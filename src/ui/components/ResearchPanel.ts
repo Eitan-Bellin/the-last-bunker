@@ -40,7 +40,7 @@ export class ResearchPanel {
     const rs = this.engine.researchSystem;
     const ids = [...RESEARCH.map(r => r.id), ...REFINEMENTS.map(r => r.id)];
     const sig = [
-      this.branch, i18n.currentLocale, rs.activeId(state), rs.queue(state).join(','), JSON.stringify(state.refinements ?? {}),
+      this.branch, i18n.currentLocale, state.rush ?? 0, rs.activeId(state), rs.queue(state).join(','), JSON.stringify(state.refinements ?? {}),
       ids.map(id => `${id}:${rs.status(state, id)}:${rs.canStart(state, id)}`).join(','),
       state.buildings.filter(b => b.type === 'laboratory').length,
       this.branch === 'genesis' ? this.engine.metaSystem.rebirthRequirements(state).map(r => r.current).join(',') : '',
@@ -83,6 +83,15 @@ export class ResearchPanel {
       row.appendChild(this.activeTime);
       this.activeBar = bar(0, 'xp');
       head.append(row, this.activeBar);
+      // Rush: spend a gift charge to skip 15 minutes of this research.
+      head.appendChild(button(`[[hourglass]] ${i18n.t('rush.button', { n: this.engine.rushSystem.count(state) })}`, 'btn-secondary btn-small', () => {
+        if (this.engine.rushSystem.rushResearch()) {
+          uiSound('confirm');
+          this.engine.requestSave();
+          this.signature = '';
+          this.refresh(this.engine.stateManager.state);
+        }
+      }, !this.engine.rushSystem.canRushResearch(state)));
       head.appendChild(this.renderQueue(state));
     } else {
       head.appendChild(el('div', 'bp-hint', i18n.t('research.idle')));

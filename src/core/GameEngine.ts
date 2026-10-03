@@ -17,6 +17,7 @@ import { IncidentSystem } from '../systems/IncidentSystem';
 import { FamilySystem } from '../systems/FamilySystem';
 import { StorySystem } from '../systems/StorySystem';
 import { SupplySystem } from '../systems/SupplySystem';
+import { RushSystem } from '../systems/RushSystem';
 import { ShopSystem, type ProjectBooster } from '../systems/ShopSystem';
 import { ProjectSystem } from '../systems/ProjectSystem'; // [LateGame B1]
 import { snapshot } from '../data/challenges'; // [LateGame B4]
@@ -85,6 +86,7 @@ export class GameEngine {
   familySystem: FamilySystem;
   storySystem: StorySystem;
   supplySystem: SupplySystem;
+  rushSystem: RushSystem;
   shopSystem: ShopSystem;
   projectSystem: ProjectSystem; // [LateGame B1]
   private tickCount = 0;
@@ -123,6 +125,7 @@ export class GameEngine {
     // A lost raid leaves raiders inside: the event system starts the breach.
     this.eventSystem.setIncidents(this.incidentSystem);
     this.supplySystem = new SupplySystem(this.stateManager, this.resourceSystem);
+    this.rushSystem = new RushSystem(this.stateManager, this.researchSystem);
     // [Economy A3] The big-projects system (Late-game agent) may feed on overflow; resolved lazily so build order doesn't matter.
     // [Economy A2] Credits shop; its project-boost item shows up once the Projects system offers boostStage().
     this.shopSystem = new ShopSystem(this.stateManager, this.resourceSystem, this.researchSystem, this.supplySystem);

@@ -158,7 +158,7 @@ export class SurfacePanel {
   }
 
   private renderMissions(state: GameState): void {
-    const sig = state.activeMissions.map(m => m.id).join(',') + i18n.currentLocale + maxTeams(state);
+    const sig = state.activeMissions.map(m => `${m.id}:${m.waiting ? 1 : 0}`).join(',') + i18n.currentLocale + maxTeams(state) + '|' + (state.rush ?? 0);
     if (sig !== this.missionSig) {
       this.missionSig = sig;
       this.missionBars.clear();
@@ -179,6 +179,14 @@ export class SurfacePanel {
         head.append(el('span', 'mission-name', `${m.long ? '[[moon]]' : '[[walker]]'} ${biomeName} · ${names}`), time);
         const b = bar(0, 'accent');
         row.append(head, b);
+        // Rush: spend a gift charge to skip 15 minutes of the trip (never past a pending radio call).
+        row.appendChild(button(`[[hourglass]] ${i18n.t('rush.button', { n: this.engine.rushSystem.count(state) })}`, 'btn-secondary btn-small', () => {
+          if (this.engine.rushSystem.rushMission(m.id)) {
+            uiSound('confirm');
+            this.engine.requestSave();
+            this.missionSig = '';
+          }
+        }, !this.engine.rushSystem.canRushMission(state, m.id)));
         this.missionsBox.appendChild(row);
         this.missionBars.set(m.id, { bar: b, time });
       }

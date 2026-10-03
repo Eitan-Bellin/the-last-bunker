@@ -1,6 +1,7 @@
 import type { GameState, ResourceType } from '../core/GameState';
 import type { StateManager } from '../core/StateManager';
 import type { ResourceSystem } from './ResourceSystem';
+import { RUSH_PER_CRATE, RUSH_WEEK_BONUS } from './RushSystem';
 
 /** Resources the crate holds, worth hours of the bunker's own production. */
 const CRATE_RESOURCES: ResourceType[] = ['food', 'water', 'materials', 'knowledge'];
@@ -16,6 +17,8 @@ export function localDay(ms = Date.now()): string {
 export interface SupplyClaim {
   streak: number;
   gains: Partial<Record<ResourceType, number>>;
+  /** Rush charges the crate held. */
+  rush: number;
 }
 
 /**
@@ -70,6 +73,9 @@ export class SupplySystem {
       if (got > 0) gains[r] = got;
     }
     this.sm.applyDelta({ path: 'supplyDrop', value: { day: localDay(), streak } });
-    return { streak, gains };
+    // Rush charges: the crate's scarce, strategic part.
+    const rush = RUSH_PER_CRATE + (streak % STREAK_MAX === 0 ? RUSH_WEEK_BONUS : 0);
+    this.sm.applyDelta({ path: 'rush', value: (this.sm.state.rush ?? 0) + rush });
+    return { streak, gains, rush };
   }
 }

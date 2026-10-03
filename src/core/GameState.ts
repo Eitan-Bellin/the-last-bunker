@@ -355,6 +355,8 @@ export interface GameState {
   awayDoorClock: number;
   /** Daily supply drop (NICE3): the local day it was last opened and the run of days in a row. */
   supplyDrop: { day: string | null; streak: number };
+  /** Rush charges: each skips 15 minutes of building, research or an expedition (see RushSystem). */
+  rush: number;
   /** [Danger] raids, disasters, mourning (older saves start calm). */
   danger: DangerState;
   // [Economy A2/A3] Credits shop purchases (reset daily / weekly) and the big project fed by overflow while away.
@@ -425,6 +427,7 @@ export function migrateState(saved: GameState): GameState {
   merged.doorWaiting = merged.doorWaiting ?? [];
   merged.awayDoorClock = merged.awayDoorClock ?? 0;
   merged.supplyDrop = merged.supplyDrop ?? { day: null, streak: 0 };
+  merged.rush = merged.rush ?? 3; // older saves get the starter charges
   // [Danger] older saves start with no raid or disaster on the clock.
   merged.danger = { ...createDanger(), ...(saved.danger ?? {}) };
   // [Economy] credits shop and the active project (older saves start with none).
@@ -512,6 +515,7 @@ export function createInitialState(): GameState {
     doorWaiting: [],
     awayDoorClock: 0,
     supplyDrop: { day: null, streak: 0 },
+    rush: 3,
     danger: createDanger(), // [Danger]
     shop: { day: null, bought: {}, week: null, weekBought: {} },
     activeProjectId: null,

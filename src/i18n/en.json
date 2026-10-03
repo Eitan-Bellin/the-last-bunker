@@ -279,6 +279,8 @@
   "surface.unexplored": "Unexplored",
   "surface.teamOut": "A team is already heading here",
   "surface.chooseTeam": "Choose a team (up to {n})",
+  "rush.button": "Rush · 15 min ({n} left)",
+  "rush.gift": "+{n} rush charges: each cuts 15 minutes off a build, research or expedition",
   "surface.noTeam": "No free survivors: everyone is posted to a station or too hurt (health 25 and below)",
   "surface.send": "Send expedition",
   "surface.leavesJob": "Workers on an expedition won't work until they return",

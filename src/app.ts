@@ -1848,6 +1848,7 @@ export class GameApp {
     const body = el('div', 'modal-result');
     body.appendChild(el('p', 'modal-body', i18n.t('supply.desc')));
     body.appendChild(this.gainsList(claim.gains));
+    body.appendChild(el('p', 'modal-sub', `[[hourglass]] ${i18n.t('rush.gift', { n: claim.rush })}`));
     if (Object.keys(claim.gains).length === 0) body.appendChild(el('p', 'bp-hint', i18n.t('supply.full')));
     body.appendChild(el('p', 'modal-sub', `[[fire]] ${i18n.t('supply.streak', { n: claim.streak })}`));
     body.appendChild(el('p', 'bp-hint', i18n.t('supply.tomorrow')));

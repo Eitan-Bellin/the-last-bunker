@@ -74,7 +74,7 @@ export class BuildingPanel {
 
     const upgradeAffordable = this.engine.resourceSystem.canAfford(state, this.engine.buildingSystem.getUpgradeCost(b));
     const sig = [
-      b.level, b.isConstructing, b.assignedSurvivorIds.join(','), this.pickerOpen, upgradeAffordable,
+      b.level, b.isConstructing, state.rush ?? 0, b.assignedSurvivorIds.join(','), this.pickerOpen, upgradeAffordable,
       state.survivors.map(s => `${s.id}:${s.assignedBuildingId}:${s.level}`).join(','),
       state.powerRatio < 0.99,
       this.incidentFor(state, b)?.id ?? '', b.specialization ?? '', Math.floor((b.wear ?? 0) / 5), this.engine.maintenanceSystem.canMaintain(state, b), // [Danger C3]
@@ -105,6 +105,15 @@ export class BuildingPanel {
     this.statusText = el('div', 'bp-status-text');
     this.statusBar = bar(0, 'accent');
     status.append(this.statusText, this.statusBar);
+    // Rush: spend a gift charge to skip 15 minutes of this build or upgrade.
+    if (b.isConstructing) {
+      status.appendChild(button(`[[hourglass]] ${i18n.t('rush.button', { n: this.engine.rushSystem.count(state) })}`, 'btn-secondary btn-small', () => {
+        if (this.engine.rushSystem.rushBuilding(b.id)) {
+          uiSound('confirm');
+          this.engine.requestSave();
+        }
+      }, !this.engine.rushSystem.canRushBuilding(state, b.id)));
+    }
     status.style.display = b.isConstructing ? '' : 'none';
     root.appendChild(status);
 
