@@ -1,0 +1,14 @@
+{
+  "appId": "com.lastbunker.game",
+  "appName": "The Last Bunker",
+  "webDir": "dist",
+  "backgroundColor": "#07090c",
+  "android": {
+    "backgroundColor": "#07090c",
+    "allowMixedContent": false
+  },
+  "ios": {
+    "backgroundColor": "#07090c",
+    "contentInset": "never"
+  }
+}

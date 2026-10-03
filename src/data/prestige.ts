@@ -1,0 +1,81 @@
+export interface PrestigeUpgradeDef {
+  id: string;
+  icon: string;
+  maxLevel: number;
+  baseCost: number;
+  growth: number;
+  name: Record<string, string>;
+  desc: Record<string, string>;
+}
+
+/**
+ * The Genesis shop. A first rebirth pays about 150–300 Isotope-7 (+10% per earlier rebirth), and the
+ * whole shop costs about 3,900, so it fills over roughly 6–10 rebirths instead of 2–3.
+ */
+export const PRESTIGE_UPGRADES: PrestigeUpgradeDef[] = [
+  {
+    id: 'echoPower', icon: '[[sparkle]]', maxLevel: 10, baseCost: 5, growth: 1.6,
+    name: { he: 'הד העבר', en: 'Echo of the Past' },
+    desc: { he: '+10% לכל הייצור לכל רמה', en: '+10% all production per level' },
+  },
+  {
+    // +150 worth per level (120 materials + 30 scrap); amounts above the starting storage are lost,
+    // which pairs it with Storage Memory.
+    id: 'quickStart', icon: '[[rocket]]', maxLevel: 3, baseCost: 15, growth: 2,
+    name: { he: 'התחלה מהירה', en: 'Quick Start' },
+    desc: { he: 'מתחילים עם עוד 120 חומרים ו־30 גרוטאות לכל רמה (עד גבול המחסן)', en: 'Start with +120 materials and +30 scrap per level (up to your storage)' },
+  },
+  {
+    id: 'fastResearch', icon: '[[research]]', maxLevel: 10, baseCost: 6, growth: 1.6,
+    name: { he: 'זיכרון מדעי', en: 'Scientific Memory' },
+    desc: { he: '+10% מהירות מחקר לכל רמה', en: '+10% research speed per level' },
+  },
+  {
+    id: 'veteranSurvivors', icon: '[[people]]', maxLevel: 3, baseCost: 10, growth: 2.2,
+    name: { he: 'ותיקים', en: 'Veterans' },
+    desc: { he: 'עוד ניצול/ה בתחילת כל משחק', en: 'One more survivor at the start' },
+  },
+  {
+    id: 'hardyStock', icon: '[[strength]]', maxLevel: 3, baseCost: 8, growth: 2,
+    name: { he: 'גנים חזקים', en: 'Hardy Stock' },
+    desc: { he: '+1 לכל התכונות של כל ניצול חדש', en: '+1 to every stat of new survivors' },
+  },
+  {
+    id: 'offlineEfficiency', icon: '[[moon]]', maxLevel: 4, baseCost: 6, growth: 1.7,
+    name: { he: 'משמרת לילה', en: 'Night Shift' },
+    desc: { he: '+5% ייצור בזמן שאתה לא משחק', en: '+5% production while away' },
+  },
+  {
+    id: 'lootLuck', icon: '[[clover]]', maxLevel: 10, baseCost: 5, growth: 1.5,
+    name: { he: 'מזל של מלקטים', en: "Scavenger's Luck" },
+    desc: { he: '+10% שלל ממשלחות', en: '+10% expedition loot' },
+  },
+  // Read by ResourceSystem.computeCaps (marked hook line).
+  {
+    id: 'storageMemory', icon: '[[storage]]', maxLevel: 4, baseCost: 30, growth: 1.8,
+    name: { he: 'זיכרון מחסנים', en: 'Storage Memory' },
+    desc: { he: '+25% מקום במחסן לכל המשאבים לכל רמה', en: '+25% storage for every resource per level' },
+  },
+  // Applied by MetaSystem.applyStartBonuses when a new run is set up.
+  {
+    id: 'preDug', icon: '[[pick]]', maxLevel: 2, baseCost: 80, growth: 2.5,
+    name: { he: 'קומה חפורה מראש', en: 'Pre-dug Level' },
+    desc: { he: 'כל משחק חדש מתחיל עם עוד קומה חפורה לכל רמה', en: 'Every new run starts with one more dug level per level' },
+  },
+  // Read by ResearchSystem.queueSlots.
+  {
+    id: 'labBench', icon: '[[laboratory]]', maxLevel: 2, baseCost: 50, growth: 2.4,
+    name: { he: 'שולחן מעבדה שני', en: 'Second Lab Bench' },
+    desc: { he: '+1 מקום בתור המחקר לכל רמה', en: '+1 research queue slot per level' },
+  },
+  // Read by ExplorationSystem (expedition team limit).
+  {
+    id: 'scoutTeams', icon: '[[walker]]', maxLevel: 3, baseCost: 40, growth: 2,
+    name: { he: 'צוותי סיור', en: 'Scout Teams' },
+    desc: { he: 'עוד צוות משלחת שיכול לצאת במקביל לכל רמה', en: 'One more expedition team out at the same time per level' },
+  },
+];
+
+export function upgradeCost(def: PrestigeUpgradeDef, level: number): number {
+  return Math.round(def.baseCost * Math.pow(def.growth, level));
+}

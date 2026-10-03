@@ -1,0 +1,445 @@
+/*
+ * Bunker OS — the game's interface as part of the world:
+ * riveted steel plates and stencil type on the HUD, green phosphor CRT terminals for panels,
+ * chunky machine buttons with indicator lamps, LED segment gauges.
+ */
+
+:root {
+  /* Karantina only at 28 px and up: smaller, its ה reads as ק and its digits blur. */
+  --font-display: 'Karantina', 'Secular One', 'Rubik', sans-serif;
+  /* Sturdy Hebrew + Latin display face for titles, labels and buttons under 28 px. */
+  --font-title: 'Secular One', 'Rubik', sans-serif;
+  --r-s: 2px;
+  --r-m: 4px;
+  --r-l: 8px;
+  --steel-1: #4a4d52;
+  --steel-2: #2e3034;
+  --steel-3: #1c1d20;
+  --rivet: radial-gradient(circle at 35% 35%, #9a9ea6 0 1px, #4a4d52 1.6px, #1c1d20 2.6px, transparent 3px);
+  --crt-bg: #07120c;
+  --crt-bg-2: #0b1a12;
+  --phosphor: #9dffb4;
+  --phosphor-dim: #5fbf7c;
+  --phosphor-faint: rgba(110, 255, 160, 0.12);
+  --amber: #ffb547;
+  --accent: #ffb547;
+  --accent-glow: rgba(255, 181, 71, 0.28);
+  --bg-card: rgba(18, 40, 26, 0.72);
+  --bg-card-hi: rgba(30, 62, 40, 0.85);
+  --border: rgba(110, 255, 160, 0.22);
+  --text-primary: #dcffe6;
+  --text-secondary: #86c79a;
+  --text-dim: #4f7d5c;
+}
+
+/* ---------- Steel plates (HUD) ---------- */
+
+.hud-top {
+  background:
+    linear-gradient(to bottom, rgba(6, 7, 9, 0.92) 0%, rgba(6, 7, 9, 0.75) 70%, transparent 100%);
+}
+
+.resource-item {
+  background:
+    var(--rivet) 3px 3px / 6px 6px no-repeat,
+    var(--rivet) calc(100% - 3px) 3px / 6px 6px no-repeat,
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.025) 0 1px, transparent 1px 3px),
+    linear-gradient(180deg, var(--steel-1), var(--steel-2) 55%, var(--steel-3));
+  border: 1px solid #0c0d0f;
+  border-radius: 4px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14), inset 0 -2px 0 rgba(0, 0, 0, 0.45), 0 2px 4px rgba(0, 0, 0, 0.5);
+  padding: 5px 10px 8px;
+}
+.resource-value {
+  font-family: 'Rubik', sans-serif;
+  font-weight: 800;
+  font-size: 14px;
+  color: #f4ecd8;
+  text-shadow: 0 1px 0 #000;
+  font-variant-numeric: tabular-nums;
+}
+.resource-fill-track { height: 4px; background: #0a0b0c; box-shadow: inset 0 1px 1px rgba(0, 0, 0, 0.8); }
+.resource-fill-bar {
+  background: repeating-linear-gradient(90deg, #ffb547 0 5px, transparent 5px 6px);
+  box-shadow: 0 0 6px rgba(255, 181, 71, 0.6);
+}
+.resource-fill-bar.full { background: repeating-linear-gradient(90deg, #ffe27a 0 5px, transparent 5px 6px); }
+.resource-fill-bar.low { background: repeating-linear-gradient(90deg, #ff5a4a 0 5px, transparent 5px 6px); box-shadow: 0 0 6px rgba(255, 80, 60, 0.7); }
+.resource-item.empty { border-color: #ff5a4a; }
+
+.info-row { gap: 12px; }
+.info-item {
+  background: rgba(0, 0, 0, 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 3px;
+  padding: 2px 7px;
+}
+.info-label { color: #b8ad96; }
+.info-arrival { margin-inline-start: 5px; color: #ffb547; font-variant-numeric: tabular-nums; font-size: 0.92em; }
+.info-arrival:empty { display: none; }
+.info-arrival.negative { color: #ff6a5a; animation: arrival-pulse 1.2s ease-in-out infinite; }
+@keyframes arrival-pulse { 50% { opacity: 0.45; } }
+
+.lang-btn {
+  background: linear-gradient(180deg, var(--steel-1), var(--steel-3));
+  border: 1px solid #0c0d0f;
+  border-radius: 4px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14), 0 2px 3px rgba(0, 0, 0, 0.5);
+  color: #f0e6d2;
+  padding: 3px 9px;
+}
+.lang-btn:active { transform: translateY(1px); box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.6); }
+
+/* Objective: a strip of embossed label tape riveted under the HUD. */
+.objective {
+  border-radius: 3px;
+  border: 1px solid #0c0d0f;
+  background:
+    linear-gradient(90deg, rgba(255, 181, 71, 0.22) var(--obj-progress, 0%), transparent var(--obj-progress, 0%)),
+    linear-gradient(180deg, #2a2b2f, #17181b);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1), 0 3px 8px rgba(0, 0, 0, 0.5);
+}
+[dir="rtl"] .objective {
+  background:
+    linear-gradient(270deg, rgba(255, 181, 71, 0.22) var(--obj-progress, 0%), transparent var(--obj-progress, 0%)),
+    linear-gradient(180deg, #2a2b2f, #17181b);
+}
+.objective-text { color: #f4ecd8; letter-spacing: 0.01em; }
+.objective-meta { color: var(--amber); }
+
+.hud-banner.power {
+  border-radius: 3px;
+  background: repeating-linear-gradient(-45deg, rgba(255, 70, 50, 0.22) 0 10px, rgba(40, 0, 0, 0.5) 10px 20px);
+  border: 1px solid #ff5a4a;
+  color: #ffd0c8;
+  text-shadow: 0 1px 2px #000;
+}
+
+/* ---------- Machine buttons (bottom nav) ---------- */
+
+.hud-bottom {
+  background:
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.02) 0 1px, transparent 1px 4px),
+    linear-gradient(180deg, #2c2e32, #151618);
+  border-top: 2px solid #0a0b0c;
+  box-shadow: 0 -1px 0 rgba(255, 255, 255, 0.08), 0 -8px 20px rgba(0, 0, 0, 0.6);
+  gap: 6px;
+  padding-inline: 8px;
+}
+.nav-btn {
+  flex: 1;
+  max-width: 96px;
+  margin: 2px 0;
+  border-radius: 6px;
+  background: linear-gradient(180deg, #3a3d42, #222428);
+  border: 1px solid #0c0d0f;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14), inset 0 -3px 0 rgba(0, 0, 0, 0.45), 0 3px 4px rgba(0, 0, 0, 0.5);
+  color: #d8ccb4;
+  position: relative;
+}
+.nav-btn::after {
+  content: '';
+  position: absolute;
+  top: 5px;
+  inset-inline-start: 6px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #3a2a14;
+  box-shadow: inset 0 1px 1px rgba(0, 0, 0, 0.6);
+}
+.nav-btn:active {
+  transform: translateY(2px);
+  background: linear-gradient(180deg, #2a2c30, #1a1b1e);
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.6);
+  color: var(--amber);
+}
+.nav-btn:active::after { background: #ffb547; box-shadow: 0 0 6px #ffb547; }
+.nav-label { font-family: var(--font-title); font-size: 12.5px; letter-spacing: 0.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.nav-badge { background: #ff4a3a; box-shadow: 0 0 8px rgba(255, 74, 58, 0.8); }
+
+/* ---------- CRT terminal panels ---------- */
+
+.sheet {
+  position: relative;
+  background:
+    radial-gradient(ellipse at 50% 0%, rgba(120, 255, 170, 0.08), transparent 60%),
+    linear-gradient(180deg, var(--crt-bg-2), var(--crt-bg));
+  border: 3px solid #1a1c1f;
+  border-bottom: none;
+  border-radius: 14px 14px 0 0;
+  box-shadow:
+    0 0 0 2px #3a3d42,
+    0 -10px 40px rgba(0, 0, 0, 0.7),
+    inset 0 0 40px rgba(0, 0, 0, 0.7),
+    inset 0 0 12px rgba(110, 255, 160, 0.08);
+  color: var(--text-primary);
+}
+/* Scanlines and a soft flicker over every terminal. */
+.sheet::before {
+  content: '';
+  position: sticky;
+  display: block;
+  top: 0;
+  height: 0;
+  pointer-events: none;
+}
+.sheet-overlay.open .sheet { animation: crt-on 0.42s ease-out; }
+@keyframes crt-on {
+  0% { filter: brightness(2.2) saturate(0.4); clip-path: inset(48% 0 48% 0); }
+  45% { filter: brightness(1.6); clip-path: inset(0 0 0 0); }
+  100% { filter: none; clip-path: inset(0 0 0 0); }
+}
+.sheet-body, .sheet-title {
+  text-shadow: 0 0 6px rgba(110, 255, 160, 0.18);
+}
+.sheet-overlay .sheet {
+  background-image:
+    repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.22) 0 1px, transparent 1px 3px),
+    radial-gradient(ellipse at 50% 0%, rgba(120, 255, 170, 0.08), transparent 60%),
+    linear-gradient(180deg, var(--crt-bg-2), var(--crt-bg));
+}
+.sheet-handle { background: #3a3d42; height: 5px; width: 48px; box-shadow: inset 0 1px 1px rgba(0, 0, 0, 0.6); }
+.sheet-title {
+  font-family: var(--font-title);
+  font-weight: 400;
+  font-size: 20px;
+  letter-spacing: 0.02em;
+  color: var(--phosphor);
+  text-shadow: 0 0 10px rgba(110, 255, 160, 0.45);
+  border-bottom: 1px dashed rgba(110, 255, 160, 0.25);
+  padding-bottom: 6px;
+}
+
+.bp-card, .person-card, .research-card, .build-item, .mission-row, .journal-item, .ach-card {
+  background: linear-gradient(180deg, rgba(20, 44, 28, 0.78), rgba(10, 26, 16, 0.78));
+  border: 1px solid rgba(110, 255, 160, 0.16);
+  border-radius: 6px;
+}
+.bp-section-title, .research-name, .build-item-name, .person-name, .ach-name { color: var(--phosphor); }
+.bp-hint, .build-item-desc, .build-meta { color: var(--text-secondary); }
+.bp-value.positive, .cost-chip.affordable, .positive-text, .gain-chip.positive { color: #7dff9e; }
+.cost-chip { background: rgba(0, 0, 0, 0.45); border: 1px solid rgba(110, 255, 160, 0.12); border-radius: 3px; }
+.zone-chip { background: rgba(110, 255, 160, 0.1); }
+
+.build-item { padding: 8px; }
+.build-item:active { border-color: var(--amber); }
+.build-thumb {
+  width: 74px;
+  height: 56px;
+  border-radius: 4px;
+  background-size: cover;
+  background-position: center;
+  position: relative;
+  border: 1px solid rgba(0, 0, 0, 0.8);
+  box-shadow: 0 0 0 1px rgba(110, 255, 160, 0.2), inset 0 0 12px rgba(0, 0, 0, 0.6);
+  filter: saturate(0.9) contrast(1.05);
+}
+.build-badge {
+  position: absolute;
+  bottom: -6px;
+  inset-inline-end: -6px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(180deg, #3a3d42, #1c1d20);
+  border: 1px solid #0c0d0f;
+  color: #f0e6d2;
+}
+.build-badge .ic { width: 15px; height: 15px; }
+
+/* ---------- Buttons ---------- */
+
+.btn {
+  border-radius: 5px;
+  border: 1px solid #0c0d0f;
+  background: linear-gradient(180deg, #3a3d42, #232528);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14), inset 0 -2px 0 rgba(0, 0, 0, 0.45), 0 2px 3px rgba(0, 0, 0, 0.45);
+  color: #f0e6d2;
+  letter-spacing: 0.01em;
+}
+.btn:active:not(:disabled) { transform: translateY(1px); box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.6); }
+/* Primary: an amber enamel plate lit by a small indicator lamp, not a flat yellow pill. */
+.btn-primary {
+  position: relative;
+  background:
+    radial-gradient(ellipse at 50% -30%, rgba(255, 232, 180, 0.32), transparent 62%),
+    linear-gradient(180deg, #d4943c, #ad6a1e 58%, #8a5216);
+  border-color: #3a2208;
+  color: #1c1004;
+  font-weight: 800;
+  text-shadow: 0 1px 0 rgba(255, 214, 150, 0.35);
+  box-shadow: inset 0 1px 0 rgba(255, 228, 176, 0.5), inset 0 -2px 0 rgba(60, 30, 0, 0.55), 0 2px 10px rgba(255, 160, 50, 0.16);
+}
+.btn-primary:not(.btn-small)::before {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 50%;
+  width: 18px;
+  height: 3px;
+  border-radius: 2px;
+  transform: translateX(-50%);
+  background: #fff0c8;
+  box-shadow: 0 0 6px 1px rgba(255, 206, 120, 0.85);
+  pointer-events: none;
+}
+.btn-primary:disabled::before { background: #5a3a14; box-shadow: none; }
+.btn-primary .ic { filter: none; }
+.btn-secondary { background: linear-gradient(180deg, #2c3a30, #18241c); color: var(--text-primary); border-color: rgba(110, 255, 160, 0.25); }
+.btn-ghost { background: transparent; box-shadow: none; border-color: rgba(110, 255, 160, 0.25); color: var(--text-primary); }
+.btn-danger { background: linear-gradient(180deg, #e85a4a, #a8281e); color: #fff; border-color: #5a0e08; }
+.tab { border-radius: 4px; background: rgba(0, 0, 0, 0.35); }
+.tab.active { border-color: var(--phosphor); color: var(--phosphor); background: rgba(110, 255, 160, 0.12); box-shadow: 0 0 8px rgba(110, 255, 160, 0.2); }
+
+/* LED segment gauges. */
+.bar-track { height: 7px; border-radius: 2px; background: #061009; box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.8); }
+.bar-fill {
+  border-radius: 0;
+  background: repeating-linear-gradient(90deg, var(--amber) 0 4px, transparent 4px 5px);
+  box-shadow: 0 0 5px rgba(255, 181, 71, 0.5);
+}
+.bar-track.health .bar-fill { background: repeating-linear-gradient(90deg, #ff6a7a 0 4px, transparent 4px 5px); box-shadow: 0 0 5px rgba(255, 90, 110, 0.5); }
+.bar-track.happiness .bar-fill { background: repeating-linear-gradient(90deg, #ffe27a 0 4px, transparent 4px 5px); }
+.bar-track.xp .bar-fill { background: repeating-linear-gradient(90deg, #8fd8ff 0 4px, transparent 4px 5px); box-shadow: 0 0 5px rgba(120, 200, 255, 0.5); }
+
+/* ---------- Dialogs ---------- */
+
+.modal {
+  border-radius: 10px;
+  border: 3px solid #1a1c1f;
+  background:
+    repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.2) 0 1px, transparent 1px 3px),
+    radial-gradient(ellipse at 50% 0%, rgba(120, 255, 170, 0.1), transparent 60%),
+    linear-gradient(180deg, var(--crt-bg-2), var(--crt-bg));
+  box-shadow: 0 0 0 2px #3a3d42, 0 24px 60px rgba(0, 0, 0, 0.7), inset 0 0 30px rgba(0, 0, 0, 0.6);
+}
+.modal-title {
+  font-family: var(--font-display);
+  font-size: 32px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--phosphor);
+  text-shadow: 0 0 12px rgba(110, 255, 160, 0.45);
+}
+.modal-body { color: var(--text-primary); }
+.modal-overlay.open .modal { animation: crt-on 0.4s ease-out; }
+
+/* ---------- Toasts: a dot-matrix ticker ---------- */
+
+.toast {
+  border-radius: 3px;
+  background:
+    radial-gradient(circle, rgba(0, 0, 0, 0.35) 0.6px, transparent 0.8px) 0 0 / 3px 3px,
+    linear-gradient(180deg, #14231a, #0a140e);
+  border: 1px solid rgba(110, 255, 160, 0.3);
+  color: var(--phosphor);
+  text-shadow: 0 0 6px rgba(110, 255, 160, 0.4);
+  font-weight: 600;
+}
+.toast.good { border-color: rgba(125, 255, 158, 0.7); }
+.toast.bad { border-color: rgba(255, 90, 74, 0.8); color: #ffb3a8; text-shadow: 0 0 6px rgba(255, 90, 74, 0.4); }
+
+/* ---------- Surface map as a radar screen ---------- */
+
+.surface-overlay {
+  background:
+    repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.18) 0 1px, transparent 1px 3px),
+    radial-gradient(ellipse at 50% 45%, #0f2a1a 0%, #07140c 60%, #030806 100%);
+}
+.surface-card { background: linear-gradient(180deg, rgba(20, 44, 28, 0.92), rgba(8, 20, 12, 0.92)); border-color: rgba(110, 255, 160, 0.25); border-radius: 8px; }
+
+.era-chip { border-radius: 4px; }
+.info-value { font-variant-numeric: tabular-nums; }
+
+/* ---------- gfx-p0: sheets close easily and hide cleanly ---------- */
+
+/* Parked sheets sit just under the screen: no shadow or ring may leak up over the nav. */
+.sheet-overlay:not(.open) .sheet {
+  box-shadow: none;
+  visibility: hidden;
+  transition: transform 0.28s cubic-bezier(0.2, 0.9, 0.3, 1), visibility 0s linear 0.28s;
+}
+.sheet.dragging { transition: none; animation: none; }
+.sheet-title { padding-inline: 40px; }
+.sheet-handle { cursor: grab; touch-action: none; }
+
+/* ✕ plate: a riveted steel button that stays put while the sheet scrolls. */
+.sheet-close {
+  position: sticky;
+  top: 2px;
+  z-index: 3;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  margin-inline-start: auto;
+  margin-inline-end: -8px;
+  margin-bottom: -36px;
+  padding: 0;
+  border: 1px solid #0c0d0f;
+  border-radius: var(--r-m);
+  background:
+    var(--rivet) 2px 2px / 6px 6px no-repeat,
+    linear-gradient(180deg, var(--steel-1), var(--steel-3));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14), 0 2px 4px rgba(0, 0, 0, 0.55);
+  color: #e8dcc4;
+  cursor: pointer;
+}
+.sheet-close .ic { width: 18px; height: 18px; }
+.sheet-close:active { transform: translateY(1px); box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.6); color: var(--amber); }
+
+/* ---------- gfx-p0: menu bolt-on at the end of the nav console ---------- */
+
+.nav-btn.nav-menu { flex: 0 0 46px; max-width: 46px; padding-inline: 0; justify-content: center; }
+.nav-menu .nav-icon .ic { width: 22px; height: 22px; }
+
+/* ---------- gfx-p0: value chips keep numbers readable in RTL ---------- */
+
+.cost-chip, .stat-chip, .gain-chip, .worker-stat, .bp-value, .objective-meta, .era-goal-count { font-variant-numeric: tabular-nums; }
+
+/* ---------- gfx-p0: the HUD fits a phone (360–430 px) ---------- */
+
+.info-row { gap: 6px; flex-wrap: nowrap; }
+.info-item, .info-row .lang-btn, .era-chip { flex: 0 0 auto; }
+.era-chip .ic { width: 15px; height: 15px; }
+
+@media (max-width: 599px) {
+  /* Icons carry population and morale; the words come back on wide screens. */
+  .info-label { display: none; }
+}
+
+@media (max-width: 479px) {
+  .hud-top { padding-inline: 8px; }
+  .resource-row { gap: 4px; }
+  .resource-item { padding: 5px 7px 8px; gap: 3px; }
+  .info-row { gap: 4px; margin-top: 6px; }
+  .info-item { padding: 2px 6px; font-size: 12px; gap: 3px; }
+  .info-icon .ic { width: 14px; height: 14px; }
+  .info-arrival { margin-inline-start: 3px; }
+  .info-row .lang-btn { padding: 3px 7px; }
+  /* The era chip keeps its colour-coded flag; the name lives in the era panel and the tooltip. */
+  .era-chip { padding: 3px 7px; }
+  .era-chip .era-name { display: none; }
+  .hud-bottom { gap: 4px; padding-inline: 6px; }
+  .nav-btn { padding: 6px 2px; min-width: 0; }
+}
+
+@media (max-width: 374px) {
+  .info-clock .info-icon { display: none; }
+  .resource-value { font-size: 13px; }
+  .resource-rate { font-size: 9.5px; }
+}
+
+/* Short screens (landscape phones): a slimmer console. */
+@media (max-height: 560px) {
+  .nav-label { display: none; }
+  .nav-btn { padding-block: 4px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sheet-overlay.open .sheet, .modal-overlay.open .modal { animation: none; }
+  .hud-banner.incident, .btn-fight, .supply-btn, .info-arrival.negative { animation: none; }
+}

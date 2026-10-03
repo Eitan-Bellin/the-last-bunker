@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Balance simulation</title>
+  <style>
+    body { background: #0b0d10; color: #cfe8d6; font: 13px/1.45 ui-monospace, Consolas, monospace; padding: 16px; }
+    pre { white-space: pre; overflow-x: auto; }
+    #status { color: #8fb39c; }
+  </style>
+</head>
+<body>
+  <h3>The Last Bunker — balance bot</h3>
+  <p>?mode=greedy|casual|engaged · &amp;hours=12 (greedy) · &amp;days=3 (casual/engaged) · &amp;seed=N or &amp;seeds=1-3 · &amp;think=10 — for long or many runs use <code>node tools/sim/run.mjs</code></p>
+  <div id="status">starting…</div>
+  <pre id="out"></pre>
+  <script type="module" src="./balance.ts"></script>
+</body>
+</html>

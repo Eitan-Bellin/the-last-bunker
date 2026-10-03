@@ -1,0 +1,75 @@
+import type { GameState, ResourceType } from '../core/GameState';
+import type { StateManager } from '../core/StateManager';
+import type { ResourceSystem } from './ResourceSystem';
+
+/** Resources the crate holds, worth hours of the bunker's own production. */
+const CRATE_RESOURCES: ResourceType[] = ['food', 'water', 'materials', 'knowledge'];
+/** The streak stops growing the crate after a week. */
+const STREAK_MAX = 7;
+
+/** Local calendar day, e.g. "2026-10-3": the drop resets at the player's midnight. */
+export function localDay(ms = Date.now()): string {
+  const d = new Date(ms);
+  return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
+}
+
+export interface SupplyClaim {
+  streak: number;
+  gains: Partial<Record<ResourceType, number>>;
+}
+
+/**
+ * The daily supply drop (NICE3): once a day a crate lands by the hatch. It holds 1 hour of production on the
+ * first day, growing to 2 hours after a week in a row, plus salvage; every 7th day in a row adds a blueprint.
+ */
+export class SupplySystem {
+  private sm: StateManager;
+  private resources: ResourceSystem;
+
+  constructor(sm: StateManager, resources: ResourceSystem) {
+    this.sm = sm;
+    this.resources = resources;
+  }
+
+  isReady(state: GameState): boolean {
+    return state.storyFlags.includes('intro:done') && state.survivors.length > 0 && state.supplyDrop?.day !== localDay();
+  }
+
+  /** The streak the next crate counts as: one more if yesterday's was opened, else back to 1. */
+  nextStreak(state: GameState): number {
+    const last = state.supplyDrop?.day;
+    return last && last === localDay(Date.now() - 86_400_000) ? (state.supplyDrop.streak ?? 0) + 1 : 1;
+  }
+
+  /** What the crate holds before storage limits. */
+  contents(state: GameState, streak: number): Partial<Record<ResourceType, number>> {
+    const hours = 1 + (Math.min(STREAK_MAX, streak) - 1) / (STREAK_MAX - 1);
+    const out: Partial<Record<ResourceType, number>> = {};
+    for (const r of CRATE_RESOURCES) {
+      const res = state.resources[r];
+      // Never less than a tenth of the store, so a brand-new bunker still gets a real crate.
+      out[r] = Math.round(Math.max(res.productionRate * hours * 3600, res.cap * 0.1));
+    }
+    out.scrap = Math.round(Math.max(10, state.resources.scrap.cap * 0.05 * hours));
+    if (streak % STREAK_MAX === 0) out.blueprints = 1;
+    return out;
+  }
+
+  /** Opens today's crate; returns what actually fit in storage. */
+  claim(): SupplyClaim | null {
+    const state = this.sm.state;
+    if (!this.isReady(state)) return null;
+    const streak = this.nextStreak(state);
+    const contents = this.contents(state, streak);
+    const before: Partial<Record<ResourceType, number>> = {};
+    for (const r of Object.keys(contents) as ResourceType[]) before[r] = state.resources[r].amount;
+    this.resources.gain(this.sm, contents);
+    const gains: Partial<Record<ResourceType, number>> = {};
+    for (const r of Object.keys(contents) as ResourceType[]) {
+      const got = Math.round(this.sm.state.resources[r].amount - (before[r] ?? 0));
+      if (got > 0) gains[r] = got;
+    }
+    this.sm.applyDelta({ path: 'supplyDrop', value: { day: localDay(), streak } });
+    return { streak, gains };
+  }
+}

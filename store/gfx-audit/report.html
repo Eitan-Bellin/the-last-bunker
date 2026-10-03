@@ -1,0 +1,295 @@
+<title>הבונקר האחרון — סקירת גרפיקה</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Secular+One&family=Heebo:wght@400;500;700&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+/* Layout: a single reading column, like a field report clipped to a steel board; summary first, detail folds below */
+:root{
+  --bg:#eceee9; --panel:#f8f9f6; --fg:#1f2522; --muted:#5d6661; --line:#cfd4cd;
+  --lamp:#b8730f; --lamp-soft:#f3e3c4;
+  --bad:#b23a2e; --warn:#a8710c; --ok:#3d7a4f;
+  --bad-bg:#f6dcd8; --warn-bg:#f5e8cc; --ok-bg:#dbecdf;
+  --display:"Secular One","Heebo",system-ui,sans-serif;
+  --body:"Heebo",system-ui,-apple-system,"Segoe UI",Arial,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#161a18; --panel:#1f2421; --fg:#e4e7e2; --muted:#9aa39d; --line:#343b37;
+  --lamp:#e7a33c; --lamp-soft:#3a2f1c;
+  --bad:#ec7d70; --warn:#e4b452; --ok:#7cc492;
+  --bad-bg:#3d211d; --warn-bg:#3a2f18; --ok-bg:#1d3324; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#161a18; --panel:#1f2421; --fg:#e4e7e2; --muted:#9aa39d; --line:#343b37;
+  --lamp:#e7a33c; --lamp-soft:#3a2f1c;
+  --bad:#ec7d70; --warn:#e4b452; --ok:#7cc492;
+  --bad-bg:#3d211d; --warn-bg:#3a2f18; --ok-bg:#1d3324; color-scheme:dark}
+body{background:var(--bg);color:var(--fg);font-family:var(--body);font-size:16px;line-height:1.65}
+.wrap{max-width:860px;margin:0 auto;padding-inline:16px;padding-block:32px 64px;display:flex;flex-direction:column;gap:40px}
+h1,h2,h3{font-family:var(--display);font-weight:400;line-height:1.25;text-wrap:balance;margin:0}
+h1{font-size:2.1rem}
+h2{font-size:1.5rem;display:flex;align-items:baseline;gap:10px}
+h3{font-size:1.12rem}
+p{margin:0}
+.eyebrow{font-family:var(--mono);font-size:.78rem;letter-spacing:.06em;color:var(--muted);text-transform:uppercase}
+section{display:flex;flex-direction:column;gap:16px}
+.lead{font-size:1.1rem;max-width:65ch}
+.answer{background:var(--lamp-soft);border-inline-start:4px solid var(--lamp);padding:18px 20px;border-radius:4px;display:flex;flex-direction:column;gap:10px}
+.answer strong{color:var(--fg)}
+ol.roots{margin:0;padding-inline-start:22px;display:flex;flex-direction:column;gap:8px}
+.tablebox{overflow-x:auto;border:1px solid var(--line);border-radius:4px;background:var(--panel)}
+table{border-collapse:collapse;width:100%;min-width:620px;font-size:.93rem}
+th,td{text-align:start;padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-weight:700;font-size:.82rem;color:var(--muted);background:var(--bg)}
+tr:last-child td{border-bottom:0}
+td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
+.chip{display:inline-block;font-size:.78rem;font-weight:700;padding:2px 9px;border-radius:99px;white-space:nowrap}
+.c-bad{background:var(--bad-bg);color:var(--bad)}
+.c-warn{background:var(--warn-bg);color:var(--warn)}
+.c-ok{background:var(--ok-bg);color:var(--ok)}
+.rec td{background:var(--lamp-soft)}
+.phases{display:flex;flex-direction:column;gap:12px}
+.phase{display:grid;grid-template-columns:96px 1fr;gap:14px;background:var(--panel);border:1px solid var(--line);border-radius:4px;padding:14px 16px}
+.phase .when{font-family:var(--mono);font-size:.8rem;color:var(--lamp);font-weight:500}
+.phase ul{margin:6px 0 0;padding-inline-start:20px;display:flex;flex-direction:column;gap:3px}
+.phase > div{min-width:0}
+@media (max-width:520px){.phase{grid-template-columns:1fr;gap:4px}}
+.asks{display:flex;flex-direction:column;gap:10px;margin:0;padding:0;list-style:none}
+.asks li{background:var(--panel);border:1px solid var(--line);border-radius:4px;padding:12px 16px}
+details{background:var(--panel);border:1px solid var(--line);border-radius:4px}
+details+details{margin-top:-6px}
+summary{cursor:pointer;padding:12px 16px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;list-style:none}
+summary::-webkit-details-marker{display:none}
+summary::before{content:"◂";color:var(--muted);transition:transform .15s}
+details[open] summary::before{transform:rotate(-90deg)}
+summary:focus-visible{outline:2px solid var(--lamp);outline-offset:2px}
+summary h3{flex:1;min-width:0}
+.dbody{padding:0 16px 16px;display:flex;flex-direction:column;gap:10px}
+.dbody ul{margin:0;padding-inline-start:20px;display:flex;flex-direction:column;gap:4px}
+.dbody .lbl{font-weight:700;font-size:.85rem;color:var(--muted)}
+code,.path{font-family:var(--mono);font-size:.82rem;direction:ltr;unicode-bidi:isolate}
+.foot{color:var(--muted);font-size:.88rem;border-top:1px solid var(--line);padding-top:16px}
+@media (prefers-reduced-motion:reduce){summary::before{transition:none}}
+</style>
+
+<div class="wrap" dir="rtl" lang="he">
+
+<header style="display:flex;flex-direction:column;gap:8px">
+  <span class="eyebrow">סקירת גרפיקה · 7 סוכנים · 3 באוקטובר 2026</span>
+  <h1>הבונקר האחרון: הדרך למראה ברמה גבוהה</h1>
+  <p class="lead">שבעה סוכנים בדקו כל אחד חלק אחר בגרפיקה: חדרים, דמויות, מבנה ותאורה, פני השטח והעולם, ממשק, אפקטים, וכיוון טכנולוגי. בדף הזה הממצאים מאוחדים להחלטה אחת ולתוכנית עבודה.</p>
+</header>
+
+<section>
+  <div class="answer">
+    <h2>זה אפשרי?</h2>
+    <p><strong>כן, ובלי להחליף מנוע או לכתוב את המשחק מחדש.</strong> הלוגיקה, הממשק, הסאונד והשמירות מופרדים היטב מהציור. כ-63% מהקוד נשאר כמו שהוא בכל מסלול.</p>
+    <p>התחושה ש"משהו ברמה נמוכה" נובעת משלוש סיבות. כולן ניתנות לתיקון:</p>
+    <ol class="roots">
+      <li><strong>הדמויות הן בובות נייר.</strong> כל אדם מורכב מכ-30 מלבנים שטוחים. כל עבודה היא יד אחת שמתנדנדת בגל סינוס, והן לא נוגעות בשום דבר בחדר.</li>
+      <li><strong>החדרים הם תמונה אחת שטוחה וקפואה.</strong> האור מצויר עליהם במקום ליפול עליהם. אנשים תמיד עומדים לפני הרהיטים ולא בתוך החדר. ב-42 מתוך 45 חדרים שום דבר לא זז.</li>
+      <li><strong>העולם סביב סטטי.</strong> השמיים הם ציור אחד בלי עומק, אין מזג אוויר, ומפת העולם היא משושים בצבע אחיד. הממשק מצויר ב-CSS שטוח ליד תוכן מצויר.</li>
+    </ol>
+  </div>
+</section>
+
+<section>
+  <h2>מצב כל תחום</h2>
+  <div class="tablebox">
+    <table>
+      <thead><tr><th>תחום</th><th>מצב</th><th>הבעיה המרכזית</th><th>התיקון שמשנה הכי הרבה</th></tr></thead>
+      <tbody>
+        <tr><td>דמויות</td><td><span class="chip c-bad">חלש מאוד</span></td><td>גפיים שטוחות בעובי אחיד, תנועת "ידיים מתנופפות", הדיוקן המצויר לא דומה לדמות</td><td>דמויות תלת-ממד (Mixamo + Blender) שמצולמות לגיליונות פריימים</td></tr>
+        <tr><td>מפת העולם</td><td><span class="chip c-bad">חלש מאוד</span></td><td>משושים בצבע אחיד על רקע כהה, בלי שטח ובלי ציוני דרך</td><td>מפה מצוירת: אריחי שטח, ציוני דרך, ערפל מונפש</td></tr>
+        <tr><td>אפקטים ומצלמה</td><td><span class="chip c-bad">חלש</span></td><td>אש היא נקודות זוהרות, שיטפון הוא מלבן כחול, המצלמה נעצרת בבת אחת</td><td>מצלמה עם תנופה + אש ומים עם שכבות, עשן ורעד חום</td></tr>
+        <tr><td>פני השטח</td><td><span class="chip c-bad">חלש</span></td><td>ציור אחד שזז יחד עם המצלמה. אין עננים, אין לילה אמיתי</td><td>4 שכבות עומק + שמיים לפי שעה ביום + מזג אוויר</td></tr>
+        <tr><td>חדרים</td><td><span class="chip c-warn">בינוני</span></td><td>הציורים עצמם טובים, אבל שטוחים וקפואים. הזוהר מעליהם שוטף את הצבע</td><td>פיצול לשכבות (אנשים עוברים מאחורי רהיטים) + מכונות מונפשות</td></tr>
+        <tr><td>מבנה ותאורה</td><td><span class="chip c-warn">בינוני</span></td><td>האור מצויר ולא מוטל, אין צללים לאנשים, המבט הכללי נראה כמו טבלה</td><td>שכבת אור אמיתית + צללי דמויות + עובי לבטון</td></tr>
+        <tr><td>ממשק</td><td><span class="chip c-warn">בינוני</span></td><td>יש זהות "Bunker OS" טובה, אבל הפס העליון יוצא מהמסך בטלפון ומספרים נערמים</td><td>תיקוני פריסה + מסך פתיחה מצויר + חומרי ממשק מצוירים</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section>
+  <h2>ההחלטה הגדולה: באיזה כיוון "3D"</h2>
+  <p style="max-width:65ch">שלוש דרכים נבדקו. סוכן הכיוון הטכנולוגי בנה גם הדגמה חיה קטנה בתלת-ממד: שלושה חדרים, מנורות עם צללים אמיתיים ואנשים שהולכים. גם עם צורות זמניות זה נראה כמו מקום פיזי ומואר.</p>
+  <div class="tablebox">
+    <table>
+      <thead><tr><th>מסלול</th><th>איך זה ייראה</th><th>זמן עבודה</th><th>קוד שנשמר</th><th>סיכון</th></tr></thead>
+      <tbody>
+        <tr><td><strong>A. ‏2.5D</strong><br>נשארים ב-Pixi</td><td>"2D פרימיום": אור דינמי על הציורים, שכבות עומק, דמויות שצולמו מתלת-ממד</td><td class="num">4–7 שבועות</td><td class="num">~95%</td><td>עדיין ייראה 2D</td></tr>
+        <tr><td><strong>B. ‏3D אמיתי</strong><br>three.js בתוך המשחק</td><td>דיורמה בסגנון Fallout Shelter: אור וצללים אמיתיים, ~2,500 אנימציות מקצועיות</td><td class="num">10–14 שבועות</td><td class="num">~70%</td><td>חום וסוללה בטלפון, התאמת סגנון</td></tr>
+        <tr><td><strong>C. מעבר למנוע</strong><br>Unity / Godot</td><td>כמו B, בלי רווח ממשי במצלמה הזאת</td><td class="num">24–36+ שבועות</td><td class="num">~0%</td><td>חודשים בלי התקדמות, ממשק עברית מאפס</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="answer">
+    <h3>ההמלצה שלי</h3>
+    <p>הסוכנים חלוקים כאן. סוכן הטכנולוגיה מכוון ל-B. סוכני החדרים, התאורה ופני השטח אומרים ש-A נותן כ-80% מהתחושה בחלק קטן מהעלות. כולם מסכימים על נקודה אחת: <strong>תלת-ממד למבנה בלי דמויות תלת-ממד ייראה גרוע יותר.</strong></p>
+    <p>לכן מתחילים בעבודה ששווה בשני המסלולים: <strong>צינור דמויות תלת-ממד</strong> ותיקונים מהירים בכל תחום. אחרי זה בונים ניסוי קטן של B ומריצים אותו על טלפון אנדרואיד אמיתי. אם הוא מחזיק 30 פריימים בשנייה בלי להתחמם, ממשיכים ל-B. אם לא, אותן דמויות בדיוק הופכות לגיליונות פריימים במסלול A. שום עבודה לא הולכת לפח.</p>
+  </div>
+</section>
+
+<section>
+  <h2>תוכנית עבודה</h2>
+  <div class="phases">
+    <div class="phase"><span class="when">שלב 0<br>~1–2 שבועות</span><div>
+      <h3>תיקונים מהירים, בלי אמנות חדשה</h3>
+      <ul>
+        <li>מצלמה: תנופה בשחרור, צביטה סביב האצבעות, מעבר רך לחדר, רעידה טובה יותר</li>
+        <li>הפחתת הזוהר הלבן בחדרים, בלום רק ממקורות אור, צללי דמויות ממנורה</li>
+        <li>אנימציות קטנות לכל 45 החדרים: אדים, להבות, מסכים מהבהבים, נוריות</li>
+        <li>עננים ערפל ציפורים ועשן בפני השטח, דשא נע ברוח, חתך אדמה לא ישר</li>
+        <li>אש עם עשן ושריפה שנשארת, הפסקת חשמל שמכבה מנורות באמת</li>
+        <li>ממשק: פס עליון שנכנס למסך, מספרים לפי שניות ובלי ערימות, סימני ± בכיוון הנכון, גופן קריא</li>
+        <li>אנשים עומדים מול הציוד שהם עובדים עליו, מרווח ביניהם, מעבר רך בין תנוחות</li>
+      </ul></div></div>
+    <div class="phase"><span class="when">שלב 1<br>~2–3 שבועות</span><div>
+      <h3>תשתית ששווה בכל מסלול</h3>
+      <ul>
+        <li>צינור דמויות: גופים + אנימציות מ-Mixamo ← סקריפט Blender (כבר מותקן אצלך) ← קבצי תלת-ממד</li>
+        <li>אב-טיפוס אחד: עובד סדנה (עמידה, הליכה, פטישה) בתוך חדר אמיתי, להשוואה מול הקיים</li>
+        <li>הוצאת "התנהגות האנשים" מקוד הציור, וממשק אחיד לצייר, כדי שאפשר יהיה להחליף צייר</li>
+      </ul></div></div>
+    <div class="phase"><span class="when">שלב 2<br>~1–2 שבועות</span><div>
+      <h3>ניסוי ההחלטה</h3>
+      <ul>
+        <li>קומה אחת בתלת-ממד אמיתי מאחורי מתג <code>?gfx3</code>: 3–4 חדרים, 15 אנשים, תוויות מעל</li>
+        <li>הרצה על טלפון אנדרואיד בינוני: מהירות, חום אחרי 15 דקות, סוללה, גודל קובץ</li>
+        <li>החלטה משותפת: B או A</li>
+      </ul></div></div>
+    <div class="phase"><span class="when">שלב 3<br>4–12 שבועות</span><div>
+      <h3>המהלכים הגדולים</h3>
+      <ul>
+        <li>כל הדמויות במראה החדש, כולל ישנים, רוכבי מעלית ויציאה למשלחות</li>
+        <li>חדרים בשכבות עם אור אמיתי (A), או חדרים בנויים בתלת-ממד (B)</li>
+        <li>פני שטח בשכבות עם שמיים, לילה ומזג אוויר, ומעבר מונפש בין תקופות</li>
+        <li>מפת עולם מצוירת, מסך פתיחה עם לוגו, ממשק מחומרים מצוירים (פלדה, זכוכית, נייר)</li>
+        <li>רגעים גדולים מבוימים: חפירת קומה, סיום בנייה, תקופה חדשה</li>
+      </ul></div></div>
+  </div>
+</section>
+
+<section>
+  <h2>מה צריך ממך</h2>
+  <ul class="asks">
+    <li><strong>אישור כיוון.</strong> להתחיל בשלב 0 ושלב 1, ולהשאיר את ההחלטה בין A ל-B לאחרי הניסוי בטלפון.</li>
+    <li><strong>Mixamo.</strong> אנימציות הדמויות חינמיות ומותרות לשימוש מסחרי, אבל צריך להתחבר עם חשבון Adobe ולהוריד את הקבצים בעצמך. אני אכין רשימה מדויקת של מה להוריד.</li>
+    <li><strong>טלפון אנדרואיד לבדיקה</strong> בשלב 2, רצוי טלפון בינוני ולא דגל.</li>
+    <li><strong>תקציב נכסים (לא חובה).</strong> חבילות תלת-ממד כמו Synty עולות בערך $100–400 ונראות טוב יותר מהחינמיות. הרישיון שלהן אוסר שימוש בכלי בינה מלאכותית ודורש אישור לגבי משחק ווב. אפשר להסתדר גם עם חומרים חינמיים (Quaternius, Kenney, Poly Haven).</li>
+  </ul>
+</section>
+
+<section>
+  <h2>פירוט לפי תחום</h2>
+
+  <details>
+    <summary><h3>דמויות</h3><span class="chip c-bad">חלש מאוד</span></summary>
+    <div class="dbody">
+      <span class="lbl">מה קיים</span>
+      <p>שלד חתוך של 10 חלקים, 19 תלבושות עבודה, 7 תסרוקות ו-7 כובעים, מצבי רוח ומצמוץ, 14 דיוקנאות מצוירים. העבודה של כל אחד נקראת מיד, והקנה מידה נכון ביחס לחדר.</p>
+      <span class="lbl">מה נראה זול</span>
+      <ul>
+        <li>גפיים בעובי אחיד בלי ברך או מרפק, גוף מלבני, כף יד עיגול, פנים של נקודה וקו</li>
+        <li>כל פעולה היא סיבוב של כתף בגל סינוס. אין ציפייה, פגיעה או המשכיות. הסיבוב לצד השני קורה בפריים אחד, והרגליים מחליקות</li>
+        <li>הטבחית מבשלת עם הגב לכיריים, שני עובדים בסדנה "מפטישים" אחד את השני, החקלאים משקים את האוויר</li>
+        <li>הדיוקן (משקפי מגן, מסכת גז, צעיף) לא מופיע על הדמות. ילדים הם מבוגרים מוקטנים, ויש תאומים כי יש 11 דיוקנאות ל-28 אנשים</li>
+        <li>הישנים נעלמים, אנשים מתגשמים בין חדרים במקום לנסוע במעלית</li>
+      </ul>
+      <span class="lbl">הכיוון</span>
+      <p>דמויות תלת-ממד מצולמות לגיליונות פריימים. בזמן ריצה הן עדיין תמונות פשוטות, כך שעשרות אנשים לא מכבידים על הטלפון. אותם קבצים משמשים גם ל-3D אמיתי אם נבחר במסלול B. דוח מלא: <span class="path">store/gfx-audit/people.md</span></p>
+    </div>
+  </details>
+
+  <details>
+    <summary><h3>חדרים</h3><span class="chip c-warn">בינוני</span></summary>
+    <div class="dbody">
+      <span class="lbl">מה קיים</span>
+      <p>45 ציורים (15 סוגים × 3 רמות), 2 אולמות, 12 הריסות. הרמות הנמוכות מצוירות באיכות מסחרית, השדרוג נראה כמו "אותו חדר משוקם", והמנורות מחוברות למערכת החשמל.</p>
+      <span class="lbl">מה נראה זול</span>
+      <ul>
+        <li>כל חדר הוא תמונה אחת. אנשים מצוירים תמיד מעל הכול ואף אחד לא עומד מאחורי מיטה או קונסולה</li>
+        <li>רק ל-3 מתוך 45 החדרים יש אפקטים חיים. אדים, להבות, מנועים ומסכים קפואים</li>
+        <li>האנשים בגובה ~65 יחידות והרהיטים המצוירים ~46, כך שאדם גבוה כמו קומה עליונה של מיטה. זה נראה כמו צעצוע</li>
+        <li>עד 4 אלומות זוהר מעל ציורים שכבר מוארים, וזה יוצר כתמים לבנים</li>
+        <li>הרמה העליונה בסגנון אחר: מבריק וציאני, "רינדור סטוק". האולמות בפרספקטיבה עמוקה שלא מתאימה לחדרים</li>
+        <li>חדרים מאוחדים חוזרים כתמונת ראי. הציור רך בזום קרוב. הפיגומים מלבנים שטוחים</li>
+        <li>רק 3 מתוך 45 קובצי המקור קיימים, כך שרזולוציה גבוהה יותר דורשת יצירה מחדש</li>
+      </ul>
+      <p>דוח מלא: <span class="path">store/gfx-audit/rooms.md</span></p>
+    </div>
+  </details>
+
+  <details>
+    <summary><h3>מבנה, מעלית ותאורה</h3><span class="chip c-warn">בינוני</span></summary>
+    <div class="dbody">
+      <span class="lbl">מה קיים</span>
+      <p>ערכת בטון ופלדה מצוירת שמשתנה לפי תקופה, מעלית מכנית מלאה (הדבר הכי "פיזי" במשחק), הבהוב משותף לכל המנורות, ערפל עומק, חלקיקי אבק ואדים.</p>
+      <span class="lbl">מה נראה זול</span>
+      <ul>
+        <li>כל האור הוא זוהר שמתווסף מעל ציורים מוארים, אז השחורים הופכים לאפור חלבי. לאנשים אין צד מואר ואין צל על הקיר</li>
+        <li>במבט כללי הבונקר נראה כמו גיליון אלקטרוני: כל הקומות זהות, ולחתך בבטון ובסלע אין עובי</li>
+        <li>אין עומק מצלמה: הכול זז יחד, בלי חזית ובלי שכבות</li>
+        <li>הסלע כמעט שחור, ויש חלל כחול-כהה מתחת לבונקר</li>
+        <li>צבע אחד לכל המשחק, בלי לילה מתחת לאדמה. הגרעיניות היא שכבת CSS שנראית כמו רעש וידאו</li>
+      </ul>
+      <p>דוח מלא: <span class="path">store/gfx-audit/structure-lighting.md</span></p>
+    </div>
+  </details>
+
+  <details>
+    <summary><h3>פני השטח, מחוזות ומפת העולם</h3><span class="chip c-bad">חלש</span></summary>
+    <div class="dbody">
+      <span class="lbl">מה קיים</span>
+      <p>4 ציורי תקופה שמספרים טוב את הסיפור "העולם מחלים", דלת מגן שמשתנה לפי תקופה עם גלגל שמסתובב, פנסי לילה, מחוזות אווירתיים (במיוחד האגם).</p>
+      <span class="lbl">מה נראה זול</span>
+      <ul>
+        <li>מפת העולם: משושים בצבע אחיד ברשת חשוכה. 6 ציורי האזורים קיימים אבל מופיעים רק בדוחות משלחת</li>
+        <li>הנוף זז באותה מהירות כמו המצלמה. עננים, ציפורים וצמחייה לא זזים</li>
+        <li>לילה הוא גוון כחול-חום, בלי כוכבים או ירח, ושמש השקיעה נשארת בתמונה</li>
+        <li>הדלת נקייה ומוארת מלפנים, כמו קריקטורה, מול ציור מואר מאחור</li>
+        <li>חתך האדמה הוא פס ישר לכל הרוחב. אין מזג אוויר. מעבר תקופה הוא חיתוך בבת אחת</li>
+      </ul>
+      <p>דוח מלא: <span class="path">store/gfx-audit/surface-world.md</span></p>
+    </div>
+  </details>
+
+  <details>
+    <summary><h3>אפקטים, אנימציית עולם ומצלמה</h3><span class="chip c-bad">חלש</span></summary>
+    <div class="dbody">
+      <span class="lbl">מה קיים</span>
+      <p>המעלית מונפשת היטב (גלגלת לפי מהירות, כבלים מתנדנדים). יש מערכת חלקיקים עם תקציב ורמות איכות, ובלום זול ונכון טכנית.</p>
+      <span class="lbl">מה נראה זול</span>
+      <ul>
+        <li>אש היא אשכול נקודות זוהרות בלי עשן, בלי רעד חום ובלי סימני שריפה</li>
+        <li>שיטפון הוא מלבן כחול עם קו גלי. פולשים מצוירים במלבני קוד. הפסקת חשמל היא קופסה שחורה</li>
+        <li>תג האזעקה והמספרים "+6.5" מסתירים את השריפה</li>
+        <li>המצלמה נעצרת בבת אחת כשעוזבים, הצביטה סביב מרכז המסך, המעבר לחדר קופץ</li>
+        <li>לחפירת קומה, סיום בנייה ותקופה חדשה אין בנייה של רגע</li>
+        <li>באג: המספרים רצים פי 2 מהר יותר במסכי 120Hz</li>
+      </ul>
+      <p>דוח מלא: <span class="path">store/gfx-audit/vfx-animation.md</span></p>
+    </div>
+  </details>
+
+  <details>
+    <summary><h3>ממשק</h3><span class="chip c-warn">בינוני</span></summary>
+    <div class="dbody">
+      <span class="lbl">מה קיים</span>
+      <p>זהות "Bunker OS" אמיתית: לוחות פלדה מסומררים, מסכי CRT ירוקים, פסים מקוטעים. אייקונים וקטוריים משלנו (לא אימוג'י), ודיוקנאות ותמונות בנייה מצוירים.</p>
+      <span class="lbl">מה נראה זול</span>
+      <ul>
+        <li>הפס העליון ברוחב 465 פיקסלים במסך של 430, אז כפתור התפריט בחוץ</li>
+        <li>המסך הראשון שחור עם "הקש להיכנס", בלי לוגו ובלי ציור</li>
+        <li>מספרי ייצור נערמים ל-3–4 שכבות מעל כל חדר</li>
+        <li>הפאנלים מסתירים את החדר שהם מתארים, ואין כפתור סגירה</li>
+        <li>שאריות סגול וכתום מערכת צבעים ישנה. גופן הכותרות לא קריא בגודל קטן ("ה" נראית כמו "ק")</li>
+        <li>סימני ± בצד הלא נכון בעברית ("2.9+")</li>
+      </ul>
+      <p>דוח מלא + 17 צילומי מסך: <span class="path">store/gfx-audit/ui.md</span>, <span class="path">store/gfx-audit/shots/</span></p>
+    </div>
+  </details>
+</section>
+
+<p class="foot">הסוכנים רק בדקו ולא שינו שום קובץ במשחק. כל הצילומים נעשו בסלוטי בדיקה (<code>gfx</code>, <code>uiaudit-new</code>). השמירה הראשית לא נגעה. הדוחות המלאים באנגלית, עם הפניות לשורות קוד, נמצאים ב-<span class="path">store/gfx-audit/</span>.</p>
+
+</div>

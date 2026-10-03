@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="he">
+<head>
+  <meta charset="utf-8" />
+  <title>Before / after</title>
+  <link href="https://fonts.googleapis.com/css2?family=Karantina:wght@700&display=swap" rel="stylesheet" />
+  <style>body { background: #111; color: #ccc; font: 13px monospace; padding: 12px; } img { max-width: 100%; display: block; margin: 8px 0; }</style>
+</head>
+<body>
+  <pre id="log"></pre>
+  <script type="module">
+    // Joins store/compare/<a>/<shot>.png and store/compare/<b>/<shot>.png side by side with captions,
+    // saved as store/compare/pairs/<b>-<shot>.png. Example:
+    // /tools/compare.html?a=before&b=g1&shots=cam2-floors-close,zoom-detail
+    const p = new URLSearchParams(location.search);
+    const a = p.get('a') ?? 'before', b = p.get('b') ?? 'g1';
+    const shots = (p.get('shots') ?? '').split(',').filter(Boolean);
+    const log = document.getElementById('log');
+    const load = async src => { const i = new Image(); i.src = `${src}?v=${Date.now()}`; await i.decode(); return i; };
+    await document.fonts.load('700 48px Karantina');
+    for (const s of shots) {
+      const [l, r] = await Promise.all([load(`/store/compare/${a}/${s}.png`), load(`/store/compare/${b}/${s}.png`)]);
+      const gap = 16, band = 64;
+      const c = document.createElement('canvas');
+      c.width = l.width + r.width + gap;
+      c.height = Math.max(l.height, r.height) + band;
+      const ctx = c.getContext('2d');
+      ctx.fillStyle = '#0b0c0e';
+      ctx.fillRect(0, 0, c.width, c.height);
+      ctx.drawImage(l, 0, band);
+      ctx.drawImage(r, l.width + gap, band);
+      ctx.font = '700 48px Karantina';
+      ctx.textAlign = 'center';
+      ctx.direction = 'rtl';
+      ctx.fillStyle = '#9a9a9a';
+      ctx.fillText('לפני', l.width / 2, 48);
+      ctx.fillStyle = '#ffb547';
+      ctx.fillText('אחרי', l.width + gap + r.width / 2, 48);
+      const blob = await new Promise(res => c.toBlob(res, 'image/png'));
+      await fetch(`/__store/save/store/compare/pairs/${b}-${s}.png`, { method: 'POST', body: blob });
+      const img = document.createElement('img');
+      img.src = URL.createObjectURL(blob);
+      document.body.appendChild(img);
+      log.textContent += `${b}-${s}.png ${(blob.size / 1024).toFixed(0)} KB\n`;
+    }
+    log.textContent += 'done\n';
+    window.__pairsDone = true;
+  </script>
+</body>
+</html>

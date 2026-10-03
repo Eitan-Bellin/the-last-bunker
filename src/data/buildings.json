@@ -1,0 +1,707 @@
+{
+  "quarters": {
+    "name": {
+      "en": "Living Quarters",
+      "he": "מגורים"
+    },
+    "description": {
+      "en": "Houses survivors. Each level adds 3 beds.",
+      "he": "מאכלסת ניצולים. כל רמה מוסיפה 3 מיטות."
+    },
+    "tier": 1,
+    "size": {
+      "w": 2,
+      "h": 2
+    },
+    "maxLevel": 5,
+    "baseCost": {
+      "materials": 30
+    },
+    "costMultiplier": 1.8,
+    "constructionTime": 60,
+    "effects": {
+      "maxPopulation": {
+        "base": 4,
+        "perLevel": 3
+      }
+    },
+    "maxWorkers": 0,
+    "powerConsumption": 1,
+    "color": "#8B7355"
+  },
+  "generator": {
+    "name": {
+      "en": "Generator",
+      "he": "גנרטור"
+    },
+    "description": {
+      "en": "Generates power. Without power, everything slows down.",
+      "he": "מייצר חשמל. בלי חשמל, הכל מאט."
+    },
+    "tier": 1,
+    "size": {
+      "w": 2,
+      "h": 1
+    },
+    "maxLevel": 5,
+    "baseCost": {
+      "materials": 25
+    },
+    "costMultiplier": 1.7,
+    "constructionTime": 40,
+    "production": {
+      "power": {
+        "base": 6,
+        "perLevel": 0.5
+      }
+    },
+    "optimalStat": "endurance",
+    "statBonusPerPoint": 0.05,
+    "baseEfficiency": 0.5,
+    "maxWorkers": 1,
+    "powerConsumption": 0,
+    "color": "#C4A43A"
+  },
+  "farm": {
+    "name": {
+      "en": "Farm",
+      "he": "חווה"
+    },
+    "description": {
+      "en": "Grows food to feed your survivors.",
+      "he": "מגדלת אוכל להאכלת הניצולים."
+    },
+    "tier": 1,
+    "size": {
+      "w": 2,
+      "h": 2
+    },
+    "maxLevel": 5,
+    "baseCost": {
+      "materials": 20
+    },
+    "costMultiplier": 1.6,
+    "constructionTime": 45,
+    "production": {
+      "food": {
+        "base": 0.6,
+        "perLevel": 0.5
+      }
+    },
+    "optimalStat": "strength",
+    "statBonusPerPoint": 0.05,
+    "maxWorkers": 2,
+    "powerConsumption": 1,
+    "color": "#4A7C3F"
+  },
+  "waterPump": {
+    "name": {
+      "en": "Water Pump",
+      "he": "משאבת מים"
+    },
+    "description": {
+      "en": "Pumps water from underground reserves.",
+      "he": "שואבת מים ממאגרים תת-קרקעיים."
+    },
+    "tier": 1,
+    "size": {
+      "w": 1,
+      "h": 2
+    },
+    "maxLevel": 5,
+    "baseCost": {
+      "materials": 15
+    },
+    "costMultiplier": 1.5,
+    "constructionTime": 30,
+    "production": {
+      "water": {
+        "base": 0.6,
+        "perLevel": 0.5
+      }
+    },
+    "optimalStat": "endurance",
+    "statBonusPerPoint": 0.05,
+    "maxWorkers": 1,
+    "powerConsumption": 2,
+    "color": "#4A90C4"
+  },
+  "workshop": {
+    "name": {
+      "en": "Workshop",
+      "he": "סדנה"
+    },
+    "description": {
+      "en": "Salvages and crafts building materials.",
+      "he": "ממחזרת ומייצרת חומרי בנייה."
+    },
+    "tier": 1,
+    "size": {
+      "w": 2,
+      "h": 1
+    },
+    "maxLevel": 5,
+    "baseCost": {
+      "materials": 15
+    },
+    "costMultiplier": 1.7,
+    "constructionTime": 40,
+    "production": {
+      "materials": {
+        "base": 0.5,
+        "perLevel": 0.5
+      }
+    },
+    "optimalStat": "agility",
+    "statBonusPerPoint": 0.05,
+    "maxWorkers": 2,
+    "powerConsumption": 2,
+    "color": "#A0603A"
+  },
+  "medbay": {
+    "name": {
+      "en": "Medbay",
+      "he": "מרפאה"
+    },
+    "description": {
+      "en": "Produces medicine and heals the wounded.",
+      "he": "מייצרת תרופות ומרפאת פצועים."
+    },
+    "tier": 1,
+    "size": {
+      "w": 1,
+      "h": 2
+    },
+    "maxLevel": 5,
+    "baseCost": {
+      "materials": 40
+    },
+    "costMultiplier": 1.8,
+    "constructionTime": 60,
+    "production": {
+      "medicine": {
+        "base": 0.05,
+        "perLevel": 0.5
+      }
+    },
+    "optimalStat": "intelligence",
+    "statBonusPerPoint": 0.05,
+    "maxWorkers": 1,
+    "powerConsumption": 2,
+    "color": "#C94C4C"
+  },
+  "canteen": {
+    "name": {
+      "en": "Canteen",
+      "he": "חדר אוכל"
+    },
+    "description": {
+      "en": "A warm meal together lifts everyone's spirits.",
+      "he": "ארוחה חמה ביחד מרימה את המורל של כולם."
+    },
+    "tier": 1,
+    "size": {
+      "w": 2,
+      "h": 1
+    },
+    "maxLevel": 5,
+    "baseCost": {
+      "materials": 35,
+      "food": 10
+    },
+    "costMultiplier": 1.9,
+    "constructionTime": 50,
+    "effects": {
+      "morale": {
+        "base": 8,
+        "perLevel": 4
+      }
+    },
+    "optimalStat": "charisma",
+    "statBonusPerPoint": 0.05,
+    "maxWorkers": 1,
+    "powerConsumption": 1,
+    "color": "#D98E3A"
+  },
+  "laboratory": {
+    "name": {
+      "en": "Laboratory",
+      "he": "מעבדה"
+    },
+    "description": {
+      "en": "Produces knowledge and speeds up research.",
+      "he": "מייצרת ידע ומאיצה מחקר."
+    },
+    "tier": 1,
+    "size": {
+      "w": 2,
+      "h": 1
+    },
+    "maxLevel": 5,
+    "baseCost": {
+      "materials": 50
+    },
+    "costMultiplier": 1.9,
+    "constructionTime": 90,
+    "production": {
+      "knowledge": {
+        "base": 0.15,
+        "perLevel": 0.5
+      }
+    },
+    "effects": {
+      "storageCap": {
+        "knowledge": 100
+      }
+    },
+    "optimalStat": "intelligence",
+    "statBonusPerPoint": 0.05,
+    "maxWorkers": 2,
+    "powerConsumption": 3,
+    "color": "#4A6A8A"
+  },
+  "radioTower": {
+    "name": {
+      "en": "Radio Room",
+      "he": "חדר רדיו"
+    },
+    "description": {
+      "en": "Broadcasts to the wasteland. Attracts new survivors.",
+      "he": "משדר אל השממה. מושך ניצולים חדשים."
+    },
+    "tier": 2,
+    "size": {
+      "w": 1,
+      "h": 2
+    },
+    "maxLevel": 5,
+    "baseCost": {
+      "materials": 80,
+      "scrap": 10
+    },
+    "costMultiplier": 2,
+    "constructionTime": 120,
+    "optimalStat": "charisma",
+    "statBonusPerPoint": 0.05,
+    "maxWorkers": 1,
+    "powerConsumption": 3,
+    "color": "#8A4A4A"
+  },
+  "hydroponics": {
+    "name": {
+      "en": "Hydroponics",
+      "he": "הידרופוניקה"
+    },
+    "description": {
+      "en": "Soil-free racks under grow lights. Lots of food, lots of power.",
+      "he": "מדפי גידול בלי אדמה תחת תאורה. הרבה אוכל, הרבה חשמל."
+    },
+    "tier": 2,
+    "size": {
+      "w": 2,
+      "h": 2
+    },
+    "maxLevel": 5,
+    "baseCost": {
+      "materials": 120,
+      "scrap": 20
+    },
+    "costMultiplier": 1.8,
+    "constructionTime": 150,
+    "production": {
+      "food": {
+        "base": 1.4,
+        "perLevel": 0.5
+      }
+    },
+    "optimalStat": "intelligence",
+    "statBonusPerPoint": 0.05,
+    "maxWorkers": 2,
+    "powerConsumption": 4,
+    "color": "#3E8A5A"
+  },
+  "waterPurifier": {
+    "name": {
+      "en": "Water Purifier",
+      "he": "מטהר מים"
+    },
+    "description": {
+      "en": "Filters contaminated groundwater into clean water.",
+      "he": "מסנן מי תהום מזוהמים למים נקיים."
+    },
+    "tier": 2,
+    "size": {
+      "w": 2,
+      "h": 1
+    },
+    "maxLevel": 5,
+    "baseCost": {
+      "materials": 100,
+      "scrap": 15
+    },
+    "costMultiplier": 1.8,
+    "constructionTime": 150,
+    "production": {
+      "water": {
+        "base": 1.4,
+        "perLevel": 0.5
+      }
+    },
+    "optimalStat": "intelligence",
+    "statBonusPerPoint": 0.05,
+    "maxWorkers": 2,
+    "powerConsumption": 3,
+    "color": "#3A7AA8"
+  },
+  "trainingRoom": {
+    "name": {
+      "en": "Training Room",
+      "he": "חדר כושר"
+    },
+    "description": {
+      "en": "Trainees gain experience three times faster.",
+      "he": "המתאמנים צוברים ניסיון פי 3 מהר יותר."
+    },
+    "tier": 2,
+    "size": {
+      "w": 2,
+      "h": 1
+    },
+    "maxLevel": 5,
+    "baseCost": {
+      "materials": 90
+    },
+    "costMultiplier": 1.9,
+    "constructionTime": 120,
+    "optimalStat": "strength",
+    "statBonusPerPoint": 0.05,
+    "maxWorkers": 2,
+    "powerConsumption": 2,
+    "color": "#8A5A4A"
+  },
+  "armory": {
+    "name": {
+      "en": "Armory",
+      "he": "נשקייה"
+    },
+    "description": {
+      "en": "Guards protect the bunker from raiders.",
+      "he": "שומרים מגינים על הבונקר מפני שודדים."
+    },
+    "tier": 2,
+    "size": {
+      "w": 1,
+      "h": 2
+    },
+    "maxLevel": 5,
+    "baseCost": {
+      "materials": 100,
+      "scrap": 25
+    },
+    "costMultiplier": 1.9,
+    "constructionTime": 120,
+    "effects": {
+      "defense": {
+        "base": 10,
+        "perLevel": 6
+      }
+    },
+    "optimalStat": "agility",
+    "statBonusPerPoint": 0.05,
+    "maxWorkers": 2,
+    "powerConsumption": 1,
+    "color": "#6A6A4A"
+  },
+  "reactor": {
+    "name": {
+      "en": "Reactor",
+      "he": "כור גרעיני"
+    },
+    "description": {
+      "en": "Enormous power output. Handle with care.",
+      "he": "תפוקת חשמל עצומה. לטפל בזהירות."
+    },
+    "tier": 3,
+    "size": {
+      "w": 2,
+      "h": 2
+    },
+    "maxLevel": 5,
+    "baseCost": {
+      "materials": 400,
+      "scrap": 80,
+      "blueprints": 1
+    },
+    "costMultiplier": 2.5,
+    "constructionTime": 600,
+    "production": {
+      "power": {
+        "base": 30,
+        "perLevel": 0.5
+      }
+    },
+    "optimalStat": "intelligence",
+    "statBonusPerPoint": 0.05,
+    "baseEfficiency": 0.5,
+    "maxWorkers": 2,
+    "powerConsumption": 0,
+    "color": "#4A8A3A"
+  },
+  "storage": {
+    "name": {
+      "en": "Storage Room",
+      "he": "מחסן"
+    },
+    "description": {
+      "en": "Increases storage capacity for every resource.",
+      "he": "מגדיל את קיבולת האחסון של כל המשאבים."
+    },
+    "tier": 1,
+    "size": {
+      "w": 2,
+      "h": 2
+    },
+    "maxLevel": 5,
+    "baseCost": {
+      "materials": 35
+    },
+    "costMultiplier": 2,
+    "constructionTime": 50,
+    "effects": {
+      "storageCap": {
+        "food": 200,
+        "water": 200,
+        "power": 50,
+        "materials": 300,
+        "medicine": 20,
+        "knowledge": 150,
+        "scrap": 100
+      }
+    },
+    "maxWorkers": 0,
+    "powerConsumption": 1,
+    "color": "#7A6B5D"
+  },
+  "elevator": {
+    "name": {
+      "en": "Elevator",
+      "he": "מעלית"
+    },
+    "description": {
+      "en": "Unlocks a new floor. Essential for expansion.",
+      "he": "פותחת קומה חדשה. חיונית להרחבה."
+    },
+    "tier": 1,
+    "size": {
+      "w": 1,
+      "h": 2
+    },
+    "maxLevel": 1,
+    "baseCost": {
+      "materials": 100
+    },
+    "costMultiplier": 3,
+    "constructionTime": 300,
+    "effects": {
+      "unlockFloor": true
+    },
+    "maxWorkers": 0,
+    "powerConsumption": 3,
+    "color": "#555555"
+  },
+  "cave": {
+    "name": {
+      "en": "Crystal Cave",
+      "he": "מערת הגבישים"
+    },
+    "description": {
+      "en": "A natural cavern full of glowing crystals: miners dig materials and the crystals teach.",
+      "he": "מערה טבעית מלאה גבישים זוהרים: כורים מוציאים חומרים והגבישים מלמדים."
+    },
+    "tier": 3,
+    "size": {
+      "w": 4,
+      "h": 1
+    },
+    "maxLevel": 3,
+    "baseCost": {
+      "materials": 300,
+      "scrap": 60
+    },
+    "costMultiplier": 2.2,
+    "constructionTime": 300,
+    "production": {
+      "materials": {
+        "base": 0.6,
+        "perLevel": 0.5
+      },
+      "knowledge": {
+        "base": 0.08,
+        "perLevel": 0.5
+      }
+    },
+    "optimalStat": "strength",
+    "statBonusPerPoint": 0.05,
+    "baseEfficiency": 0.25,
+    "maxWorkers": 3,
+    "powerConsumption": 1,
+    "color": "#3a8a6a"
+  },
+  "lake": {
+    "name": {
+      "en": "Underground Lake",
+      "he": "האגם התת־קרקעי"
+    },
+    "description": {
+      "en": "Clean water without end and blind fish for the table. A calm place that lifts everyone.",
+      "he": "מים נקיים בלי סוף ודגים עיוורים לשולחן. מקום שליו שמרים את כולם."
+    },
+    "tier": 3,
+    "size": {
+      "w": 4,
+      "h": 1
+    },
+    "maxLevel": 3,
+    "baseCost": {
+      "materials": 500,
+      "scrap": 100
+    },
+    "costMultiplier": 2.2,
+    "constructionTime": 420,
+    "production": {
+      "water": {
+        "base": 1.4,
+        "perLevel": 0.5
+      },
+      "food": {
+        "base": 0.5,
+        "perLevel": 0.5
+      }
+    },
+    "effects": {
+      "morale": {
+        "base": 5,
+        "perLevel": 2
+      }
+    },
+    "optimalStat": "endurance",
+    "statBonusPerPoint": 0.05,
+    "baseEfficiency": 0.4,
+    "maxWorkers": 3,
+    "powerConsumption": 0,
+    "color": "#2a5a8a"
+  },
+  "metro": {
+    "name": {
+      "en": "Metro Station",
+      "he": "תחנת המטרו"
+    },
+    "description": {
+      "en": "Salvage from a dead city under our feet, and tunnels that speed every expedition.",
+      "he": "שלל מעיר מתה מתחת לרגלינו, ומנהרות שמקצרות כל משלחת."
+    },
+    "tier": 4,
+    "size": {
+      "w": 4,
+      "h": 1
+    },
+    "maxLevel": 3,
+    "baseCost": {
+      "materials": 800,
+      "scrap": 160,
+      "blueprints": 1
+    },
+    "costMultiplier": 2.2,
+    "constructionTime": 600,
+    "production": {
+      "scrap": {
+        "base": 0.4,
+        "perLevel": 0.5
+      },
+      "materials": {
+        "base": 0.3,
+        "perLevel": 0.5
+      }
+    },
+    "optimalStat": "agility",
+    "statBonusPerPoint": 0.05,
+    "baseEfficiency": 0.25,
+    "maxWorkers": 3,
+    "powerConsumption": 2,
+    "color": "#8a6a3a"
+  },
+  "atrium": {
+    "name": {
+      "en": "Atrium",
+      "he": "האטריום"
+    },
+    "description": {
+      "en": "A two-storey garden with a living tree under a sun lamp. The heart of the colony.",
+      "he": "גן בגובה שתי קומות עם עץ חי תחת מנורת שמש. הלב של המושבה."
+    },
+    "tier": 4,
+    "size": {
+      "w": 3,
+      "h": 2
+    },
+    "maxLevel": 3,
+    "baseCost": {
+      "materials": 650,
+      "scrap": 120,
+      "blueprints": 1
+    },
+    "costMultiplier": 2.4,
+    "constructionTime": 900,
+    "effects": {
+      "morale": {
+        "base": 14,
+        "perLevel": 6
+      },
+      "maxPopulation": {
+        "base": 4,
+        "perLevel": 2
+      }
+    },
+    "optimalStat": "charisma",
+    "statBonusPerPoint": 0.05,
+    "baseEfficiency": 0.5,
+    "maxWorkers": 2,
+    "powerConsumption": 4,
+    "color": "#6a9a3a"
+  },
+  "reactorHall": {
+    "name": {
+      "en": "Reactor Hall",
+      "he": "אולם הכור"
+    },
+    "description": {
+      "en": "A fusion core two storeys tall. Enough light for a city, if it is kept cool.",
+      "he": "ליבת היתוך בגובה שתי קומות. מספיק אור לעיר שלמה, אם שומרים עליה קרה."
+    },
+    "tier": 5,
+    "size": {
+      "w": 3,
+      "h": 2
+    },
+    "maxLevel": 3,
+    "baseCost": {
+      "materials": 1200,
+      "scrap": 300,
+      "blueprints": 2
+    },
+    "costMultiplier": 2.5,
+    "constructionTime": 1500,
+    "production": {
+      "power": {
+        "base": 90,
+        "perLevel": 0.5
+      }
+    },
+    "optimalStat": "intelligence",
+    "statBonusPerPoint": 0.05,
+    "baseEfficiency": 0.4,
+    "maxWorkers": 3,
+    "powerConsumption": 0,
+    "color": "#2a8a9a"
+  }
+}
