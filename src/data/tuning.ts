@@ -23,7 +23,7 @@ export const TUNING = {
    * [P4] From Act II every price (and the storage that holds it) is this many times its hours: contracts and outposts
    * bring income on top of the rooms, so the same Acts take the same days.
    */
-  priceScale: 2.8,
+  priceScale: 3.5,
   /** From Act III on, this share of a price is also asked in each older currency (in its own reference income). */
   olderCurrencyShare: 0.4,
   /** L2: each Act's currency can be stored for this many hours of its reference income (index = current Act). */
@@ -47,7 +47,7 @@ export const TUNING = {
   maxUpgradeSeconds: 20 * 3600,
   /** Digging: seconds per new floor (index = floors after the dig); deeper floors grow by digTimeGrowth each. */
   digSeconds: [0, 0, 0, 0, 60, 300, 1800, 3600, 7200],
-  digTimeGrowth: 1.25,
+  digTimeGrowth: 1.15,
 } as const;
 
 export type Tuning = typeof TUNING;

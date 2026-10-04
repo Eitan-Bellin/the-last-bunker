@@ -18,6 +18,7 @@ export interface EndingDef {
 }
 
 const done = (s: GameState, id: string) => !!s.research[id]?.completed;
+const law = (s: GameState, id: string) => (s.longGame?.policy.laws ?? []).includes(id);
 const contracts = (s: GameState) => (s.stats as unknown as { contractsDone?: number }).contractsDone ?? 0;
 
 export const ENDINGS: EndingDef[] = [
@@ -28,7 +29,9 @@ export const ENDINGS: EndingDef[] = [
       he: 'בונקר 17 לא נשאר מתחת לאדמה. הדרכים שסללתם, החוזים ששמרתם והאנשים שהאכלתם הפכו שכנים לברית. כשתתחיל הבראשית, היא תתחיל עם חברים.',
       en: 'Bunker 17 did not stay underground. The roads you paved, the contracts you kept and the people you fed turned neighbours into an alliance. When Genesis begins, it begins among friends.',
     },
-    score: s => ['terminus', 'clan', 'noa'].filter(p => relationLevel(s, p) >= 3).length * 2 + Math.min(4, contracts(s) / 250) + (done(s, 'diplomacy') ? 2 : 0),
+    // Read from the choices: the Diplomacy doctrine, the Commune, open doors, and friends on every road.
+    score: s => (done(s, 'diplomacy') ? 3 : 0) + (done(s, 'commune') ? 1 : 0) + (law(s, 'openDoors') ? 1 : 0)
+      + (['terminus', 'clan', 'noa'].every(p => relationLevel(s, p) >= 5) ? 1 : 0) + Math.min(0.5, contracts(s) / 4000),
   },
   {
     id: 'fortress', icon: '[[vault]]', legacy: 0.1,
@@ -37,7 +40,7 @@ export const ENDINGS: EndingDef[] = [
       he: 'העולם ניסה לקחת ממכם שוב ושוב, ושוב ושוב הדלת החזיקה. מה שתעבירו לעולם הבא הוא לא רק זרעים וספרים, אלא הידיעה שאפשר לעמוד.',
       en: 'The world tried to take from you again and again, and again and again the door held. What you carry into the next world is not only seeds and books, but the knowledge that one can stand.',
     },
-    score: s => (done(s, 'fortress') ? 3 : 0) + (done(s, 'rangers') ? 3 : 0) + (done(s, 'militia') ? 2 : 0) + (done(s, 'bunkerDoctrine') ? 1 : 0),
+    score: s => (done(s, 'fortress') ? 2 : 0) + (done(s, 'rangers') ? 2 : 0) + (done(s, 'militia') ? 1 : 0) + (done(s, 'bunkerDoctrine') ? 1 : 0) + (law(s, 'martialLaw') ? 1 : 0),
   },
   {
     id: 'garden', icon: '[[clover]]', legacy: 0.1,
@@ -46,7 +49,8 @@ export const ENDINGS: EndingDef[] = [
       he: 'מתחת לכיפת השמיים גדלים עכשיו עצים שאף אחד כאן לא ראה מעולם. אתם מוכנים לבראשית כמו שגננים מוכנים לאביב: עם זרעים בכיס וידיים בעפר.',
       en: 'Under the Sky Dome now grow trees nobody here had ever seen. You are ready for Genesis the way gardeners are ready for spring: seeds in the pocket and hands in the soil.',
     },
-    score: s => (done(s, 'hydroDoctrine') || done(s, 'mycelium') || done(s, 'surfaceFarms') ? 2 : 0) + (s.storyFlags.includes('project:greenhouse') ? 1.5 : 0) + (s.storyFlags.includes('project:skyDome') ? 1.5 : 0) + (done(s, 'commune') ? 1 : 0),
+    score: s => (done(s, 'mycelium') || done(s, 'surfaceFarms') ? 2 : done(s, 'hydroDoctrine') ? 1 : 0) + (s.storyFlags.includes('project:skyDome') ? 1 : 0)
+      + (law(s, 'dayOfRest') ? 1 : 0) + (law(s, 'rationing') ? 0.5 : 0),
   },
   {
     id: 'ark', icon: '[[vault]]', legacy: 0.05,
@@ -55,7 +59,7 @@ export const ENDINGS: EndingDef[] = [
       he: 'לא כל מה שבניתם ישרוד את המעבר. אבל השמות, השירים והזרעים בתיבה כן. מישהו בעולם הבא יפתח אותה, ויידע שהייתם כאן.',
       en: 'Not everything you built will survive the crossing. But the names, the songs and the seeds in the Ark will. Someone in the next world will open it, and know that you were here.',
     },
-    score: () => 1,
+    score: () => 1.5,
   },
 ];
 
