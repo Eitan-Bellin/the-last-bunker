@@ -30,6 +30,7 @@ jobs:
       # Stop before publishing if the code does not type-check or the game logic is broken (a silent break once made every simulation useless).
       - run: npx tsc --noEmit
       - run: node tools/sim/smoke.mjs
+      - run: node tools/sim/lint.mjs
       - run: npx vite build
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3

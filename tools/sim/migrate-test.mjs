@@ -2,10 +2,11 @@
 // Save-migration test: every sample save in a folder (default store/sim/saves-v4) is migrated and started with the live
 // code; exit 1 if any lost something or broke. Sample saves come from an older build: run.mjs --dump-save <prefix>.
 // Usage: node tools/sim/migrate-test.mjs [folder]
-import { readdirSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
+import { readdirSync, readFileSync, rmSync } from 'node:fs';
 import { join, resolve, dirname } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { bundleSim } from './bundle.mjs';
+import './node-globals.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const dir = resolve(process.cwd(), process.argv[2] ?? join(ROOT, 'store', 'sim', 'saves-v4'));
@@ -14,17 +15,6 @@ if (!files.length) {
   console.error(`no sample saves in ${dir}`);
   process.exit(1);
 }
-
-// Browser globals the game touches at import time (same stand-ins as worker.mjs).
-const g = globalThis;
-const mem = new Map();
-g.window ??= g;
-g.localStorage ??= { getItem: k => (mem.has(k) ? mem.get(k) : null), setItem: (k, v) => mem.set(k, String(v)), removeItem: k => mem.delete(k), clear: () => mem.clear(), key: i => [...mem.keys()][i] ?? null, get length() { return mem.size; } };
-g.location ??= { search: '', href: 'http://sim.local/', hostname: 'sim.local' };
-g.requestAnimationFrame ??= () => 0;
-g.cancelAnimationFrame ??= () => {};
-const el = () => ({ style: {}, classList: { add() {}, remove() {}, toggle() {} }, appendChild() {}, addEventListener() {}, setAttribute() {}, getContext: () => null });
-g.document ??= { createElement: el, body: el(), documentElement: el(), addEventListener() {}, removeEventListener() {}, hidden: false, querySelector: () => null, getElementById: () => null };
 
 const { file } = await bundleSim({ tag: 'migrate', entry: join(ROOT, 'tools', 'sim', 'migrate.ts') });
 const mod = await import(pathToFileURL(file).href);

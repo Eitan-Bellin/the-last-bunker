@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "check": "tsc --noEmit && node tools/sim/smoke.mjs"
+    "check": "tsc --noEmit && node tools/sim/smoke.mjs && node tools/sim/lint.mjs"
   },
   "devDependencies": {
     "@types/howler": "^2.2.13",
