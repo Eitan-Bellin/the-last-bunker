@@ -1,3 +1,4 @@
+import { isLiteMode } from '../core/crashGuard';
 import { Assets, Texture } from 'pixi.js';
 import { artEntry, type ArtEntry, type LightSpot } from './registry';
 
@@ -97,7 +98,7 @@ class ArtLibraryImpl {
     try {
       const tex = await Assets.load<Texture>({
         src: this.url(key),
-        data: { autoGenerateMipmaps: true, scaleMode: 'linear' },
+        data: { autoGenerateMipmaps: !isLiteMode(), scaleMode: 'linear' }, // lite mode: a quarter less texture memory
       });
       this.textures.set(key, tex);
       for (const fn of this.listeners) fn(key);

@@ -5,6 +5,7 @@ import {
 import { SFX, type Sfx } from './sfx';
 import { AMBIENCE, AMBIENCE_SECONDS, type AmbienceKey } from './ambience';
 import { BEDS, BED_SECONDS, ERA_BEDS, type BedKey } from './beds';
+import { isLiteMode } from '../core/crashGuard';
 
 export type ZoomMix = 'far' | 'mid' | 'close';
 
@@ -113,6 +114,11 @@ export class AudioEngine {
     return this.enabled;
   }
 
+  /** For crash records. */
+  get debugState(): string {
+    return this.ctx ? `${this.ctx.state} sfx=${this.sfx.size} rendering=${this.rendering}` : 'idle';
+  }
+
   toggle(): void {
     this.enabled = !this.enabled;
     try {
@@ -175,6 +181,8 @@ export class AudioEngine {
       const buffer = await renderLoop(BED_SECONDS, 2, BEDS[key], seed++, 0.85, LOOP_RATE);
       this.startBed(key, normalize(buffer, key === 'city' ? 0.22 : 0.26));
     }
+    // Lite mode (the game was killed twice in an hour) leaves out the two big extra music layers: ~13 MB and a long render.
+    if (isLiteMode()) return;
     const dark = await renderLoop(LOOP_SECONDS, LOOP_TAIL, darkTheme, 13, 1.0, MUSIC_RATE);
     this.darkGain = this.loopLayer(normalize(dark, 0.6), this.mood === 'dark' ? 1 : 0);
     const pulse = await renderLoop(EXPEDITION_SECONDS, 2, expeditionPulse, 17, 0.6, MUSIC_RATE);

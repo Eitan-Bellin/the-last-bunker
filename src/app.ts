@@ -5,6 +5,8 @@ import { getPartner } from './data/trade'; // [LateGame B2]
 import { WEEKLY_CREDITS } from './data/challenges'; // [LateGame B4]
 import { setSurfaceProjects } from './rendering/surface2'; // [LateGame B1]
 import { BunkerRenderer } from './rendering/BunkerRenderer';
+import { BRIGHTNESS_LEVELS } from './rendering/postfx';
+import { clearLiteMode, crashReport, installCrashGuard, isLiteMode, logCrash } from './core/crashGuard';
 import { HUD, type NavKey } from './ui/HUD';
 import { BuildMenu } from './ui/components/BuildMenu';
 import { BuildingPanel } from './ui/components/BuildingPanel';
@@ -28,7 +30,7 @@ import { BIOMES, POIS, type BiomeId } from './data/surface';
 import { BUILDING_ICONS, RESOURCE_ICONS, costRow, el } from './ui/dom';
 import { isBuildingUnlocked } from './systems/ResearchSystem';
 import type { Objective } from './systems/ObjectiveSystem';
-import type { BuildingType, MissionReport, Position, ResourceType, SurvivorState, SurvivorStats } from './core/GameState';
+import type { BuildingType, GameState, MissionReport, Position, ResourceType, SurvivorState, SurvivorStats } from './core/GameState';
 import { preloadIcons } from './rendering/richText';
 import { ArtLibrary } from './art/ArtLibrary';
 import { buildingArtKey, roomTier } from './art/registry';
@@ -172,6 +174,13 @@ export class GameApp {
         const cur = this.renderer.postfx?.forcedQuality ?? null;
         const next = order[(order.indexOf(cur) + 1) % order.length];
         this.renderer.postfx?.setQuality(next);
+        clearLiteMode(); // a hand-picked level ends the automatic lite mode
+      },
+      copyDiagnostics: () => this.copyDiagnostics(),
+      brightness: () => i18n.t(`settings.bright.${this.renderer.postfx?.brightness ?? 'bright'}`),
+      cycleBrightness: () => {
+        const fx = this.renderer.postfx;
+        if (fx) fx.setBrightness(BRIGHTNESS_LEVELS[(BRIGHTNESS_LEVELS.indexOf(fx.brightness) + 1) % BRIGHTNESS_LEVELS.length]);
       },
       notifications: () => {
         const perm = this.notifier.permission;
@@ -187,6 +196,7 @@ export class GameApp {
   }
 
   async start(): Promise<void> {
+    const guard = installCrashGuard(() => this.diagnostics());
     const canvas = document.getElementById('game-canvas') as HTMLCanvasElement;
     await Promise.all([this.renderer.init(canvas), preloadIcons(SCENE_ICONS).catch(() => undefined)]);
     await this.engine.init();
@@ -205,7 +215,9 @@ export class GameApp {
     if (import.meta.env.DEV) void import('./dev/storeShots').then(m => m.installStoreShots(this.renderer.app));
     if (import.meta.env.DEV) void import('./dev/camShots').then(m => m.installCamShots(this.renderer, () => this.state));
 
+    this.engine.onRenderStuck = fails => this.recoverRender(fails);
     this.engine.start();
+    if (guard.liteJustEnabled) this.toasts.show(`[[sparkle]] ${i18n.t('toast.liteMode')}`, 'info');
     if (!this.state.storyFlags.includes('intro:done')) this.playIntroSequence();
     // Back from a break, or people still waiting at the door from last time: the welcome screen comes first.
     else if (this.engine.offlineReport || (this.state.doorWaiting?.length ?? 0) > 0) this.showWelcome(this.engine.offlineReport);
@@ -289,12 +301,65 @@ export class GameApp {
     return this.engine.stateManager.state;
   }
 
+  /** Memory and GPU numbers saved with every crash record and heartbeat. */
+  private diagnostics(): Record<string, unknown> {
+    const mem = (performance as unknown as { memory?: { usedJSHeapSize: number } }).memory;
+    const s = this.engine?.stateManager?.state;
+    return {
+      uptimeMin: Math.round(performance.now() / 60000),
+      heapMB: mem ? Math.round(mem.usedJSHeapSize / 1048576) : null,
+      ...this.renderer.gpuStats(),
+      quality: this.renderer.postfx?.quality ?? null,
+      bright: this.renderer.postfx?.brightness ?? null,
+      lite: isLiteMode(),
+      audio: this.audio.debugState,
+      era: s?.era ?? null,
+      rooms: s?.buildings.length ?? null,
+      people: s?.survivors.length ?? null,
+    };
+  }
+
+  private copyDiagnostics(): void {
+    const text = crashReport();
+    const done = () => this.toasts.show(`[[save]] ${i18n.t('toast.diagnosticsCopied')}`, 'good');
+    if (navigator.clipboard?.writeText) navigator.clipboard.writeText(text).then(done, () => window.prompt('Diagnostics', text));
+    else window.prompt('Diagnostics', text);
+  }
+
+  /** The picture keeps failing: rebuild the scene first; if it still fails, save and reload (at most twice in 5 minutes). */
+  private recoverRender(fails: number): void {
+    if (fails <= 240) {
+      this.renderer.recoverGraphics();
+      return;
+    }
+    let stamps: number[] = [];
+    try { stamps = JSON.parse(sessionStorage.getItem('lastbunker_reloads') ?? '[]') as number[]; } catch { stamps = []; }
+    stamps = stamps.filter(x => Date.now() - x < 300_000);
+    if (stamps.length >= 2) return;
+    stamps.push(Date.now());
+    try { sessionStorage.setItem('lastbunker_reloads', JSON.stringify(stamps)); } catch { /* still reload */ }
+    logCrash('auto-reload', 'render kept failing');
+    void this.engine.forceSave().finally(() => location.reload());
+  }
+
   private frame(dt: number, alpha: number): void {
     const state = this.state;
-    this.renderer.render(state, dt, alpha);
-    this.hud.update(state);
-    this.popups.update();
+    // Each part is guarded on its own: a throwing panel must not stop the picture or the dialogs behind it.
+    this.renderer.frameTarget = this.engine.frameTargetMs;
+    try { this.renderer.render(state, dt, alpha); } catch (err) { logCrash('render', err); throw err; }
+    this.guarded('hud', () => { this.hud.update(state); this.popups.update(); });
+    this.guarded('ui', () => this.frameUi(state));
+  }
 
+  private guarded(name: string, fn: () => void): void {
+    try {
+      fn();
+    } catch (err) {
+      logCrash(`ui:${name}`, err);
+    }
+  }
+
+  private frameUi(state: GameState): void {
     const now = performance.now();
     if (now - this.lastPanelRefresh > PANEL_REFRESH_MS) {
       this.lastPanelRefresh = now;
@@ -1064,7 +1129,10 @@ export class GameApp {
       this.showWelcome(report as OfflineReport);
     });
 
-    document.addEventListener('pointerdown', () => this.engine.notifyInteraction(), { passive: true });
+    // Any touch, drag, wheel or key counts: the picture draws at full speed while the player is handling the bunker.
+    for (const type of ['pointerdown', 'pointermove', 'wheel', 'keydown'] as const) {
+      document.addEventListener(type, () => this.engine.notifyInteraction(), { passive: true });
+    }
   }
 
   private async toggleLanguage(): Promise<void> {

@@ -21,6 +21,8 @@ import { ArtLibrary } from '../art/ArtLibrary';
 import { artEntry, buildingArtKey, roomTier, ruinArtKey } from '../art/registry';
 import { buildCityMap, type CityMap } from './cityMap';
 import { PostFX } from './postfx';
+import { isLiteMode, logCrash } from '../core/crashGuard';
+import { isTouchDevice } from '../utils/device';
 import { coneTexture } from '../art/ArtLibrary';
 import { buildRuinVisual, type RuinVisual } from './ruinArt';
 import { iconSprite } from './richText';
@@ -69,6 +71,8 @@ interface RoomView {
   lane: Lane;
   width: number;
   height: number;
+  /** Off screen this frame: not drawn and not animated. */
+  culled?: boolean;
 }
 
 interface RuinView {
@@ -424,10 +428,17 @@ export class BunkerRenderer {
       width: window.innerWidth,
       height: window.innerHeight,
       backgroundColor: 0x0d0f1a,
-      antialias: true,
-      resolution: Math.min(window.devicePixelRatio, 2),
+      // Lite mode (after the game was killed twice in an hour): fewer pixels, no multisampling. The picture is drawn by
+      // render() itself rather than Pixi's ticker: a ticker that throws once never comes back.
+      // Phones: 1.5x is plenty for a painted scene and takes 44% fewer pixels than 2x (heat, battery); no multisampling either.
+      antialias: !isLiteMode() && !isTouchDevice(),
+      resolution: Math.min(window.devicePixelRatio, isLiteMode() ? 1.25 : isTouchDevice() ? 1.5 : 2),
       autoDensity: true,
+      autoStart: false,
+      // Textures idle for a while leave the GPU (they come back when drawn again): sooner than Pixi's minute, sooner still in lite mode.
+      gcMaxUnusedTime: isLiteMode() ? 15_000 : 30_000,
     });
+    this.watchContext(canvas);
     this.highlightLayer.eventMode = 'none';
     this.labelLayer.eventMode = 'none';
     this.dust.graphics.eventMode = 'none';
@@ -457,7 +468,7 @@ export class BunkerRenderer {
     setPopupBlocker((x, y) => this.inIncident(x, y)); // [camera]
     this.fitToScreen();
     // gfx-p0 light: the composite takes over the era grade and reads the era/night for vignette and night lighting.
-    this.postfx = new PostFX(this.app, this.worldContainer, this.grade, () => ({ era: this.surfaceEra, night: this.nightNow }));
+    this.postfx = new PostFX(this.app, this.worldContainer, this.grade, () => ({ era: this.surfaceEra, night: this.nightNow, target: this.frameTarget }));
     window.addEventListener('resize', () => {
       this.app.renderer.resize(window.innerWidth, window.innerHeight);
       this.fitToScreen();
@@ -1480,7 +1491,91 @@ export class BunkerRenderer {
     return lamps;
   }
 
-  render(state: GameState, _dt: number, _alpha: number): void {
+  /** Milliseconds per picture the engine aims for right now (set by the app each frame). */
+  frameTarget = 1000 / 60;
+
+  /** The GPU took the context away (app switch, memory pressure, driver reset); until it is back nothing is drawn. */
+  private contextLost = false;
+  private drawFails = 0;
+
+  private watchContext(canvas: HTMLCanvasElement): void {
+    canvas.addEventListener('webglcontextlost', ev => {
+      ev.preventDefault();
+      this.contextLost = true;
+      logCrash('gl-context-lost', 'WebGL context lost');
+    });
+    // Pixi's own listener (registered first) has already re-initialised the GL systems by now.
+    canvas.addEventListener('webglcontextrestored', () => {
+      this.contextLost = false;
+      this.recoverGraphics();
+    });
+  }
+
+  /**
+   * Rooms wholly off screen are neither drawn nor animated: zoomed in, most of the bunker is out of view, and every
+   * hidden room used to cost as much CPU and GPU as a visible one (heat, battery).
+   */
+  private cullRooms(): void {
+    const wc = this.worldContainer;
+    const s = wc.scale.x || 1;
+    const margin = 80; // glows and shadows reach past a room's edge
+    const x0 = -wc.x / s - margin;
+    const y0 = -wc.y / s - margin;
+    const x1 = (this.app.screen.width - wc.x) / s + margin;
+    const y1 = (this.app.screen.height - wc.y) / s + margin;
+    for (const v of this.views.values()) {
+      const r = v.root;
+      const seen = r.x < x1 && r.x + v.width > x0 && r.y < y1 && r.y + v.height > y0;
+      v.culled = !seen;
+      if (r.visible !== seen) r.visible = seen;
+    }
+  }
+
+  /** Numbers for crash records: how many textures the GPU holds and at what pixel density. */
+  gpuStats(): { gpuTextures: number; res: number } {
+    let n = -1;
+    try {
+      const items = (this.app.renderer.texture as unknown as { _managedTextures: { items: Record<string, unknown> } })._managedTextures.items;
+      n = 0;
+      for (const k in items) if (items[k]) n++;
+    } catch {
+      // internals moved: report unknown
+    }
+    return { gpuTextures: n, res: this.app.renderer.resolution };
+  }
+
+  /** Everything that holds GPU state is rebuilt from the game state: the cure for a scene left half-broken. */
+  recoverGraphics(): void {
+    this.resetScene();
+    this.undergroundSig = '';
+    this.utilitiesSig = '';
+    this.surfaceSig = '';
+    this.cityMapSig = '';
+    this.refreshSurface();
+  }
+
+  /** Updates the scene, then draws it; the picture is drawn even when the update threw halfway. */
+  render(state: GameState, dt: number, alpha: number): void {
+    try {
+      this.updateScene(state, dt, alpha);
+    } finally {
+      this.draw();
+    }
+  }
+
+  private draw(): void {
+    const gl = (this.app.renderer as { gl?: WebGL2RenderingContext }).gl;
+    if (this.contextLost || gl?.isContextLost()) return;
+    try {
+      this.app.render();
+      this.drawFails = 0;
+    } catch (err) {
+      this.drawFails++;
+      throw err;
+    }
+  }
+
+  private updateScene(state: GameState, _dt: number, _alpha: number): void {
     const now = performance.now();
     const dt = Math.min(0.1, (now - this.lastFrame) / 1000);
     this.lastFrame = now;
@@ -1503,9 +1598,12 @@ export class BunkerRenderer {
     this.decals?.animate(this.time, power); // [gfx2 wear]
     this.atmo?.update(this.time, dt, power, this.worldContainer, this.app.screen, this.postfx?.quality ?? 'high'); // [gfx2 wear]
     setRoomFxQuality(this.postfx?.quality ?? 'high'); // gfx-p0 rooms: heat haze on high, fewer particles on low
+    this.cullRooms();
     for (const [id, v] of this.views) {
-      v.visual?.animate(this.time, power);
-      v.scaffold?.animate(this.time, power);
+      if (!v.culled) {
+        v.visual?.animate(this.time, power);
+        v.scaffold?.animate(this.time, power);
+      }
       if (v.oldVisual) {
         v.fade += dt / 1.1;
         v.oldVisual.alpha = Math.max(0, 1 - v.fade);

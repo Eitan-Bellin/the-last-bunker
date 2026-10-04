@@ -14,6 +14,8 @@ function slotSuffix(): string {
 
 const AUTO_SAVE_KEY = `lastbunker_auto${slotSuffix()}`;
 const SAVE_SLOT_PREFIX = `lastbunker_slot${slotSuffix()}_`;
+/** The autosave as it was when this session began: if a session ever goes wrong, the last good game is still here. */
+const BACKUP_KEY = `${AUTO_SAVE_KEY}_bak`;
 
 export class SaveManager {
   async save(state: GameState, slot: 'auto' | number = 'auto'): Promise<void> {
@@ -25,11 +27,30 @@ export class SaveManager {
 
   async load(slot: 'auto' | number = 'auto'): Promise<GameState | null> {
     const key = slot === 'auto' ? AUTO_SAVE_KEY : `${SAVE_SLOT_PREFIX}${slot}`;
-    const compressed = await get<string>(key);
-    if (!compressed) return null;
-    const serialized = decompressFromUTF16(compressed);
-    if (!serialized) return null;
-    return JSON.parse(serialized) as GameState;
+    const main = await this.read(key);
+    if (main) {
+      // Remember the game we just loaded fine (best effort, never blocks the start).
+      if (slot === 'auto') void get<string>(key).then(raw => (raw ? set(BACKUP_KEY, raw) : undefined)).catch(() => undefined);
+      return main;
+    }
+    // Unreadable or missing main save: fall back to the backup rather than starting over (and overwriting it).
+    if (slot === 'auto') {
+      const backup = await this.read(BACKUP_KEY);
+      if (backup) return backup;
+    }
+    return null;
+  }
+
+  private async read(key: string): Promise<GameState | null> {
+    try {
+      const compressed = await get<string>(key);
+      if (!compressed) return null;
+      const serialized = decompressFromUTF16(compressed);
+      if (!serialized) return null;
+      return JSON.parse(serialized) as GameState;
+    } catch {
+      return null;
+    }
   }
 
   async deleteSave(slot: 'auto' | number): Promise<void> {

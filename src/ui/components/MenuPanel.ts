@@ -35,6 +35,11 @@ export interface MenuActions {
   /** Graphics quality: current label and cycling to the next setting. */
   graphics: () => string;
   cycleGraphics: () => void;
+  /** Screen brightness: current label and cycling to the next level. */
+  brightness: () => string;
+  cycleBrightness: () => void;
+  /** Puts the crash/diagnostics report on the clipboard. */
+  copyDiagnostics: () => void;
   /** Notifications (S6): current label, and turning them on (asks the system) or off. */
   notifications: () => string;
   toggleNotifications: () => Promise<void>;
@@ -72,7 +77,7 @@ export class MenuPanel {
     const sig = [
       this.tab, state.achievements.length, meta.isotope(state), JSON.stringify(state.prestige.upgrades),
       meta.canRebirth(state), this.tab === 'stats' ? Math.floor(state.stats.totalPlayTime / 5) : 0,
-      this.tab === 'genesis' ? meta.rebirthGain(state) : 0, this.actions.isSoundOn(), this.actions.graphics(),
+      this.tab === 'genesis' ? meta.rebirthGain(state) : 0, this.actions.isSoundOn(), this.actions.graphics(), this.actions.brightness(),
       this.tab === 'genesis' ? meta.rebirthRequirements(state).map(r => r.current).join(',') : '',
     ].join('|');
     if (sig === this.signature) return;
@@ -128,6 +133,14 @@ export class MenuPanel {
         this.signature = '';
         this.refresh(this.engine.stateManager.state);
       }));
+    const bright = el('div', 'bp-row');
+    bright.append(el('span', '', `[[sun]] ${i18n.t('settings.brightness')}`),
+      button(this.actions.brightness(), 'btn-small', () => {
+        uiSound('switch');
+        this.actions.cycleBrightness();
+        this.signature = '';
+        this.refresh(this.engine.stateManager.state);
+      }));
     // [offline agent] Notifications toggle: turning it on asks the system for permission.
     const notify = el('div', 'bp-row');
     notify.append(el('span', '', `[[bell]] ${i18n.t('settings.notifications')}`),
@@ -137,7 +150,10 @@ export class MenuPanel {
         this.signature = '';
         this.refresh(this.engine.stateManager.state);
       }));
-    general.append(lang, sound, gfx, notify);
+    const diag = el('div', 'bp-row');
+    diag.append(el('span', '', `[[chart]] ${i18n.t('settings.diagnostics')}`),
+      button(i18n.t('settings.diagnosticsCopy'), 'btn-small', () => { uiSound('switch'); this.actions.copyDiagnostics(); }));
+    general.append(lang, sound, gfx, bright, notify, diag);
     box.appendChild(general);
 
     const saves = el('div', 'bp-card');

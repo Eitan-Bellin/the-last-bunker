@@ -11,9 +11,13 @@ export class PerformanceMonitor {
   private requiredStableFrames = 120;
   lowBattery = false;
 
-  recordFrame(timestamp: number): void {
+  /**
+   * `targetMs` is how long the picture wants to take (the engine draws at 60, 30 or 15 fps depending on touch):
+   * frames are judged against it, so a deliberate 30 fps is not mistaken for a struggling device.
+   */
+  recordFrame(timestamp: number, targetMs = 1000 / 60): void {
     if (this.lastTime > 0) {
-      const delta = timestamp - this.lastTime;
+      const delta = (timestamp - this.lastTime) * ((1000 / 60) / targetMs);
       this.frameTimes.push(delta);
       if (this.frameTimes.length > this.maxSamples) {
         this.frameTimes.shift();

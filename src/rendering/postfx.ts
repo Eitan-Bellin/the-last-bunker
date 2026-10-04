@@ -1,19 +1,36 @@
 import {
-  ColorMatrixFilter, Filter, GlProgram, RenderTexture, RendererType, Texture, defaultFilterVert,
+  ColorMatrixFilter, Filter, GlProgram, Rectangle, RenderTexture, RendererType, Texture, defaultFilterVert,
   type Application, type Container, type FilterSystem, type RenderSurface,
 } from 'pixi.js';
 import { PerformanceMonitor, type QualityLevel } from '../utils/PerformanceMonitor';
 import { TOPSOIL } from './layout';
 import { nightLight } from './structure';
+import { isLiteMode } from '../core/crashGuard';
+import { isTouchDevice } from '../utils/device';
 
 const BLOOM_SCALE = 0.25;
 const QUALITY_KEY = 'lastbunker_gfx';
+const BRIGHTNESS_KEY = 'lastbunker_bright';
+
+/**
+ * Screen brightness (player setting): a gamma curve over the finished frame lifts the dark mid-tones, a faint floor keeps
+ * shadows from going dead black, and white stays white. 'normal' is the original moody look. Playtest after playtest said
+ * "the bunker is dark", so the default is one step up.
+ */
+export type Brightness = 'normal' | 'bright' | 'brighter';
+export const BRIGHTNESS_LEVELS: Brightness[] = ['normal', 'bright', 'brighter'];
+/** Gamma lift (1 - gamma) and black floor per level; scaled below per era and night, because the dark eras are the dark ones. */
+const LIFT: Record<Brightness, [number, number]> = { normal: [0, 0], bright: [0.28, 0.02], brighter: [0.42, 0.035] };
+/** The Remnant is the darkest look, the Undercity already glows: the same setting lifts them by very different amounts. */
+const ERA_LIFT = [1, 0.85, 0.5, 0.35];
 
 /** What the composite needs from the renderer every frame. */
 export interface PostView {
   era: number;
   /** 0..1 darkness of the bunker clock. */
   night: number;
+  /** Milliseconds per picture the engine is aiming for right now. */
+  target?: number;
 }
 
 /**
@@ -50,6 +67,8 @@ export class PostFX {
   private applied: QualityLevel | null = null;
   private night = 0;
   private vignette: [number, number] = VIGNETTE[1];
+  private tone: Brightness = 'bright';
+  private area: Rectangle | null = null;
 
   constructor(app: Application, world: Container, grade?: ColorMatrixFilter, view?: () => PostView) {
     this.app = app;
@@ -59,11 +78,13 @@ export class PostFX {
     try {
       const stored = localStorage.getItem(QUALITY_KEY);
       if (stored === 'high' || stored === 'medium' || stored === 'low') this.forced = stored;
+      const tone = localStorage.getItem(BRIGHTNESS_KEY);
+      if (tone === 'normal' || tone === 'bright' || tone === 'brighter') this.tone = tone;
     } catch {
       // no stored preference
     }
-    // Small, low-core devices start one notch down; the monitor can still raise it.
-    if (!this.forced && (navigator.hardwareConcurrency ?? 8) <= 4) this.monitor.quality = 'medium';
+    // Phones and tablets, and small low-core devices, start one notch down (cooler and longer battery); the monitor can still raise it.
+    if (!this.forced && ((navigator.hardwareConcurrency ?? 8) <= 4 || isTouchDevice())) this.monitor.quality = 'medium';
     this.monitor.checkBattery();
     if (app.renderer.type === RendererType.WEBGL) {
       this.composite = new CompositeFilter(this.screenSize());
@@ -77,7 +98,8 @@ export class PostFX {
   }
 
   get quality(): QualityLevel {
-    return this.forced ?? this.monitor.quality;
+    // Lite mode (the game was killed twice in an hour) means no bloom or grain until the player picks a level.
+    return this.forced ?? (isLiteMode() ? 'low' : this.monitor.quality);
   }
 
   /** Player override from the settings menu (null = automatic). */
@@ -91,16 +113,36 @@ export class PostFX {
     }
   }
 
+  /** Gamma and floor for this era: stronger in the dark eras and again at night, never past a lift of 0.5. */
+  private toneFor(era: number): [number, number] {
+    const [lift, floor] = LIFT[this.tone];
+    const k = ERA_LIFT[Math.max(0, Math.min(ERA_LIFT.length - 1, era))] * (1 + 0.5 * this.night);
+    return [1 - Math.min(0.5, lift * k), floor * Math.min(1.5, k)];
+  }
+
+  get brightness(): Brightness {
+    return this.tone;
+  }
+
+  setBrightness(b: Brightness): void {
+    this.tone = b;
+    try {
+      localStorage.setItem(BRIGHTNESS_KEY, b);
+    } catch {
+      // preference won't persist
+    }
+  }
+
   private screenSize(): [number, number] {
     return [Math.max(16, Math.ceil(window.innerWidth)), Math.max(16, Math.ceil(window.innerHeight))];
   }
 
   /** Called once per frame after the scene has been updated. */
   update(now: number): void {
-    this.monitor.recordFrame(now);
+    const v = this.view();
+    this.monitor.recordFrame(now, v.target);
     if (++this.frame % 60 === 0) this.monitor.update();
     const q = this.quality;
-    const v = this.view();
     // The clock's night already ramps; this only stops a forced jump (dev shots) from popping the grade.
     this.night += (v.night - this.night) * 0.2;
     if (Math.abs(v.night - this.night) < 0.002) this.night = v.night;
@@ -116,12 +158,20 @@ export class PostFX {
     }
     this.vignette = VIGNETTE[Math.max(0, Math.min(VIGNETTE.length - 1, v.era))];
     const t = this.world.localTransform;
+    // Tell the filter where the screen is, so it does not measure the whole 3000-object world every frame to find out.
+    const sw = this.app.screen.width;
+    const sh = this.app.screen.height;
+    const pad = 16 / t.a;
+    (this.area ??= new Rectangle()).set(-t.tx / t.a - pad, -t.ty / t.d - pad, sw / t.a + 2 * pad, sh / t.d + 2 * pad);
+    this.world.filterArea = this.area;
     c.setFrame({
       matrix: this.grade?.matrix as ArrayLike<number> | undefined,
-      grain: q === 'low' ? 0 : 0.055,
+      // Film grain is the costly part of the composite: full quality only.
+      grain: q === 'high' ? 0.055 : 0,
       seed: Math.floor(now / 42) % 997,
       vignette: this.vignette,
       night: this.night,
+      tone: this.toneFor(v.era),
       // Screen y where the underground starts (night only darkens below the topsoil).
       groundY: t.ty + t.d * (TOPSOIL - 30),
       groundH: Math.max(8, t.d * 40),
@@ -200,6 +250,7 @@ uniform float uColorMatrix[20];
 uniform vec4 uScreen;
 uniform vec4 uLook;
 uniform vec4 uNight;
+uniform vec4 uTone;
 
 float luma(vec3 c) { return dot(c, vec3(0.2126, 0.7152, 0.0722)); }
 float hash(vec2 p) {
@@ -245,6 +296,8 @@ void main(void) {
     c = mix(c, mix(dark, warm, lit), night);
   }
 
+  // Player brightness: gamma lifts the dark mid-tones (white stays white), the floor keeps shadows from going dead black.
+  c = pow(c, vec3(uTone.x)) * (1.0 - uTone.y) + uTone.y;
   // Small exposure lift: the painted rooms are dark by design, the shoulder below keeps the lift from clipping.
   c *= 1.12;
   // Filmic shoulder: highlights roll off (and desaturate a touch) instead of clipping flat.
@@ -278,7 +331,7 @@ class CompositeFilter extends Filter {
   private kawase: Filter[];
   private rtA: RenderTexture;
   private rtB: RenderTexture;
-  private uni: { uScreen: Float32Array; uLook: Float32Array; uNight: Float32Array; uColorMatrix: Float32Array };
+  private uni: { uScreen: Float32Array; uLook: Float32Array; uNight: Float32Array; uTone: Float32Array; uColorMatrix: Float32Array };
 
   constructor(screen: [number, number]) {
     const bw = Math.max(8, Math.ceil(screen[0] * BLOOM_SCALE));
@@ -296,6 +349,8 @@ class CompositeFilter extends Filter {
           uLook: { value: new Float32Array([0.85, 0.4, 0.5, 0.05]), type: 'vec4<f32>' },
           // x night, y ground screen-y, z grain seed, w ground ramp height
           uNight: { value: new Float32Array([0, 0, 0, 40]), type: 'vec4<f32>' },
+          // x gamma, y floor
+          uTone: { value: new Float32Array([1, 0, 0, 0]), type: 'vec4<f32>' },
         },
         uBloom: rtA.source,
       },
@@ -303,7 +358,7 @@ class CompositeFilter extends Filter {
     this.rtA = rtA;
     this.rtB = rtB;
     const u = this.resources.compositeUniforms.uniforms;
-    this.uni = { uScreen: u.uScreen, uLook: u.uLook, uNight: u.uNight, uColorMatrix: u.uColorMatrix };
+    this.uni = { uScreen: u.uScreen, uLook: u.uLook, uNight: u.uNight, uTone: u.uTone, uColorMatrix: u.uColorMatrix };
     this.extract = new Filter({
       glProgram: GlProgram.from({ vertex: FIT_VERT, fragment: EXTRACT_FRAG, name: 'bunker-bloom-extract' }),
       // x threshold, y knee, z weight of white (uncoloured) light
@@ -327,9 +382,11 @@ class CompositeFilter extends Filter {
 
   setFrame(f: {
     matrix?: ArrayLike<number>; grain: number; seed: number; vignette: [number, number]; night: number;
-    groundY: number; groundH: number; resolution: number;
+    tone: [number, number]; groundY: number; groundH: number; resolution: number;
   }): void {
     const u = this.uni;
+    u.uTone[0] = f.tone[0];
+    u.uTone[1] = f.tone[1];
     if (f.matrix && f.matrix.length >= 20) for (let i = 0; i < 20; i++) u.uColorMatrix[i] = f.matrix[i];
     u.uLook[0] = this.passes > 0 ? (this.passes >= 4 ? 0.85 : 0.75) : 0;
     u.uLook[1] = f.vignette[0];

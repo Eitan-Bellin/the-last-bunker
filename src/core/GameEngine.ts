@@ -25,11 +25,23 @@ import { DeathSystem } from '../systems/DeathSystem'; // [Danger]
 import { MaintenanceSystem } from '../systems/MaintenanceSystem';
 import { AwayDanger, type AwayDangerReport } from '../systems/AwayDanger';
 import { DIG_LORE, seedRuins } from '../data/ruins';
+import { logCrash } from './crashGuard';
 
 const TICK_RATE = 10;
 const TICK_INTERVAL = 1000 / TICK_RATE;
 const TICK_SECONDS = 1 / TICK_RATE;
 const AUTO_SAVE_INTERVAL = 30_000;
+/**
+ * Picture rate governor (battery and heat): the bunker is a slow place, so the picture is drawn at full speed only while
+ * the player is touching it (and a moment after), at 30 fps while they watch, and at 15 fps once they stopped touching it.
+ * Phones with 90/120 Hz screens used to draw 120 frames a second of a mostly still scene. The simulation is not affected.
+ */
+const FRAME_ACTIVE_MS = 1000 / 60;
+const FRAME_CALM_MS = 1000 / 30;
+const FRAME_IDLE_MS = 1000 / 15;
+/** How long after the last touch the picture stays at full speed (camera glides and flicks need it). */
+const ACTIVE_HOLD_MS = 1800;
+const IDLE_AFTER_S = 30;
 const OFFLINE_EFFICIENCY = 0.8;
 const OFFLINE_MAX_SECONDS = 86_400;
 const OFFLINE_STEP_SECONDS = 60;
@@ -97,9 +109,10 @@ export class GameEngine {
   private running = false;
   private rafId = 0;
   private idleSeconds = 0;
-  private frameCount = 0;
-  private skipped = 0;
+  private lastRenderAt = 0;
   private lastInteraction = 0;
+  /** Milliseconds the picture currently aims to take per frame (the performance monitor judges against it). */
+  frameTargetMs = FRAME_ACTIVE_MS;
 
   offlineReport: OfflineReport | null = null;
   paused = false;
@@ -430,8 +443,15 @@ export class GameEngine {
     }
   }
 
+  /** Frames in a row whose picture threw; a long run means the renderer is wedged (lost GPU, broken scene). */
+  private renderFails = 0;
+  /** Called once when the picture has failed for a while: the app can rebuild the scene. Returns true if it tried. */
+  onRenderStuck: ((fails: number) => void) | null = null;
+
   private loop = (timestamp: number): void => {
     if (!this.running) return;
+    // One bad frame must never stop the game: whatever happens, the next frame is already booked.
+    this.rafId = requestAnimationFrame(this.loop);
 
     const elapsed = Math.min(timestamp - this.lastTickTime, 1000);
     this.lastTickTime = timestamp;
@@ -442,47 +462,66 @@ export class GameEngine {
     // While a cinematic plays the world holds its breath: no ticks, no events.
     if (this.paused) this.tickAccumulator = 0;
     while (this.tickAccumulator >= TICK_INTERVAL) {
-      this.tick();
       this.tickAccumulator -= TICK_INTERVAL;
+      this.tick();
     }
 
     const alpha = this.tickAccumulator / TICK_INTERVAL;
-    // Battery: after 30 s without a touch the picture refreshes at half rate (the simulation is unaffected).
-    this.frameCount++;
-    if (!this.isIdle || this.frameCount % 2 === 0) this.onRender?.(this.isIdle ? elapsed + this.skipped : elapsed, alpha);
-    this.skipped = this.isIdle && this.frameCount % 2 !== 0 ? elapsed : 0;
+    // Picture rate governor: skip animation frames the player would not notice (see FRAME_* above).
+    const target = this.pictureInterval();
+    // A little slack so a 60 Hz screen draws every other frame for 30 fps instead of jittering around the limit.
+    if (timestamp - this.lastRenderAt >= target - 4) {
+      const since = this.lastRenderAt ? timestamp - this.lastRenderAt : elapsed;
+      this.lastRenderAt = timestamp;
+      this.frameTargetMs = target;
+      try {
+        this.onRender?.(Math.min(since, 1000), alpha);
+        this.renderFails = 0;
+      } catch (err) {
+        logCrash('render', err);
+        if (++this.renderFails % 120 === 0) this.onRenderStuck?.(this.renderFails);
+      }
+    }
 
     if (Date.now() - this.lastSaveTime > AUTO_SAVE_INTERVAL) {
-      void this.autoSave();
       this.lastSaveTime = Date.now();
+      this.autoSave().catch(err => logCrash('save', err));
     }
-
-    this.rafId = requestAnimationFrame(this.loop);
   };
 
+  /** Runs one system step; a throwing system is logged and skipped so the others keep the bunker alive. */
+  private step(name: string, fn: () => void): void {
+    try {
+      fn();
+    } catch (err) {
+      logCrash(`system:${name}`, err);
+    }
+  }
+
   private tick(): void {
-    this.resourceSystem.update(this.stateManager, TICK_SECONDS);
-    this.buildingSystem.update(this.stateManager, TICK_SECONDS);
-    this.populationSystem.update(this.stateManager, TICK_SECONDS);
-    this.eventSystem.update();
-    this.researchSystem.update(this.stateManager, TICK_SECONDS);
-    this.explorationSystem.update(TICK_SECONDS);
-    this.restorationSystem.update(TICK_SECONDS);
-    this.incidentSystem.update(TICK_SECONDS);
-    this.familySystem.update(TICK_SECONDS);
-    this.projectSystem.update(TICK_SECONDS); // [LateGame B1]
-    this.maintenanceSystem.update(TICK_SECONDS); // [Danger C3]
+    const sm = this.stateManager;
+    this.step('resource', () => this.resourceSystem.update(sm, TICK_SECONDS));
+    this.step('building', () => this.buildingSystem.update(sm, TICK_SECONDS));
+    this.step('population', () => this.populationSystem.update(sm, TICK_SECONDS));
+    this.step('event', () => this.eventSystem.update());
+    this.step('research', () => this.researchSystem.update(sm, TICK_SECONDS));
+    this.step('exploration', () => this.explorationSystem.update(TICK_SECONDS));
+    this.step('restoration', () => this.restorationSystem.update(TICK_SECONDS));
+    this.step('incident', () => this.incidentSystem.update(TICK_SECONDS));
+    this.step('family', () => this.familySystem.update(TICK_SECONDS));
+    this.step('project', () => this.projectSystem.update(TICK_SECONDS)); // [LateGame B1]
+    this.step('maintenance', () => this.maintenanceSystem.update(TICK_SECONDS)); // [Danger C3]
     if (++this.tickCount % 10 === 0) {
-      this.metaSystem.checkAchievements();
-      this.objectiveSystem.update();
-      this.eraSystem.update();
-      this.storySystem.update();
+      this.step('achievements', () => this.metaSystem.checkAchievements());
+      this.step('objective', () => this.objectiveSystem.update());
+      this.step('era', () => this.eraSystem.update());
+      this.step('story', () => this.storySystem.update());
     }
 
-    this.stateManager.applyDelta({
+    this.step('clock', () => sm.applyDelta({
       path: 'stats.totalPlayTime',
-      value: this.stateManager.state.stats.totalPlayTime + TICK_SECONDS,
-    });
+      value: sm.state.stats.totalPlayTime + TICK_SECONDS,
+    }));
   }
 
   private async autoSave(): Promise<void> {
@@ -513,7 +552,14 @@ export class GameEngine {
   }
 
   get isIdle(): boolean {
-    return this.idleSeconds > 30;
+    return this.idleSeconds > IDLE_AFTER_S;
+  }
+
+  /** Wanted time between pictures right now. */
+  private pictureInterval(): number {
+    const since = Date.now() - this.lastInteraction;
+    if (since < ACTIVE_HOLD_MS) return FRAME_ACTIVE_MS;
+    return this.isIdle ? FRAME_IDLE_MS : FRAME_CALM_MS;
   }
 
   async forceSave(): Promise<void> {
