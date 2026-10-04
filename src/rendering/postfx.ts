@@ -13,6 +13,41 @@ const QUALITY_KEY = 'lastbunker_gfx';
 const BRIGHTNESS_KEY = 'lastbunker_bright';
 
 /**
+ * What each graphics level really changes. `res` caps the pixel density (1 = a pixel per CSS pixel), `msaa` smooths the
+ * edges of everything in the world, `passes` is the bloom blur, `grain` the film grain, and `fps` is the picture rate while the
+ * player is touching / watching / idle. High is the full look at full speed: it costs heat and battery, which is the point of the choice.
+ */
+export interface QualityProfile {
+  res: number;
+  msaa: boolean;
+  passes: number;
+  grain: boolean;
+  fps: [number, number, number];
+}
+export const QUALITY_PROFILE: Record<QualityLevel, QualityProfile> = {
+  high: { res: 2, msaa: true, passes: 4, grain: true, fps: [60, 60, 30] },
+  medium: { res: 1.75, msaa: false, passes: 2, grain: false, fps: [60, 30, 15] },
+  low: { res: 1.25, msaa: false, passes: 0, grain: false, fps: [30, 20, 10] },
+};
+
+export function storedQuality(): QualityLevel | null {
+  try {
+    const s = localStorage.getItem(QUALITY_KEY);
+    return s === 'high' || s === 'medium' || s === 'low' ? s : null;
+  } catch {
+    return null;
+  }
+}
+
+/** The level a session starts at: the player's pick, else lite mode, else by device (phones and small devices start at medium). */
+export function startQuality(): QualityLevel {
+  const stored = storedQuality();
+  if (stored) return stored;
+  if (isLiteMode()) return 'low';
+  return isTouchDevice() || (navigator.hardwareConcurrency ?? 8) <= 4 ? 'medium' : 'high';
+}
+
+/**
  * Screen brightness (player setting): a gamma curve over the finished frame lifts the dark mid-tones, a faint floor keeps
  * shadows from going dead black, and white stays white. 'normal' is the original moody look. Playtest after playtest said
  * "the bunker is dark", so the default is one step up.
@@ -75,16 +110,17 @@ export class PostFX {
     this.world = world;
     this.grade = grade ?? (world.filters as Filter[] | null)?.find((f): f is ColorMatrixFilter => f instanceof ColorMatrixFilter) ?? null;
     this.view = view ?? (() => ({ era: 1, night: 0 }));
+    this.forced = storedQuality();
     try {
-      const stored = localStorage.getItem(QUALITY_KEY);
-      if (stored === 'high' || stored === 'medium' || stored === 'low') this.forced = stored;
       const tone = localStorage.getItem(BRIGHTNESS_KEY);
       if (tone === 'normal' || tone === 'bright' || tone === 'brighter') this.tone = tone;
     } catch {
       // no stored preference
     }
-    // Phones and tablets, and small low-core devices, start one notch down (cooler and longer battery); the monitor can still raise it.
-    if (!this.forced && ((navigator.hardwareConcurrency ?? 8) <= 4 || isTouchDevice())) this.monitor.quality = 'medium';
+    // Phones and tablets, and small low-core devices, start at medium (cooler, longer battery). The monitor can lift desktops
+    // to high by itself; a phone only gets high when the player picks it in the settings.
+    this.monitor.quality = startQuality();
+    if (isTouchDevice()) this.monitor.maxQuality = 'medium';
     this.monitor.checkBattery();
     if (app.renderer.type === RendererType.WEBGL) {
       this.composite = new CompositeFilter(this.screenSize());
@@ -100,6 +136,11 @@ export class PostFX {
   get quality(): QualityLevel {
     // Lite mode (the game was killed twice in an hour) means no bloom or grain until the player picks a level.
     return this.forced ?? (isLiteMode() ? 'low' : this.monitor.quality);
+  }
+
+  /** What the current level changes (see QUALITY_PROFILE). */
+  get profile(): QualityProfile {
+    return QUALITY_PROFILE[this.quality];
   }
 
   /** Player override from the settings menu (null = automatic). */
@@ -133,6 +174,17 @@ export class PostFX {
     }
   }
 
+  private lastResize = -1e9;
+
+  /** Pixel density follows the level (at most one change every 8 s, so a wobbling frame rate cannot make the canvas flicker). */
+  private applyResolution(cap: number, now: number): void {
+    const want = Math.min(window.devicePixelRatio || 1, cap);
+    const r = this.app.renderer;
+    if (Math.abs(r.resolution - want) < 0.01 || now - this.lastResize < 8000) return;
+    this.lastResize = now;
+    r.resize(this.app.screen.width, this.app.screen.height, want);
+  }
+
   private screenSize(): [number, number] {
     return [Math.max(16, Math.ceil(window.innerWidth)), Math.max(16, Math.ceil(window.innerHeight))];
   }
@@ -154,7 +206,11 @@ export class PostFX {
     if (!fl?.includes(c)) this.world.filters = [...(fl ?? []).filter(x => x !== this.grade), c];
     if (q !== this.applied) {
       this.applied = q;
-      c.passes = q === 'high' ? 4 : q === 'medium' ? 2 : 0;
+      const p = QUALITY_PROFILE[q];
+      c.passes = p.passes;
+      // The world is drawn into the filter's texture, so smoothing its edges is a switch on the filter, changeable at any time.
+      c.antialias = p.msaa ? 'on' : 'off';
+      this.applyResolution(p.res, now);
     }
     this.vignette = VIGNETTE[Math.max(0, Math.min(VIGNETTE.length - 1, v.era))];
     const t = this.world.localTransform;
@@ -167,7 +223,7 @@ export class PostFX {
     c.setFrame({
       matrix: this.grade?.matrix as ArrayLike<number> | undefined,
       // Film grain is the costly part of the composite: full quality only.
-      grain: q === 'high' ? 0.055 : 0,
+      grain: QUALITY_PROFILE[q].grain ? 0.055 : 0,
       seed: Math.floor(now / 42) % 997,
       vignette: this.vignette,
       night: this.night,

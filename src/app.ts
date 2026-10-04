@@ -346,6 +346,8 @@ export class GameApp {
     const state = this.state;
     // Each part is guarded on its own: a throwing panel must not stop the picture or the dialogs behind it.
     this.renderer.frameTarget = this.engine.frameTargetMs;
+    const fps = this.renderer.postfx?.profile.fps;
+    if (fps) this.engine.frameRates = fps;
     try { this.renderer.render(state, dt, alpha); } catch (err) { logCrash('render', err); throw err; }
     this.guarded('hud', () => { this.hud.update(state); this.popups.update(); });
     this.guarded('ui', () => this.frameUi(state));

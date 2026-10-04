@@ -491,6 +491,7 @@
   "settings.gfx.high": "גבוהה",
   "settings.gfx.medium": "בינונית",
   "settings.gfx.low": "חסכונית",
+  "settings.gfxHint": "גבוהה: חדות מלאה, החלקת קצוות ותנועה חלקה תמיד (מחמם ושואב סוללה). בינונית: ברירת המחדל בטלפון. חסכונית: קריר וקל.",
   "settings.brightness": "בהירות",
   "settings.bright.normal": "רגילה",
   "settings.bright.bright": "בהירה",

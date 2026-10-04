@@ -32,13 +32,12 @@ const TICK_INTERVAL = 1000 / TICK_RATE;
 const TICK_SECONDS = 1 / TICK_RATE;
 const AUTO_SAVE_INTERVAL = 30_000;
 /**
- * Picture rate governor (battery and heat): the bunker is a slow place, so the picture is drawn at full speed only while
- * the player is touching it (and a moment after), at 30 fps while they watch, and at 15 fps once they stopped touching it.
- * Phones with 90/120 Hz screens used to draw 120 frames a second of a mostly still scene. The simulation is not affected.
+ * Picture rate governor (battery and heat). The graphics level sets three rates (`frameRates`): while the player is touching
+ * the bunker (and a moment after), while they only watch, and once they stopped touching it for a while. High draws at full
+ * speed throughout; medium and low save heat. Phones with 90/120 Hz screens used to draw 120 frames a second of a mostly
+ * still scene. The simulation is not affected.
  */
 const FRAME_ACTIVE_MS = 1000 / 60;
-const FRAME_CALM_MS = 1000 / 30;
-const FRAME_IDLE_MS = 1000 / 15;
 /** How long after the last touch the picture stays at full speed (camera glides and flicks need it). */
 const ACTIVE_HOLD_MS = 1800;
 const IDLE_AFTER_S = 30;
@@ -113,6 +112,8 @@ export class GameEngine {
   private lastInteraction = 0;
   /** Milliseconds the picture currently aims to take per frame (the performance monitor judges against it). */
   frameTargetMs = FRAME_ACTIVE_MS;
+  /** Pictures per second while touching / watching / idle; the app sets it from the graphics level every frame. */
+  frameRates: [number, number, number] = [60, 30, 15];
 
   offlineReport: OfflineReport | null = null;
   paused = false;
@@ -558,8 +559,8 @@ export class GameEngine {
   /** Wanted time between pictures right now. */
   private pictureInterval(): number {
     const since = Date.now() - this.lastInteraction;
-    if (since < ACTIVE_HOLD_MS) return FRAME_ACTIVE_MS;
-    return this.isIdle ? FRAME_IDLE_MS : FRAME_CALM_MS;
+    const [active, calm, idle] = this.frameRates;
+    return 1000 / (since < ACTIVE_HOLD_MS ? active : this.isIdle ? idle : calm);
   }
 
   async forceSave(): Promise<void> {

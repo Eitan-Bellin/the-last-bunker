@@ -20,7 +20,7 @@ import { lineWidth, richLine } from './richText';
 import { ArtLibrary } from '../art/ArtLibrary';
 import { artEntry, buildingArtKey, roomTier, ruinArtKey } from '../art/registry';
 import { buildCityMap, type CityMap } from './cityMap';
-import { PostFX } from './postfx';
+import { PostFX, QUALITY_PROFILE, startQuality } from './postfx';
 import { isLiteMode, logCrash } from '../core/crashGuard';
 import { isTouchDevice } from '../utils/device';
 import { coneTexture } from '../art/ArtLibrary';
@@ -430,9 +430,10 @@ export class BunkerRenderer {
       backgroundColor: 0x0d0f1a,
       // Lite mode (after the game was killed twice in an hour): fewer pixels, no multisampling. The picture is drawn by
       // render() itself rather than Pixi's ticker: a ticker that throws once never comes back.
-      // Phones: 1.5x is plenty for a painted scene and takes 44% fewer pixels than 2x (heat, battery); no multisampling either.
-      antialias: !isLiteMode() && !isTouchDevice(),
-      resolution: Math.min(window.devicePixelRatio, isLiteMode() ? 1.25 : isTouchDevice() ? 1.5 : 2),
+      // The canvas itself is never multisampled (the world is drawn into the filter's texture, where the quality level
+      // switches smoothing on or off); the pixel density starts at the level this session begins with and follows the setting.
+      antialias: false,
+      resolution: Math.min(window.devicePixelRatio, QUALITY_PROFILE[startQuality()].res),
       autoDensity: true,
       autoStart: false,
       // Textures idle for a while leave the GPU (they come back when drawn again): sooner than Pixi's minute, sooner still in lite mode.

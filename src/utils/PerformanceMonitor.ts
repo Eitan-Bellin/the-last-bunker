@@ -5,6 +5,8 @@ export class PerformanceMonitor {
   private maxSamples = 60;
   private lastTime = 0;
   quality: QualityLevel = 'high';
+  /** Automatic quality never climbs past this (phones stay at medium unless the player picks high). */
+  maxQuality: QualityLevel = 'high';
   private downgradeThreshold = 40;
   private upgradeThreshold = 55;
   private stableFrames = 0;
@@ -43,7 +45,7 @@ export class PerformanceMonitor {
       this.stableFrames++;
       if (this.stableFrames > this.requiredStableFrames && !this.lowBattery) {
         if (this.quality === 'low') this.quality = 'medium';
-        else if (this.quality === 'medium') this.quality = 'high';
+        else if (this.quality === 'medium' && this.maxQuality === 'high') this.quality = 'high';
         this.stableFrames = 0;
       }
     } else {

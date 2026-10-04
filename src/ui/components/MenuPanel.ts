@@ -133,6 +133,7 @@ export class MenuPanel {
         this.signature = '';
         this.refresh(this.engine.stateManager.state);
       }));
+    const gfxHint = el('div', 'bp-hint', i18n.t('settings.gfxHint'));
     const bright = el('div', 'bp-row');
     bright.append(el('span', '', `[[sun]] ${i18n.t('settings.brightness')}`),
       button(this.actions.brightness(), 'btn-small', () => {
@@ -153,7 +154,7 @@ export class MenuPanel {
     const diag = el('div', 'bp-row');
     diag.append(el('span', '', `[[chart]] ${i18n.t('settings.diagnostics')}`),
       button(i18n.t('settings.diagnosticsCopy'), 'btn-small', () => { uiSound('switch'); this.actions.copyDiagnostics(); }));
-    general.append(lang, sound, gfx, bright, notify, diag);
+    general.append(lang, sound, gfx, gfxHint, bright, notify, diag);
     box.appendChild(general);
 
     const saves = el('div', 'bp-card');
