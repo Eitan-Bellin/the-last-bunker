@@ -65,6 +65,8 @@ export interface WorldState {
   treaties: Record<string, unknown>;
   contracts: unknown[];
   seq: number;
+  /** [P4] World time of the next contract offer (0 = not scheduled yet). */
+  nextContractAt?: number;
 }
 
 /** [UX lane] One card in the Decision Inbox. */

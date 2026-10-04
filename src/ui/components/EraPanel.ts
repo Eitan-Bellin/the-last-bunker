@@ -1,9 +1,11 @@
+import { LAWS, lawCost, lawSlots } from '../../data/laws';
+import type { EndingDef } from '../../data/endings';
 import type { GameEngine } from '../../core/GameEngine';
 import type { GameState } from '../../core/GameState';
 import { i18n } from '../../i18n/I18nManager';
 import { ERAS, eraOf, type EraDef } from '../../data/eras';
 import { Sheet } from './Sheet';
-import { bar, button, el, setBar } from '../dom';
+import { bar, button, costRow, el, setBar } from '../dom';
 import { ACTS, actOf, type ActDef } from '../../data/acts';
 import { getProject, stagesDone } from '../../data/projects';
 import { FOREMAN_ACT, FOREMAN_ORDERS, type ForemanSystem } from '../../systems/ForemanSystem';
@@ -43,7 +45,7 @@ export class EraPanel {
     const era = eraOf(state);
     const act = state.longGame ? actOf(state) : null;
     this.lastState = state;
-    const orders = FOREMAN_ORDERS.map(o => (state.longGame?.foreman.orders[o] ? 1 : 0)).join('');
+    const orders = FOREMAN_ORDERS.map(o => (state.longGame?.foreman.orders[o] ? 1 : 0)).join('') + (state.longGame?.policy.laws ?? []).join(',');
     const goalIdx = act ? act.goals.findIndex(g => { const [c, t] = g.progress(state); return c < t; }) : -1;
     const sig = `${era.id}|${act?.id ?? 0}|${orders}|${state.tutorialStep}|${goalIdx}|${state.activeProjectId}|${state.activeProjectId ? state.lateGame.projects[state.activeProjectId]?.stage ?? 0 : 0}|${i18n.currentLocale}`;
     if (sig !== this.signature) {
@@ -132,7 +134,32 @@ export class EraPanel {
     }
     card.appendChild(steps);
     if (act.id >= FOREMAN_ACT && this.foreman && this.lastState) card.appendChild(this.renderForeman(this.lastState));
+    if (this.lastState && this.engine && lawSlots(this.lastState) > 0) card.appendChild(this.renderLaws(this.lastState));
     return card;
+  }
+
+  /** [P3] Laws: a few slots, each law a clear trade. */
+  private renderLaws(state: GameState): HTMLElement {
+    const locale = i18n.currentLocale;
+    const box = el('div', 'foreman laws');
+    const active = state.longGame?.policy.laws ?? [];
+    const slots = lawSlots(state);
+    box.appendChild(el('div', 'bp-section-title', `[[books]] ${i18n.t('laws.title', { n: active.length, slots })}`));
+    box.appendChild(costRow(state, lawCost(state)));
+    for (const l of LAWS) {
+      const on = active.includes(l.id);
+      const row = el('div', 'foreman-row');
+      const text = el('span', 'foreman-text');
+      text.append(el('div', '', `${l.icon} ${l.name[locale]}`), el('div', 'bp-hint', l.desc[locale]));
+      const can = on || (active.length < slots && this.engine!.resourceSystem.canAfford(state, lawCost(state)));
+      row.append(text, button(i18n.t(on ? 'laws.repeal' : 'laws.enact'), on ? 'btn-secondary btn-small' : 'btn-primary btn-small', () => {
+        if (on) this.engine!.repealLaw(l.id); else this.engine!.enactLaw(l.id);
+        this.signature = '';
+        this.refresh(this.engine!.stateManager.state);
+      }, !can));
+      box.appendChild(row);
+    }
+    return box;
   }
 
   /** [Long game] The Foreman's standing orders: routine handed over, on or off. */
@@ -206,6 +233,29 @@ export function showActBanner(act: ActDef, onDone: () => void): void {
     el('div', 'era-banner-name', act.name[locale]),
     el('div', 'era-banner-tagline', act.tagline[locale]),
     el('p', 'era-banner-story', i18n.t('act.opens', { level: act.levelCap, people: act.popCap, floors: act.floorCap })),
+  );
+  const btn = el('button', 'btn btn-primary', i18n.t('era.continue'));
+  inner.appendChild(btn);
+  overlay.appendChild(inner);
+  document.body.appendChild(overlay);
+  requestAnimationFrame(() => overlay.classList.add('in'));
+  btn.addEventListener('click', () => {
+    overlay.classList.remove('in');
+    setTimeout(() => overlay.remove(), 600);
+    onDone();
+  });
+}
+
+/** [P5] The run's ending: its name and story, before Genesis. */
+export function showEndingBanner(ending: EndingDef, onDone: () => void): void {
+  const locale = i18n.currentLocale;
+  const overlay = el('div', 'era-banner ending-banner');
+  const inner = el('div', 'era-banner-inner');
+  inner.append(
+    el('div', 'era-banner-kicker', i18n.t('ending.kicker')),
+    el('div', 'era-banner-name', `${ending.icon} ${ending.name[locale]}`),
+    el('p', 'era-banner-story', ending.text[locale]),
+    el('div', 'era-banner-tagline', i18n.t('ending.next')),
   );
   const btn = el('button', 'btn btn-primary', i18n.t('era.continue'));
   inner.appendChild(btn);

@@ -18,6 +18,9 @@ export const RESOURCE_ICONS: Record<string, string> = {
   credits: tok('credits'),
   components: tok('components'),
   alloys: tok('alloys'),
+  data: tok('chart'),
+  influence: tok('crown'),
+  seedCores: tok('clover'),
 };
 
 export const STAT_ICONS: Record<keyof SurvivorStats, string> = {

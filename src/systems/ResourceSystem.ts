@@ -1,3 +1,4 @@
+import { lawAppetite, lawOutput } from '../data/laws';
 import { hasFeature } from './ResearchSystem';
 import { seasonEffects } from '../data/seasons';
 import type { BuildingInstance, GameState, ResourceType, ResourceState } from '../core/GameState';
@@ -43,6 +44,8 @@ registerModifier({
   mult: ({ resource }) => (resource === 'power' ? 1 : moraleNow),
 });
 registerModifier({ id: 'echo', mult: ({ state }) => prestigeMultiplier(state) });
+// [P3] Laws in force.
+registerModifier({ id: 'laws', mult: ({ state, resource }) => (state.longGame?.policy.laws.length ? lawOutput(state, resource) : 1) });
 // [P2] The season leans on food, water or materials.
 registerModifier({
   id: 'season',
@@ -120,7 +123,7 @@ export class ResourceSystem {
       }
     }
 
-    const appetite = difficultyOf(state).consumption;
+    const appetite = difficultyOf(state).consumption * lawAppetite(state);
     for (const s of state.survivors) {
       if (s.isOnMission) continue;
       const glutton = s.traits.includes('glutton') ? 2 : 1;
@@ -236,7 +239,7 @@ export class ResourceSystem {
       }
     }
     if (r === 'food' || r === 'water') {
-      const appetite = difficultyOf(state).consumption;
+      const appetite = difficultyOf(state).consumption * lawAppetite(state);
       let people = 0;
       for (const s of state.survivors) {
         if (s.isOnMission) continue;

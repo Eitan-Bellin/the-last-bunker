@@ -8,7 +8,7 @@ import { TUNING } from './tuning';
  * a set number of those hours (capHours), so a single payment always fits.
  * Act I keeps its hand-tuned prices: the first half hour is not touched.
  */
-export const ACT_CURRENCY: readonly ResourceType[] = ['materials', 'materials', 'materials', 'components', 'alloys', 'alloys', 'alloys', 'alloys'];
+export const ACT_CURRENCY: readonly ResourceType[] = ['materials', 'materials', 'materials', 'components', 'alloys', 'data', 'influence', 'seedCores'];
 
 /** Reference income of an Act's currency, per hour. */
 export function refIncome(act: number): number {
@@ -21,6 +21,7 @@ export function refIncome(act: number): number {
  */
 export function actPrice(act: number, hours: number): Record<string, number> {
   const a = Math.max(1, act);
+  if (a >= 2) hours *= TUNING.priceScale;
   const out: Record<string, number> = {};
   const add = (r: ResourceType, v: number) => { if (v >= 1) out[r] = (out[r] ?? 0) + Math.round(v); };
   add(ACT_CURRENCY[a], hours * refIncome(a));
@@ -41,7 +42,7 @@ export function upgradeHours(level: number): number {
 
 /** The Act a floor belongs to (B6-B8 Act II, B9-B11 Act III, B12-B14 Act IV, deeper Act V). */
 export function floorAct(floorCount: number): number {
-  return floorCount <= 5 ? 1 : Math.min(5, Math.floor((floorCount - 6) / 3) + 2);
+  return floorCount <= 5 ? 1 : Math.min(7, Math.floor((floorCount - 6) / 3) + 2);
 }
 
 /** Hours of income to dig to `floorCount` floors (from B7; the first digs keep their old prices). */
@@ -55,7 +56,7 @@ export function digHours(floorCount: number): number {
  */
 export function actCapBonus(state: GameState): Partial<Record<ResourceType, number>> {
   const act = state.longGame?.meta.act ?? 1;
-  const hours = TUNING.capHours[Math.min(TUNING.capHours.length - 1, act)];
+  const hours = TUNING.capHours[Math.min(TUNING.capHours.length - 1, act)] * (act >= 2 ? TUNING.priceScale : 1);
   const out: Partial<Record<ResourceType, number>> = {};
   for (let a = 2; a <= act; a++) {
     const c = ACT_CURRENCY[a];

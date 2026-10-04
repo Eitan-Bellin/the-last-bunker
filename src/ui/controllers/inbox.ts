@@ -169,6 +169,8 @@ export class InboxController {
   }
 
   private params(item: InboxItem): Record<string, string> {
+    const def = inboxKind(item.kind);
+    if (def?.params) return def.params(item, i18n.currentLocale);
     return Object.fromEntries(Object.entries(item.data).map(([k, v]) => [k, String(v)]));
   }
 
@@ -189,7 +191,7 @@ export class InboxController {
         ...choices.map((c, i) => ({
           label: i18n.t(c.label, params),
           className: i === 0 ? 'btn-primary' : 'btn-secondary',
-          disabled: !!c.cost && !this.app.engine.resourceSystem.canAfford(state, c.cost),
+          disabled: c.available === false || (!!c.cost && !this.app.engine.resourceSystem.canAfford(state, c.cost)),
           detail: c.cost ? costRow(state, c.cost) : undefined,
           onClick: () => {
             this.app.modal.hide();

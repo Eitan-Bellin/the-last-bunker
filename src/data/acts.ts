@@ -1,5 +1,6 @@
 import type { GameState } from '../core/GameState';
 import { projectDone } from './projects';
+import { relationLevel } from './trade';
 
 /**
  * The long game's Acts (long-game plan, section 5): the run's chapters. Eras stay the bunker's look and story beats;
@@ -84,7 +85,43 @@ export const ACTS: ActDef[] = [
       { text: { he: '6 חדרים ברמה 9', en: '6 rooms at level 9' }, progress: s => atLeast(roomsAt(s, 9), 6) },
       { text: { he: 'הגיעו ל־90 ניצולים', en: 'Reach 90 survivors' }, progress: s => atLeast(s.survivors.length, 90) },
     ],
-    charter: ['wall', 'genesisCore'],
+    charter: ['wall', 'deepFoundry'],
+  },
+  {
+    id: 5,
+    name: { he: 'מערכה V · לעלות', en: 'Act V · Rise' },
+    tagline: { he: 'שחר מעל האפר', en: 'Dawn above the ash' },
+    levelCap: 10, popCap: 150, floorCap: 17,
+    goals: [
+      { text: { he: 'החזיקו 3 מאחזים', en: 'Hold 3 outposts' }, progress: s => atLeast(((s.longGame?.world.outposts ?? []) as unknown[]).length, 3) },
+      { text: { he: 'חפרו 17 קומות', en: 'Dig 17 levels' }, progress: s => atLeast(s.currentFloors, 17) },
+      { text: { he: '8 חדרים ברמה 10', en: '8 rooms at level 10' }, progress: s => atLeast(roomsAt(s, 10), 8) },
+    ],
+    charter: ['surfaceGate', 'skyDome'],
+  },
+  {
+    id: 6,
+    name: { he: 'מערכה VI · למשול', en: 'Act VI · Govern' },
+    tagline: { he: 'רפובליקה בין שכנים', en: 'A republic among neighbours' },
+    levelCap: 10, popCap: 190, floorCap: 20,
+    goals: [
+      { text: { he: 'צברו 1,500 השפעה', en: 'Gather 1,500 influence' }, progress: s => atLeast(Math.floor(s.resources.influence?.amount ?? 0), 1500) },
+      { text: { he: 'הגיעו ל־150 ניצולים', en: 'Reach 150 survivors' }, progress: s => atLeast(s.survivors.length, 150) },
+      { text: { he: 'חפרו 20 קומות', en: 'Dig 20 levels' }, progress: s => atLeast(s.currentFloors, 20) },
+    ],
+    charter: ['tradeLeague', 'constitution'],
+  },
+  {
+    id: 7,
+    name: { he: 'מערכה VII · בראשית', en: 'Act VII · Genesis' },
+    tagline: { he: 'מה שיעבור לעולם הבא', en: 'What will cross into the next world' },
+    levelCap: 10, popCap: 190, floorCap: 24,
+    goals: [
+      { text: { he: 'חפרו 24 קומות', en: 'Dig 24 levels' }, progress: s => atLeast(s.currentFloors, 24) },
+      { text: { he: 'הגיעו ל־170 ניצולים', en: 'Reach 170 survivors' }, progress: s => atLeast(s.survivors.length, 170) },
+      { text: { he: 'השלימו את כספת הזרעים (מחקר)', en: 'Complete the Seed Vault (research)' }, progress: s => [s.research.seedVault?.completed ? 1 : 0, 1] },
+    ],
+    charter: ['ark', 'genesisCore'],
   },
 ];
 

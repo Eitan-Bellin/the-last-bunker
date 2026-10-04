@@ -1,3 +1,4 @@
+import { lawThreat } from '../data/laws';
 import { hasFeature } from './ResearchSystem';
 import type { StateManager } from '../core/StateManager';
 import type { GameState } from '../core/GameState';
@@ -27,7 +28,7 @@ export function threatTarget(state: GameState): number {
   for (const b of state.buildings) if (b.type === 'radioTower' && !b.isConstructing) radio += b.level;
   const act = state.longGame?.meta.act ?? 1;
   const raw = 10 + 30 * wealth + 1.5 * radio + 0.15 * state.survivors.length + 6 * act + (state.storyFlags.includes('project:radioMast') ? 8 : 0);
-  return Math.max(0, Math.min(100, raw * difficultyOf(state).threat));
+  return Math.max(0, Math.min(100, (raw + lawThreat(state)) * difficultyOf(state).threat));
 }
 
 /** Raids come this many times more often than the base pace (1 at a meter of 50). */

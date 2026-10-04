@@ -1,6 +1,7 @@
 import type { StateManager } from '../core/StateManager';
 import { bus } from '../core/EventBus';
 import { ACTS, MAX_ACT, actComplete, actOf } from '../data/acts';
+import { endingOf } from '../data/endings';
 import type { BuildingSystem } from './BuildingSystem';
 
 /**
@@ -22,7 +23,16 @@ export class ActSystem {
     const lg = state.longGame;
     if (!lg) return;
     const act = actOf(state);
-    if (act.id >= MAX_ACT || !actComplete(state, act)) return;
+    // [P5] The last Act done: the run's ending is told once (and kept for the Legacy).
+    if (act.id >= MAX_ACT) {
+      if (actComplete(state, act) && !state.storyFlags.some(f => f.startsWith('ending:'))) {
+        const ending = endingOf(state);
+        this.sm.applyDelta({ path: 'storyFlags', value: [...state.storyFlags, `ending:${ending.id}`] });
+        bus.emit('ending', ending.id);
+      }
+      return;
+    }
+    if (!actComplete(state, act)) return;
     const next = ACTS[act.id];
     this.sm.applyDeltas([
       { path: 'longGame.meta.act', value: next.id },

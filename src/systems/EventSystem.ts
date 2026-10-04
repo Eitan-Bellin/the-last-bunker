@@ -1,3 +1,4 @@
+import { lawArrivals, lawDefense } from '../data/laws';
 import { roomSlots } from '../data/buildingDefs';
 import { seasonEffects } from '../data/seasons';
 import { inBreather, threatPace, threatStrength } from './ThreatSystem';
@@ -384,7 +385,8 @@ export function defenseParts(state: GameState): { walls: number; guards: number;
   if (hasFeature(state, 'rangers')) guards *= 1.4;
   if (hasFeature(state, 'armorPlating')) guards *= 1.2;
   if (hasFeature(state, 'militia')) residents *= 2;
-  return { walls, guards, residents };
+  const law = lawDefense(state);
+  return { walls: walls * law, guards: guards * law, residents };
 }
 
 /** [P2] How much each part counts against each kind of raider (walls stop scavengers, guards stop marauders). */
@@ -481,7 +483,7 @@ export function arrivalGap(state: GameState, roll = 0.5): number {
   const hunger = state.resources.food.amount <= 0 || state.resources.water.amount <= 0 ? 2 : 1;
   // [LateGame B1] the field radio mast project brings newcomers faster
   // [P2] More people travel in spring, fewer in winter.
-  const season = (seasonEffects(state)?.arrivals ?? 1) * (hasFeature(state, 'longRangeRadio') ? 0.8 : 1);
+  const season = (seasonEffects(state)?.arrivals ?? 1) * (hasFeature(state, 'longRangeRadio') ? 0.8 : 1) * lawArrivals(state);
   return Math.round(base * radio * mood * hunger * season * (0.75 + roll * 0.5) / projectArrivalSpeed(state));
 }
 

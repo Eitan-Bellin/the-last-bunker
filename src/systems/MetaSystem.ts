@@ -8,6 +8,7 @@ import { MAX_FLOORS } from '../data/zones';
 import { hasFeature } from './ResearchSystem';
 import { MAX_ACT, actComplete, actOf } from '../data/acts';
 import { DIFFICULTIES } from '../data/difficulty';
+import { ENDINGS } from '../data/endings';
 
 /** Project Genesis gate (the design's "big decision"): the research plus a grown, era-3 bunker. */
 export const GENESIS_MIN_SURVIVORS = 40;
@@ -86,7 +87,9 @@ export class MetaSystem {
         + state.survivors.length + 5 * state.achievements.length;
       const diff = DIFFICULTIES.find(d => d.id === lg.meta.diffLowest)?.legacy ?? 1;
       // [P3] Heritage research: +10%.
-      return Math.floor(raw * diff * (1 + 0.1 * state.prestige.rebirthCount) * (hasFeature(state, 'heritage') ? 1.1 : 1));
+      // [P5] The run's ending adds its share.
+      const ending = ENDINGS.find(e => state.storyFlags.includes(`ending:${e.id}`));
+      return Math.floor(raw * diff * (1 + 0.1 * state.prestige.rebirthCount) * (hasFeature(state, 'heritage') ? 1.1 : 1) * (1 + (ending?.legacy ?? 0)));
     }
     const explored = state.explorationMap.filter(h => h.explored).length;
     const raw = 5 + Math.sqrt(state.stats.totalFoodProduced / 20) + state.survivors.length * 2 + researched * 2 + explored

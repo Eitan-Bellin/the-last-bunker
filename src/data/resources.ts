@@ -38,9 +38,10 @@ export const RESOURCES: readonly ResourceDef[] = [
   // Long game, tier 2: made by workshop and generator roles from their Act on (hidden before). Later tiers have no producer yet.
   { id: 'components', tier: 2, ticked: true, baseCap: 200, overflowCredits: 0.3, wasteTracked: true, act: 3 },
   { id: 'alloys', tier: 2, ticked: true, baseCap: 80, overflowCredits: 0.8, wasteTracked: true, act: 4 },
-  { id: 'data', tier: 2, ticked: false, act: 5 },
-  { id: 'influence', tier: 2, ticked: false, act: 6 },
-  { id: 'seedCores', tier: 2, ticked: false, act: 7 },
+  // [P5] The late Acts' currencies: data (lab Data Vaults), influence (Council Halls and the world's trust), seed cores (Seed Forge).
+  { id: 'data', tier: 2, ticked: true, baseCap: 100, overflowCredits: 1, wasteTracked: true, act: 5 },
+  { id: 'influence', tier: 2, ticked: true, baseCap: 60, overflowCredits: 1.5, wasteTracked: true, act: 6 },
+  { id: 'seedCores', tier: 2, ticked: true, baseCap: 20, overflowCredits: 4, wasteTracked: true, act: 7 },
   { id: 'isotope7', tier: 'meta', ticked: false },
   { id: 'blueprints', tier: 'meta', ticked: false },
   { id: 'vaultCoins', tier: 'meta', ticked: false },

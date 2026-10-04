@@ -1,3 +1,4 @@
+import { lawMorale } from '../data/laws';
 import type { GameState, SurvivorState, SurvivorStats, BuildingInstance } from '../core/GameState';
 import type { StateManager } from '../core/StateManager';
 import type { SeededRandom } from '../core/Random';
@@ -216,6 +217,8 @@ export class PopulationSystem {
 
     const research = researchMorale(state);
     if (research > 0) factors.push({ key: 'research', value: research });
+    const laws = lawMorale(state);
+    if (laws !== 0) factors.push({ key: 'laws', value: laws });
     const specs = specTotal(state, 'morale');
     if (specs > 0) factors.push({ key: 'specs', value: specs });
     if (s.partnerId && state.survivors.some(p => p.id === s.partnerId)) factors.push({ key: 'family', value: 6 });
@@ -252,6 +255,7 @@ export class PopulationSystem {
     sum += buffs;
     const research = researchMorale(state);
     if (research > 0) sum += research;
+    sum += lawMorale(state);
     const specs = specTotal(state, 'morale');
     if (specs > 0) sum += specs;
     let kids = 0;
