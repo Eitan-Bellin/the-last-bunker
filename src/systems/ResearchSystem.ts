@@ -93,7 +93,50 @@ export class ResearchSystem {
   }
 
   /** The node to research next for this id: fixed nodes as-is, refinements at their next level. */
+  /** [Long game P3] Whether the node's Eureka condition is met (it is then cheaper and faster). */
+  eureka(state: GameState, def: ResearchDef): boolean {
+    const e = def.eureka;
+    if (!e) return false;
+    const have = e.kind === 'floors' ? state.currentFloors
+      : e.kind === 'explored' ? state.explorationMap.filter(h => h.explored && h.biome !== 'bunker').length
+      : e.kind === 'specialized' ? state.buildings.filter(b => b.specialization).length
+      : e.kind === 'pop' ? state.survivors.length
+      : e.kind === 'crises' ? state.stats.totalCrisesSurvived
+      : e.kind === 'charters' ? state.storyFlags.filter(f => f.startsWith('project:')).length
+      : (state.lore ?? []).length;
+    return have >= e.n;
+  }
+
+  /** [Long game P3] Why a node is closed beyond its prerequisites: its Act has not come, or its fork took another path. */
+  blockReason(state: GameState, id: string): 'act' | 'fork' | null {
+    const def = getResearch(id);
+    if (!def) return null;
+    if (def.act && (state.longGame?.meta.act ?? 99) < def.act) return 'act';
+    if (def.fork) {
+      const pending = new Set([this.activeId(state), ...this.queue(state)]);
+      const taken = RESEARCH.find(r => r.fork === def.fork && r.id !== id && (isResearched(state, r.id) || pending.has(r.id)));
+      if (taken) return 'fork';
+    }
+    return null;
+  }
+
+  /** The node the fork's other choice took (for "closed by ..."). */
+  forkTaken(state: GameState, id: string): ResearchDef | undefined {
+    const def = getResearch(id);
+    if (!def?.fork) return undefined;
+    const pending = new Set([this.activeId(state), ...this.queue(state)]);
+    return RESEARCH.find(r => r.fork === def.fork && r.id !== id && (isResearched(state, r.id) || pending.has(r.id)));
+  }
+
   defOf(state: GameState, id: string): ResearchDef | undefined {
+    const base = getResearch(id);
+    if (base && !getRefinement(id) && this.eureka(state, base)) {
+      return {
+        ...base,
+        cost: Object.fromEntries(Object.entries(base.cost).map(([r, v]) => [r, Math.round((v ?? 0) * 0.7)])),
+        time: Math.round(base.time * 0.6),
+      };
+    }
     const ref = getRefinement(id);
     if (ref) {
       const def = refinementResearch(ref, refinementLevel(state, id));
@@ -115,7 +158,7 @@ export class ResearchSystem {
     if (node?.isResearching) return 'active';
     if (this.queue(state).includes(id)) return 'queued';
     const def = this.defOf(state, id);
-    if (!def) return 'locked';
+    if (!def || this.blockReason(state, id)) return 'locked';
     return def.requires.every(req => isResearched(state, req)) ? 'available' : 'locked';
   }
 
@@ -169,7 +212,7 @@ export class ResearchSystem {
   canStart(state: GameState, id: string): boolean {
     const def = this.defOf(state, id);
     if (!def || state.research[id]?.completed || state.research[id]?.isResearching || this.queue(state).includes(id)) return false;
-    if (!this.requirementsMet(state, def)) return false;
+    if (!this.requirementsMet(state, def) || this.blockReason(state, id)) return false;
     if (this.activeId(state) && this.queue(state).length >= this.queueSlots(state)) return false;
     return this.resources.canAfford(state, def.cost as Record<string, number>);
   }

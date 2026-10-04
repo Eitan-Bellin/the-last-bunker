@@ -378,6 +378,12 @@ export function defenseParts(state: GameState): { walls: number; guards: number;
     }
   }
   walls += projectDefense(state);
+  // [P3] Research and doctrines.
+  if (hasFeature(state, 'tripwires')) walls += 15;
+  if (hasFeature(state, 'fortress')) walls *= 1.5;
+  if (hasFeature(state, 'rangers')) guards *= 1.4;
+  if (hasFeature(state, 'armorPlating')) guards *= 1.2;
+  if (hasFeature(state, 'militia')) residents *= 2;
   return { walls, guards, residents };
 }
 
@@ -444,9 +450,11 @@ export function raidOdds(state: GameState, stance: RaidStance = 'hold'): number 
 
 /** The toll that sends the raiders away: a fifth of the food and scrap. */
 export function raidTribute(state: GameState): Resources {
+  // [P3] The Diplomacy doctrine halves the toll.
+  const k = hasFeature(state, 'diplomacy') ? 0.1 : 0.2;
   return nonZero({
-    food: Math.max(10, Math.round(state.resources.food.amount * 0.2)),
-    scrap: Math.round(state.resources.scrap.amount * 0.2),
+    food: Math.max(10, Math.round(state.resources.food.amount * k)),
+    scrap: Math.round(state.resources.scrap.amount * k),
   });
 }
 
@@ -473,7 +481,7 @@ export function arrivalGap(state: GameState, roll = 0.5): number {
   const hunger = state.resources.food.amount <= 0 || state.resources.water.amount <= 0 ? 2 : 1;
   // [LateGame B1] the field radio mast project brings newcomers faster
   // [P2] More people travel in spring, fewer in winter.
-  const season = seasonEffects(state)?.arrivals ?? 1;
+  const season = (seasonEffects(state)?.arrivals ?? 1) * (hasFeature(state, 'longRangeRadio') ? 0.8 : 1);
   return Math.round(base * radio * mood * hunger * season * (0.75 + roll * 0.5) / projectArrivalSpeed(state));
 }
 
@@ -523,7 +531,8 @@ export class EventSystem {
     const state = this.ctx.sm.state;
     // [P2] The scout report: who is coming is known at once (the forecast is exact).
     const kind: RaidKind = this.ctx.rng.chance(0.5) ? 'scavengers' : 'marauders';
-    const raid = { hitAt: state.stats.totalPlayTime + RAID_WARNING, strength: raidStrength(state, this.ctx.rng.next()), kind, stance: 'hold' as RaidStance };
+    const warning = RAID_WARNING + (hasFeature(state, 'watchtower') ? 180 : 0); // [P3] the watchtower sees them sooner
+    const raid = { hitAt: state.stats.totalPlayTime + warning, strength: raidStrength(state, this.ctx.rng.next()), kind, stance: 'hold' as RaidStance };
     this.setDanger({ raid });
     bus.emit('raid:warning', raid);
     return raid;
@@ -662,7 +671,7 @@ export class EventSystem {
       }
       if (!opts.soft) this.ctx.incidents?.startBreach();
       // [P2] A rout wrecks a room by the door (it comes back at its old level once restored).
-      if (rout && !opts.soft && difficultyOf(state).roomDamage) result.wrecked = this.wreckRoom() ?? undefined;
+      if (rout && !opts.soft && difficultyOf(state).roomDamage && !hasFeature(state, 'bunkerDoctrine')) result.wrecked = this.wreckRoom() ?? undefined;
     }
     this.setDanger({ raid: null });
     this.scheduleRaid();

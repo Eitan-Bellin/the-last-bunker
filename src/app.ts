@@ -30,6 +30,7 @@ import { ArtLibrary } from './art/ArtLibrary';
 import { buildingArtKey, roomTier } from './art/registry';
 import type { IconName } from './ui/icons';
 import { RuinPanel } from './ui/components/RuinPanel';
+import { ResourceSheet } from './ui/components/ResourceSheet';
 import { JournalPanel, LoreReader } from './ui/components/JournalPanel';
 import { EraPanel } from './ui/components/EraPanel';
 import { eraOf } from './data/eras';
@@ -73,6 +74,8 @@ export class GameApp {
   // Controllers: each owns one part of the game screen's behaviour (src/ui/controllers/).
   readonly feedback = new FeedbackController(this);
   readonly inbox = new InboxController(this);
+  /** [Long game UX] Opened by tapping a resource in the HUD. */
+  resourceSheet!: ResourceSheet;
   readonly saves = new SaveController(this);
   readonly lore = new LoreController(this);
   readonly dig = new DigController(this);
@@ -180,6 +183,7 @@ export class GameApp {
       persistLabel: () => i18n.t(`settings.persist.${getPersistStatus()}`),
     });
     this.ruinPanel = new RuinPanel(this.engine);
+    this.resourceSheet = new ResourceSheet(this.engine);
     this.modal = new Modal();
     this.toasts = new Toasts();
   }
@@ -385,6 +389,7 @@ export class GameApp {
       if (this.eraPanel.isVisible) this.eraPanel.refresh(state);
       if (this.projectsPanel.isVisible) this.projectsPanel.refresh(state); // [LateGame B1]
       this.inbox.refresh(state);
+      if (this.resourceSheet.isVisible) this.resourceSheet.refresh(state);
       const marks = doneProjects(state).join(',');
       if (marks !== this.projectMarks) { this.projectMarks = marks; setSurfaceProjects(marks ? marks.split(',') : []); } // [LateGame B1] surface markers
       this.updateBadges();
@@ -578,12 +583,11 @@ export class GameApp {
       if (!wasOpen) this.menuPanel.show();
     };
 
+    // [Long game UX] The resource drawer: sources, sinks, time to full or empty, and why.
     this.hud.onResourceTap = (r: ResourceType) => {
-      const res = this.state.resources[r];
-      const net = res.productionRate - res.consumptionRate;
-      this.toasts.show(
-        `${RESOURCE_ICONS[r] ?? ''} ${i18n.t(`resources.${r}`)}: ${Math.floor(res.amount)}/${res.cap} · ${i18n.formatRate(net)} ${i18n.t('resources.perSecond')}`,
-      );
+      this.audio.play('click');
+      this.closeSheets();
+      this.resourceSheet.show(r, this.state);
     };
 
     this.hud.onPlacementCancel = () => this.world.cancelPlacement();
@@ -604,6 +608,7 @@ export class GameApp {
     };
     this.eraPanel.onOpenProjects = () => { this.closeSheets(); this.projectsPanel.show(); }; // [LateGame B1]
     this.eraPanel.foreman = this.engine.foremanSystem; // [Long game]
+    this.eraPanel.engine = this.engine;
     this.hud.onEra = () => {
       this.audio.play('click');
       const wasOpen = this.eraPanel.isVisible;
@@ -767,7 +772,7 @@ export class GameApp {
   private anyPanelOpen(): boolean {
     return this.buildMenu.isVisible || this.buildingPanel.isVisible || this.peoplePanel.isVisible || this.researchPanel.isVisible
       || this.surfacePanel.isVisible || this.menuPanel.isVisible || this.ruinPanel.isVisible || this.journal.isVisible
-      || this.eraPanel.isVisible || this.projectsPanel.isVisible || this.loreReader.isVisible || this.inbox.isVisible;
+      || this.eraPanel.isVisible || this.projectsPanel.isVisible || this.loreReader.isVisible || this.inbox.isVisible || this.resourceSheet.isVisible;
   }
 
   /**
@@ -820,6 +825,7 @@ export class GameApp {
     this.eraPanel.hide();
     this.projectsPanel.hide(); // [LateGame B1]
     this.inbox.hide();
+    this.resourceSheet.hide();
   }
 
   // ---- [Danger] raid warnings, disasters, memorials (LATEGAME-PLAN part C) ----

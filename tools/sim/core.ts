@@ -324,6 +324,7 @@ export async function runSim(o: SimOptions): Promise<SimResult> {
   const offs = [
     bus.on('era:advance', (era: unknown) => mark(`era ${era} ${ERAS[era as number]?.key ?? ''}`.trim())),
     bus.on('act:advance', (act: unknown) => mark(`act ${act}`)), // [Long game]
+    bus.on('research:complete', (id: unknown) => { const f = (researchData.RESEARCH as unknown as { id: string; fork?: string }[]).find(r => r.id === id)?.fork; if (f) mark(`doctrine ${id}`); }), // [P3]
     bus.on('survivor:died', (_s: unknown, cause: unknown) => {
       R.deaths.total++;
       const c = String(cause ?? 'other');
@@ -565,9 +566,14 @@ export async function runSim(o: SimOptions): Promise<SimResult> {
       const d = (defOf ? defOf(state(), id) : researchData.RESEARCH.find(r => r.id === id)) as { cost?: Record<string, number> } | undefined;
       return d?.cost?.knowledge ?? 0;
     };
+    // [P3] Doctrine forks: each seed follows one path per fork (seed 1 the first option, seed 2 the second...).
+    const all = researchData.RESEARCH as unknown as { id: string; fork?: string }[];
+    const forks = [...new Set(all.map(r => r.fork).filter(Boolean))] as string[];
+    const chosen = new Set(forks.map((f, fi) => { const opts = all.filter(r => r.fork === f); return opts[(o.seed + fi) % opts.length].id; }));
+    const onPath = (id: string) => { const f = all.find(r => r.id === id)?.fork; return !f || chosen.has(id); };
     // Main tree first (cheapest), endless refinements only when nothing else is open; fill the queue if there is one.
     for (let i = 0; i < 6; i++) {
-      const next = ids.filter(id => e.researchSystem.canStart(state(), id))
+      const next = ids.filter(id => onPath(id) && e.researchSystem.canStart(state(), id))
         .sort((a, b) => Number(refIds.has(a)) - Number(refIds.has(b)) || costK(a) - costK(b))[0];
       if (!next) break;
       const hadActive = !!e.researchSystem.activeId(state());

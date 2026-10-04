@@ -1,3 +1,4 @@
+import type { GameEngine } from '../../core/GameEngine';
 import type { GameState } from '../../core/GameState';
 import { i18n } from '../../i18n/I18nManager';
 import { ERAS, eraOf, type EraDef } from '../../data/eras';
@@ -20,6 +21,8 @@ export class EraPanel {
   private actLabels: HTMLElement[] = [];
   /** [Long game] Set by the app: the Foreman whose standing orders are toggled here. */
   foreman: ForemanSystem | null = null;
+  /** [Long game UX] Set by the app: the engine, for the "next up" card (objective, project ETA). */
+  engine: GameEngine | null = null;
   private lastState: GameState | null = null;
 
   show(state: GameState): void {
@@ -41,7 +44,8 @@ export class EraPanel {
     const act = state.longGame ? actOf(state) : null;
     this.lastState = state;
     const orders = FOREMAN_ORDERS.map(o => (state.longGame?.foreman.orders[o] ? 1 : 0)).join('');
-    const sig = `${era.id}|${act?.id ?? 0}|${orders}|${i18n.currentLocale}`;
+    const goalIdx = act ? act.goals.findIndex(g => { const [c, t] = g.progress(state); return c < t; }) : -1;
+    const sig = `${era.id}|${act?.id ?? 0}|${orders}|${state.tutorialStep}|${goalIdx}|${state.activeProjectId}|${state.activeProjectId ? state.lateGame.projects[state.activeProjectId]?.stage ?? 0 : 0}|${i18n.currentLocale}`;
     if (sig !== this.signature) {
       this.signature = sig;
       this.render(era, act);
@@ -61,6 +65,33 @@ export class EraPanel {
       setBar(this.bars[i], (Math.min(c, t) / t) * 100);
       if (this.labels[i]) this.labels[i].textContent = t > 1 ? `${Math.min(c, t)}/${t}` : c >= t ? '✓' : '';
     });
+  }
+
+  /** [Long game UX] Three goals, short to long: the current objective, the Act's next goal, and the charter work. */
+  private renderNextUp(state: GameState, act: ActDef): HTMLElement {
+    const locale = i18n.currentLocale;
+    const engine = this.engine!;
+    const card = el('div', 'bp-card next-up');
+    card.appendChild(el('div', 'bp-section-title', `[[target]] ${i18n.t('next.title')}`));
+    const obj = engine.objectiveSystem.current(state);
+    const [oc, ot] = obj.progress(state);
+    card.appendChild(el('div', 'next-row', `${i18n.t('next.short')}: ${obj.text[locale] ?? obj.text.en}${ot > 1 ? ` (${Math.min(oc, ot)}/${ot})` : ''}`));
+    const goal = act.goals.find(g => { const [c, t] = g.progress(state); return c < t; });
+    if (goal) {
+      const [c, t] = goal.progress(state);
+      card.appendChild(el('div', 'next-row', `${i18n.t('next.medium')}: ${goal.text[locale]} (${c}/${t})`));
+    }
+    const pid = state.activeProjectId;
+    const charter = act.charter.find(id => stagesDone(state, id) < (getProject(id)?.stages.length ?? 0));
+    if (pid) {
+      const def = getProject(pid);
+      const eta = engine.projectSystem.workEta(state, pid);
+      const done = stagesDone(state, pid);
+      card.appendChild(el('div', 'next-row', `${i18n.t('next.long')}: ${def?.name[locale] ?? pid} · ${i18n.t('next.stage', { n: done + 1, all: def?.stages.length ?? 0 })}${isFinite(eta) ? ` · ${i18n.t('next.workLeft', { t: i18n.formatDuration(eta) })}` : ` · ${i18n.t('next.noCrew')}`}`));
+    } else if (charter) {
+      card.appendChild(el('div', 'next-row', `${i18n.t('next.long')}: ${i18n.t('next.pick', { name: getProject(charter)?.name[locale] ?? charter })}`));
+    }
+    return card;
   }
 
   /** [Long game] The Act card: its name, what it allows, and what finishes it (goals and charter projects). */
@@ -126,6 +157,7 @@ export class EraPanel {
     const locale = i18n.currentLocale;
     this.sheet.setTitle(`[[flag]] ${i18n.t('era.title')}`);
     const root = el('div', 'era');
+    if (act && this.lastState && this.engine) root.appendChild(this.renderNextUp(this.lastState, act));
     if (act) root.appendChild(this.renderAct(act));
     const head = el('div', `era-head era-${era.key}`);
     head.append(

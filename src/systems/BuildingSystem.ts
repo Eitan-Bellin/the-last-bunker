@@ -1,3 +1,4 @@
+import { hasFeature } from './ResearchSystem';
 import type { GameState, BuildingType, BuildingInstance, Position } from '../core/GameState';
 import type { StateManager } from '../core/StateManager';
 import { bus } from '../core/EventBus';
@@ -278,8 +279,10 @@ export class BuildingSystem {
   digTime(state: GameState): number {
     const n = state.currentFloors + 1;
     const table = TUNING.digSeconds;
-    if (n < table.length) return table[n];
-    return Math.round(table[table.length - 1] * Math.pow(TUNING.digTimeGrowth, n - (table.length - 1)));
+    // [P3] Deep Drilling research: a quarter faster.
+    const drill = hasFeature(state, 'deepDrilling') ? 0.75 : 1;
+    if (n < table.length) return Math.round(table[n] * drill);
+    return Math.round(table[table.length - 1] * Math.pow(TUNING.digTimeGrowth, n - (table.length - 1)) * drill);
   }
 
   /** People the dig needs for full speed (fewer dig proportionally slower). */

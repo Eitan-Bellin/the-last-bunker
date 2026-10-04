@@ -85,7 +85,8 @@ export class MetaSystem {
       const raw = 100 * actsDone + 10 * Math.max(0, state.currentFloors - 3) + 5 * topRooms + 2 * researched
         + state.survivors.length + 5 * state.achievements.length;
       const diff = DIFFICULTIES.find(d => d.id === lg.meta.diffLowest)?.legacy ?? 1;
-      return Math.floor(raw * diff * (1 + 0.1 * state.prestige.rebirthCount));
+      // [P3] Heritage research: +10%.
+      return Math.floor(raw * diff * (1 + 0.1 * state.prestige.rebirthCount) * (hasFeature(state, 'heritage') ? 1.1 : 1));
     }
     const explored = state.explorationMap.filter(h => h.explored).length;
     const raw = 5 + Math.sqrt(state.stats.totalFoodProduced / 20) + state.survivors.length * 2 + researched * 2 + explored
