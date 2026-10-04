@@ -491,7 +491,7 @@
   "settings.gfx.high": "High",
   "settings.gfx.medium": "Medium",
   "settings.gfx.low": "Battery saver",
-  "settings.gfxHint": "High: full sharpness, smooth edges and always-smooth motion (warmer, uses more battery). Medium: the phone default. Battery saver: cool and light.",
+  "settings.gfxHint": "High: the screen's full sharpness, full light effects and film grain, smooth even when idle (warmer). Medium (phone default): sharp, lighter effects, rests when you are not touching. Battery saver: cool and light.",
   "settings.brightness": "Brightness",
   "settings.bright.normal": "Normal",
   "settings.bright.bright": "Bright",

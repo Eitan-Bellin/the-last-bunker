@@ -20,7 +20,7 @@ import { lineWidth, richLine } from './richText';
 import { ArtLibrary } from '../art/ArtLibrary';
 import { artEntry, buildingArtKey, roomTier, ruinArtKey } from '../art/registry';
 import { buildCityMap, type CityMap } from './cityMap';
-import { PostFX, QUALITY_PROFILE, startQuality } from './postfx';
+import { PostFX, startQuality, targetResolution } from './postfx';
 import { isLiteMode, logCrash } from '../core/crashGuard';
 import { isTouchDevice } from '../utils/device';
 import { coneTexture } from '../art/ArtLibrary';
@@ -433,7 +433,7 @@ export class BunkerRenderer {
       // The canvas itself is never multisampled (the world is drawn into the filter's texture, where the quality level
       // switches smoothing on or off); the pixel density starts at the level this session begins with and follows the setting.
       antialias: false,
-      resolution: Math.min(window.devicePixelRatio, QUALITY_PROFILE[startQuality()].res),
+      resolution: targetResolution(startQuality()),
       autoDensity: true,
       autoStart: false,
       // Textures idle for a while leave the GPU (they come back when drawn again): sooner than Pixi's minute, sooner still in lite mode.

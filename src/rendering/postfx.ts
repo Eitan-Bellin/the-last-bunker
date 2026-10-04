@@ -13,22 +13,37 @@ const QUALITY_KEY = 'lastbunker_gfx';
 const BRIGHTNESS_KEY = 'lastbunker_bright';
 
 /**
- * What each graphics level really changes. `res` caps the pixel density (1 = a pixel per CSS pixel), `msaa` smooths the
- * edges of everything in the world, `passes` is the bloom blur, `grain` the film grain, and `fps` is the picture rate while the
- * player is touching / watching / idle. High is the full look at full speed: it costs heat and battery, which is the point of the choice.
+ * What each graphics level really changes. `res` caps the pixel density (1 = a pixel per CSS pixel) and `mp` caps the
+ * pixels drawn per picture (megapixels), so a big tablet gets the same budget as a phone instead of three times the heat.
+ * `msaa` smooths the edges of everything in the world (only below 1.75x: at phone densities the pixels are already finer
+ * than the eye, and 4x samples of a 3x picture were what cooked phones on High), `passes` is the bloom blur, `grain` the
+ * film grain, and `fps` is the picture rate while the player is touching / watching / idle.
+ *
+ * Sharpness comes from pixel density, heat from pixels x effects x pictures per second: so Medium (the phone default) keeps
+ * a sharp 2x picture and saves on the effects and the idle picture rate, never on sharpness.
  */
 export interface QualityProfile {
   res: number;
+  mp: number;
   msaa: boolean;
   passes: number;
   grain: boolean;
   fps: [number, number, number];
 }
 export const QUALITY_PROFILE: Record<QualityLevel, QualityProfile> = {
-  high: { res: 2.5, msaa: true, passes: 4, grain: true, fps: [60, 60, 30] },
-  medium: { res: 1.5, msaa: false, passes: 2, grain: false, fps: [60, 30, 15] },
-  low: { res: 1, msaa: false, passes: 0, grain: false, fps: [30, 20, 10] },
+  high: { res: 3, mp: 3.4, msaa: true, passes: 4, grain: true, fps: [60, 60, 30] },
+  medium: { res: 2, mp: 1.8, msaa: false, passes: 2, grain: false, fps: [60, 30, 15] },
+  low: { res: 1.5, mp: 0.9, msaa: false, passes: 0, grain: false, fps: [30, 20, 10] },
 };
+
+/** Pixel density for a level on this screen: the device's own density, capped by the level and by its pixel budget. */
+export function targetResolution(level: QualityLevel): number {
+  const p = QUALITY_PROFILE[level];
+  const dpr = window.devicePixelRatio || 1;
+  const css = Math.max(1, window.innerWidth * window.innerHeight);
+  const budget = Math.sqrt((p.mp * 1e6) / css);
+  return Math.max(1, Math.round(Math.min(dpr, p.res, budget) * 4) / 4);
+}
 
 export function storedQuality(): QualityLevel | null {
   try {
@@ -104,6 +119,7 @@ export class PostFX {
   private vignette: [number, number] = VIGNETTE[1];
   private tone: Brightness = 'bright';
   private area: Rectangle | null = null;
+  private msaa = false;
 
   constructor(app: Application, world: Container, grade?: ColorMatrixFilter, view?: () => PostView) {
     this.app = app;
@@ -186,8 +202,8 @@ export class PostFX {
   private lastResize = -1e9;
 
   /** Pixel density follows the level (at most one change every 8 s, so a wobbling frame rate cannot make the canvas flicker). */
-  private applyResolution(cap: number, now: number): void {
-    const want = Math.min(window.devicePixelRatio || 1, cap);
+  private applyResolution(level: QualityLevel, now: number): void {
+    const want = targetResolution(level);
     const r = this.app.renderer;
     if (Math.abs(r.resolution - want) < 0.01 || now - this.lastResize < 8000) return;
     this.lastResize = now;
@@ -218,9 +234,12 @@ export class PostFX {
       const p = QUALITY_PROFILE[q];
       c.passes = p.passes;
       // The world is drawn into the filter's texture, so smoothing its edges is a switch on the filter, changeable at any time.
-      c.antialias = p.msaa ? 'on' : 'off';
+      this.msaa = p.msaa;
     }
-    this.applyResolution(QUALITY_PROFILE[this.baseLevel].res, now);
+    // Edge smoothing only where pixels are coarse enough to show jaggies (desktops); on a sharp phone it was pure heat.
+    const aa = this.msaa && this.app.renderer.resolution < 1.75 ? 'on' : 'off';
+    if (c.antialias !== aa) c.antialias = aa;
+    this.applyResolution(this.baseLevel, now);
     this.vignette = VIGNETTE[Math.max(0, Math.min(VIGNETTE.length - 1, v.era))];
     const t = this.world.localTransform;
     // Tell the filter where the screen is, so it does not measure the whole 3000-object world every frame to find out.
