@@ -8,6 +8,7 @@ import { specOf } from '../data/specializations';
 import { BASE_CAPS, OVERFLOW_CREDITS, POWER_FLOOR, TICKED_RESOURCES } from '../data/resources';
 import { modifierProduct, prepareModifiers, registerModifier } from './modifiers';
 import { difficultyOf } from '../data/difficulty';
+import { actCapBonus } from '../data/pricing';
 
 const EMERGENCY_EFFICIENCY = 0.25;
 const FOOD_PER_SURVIVOR = 0.08;
@@ -40,6 +41,12 @@ registerModifier({
   mult: ({ resource }) => (resource === 'power' ? 1 : moraleNow),
 });
 registerModifier({ id: 'echo', mult: ({ state }) => prestigeMultiplier(state) });
+// [Long game] A room that is changing its role produces nothing until the work is done.
+registerModifier({ id: 'retool', mult: ({ state, building }) => (retooling(state, building) ? 0 : 1) });
+
+export function retooling(state: GameState, b: BuildingInstance): boolean {
+  return (b.retoolUntil ?? 0) > (state.longGame?.meta.worldT ?? 0);
+}
 registerModifier({ id: 'researchResource', mult: ({ state, resource }) => researchResourceMult(state, resource) });
 registerModifier({ id: 'researchRoom', mult: ({ state, building }) => researchBuildingMult(state, building.type) });
 registerModifier({
@@ -112,11 +119,14 @@ export class ResourceSystem {
     // Production chains draw their inputs; specialized rooms add their side products.
     for (const b of state.buildings) {
       if (effectiveLevel(b) <= 0 || incidentBlocks(state, b)) continue;
-      for (const input of chainInputs(b.type)) {
+      for (const input of chainInputs(b)) {
         if (inputFed(state, input)) consumption[input.resource] = (consumption[input.resource] ?? 0) + inputRate(input, b);
       }
-      for (const [r, v] of Object.entries(specOf(b)?.extra ?? {}) as [ResourceType, number][]) {
-        production[r] = (production[r] ?? 0) + v * powerRatio;
+      const spec = specOf(b);
+      // [Long game] Tier-2 roles grow with the room's level, slow down when starved, and stop while the room retools.
+      const roleScale = spec?.levelScaled ? (effectiveLevel(b) / 5) * chainFactor(state, b) * (retooling(state, b) ? 0 : 1) : 1;
+      for (const [r, v] of Object.entries(spec?.extra ?? {}) as [ResourceType, number][]) {
+        production[r] = (production[r] ?? 0) + v * powerRatio * roleScale;
       }
     }
 
@@ -223,6 +233,8 @@ export class ResourceSystem {
     // [Economy A4] Per-era storage multiplier (power is not stored in bulk, so it stays as is).
     const eraMult = eraCapMultiplier(state);
     if (eraMult > 1) for (const r of Object.keys(caps) as ResourceType[]) if (r !== 'power') caps[r] = Math.round((caps[r] ?? 0) * eraMult);
+    // [Long game] L2: the Act's currencies hold a set number of hours of their reference income, so any price fits.
+    for (const [r, v] of Object.entries(actCapBonus(state)) as [ResourceType, number][]) caps[r] = (caps[r] ?? 0) + v;
     return caps;
   }
 

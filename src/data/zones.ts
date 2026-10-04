@@ -39,7 +39,8 @@ const DEEP: Omit<ZoneDef, 'floor'> = {
 };
 
 export const BASE_FLOORS = ZONES.length;
-export const MAX_FLOORS = 8;
+/** [Long game] Release 1 goes to 16 floors (the Acts open them a few at a time). */
+export const MAX_FLOORS = 16;
 
 const BUILDING_ZONE: Partial<Record<BuildingType, ZoneId>> = {
   quarters: 'living',

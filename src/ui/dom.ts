@@ -16,6 +16,8 @@ export const RESOURCE_ICONS: Record<string, string> = {
   blueprints: tok('blueprints'),
   isotope7: tok('isotope7'),
   credits: tok('credits'),
+  components: tok('components'),
+  alloys: tok('alloys'),
 };
 
 export const STAT_ICONS: Record<keyof SurvivorStats, string> = {

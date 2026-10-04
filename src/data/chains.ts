@@ -1,5 +1,6 @@
 import type { BuildingInstance, BuildingType, GameState, ResourceType } from '../core/GameState';
 import { effectiveLevel, levelMultiplier } from './buildingDefs';
+import { specOf } from './specializations';
 
 /**
  * Light production chains (Sprint 6): some rooms turn one resource into another.
@@ -31,8 +32,11 @@ export const BOOST_FACTOR = 1.5;
 /** M1: boost fuel only burns the surplus above this share of its storage cap, so digs and research can still save up. */
 export const BOOST_RESERVE = 0.5;
 
-export function chainInputs(type: BuildingType): ChainInput[] {
-  return CHAIN_INPUTS[type] ?? [];
+/** A room's inputs: its type's, plus its role's when it has one (a room passed by type alone gets only the type's). */
+export function chainInputs(b: BuildingType | BuildingInstance): ChainInput[] {
+  if (typeof b === 'string') return CHAIN_INPUTS[b] ?? [];
+  const role = specOf(b)?.inputs;
+  return role ? [...(CHAIN_INPUTS[b.type] ?? []), ...role] : CHAIN_INPUTS[b.type] ?? [];
 }
 
 /** Per-second draw of one input at the room's working level. */
@@ -55,7 +59,7 @@ export function inputFed(state: GameState, input: ChainInput): boolean {
 /** Output multiplier from the room's inputs: starved, normal or boosted. */
 export function chainFactor(state: GameState, b: BuildingInstance): number {
   let f = 1;
-  for (const input of chainInputs(b.type)) {
+  for (const input of chainInputs(b)) {
     const fed = inputFed(state, input);
     if (input.boost) f *= fed ? BOOST_FACTOR : 1;
     else if (!fed) f *= STARVED_FACTOR;

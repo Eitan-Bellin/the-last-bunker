@@ -318,6 +318,7 @@ export async function runSim(o: SimOptions): Promise<SimResult> {
   let lastOffline: Loose | null = null;
   const offs = [
     bus.on('era:advance', (era: unknown) => mark(`era ${era} ${ERAS[era as number]?.key ?? ''}`.trim())),
+    bus.on('act:advance', (act: unknown) => mark(`act ${act}`)), // [Long game]
     bus.on('survivor:died', () => {
       R.deaths.total++;
       const s = state();
@@ -367,8 +368,10 @@ export async function runSim(o: SimOptions): Promise<SimResult> {
   const sample = (label: string) => {
     const s = state();
     const res: Record<string, [number, number, number]> = {};
-    for (const k of TRACKED) {
+    // [Long game] tier-2 goods too, when the engine has them.
+    for (const k of [...TRACKED, 'components', 'alloys'] as ResourceType[]) {
       const r = s.resources[k];
+      if (!r) continue;
       res[k] = [Math.round(r.amount), Math.round(r.cap), +(r.productionRate - r.consumptionRate).toFixed(2)];
     }
     const adults = s.survivors.filter(x => !x.child);
@@ -594,7 +597,8 @@ export async function runSim(o: SimOptions): Promise<SimResult> {
 
   const upgrade = (capBlocked: boolean) => {
     const s = state();
-    const canUp = (b: typeof s.buildings[number]) => !b.isConstructing && b.level < (getDef(b.type)?.maxLevel ?? 1)
+    // canUpgrade(b, state) holds the Act's level ceiling in newer engines (older ones ignore the state).
+    const canUp = (b: typeof s.buildings[number]) => e.buildingSystem.canUpgrade(b, s)
       && e.resourceSystem.canAfford(s, e.buildingSystem.getUpgradeCost(b));
     if (capBlocked) {
       const st = s.buildings.filter(b => b.type === 'storage' && canUp(b)).sort((a, b) => a.level - b.level)[0];
@@ -606,21 +610,61 @@ export async function runSim(o: SimOptions): Promise<SimResult> {
     }
   };
 
+  /** [Long game] Rooms the bot keeps in a tier-2 role once its Act opens: role id -> how many. */
+  const tier2Roles = (): [string, number][] => {
+    const act = (state() as unknown as { longGame?: { meta: { act: number } } }).longGame?.meta.act ?? 0;
+    const out: [string, number][] = [];
+    if (act >= 3) out.push(['assemblyLine', act >= 4 ? 3 : 2]);
+    if (act >= 4) out.push(['arcFurnace', 2]);
+    return out;
+  };
   const specializeAndDig = () => {
+    const bsys = e.buildingSystem as unknown as Loose;
+    const roles = tier2Roles();
+    const wantRole = (type: BuildingType): string | null => {
+      for (const [id, n] of roles) {
+        const sp = specsFor(type).find(x => x.id === id);
+        if (!sp) continue;
+        if (state().buildings.filter(b => b.specialization === id).length < n) return id;
+      }
+      return null;
+    };
     for (const b of state().buildings) {
       if (e.buildingSystem.canSpecialize(state(), b.id) && e.resourceSystem.canAfford(state(), e.buildingSystem.specCost())) {
+        const pick = wantRole(b.type) ?? specsFor(b.type).filter(x => !(x as unknown as { act?: number }).act)[0]?.id;
+        if (!pick) continue;
         e.resourceSystem.spend(sm, e.buildingSystem.specCost());
-        e.buildingSystem.specialize(sm, b.id, specsFor(b.type)[0].id);
+        e.buildingSystem.specialize(sm, b.id, pick);
         mark('first specialization'); acted('specialize');
       }
     }
+    // A tier-2 role still missing and no fresh room for it: refit the highest specialized room of that type.
+    const canRetool = fn(bsys, 'canRetool'), retool = fn(bsys, 'retool'), retoolCost = fn(bsys, 'retoolCost');
+    if (canRetool && retool && retoolCost) {
+      for (const [id, n] of roles) {
+        if (state().buildings.filter(b => b.specialization === id).length >= n) continue;
+        const cand = state().buildings.filter(b => b.specialization && b.specialization !== id && !roles.some(([r]) => r === b.specialization) && canRetool(state(), b.id, id))
+          .sort((a, b) => b.level - a.level)[0];
+        const cost = retoolCost() as Record<string, number>;
+        if (cand && e.resourceSystem.canAfford(state(), cost)) {
+          e.resourceSystem.spend(sm, cost);
+          if (retool(sm, cand.id, id)) { acted('retool'); mark(`first ${id}`); }
+        }
+      }
+    }
     const s = state();
-    const crowded = s.buildings.length / Math.max(1, s.currentFloors) > 4.5 || noSpaceFor !== null;
+    // Older engines dig only when crowded; with Acts the bot digs as deep as the Act allows (the Act goals ask for depth).
+    const digSys = (e as unknown as Loose).digSystem as Loose | undefined;
+    const crowded = s.buildings.length / Math.max(1, s.currentFloors) > 4.5 || noSpaceFor !== null || !!digSys;
     if (crowded && e.buildingSystem.canDig(s) && e.resourceSystem.canAfford(s, e.buildingSystem.digCost(s))) {
       e.resourceSystem.spend(sm, e.buildingSystem.digCost(s));
       e.buildingSystem.dig(sm);
       acted('dig');
     }
+    if (digSys && fn(digSys, 'autoStaff')?.()) acted('digStaff');
+    // [Long game] An engaged player hands routine to the Foreman as soon as it takes orders.
+    const foreman = (e as unknown as Loose).foremanSystem as Loose | undefined;
+    if (foreman && fn(foreman, 'available')?.(state())) for (const o of ['maintain', 'deposit', 'staff']) if (!fn(foreman, 'isOn')?.(state(), o)) fn(foreman, 'set')?.(o, true);
     const d = nextDistrict(state());
     if (d && e.resourceSystem.canAfford(state(), d.cost as Record<string, number>)) {
       e.resourceSystem.spend(sm, d.cost as Record<string, number>);

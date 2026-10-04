@@ -1,4 +1,6 @@
 import type { GameState, ResourceType } from '../core/GameState';
+import { actPrice } from './pricing';
+import { TUNING } from './tuning';
 
 /**
  * [LateGame B1] Big projects: the long goals of the second half of the game.
@@ -7,7 +9,7 @@ import type { GameState, ResourceType } from '../core/GameState';
  * Each finished stage pays a permanent reward (the project's effect, in equal steps); the last stage opens
  * the project's finale. About 28 stages in all: roughly 4-6 days of play for an engaged player.
  */
-export type ProjectId = 'radioMast' | 'purifier' | 'greenhouse' | 'metroTunnel' | 'archive' | 'wall';
+export type ProjectId = 'radioMast' | 'purifier' | 'greenhouse' | 'metroTunnel' | 'archive' | 'wall' | 'vaultSeal' | 'genesisCore';
 
 export interface ProjectStage {
   cost: Partial<Record<ResourceType, number>>;
@@ -44,62 +46,92 @@ export interface ProjectDef {
   flag: string;
   /** First era in which the project can be started. */
   era: number;
+  /** [Long game] First Act in which it can be started (the Act's charter, see src/data/acts.ts). */
+  act?: number;
   stages: ProjectStage[];
   effects: ProjectEffects;
 }
 
 const rep = (n: number, f: (i: number) => ProjectStage): ProjectStage[] => Array.from({ length: n }, (_, i) => f(i));
+/** [Long game] A charter stage: hours of its Act's income (pricing.ts), plus the project's own flavour of goods. */
+const charter = (act: number, flavour: Partial<Record<ResourceType, number>>, growth = 0.08) => (i: number): Partial<Record<ResourceType, number>> => {
+  const price = actPrice(act, TUNING.charterStageHours[act] * (1 + growth * i)) as Partial<Record<ResourceType, number>>;
+  for (const [r, v] of Object.entries(flavour) as [ResourceType, number][]) price[r] = (price[r] ?? 0) + v;
+  return price;
+};
 /** Crew grows with the project: 2, 2, 3, 3, 4. */
 const crewAt = (i: number) => (i < 2 ? 2 : i < 4 ? 3 : 4);
 
 export const PROJECTS: ProjectDef[] = [
   {
-    id: 'radioMast', icon: '[[radioTower]]', flag: 'project:radioMast', era: 2,
+    // [Long game] Act I's charter: the bunker becomes a place people can hold.
+    id: 'vaultSeal', icon: '[[vault]]', flag: 'project:vaultSeal', era: 1, act: 1,
+    name: { he: 'איטום דלת הכספת', en: 'Seal the Vault Door' },
+    desc: { he: 'הדלת הגדולה של בונקר 17 לא נסגרת עד הסוף מאז האפר. בלי אטימה, אף אחד לא יישאר כאן לאורך זמן.', en: 'The great door of Bunker 17 has not closed all the way since the ashes. Without a seal, nobody will stay here for long.' },
+    finale: { he: 'הבונקר אטום: מערכה II נפתחת', en: 'The bunker is sealed: Act II opens' },
+    stages: [
+      { cost: charter(1, { scrap: 40 }, 0.5)(0), hours: 8, crew: 2 },
+      { cost: charter(1, { scrap: 60 }, 0.5)(1), hours: 14, crew: 2 },
+      { cost: charter(1, { scrap: 90, knowledge: 300 }, 0.5)(2), hours: 20, crew: 3 },
+    ],
+    effects: { defense: 10 },
+  },
+  {
+    id: 'radioMast', icon: '[[radioTower]]', flag: 'project:radioMast', era: 2, act: 2,
     name: { he: 'מגדל הרדיו בשטח', en: 'Field Radio Mast' },
     desc: { he: 'מגדל שידור ענק על פני השטח. הקול שלכם יגיע רחוק, ומי ששומע אותו יבוא.', en: 'A giant broadcast mast on the surface. Your voice will carry far, and those who hear it will come.' },
     finale: { he: 'ניצולים מגיעים פי 2 מהר יותר, ואות "שידור לעולם" יוצא לאוויר', en: 'Newcomers arrive twice as fast, and a "broadcast to the world" goes on air' },
-    stages: rep(5, i => ({ cost: { materials: 3000, scrap: 200 }, hours: 6, crew: crewAt(i) })),
+    stages: rep(5, i => ({ cost: charter(2, { scrap: 200 })(i), hours: 6, crew: crewAt(i) })),
     effects: { arrivalSpeed: 2 },
   },
   {
-    id: 'purifier', icon: '[[waterPurifier]]', flag: 'project:purifier', era: 2,
+    id: 'purifier', icon: '[[waterPurifier]]', flag: 'project:purifier', era: 2, act: 2,
     name: { he: 'מתקן טיהור מים', en: 'Water Purification Plant' },
     desc: { he: 'מתקן ענק שמנקה את מי התהום. יותר מים, ובלי חשש מהרעלה.', en: 'A huge plant that cleans the groundwater. More water, and no fear of poisoning.' },
     finale: { he: 'המים בבונקר +40%, ואין יותר הרעלת מים', en: 'Bunker water +40%, and no more water poisoning' },
-    stages: rep(4, i => ({ cost: { water: 5000, materials: 2000 }, hours: 4.5, crew: crewAt(i) })),
+    stages: rep(4, i => ({ cost: charter(2, { water: 5000 })(i), hours: 4.5, crew: crewAt(i) })),
     effects: { resourceMult: { water: 0.4 } },
   },
   {
-    id: 'greenhouse', icon: '[[wheat]]', flag: 'project:greenhouse', era: 2,
+    id: 'greenhouse', icon: '[[wheat]]', flag: 'project:greenhouse', era: 2, act: 3,
     name: { he: 'חממה על פני השטח', en: 'Surface Greenhouse' },
     desc: { he: 'חממה גדולה מעל הבונקר, תחת שמיים חדשים. לא עוד רק אוכל מתחת לאדמה.', en: 'A big greenhouse above the bunker, under new skies. Food that no longer grows only underground.' },
     finale: { he: 'האוכל +30%, ואזור ירוק נפתח על המפה', en: 'Food +30%, and a green zone opens on the map' },
-    stages: rep(5, i => ({ cost: { food: 4000, knowledge: 1500 }, hours: 6, crew: crewAt(i) })),
+    stages: rep(5, i => ({ cost: charter(3, { food: 4000, knowledge: 1500 })(i), hours: 6, crew: crewAt(i) })),
     effects: { resourceMult: { food: 0.3 } },
   },
   {
-    id: 'metroTunnel', icon: '[[car]]', flag: 'project:metroTunnel', era: 2,
+    id: 'metroTunnel', icon: '[[car]]', flag: 'project:metroTunnel', era: 2, act: 3,
     name: { he: 'מנהרה למטרו', en: 'Metro Tunnel' },
     desc: { he: 'מנהרה ארוכה אל קו הרכבת הישן. מסלול קבוע אל העיר, בלי לצאת לאבק.', en: 'A long tunnel to the old rail line. A fixed road to the city, without walking through the dust.' },
     finale: { he: 'משלחות מהירות פי 2, ונתיב סחר קבוע', en: 'Expeditions twice as fast, and a standing trade route' },
-    stages: rep(5, i => ({ cost: { materials: 2500, scrap: 300 }, hours: 9, crew: crewAt(i) })),
+    stages: rep(5, i => ({ cost: charter(3, { scrap: 300 })(i), hours: 9, crew: crewAt(i) })),
     effects: { expeditionSpeed: 2 },
   },
   {
-    id: 'archive', icon: '[[books]]', flag: 'project:archive', era: 2,
+    id: 'archive', icon: '[[books]]', flag: 'project:archive', era: 2, act: 3,
     name: { he: 'ארכיון הידע', en: 'Knowledge Archive' },
     desc: { he: 'כל מה שהעולם הישן ידע, מסודר ושמור. המעבדה לא תתחיל יותר מאפס.', en: 'Everything the old world knew, sorted and kept. The lab will never start from zero again.' },
     finale: { he: 'תור מחקר נוסף, ומחקרי שכלול זולים ב־25%', en: 'One more research queue slot, and refinement research is 25% cheaper' },
-    stages: rep(4, i => ({ cost: { knowledge: 8000, blueprints: 3 }, hours: 7.5, crew: crewAt(i) })),
+    stages: rep(4, i => ({ cost: charter(3, { knowledge: 8000, blueprints: 3 })(i), hours: 7.5, crew: crewAt(i) })),
     effects: { researchQueue: 1, refineDiscount: 0.25 },
   },
   {
-    id: 'wall', icon: '[[armory]]', flag: 'project:wall', era: 2,
+    id: 'wall', icon: '[[armory]]', flag: 'project:wall', era: 2, act: 4,
     name: { he: 'החומה', en: 'The Wall' },
     desc: { he: 'חומה סביב הכניסה. מי שבא לקחת, יחשוב פעמיים.', en: 'A wall around the entrance. Whoever comes to take will think twice.' },
     finale: { he: 'הגנה +50 מפני פושטים', en: '+50 defense against raiders' },
-    stages: rep(5, i => ({ cost: { materials: 4000, scrap: 400 }, hours: 6, crew: crewAt(i) })),
+    stages: rep(5, i => ({ cost: charter(4, { scrap: 400 })(i), hours: 6, crew: crewAt(i) })),
     effects: { defense: 50 },
+  },
+  {
+    // [Long game] Act IV's charter and the road to Genesis: a seed of the new world, built from the bunker's best goods.
+    id: 'genesisCore', icon: '[[isotope7]]', flag: 'project:genesisCore', era: 3, act: 4,
+    name: { he: 'ליבת בראשית', en: 'Genesis Core' },
+    desc: { he: 'מכונה שתשמור את כל מה שלמדתם, כדי שהעולם הבא יתחיל ממקום טוב יותר. דורשת את הסגסוגות והרכיבים הטובים ביותר שהבונקר יודע לייצר.', en: 'A machine that keeps everything you have learned, so the next world starts from a better place. It takes the finest alloys and components the bunker can make.' },
+    finale: { he: 'פרויקט בראשית נפתח', en: 'Project Genesis opens' },
+    stages: rep(6, i => ({ cost: charter(4, {}, 0.15)(i), hours: 10, crew: 4 + Math.floor(i / 2) })),
+    effects: { resourceMult: { knowledge: 0.3 } },
   },
 ];
 

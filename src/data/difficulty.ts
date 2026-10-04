@@ -18,12 +18,14 @@ export interface DifficultyDef {
   startStock: number;
   /** Ignored danger may kill while the player is away (never on Settler). */
   awayDeaths: boolean;
+  /** Legacy (Genesis payout) multiplier, by the easiest difficulty the run was played on. */
+  legacy: number;
 }
 
 export const DIFFICULTIES: readonly DifficultyDef[] = [
-  { id: 'settler', icon: '[[heart]]', consumption: 0.8, raidStrength: 0.75, awayHealthFloor: 35, startStock: 0.5, awayDeaths: false },
-  { id: 'warden', icon: '[[vault]]', consumption: 1, raidStrength: 1, awayHealthFloor: 15, startStock: 0, awayDeaths: true },
-  { id: 'last', icon: '[[skull]]', consumption: 1.25, raidStrength: 1.3, awayHealthFloor: 1, startStock: -0.25, awayDeaths: true },
+  { id: 'settler', icon: '[[heart]]', consumption: 0.8, raidStrength: 0.75, awayHealthFloor: 35, startStock: 0.5, awayDeaths: false, legacy: 0.75 },
+  { id: 'warden', icon: '[[vault]]', consumption: 1, raidStrength: 1, awayHealthFloor: 15, startStock: 0, awayDeaths: true, legacy: 1 },
+  { id: 'last', icon: '[[skull]]', consumption: 1.25, raidStrength: 1.3, awayHealthFloor: 1, startStock: -0.25, awayDeaths: true, legacy: 1.4 },
 ];
 
 export function difficultyOf(state: GameState): DifficultyDef {

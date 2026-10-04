@@ -27,6 +27,9 @@ import { MaintenanceSystem } from '../systems/MaintenanceSystem';
 import { AwayDanger, type AwayDangerReport } from '../systems/AwayDanger';
 import { DIG_LORE, seedRuins } from '../data/ruins';
 import { InboxSystem } from '../systems/InboxSystem';
+import { DigSystem } from '../systems/DigSystem';
+import { ActSystem } from '../systems/ActSystem';
+import { ForemanSystem } from '../systems/ForemanSystem';
 import { difficultyOf, easier } from '../data/difficulty';
 import type { Difficulty } from './state/longGame';
 import { logCrash } from './crashGuard';
@@ -118,6 +121,10 @@ export class GameEngine {
   projectSystem: ProjectSystem; // [LateGame B1]
   /** [Long game] The Decision Inbox's own cards. */
   inboxSystem: InboxSystem;
+  /** [Long game] Timed digs with a crew, and the Acts. */
+  digSystem: DigSystem;
+  actSystem: ActSystem;
+  foremanSystem: ForemanSystem;
   /** The step list, in order (see registerSystems). New systems add themselves with register(). */
   private systems: EngineSystem[] = [];
   /** Game seconds gathered toward the next run of the slow systems. */
@@ -188,6 +195,9 @@ export class GameEngine {
     this.incidentSystem.setDeath(this.deathSystem);
     this.incidentSystem.setBuildings(this.buildingSystem);
     this.inboxSystem = new InboxSystem(this.stateManager);
+    this.digSystem = new DigSystem(this.stateManager, this.buildingSystem, this.populationSystem);
+    this.actSystem = new ActSystem(this.stateManager, this.buildingSystem);
+    this.foremanSystem = new ForemanSystem(this.stateManager, this.maintenanceSystem, this.projectSystem, this.populationSystem, this.digSystem);
     this.awayDanger = new AwayDanger(this.stateManager, this.rng, this.eventSystem, this.incidentSystem, this.deathSystem);
     bus.on('survivor:died', (s: unknown) => this.deathSystem.onDeath(s as import('./GameState').SurvivorState));
     bus.on('survivor:died', (s: unknown) => this.familySystem.forget((s as { id: string }).id));
@@ -245,6 +255,11 @@ export class GameEngine {
       { name: 'family', online: dt => this.familySystem.update(dt), offline: dt => this.familySystem.update(dt) },
       { name: 'project', online: dt => this.projectSystem.update(dt), offline: dt => this.projectSystem.update(dt) }, // [LateGame B1]
       // [Danger C3] Rooms wear while away too (at the away efficiency).
+      // [Long game] The dig crew works away too; Acts advance only while the game is open (the player sees it happen).
+      { name: 'dig', online: dt => this.digSystem.update(dt), offline: dt => this.digSystem.update(dt) },
+      { name: 'act', slow: true, online: () => this.actSystem.update() },
+      // The Foreman's standing orders run away too (that is the point of them).
+      { name: 'foreman', online: dt => this.foremanSystem.update(dt), offline: dt => this.foremanSystem.update(dt) },
       { name: 'maintenance', online: dt => this.maintenanceSystem.update(dt), offline: (dt, eff) => this.maintenanceSystem.update(dt * eff) },
       // Card deadlines run on world time, so a safe default can be taken while the player is away.
       { name: 'inbox', slow: true, online: () => this.inboxSystem.update(), offline: () => this.inboxSystem.update() },

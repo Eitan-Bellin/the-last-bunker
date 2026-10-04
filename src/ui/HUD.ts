@@ -1,10 +1,12 @@
+import { resourceDef } from '../data/resources';
 import type { GameState, ResourceType } from '../core/GameState';
 import { vibrate } from '../utils/haptics';
 import { timeOfDay } from '../data/dayCycle';
 import { i18n } from '../i18n/I18nManager';
 import { RESOURCE_ICONS, el, setRich } from './dom';
 
-const VISIBLE_RESOURCES: ResourceType[] = ['food', 'water', 'power', 'materials', 'medicine', 'knowledge'];
+/** [Long game] Components and alloys join the row from their Act on (the row then has four columns). */
+const VISIBLE_RESOURCES: ResourceType[] = ['food', 'water', 'power', 'materials', 'medicine', 'knowledge', 'components', 'alloys'];
 
 export type NavKey = 'build' | 'surface' | 'research' | 'people';
 
@@ -288,7 +290,20 @@ export class HUD {
     setRich(node, text);
   }
 
+  private shownAct = -1;
+
   update(state: GameState): void {
+    const act = state.longGame?.meta.act ?? 1;
+    if (act !== this.shownAct) {
+      this.shownAct = act;
+      let tier2 = false;
+      for (const [rt, els] of this.resourceEls) {
+        const opens = resourceDef(rt)?.act ?? 0;
+        els.root.style.display = act >= opens ? '' : 'none';
+        if (opens > 0 && act >= opens) tier2 = true;
+      }
+      this.resourceEls.values().next().value?.root.parentElement?.classList.toggle('tier2', tier2);
+    }
     const nowMs = performance.now();
     const dtRoll = Math.min(0.1, (nowMs - this.lastUpdate) / 1000);
     this.lastUpdate = nowMs;

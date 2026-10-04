@@ -3,6 +3,9 @@ import { i18n } from '../../i18n/I18nManager';
 import { ERAS, eraOf, type EraDef } from '../../data/eras';
 import { Sheet } from './Sheet';
 import { bar, button, el, setBar } from '../dom';
+import { ACTS, actOf, type ActDef } from '../../data/acts';
+import { getProject, stagesDone } from '../../data/projects';
+import { FOREMAN_ACT, FOREMAN_ORDERS, type ForemanSystem } from '../../systems/ForemanSystem';
 
 /** Where the bunker stands in its story, and what it takes to reach the next era. */
 export class EraPanel {
@@ -12,6 +15,12 @@ export class EraPanel {
   private labels: HTMLElement[] = [];
   /** [LateGame B1] Opens the big projects panel. */
   onOpenProjects: (() => void) | null = null;
+  /** [Long game] The Act's goal bars (its own goals, then its charter projects). */
+  private actBars: HTMLElement[] = [];
+  private actLabels: HTMLElement[] = [];
+  /** [Long game] Set by the app: the Foreman whose standing orders are toggled here. */
+  foreman: ForemanSystem | null = null;
+  private lastState: GameState | null = null;
 
   show(state: GameState): void {
     this.signature = '';
@@ -29,10 +38,23 @@ export class EraPanel {
 
   refresh(state: GameState): void {
     const era = eraOf(state);
-    const sig = `${era.id}|${i18n.currentLocale}`;
+    const act = state.longGame ? actOf(state) : null;
+    this.lastState = state;
+    const orders = FOREMAN_ORDERS.map(o => (state.longGame?.foreman.orders[o] ? 1 : 0)).join('');
+    const sig = `${era.id}|${act?.id ?? 0}|${orders}|${i18n.currentLocale}`;
     if (sig !== this.signature) {
       this.signature = sig;
-      this.render(era);
+      this.render(era, act);
+    }
+    if (act) {
+      const rows: [number, number][] = [
+        ...act.goals.map(g => g.progress(state)),
+        ...act.charter.map(id => [stagesDone(state, id), getProject(id)?.stages.length ?? 1] as [number, number]),
+      ];
+      rows.forEach(([c, t], i) => {
+        setBar(this.actBars[i], (Math.min(c, t) / t) * 100);
+        if (this.actLabels[i]) this.actLabels[i].textContent = c >= t ? '✓' : t > 1 ? `${Math.min(c, t)}/${t}` : '';
+      });
     }
     era.next.forEach((g, i) => {
       const [c, t] = g.progress(state);
@@ -41,10 +63,64 @@ export class EraPanel {
     });
   }
 
-  private render(era: EraDef): void {
+  /** [Long game] The Act card: its name, what it allows, and what finishes it (goals and charter projects). */
+  private renderAct(act: ActDef): HTMLElement {
+    const locale = i18n.currentLocale;
+    const card = el('div', 'bp-card act-card');
+    card.append(
+      el('div', 'act-name', act.name[locale]),
+      el('div', 'era-tagline', act.tagline[locale]),
+      el('div', 'act-limits', i18n.t('act.limits', { level: act.levelCap, people: act.popCap, floors: act.floorCap })),
+    );
+    const last = act.id >= ACTS.length;
+    card.appendChild(el('div', 'bp-section-title', last ? i18n.t('act.goalsGenesis') : i18n.t('act.goalsNext', { name: ACTS[act.id].name[locale] })));
+    this.actBars = [];
+    this.actLabels = [];
+    const addRow = (text: string) => {
+      const row = el('div', 'era-goal');
+      const label = el('span', 'era-goal-count');
+      row.append(el('span', 'era-goal-text', text), label);
+      const b = bar(0, 'accent');
+      card.append(row, b);
+      this.actBars.push(b);
+      this.actLabels.push(label);
+    };
+    for (const g of act.goals) addRow(g.text[locale]);
+    for (const id of act.charter) addRow(`[[build]] ${i18n.t('act.charter', { name: getProject(id)?.name[locale] ?? id })}`);
+    const steps = el('div', 'era-timeline');
+    for (const a of ACTS) {
+      const step = el('div', `era-step ${a.id < act.id ? 'past' : a.id === act.id ? 'current' : 'future'}`);
+      step.append(el('span', 'era-dot'), el('span', 'era-step-name', a.name[locale]));
+      steps.appendChild(step);
+    }
+    card.appendChild(steps);
+    if (act.id >= FOREMAN_ACT && this.foreman && this.lastState) card.appendChild(this.renderForeman(this.lastState));
+    return card;
+  }
+
+  /** [Long game] The Foreman's standing orders: routine handed over, on or off. */
+  private renderForeman(state: GameState): HTMLElement {
+    const box = el('div', 'foreman');
+    box.appendChild(el('div', 'bp-section-title', `[[worker]] ${i18n.t('foreman.title')}`));
+    box.appendChild(el('div', 'bp-hint', i18n.t('foreman.hint')));
+    for (const o of FOREMAN_ORDERS) {
+      const on = !!state.longGame?.foreman.orders[o];
+      const row = el('div', 'foreman-row');
+      row.append(el('span', 'foreman-text', i18n.t(`foreman.${o}`)), button(i18n.t(on ? 'settings.on' : 'settings.off'), on ? 'btn-primary btn-small' : 'btn-secondary btn-small', () => {
+        this.foreman?.set(o, !on);
+        this.signature = '';
+        if (this.lastState) this.refresh(this.lastState);
+      }));
+      box.appendChild(row);
+    }
+    return box;
+  }
+
+  private render(era: EraDef, act: ActDef | null): void {
     const locale = i18n.currentLocale;
     this.sheet.setTitle(`[[flag]] ${i18n.t('era.title')}`);
     const root = el('div', 'era');
+    if (act) root.appendChild(this.renderAct(act));
     const head = el('div', `era-head era-${era.key}`);
     head.append(
       el('div', 'era-num', i18n.t('era.number', { n: era.id + 1 })),
@@ -80,6 +156,29 @@ export class EraPanel {
     root.appendChild(timeline);
     this.sheet.body.replaceChildren(root);
   }
+}
+
+/** [Long game] Full-screen title card when a new Act begins: what it opens. */
+export function showActBanner(act: ActDef, onDone: () => void): void {
+  const locale = i18n.currentLocale;
+  const overlay = el('div', 'era-banner act-banner');
+  const inner = el('div', 'era-banner-inner');
+  inner.append(
+    el('div', 'era-banner-kicker', i18n.t('act.new')),
+    el('div', 'era-banner-name', act.name[locale]),
+    el('div', 'era-banner-tagline', act.tagline[locale]),
+    el('p', 'era-banner-story', i18n.t('act.opens', { level: act.levelCap, people: act.popCap, floors: act.floorCap })),
+  );
+  const btn = el('button', 'btn btn-primary', i18n.t('era.continue'));
+  inner.appendChild(btn);
+  overlay.appendChild(inner);
+  document.body.appendChild(overlay);
+  requestAnimationFrame(() => overlay.classList.add('in'));
+  btn.addEventListener('click', () => {
+    overlay.classList.remove('in');
+    setTimeout(() => overlay.remove(), 600);
+    onDone();
+  });
 }
 
 /** Full-screen title card when a new era begins. */

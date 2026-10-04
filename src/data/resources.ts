@@ -35,9 +35,9 @@ export const RESOURCES: readonly ResourceDef[] = [
   { id: 'knowledge', tier: 1, ticked: true, baseCap: 100, overflowCredits: 0.05, wasteTracked: true },
   // Scrap has no room rate; treated like materials so late scrap overflow is not lost.
   { id: 'scrap', tier: 1, ticked: true, baseCap: 200, overflowCredits: 0.03, wasteTracked: true },
-  // Long game, tier 2 (no producer yet: they start at 0 and stay hidden until their Act).
-  { id: 'components', tier: 2, ticked: false, act: 3 },
-  { id: 'alloys', tier: 2, ticked: false, act: 4 },
+  // Long game, tier 2: made by workshop and generator roles from their Act on (hidden before). Later tiers have no producer yet.
+  { id: 'components', tier: 2, ticked: true, baseCap: 200, overflowCredits: 0.3, wasteTracked: true, act: 3 },
+  { id: 'alloys', tier: 2, ticked: true, baseCap: 80, overflowCredits: 0.8, wasteTracked: true, act: 4 },
   { id: 'data', tier: 2, ticked: false, act: 5 },
   { id: 'influence', tier: 2, ticked: false, act: 6 },
   { id: 'seedCores', tier: 2, ticked: false, act: 7 },

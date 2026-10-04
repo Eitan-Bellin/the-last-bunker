@@ -24,8 +24,9 @@ export const SCRAP_BUNDLE = 20;
 export const SHOP_ITEMS: ShopItem[] = [
   { id: 'blueprint', icon: '[[blueprints]]', price: 150 },
   { id: 'scrap20', icon: '[[scrap]]', price: 40 },
-  { id: 'researchBoost', icon: '[[research]]', price: 60 },
-  { id: 'projectBoost', icon: '[[materials]]', price: 120 },
+  // [Long game] Boosts are a treat, not a way around the game: a few a day.
+  { id: 'researchBoost', icon: '[[research]]', price: 60, dailyLimit: 3 },
+  { id: 'projectBoost', icon: '[[materials]]', price: 120, dailyLimit: 1 },
   { id: 'isotope', icon: '[[isotope7]]', price: 400, weeklyLimit: 5 },
   { id: 'crate', icon: '[[gift]]', price: 250, dailyLimit: 1 },
 ];

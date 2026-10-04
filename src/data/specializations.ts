@@ -1,5 +1,6 @@
 import type { BuildingInstance, BuildingType, GameState, ResourceType } from '../core/GameState';
 import type { IconName } from '../ui/icons';
+import type { ChainInput } from './chains';
 
 /**
  * Room specialization (Sprint 6): a room at its top level can be fitted out for one of two roles.
@@ -29,7 +30,17 @@ export interface SpecDef {
   expeditionLoot?: number;
   expeditionChance?: number;
   childGrowth?: number;
+  /** [Long game] First Act in which this role can be chosen. */
+  act?: number;
+  /** [Long game] What the role consumes for its `extra` (a starved input slows the whole room, as in chains.ts). */
+  inputs?: ChainInput[];
+  /** [Long game] `extra` grows with the room's level (given here for a level-5 room). */
+  levelScaled?: boolean;
 }
+
+/** [Long game] Changing a room's role: this many times the specialization price, and the room stands still for a while. */
+export const RETOOL_PRICE_MULT = 2;
+export const RETOOL_SECONDS = 1800;
 
 export const SPEC_COST: Partial<Record<ResourceType, number>> = { materials: 160, knowledge: 60 };
 
@@ -63,12 +74,28 @@ export const SPECIALIZATIONS: SpecDef[] = [
     name: { he: 'האצת יתר', en: 'Overclocked' }, desc: { he: '+60% חשמל · סכנת שריפה כפולה', en: '+60% power · double fire risk' },
   },
   {
+    // [Long game] Tier 2: alloys, the currency of Act IV. The furnace burns most of the generator's own power.
+    id: 'arcFurnace', type: 'generator', icon: 'fire', act: 4, outputMult: 0.4, levelScaled: true, risk: 1.5,
+    extra: { alloys: 0.012 },
+    inputs: [{ resource: 'materials', base: 0.4, perLevel: 0.4 }, { resource: 'scrap', base: 0.04, perLevel: 0.3 }],
+    name: { he: 'כבשן קשת', en: 'Arc Furnace' },
+    desc: { he: 'מתיך חומרים וגרוטאות לסגסוגות · 40% מהחשמל', en: 'Smelts materials and scrap into alloys · 40% of the power' },
+  },
+  {
     id: 'efficient', type: 'generator', icon: 'battery', outputMult: 1.25, risk: 0.3, caps: { power: 50 },
     name: { he: 'יעילות', en: 'Efficient' }, desc: { he: '+25% חשמל · +50 אחסון · כמעט בלי תקלות', en: '+25% power · +50 storage · rarely fails' },
   },
   {
     id: 'foundry', type: 'workshop', icon: 'materials', outputMult: 1.4,
     name: { he: 'יציקה', en: 'Foundry' }, desc: { he: '+40% חומרים', en: '+40% materials' },
+  },
+  {
+    // [Long game] Tier 2: components, the currency of Act III. The line eats scrap and leaves less raw materials.
+    id: 'assemblyLine', type: 'workshop', icon: 'settings', act: 3, outputMult: 0.6, levelScaled: true,
+    extra: { components: 0.03 },
+    inputs: [{ resource: 'scrap', base: 0.05, perLevel: 0.3 }],
+    name: { he: 'פס הרכבה', en: 'Assembly Line' },
+    desc: { he: 'מייצר רכיבים מגרוטאות · 60% מהחומרים', en: 'Makes components from scrap · 60% of the materials' },
   },
   {
     id: 'salvageYard', type: 'workshop', icon: 'recycle', extra: { scrap: 0.15 },
@@ -158,8 +185,9 @@ export const SPECIALIZATIONS: SpecDef[] = [
 
 const BY_ID = new Map(SPECIALIZATIONS.map(s => [s.id, s]));
 
-export function specsFor(type: BuildingType): SpecDef[] {
-  return SPECIALIZATIONS.filter(s => s.type === type);
+export function specsFor(type: BuildingType, state?: GameState): SpecDef[] {
+  const act = state?.longGame?.meta.act ?? 99;
+  return SPECIALIZATIONS.filter(s => s.type === type && (!state || (s.act ?? 0) <= act));
 }
 
 export function specOf(b: BuildingInstance): SpecDef | undefined {

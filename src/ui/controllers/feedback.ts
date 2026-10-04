@@ -1,3 +1,4 @@
+import { ACTS } from '../../data/acts';
 import { vibrate } from '../../utils/haptics';
 import { getProject } from '../../data/projects';
 import { getPartner } from '../../data/trade';
@@ -11,7 +12,7 @@ import { RESOURCE_ICONS } from '../../ui/dom';
 import type { Objective } from '../../systems/ObjectiveSystem';
 import type { ResourceType, SurvivorState, SurvivorStats } from '../../core/GameState';
 import { isDistrict } from '../../data/buildingDefs';
-import { showEraBanner } from '../../ui/components/EraPanel';
+import { showActBanner, showEraBanner } from '../../ui/components/EraPanel';
 import { ERAS } from '../../data/eras';
 import { RUIN_KINDS } from '../../data/ruins';
 import type { RuinClearedInfo } from '../../systems/RestorationSystem';
@@ -263,6 +264,25 @@ export class FeedbackController {
       this.app.closeSheets();
       this.app.engine.requestSave();
       showEraBanner(def, () => { this.app.storyOpen = false; });
+    });
+
+    // [Long game] A new Act: its title card once nothing else holds the screen, and the beds it opens fill again.
+    bus.on('act:advance', (n: unknown) => {
+      const act = ACTS[(n as number) - 1];
+      if (!act) return;
+      this.app.engine.requestSave();
+      const show = () => {
+        if (this.app.storyOpen || this.app.modal.isVisible || document.querySelector('.era-banner')) { setTimeout(show, 1500); return; }
+        this.app.audio.play('era');
+        this.app.renderer.shake(4, 1);
+        this.app.storyOpen = true;
+        this.app.closeSheets();
+        showActBanner(act, () => { this.app.storyOpen = false; });
+      };
+      setTimeout(show, 600);
+    });
+    bus.on('dig:start', () => {
+      this.app.toasts.show(`[[pick]] ${i18n.t('dig.started', { n: this.app.state.currentFloors + 1, t: i18n.formatDuration(this.app.state.longGame?.dig.total ?? 0) })}`, 'info');
     });
   }
 }

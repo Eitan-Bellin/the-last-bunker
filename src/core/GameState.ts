@@ -68,6 +68,8 @@ export interface BuildingInstance {
   specialization: string | null;
   /** [Danger C3] Wear in percent (0-100) on rooms of level 3+; "Maintain" resets it. Absent = 0. */
   wear?: number;
+  /** [Long game] World time until which the room is changing its role (it produces nothing meanwhile). */
+  retoolUntil?: number;
 }
 
 export interface SurvivorStats {

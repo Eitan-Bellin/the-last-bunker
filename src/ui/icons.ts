@@ -223,6 +223,9 @@ export const ICON_SVG = {
     + '<path d="M12 2.9c.6-1.2 1.8-1.3 2.4-.6" ' + S + ' stroke-width="1.3"/><path d="M6 21c.7-3 3.2-4.6 6-4.6s5.3 1.6 6 4.6z" opacity=".6"/>',
   rings: '<circle cx="8.8" cy="13.8" r="5.6" ' + S + ' stroke-width="2.1"/><circle cx="15.2" cy="13.8" r="5.6" ' + S + ' stroke-width="2.1" opacity=".6"/>'
     + '<path d="M15.2 3.2l1.6 1.8-1.6 1.8-1.6-1.8z"/>',
+  // [Long game] Tier-2 goods: a gear (components) and a stack of cast ingots (alloys).
+  components: '<path d="M10.6 2.5h2.8l.5 2.4a7.6 7.6 0 0 1 1.9.8l2-1.4 2 2-1.4 2a7.6 7.6 0 0 1 .8 1.9l2.4.5v2.8l-2.4.5a7.6 7.6 0 0 1-.8 1.9l1.4 2-2 2-2-1.4a7.6 7.6 0 0 1-1.9.8l-.5 2.4h-2.8l-.5-2.4a7.6 7.6 0 0 1-1.9-.8l-2 1.4-2-2 1.4-2a7.6 7.6 0 0 1-.8-1.9L2.5 13.4v-2.8l2.4-.5a7.6 7.6 0 0 1 .8-1.9l-1.4-2 2-2 2 1.4a7.6 7.6 0 0 1 1.9-.8z"/><circle cx="12" cy="12" r="3.2" ' + CUT + '/>',
+  alloys: '<path d="M3 17.5 5.2 12.5h6.6l2.2 5z"/><path d="M10 17.5l2.2-5h6.6L21 17.5z" opacity=".6"/><path d="M6.6 11.5 8.8 6.5h6.4l2.2 5z"/><rect x="2.5" y="18" width="19" height="2.2" rx=".6" opacity=".45"/>',
   // Decision Inbox: a tray with a card dropping in.
   inbox: '<path d="M3 13.5 5.6 5.2A1.5 1.5 0 0 1 7 4.2h10a1.5 1.5 0 0 1 1.4 1L21 13.5V19a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 19z" opacity=".6"/>'
     + '<path d="M3 13.5h5.2l1.3 2.6h5l1.3-2.6H21V19a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 19z"/><rect x="8" y="6.5" width="8" height="1.8" rx=".6"/><rect x="8" y="9.6" width="8" height="1.8" rx=".6"/>',

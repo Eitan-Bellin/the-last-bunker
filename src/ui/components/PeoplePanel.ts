@@ -241,6 +241,7 @@ export class PeoplePanel {
     const ruin = !job && s.assignedBuildingId ? state.ruins.find(r => r.id === s.assignedBuildingId) : undefined;
     const jobName = job ? `${BUILDING_ICONS[job.type] ?? ''} ${getDef(job.type)?.name[locale] ?? ''}`
       : ruin ? `[[pick]] ${i18n.t('ruin.duty', { n: ruin.floor + 1 })}`
+        : s.assignedBuildingId === 'p_dig' ? `[[pick]] ${i18n.t('dig.duty', { n: (state.longGame?.dig.floor ?? 0) + 1 })}` // [Long game]
         : s.assignedBuildingId?.startsWith('p_') ? `[[build]] ${i18n.t('proj.duty')}` // [LateGame B1]
         : `[[warning]] ${i18n.t('people.noJob')}`;
     jobRow.appendChild(el('span', job || ruin || s.child || s.assignedBuildingId?.startsWith('p_') ? '' : 'warn', s.child ? `[[baby]] ${i18n.t('family.tooYoung', { g: genderOf(s) })}` : jobName));

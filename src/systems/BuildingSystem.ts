@@ -1,10 +1,13 @@
 import type { GameState, BuildingType, BuildingInstance, Position } from '../core/GameState';
 import type { StateManager } from '../core/StateManager';
 import { bus } from '../core/EventBus';
-import { getDef, effectiveLevel, isDistrict, roomFloors, roomSlots, type BuildingDef } from '../data/buildingDefs';
+import { getDef, effectiveLevel, isDistrict, roomFloors, roomSlots, specLevel, type BuildingDef } from '../data/buildingDefs';
+import { actOf, levelCapFor } from '../data/acts';
+import { TUNING } from '../data/tuning';
+import { actPrice, digHours, floorAct, levelAct, upgradeHours } from '../data/pricing';
 import { districtDef, nextDistrict } from '../data/districts';
 import { BASE_FLOORS, MAX_FLOORS, allowedFloors } from '../data/zones';
-import { SPEC_COST, specTotal, specsFor } from '../data/specializations';
+import { RETOOL_PRICE_MULT, RETOOL_SECONDS, SPEC_COST, specTotal, specsFor } from '../data/specializations';
 
 export const SLOTS_PER_FLOOR = 12;
 
@@ -79,6 +82,15 @@ export class BuildingSystem {
   getUpgradeCost(building: BuildingInstance): Record<string, number> {
     const def = getDef(building.type);
     if (!def) return {};
+    // [Long game] From Mk4 on, a level costs hours of its Act's income (pricing.ts); scrap and blueprints keep their gentle curve.
+    // Rooms with five levels (districts, halls) count each level as two.
+    const mk = Math.round(((building.level + 1) * 10) / def.maxLevel);
+    if (mk >= 4) {
+      const costs = actPrice(levelAct(mk), upgradeHours(mk) * (def.maxLevel < 10 ? 2 : 1));
+      const gentle = Math.pow(def.costMultiplier, Math.min(building.level, 5));
+      for (const r of SCARCE_COSTS) if (def.baseCost[r]) costs[r] = Math.ceil(def.baseCost[r] * gentle);
+      return costs;
+    }
 
     // S2: quarters are the bed supply, so they upgrade on a gentler factor than other rooms.
     const factor = building.type === 'quarters' ? 1 : 1.5;
@@ -94,13 +106,29 @@ export class BuildingSystem {
 
   getUpgradeTime(building: BuildingInstance): number {
     const def = getDef(building.type);
-    // S1: high levels take real time (x3 per level: a farm's last upgrade is about an hour), so they finish while away.
-    return def ? Math.round(def.constructionTime * (building.level + 1) * 0.75 * Math.pow(3, Math.max(0, building.level - 1))) : 0;
+    if (!def) return 0;
+    // S1: high levels take real time (x3 per level: a farm's last classic upgrade is about an hour), so they finish while away.
+    // [Long game] Past the classic top, each level doubles the last classic time, up to maxUpgradeSeconds.
+    const classic = specLevel(def);
+    const at = (l: number) => def.constructionTime * (l + 1) * 0.75 * Math.pow(3, Math.max(0, l - 1));
+    const t = building.level < classic ? at(building.level) : at(classic - 1) * Math.pow(2, building.level - classic + 1);
+    return Math.round(Math.min(TUNING.maxUpgradeSeconds, t));
   }
 
-  canUpgrade(building: BuildingInstance): boolean {
+  /** With a state, the Act's level ceiling applies too (see upgradeBlock for why a room cannot go up). */
+  canUpgrade(building: BuildingInstance, state?: GameState): boolean {
     const def = getDef(building.type);
-    return !!def && !building.isConstructing && building.level < def.maxLevel;
+    if (!def || building.isConstructing) return false;
+    return building.level < (state ? levelCapFor(state, def.maxLevel) : def.maxLevel);
+  }
+
+  /** Why a room cannot be upgraded right now: at its top, held by the Act, busy; null = it can. */
+  upgradeBlock(building: BuildingInstance, state: GameState): 'max' | 'act' | 'busy' | null {
+    const def = getDef(building.type);
+    if (!def || building.level >= def.maxLevel) return 'max';
+    if (building.isConstructing) return 'busy';
+    if (building.level >= levelCapFor(state, def.maxLevel)) return 'act';
+    return null;
   }
 
   canPlaceBuilding(type: BuildingType, pos: Position, state: GameState): boolean {
@@ -182,7 +210,7 @@ export class BuildingSystem {
     if (idx === -1) return false;
 
     const building = sm.state.buildings[idx];
-    if (!this.canUpgrade(building)) return false;
+    if (!this.canUpgrade(building, sm.state)) return false;
 
     const time = this.getUpgradeTime(building);
     sm.applyDeltas([
@@ -206,6 +234,8 @@ export class BuildingSystem {
       }
     }
     maxPop += specTotal(sm.state, 'population');
+    // [Long game] The Act holds the bunker's size; nobody already inside is ever turned out.
+    maxPop = Math.min(maxPop, Math.max(actOf(sm.state).popCap, sm.state.survivors.length));
     sm.applyDelta({ path: 'maxPopulation', value: maxPop });
   }
 
@@ -238,14 +268,37 @@ export class BuildingSystem {
   digCost(state: GameState): Record<string, number> {
     const extra = state.currentFloors - BASE_FLOORS;
     // M2: B4-B8 cost 180 / 306 / 520 / 884 / 1503 materials, so the first dig fits the base 300 cap.
-    return {
-      materials: Math.round(180 * Math.pow(1.7, extra)),
-      scrap: 25 + 20 * extra,
-    };
+    // [Long game] From B7 a floor costs hours of its Act's income (pricing.ts); scrap keeps growing by 20 a floor.
+    const next = state.currentFloors + 1;
+    if (next >= 7) return { ...actPrice(floorAct(next), digHours(next)), scrap: 25 + 20 * extra };
+    return { materials: Math.round(180 * Math.pow(1.7, extra)), scrap: 25 + 20 * extra };
+  }
+
+  /** Seconds of crew work to dig the next floor. */
+  digTime(state: GameState): number {
+    const n = state.currentFloors + 1;
+    const table = TUNING.digSeconds;
+    if (n < table.length) return table[n];
+    return Math.round(table[table.length - 1] * Math.pow(TUNING.digTimeGrowth, n - (table.length - 1)));
+  }
+
+  /** People the dig needs for full speed (fewer dig proportionally slower). */
+  digCrew(state: GameState): number {
+    return Math.min(6, 2 + Math.floor(Math.max(0, state.currentFloors - BASE_FLOORS) / 3));
   }
 
   canDig(state: GameState): boolean {
-    return state.currentFloors < MAX_FLOORS;
+    // [Long game] One dig at a time, and the Act sets how deep the bunker may go.
+    if (state.longGame?.dig.floor != null) return false;
+    return state.currentFloors < Math.min(MAX_FLOORS, actOf(state).floorCap);
+  }
+
+  /** Why no dig can start: the Act's depth, the bunker's bottom, or a dig already under way (null = it can). */
+  digBlock(state: GameState): 'digging' | 'act' | 'max' | null {
+    if (state.longGame?.dig.floor != null) return 'digging';
+    if (state.currentFloors >= MAX_FLOORS) return 'max';
+    if (state.currentFloors >= actOf(state).floorCap) return 'act';
+    return null;
   }
 
   /** Dig costs that storage can't even hold yet: the player needs a (bigger) Storage Room first. */
@@ -301,7 +354,20 @@ export class BuildingSystem {
     return true;
   }
 
+  /** Starts digging the next floor (paid by the caller). The crew in DigSystem does the work; the floor opens when it is done. */
   dig(sm: StateManager): void {
+    const state = sm.state;
+    if (!state.longGame) {
+      // A state without the long game (should not happen after migration): the old instant dig.
+      this.finishDig(sm);
+      return;
+    }
+    sm.applyDelta({ path: 'longGame.dig', value: { floor: state.currentFloors, paid: [], progress: 0, total: this.digTime(state), crew: [] } });
+    bus.emit('dig:start', state.currentFloors);
+  }
+
+  /** The new floor opens. */
+  finishDig(sm: StateManager): void {
     sm.applyDelta({ path: 'currentFloors', value: sm.state.currentFloors + 1 });
     bus.emit('floor:dug', sm.state.currentFloors - 1);
   }
@@ -309,13 +375,36 @@ export class BuildingSystem {
   canSpecialize(state: GameState, buildingId: string): boolean {
     const b = state.buildings.find(x => x.id === buildingId);
     const def = b ? getDef(b.type) : undefined;
-    return !!b && !!def && !b.isConstructing && !b.specialization && b.level >= def.maxLevel && specsFor(b.type).length > 0;
+    return !!b && !!def && !b.isConstructing && !b.specialization && b.level >= specLevel(def) && specsFor(b.type, state).length > 0;
+  }
+
+  /** [Long game] A specialized room may change its role (for a price, and it stands still for a while). */
+  canRetool(state: GameState, buildingId: string, specId: string): boolean {
+    const b = state.buildings.find(x => x.id === buildingId);
+    return !!b && !b.isConstructing && !!b.specialization && b.specialization !== specId && specsFor(b.type, state).some(s => s.id === specId);
+  }
+
+  retoolCost(): Record<string, number> {
+    const out: Record<string, number> = {};
+    for (const [r, v] of Object.entries(SPEC_COST)) out[r] = (v ?? 0) * RETOOL_PRICE_MULT;
+    return out;
+  }
+
+  /** Changes the room's role (paid by the caller). */
+  retool(sm: StateManager, buildingId: string, specId: string): boolean {
+    const state = sm.state;
+    if (!this.canRetool(state, buildingId, specId)) return false;
+    const until = (state.longGame?.meta.worldT ?? 0) + RETOOL_SECONDS;
+    sm.applyDelta({ path: 'buildings', value: state.buildings.map(x => (x.id === buildingId ? { ...x, specialization: specId, retoolUntil: until } : x)) });
+    this.recalculateMaxPopulation(sm);
+    bus.emit('building:specialized', buildingId);
+    return true;
   }
 
   specialize(sm: StateManager, buildingId: string, specId: string): boolean {
     const state = sm.state;
     const b = state.buildings.find(x => x.id === buildingId);
-    if (!b || !this.canSpecialize(state, buildingId) || !specsFor(b.type).some(s => s.id === specId)) return false;
+    if (!b || !this.canSpecialize(state, buildingId) || !specsFor(b.type, state).some(s => s.id === specId)) return false;
     sm.applyDelta({ path: 'buildings', value: state.buildings.map(x => (x.id === buildingId ? { ...x, specialization: specId } : x)) });
     this.recalculateMaxPopulation(sm);
     bus.emit('building:specialized', buildingId);

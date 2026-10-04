@@ -61,6 +61,11 @@ export function roomFloors(type: BuildingType): number {
   return isHall(type) ? 2 : 1;
 }
 
+/** The classic top level (half the room's Mk ceiling): specialization opens here, and the old "max level" goals count it. */
+export function specLevel(def: BuildingDef): number {
+  return Math.max(1, Math.round(def.maxLevel / 2));
+}
+
 export function getDef(type: BuildingType): BuildingDef | undefined {
   return BUILDING_DEFS[type];
 }

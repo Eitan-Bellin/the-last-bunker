@@ -603,6 +603,7 @@ export class GameApp {
       if (!wasOpen) this.journal.show(this.state);
     };
     this.eraPanel.onOpenProjects = () => { this.closeSheets(); this.projectsPanel.show(); }; // [LateGame B1]
+    this.eraPanel.foreman = this.engine.foremanSystem; // [Long game]
     this.hud.onEra = () => {
       this.audio.play('click');
       const wasOpen = this.eraPanel.isVisible;
@@ -625,6 +626,7 @@ export class GameApp {
     this.buildingPanel.onIncidentTap = (id: string) => this.danger.tapIncident(id);
     this.buildingPanel.onQuickFix = (id: string) => this.danger.quickFixIncident(id);
     this.buildingPanel.onSpecialize = (bid: string, spec: string) => this.specialize(bid, spec);
+    this.buildingPanel.onRetool = (bid: string, spec: string) => this.retool(bid, spec); // [Long game]
     this.hud.onIncident = () => {
       if (this.danger.dangerBanner()) { this.audio.play('click'); this.danger.showDanger(); return; } // [Danger]
       const inc = this.state.incidents?.[0];
@@ -837,6 +839,19 @@ export class GameApp {
       return;
     }
     bs.specialize(this.engine.stateManager, buildingId, specId);
+    this.buildingPanel.refresh(this.state);
+  }
+
+  /** [Long game] Refit a specialized room to another role. */
+  private retool(buildingId: string, specId: string): void {
+    const bs = this.engine.buildingSystem;
+    if (!bs.canRetool(this.state, buildingId, specId) || !this.engine.resourceSystem.spend(this.engine.stateManager, bs.retoolCost())) {
+      this.audio.play('error');
+      this.toasts.show(i18n.t('toast.notEnough'), 'bad');
+      return;
+    }
+    bs.retool(this.engine.stateManager, buildingId, specId);
+    this.engine.requestSave();
     this.buildingPanel.refresh(this.state);
   }
 

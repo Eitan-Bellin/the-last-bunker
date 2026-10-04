@@ -82,7 +82,7 @@ export const ACHIEVEMENTS: AchievementDef[] = [
   {
     id: 'maxRoom', icon: '[[crown]]', reward: { scrap: 60 },
     name: { he: 'שלמות', en: 'Perfection' }, desc: { he: 'מבנה ברמה מקסימלית', en: 'A room at max level' },
-    check: s => s.buildings.some(b => !b.isConstructing && b.level >= (getDef(b.type)?.maxLevel ?? 99)),
+    check: s => s.buildings.some(b => !b.isConstructing && b.level >= Math.round((getDef(b.type)?.maxLevel ?? 198) / 2)),
   },
   {
     id: 'reactorOnline', icon: '[[reactor]]', reward: { knowledge: 100 },

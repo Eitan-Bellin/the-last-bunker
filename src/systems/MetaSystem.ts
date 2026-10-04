@@ -6,6 +6,8 @@ import { ACHIEVEMENTS } from '../data/achievements';
 import { PRESTIGE_UPGRADES, upgradeCost } from '../data/prestige';
 import { MAX_FLOORS } from '../data/zones';
 import { hasFeature } from './ResearchSystem';
+import { MAX_ACT, actComplete, actOf } from '../data/acts';
+import { DIFFICULTIES } from '../data/difficulty';
 
 /** Project Genesis gate (the design's "big decision"): the research plus a grown, era-3 bunker. */
 export const GENESIS_MIN_SURVIVORS = 40;
@@ -41,16 +43,30 @@ export class MetaSystem {
     }
   }
 
+  private finalActDone(state: GameState): boolean {
+    const act = actOf(state);
+    return act.id >= MAX_ACT && actComplete(state, act);
+  }
+
   /** Every condition for Genesis, so the UI can show exactly what is still missing. */
   rebirthRequirements(state: GameState): RebirthRequirement[] {
     const research = hasFeature(state, 'genesis');
     const pop = state.survivors.length;
     const era = state.era ?? 0;
-    return [
+    const reqs: RebirthRequirement[] = [
       { key: 'genesis.reqResearch', met: research, current: research ? 1 : 0, target: 1 },
       { key: 'genesis.reqSurvivors', met: pop >= GENESIS_MIN_SURVIVORS, current: pop, target: GENESIS_MIN_SURVIVORS },
       { key: 'genesis.reqEra', met: era >= GENESIS_MIN_ERA, current: era, target: GENESIS_MIN_ERA },
     ];
+    // [Long game] A new bunker reaches Genesis by finishing the last Act (its charter ends with the Genesis Core).
+    // A bunker from before the long game keeps the classic gate, so nobody loses the Genesis they were about to make.
+    const lg = state.longGame;
+    if (lg && !lg.meta.legacy) {
+      const act = actOf(state);
+      const done = act.id >= MAX_ACT && actComplete(state, act);
+      reqs.push({ key: 'genesis.reqAct', met: done, current: done ? MAX_ACT : act.id - 1, target: MAX_ACT });
+    }
+    return reqs;
   }
 
   canRebirth(state: GameState): boolean {
@@ -60,6 +76,17 @@ export class MetaSystem {
   /** Isotope-7 awarded for a rebirth now; grows with everything achieved this run. */
   rebirthGain(state: GameState): number {
     const researched = Object.values(state.research).filter(r => r.completed).length;
+    // [Long game] Legacy from what the run achieved (Acts, depth, top rooms, knowledge, people), not from waiting:
+    // the old food term grew by itself while the player was away. Bunkers from before the long game keep the old sum.
+    const lg = state.longGame;
+    if (lg && !lg.meta.legacy) {
+      const actsDone = Math.max(0, lg.meta.act - 1) + (this.finalActDone(state) ? 1 : 0);
+      const topRooms = state.buildings.filter(b => b.level >= 8).length;
+      const raw = 100 * actsDone + 10 * Math.max(0, state.currentFloors - 3) + 5 * topRooms + 2 * researched
+        + state.survivors.length + 5 * state.achievements.length;
+      const diff = DIFFICULTIES.find(d => d.id === lg.meta.diffLowest)?.legacy ?? 1;
+      return Math.floor(raw * diff * (1 + 0.1 * state.prestige.rebirthCount));
+    }
     const explored = state.explorationMap.filter(h => h.explored).length;
     const raw = 5 + Math.sqrt(state.stats.totalFoodProduced / 20) + state.survivors.length * 2 + researched * 2 + explored
       + state.buildings.reduce((s, b) => s + b.level, 0);

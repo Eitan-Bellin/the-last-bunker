@@ -15,6 +15,29 @@ export class DigController {
   updateDigSign(): void {
     const state = this.app.state;
     const bs = this.app.engine.buildingSystem;
+    // [Long game] A dig under way: the sign shows how far it is and who is on it.
+    const d = state.longGame?.dig;
+    if (d && d.floor != null) {
+      const ds = this.app.engine.digSystem;
+      const pct = Math.floor((d.progress / Math.max(1, d.total)) * 100);
+      const eta = ds.eta(state);
+      const crew = `[[people]] ${ds.crew(state).length}/${ds.wanted(state)}`;
+      const status = isFinite(eta) ? `${pct}%   ${crew}   [[clock]] ${i18n.formatDuration(eta)}` : `${pct}%   ${crew}   ${i18n.t('dig.noCrew')}`;
+      this.app.renderer.setDigSign(true, i18n.t('dig.digging', { n: d.floor + 1 }), status);
+    } else {
+      this.updateIdleDigSign();
+    }
+    const next = nextDistrict(state);
+    this.app.renderer.setDistrictSign(next ? {
+      floor: next.floor,
+      text: i18n.t('district.dig', { name: next.name[i18n.currentLocale] }),
+      cost: (Object.entries(next.cost) as [ResourceType, number][]).map(([r, v]) => `${RESOURCE_ICONS[r] ?? ''} ${v}`).join('   '),
+    } : null);
+  }
+
+  private updateIdleDigSign(): void {
+    const state = this.app.state;
+    const bs = this.app.engine.buildingSystem;
     const cost = bs.digCost(state);
     // [Economy] M2: when the price is bigger than storage can hold, the sign says so instead of showing an unreachable cost.
     const over = bs.digOverCap(state);
@@ -22,12 +45,40 @@ export class DigController {
       ? `[[storage]] ${i18n.t('dig.needStorage', { cap: over.cap, cost: over.cost })}`
       : (Object.entries(cost) as [ResourceType, number][]).map(([r, v]) => `${RESOURCE_ICONS[r] ?? ''} ${v}`).join('   ');
     this.app.renderer.setDigSign(bs.canDig(state), i18n.t('dig.title', { n: state.currentFloors + 1 }), costText);
-    const next = nextDistrict(state);
-    this.app.renderer.setDistrictSign(next ? {
-      floor: next.floor,
-      text: i18n.t('district.dig', { name: next.name[i18n.currentLocale] }),
-      cost: (Object.entries(next.cost) as [ResourceType, number][]).map(([r, v]) => `${RESOURCE_ICONS[r] ?? ''} ${v}`).join('   '),
-    } : null);
+  }
+
+  /** [Long game] The dig in progress: how far, who is on it, and a button to (re)fill the crew. */
+  private showDigStatus(): void {
+    const state = this.app.state;
+    const d = state.longGame?.dig;
+    if (!d || d.floor == null) return;
+    const ds = this.app.engine.digSystem;
+    const eta = ds.eta(state);
+    const body = el('div', 'modal-result');
+    body.append(
+      el('p', 'modal-body', i18n.t('dig.statusBody', { pct: Math.floor((d.progress / Math.max(1, d.total)) * 100), crew: ds.crew(state).length, want: ds.wanted(state) })),
+      el('p', 'modal-sub', isFinite(eta) ? i18n.t('dig.eta', { t: i18n.formatDuration(eta) }) : i18n.t('dig.noCrewBody')),
+    );
+    const full = ds.crew(state).length >= ds.wanted(state);
+    this.app.modal.show({
+      icon: '[[pick]]',
+      title: i18n.t('dig.digging', { n: d.floor + 1 }),
+      body,
+      actions: [
+        {
+          label: `[[people]] ${i18n.t('dig.staff', { n: ds.wanted(state) })}`,
+          className: 'btn-primary',
+          disabled: full,
+          onClick: () => {
+            this.app.modal.hide();
+            const n = ds.autoStaff();
+            this.app.toasts.show(n > 0 ? `[[pick]] ${i18n.t('dig.staffed', { n })}` : i18n.t('dig.nobody'), n > 0 ? 'good' : 'bad');
+            this.app.engine.requestSave();
+          },
+        },
+        { label: i18n.t('event.ok'), className: 'btn-secondary', onClick: () => this.app.modal.hide() },
+      ],
+    });
   }
 
   /** Tunnel sideways into the next natural cavern. */
@@ -85,12 +136,18 @@ export class DigController {
   confirmDig(): void {
     const state = this.app.state;
     const bs = this.app.engine.buildingSystem;
+    if (state.longGame?.dig.floor != null) { this.showDigStatus(); return; }
     if (!bs.canDig(state)) return;
     const cost = bs.digCost(state);
     const affordable = this.app.engine.resourceSystem.canAfford(state, cost);
     // [Economy] M2: explain a dig that storage is too small for.
     const over = bs.digOverCap(state);
-    let body: string | HTMLElement = i18n.t('dig.body');
+    const intro = el('div', 'modal-result');
+    intro.append(
+      el('p', 'modal-body', i18n.t('dig.body')),
+      el('p', 'modal-sub', i18n.t('dig.takes', { t: i18n.formatDuration(bs.digTime(state)), n: bs.digCrew(state) })),
+    );
+    let body: string | HTMLElement = intro;
     if (over) {
       body = el('div', 'modal-result');
       body.append(el('p', 'modal-body', i18n.t('dig.body')),
@@ -110,6 +167,8 @@ export class DigController {
             this.app.modal.hide();
             if (!this.app.engine.resourceSystem.spend(this.app.engine.stateManager, cost)) return;
             bs.dig(this.app.engine.stateManager);
+            // The crew is called at once (idle people first); the player can change it from the people panel.
+            this.app.engine.digSystem.autoStaff();
             this.app.engine.requestSave();
             this.app.audio.play('drill');
             setTimeout(() => this.app.audio.play('dig'), 700);

@@ -10,7 +10,7 @@ import { INCIDENTS, quickFixCost } from '../../data/incidents';
 import { boostReserve, chainInputs, inputFed, inputRate } from '../../data/chains';
 import { roomPowerDraw } from '../../systems/ResourceSystem';
 import { allowedFloors } from '../../data/zones';
-import { specOf, specsFor } from '../../data/specializations';
+import { RETOOL_SECONDS, specOf, specsFor } from '../../data/specializations';
 import type { Incident } from '../../core/GameState';
 import { uiSound } from '../../audio/uiSound';
 import { maintenanceCard } from './MaintenanceCard'; // [Danger C3]
@@ -33,6 +33,8 @@ export class BuildingPanel {
   onIncidentTap: ((incidentId: string) => void) | null = null;
   onQuickFix: ((incidentId: string) => void) | null = null;
   onSpecialize: ((buildingId: string, specId: string) => void) | null = null;
+  /** [Long game] Change a specialized room's role. */
+  onRetool: ((buildingId: string, specId: string) => void) | null = null;
   private incidentBar: HTMLElement | null = null;
   private incidentSev: HTMLElement | null = null;
 
@@ -79,8 +81,9 @@ export class BuildingPanel {
       state.powerRatio < 0.99,
       this.incidentFor(state, b)?.id ?? '', b.specialization ?? '', Math.floor((b.wear ?? 0) / 5), this.engine.maintenanceSystem.canMaintain(state, b), // [Danger C3]
 
-      chainInputs(b.type).map(i => inputFed(state, i)).join(','),
+      chainInputs(b).map(i => inputFed(state, i)).join(','),
       this.engine.buildingSystem.canSpecialize(state, b.id),
+      state.longGame?.meta.act ?? 0, Math.ceil(Math.max(0, (b.retoolUntil ?? 0) - (state.longGame?.meta.worldT ?? 0)) / 60), // [Long game]
       this.engine.resourceSystem.canAfford(state, this.engine.buildingSystem.specCost()),
       this.demolishOpen, this.engine.buildingSystem.demolishBlock(state, b.id), state.maxPopulation,
       Object.values(state.resources).map(r => Math.floor(r.cap)).join(','), state.buildings.length, state.currentFloors,
@@ -185,7 +188,7 @@ export class BuildingPanel {
     if (def.production && !def.production.power && state.powerRatio < 0.99) {
       stats.appendChild(el('div', 'bp-warning', `[[warning]] ${i18n.t('building.powerLow')}`));
     }
-    for (const input of chainInputs(b.type)) {
+    for (const input of chainInputs(b)) {
       const fed = inputFed(state, input);
       // M1: fuel below the reserve is being saved for digs and research, not missing.
       const saving = input.boost && !fed && (state.resources[input.resource]?.amount ?? 0) > 0.5;
@@ -212,6 +215,7 @@ export class BuildingPanel {
     if (maint) root.appendChild(maint);
     root.appendChild(this.renderUpgrade(state, b, upgradeAffordable));
     if (this.engine.buildingSystem.canSpecialize(state, b.id)) root.appendChild(this.renderSpecs(state, b));
+    else if (b.specialization && specsFor(b.type, state).length > 1) root.appendChild(this.renderRetool(state, b)); // [Long game]
     root.appendChild(this.renderDemolish(state, b));
     this.sheet.body.replaceChildren(root);
   }
@@ -255,10 +259,37 @@ export class BuildingPanel {
     const cost = this.engine.buildingSystem.specCost();
     const affordable = this.engine.resourceSystem.canAfford(state, cost);
     const grid = el('div', 'spec-grid');
-    for (const spec of specsFor(b.type)) {
+    for (const spec of specsFor(b.type, state)) {
       const opt = el('div', 'spec-card');
       opt.append(el('div', 'spec-name', `[[${spec.icon}]] ${spec.name[locale]}`), el('div', 'spec-desc', spec.desc[locale]));
       opt.appendChild(button(i18n.t('spec.choose'), 'btn-primary btn-small', () => this.onSpecialize?.(b.id, spec.id), !affordable));
+      grid.appendChild(opt);
+    }
+    card.append(grid, costRow(state, cost));
+    return card;
+  }
+
+  /** [Long game] A specialized room can be refitted to another role: double the price, and it stands still meanwhile. */
+  private renderRetool(state: GameState, b: BuildingInstance): HTMLElement {
+    const locale = i18n.currentLocale;
+    const bs = this.engine.buildingSystem;
+    const card = el('div', 'bp-card');
+    const now = state.longGame?.meta.worldT ?? 0;
+    const left = (b.retoolUntil ?? 0) - now;
+    card.appendChild(el('div', 'bp-section-title', `[[crown]] ${specOf(b)?.name[locale] ?? ''}`));
+    if (left > 0) {
+      card.appendChild(el('div', 'bp-hint', `[[settings]] ${i18n.t('spec.retooling', { t: i18n.formatDuration(left) })}`));
+      return card;
+    }
+    card.appendChild(el('div', 'bp-hint', i18n.t('spec.retoolBody', { t: i18n.formatDuration(RETOOL_SECONDS) })));
+    const cost = bs.retoolCost();
+    const affordable = this.engine.resourceSystem.canAfford(state, cost);
+    const grid = el('div', 'spec-grid');
+    for (const spec of specsFor(b.type, state)) {
+      if (spec.id === b.specialization) continue;
+      const opt = el('div', 'spec-card');
+      opt.append(el('div', 'spec-name', `[[${spec.icon}]] ${spec.name[locale]}`), el('div', 'spec-desc', spec.desc[locale]));
+      opt.appendChild(button(i18n.t('spec.retool'), 'btn-secondary btn-small', () => this.onRetool?.(b.id, spec.id), !affordable || b.isConstructing));
       grid.appendChild(opt);
     }
     card.append(grid, costRow(state, cost));
@@ -357,6 +388,11 @@ export class BuildingPanel {
     const card = el('div', 'bp-card bp-upgrade');
     if (b.level >= def.maxLevel) {
       card.appendChild(el('div', 'bp-hint center', `[[star]] ${i18n.t('building.maxLevel')}`));
+      return card;
+    }
+    // [Long game] The Act holds the level: say so instead of a grey button.
+    if (this.engine.buildingSystem.upgradeBlock(b, state) === 'act') {
+      card.appendChild(el('div', 'bp-hint center', `[[lock]] ${i18n.t('building.actCap', { level: b.level + 1 })}`));
       return card;
     }
     const cost = this.engine.buildingSystem.getUpgradeCost(b);

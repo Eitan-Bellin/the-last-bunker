@@ -40,7 +40,7 @@ export class ProjectSystem {
   }
 
   isAvailable(state: GameState, def: ProjectDef): boolean {
-    return (state.era ?? 0) >= def.era;
+    return (state.era ?? 0) >= def.era && (state.longGame?.meta.act ?? 99) >= (def.act ?? 0);
   }
 
   crew(state: GameState, id: string): SurvivorState[] {
