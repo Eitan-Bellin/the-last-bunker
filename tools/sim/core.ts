@@ -175,6 +175,10 @@ const fn = (o: unknown, k: string): Fn | null => {
 /** One step = every system call GameEngine.tick() makes, at dt seconds, in the same order. */
 function buildStepper(e: GameEngine, warnings: string[]): { names: string[]; run: (dt: number) => void } {
   const eng = e as unknown as Loose;
+  // Newer engines expose their step list directly: the open game, time away and this simulator then run the same code.
+  const advance = fn(e, 'advance');
+  const names = fn(e, 'systemNames');
+  if (advance && names) return { names: names() as string[], run: (dt: number) => { advance(dt, 'online'); } };
   const tick = (Object.getPrototypeOf(e) as Loose).tick;
   const src = typeof tick === 'function' ? tick.toString() : '';
   type Call = { sys: string; method: string; kind: 'none' | 'dt' | 'sm' | 'smdt' };

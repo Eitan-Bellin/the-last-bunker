@@ -78,6 +78,18 @@ export interface OfflineReport {
   danger?: AwayDangerReport;
 }
 
+/**
+ * One system in the engine's step list. `online` runs while the game is open; `offline` runs while catching up on time away
+ * (with the away efficiency); a system without `offline` deliberately does nothing away (its policy is "online only").
+ * `slow` systems run about once a second of game time rather than on every tick.
+ */
+export interface EngineSystem {
+  name: string;
+  online?: (dt: number) => void;
+  offline?: (dt: number, efficiency: number) => void;
+  slow?: boolean;
+}
+
 export class GameEngine {
   stateManager: StateManager;
   saveManager: SaveManager;
@@ -103,7 +115,12 @@ export class GameEngine {
   rushSystem: RushSystem;
   shopSystem: ShopSystem;
   projectSystem: ProjectSystem; // [LateGame B1]
-  private tickCount = 0;
+  /** The step list, in order (see registerSystems). New systems add themselves with register(). */
+  private systems: EngineSystem[] = [];
+  /** Game seconds gathered toward the next run of the slow systems. */
+  private slowClock = 0;
+  /** Set by simulate() while catching up: what the rooms made beyond full storage, per resource. */
+  private offlineWaste: Partial<Record<ResourceType, number>> | null = null;
 
   private lastTickTime = 0;
   private tickAccumulator = 0;
@@ -175,6 +192,92 @@ export class GameEngine {
       const lore = DIG_LORE[floor as number];
       if (lore) this.restorationSystem.addLore(lore);
     });
+    this.registerSystems();
+  }
+
+  /** Adds a system to the end of the step list (or replaces the one with the same name, keeping its place). */
+  register(sys: EngineSystem): void {
+    const at = this.systems.findIndex(s => s.name === sys.name);
+    if (at >= 0) this.systems[at] = sys;
+    else this.systems.push(sys);
+  }
+
+  /** The step list's names, in order (the simulator records it). */
+  systemNames(): string[] {
+    return this.systems.map(s => `${s.name}${s.slow ? '(slow)' : ''}${s.offline ? '' : '(online only)'}`);
+  }
+
+  /**
+   * The engine's step list. Order matters (production before consumption checks, events after population).
+   * Away policy: anything that needs the player (events, story, objectives, eras, achievements, incidents) stays online only;
+   * the welcome-back path handles the door, away danger and era catch-up itself.
+   */
+  private registerSystems(): void {
+    const sm = this.stateManager;
+    const sys: EngineSystem[] = [
+      {
+        name: 'resource',
+        online: dt => this.resourceSystem.update(sm, dt),
+        offline: (dt, eff) => {
+          const waste = this.offlineWaste;
+          const pre = waste ? WASTE_TRACKED.map(r => sm.state.resources[r].amount) : null;
+          this.resourceSystem.update(sm, dt * eff);
+          // Whatever the rooms made beyond the cap this step was thrown away.
+          if (waste && pre) WASTE_TRACKED.forEach((r, i) => {
+            const res = sm.state.resources[r];
+            const lost = pre[i] + (res.productionRate - res.consumptionRate) * dt * eff - res.amount;
+            if (lost > 0.001 && res.amount >= res.cap - 0.001) waste[r] = (waste[r] ?? 0) + lost;
+          });
+        },
+      },
+      { name: 'building', online: dt => this.buildingSystem.update(sm, dt), offline: dt => this.buildingSystem.update(sm, dt) },
+      // [Danger C4] Away, hunger can hurt but never takes a resident below the health floor.
+      { name: 'population', online: dt => this.populationSystem.update(sm, dt), offline: dt => this.populationSystem.update(sm, dt, OFFLINE_HEALTH_FLOOR) },
+      { name: 'event', online: () => this.eventSystem.update() },
+      { name: 'research', online: dt => this.researchSystem.update(sm, dt), offline: dt => this.researchSystem.update(sm, dt) },
+      { name: 'exploration', online: dt => this.explorationSystem.update(dt), offline: dt => this.explorationSystem.update(dt) },
+      { name: 'restoration', online: dt => this.restorationSystem.update(dt), offline: dt => this.restorationSystem.update(dt) },
+      { name: 'incident', online: dt => this.incidentSystem.update(dt) },
+      { name: 'family', online: dt => this.familySystem.update(dt), offline: dt => this.familySystem.update(dt) },
+      { name: 'project', online: dt => this.projectSystem.update(dt), offline: dt => this.projectSystem.update(dt) }, // [LateGame B1]
+      // [Danger C3] Rooms wear while away too (at the away efficiency).
+      { name: 'maintenance', online: dt => this.maintenanceSystem.update(dt), offline: (dt, eff) => this.maintenanceSystem.update(dt * eff) },
+      { name: 'achievements', slow: true, online: () => this.metaSystem.checkAchievements() },
+      { name: 'objective', slow: true, online: () => this.objectiveSystem.update() },
+      { name: 'era', slow: true, online: () => this.eraSystem.update() },
+      { name: 'story', slow: true, online: () => this.storySystem.update() },
+    ];
+    for (const s of sys) this.register(s);
+  }
+
+  /**
+   * Moves the world forward by `dt` game seconds: the one entry point for the open game (tick), time away (simulate)
+   * and the balance simulator. Online it also advances the play clock. A throwing system is logged and skipped.
+   */
+  advance(dt: number, mode: 'online' | 'offline', efficiency = 1): void {
+    let slowDue = false;
+    if (mode === 'online') {
+      this.slowClock += dt;
+      // A hair under a second, so ten 0.1 s ticks (with float drift) still make one slow round.
+      if (this.slowClock >= 0.999) {
+        slowDue = true;
+        this.slowClock = 0;
+      }
+    }
+    for (const s of this.systems) {
+      if (mode === 'online') {
+        if (!s.online || (s.slow && !slowDue)) continue;
+        const f = s.online;
+        this.step(s.name, () => f(dt));
+      } else if (s.offline) {
+        const f = s.offline;
+        this.step(s.name, () => f(dt, efficiency));
+      }
+    }
+    if (mode === 'online') {
+      const sm = this.stateManager;
+      this.step('clock', () => sm.applyDelta({ path: 'stats.totalPlayTime', value: sm.state.stats.totalPlayTime + dt }));
+    }
   }
 
   async init(): Promise<void> {
@@ -364,29 +467,15 @@ export class GameEngine {
     // Short absences are simulated finely, long ones coarsely: the cost grows with the number of steps (and with the crowd).
     const stepSize = seconds > 300 ? OFFLINE_STEP_SECONDS : seconds > 60 ? 5 : 1;
     let remaining = seconds;
+    this.offlineWaste = wastedRaw;
     try {
       while (remaining > 0) {
         const step = Math.min(stepSize, remaining);
-        const pre = WASTE_TRACKED.map(r => sm.state.resources[r].amount);
-        this.resourceSystem.update(sm, step * efficiency);
-        // Whatever the rooms made beyond the cap this step was thrown away.
-        WASTE_TRACKED.forEach((r, i) => {
-          const res = sm.state.resources[r];
-          const lost = pre[i] + (res.productionRate - res.consumptionRate) * step * efficiency - res.amount;
-          if (lost > 0.001 && res.amount >= res.cap - 0.001) wastedRaw[r] = (wastedRaw[r] ?? 0) + lost;
-        });
-        this.buildingSystem.update(sm, step);
-        this.researchSystem.update(sm, step);
-        this.explorationSystem.update(step);
-        this.restorationSystem.update(step);
-        this.familySystem.update(step);
-        this.projectSystem.update(step); // [LateGame B1]
-        // [Danger C3/C4] Rooms wear while away, and hunger hurts people but never below 15 health.
-        this.maintenanceSystem.update(step * efficiency);
-        this.populationSystem.update(sm, step, OFFLINE_HEALTH_FLOOR);
+        this.advance(step, 'offline', efficiency);
         remaining -= step;
       }
     } finally {
+      this.offlineWaste = null;
       offMission();
       offResearch();
     }
@@ -575,29 +664,7 @@ export class GameEngine {
   }
 
   private tick(): void {
-    const sm = this.stateManager;
-    this.step('resource', () => this.resourceSystem.update(sm, TICK_SECONDS));
-    this.step('building', () => this.buildingSystem.update(sm, TICK_SECONDS));
-    this.step('population', () => this.populationSystem.update(sm, TICK_SECONDS));
-    this.step('event', () => this.eventSystem.update());
-    this.step('research', () => this.researchSystem.update(sm, TICK_SECONDS));
-    this.step('exploration', () => this.explorationSystem.update(TICK_SECONDS));
-    this.step('restoration', () => this.restorationSystem.update(TICK_SECONDS));
-    this.step('incident', () => this.incidentSystem.update(TICK_SECONDS));
-    this.step('family', () => this.familySystem.update(TICK_SECONDS));
-    this.step('project', () => this.projectSystem.update(TICK_SECONDS)); // [LateGame B1]
-    this.step('maintenance', () => this.maintenanceSystem.update(TICK_SECONDS)); // [Danger C3]
-    if (++this.tickCount % 10 === 0) {
-      this.step('achievements', () => this.metaSystem.checkAchievements());
-      this.step('objective', () => this.objectiveSystem.update());
-      this.step('era', () => this.eraSystem.update());
-      this.step('story', () => this.storySystem.update());
-    }
-
-    this.step('clock', () => sm.applyDelta({
-      path: 'stats.totalPlayTime',
-      value: sm.state.stats.totalPlayTime + TICK_SECONDS,
-    }));
+    this.advance(TICK_SECONDS, 'online');
   }
 
   /** Writes the game to storage. Never throws: a failed write is counted, logged, and reported to the player after the second miss. */
