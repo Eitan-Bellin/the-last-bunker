@@ -770,6 +770,7 @@
   "res.why": "Why the top producer makes what it makes",
   "mod.season": "Season",
   "mod.laws": "Laws",
+  "mod.mutators": "Hardships",
   "next.title": "Next up",
   "next.short": "Now",
   "next.medium": "This Act",
@@ -808,5 +809,10 @@
   "laws.title": "Laws ({n}/{slots})",
   "laws.enact": "Pass",
   "laws.repeal": "Repeal",
-  "morale.laws": "Laws"
+  "morale.laws": "Laws",
+  "genesis.keystone": "Keystone: one per group, for every run to come",
+  "genesis.keystoneClosed": "Closed: another keystone of this group was chosen",
+  "mutators.title": "A new world, new hardships?",
+  "mutators.body": "Take on hardships for this run and earn more Legacy at its Genesis. Now: +{n}%.",
+  "mutators.begin": "Begin"
 }

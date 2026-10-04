@@ -181,7 +181,7 @@ export class ResearchSystem {
     for (const b of state.buildings) {
       if (b.type === 'laboratory') labLevels += Math.max(0, effectiveLevel(b)) * (b.assignedSurvivorIds.length > 0 ? 1 : 0.5);
     }
-    const prestige = 1 + 0.1 * (state.prestige.upgrades['fastResearch'] ?? 0);
+    const prestige = (1 + 0.1 * (state.prestige.upgrades['fastResearch'] ?? 0)) * (state.prestige.upgrades['ksScholar'] ? 1.3 : 1);
     return (1 + 0.25 * labLevels) * prestige;
   }
 

@@ -770,6 +770,7 @@
   "res.why": "למה היצרן הגדול מייצר כמה שהוא מייצר",
   "mod.season": "עונה",
   "mod.laws": "חוקים",
+  "mod.mutators": "קשיים",
   "next.title": "מה הלאה",
   "next.short": "עכשיו",
   "next.medium": "במערכה",
@@ -808,5 +809,10 @@
   "laws.title": "חוקים ({n}/{slots})",
   "laws.enact": "להעביר",
   "laws.repeal": "לבטל",
-  "morale.laws": "חוקים"
+  "morale.laws": "חוקים",
+  "genesis.keystone": "אבן יסוד: אחת מכל קבוצה, לכל המשחקים שיבואו",
+  "genesis.keystoneClosed": "סגור: נבחרה אבן יסוד אחרת מהקבוצה הזו",
+  "mutators.title": "עולם חדש, קשיים חדשים?",
+  "mutators.body": "קבלו על עצמכם קשיים לריצה הזו וקבלו יותר מורשת בבראשית שלה. כרגע: +{n}%.",
+  "mutators.begin": "להתחיל"
 }

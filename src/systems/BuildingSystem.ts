@@ -38,6 +38,7 @@ export class BuildingSystem {
 
   update(sm: StateManager, dt: number): void {
     const state = sm.state;
+    this.artisan = !!state.prestige.upgrades['ksArtisan'];
     let changed = false;
 
     for (let i = 0; i < state.buildings.length; i++) {
@@ -80,6 +81,9 @@ export class BuildingSystem {
     return costs;
   }
 
+  /** [P5] Set by the engine each tick from the Artisan keystone (getUpgradeCost has no state). */
+  artisan = false;
+
   getUpgradeCost(building: BuildingInstance): Record<string, number> {
     const def = getDef(building.type);
     if (!def) return {};
@@ -87,7 +91,8 @@ export class BuildingSystem {
     // Rooms with five levels (districts, halls) count each level as two.
     const mk = Math.round(((building.level + 1) * 10) / def.maxLevel);
     if (mk >= 4) {
-      const costs = actPrice(levelAct(mk), upgradeHours(mk) * (def.maxLevel < 10 ? 2 : 1));
+      // [P5] The Artisan keystone: a sixth cheaper (and the doubled steps of five-level rooms).
+      const costs = actPrice(levelAct(mk), upgradeHours(mk) * (def.maxLevel < 10 ? 2 : 1) * (this.artisan ? 0.85 : 1));
       const gentle = Math.pow(def.costMultiplier, Math.min(building.level, 5));
       for (const r of SCARCE_COSTS) if (def.baseCost[r]) costs[r] = Math.ceil(def.baseCost[r] * gentle);
       return costs;
@@ -236,7 +241,8 @@ export class BuildingSystem {
     }
     maxPop += specTotal(sm.state, 'population');
     // [Long game] The Act holds the bunker's size; nobody already inside is ever turned out.
-    maxPop = Math.min(maxPop, Math.max(actOf(sm.state).popCap, sm.state.survivors.length));
+    const cap = Math.round(actOf(sm.state).popCap * (sm.state.prestige.upgrades['ksSettler'] ? 1.1 : 1)); // [P5] keystone
+    maxPop = Math.min(maxPop, Math.max(cap, sm.state.survivors.length));
     sm.applyDelta({ path: 'maxPopulation', value: maxPop });
   }
 

@@ -1015,6 +1015,33 @@ export class BunkerRenderer {
     }
     this.utilitiesSig = '';
     this.digSig = '';
+    this.collectStructureCullables();
+  }
+
+  /**
+   * [P6] With up to 24 floors most of the structure is off screen: every part of the rock, casing and the empty-slot tiles
+   * gets its vertical extent measured once here, and cullRooms() hides what the camera cannot see.
+   */
+  private structureCull: { obj: Container; y0: number; y1: number }[] = [];
+
+  private collectStructureCullables(): void {
+    const out: { obj: Container; y0: number; y1: number }[] = [];
+    const addChildren = (root: Container | undefined) => {
+      if (!root) return;
+      for (const c of root.children) {
+        const b = c.getLocalBounds();
+        if (!isFinite(b.minY) || !isFinite(b.maxY) || b.maxY - b.minY > 3 * FLOOR_H) continue; // tall pieces stay
+        out.push({ obj: c, y0: root.y + c.y + b.minY, y1: root.y + c.y + b.maxY });
+      }
+    };
+    addChildren(this.undergroundHolder.children[0] as Container | undefined);
+    for (let f = 0, i = 0; f < this.floors; f++) {
+      for (let s = 0; s < SLOTS_PER_FLOOR; s++, i++) {
+        const tile = this.slotLayer.children[i];
+        if (tile) out.push({ obj: tile as Container, y0: floorTop(f), y1: floorTop(f) + ROOM_H });
+      }
+    }
+    this.structureCull = out;
   }
 
   private structureSig(state: GameState): string {
@@ -1529,6 +1556,11 @@ export class BunkerRenderer {
       const seen = r.x < x1 && r.x + v.width > x0 && r.y < y1 && r.y + v.height > y0;
       v.culled = !seen;
       if (r.visible !== seen) r.visible = seen;
+    }
+    // [P6] The structure, by height only (it spans the whole width anyway).
+    for (const c of this.structureCull) {
+      const seen = c.y1 > y0 && c.y0 < y1;
+      if (c.obj.visible !== seen) c.obj.visible = seen;
     }
   }
 

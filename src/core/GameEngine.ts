@@ -1,3 +1,4 @@
+import { MUTATORS } from '../data/mutators';
 import { LAWS, lawCost, lawSlots } from '../data/laws';
 import { StateManager } from './StateManager';
 import { SaveManager, type BackupKind } from './SaveManager';
@@ -348,7 +349,7 @@ export class GameEngine {
     const up = this.stateManager.state.prestige.upgrades;
     // [Progression hook] Quick Start stock and Pre-dug levels (MetaSystem.applyStartBonuses).
     this.metaSystem.applyStartBonuses(this.stateManager);
-    for (let i = 0; i < 3 + (up['veteranSurvivors'] ?? 0); i++) {
+    for (let i = 0; i < 3 + (up['veteranSurvivors'] ?? 0) + (up['ksFounders'] ? 2 : 0); i++) {
       this.populationSystem.addSurvivor(this.stateManager, this.populationSystem.createSurvivor(this.rng));
     }
 
@@ -552,6 +553,8 @@ export class GameEngine {
     const credits = Math.round(this.resourceSystem.creditsMade - creditsBefore);
     // [Danger C4] The soft version of raids and disasters, with the 24-hour safety net.
     const danger = this.awayDanger.run(seconds);
+    // [P2] The player is back: the "danger ignored" streak ends (a day of neglect is a day away, not any day since).
+    if (difficultyOf(sm.state).id !== 'last' && sm.state.danger.ignoredSince !== null) sm.applyDelta({ path: 'danger', value: { ...sm.state.danger, ignoredSince: null } });
     // A real absence (not a short tab switch): the return grace starts now.
     if (seconds > 300) this.graceUntil = sm.state.stats.totalPlayTime + RETURN_GRACE;
     if (danger.raids + danger.disasters.length > 0) bus.emit('danger:away', danger);
@@ -606,6 +609,14 @@ export class GameEngine {
         sm.applyDelta({ path: `resources.${r}.amount`, value: Math.min(res.cap, Math.max(0, Math.round(res.amount * (1 + extra)))) });
       }
     }
+    this.requestSave();
+  }
+
+  /** [P5] The run's mutators (only while it has just begun). */
+  setMutators(ids: string[]): void {
+    const sm = this.stateManager;
+    if (!sm.state.longGame || sm.state.longGame.meta.act > 1) return;
+    sm.applyDelta({ path: 'longGame.meta.mutators', value: ids.filter(id => MUTATORS.some(m => m.id === id)) });
     this.requestSave();
   }
 

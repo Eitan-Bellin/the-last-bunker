@@ -27,6 +27,26 @@ export function actPrice(act: number, hours: number): Record<string, number> {
   add(ACT_CURRENCY[a], hours * refIncome(a));
   if (a >= 3) add('materials', hours * refIncome(2) * TUNING.olderCurrencyShare);
   if (a >= 4) add('components', hours * refIncome(3) * TUNING.olderCurrencyShare);
+  if (a >= 5) add('alloys', hours * refIncome(4) * TUNING.olderCurrencyShare);
+  if (a >= 6) add('data', hours * refIncome(5) * TUNING.olderCurrencyShare);
+  if (a >= 7) add('influence', hours * refIncome(6) * TUNING.olderCurrencyShare);
+  return out;
+}
+
+/**
+ * [P4] A bundle of `hours` of the Act's income in the same mix prices ask for (the newest currency plus the share of
+ * the older ones), without the price scale: what contracts pay, so they relieve every currency a price needs.
+ */
+export function actBundle(act: number, hours: number): Partial<Record<ResourceType, number>> {
+  const a = Math.max(1, act);
+  const out: Partial<Record<ResourceType, number>> = {};
+  const add = (r: ResourceType, v: number) => { if (v >= 1) out[r] = (out[r] ?? 0) + Math.round(v); };
+  add(ACT_CURRENCY[a], hours * refIncome(a));
+  if (a >= 3) add('materials', hours * refIncome(2) * TUNING.olderCurrencyShare);
+  if (a >= 4) add('components', hours * refIncome(3) * TUNING.olderCurrencyShare);
+  if (a >= 5) add('alloys', hours * refIncome(4) * TUNING.olderCurrencyShare);
+  if (a >= 6) add('data', hours * refIncome(5) * TUNING.olderCurrencyShare);
+  if (a >= 7) add('influence', hours * refIncome(6) * TUNING.olderCurrencyShare);
   return out;
 }
 

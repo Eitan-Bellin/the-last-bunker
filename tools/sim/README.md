@@ -23,6 +23,8 @@ node tools/sim/run.mjs --mode engaged --days 7   --seeds 1-5 --json store/sim/my
 | `--src` | run against a frozen copy of the code instead of live `src/`, e.g. `store/sim/baseline-src` (holds `core/`, `systems/`, `data/`) |
 | `--return` | `restart` (default: a real app start through `GameEngine.init()`, the welcome-back path) or `resume` (the tab-visible path, `engine.simulate()`) |
 | `--note` | free text stored in the JSON |
+| `--difficulty` | `settler`, `warden` (default) or `last` (long game) |
+| `--dump-save <prefix>` | write each run's final game as `<prefix>-seed<N>.json` (sample saves for migration tests) |
 | `--progress` / `--quiet` | more / less console output |
 
 Re-print or compare saved runs:
@@ -72,3 +74,11 @@ levels, research, beds), objectives done and final state.
 `store/sim/baseline-*.json` / `BASELINE.md` were made on the code from before the balance fixes, frozen in
 `store/sim/baseline-src/` (verified identical to the reviewer's 3 Oct 16:24 bundle). Re-run a baseline mode with
 `--src store/sim/baseline-src` to compare like for like after bot changes.
+
+## Long-game tools
+
+- `node tools/sim/lint.mjs`: en/he keys and placeholders match, research is a sound DAG, every cost names a real resource (also in CI and `npm run check`).
+- `node tools/sim/migrate-test.mjs [folder]`: migrates and starts every sample save in the folder (default `store/sim/saves-v4`); fails on anything lost.
+- `node tools/sim/gates.mjs <save.json> [--hours 24]`: determinism (same seed, same game), offline identity (a day away vs online, shared systems within 3%) and performance budgets.
+- The bot follows a different doctrine path and law order per seed, takes contracts, builds outposts, digs with a crew and keeps the tier-2 roles of each Act. Milestones include `act N`, `doctrine <id>` and `ending <id>`; deaths carry a cause (`deaths.causes`), raids are counted by kind and stance (`danger.byKind`).
+- Pacing knobs live in `src/data/tuning.ts` (reference income per Act, price scale, charter stage hours, contracts, outposts); Act ceilings and goals in `src/data/acts.ts`.

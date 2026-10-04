@@ -6,6 +6,13 @@ export interface PrestigeUpgradeDef {
   growth: number;
   name: Record<string, string>;
   desc: Record<string, string>;
+  /** [P5] Keystone group: one keystone per group, for good (the others in it close). */
+  keystone?: string;
+}
+
+/** [P5] Whether a keystone is owned (prestige upgrades hold it as level 1). */
+export function hasKeystone(state: { prestige: { upgrades: Record<string, number> } }, id: string): boolean {
+  return (state.prestige.upgrades[id] ?? 0) > 0;
 }
 
 /**
@@ -73,6 +80,37 @@ export const PRESTIGE_UPGRADES: PrestigeUpgradeDef[] = [
     id: 'scoutTeams', icon: '[[walker]]', maxLevel: 3, baseCost: 40, growth: 2,
     name: { he: 'צוותי סיור', en: 'Scout Teams' },
     desc: { he: 'עוד צוות משלחת שיכול לצאת במקביל לכל רמה', en: 'One more expedition team out at the same time per level' },
+  },
+  // [P5] Keystones: one choice in each group shapes every later run.
+  {
+    id: 'ksFounders', icon: '[[people]]', maxLevel: 1, baseCost: 400, growth: 1, keystone: 'founding',
+    name: { he: 'אבן יסוד: המייסדים', en: 'Keystone: The Founders' },
+    desc: { he: 'כל משחק מתחיל עם עוד שני ניצולים', en: 'Every run starts with two more survivors' },
+  },
+  {
+    id: 'ksCartographer', icon: '[[map]]', maxLevel: 1, baseCost: 400, growth: 1, keystone: 'founding',
+    name: { he: 'אבן יסוד: הקרטוגרף', en: 'Keystone: The Cartographer' },
+    desc: { he: 'חוזים משלמים +25%', en: 'Contracts pay +25%' },
+  },
+  {
+    id: 'ksScholar', icon: '[[books]]', maxLevel: 1, baseCost: 400, growth: 1, keystone: 'founding',
+    name: { he: 'אבן יסוד: המלומד', en: 'Keystone: The Scholar' },
+    desc: { he: 'מחקר מהיר ב־30%', en: 'Research 30% faster' },
+  },
+  {
+    id: 'ksBastion', icon: '[[vault]]', maxLevel: 1, baseCost: 700, growth: 1, keystone: 'line',
+    name: { he: 'אבן יסוד: המעוז', en: 'Keystone: The Bastion' },
+    desc: { he: 'האיום מבחוץ −15', en: 'Threat from outside −15' },
+  },
+  {
+    id: 'ksArtisan', icon: '[[workshop]]', maxLevel: 1, baseCost: 700, growth: 1, keystone: 'line',
+    name: { he: 'אבן יסוד: האומן', en: 'Keystone: The Artisan' },
+    desc: { he: 'שדרוגי חדרים זולים ב־15%', en: 'Room upgrades 15% cheaper' },
+  },
+  {
+    id: 'ksSettler', icon: '[[quarters]]', maxLevel: 1, baseCost: 700, growth: 1, keystone: 'line',
+    name: { he: 'אבן יסוד: המתיישב', en: 'Keystone: The Settler' },
+    desc: { he: 'תקרת האוכלוסייה של כל מערכה +10%', en: 'Each Act\'s population cap +10%' },
   },
 ];
 

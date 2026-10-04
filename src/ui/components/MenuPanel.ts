@@ -329,7 +329,12 @@ export class MenuPanel {
       const info = el('div', 'genesis-info');
       info.append(el('div', 'research-name', `${u.icon} ${u.name[locale] ?? u.name.en} · ${level}/${u.maxLevel}`), el('div', 'bp-hint', u.desc[locale] ?? u.desc.en));
       row.appendChild(info);
-      if (level >= u.maxLevel) {
+      // [P5] Keystones: one per group.
+      const closed = !!u.keystone && level === 0 && PRESTIGE_UPGRADES.some(x => x.keystone === u.keystone && x.id !== u.id && meta.upgradeLevel(state, x.id) > 0);
+      if (u.keystone) info.appendChild(el('div', 'bp-hint doctrine-tag', i18n.t(closed ? 'genesis.keystoneClosed' : 'genesis.keystone')));
+      if (closed) {
+        row.appendChild(el('span', 'research-done', '[[lock]]'));
+      } else if (level >= u.maxLevel) {
         row.appendChild(el('span', 'research-done', '[[star]]'));
       } else {
         const cost = upgradeCost(u, level);

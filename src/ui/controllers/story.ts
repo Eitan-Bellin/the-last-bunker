@@ -1,3 +1,4 @@
+import { MUTATORS } from '../../data/mutators';
 import { el } from '../../ui/dom';
 import { hideSplash } from '../../ui/splash';
 import { DIFFICULTIES } from '../../data/difficulty';
@@ -94,6 +95,29 @@ export class StoryController {
         this.app.engine.requestSave();
         this.app.toasts.show(`[[flashlight]] ${i18n.t('intro.firstHint')}`, 'info');
       },
+    });
+  }
+
+  /** [P5] After a Genesis: the new run's mutators, toggled on and off, then begun. */
+  chooseMutators(picked: string[] = this.app.state.longGame?.meta.mutators ?? []): void {
+    const locale = i18n.currentLocale;
+    const legacy = MUTATORS.filter(m => picked.includes(m.id)).reduce((s, m) => s + m.legacy, 0);
+    this.app.modal.show({
+      icon: '[[sparkle]]',
+      title: i18n.t('mutators.title'),
+      body: i18n.t('mutators.body', { n: Math.round(legacy * 100) }),
+      actions: [
+        ...MUTATORS.map(m => ({
+          label: `${picked.includes(m.id) ? '✓ ' : ''}${m.icon} ${m.name[locale]} (+${Math.round(m.legacy * 100)}%)`,
+          className: picked.includes(m.id) ? 'btn-primary' : 'btn-secondary',
+          detail: el('span', 'difficulty-desc', m.desc[locale]),
+          onClick: () => this.chooseMutators(picked.includes(m.id) ? picked.filter(x => x !== m.id) : [...picked, m.id]),
+        })),
+        {
+          label: i18n.t('mutators.begin'), className: 'btn-primary',
+          onClick: () => { this.app.engine.setMutators(picked); this.app.modal.hide(); },
+        },
+      ],
     });
   }
 

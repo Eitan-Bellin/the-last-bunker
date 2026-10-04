@@ -1,8 +1,9 @@
+import { hasKeystone } from '../data/prestige';
 import type { StateManager } from '../core/StateManager';
 import type { GameState, ResourceType } from '../core/GameState';
 import type { InboxItem } from '../core/state/longGame';
 import { bus } from '../core/EventBus';
-import { ACT_CURRENCY, refIncome } from '../data/pricing';
+import { actBundle } from '../data/pricing';
 import { getPartner, openPartners } from '../data/trade';
 import { i18n } from '../i18n/I18nManager';
 import { RESOURCE_ICONS } from '../ui/dom';
@@ -143,9 +144,10 @@ export class ContractSystem {
     const issuer = issuers[Math.floor(this.roll(n, 1) * issuers.length)];
     const type: ContractType = this.roll(n, 2) < 0.6 ? 'supply' : 'crew';
     const hours = type === 'crew' ? TUNING.contractRewardHours * 1.6 : TUNING.contractRewardHours;
-    const cur = ACT_CURRENCY[act];
-    const reward: Partial<Record<ResourceType, number>> = { [cur]: Math.round(hours * refIncome(act)) };
-    if (act >= 3) reward.materials = Math.round(hours * refIncome(2) * 0.3);
+    // [P5] The Cartographer keystone: contracts pay a quarter more.
+    const k = hasKeystone(state, 'ksCartographer') ? 1.25 : 1;
+    // Paid in the same mix prices ask for, so a contract helps with every currency the Act needs.
+    const reward = actBundle(act, hours * k);
     const give: Partial<Record<ResourceType, number>> = {};
     if (type === 'supply') {
       const ask = ASKS[Math.floor(this.roll(n, 3) * ASKS.length)];

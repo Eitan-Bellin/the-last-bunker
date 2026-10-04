@@ -1,3 +1,4 @@
+import { hasMutator } from '../data/mutators';
 import { lawAppetite, lawOutput } from '../data/laws';
 import { hasFeature } from './ResearchSystem';
 import { seasonEffects } from '../data/seasons';
@@ -50,11 +51,15 @@ registerModifier({ id: 'laws', mult: ({ state, resource }) => (state.longGame?.p
 registerModifier({
   id: 'season',
   mult: ({ state, resource }) => {
-    const m = seasonEffects(state)?.output[resource] ?? 1;
+    let m = seasonEffects(state)?.output[resource] ?? 1;
+    // [P5] Harsh Winters mutator: every season's penalty doubled.
+    if (m < 1 && hasMutator(state, 'harshWinters')) m = 1 - (1 - m) * 2;
     // [P3] Winter Stores (and the Mycelium doctrine) halve a season's food penalty.
     return m < 1 && resource === 'food' && hasFeature(state, 'winterStores') ? 1 - (1 - m) / 2 : m;
   },
 });
+// [P5] Lean Years mutator.
+registerModifier({ id: 'mutators', mult: ({ state, resource }) => (resource === 'food' && hasMutator(state, 'leanYears') ? 0.85 : 1) });
 // [Long game] A room that is changing its role produces nothing until the work is done.
 registerModifier({ id: 'retool', mult: ({ state, building }) => (retooling(state, building) ? 0 : 1) });
 
@@ -95,7 +100,8 @@ export class ResourceSystem {
     let powerProd = 0;
     let powerDemand = 0;
     // [P2] Winter heating.
-    const seasonPower = hasFeature(state, 'geothermal') ? 1 : seasonEffects(state)?.powerDemand ?? 1;
+    const rawSeason = seasonEffects(state)?.powerDemand ?? 1;
+    const seasonPower = hasFeature(state, 'geothermal') ? 1 : hasMutator(state, 'harshWinters') ? 1 + (rawSeason - 1) * 2 : rawSeason;
     for (const b of state.buildings) {
       const level = effectiveLevel(b);
       const def = getDef(b.type);
@@ -309,6 +315,8 @@ export class ResourceSystem {
     // [Economy A4] Per-era storage multiplier (power is not stored in bulk, so it stays as is).
     const eraMult = eraCapMultiplier(state);
     if (eraMult > 1) for (const r of Object.keys(caps) as ResourceType[]) if (r !== 'power') caps[r] = Math.round((caps[r] ?? 0) * eraMult);
+    // [P5] Scarcity mutator: every store a quarter smaller (power aside).
+    if (hasMutator(state, 'scarcity')) for (const r of Object.keys(caps) as ResourceType[]) if (r !== 'power') caps[r] = Math.round((caps[r] ?? 0) * 0.75);
     // [Long game] L2: the Act's currencies hold a set number of hours of their reference income, so any price fits.
     for (const [r, v] of Object.entries(actCapBonus(state)) as [ResourceType, number][]) caps[r] = (caps[r] ?? 0) + v;
     return caps;
