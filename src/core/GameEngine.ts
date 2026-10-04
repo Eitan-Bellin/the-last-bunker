@@ -1,8 +1,9 @@
 import { StateManager } from './StateManager';
-import { SaveManager } from './SaveManager';
+import { SaveManager, type BackupKind } from './SaveManager';
+import { stillOwner } from './singleInstance';
 import { bus } from './EventBus';
 import { SeededRandom } from './Random';
-import { createInitialState, migrateState, type ResourceType } from './GameState';
+import { createInitialState, migrateState, type GameState, type ResourceType } from './GameState';
 import { ResourceSystem, type OverflowAbsorber } from '../systems/ResourceSystem';
 import { BuildingSystem } from '../systems/BuildingSystem';
 import { PopulationSystem } from '../systems/PopulationSystem';
@@ -42,6 +43,8 @@ const FRAME_ACTIVE_MS = 1000 / 60;
 const ACTIVE_HOLD_MS = 1800;
 const IDLE_AFTER_S = 30;
 const OFFLINE_EFFICIENCY = 0.8;
+/** Frames this far apart on the wall clock mean the device was asleep (not just slow). */
+const SLEEP_GAP_MS = 20_000;
 const OFFLINE_MAX_SECONDS = 86_400;
 const OFFLINE_STEP_SECONDS = 60;
 /** [Danger C4] Away, hunger can hurt but never takes a resident below this health. */
@@ -117,6 +120,15 @@ export class GameEngine {
 
   offlineReport: OfflineReport | null = null;
   paused = false;
+  /** Nothing is written to storage while true: a save we could not read must never be overwritten, and a second open copy must not clobber this one. */
+  saveBlocked = false;
+  /** Why the main save could not be used at start ('error' = storage failed, 'corrupt' = unreadable); null = all fine. */
+  loadProblem: 'error' | 'corrupt' | null = null;
+  /** Set when the main save was unreadable and this game came from a backup. */
+  recoveredFrom: BackupKind | null = null;
+  /** When the game restored from a backup was last saved (wall-clock ms). */
+  recoveredAt: number | null = null;
+  private saveFailures = 0;
   onRender: ((dt: number, alpha: number) => void) | null = null;
 
   constructor() {
@@ -166,23 +178,19 @@ export class GameEngine {
   }
 
   async init(): Promise<void> {
-    const saved = await this.saveManager.load('auto');
-    if (saved) {
-      const oldVersion = saved.version ?? 1;
-      const state = migrateState(saved);
-      this.stateManager.loadState(state);
-      this.rng.seed = state.randomSeed;
-      this.buildingSystem.syncNextId(state);
-      this.populationSystem.syncNextId(state);
-      if (oldVersion < 3) this.buildingSystem.repackAll(this.stateManager);
-      if (oldVersion < 4) this.stateManager.applyDelta({ path: 'tutorialStep', value: ObjectiveSystem.migrateStep(state.tutorialStep ?? 0) });
-      this.buildingSystem.recalculateMaxPopulation(this.stateManager);
-      this.explorationSystem.ensureMap();
-      this.incidentSystem.sync(state);
-      this.incidentSystem.prune();
+    const loaded = await this.saveManager.loadSafe();
+    if (loaded.state) {
+      this.recoveredFrom = loaded.recoveredFrom ?? null;
+      this.recoveredAt = loaded.recoveredFrom ? (loaded.state.timestamp ?? null) : null;
+      this.adoptState(loaded.state);
       this.handleOfflineProgression();
       this.eraSystem.catchUp();
     } else {
+      // A storage error or an unreadable save is not "no save": show something to look at, but never write over what may still be there.
+      if (loaded.status === 'error' || loaded.status === 'corrupt') {
+        this.loadProblem = loaded.status;
+        this.saveBlocked = true;
+      }
       this.setupNewGame();
     }
     bus.emit('engine:ready');
@@ -210,6 +218,7 @@ export class GameEngine {
 
   /** Replaces the current game with a brand-new one (player-confirmed in the menu). */
   async newGame(): Promise<void> {
+    await this.keepPrevious();
     const fresh = createInitialState();
     this.stateManager.loadState(fresh);
     this.rng.seed = fresh.randomSeed;
@@ -219,11 +228,10 @@ export class GameEngine {
     await this.autoSave();
   }
 
-  async importState(raw: string): Promise<boolean> {
-    const parsed = this.saveManager.importSave(raw);
-    if (!parsed) return false;
-    const oldVersion = parsed.version ?? 1;
-    const state = migrateState(parsed);
+  /** Makes a loaded save the running game (the same steps for the autosave, an import and a restored backup). */
+  private adoptState(saved: GameState): void {
+    const oldVersion = saved.version ?? 1;
+    const state = migrateState(saved);
     this.stateManager.loadState(state);
     this.rng.seed = state.randomSeed;
     this.buildingSystem.syncNextId(state);
@@ -234,6 +242,43 @@ export class GameEngine {
     this.explorationSystem.ensureMap();
     this.incidentSystem.sync(state);
     this.incidentSystem.prune();
+  }
+
+  /** The game as it runs now, exactly as it would be saved. */
+  private currentJson(): string {
+    this.stateManager.applyDelta({ path: 'timestamp', value: Date.now() });
+    this.stateManager.applyDelta({ path: 'randomSeed', value: this.rng.seed });
+    return JSON.stringify(this.stateManager.state);
+  }
+
+  /** Keeps the current game as the "previous" backup before something replaces it (new game, import, Genesis, restore). */
+  private async keepPrevious(): Promise<void> {
+    if (this.saveBlocked) return;
+    await this.saveManager.snapshotPrev(this.currentJson());
+  }
+
+  /** The player chose to carry on after a save problem (a new game, or playing without saving). */
+  allowSaving(): void {
+    this.loadProblem = null;
+    this.saveBlocked = false;
+  }
+
+  async importState(raw: string): Promise<boolean> {
+    const parsed = this.saveManager.importSave(raw);
+    if (!parsed) return false;
+    await this.keepPrevious();
+    this.adoptState(parsed);
+    this.eraSystem.catchUp();
+    await this.autoSave();
+    return true;
+  }
+
+  /** Puts a backup back as the running game. The game it replaces is kept as the "previous" backup. */
+  async restoreBackup(kind: BackupKind): Promise<boolean> {
+    const state = await this.saveManager.readBackup(kind);
+    if (!state) return false;
+    await this.keepPrevious();
+    this.adoptState(state);
     this.eraSystem.catchUp();
     await this.autoSave();
     return true;
@@ -247,12 +292,15 @@ export class GameEngine {
   async rebirth(): Promise<void> {
     const old = this.stateManager.state;
     if (!this.metaSystem.canRebirth(old)) return;
+    await this.keepPrevious();
     const gain = this.metaSystem.rebirthGain(old);
     const fresh = createInitialState();
     fresh.prestige = {
       ...old.prestige,
       rebirthCount: old.prestige.rebirthCount + 1,
       totalIsotope7Earned: old.prestige.totalIsotope7Earned + gain,
+      // Remember which chapters this timeline told (chapters finished before this field existed are in storyFlags).
+      storySeen: [...new Set([...(old.prestige.storySeen ?? []), ...old.storyFlags.filter(f => f.startsWith('story:')).map(f => f.slice(6))])],
     };
     fresh.resources.isotope7.amount = old.resources.isotope7.amount + gain;
     fresh.achievements = [...old.achievements];
@@ -265,8 +313,12 @@ export class GameEngine {
     // [LateGame B4] the weekly challenge (and its cosmetics) runs on real weeks, not timelines.
     fresh.lateGame.weekly = { ...(old.lateGame?.weekly ?? fresh.lateGame.weekly), base: snapshot(fresh) };
     fresh.stats = { ...old.stats, totalPrestigeResets: old.stats.totalPrestigeResets + 1 };
+    // Every clock below counts play-seconds, and the play clock carries over, so each is set relative to now (not to zero).
     fresh.nextEventAt = fresh.stats.totalPlayTime + 120;
     fresh.nextArrivalAt = fresh.stats.totalPlayTime + 60;
+    fresh.nextIncidentAt = fresh.stats.totalPlayTime + 900;
+    // Unspent rush charges are a gift from the daily crates: Genesis does not take them.
+    fresh.rush = Math.max(old.rush ?? 0, fresh.rush);
     fresh.createdAt = Date.now();
     this.stateManager.loadState(fresh);
     this.rng.seed = fresh.randomSeed;
@@ -309,7 +361,8 @@ export class GameEngine {
     this.resourceSystem.overflowLog = {};
     const creditsBefore = this.resourceSystem.creditsMade;
 
-    const stepSize = seconds > 300 ? OFFLINE_STEP_SECONDS : 1;
+    // Short absences are simulated finely, long ones coarsely: the cost grows with the number of steps (and with the crowd).
+    const stepSize = seconds > 300 ? OFFLINE_STEP_SECONDS : seconds > 60 ? 5 : 1;
     let remaining = seconds;
     try {
       while (remaining > 0) {
@@ -419,6 +472,7 @@ export class GameEngine {
 
     window.addEventListener('pagehide', () => void this.autoSave());
 
+    this.lastWall = Date.now();
     let hiddenAt = 0;
     document.addEventListener('visibilitychange', () => {
       if (document.hidden) {
@@ -429,11 +483,25 @@ export class GameEngine {
       const away = hiddenAt ? (Date.now() - hiddenAt) / 1000 : 0;
       hiddenAt = 0;
       if (away < 2) return;
-      const report = this.simulate(Math.min(away, OFFLINE_MAX_SECONDS), away > 60 ? this.offlineEfficiency() : 1);
-      this.lastTickTime = performance.now();
-      this.tickAccumulator = 0;
-      if (away > 60) bus.emit('offline:processed', report);
+      // The frame loop may already have noticed the gap (a frame can run before this event): do not count it twice.
+      if (Date.now() - this.lastWall < away * 1000 - 2000) return;
+      this.comeBack(away);
     });
+  }
+
+  /** Wall-clock time of the previous frame: a long gap while the page believes it is visible means the device slept (no visibility event). */
+  private lastWall = 0;
+
+  /** The player is back after `away` seconds: the bunker works through the gap, and the new "last seen" time is saved right away. */
+  private comeBack(away: number): void {
+    const report = this.simulate(Math.min(away, OFFLINE_MAX_SECONDS), away > 60 ? this.offlineEfficiency() : 1);
+    this.lastTickTime = performance.now();
+    this.tickAccumulator = 0;
+    this.lastWall = Date.now();
+    // Without this a game closed in the next half minute would count the same absence again on the next start.
+    this.stateManager.applyDelta({ path: 'timestamp', value: Date.now() });
+    this.requestSave();
+    if (away > 60) bus.emit('offline:processed', report);
   }
 
   stop(): void {
@@ -453,6 +521,13 @@ export class GameEngine {
     if (!this.running) return;
     // One bad frame must never stop the game: whatever happens, the next frame is already booked.
     this.rafId = requestAnimationFrame(this.loop);
+
+    // A laptop that slept or a phone that froze the page without telling it: the wall clock jumped, the frame clock did not.
+    const wall = Date.now();
+    const slept = this.lastWall > 0 && wall - this.lastWall > SLEEP_GAP_MS && !document.hidden;
+    const sleptFor = (wall - this.lastWall) / 1000;
+    this.lastWall = wall;
+    if (slept) this.comeBack(sleptFor);
 
     const elapsed = Math.min(timestamp - this.lastTickTime, 1000);
     this.lastTickTime = timestamp;
@@ -486,7 +561,7 @@ export class GameEngine {
 
     if (Date.now() - this.lastSaveTime > AUTO_SAVE_INTERVAL) {
       this.lastSaveTime = Date.now();
-      this.autoSave().catch(err => logCrash('save', err));
+      void this.autoSave();
     }
   };
 
@@ -525,10 +600,24 @@ export class GameEngine {
     }));
   }
 
+  /** Writes the game to storage. Never throws: a failed write is counted, logged, and reported to the player after the second miss. */
   private async autoSave(): Promise<void> {
-    this.stateManager.applyDelta({ path: 'timestamp', value: Date.now() });
-    this.stateManager.applyDelta({ path: 'randomSeed', value: this.rng.seed });
-    await this.saveManager.save(this.stateManager.getSnapshot());
+    if (this.saveBlocked) return;
+    // Another copy of the game started after this one: it owns the save now, and this one must not write over it.
+    if (!stillOwner()) {
+      this.saveBlocked = true;
+      bus.emit('save:superseded');
+      return;
+    }
+    try {
+      await this.saveManager.saveJson(this.currentJson());
+      if (this.saveFailures > 0) bus.emit('save:recovered');
+      this.saveFailures = 0;
+    } catch (err) {
+      logCrash('save', err);
+      this.saveFailures++;
+      if (this.saveFailures === 2 || this.saveFailures % 20 === 0) bus.emit('save:failed', this.saveFailures);
+    }
   }
 
   private offlineEfficiency(): number {

@@ -14,6 +14,12 @@ export function localDay(ms = Date.now()): string {
   return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
 }
 
+/** Noon yesterday by the calendar (not "now minus 24 hours", which lands on the wrong date on a day the clocks change). */
+function yesterdayMs(): number {
+  const d = new Date();
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate() - 1, 12).getTime();
+}
+
 export interface SupplyClaim {
   streak: number;
   gains: Partial<Record<ResourceType, number>>;
@@ -41,7 +47,7 @@ export class SupplySystem {
   /** The streak the next crate counts as: one more if yesterday's was opened, else back to 1. */
   nextStreak(state: GameState): number {
     const last = state.supplyDrop?.day;
-    return last && last === localDay(Date.now() - 86_400_000) ? (state.supplyDrop.streak ?? 0) + 1 : 1;
+    return last && last === localDay(yesterdayMs()) ? (state.supplyDrop.streak ?? 0) + 1 : 1;
   }
 
   /** What the crate holds before storage limits. */

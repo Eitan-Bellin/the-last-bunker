@@ -94,6 +94,7 @@ export class StorySystem {
     }
     if (effect) this.apply(effect, out);
     this.sm.applyDelta({ path: 'storyFlags', value: [...new Set([...this.sm.state.storyFlags, ...flags, ...(effect?.flags ?? [])])] });
+    this.sm.applyDelta({ path: 'prestige.storySeen', value: [...new Set([...(this.sm.state.prestige.storySeen ?? []), ch.id])] });
     this.offered = null;
     this.nextAllowed = this.sm.state.stats.totalPlayTime + CHAPTER_GAP;
     bus.emit('story:done', ch.id);

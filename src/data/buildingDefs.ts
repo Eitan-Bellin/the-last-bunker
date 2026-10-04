@@ -1,5 +1,6 @@
 import raw from './buildings.json';
 import { masteryMultiplier } from './mastery'; // [LateGame B3]
+import { timeOfDay } from './dayCycle';
 import type { BuildingInstance, BuildingType, GameState, SurvivorStats } from '../core/GameState';
 
 export interface ProductionEntry {
@@ -129,9 +130,14 @@ export function workforceMultiplier(state: GameState, building: BuildingInstance
   if (workers.length === 0) return staffing;
 
   let skill = 0;
+  // Night owls work better after dark; a loner works better with the room to themselves.
+  const night = timeOfDay(state.stats.totalPlayTime).night > 0.5;
   for (const w of workers) {
     const stat = def.optimalStat ? w.stats[def.optimalStat] : 5;
-    skill += 1 + (stat - 5) * (def.statBonusPerPoint ?? 0.05) + traitBonus(w.traits, building.type);
+    let personal = traitBonus(w.traits, building.type);
+    if (w.traits.includes('nightOwl') && night) personal += 0.2;
+    if (w.traits.includes('loner') && workers.length === 1) personal += 0.25;
+    skill += 1 + (stat - 5) * (def.statBonusPerPoint ?? 0.05) + personal;
   }
   skill /= workers.length;
   // [LateGame B3] Mastery: +5% per rank above 1, +15% for a Master.

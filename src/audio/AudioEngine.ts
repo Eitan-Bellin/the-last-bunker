@@ -13,6 +13,8 @@ export type { Sfx } from './sfx';
 export type MusicMood = 'shelter' | 'dark';
 
 const STORAGE_KEY = 'lastbunker_sound';
+/** The player's music and effects levels (0..1, 1 = the mix as it was designed). A device preference, not part of the save. */
+const VOLUME_KEY = 'lastbunker_vol';
 const MUSIC_LEVEL = 0.5;
 const SFX_LEVEL = 0.8;
 const AMBIENCE_LEVEL = 0.55;
@@ -89,6 +91,9 @@ export class AudioEngine {
   private beds = new Map<BedKey, GainNode>();
   private zoom: ZoomMix = 'mid';
   private musicLevel = MUSIC_LEVEL;
+  private musicOut: GainNode | null = null;
+  private fxOut: GainNode | null = null;
+  private volumes = { music: 1, fx: 1 };
 
   constructor() {
     let stored: string | null = null;
@@ -98,6 +103,13 @@ export class AudioEngine {
       stored = null;
     }
     this.enabled = stored !== 'off';
+    try {
+      const v = JSON.parse(localStorage.getItem(VOLUME_KEY) ?? 'null') as { music?: number; fx?: number } | null;
+      const ok = (n: unknown) => (typeof n === 'number' && n >= 0 && n <= 1 ? n : 1);
+      if (v) this.volumes = { music: ok(v.music), fx: ok(v.fx) };
+    } catch {
+      // defaults
+    }
     const unlock = () => {
       window.removeEventListener('pointerdown', unlock);
       if (this.enabled) void this.start();
@@ -112,6 +124,28 @@ export class AudioEngine {
 
   get isOn(): boolean {
     return this.enabled;
+  }
+
+  /** Music and effects levels (0..1). Effects include the room ambience. */
+  get levels(): { music: number; fx: number } {
+    return { ...this.volumes };
+  }
+
+  setLevels(music: number, fx: number): void {
+    this.volumes = { music: Math.max(0, Math.min(1, music)), fx: Math.max(0, Math.min(1, fx)) };
+    try {
+      localStorage.setItem(VOLUME_KEY, JSON.stringify(this.volumes));
+    } catch {
+      // the level simply won't persist
+    }
+    this.applyLevels();
+  }
+
+  private applyLevels(): void {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    this.musicOut?.gain.setTargetAtTime(this.volumes.music, t, 0.05);
+    this.fxOut?.gain.setTargetAtTime(this.volumes.fx, t, 0.05);
   }
 
   /** For crash records. */
@@ -147,9 +181,15 @@ export class AudioEngine {
     limiter.attack.value = 0.003;
     limiter.release.value = 0.2;
     this.master.connect(limiter).connect(this.ctx.destination);
-    this.musicBus = this.bus(MUSIC_LEVEL);
-    this.sfxBus = this.bus(SFX_LEVEL);
-    this.ambBus = this.bus(AMBIENCE_LEVEL);
+    this.musicOut = this.ctx.createGain();
+    this.fxOut = this.ctx.createGain();
+    this.musicOut.connect(this.master);
+    this.fxOut.connect(this.master);
+    this.musicOut.gain.value = this.volumes.music;
+    this.fxOut.gain.value = this.volumes.fx;
+    this.musicBus = this.bus(MUSIC_LEVEL, this.musicOut);
+    this.sfxBus = this.bus(SFX_LEVEL, this.fxOut);
+    this.ambBus = this.bus(AMBIENCE_LEVEL, this.fxOut);
     this.rendering = true;
     try {
       await this.renderAll();
@@ -158,10 +198,10 @@ export class AudioEngine {
     }
   }
 
-  private bus(level: number): GainNode {
+  private bus(level: number, dest: AudioNode): GainNode {
     const g = this.ctx!.createGain();
     g.gain.value = level;
-    g.connect(this.master!);
+    g.connect(dest);
     return g;
   }
 

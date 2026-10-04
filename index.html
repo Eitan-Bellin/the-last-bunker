@@ -19,6 +19,8 @@
 </head>
 <body>
   <canvas id="game-canvas"></canvas>
+  <!-- Shown from the very first paint; main.ts fades it out once the game is ready (the HUD used to show zeros on a black screen). -->
+  <div id="splash" style="position:fixed;inset:0;z-index:100001;display:flex;align-items:center;justify-content:center;background:#07090c"><div class="splash-mark" style="font:700 36px Rubik,system-ui,sans-serif;color:#f1d58a">הבונקר האחרון</div></div>
   <script type="module" src="/src/main.ts"></script>
 </body>
 </html>

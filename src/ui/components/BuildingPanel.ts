@@ -3,7 +3,7 @@ import type { GameEngine } from '../../core/GameEngine';
 import { i18n } from '../../i18n/I18nManager';
 import { getDef, effectiveLevel, workforceMultiplier, traitBonus, compoundNeighbors } from '../../data/buildingDefs';
 import { Sheet } from './Sheet';
-import { portraitFor, portraitUrl } from '../../data/portraits';
+import { genderOf, portraitFor, portraitUrl } from '../../data/portraits';
 import { bunkerDefense } from '../../systems/EventSystem';
 import { BUILDING_ICONS, RESOURCE_ICONS, STAT_ICONS, bar, button, costRow, el, setBar, setRich } from '../dom';
 import { INCIDENTS, quickFixCost } from '../../data/incidents';
@@ -331,7 +331,7 @@ export class BuildingPanel {
       const name = el('div', 'worker-name', this.engine.populationSystem.getLocalizedName(s, locale));
       const job = s.assignedBuildingId ? state.buildings.find(x => x.id === s.assignedBuildingId) : undefined;
       const jobName = job ? getDef(job.type)?.name[locale] ?? '' : '';
-      name.appendChild(el('span', 'worker-level', ` · ${job ? i18n.t('building.worksAt', { name: jobName }) : i18n.t('building.idle')}`));
+      name.appendChild(el('span', 'worker-level', ` · ${job ? i18n.t('building.worksAt', { name: jobName, g: genderOf(s) }) : i18n.t('building.idle')}`));
       row.appendChild(name);
       if (stat) row.appendChild(el('span', 'worker-stat', `${STAT_ICONS[stat]} ${s.stats[stat]}`));
       if (traitBonus(s.traits, b.type) > 0) row.appendChild(el('span', 'worker-trait', '[[star]]'));

@@ -8,6 +8,7 @@ import type { MetaSystem } from '../../systems/MetaSystem';
 import { Sheet } from './Sheet';
 import { button, el } from '../dom';
 import { uiSound } from '../../audio/uiSound';
+import type { BackupInfo, BackupKind } from '../../core/SaveManager';
 
 export type MenuTab = 'settings' | 'stats' | 'achievements' | 'genesis';
 
@@ -43,6 +44,20 @@ export interface MenuActions {
   /** Notifications (S6): current label, and turning them on (asks the system) or off. */
   notifications: () => string;
   toggleNotifications: () => Promise<void>;
+  /** Saves to a file / imports from a file (the player's own copy, outside the browser's storage). */
+  exportFile: () => void;
+  importFile: () => void;
+  /** The automatic backups that exist, and putting one back (the app asks for confirmation first). */
+  listBackups: () => Promise<BackupInfo[]>;
+  restoreBackup: (kind: BackupKind) => void;
+  /** Music and effects volume, 0..1. */
+  getLevels: () => { music: number; fx: number };
+  setLevels: (music: number, fx: number) => void;
+  /** Text size: current label and cycling to the next. */
+  textSize: () => string;
+  cycleTextSize: () => void;
+  /** Whether the browser promised to keep the save. */
+  persistLabel: () => string;
 }
 
 export class MenuPanel {
@@ -51,6 +66,7 @@ export class MenuPanel {
   private actions: MenuActions;
   private tab: MenuTab = 'settings';
   private signature = '';
+  private backups: BackupInfo[] | null = null;
 
   constructor(engine: GameEngine, actions: MenuActions) {
     this.engine = engine;
@@ -62,6 +78,16 @@ export class MenuPanel {
     this.signature = '';
     this.refresh(this.engine.stateManager.state);
     this.sheet.show();
+    this.loadBackups();
+  }
+
+  /** Reads the list of backups (they live in storage, so it is asynchronous) and redraws when it arrives. */
+  loadBackups(): void {
+    void this.actions.listBackups().then(list => {
+      this.backups = list;
+      this.signature = '';
+      if (this.sheet.isVisible) this.refresh(this.engine.stateManager.state);
+    }).catch(() => undefined);
   }
 
   hide(): void {
@@ -77,7 +103,8 @@ export class MenuPanel {
     const sig = [
       this.tab, state.achievements.length, meta.isotope(state), JSON.stringify(state.prestige.upgrades),
       meta.canRebirth(state), this.tab === 'stats' ? Math.floor(state.stats.totalPlayTime / 5) : 0,
-      this.tab === 'genesis' ? meta.rebirthGain(state) : 0, this.actions.isSoundOn(), this.actions.graphics(), this.actions.brightness(),
+      this.tab === 'genesis' ? meta.rebirthGain(state) : 0, this.actions.isSoundOn(), this.actions.graphics(), this.actions.brightness(), this.actions.textSize(), this.actions.persistLabel(),
+      this.backups?.map(b => `${b.kind}${b.timestamp}`).join(',') ?? 'loading',
       this.tab === 'genesis' ? meta.rebirthRequirements(state).map(r => r.current).join(',') : '',
     ].join('|');
     if (sig === this.signature) return;
@@ -125,6 +152,25 @@ export class MenuPanel {
         this.signature = '';
         this.refresh(this.engine.stateManager.state);
       }));
+    const levels = this.actions.getLevels();
+    const slider = (labelKey: string, icon: string, value: number, onInput: (v: number) => void): HTMLElement => {
+      const row = el('div', 'bp-row vol-row');
+      const input = document.createElement('input');
+      input.type = 'range';
+      input.min = '0';
+      input.max = '100';
+      input.step = '5';
+      input.value = String(Math.round(value * 100));
+      input.className = 'vol-slider';
+      input.setAttribute('aria-label', i18n.t(labelKey));
+      // No redraw while dragging: replacing the slider under the finger would end the drag.
+      input.addEventListener('input', () => onInput(Number(input.value) / 100));
+      input.addEventListener('change', () => uiSound('switch'));
+      row.append(el('span', '', `${icon} ${i18n.t(labelKey)}`), input);
+      return row;
+    };
+    const music = slider('settings.volumeMusic', '[[sound]]', levels.music, v => this.actions.setLevels(v, this.actions.getLevels().fx));
+    const fx = slider('settings.volumeFx', '[[sound]]', levels.fx, v => this.actions.setLevels(this.actions.getLevels().music, v));
     const gfx = el('div', 'bp-row');
     gfx.append(el('span', '', `[[sparkle]] ${i18n.t('settings.graphics')}`),
       button(this.actions.graphics(), 'btn-small', () => {
@@ -142,6 +188,14 @@ export class MenuPanel {
         this.signature = '';
         this.refresh(this.engine.stateManager.state);
       }));
+    const textSize = el('div', 'bp-row');
+    textSize.append(el('span', '', `[[note]] ${i18n.t('settings.textSize')}`),
+      button(this.actions.textSize(), 'btn-small', () => {
+        uiSound('switch');
+        this.actions.cycleTextSize();
+        this.signature = '';
+        this.refresh(this.engine.stateManager.state);
+      }));
     // [offline agent] Notifications toggle: turning it on asks the system for permission.
     const notify = el('div', 'bp-row');
     notify.append(el('span', '', `[[bell]] ${i18n.t('settings.notifications')}`),
@@ -151,10 +205,11 @@ export class MenuPanel {
         this.signature = '';
         this.refresh(this.engine.stateManager.state);
       }));
+    const notifyHint = el('div', 'bp-hint', i18n.t('settings.notifyWebHint'));
     const diag = el('div', 'bp-row');
     diag.append(el('span', '', `[[chart]] ${i18n.t('settings.diagnostics')}`),
       button(i18n.t('settings.diagnosticsCopy'), 'btn-small', () => { uiSound('switch'); this.actions.copyDiagnostics(); }));
-    general.append(lang, sound, gfx, gfxHint, bright, notify, diag);
+    general.append(lang, sound, music, fx, gfx, gfxHint, bright, textSize, notify, notifyHint, diag);
     box.appendChild(general);
 
     const saves = el('div', 'bp-card');
@@ -174,12 +229,36 @@ export class MenuPanel {
           // clipboard blocked; the text stays selected in the box for manual copy
         }
       }),
+      button(i18n.t('settings.exportFile'), 'btn-small', () => this.actions.exportFile()),
       button(i18n.t('settings.import'), 'btn-small', () => {
         if (area.value.trim()) this.actions.importSave(area.value);
       }),
+      button(i18n.t('settings.importFile'), 'btn-small', () => this.actions.importFile()),
     );
     saves.append(area, row);
+    const persist = el('div', 'bp-row');
+    persist.append(el('span', '', `[[lock]] ${i18n.t('settings.persist')}`), el('span', 'bp-value', this.actions.persistLabel()));
+    saves.append(persist, el('div', 'bp-hint', i18n.t('settings.persistHint')));
     box.appendChild(saves);
+
+    const backupCard = el('div', 'bp-card');
+    backupCard.appendChild(el('div', 'bp-section-title', `[[refresh]] ${i18n.t('settings.backups')}`));
+    if (this.backups && this.backups.length > 0) {
+      const locale = i18n.currentLocale === 'he' ? 'he-IL' : 'en-GB';
+      for (const b of this.backups) {
+        const r = el('div', 'bp-row backup-row');
+        const when = new Date(b.timestamp).toLocaleString(locale, { dateStyle: 'short', timeStyle: 'short' });
+        r.append(
+          el('span', 'backup-text', i18n.t('settings.backups.row', { kind: i18n.t(`save.kind.${b.kind}`), time: when, n: b.people })),
+          button(i18n.t('settings.backups.restore'), 'btn-small', () => this.actions.restoreBackup(b.kind)),
+        );
+        backupCard.appendChild(r);
+      }
+    } else if (this.backups) {
+      backupCard.appendChild(el('div', 'bp-hint', i18n.t('settings.backups.none')));
+    }
+    backupCard.appendChild(el('div', 'bp-hint', i18n.t('settings.backups.hint')));
+    box.appendChild(backupCard);
 
     const danger = el('div', 'bp-card');
     danger.appendChild(button(`[[warning]] ${i18n.t('settings.newGame')}`, 'btn-ghost danger-btn', () => this.actions.newGame()));

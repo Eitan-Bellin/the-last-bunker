@@ -70,10 +70,12 @@ export class PopulationSystem {
     const died: SurvivorState[] = [];
     const leveled: { survivor: SurvivorState; stat: keyof SurvivorStats }[] = [];
 
+    // Most of a survivor's mood is the same for everyone: work it out once per step, not once per person (it was O(n²)).
+    const mood = this.sharedMood(state);
     const survivors = state.survivors.map(original => {
       const s: SurvivorState = { ...original, stats: { ...original.stats } };
 
-      const target = this.getTargetHappiness(state, s);
+      const target = this.fastTargetHappiness(state, s, mood);
       s.happiness = Math.max(0, Math.min(100, s.happiness + (target - s.happiness) * MORALE_DRIFT_PER_SECOND * dt));
 
       if (starving || thirsty) {
@@ -227,6 +229,53 @@ export class PopulationSystem {
     if (s.traits.includes('optimist')) factors.push({ key: 'optimist', value: 10 });
     if (s.traits.includes('pessimist')) factors.push({ key: 'pessimist', value: -10 });
     return factors;
+  }
+
+  /**
+   * The parts of morale that do not depend on who is asking. Must stay in step with getMoraleFactors (the list the
+   * People panel shows): that function is the readable version, this is the same sum done once for everybody.
+   */
+  private sharedMood(state: GameState): { sum: number; leaders: number; ids: Set<string> } {
+    let sum = 45;
+    if (state.resources.food.amount <= 0) sum -= 30;
+    if (state.resources.water.amount <= 0) sum -= 30;
+    if (state.survivors.length > state.maxPopulation) sum -= 15;
+    const crowd = Math.min(14, Math.max(0, Math.round((state.survivors.length - 12) * 0.4)));
+    if (crowd > 0) sum -= crowd;
+    if ((state.powerRatio ?? 1) < 0.99) sum -= Math.round(15 * (1 - state.powerRatio)) + 5;
+    const canteen = this.getCanteenBonus(state);
+    if (canteen > 0) sum += Math.round(canteen);
+    const now = state.stats.totalPlayTime;
+    const buffs = state.moraleBuffs.filter(b => b.expiresAt > now).reduce((acc, b) => acc + b.value, 0);
+    sum += buffs;
+    const research = researchMorale(state);
+    if (research > 0) sum += research;
+    const specs = specTotal(state, 'morale');
+    if (specs > 0) sum += specs;
+    let kids = 0;
+    let leaders = 0;
+    const ids = new Set<string>();
+    for (const o of state.survivors) {
+      ids.add(o.id);
+      if (o.child) kids++;
+      if (o.traits.includes('naturalLeader')) leaders++;
+    }
+    if (kids > 0) sum += Math.min(6, kids * 2);
+    sum -= 4 * (state.incidents?.length ?? 0);
+    return { sum, leaders, ids };
+  }
+
+  /** One survivor's target mood from the shared part plus what is personal to them. Same result as getTargetHappiness. */
+  private fastTargetHappiness(state: GameState, s: SurvivorState, mood: { sum: number; leaders: number; ids: Set<string> }): number {
+    let total = mood.sum;
+    if (!s.isOnMission) total += s.assignedBuildingId ? 15 : -10;
+    if (s.health < 50) total -= 10;
+    if (s.partnerId && mood.ids.has(s.partnerId)) total += 6;
+    total += griefFor(state, s.id);
+    if (mood.leaders - (s.traits.includes('naturalLeader') ? 1 : 0) > 0) total += 5;
+    if (s.traits.includes('optimist')) total += 10;
+    if (s.traits.includes('pessimist')) total -= 10;
+    return Math.max(0, Math.min(100, total));
   }
 
   getTargetHappiness(state: GameState, s: SurvivorState): number {

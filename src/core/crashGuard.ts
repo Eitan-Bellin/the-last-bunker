@@ -15,6 +15,8 @@ const LITE_KEY = 'lastbunker_lite';
 const HEARTBEAT_MS = 4000;
 const MAX_LOG = 30;
 const HOUR = 3_600_000;
+/** Lite mode lasts this long, then the normal graphics return (closing the app by hand twice used to switch it on for good). */
+const LITE_TTL = 3 * 24 * HOUR;
 
 export interface CrashEntry {
   t: number;
@@ -122,7 +124,18 @@ let lite: boolean | null = null;
 export function isLiteMode(): boolean {
   if (lite === null) {
     try {
-      lite = localStorage.getItem(LITE_KEY) === '1';
+      const v = localStorage.getItem(LITE_KEY);
+      if (v === null) lite = false;
+      else {
+        // Older versions stored '1' with no time: that starts its countdown now.
+        const since = v === '1' ? Date.now() : Number(v);
+        if (v === '1') localStorage.setItem(LITE_KEY, String(since));
+        lite = Number.isFinite(since) && Date.now() - since < LITE_TTL;
+        if (!lite) {
+          localStorage.removeItem(LITE_KEY);
+          localStorage.removeItem(DEATHS_KEY);
+        }
+      }
     } catch {
       lite = false;
     }
@@ -164,7 +177,7 @@ export function installCrashGuard(info: () => Record<string, unknown>): GuardSta
     write(DEATHS_KEY, deaths);
     if (deaths.length >= 2 && !isLiteMode()) {
       try {
-        localStorage.setItem(LITE_KEY, '1');
+        localStorage.setItem(LITE_KEY, String(Date.now()));
         lite = true;
         liteJustEnabled = true;
       } catch {

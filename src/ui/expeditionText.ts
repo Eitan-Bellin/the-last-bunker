@@ -2,6 +2,7 @@ import type { JournalEntry } from '../core/GameState';
 import { i18n } from '../i18n/I18nManager';
 import { expeditionEvent } from '../data/expeditionEvents';
 import { POIS } from '../data/surface';
+import { genderOfName } from '../data/portraits';
 import { el } from './dom';
 
 function clock(t: number): string {
@@ -23,7 +24,11 @@ export function journalLine(e: JournalEntry, place: string, localName: (n: strin
     return { icon: '[[chat]]', text: opt ? `«${opt.label[locale]}» · ${opt.result[locale]}${auto}` : '' };
   }
   const vars: Record<string, string | number> = { place, ...(e.vars ?? {}) };
-  if (typeof vars.name === 'string') vars.name = localName(vars.name);
+  if (typeof vars.name === 'string') {
+    const g = genderOfName(vars.name);
+    vars.name = localName(vars.name);
+    if (g) vars.g = g;
+  }
   if (typeof vars.poi === 'string') vars.poi = POIS[vars.poi]?.name[locale] ?? vars.poi;
   const icon: Record<string, string> = {
     depart: '[[door]]', arrive: '[[flag]]', trouble: '[[warning]]', poi: '[[star]]', recruit: '[[person]]', injury: '[[bandage]]', return: '[[vault]]',

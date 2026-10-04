@@ -38,27 +38,38 @@ export function noiseBuffer(ctx: BaseAudioContext, seconds: number, color: 'whit
   return buf;
 }
 
+/** The computed impulse responses by sample rate and shape: every render used to regenerate the same ~280k samples. */
+const impulseCache = new Map<string, Float32Array<ArrayBuffer>[]>();
+
 /** Synthetic impulse response of a large concrete room: early slap-backs plus a dark diffuse tail. */
 export function concreteImpulse(ctx: BaseAudioContext, seconds = 3.2, decay = 0.9, seed = 11): AudioBuffer {
   const len = Math.floor(ctx.sampleRate * seconds);
-  const buf = ctx.createBuffer(2, len, ctx.sampleRate);
-  const rnd = seeded(seed);
-  for (let ch = 0; ch < 2; ch++) {
-    const d = buf.getChannelData(ch);
-    let lp = 0;
-    for (let i = 0; i < len; i++) {
-      const t = i / ctx.sampleRate;
-      const env = Math.exp(-t / decay) * (t < 0.012 ? t / 0.012 : 1);
-      const n = rnd() * 2 - 1;
-      const cutoff = 0.55 - 0.45 * Math.min(1, t / seconds);
-      lp += (n - lp) * cutoff;
-      d[i] = lp * env * 0.6;
+  const key = `${ctx.sampleRate}|${seconds}|${decay}|${seed}`;
+  let channels = impulseCache.get(key);
+  if (!channels) {
+    channels = [new Float32Array(len), new Float32Array(len)];
+    const rnd = seeded(seed);
+    for (let ch = 0; ch < 2; ch++) {
+      const d = channels[ch];
+      let lp = 0;
+      for (let i = 0; i < len; i++) {
+        const t = i / ctx.sampleRate;
+        const env = Math.exp(-t / decay) * (t < 0.012 ? t / 0.012 : 1);
+        const n = rnd() * 2 - 1;
+        const cutoff = 0.55 - 0.45 * Math.min(1, t / seconds);
+        lp += (n - lp) * cutoff;
+        d[i] = lp * env * 0.6;
+      }
+      for (const [time, amp] of [[0.023, 0.5], [0.041, 0.38], [0.067, 0.3], [0.089, 0.22], [0.131, 0.16]]) {
+        const idx = Math.floor((time + (ch ? 0.004 : 0)) * ctx.sampleRate);
+        if (idx < len) d[idx] += amp * (ch ? -1 : 1);
+      }
     }
-    for (const [time, amp] of [[0.023, 0.5], [0.041, 0.38], [0.067, 0.3], [0.089, 0.22], [0.131, 0.16]]) {
-      const idx = Math.floor((time + (ch ? 0.004 : 0)) * ctx.sampleRate);
-      if (idx < len) d[idx] += amp * (ch ? -1 : 1);
-    }
+    impulseCache.set(key, channels);
   }
+  const buf = ctx.createBuffer(2, len, ctx.sampleRate);
+  buf.copyToChannel(channels[0], 0);
+  buf.copyToChannel(channels[1], 1);
   return buf;
 }
 

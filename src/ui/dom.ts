@@ -1,4 +1,5 @@
 import type { GameState, ResourceType, SurvivorStats } from '../core/GameState';
+import { vibrate } from '../utils/haptics';
 import { i18n } from '../i18n/I18nManager';
 import { iconSvg, isIcon, tok, type IconName } from './icons';
 import { uiSound } from '../audio/uiSound';
@@ -47,7 +48,7 @@ export const BUILDING_ICONS: Record<string, string> = {
 const TOKEN = /\[\[([a-zA-Z0-9]+)\]\]/g;
 
 /** A signed number ("+2.9", "−1", "+10%", "+1.2K") that does not continue a word or a range like "3-5". */
-const SIGNED = /(?<![\p{L}\p{N}])[+\-−–]\s?\d[\d.,]*(?:%|[KMB](?!\p{L}))?/gu;
+const SIGNED = /[+\-−–]\s?\d[\d.,]*(?:%|[KMB](?!\p{L}))?/gu;
 
 /**
  * In right-to-left text a leading sign is a neutral character and drifts to the far side ("2.9+", "1–").
@@ -56,7 +57,8 @@ const SIGNED = /(?<![\p{L}\p{N}])[+\-−–]\s?\d[\d.,]*(?:%|[KMB](?!\p{L}))?/gu
  */
 export function bidiNumbers(text: string): string {
   if (document.documentElement.dir !== 'rtl' || !/[+\-−–]\s?\d/.test(text)) return text;
-  return text.replace(SIGNED, m => `⁦${m}⁩`);
+  // A sign glued to a letter or digit ("A-5", "3-5") is not a signed number. (No regex lookbehind: older iPhones cannot even parse one.)
+  return text.replace(SIGNED, (m, offset: number) => (/[\p{L}\p{N}]/u.test(text[offset - 1] ?? '') ? m : `⁦${m}⁩`));
 }
 
 /** Fills a node with text in which [[icon]] tokens become inline SVG icons. */
@@ -125,16 +127,16 @@ export function button(label: string, className: string, onClick: () => void, di
   b.addEventListener('click', (e) => {
     e.stopPropagation();
     if (b.disabled) {
-      navigator.vibrate?.([10, 40, 10]);
+      vibrate([10, 40, 10]);
       return;
     }
-    navigator.vibrate?.(8);
+    vibrate(8);
     if (/\btab(-btn)?\b/.test(b.className)) uiSound('tab');
     onClick();
   });
   return b;
 }
 
-export function localizedTrait(trait: string): string {
-  return i18n.t(`traits.${trait}`);
+export function localizedTrait(trait: string, gender?: 'm' | 'f'): string {
+  return i18n.t(`traits.${trait}`, gender ? { g: gender } : undefined);
 }

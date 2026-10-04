@@ -1,4 +1,5 @@
 import { GameEngine, type OfflineReport } from './core/GameEngine';
+import { vibrate } from './utils/haptics';
 import { ProjectsPanel } from './ui/components/ProjectsPanel'; // [LateGame B1]
 import { doneProjects, getProject } from './data/projects'; // [LateGame B1]
 import { getPartner } from './data/trade'; // [LateGame B2]
@@ -43,7 +44,11 @@ import { EraPanel, showEraBanner } from './ui/components/EraPanel';
 import { playIntro } from './ui/components/Intro';
 import { ERAS, eraOf } from './data/eras';
 import { getLore } from './data/lore';
-import { portraitFor, portraitUrl } from './data/portraits';
+import { genderOf, genderOfName, portraitFor, portraitUrl } from './data/portraits';
+import { ensurePersistentStorage, getPersistStatus, type BackupInfo, type BackupKind } from './core/SaveManager';
+import { claimOwnership, onSuperseded } from './core/singleInstance';
+import { currentTextSize, cycleTextSize } from './ui/textSize';
+import { hideSplash } from './ui/splash';
 import { RUIN_KINDS } from './data/ruins';
 import type { RuinClearedInfo } from './systems/RestorationSystem';
 import { StoryDialog } from './ui/components/StoryDialog';
@@ -62,6 +67,7 @@ import './style.css';
 import './styles/story.css';
 import './styles/bunker-os.css';
 import './styles/depth.css';
+import './styles/touch.css';
 
 /** Icons drawn inside the Pixi scene (plaques, signs, popups); rasterized once at startup. */
 const SCENE_ICONS: IconName[] = [
@@ -123,6 +129,8 @@ export class GameApp {
   private gradedEra = -1;
   /** Finds wait their turn so two discoveries never fight over the same dialog. */
   private loreQueue: string[] = [];
+  /** Districts that broke through and still await their "discovered" dialog. */
+  private districtFoundQueue: string[] = [];
   private storyOpen = false;
   private storyDialog = new StoryDialog();
   private pendingChapter: string | null = null;
@@ -189,6 +197,15 @@ export class GameApp {
         return i18n.t(this.notifier.isOn(this.state.settings.notificationsEnabled) ? 'settings.on' : 'settings.off');
       },
       toggleNotifications: () => this.toggleNotifications(),
+      exportFile: () => this.exportFile(),
+      importFile: () => this.importFile(),
+      listBackups: () => this.engine.saveManager.listBackups(),
+      restoreBackup: (kind) => this.confirmRestore(kind),
+      getLevels: () => this.audio.levels,
+      setLevels: (music, fx) => this.audio.setLevels(music, fx),
+      textSize: () => i18n.t(`settings.text.${currentTextSize()}`),
+      cycleTextSize: () => { cycleTextSize(); },
+      persistLabel: () => i18n.t(`settings.persist.${getPersistStatus()}`),
     });
     this.ruinPanel = new RuinPanel(this.engine);
     this.modal = new Modal();
@@ -196,6 +213,9 @@ export class GameApp {
   }
 
   async start(): Promise<void> {
+    // This copy of the game owns the save from now on; an older copy that is still open will stop writing (see singleInstance.ts).
+    claimOwnership();
+    onSuperseded(() => this.showSuperseded());
     const guard = installCrashGuard(() => this.diagnostics());
     const canvas = document.getElementById('game-canvas') as HTMLCanvasElement;
     await Promise.all([this.renderer.init(canvas), preloadIcons(SCENE_ICONS).catch(() => undefined)]);
@@ -209,14 +229,25 @@ export class GameApp {
 
     this.engine.onRender = (dt, alpha) => this.frame(dt, alpha);
 
-    (window as unknown as Record<string, unknown>).__engine = this.engine;
-    (window as unknown as Record<string, unknown>).__renderer = this.renderer;
-    (window as unknown as Record<string, unknown>).__audio = this.audio;
+    // Debug handles: only in development, or on request (?debug), so the live game can't be poked from the console by accident.
+    if (import.meta.env.DEV || new URLSearchParams(location.search).has('debug')) {
+      (window as unknown as Record<string, unknown>).__engine = this.engine;
+      (window as unknown as Record<string, unknown>).__renderer = this.renderer;
+      (window as unknown as Record<string, unknown>).__audio = this.audio;
+    }
     if (import.meta.env.DEV) void import('./dev/storeShots').then(m => m.installStoreShots(this.renderer.app));
     if (import.meta.env.DEV) void import('./dev/camShots').then(m => m.installCamShots(this.renderer, () => this.state));
 
     this.engine.onRenderStuck = fails => this.recoverRender(fails);
+    this.watchSaving();
+    // A save that could not be read, or one restored from a backup, is explained before the game moves a step.
+    if (this.engine.loadProblem) await this.resolveLoadProblem();
+    else if (this.engine.recoveredFrom) await this.noticeRecovered();
     this.engine.start();
+    this.installBackNavigation();
+    // Ask the browser to keep the save safe (it may clear site data when the phone runs low on space): after the first tap, and once more later.
+    window.addEventListener('pointerdown', () => void ensurePersistentStorage(), { once: true });
+    setTimeout(() => void ensurePersistentStorage(), 10 * 60_000);
     if (guard.liteJustEnabled) this.toasts.show(`[[sparkle]] ${i18n.t('toast.liteMode')}`, 'info');
     if (!this.state.storyFlags.includes('intro:done')) this.playIntroSequence();
     // Back from a break, or people still waiting at the door from last time: the welcome screen comes first.
@@ -342,8 +373,14 @@ export class GameApp {
     void this.engine.forceSave().finally(() => location.reload());
   }
 
+  private splashHidden = false;
+
   private frame(dt: number, alpha: number): void {
     const state = this.state;
+    if (!this.splashHidden) {
+      this.splashHidden = true;
+      hideSplash();
+    }
     // Each part is guarded on its own: a throwing panel must not stop the picture or the dialogs behind it.
     this.renderer.frameTarget = this.engine.frameTargetMs;
     const fps = this.renderer.postfx?.profile.fps;
@@ -401,6 +438,9 @@ export class GameApp {
       else if (this.pendingChapter && !document.querySelector('.era-banner')) this.playChapter(this.pendingChapter);
     }
     this.checkShortages();
+    if (this.districtFoundQueue.length && !this.modal.isVisible && !this.welcomeOpen && !this.introPlaying && !this.storyOpen && !this.storyDialog.isVisible) {
+      this.showDistrictFound(this.districtFoundQueue.shift()!);
+    }
     this.flushLoreQueue();
   }
 
@@ -894,7 +934,8 @@ export class GameApp {
       if (isDistrict(b.type)) {
         const c = this.renderer.roomCenter(b);
         this.renderer.burstAt(c.x, c.y + 30, 200);
-        setTimeout(() => this.showDistrictFound(b.type), 600);
+        // Told as soon as nothing else is on screen: it used to take over (and wipe out) the welcome-back dialog.
+        this.districtFoundQueue.push(b.type);
       }
       const name = getDef(b.type)?.name[i18n.currentLocale] ?? b.type;
       this.toasts.show(`[[check]] ${i18n.t('toast.buildingComplete', { name })}`, 'good');
@@ -916,12 +957,13 @@ export class GameApp {
         name: this.localName(survivor.name),
         level: survivor.level,
         stat: i18n.t(`stats.${stat as keyof SurvivorStats}`),
+        ...this.gOf(survivor),
       })}`, 'good');
     });
 
     bus.on('survivor:died', (s: unknown) => {
       this.audio.play('error');
-      this.toasts.show(`[[skull]] ${i18n.t('toast.died', { name: this.localName((s as SurvivorState).name) })}`, 'bad');
+      this.toasts.show(`[[skull]] ${i18n.t('toast.died', { name: this.localName((s as SurvivorState).name), ...this.gOf(s as SurvivorState) })}`, 'bad');
     });
 
     bus.on('research:complete', (id: unknown) => {
@@ -956,7 +998,7 @@ export class GameApp {
       this.audio.play(sound[inc.kind]);
       if (inc.kind !== 'breach') setTimeout(() => this.audio.play('alarm'), 400);
       this.renderer.shake(inc.kind === 'breach' ? 6 : 4, 0.5);
-      navigator.vibrate?.([40, 60, 40]);
+      vibrate([40, 60, 40]);
       this.toasts.show(`[[${def.icon}]] ${i18n.t('incident.started', { name: def.name[i18n.currentLocale], room: this.roomName(inc.buildingId) })}`, 'bad');
     });
     bus.on('incident:burnout', (i: unknown) => {
@@ -1022,14 +1064,14 @@ export class GameApp {
       this.audio.play('baby');
       const p = this.renderer.personPos(parents[0].id);
       if (p) this.renderer.floatIcons(p.x, p.y, 'baby', 4, '#ffe2a0');
-      this.toasts.show(`[[baby]] ${i18n.t('family.born', { a: this.localName(parents[0].name), b: this.localName(parents[1].name), name: this.localName(child.name) })}`, 'good');
+      this.toasts.show(`[[baby]] ${i18n.t('family.born', { a: this.localName(parents[0].name), b: this.localName(parents[1].name), name: this.localName(child.name), ...this.gOf(child) })}`, 'good');
       this.engine.requestSave();
     });
     bus.on('family:grownUp', (s: unknown) => {
       const sv = s as SurvivorState | undefined;
       if (!sv) return;
       this.audio.play('levelup');
-      this.toasts.show(`[[star]] ${i18n.t('family.grownUp', { name: this.localName(sv.name) })}`, 'good');
+      this.toasts.show(`[[star]] ${i18n.t('family.grownUp', { name: this.localName(sv.name), ...this.gOf(sv) })}`, 'good');
     });
     bus.on('story:chapter', (id: unknown) => { this.pendingChapter = id as string; });
     bus.on('mission:choice', () => this.audio.play('radio'));
@@ -1064,7 +1106,7 @@ export class GameApp {
     bus.on('caravan:complete', (r: unknown) => {
       const c = r as { partner: string; ok: boolean; levelUp: boolean; recruitName: string | null };
       const name = getPartner(c.partner)?.name[i18n.currentLocale] ?? '';
-      this.toasts.show(c.ok ? `[[cart]] ${i18n.t('trade.home', { name })}${c.levelUp ? ` · ${i18n.t('trade.levelUp')}` : ''}${c.recruitName ? ` · ${i18n.t('mission.recruit', { name: this.localName(c.recruitName) })}` : ''}` : `[[skull]] ${i18n.t('trade.ambush', { name })}`, c.ok ? 'good' : 'bad');
+      this.toasts.show(c.ok ? `[[cart]] ${i18n.t('trade.home', { name })}${c.levelUp ? ` · ${i18n.t('trade.levelUp')}` : ''}${c.recruitName ? ` · ${i18n.t('mission.recruit', { name: this.localName(c.recruitName), ...this.gByName(c.recruitName) })}` : ''}` : `[[skull]] ${i18n.t('trade.ambush', { name })}`, c.ok ? 'good' : 'bad');
       this.engine.requestSave();
     });
     bus.on('survivor:rank', (s: unknown, rank: unknown) => {
@@ -1186,10 +1228,233 @@ export class GameApp {
     });
   }
 
-  private async importSave(raw: string): Promise<void> {
-    const ok = await this.engine.importState(raw);
-    this.toasts.show(ok ? i18n.t('settings.importOk') : i18n.t('settings.importBad'), ok ? 'good' : 'bad');
-    if (!ok) this.audio.play('error');
+  /** An import replaces the running game, so it is checked first and then confirmed (the current game is kept as a backup). */
+  private importSave(raw: string): void {
+    if (!this.engine.saveManager.importSave(raw)) {
+      this.toasts.show(i18n.t('settings.importBad'), 'bad');
+      this.audio.play('error');
+      return;
+    }
+    this.modal.show({
+      icon: '[[save]]',
+      title: i18n.t('settings.import'),
+      body: i18n.t('settings.importConfirm'),
+      actions: [
+        {
+          label: i18n.t('settings.importYes'),
+          className: 'btn-danger',
+          onClick: async () => {
+            this.modal.hide();
+            const ok = await this.engine.importState(raw);
+            this.toasts.show(ok ? i18n.t('settings.importOk') : i18n.t('settings.importBad'), ok ? 'good' : 'bad');
+            if (!ok) this.audio.play('error');
+            this.menuPanel.loadBackups();
+          },
+        },
+        { label: i18n.t('placement.cancel'), className: 'btn-secondary', onClick: () => this.modal.hide() },
+      ],
+    });
+  }
+
+  private confirmRestore(kind: BackupKind): void {
+    void this.engine.saveManager.listBackups().then((list: BackupInfo[]) => {
+      const info = list.find(b => b.kind === kind);
+      if (!info) return;
+      const locale = i18n.currentLocale === 'he' ? 'he-IL' : 'en-GB';
+      const when = new Date(info.timestamp).toLocaleString(locale, { dateStyle: 'short', timeStyle: 'short' });
+      this.modal.show({
+        icon: '[[refresh]]',
+        title: i18n.t('settings.backups'),
+        body: i18n.t('settings.backups.confirm', { time: when }),
+        actions: [
+          {
+            label: i18n.t('settings.backups.restore'),
+            className: 'btn-danger',
+            onClick: async () => {
+              this.modal.hide();
+              const ok = await this.engine.restoreBackup(kind);
+              this.toasts.show(ok ? i18n.t('settings.backups.done') : i18n.t('settings.importBad'), ok ? 'good' : 'bad');
+              this.menuPanel.loadBackups();
+            },
+          },
+          { label: i18n.t('placement.cancel'), className: 'btn-secondary', onClick: () => this.modal.hide() },
+        ],
+      });
+    });
+  }
+
+  /** Writes the save to a file the player keeps outside the browser's storage. */
+  private exportFile(): void {
+    const data = this.engine.exportState();
+    const d = new Date();
+    const stamp = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    const blob = new Blob([data], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `last-bunker-save-${stamp}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 10_000);
+    this.toasts.show(i18n.t('settings.exportedFile'), 'good');
+  }
+
+  private importFile(): void {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.txt,text/plain';
+    input.addEventListener('change', () => {
+      const file = input.files?.[0];
+      if (!file) return;
+      void file.text().then(text => this.importSave(text)).catch(() => this.toasts.show(i18n.t('settings.importBad'), 'bad'));
+    });
+    input.click();
+  }
+
+  // ---- save protection: problems at start, a second open copy, failed writes ----
+
+  /** The save could not be used at start. Nothing has been written over it; the player decides what happens next. */
+  private resolveLoadProblem(): Promise<void> {
+    hideSplash();
+    const problem = this.engine.loadProblem;
+    return new Promise<void>(resolve => {
+      const retry = { label: i18n.t('save.problem.retry'), className: 'btn-primary', onClick: () => location.reload() };
+      if (problem === 'error') {
+        this.modal.show({
+          icon: '[[warning]]',
+          title: i18n.t('save.problem.error.title'),
+          body: i18n.t('save.problem.error.body'),
+          actions: [
+            retry,
+            {
+              label: i18n.t('save.problem.noSave'),
+              className: 'btn-secondary',
+              onClick: () => {
+                this.modal.hide();
+                this.unsavedReminder();
+                resolve();
+              },
+            },
+          ],
+        });
+        return;
+      }
+      this.modal.show({
+        icon: '[[warning]]',
+        title: i18n.t('save.problem.corrupt.title'),
+        body: i18n.t('save.problem.corrupt.body'),
+        actions: [
+          retry,
+          {
+            label: i18n.t('save.problem.copy'),
+            className: 'btn-secondary',
+            onClick: () => {
+              void this.engine.saveManager.corruptCopy().then(raw => {
+                if (raw && navigator.clipboard?.writeText) {
+                  navigator.clipboard.writeText(raw).then(() => this.toasts.show(i18n.t('save.problem.copied'), 'good'), () => window.prompt('Save data', raw));
+                } else if (raw) window.prompt('Save data', raw);
+              });
+            },
+          },
+          {
+            label: i18n.t('save.problem.newGame'),
+            className: 'btn-secondary',
+            onClick: () => {
+              this.modal.hide();
+              this.engine.allowSaving();
+              resolve();
+            },
+          },
+        ],
+      });
+    });
+  }
+
+  /** The main save was unreadable and a backup took its place: say so. */
+  private noticeRecovered(): Promise<void> {
+    hideSplash();
+    const kind = this.engine.recoveredFrom ?? 'session';
+    const locale = i18n.currentLocale === 'he' ? 'he-IL' : 'en-GB';
+    const when = new Date(this.engine.recoveredAt ?? Date.now()).toLocaleString(locale, { dateStyle: 'short', timeStyle: 'short' });
+    return new Promise<void>(resolve => {
+      this.modal.show({
+        icon: '[[save]]',
+        title: i18n.t('save.recovered.title'),
+        body: i18n.t('save.recovered.body', { kind: i18n.t(`save.kind.${kind}`), time: when }),
+        actions: [{ label: i18n.t('event.ok'), onClick: () => { this.modal.hide(); resolve(); } }],
+      });
+    });
+  }
+
+  /** Playing without saving (the player chose it): a reminder every few minutes, so it is never forgotten. */
+  private unsavedReminder(): void {
+    this.toasts.show(`[[warning]] ${i18n.t('save.problem.unsaved')}`, 'bad');
+    window.setInterval(() => {
+      if (this.engine.saveBlocked && !document.hidden) this.toasts.show(`[[warning]] ${i18n.t('save.problem.unsaved')}`, 'bad');
+    }, 5 * 60_000);
+  }
+
+  private watchSaving(): void {
+    bus.on('save:failed', () => this.toasts.show(`[[warning]] ${i18n.t('save.failed')}`, 'bad'));
+    bus.on('save:recovered', () => this.toasts.show(`[[save]] ${i18n.t('save.recoveredOk')}`, 'good'));
+    bus.on('save:superseded', () => this.showSuperseded());
+  }
+
+  /** The game was opened in another window after this one: this one stops saving, so it cannot overwrite the newer progress. */
+  private showSuperseded(): void {
+    if (document.querySelector('.save-lock')) return;
+    this.engine.saveBlocked = true;
+    this.engine.paused = true;
+    const box = el('div', 'save-lock');
+    const use = el('button', 'btn btn-primary', i18n.t('save.superseded.use'));
+    use.addEventListener('click', () => location.reload());
+    box.append(el('h2', '', i18n.t('save.superseded.title')), el('p', '', i18n.t('save.superseded.body')), use);
+    box.setAttribute('role', 'alertdialog');
+    document.body.appendChild(box);
+  }
+
+  // ---- the phone's back button ----
+
+  private anyPanelOpen(): boolean {
+    return this.buildMenu.isVisible || this.buildingPanel.isVisible || this.peoplePanel.isVisible || this.researchPanel.isVisible
+      || this.surfacePanel.isVisible || this.menuPanel.isVisible || this.ruinPanel.isVisible || this.journal.isVisible
+      || this.eraPanel.isVisible || this.projectsPanel.isVisible || this.loreReader.isVisible;
+  }
+
+  /**
+   * Back closes the open panel instead of leaving the game (an accidental swipe used to throw the player out to the previous page).
+   * With nothing open, the first press asks to press again; the second leaves.
+   */
+  private installBackNavigation(): void {
+    let lastBack = 0;
+    history.pushState({ lastbunker: 1 }, '');
+    window.addEventListener('popstate', () => {
+      if (this.modal.isVisible) {
+        history.pushState({ lastbunker: 1 }, '');
+        return;
+      }
+      if (this.placementMode) {
+        this.cancelPlacement();
+        history.pushState({ lastbunker: 1 }, '');
+        return;
+      }
+      if (this.anyPanelOpen()) {
+        this.closeSheets();
+        this.surfacePanel.hide();
+        this.loreReader.hide();
+        history.pushState({ lastbunker: 1 }, '');
+        return;
+      }
+      const now = Date.now();
+      if (now - lastBack < 2500) {
+        history.back();
+        return;
+      }
+      lastBack = now;
+      this.toasts.show(i18n.t('nav.backAgain'), 'info');
+      history.pushState({ lastbunker: 1 }, '');
+    });
   }
 
   private localName(name: string): string {
@@ -1281,7 +1546,7 @@ export class GameApp {
     this.engine.resourceSystem.gain(this.engine.stateManager, { [r]: amount });
     this.audio.play(r === 'water' ? 'drip' : r === 'materials' || r === 'scrap' ? 'coin' : 'collect');
     if (r === 'water') this.audio.play('collect', { volume: 0.6 });
-    navigator.vibrate?.(12);
+    vibrate(12);
     this.flyToHud(r, pos.x, pos.y, `+${amount}`);
     this.engine.notifyInteraction();
   }
@@ -1325,7 +1590,7 @@ export class GameApp {
         this.toasts.show(`[[warning]] ${i18n.t('people.full')}`, 'bad');
         return;
       }
-      this.toasts.show(`[[pick]] ${i18n.t('drag.toRuin', { name })}`, 'good');
+      this.toasts.show(`[[pick]] ${i18n.t('drag.toRuin', { name, ...this.gOf(s) })}`, 'good');
     } else {
       const b = state.buildings.find(x => x.id === targetId);
       if (!b) return;
@@ -1340,10 +1605,10 @@ export class GameApp {
         this.toasts.show(`[[warning]] ${i18n.t('drag.full', { room: def.name[i18n.currentLocale] ?? def.name.en })}`, 'bad');
         return;
       }
-      this.toasts.show(`${BUILDING_ICONS[b.type] ?? ''} ${i18n.t('drag.assigned', { name, room: def.name[i18n.currentLocale] ?? def.name.en })}`, 'good');
+      this.toasts.show(`${BUILDING_ICONS[b.type] ?? ''} ${i18n.t('drag.assigned', { name, room: def.name[i18n.currentLocale] ?? def.name.en, ...this.gOf(s) })}`, 'good');
     }
     this.audio.play('assign');
-    navigator.vibrate?.(18);
+    vibrate(18);
     this.engine.requestSave();
   }
 
@@ -1415,7 +1680,7 @@ export class GameApp {
     body.appendChild(el('p', 'modal-body', i18n.t(`event.${eventId}.result.${result.key}`, params)));
     if (result.gains) body.appendChild(this.gainsList(result.gains));
     for (const inj of result.injured ?? []) {
-      body.appendChild(el('p', 'modal-sub negative-text', `[[bandage]] ${i18n.t('mission.injury', { name: this.localName(inj.name), n: inj.damage })}`));
+      body.appendChild(el('p', 'modal-sub negative-text', `[[bandage]] ${i18n.t('mission.injury', { name: this.localName(inj.name), n: inj.damage, ...this.gByName(inj.name, (inj as { id?: string }).id) })}`));
     }
 
     this.modal.show({
@@ -1527,9 +1792,9 @@ export class GameApp {
     body.appendChild(el('p', 'modal-body', i18n.t(`raid.result.${r.key}`, { captive: r.captive ? this.localName(r.captive) : '' })));
     if (r.gains) body.appendChild(this.gainsList(r.gains));
     for (const inj of r.injured) {
-      body.appendChild(el('p', 'modal-sub negative-text', `[[bandage]] ${i18n.t('mission.injury', { name: this.localName(inj.name), n: inj.damage })}`));
+      body.appendChild(el('p', 'modal-sub negative-text', `[[bandage]] ${i18n.t('mission.injury', { name: this.localName(inj.name), n: inj.damage, ...this.gByName(inj.name, (inj as { id?: string }).id) })}`));
     }
-    if (r.died) body.appendChild(el('p', 'modal-sub negative-text', `[[skull]] ${i18n.t('raid.result.died', { name: this.localName(r.died) })}`));
+    if (r.died) body.appendChild(el('p', 'modal-sub negative-text', `[[skull]] ${i18n.t('raid.result.died', { name: this.localName(r.died), ...this.gByName(r.died) })}`));
     this.audio.play(r.key === 'win' || r.key === 'winCaptive' ? 'achievement' : 'error');
     this.modal.show({
       icon: '[[armory]]',
@@ -1545,6 +1810,7 @@ export class GameApp {
     if (!f) return;
     const name = this.localName(f.name);
     const lineKey = f.job && i18n.has(`memorial.line.${f.job}`) ? `memorial.line.${f.job}` : 'memorial.line.generic';
+    const memorialGender = this.gOf(f);
     const body = el('div', 'modal-result memorial');
     const row = el('div', 'modal-portraits');
     const img = el('img', 'modal-portrait');
@@ -1554,7 +1820,7 @@ export class GameApp {
     body.append(
       row,
       el('p', 'modal-sub', i18n.t('memorial.sub', { level: f.level })),
-      el('p', 'modal-body', `"${i18n.t(lineKey)}"`),
+      el('p', 'modal-body', `"${i18n.t(lineKey, memorialGender)}"`),
       el('p', 'bp-hint', `[[heart]] ${i18n.t('memorial.ceremonyHint')}`),
       el('p', 'bp-hint', `[[hourglass]] ${i18n.t('memorial.carryOnHint')}`),
     );
@@ -1623,7 +1889,7 @@ export class GameApp {
     this.engine.notifyInteraction();
     const sound: Record<string, 'splash' | 'click' | 'place'> = { fire: 'splash', flood: 'splash', blackout: 'click', roaches: 'place', breach: 'place' };
     this.audio.play(sound[inc.kind]);
-    navigator.vibrate?.(14);
+    vibrate(14);
     this.renderer.incidents.hit(id);
     this.engine.incidentSystem.tap(id);
     if (this.buildingPanel.isVisible) this.buildingPanel.refresh(this.state);
@@ -1680,6 +1946,8 @@ export class GameApp {
     this.engine.paused = true;
     this.storyDialog.play({
       ...this.chapterOptions(id),
+      // Seen in an earlier timeline (before Genesis): the scene can be skipped, the decision cannot.
+      canSkip: (this.state.prestige.storySeen ?? []).includes(id),
       finish: (key: string | null) => {
         const out = this.engine.storySystem.finish(id, key);
         this.engine.requestSave();
@@ -1770,10 +2038,10 @@ export class GameApp {
     }
     body.appendChild(this.gainsList(report.loot));
     if (report.recruitName) {
-      body.appendChild(el('p', 'modal-sub positive-text', `[[person]] ${i18n.t('mission.recruit', { name: this.localName(report.recruitName) })}`));
+      body.appendChild(el('p', 'modal-sub positive-text', `[[person]] ${i18n.t('mission.recruit', { name: this.localName(report.recruitName), ...this.gByName(report.recruitName) })}`));
     }
     for (const inj of report.injuries) {
-      body.appendChild(el('p', 'modal-sub negative-text', `[[bandage]] ${i18n.t('mission.injury', { name: this.localName(inj.name), n: inj.damage })}`));
+      body.appendChild(el('p', 'modal-sub negative-text', `[[bandage]] ${i18n.t('mission.injury', { name: this.localName(inj.name), n: inj.damage, ...this.gByName(inj.name, (inj as { id?: string }).id) })}`));
     }
     if (report.journal?.length) {
       const details = el('details', 'exp-log');
@@ -1802,7 +2070,24 @@ export class GameApp {
       if (typeof v === 'string') params[k] = k.startsWith('name') ? this.localName(v) : v;
       else if (typeof v === 'number') params[k] = String(v);
     }
+    // An event about one person (a wanderer, a sick resident) is worded for their gender.
+    const who = (data.survivor as SurvivorState | undefined) ?? this.state.survivors.find(x => x.id === data.survivorId);
+    if (who?.name) params.g = genderOf(who);
     return params;
+  }
+
+  /** i18n gender parameter for a known survivor. */
+  private gOf(s: { name: string; portraitIndex: number; child?: boolean; portrait?: string } | undefined | null): Record<string, string> {
+    return s ? { g: genderOf(s) } : {};
+  }
+
+  /** The same for someone known by name (and, for unisex names, by id or by who is in the bunker). */
+  private gByName(name: string, id?: string): Record<string, string> {
+    const byId = id ? this.state.survivors.find(x => x.id === id) : undefined;
+    const found = byId ?? this.state.survivors.find(x => x.name === name);
+    if (found) return this.gOf(found);
+    const g = genderOfName(name);
+    return g ? { g } : {};
   }
 
   private gainsList(gains: Partial<Record<ResourceType, number>>): HTMLElement {
@@ -1820,6 +2105,8 @@ export class GameApp {
    */
   private showWelcome(report: OfflineReport | null): void {
     this.welcomeOpen = true;
+    // Whatever closes this dialog (a button, or another dialog taking its place) ends the "welcome is open" state.
+    const onDismiss = () => { this.welcomeOpen = false; };
     this.audio.play('event');
     const state = this.state;
     const locale = i18n.currentLocale;
@@ -1875,7 +2162,7 @@ export class GameApp {
       const actions = [{ label: i18n.t('welcome.ok'), onClick: close }] as { label: string; className?: string; onClick: () => void }[];
       // [Economy A1] a shortcut to spend the credits the overflow earned.
       if ((report?.credits ?? 0) > 0) actions.unshift({ label: i18n.t('welcome.toShop'), className: 'btn-secondary', onClick: () => { close(); this.journal.showShop(this.state); } });
-      this.modal.show({ icon: '[[vault]]', title: i18n.t('welcome.title'), body, actions });
+      this.modal.show({ icon: '[[vault]]', title: i18n.t('welcome.title'), body, actions, onDismiss });
       return;
     }
     // The doorstep: faces and names of who waited through the night.
@@ -1890,7 +2177,7 @@ export class GameApp {
     const names = waiting.map(p => this.localName(p.name)).join(', ');
     door.append(row, el('p', 'modal-body', `[[door]] ${i18n.t(waiting.length === 1 ? 'welcome.doorOne' : 'welcome.door', { n: waiting.length, names })}`));
     const beds = state.maxPopulation - state.survivors.length;
-    if (beds < waiting.length) door.appendChild(el('p', 'bp-hint negative-text', i18n.t('welcome.doorBeds', { n: Math.max(0, beds) })));
+    if (beds < waiting.length) door.appendChild(el('p', 'bp-hint negative-text', i18n.t(beds <= 0 ? 'welcome.doorNoBeds' : 'welcome.doorBeds', { n: Math.max(0, beds) })));
     body.appendChild(door);
     const answer = (accept: boolean) => {
       const n = this.engine.answerDoor(accept);
@@ -1906,6 +2193,7 @@ export class GameApp {
         { label: i18n.t('welcome.doorAccept'), className: 'btn-primary', disabled: beds <= 0, onClick: () => answer(true) },
         { label: i18n.t('welcome.doorRefuse'), className: 'btn-secondary', onClick: () => answer(false) },
       ],
+      onDismiss,
     });
   }
 

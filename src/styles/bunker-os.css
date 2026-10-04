@@ -53,7 +53,7 @@
 .resource-value {
   font-family: 'Rubik', sans-serif;
   font-weight: 800;
-  font-size: 14px;
+  font-size: calc(14px * var(--fs, 1));
   color: #f4ecd8;
   text-shadow: 0 1px 0 #000;
   font-variant-numeric: tabular-nums;
@@ -155,7 +155,7 @@
   color: var(--amber);
 }
 .nav-btn:active::after { background: #ffb547; box-shadow: 0 0 6px #ffb547; }
-.nav-label { font-family: var(--font-title); font-size: 12.5px; letter-spacing: 0.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.nav-label { font-family: var(--font-title); font-size: calc(12.5px * var(--fs, 1)); letter-spacing: 0.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
 .nav-badge { background: #ff4a3a; box-shadow: 0 0 8px rgba(255, 74, 58, 0.8); }
 
 /* ---------- CRT terminal panels ---------- */
@@ -203,7 +203,7 @@
 .sheet-title {
   font-family: var(--font-title);
   font-weight: 400;
-  font-size: 20px;
+  font-size: calc(20px * var(--fs, 1));
   letter-spacing: 0.02em;
   color: var(--phosphor);
   text-shadow: 0 0 10px rgba(110, 255, 160, 0.45);
@@ -318,7 +318,7 @@
 }
 .modal-title {
   font-family: var(--font-display);
-  font-size: 32px;
+  font-size: calc(32px * var(--fs, 1));
   font-weight: 700;
   letter-spacing: 0.04em;
   color: var(--phosphor);
@@ -416,7 +416,7 @@
   .resource-row { gap: 4px; }
   .resource-item { padding: 5px 7px 8px; gap: 3px; }
   .info-row { gap: 4px; margin-top: 6px; }
-  .info-item { padding: 2px 6px; font-size: 12px; gap: 3px; }
+  .info-item { padding: 2px 6px; font-size: calc(12px * var(--fs, 1)); gap: 3px; }
   .info-icon .ic { width: 14px; height: 14px; }
   .info-arrival { margin-inline-start: 3px; }
   .info-row .lang-btn { padding: 3px 7px; }
@@ -429,8 +429,8 @@
 
 @media (max-width: 374px) {
   .info-clock .info-icon { display: none; }
-  .resource-value { font-size: 13px; }
-  .resource-rate { font-size: 9.5px; }
+  .resource-value { font-size: calc(13px * var(--fs, 1)); }
+  .resource-rate { font-size: calc(9.5px * var(--fs, 1)); }
 }
 
 /* Short screens (landscape phones): a slimmer console. */

@@ -159,6 +159,8 @@ export interface PrestigeState {
   transcendenceCount: number;
   totalIsotope7Earned: number;
   upgrades: Record<string, number>;
+  /** Story chapters already seen in an earlier timeline (kept across Genesis, so a replay can be skipped). Absent in older saves. */
+  storySeen?: string[];
 }
 
 export interface GameSettings {

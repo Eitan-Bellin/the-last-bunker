@@ -63,3 +63,15 @@ export function portraitFor(s: Pick<SurvivorState, 'name' | 'portraitIndex'> & {
 export function portraitUrl(def: PortraitDef): string {
   return `${import.meta.env.BASE_URL}art/portraits/${def.file}.webp`;
 }
+
+/** The grammatical gender to use for a person in Hebrew sentences: their name decides, and for unisex names the painted face does. */
+export function genderOf(s: Pick<SurvivorState, 'name' | 'portraitIndex'> & { child?: boolean; portrait?: string }): 'm' | 'f' {
+  const g = nameGender(s.name);
+  return g === 'n' ? portraitFor(s).gender : g;
+}
+
+/** The same, for someone known only by name: null when the name is unisex and nothing else says which. */
+export function genderOfName(name: string): 'm' | 'f' | null {
+  const g = nameGender(name);
+  return g === 'n' ? null : g;
+}

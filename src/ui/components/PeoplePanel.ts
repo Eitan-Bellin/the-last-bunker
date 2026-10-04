@@ -4,7 +4,7 @@ import { i18n } from '../../i18n/I18nManager';
 import { getDef, traitBonus } from '../../data/buildingDefs';
 import { STAT_KEYS, xpForNextLevel } from '../../systems/PopulationSystem';
 import { Sheet } from './Sheet';
-import { portraitFor, portraitUrl } from '../../data/portraits';
+import { genderOf, portraitFor, portraitUrl } from '../../data/portraits';
 import { BUILDING_ICONS, STAT_ICONS, bar, button, el, localizedTrait, setBar } from '../dom';
 import { uiSound } from '../../audio/uiSound';
 import { MAX_RANK, SPECS, rankOf, rankProgress, trainingCost } from '../../data/mastery'; // [LateGame B3]
@@ -164,12 +164,12 @@ export class PeoplePanel {
     head.appendChild(name);
     const partner = s.partnerId ? state.survivors.find(p => p.id === s.partnerId) : undefined;
     if (partner) head.appendChild(el('span', 'family-chip', `[[heart]] ${this.engine.populationSystem.getLocalizedName(partner, locale)}`));
-    if (s.child) head.appendChild(el('span', 'family-chip child', `[[baby]] ${i18n.t('family.child', { n: Math.round(this.engine.familySystem.growthOf(state, s) * 100) })}`));
+    if (s.child) head.appendChild(el('span', 'family-chip child', `[[baby]] ${i18n.t('family.child', { n: Math.round(this.engine.familySystem.growthOf(state, s) * 100), g: genderOf(s) })}`));
     const traits = el('div', 'trait-list');
     for (const t of s.traits) {
-      const chip = el('span', 'trait-chip', localizedTrait(t));
+      const chip = el('span', 'trait-chip', localizedTrait(t, genderOf(s)));
       const desc = `traitDesc.${t}`;
-      if (i18n.has(desc)) chip.title = i18n.t(desc);
+      if (i18n.has(desc)) chip.title = i18n.t(desc, { g: genderOf(s) });
       traits.appendChild(chip);
     }
     head.appendChild(traits);
@@ -243,7 +243,7 @@ export class PeoplePanel {
       : ruin ? `[[pick]] ${i18n.t('ruin.duty', { n: ruin.floor + 1 })}`
         : s.assignedBuildingId?.startsWith('p_') ? `[[build]] ${i18n.t('proj.duty')}` // [LateGame B1]
         : `[[warning]] ${i18n.t('people.noJob')}`;
-    jobRow.appendChild(el('span', job || ruin || s.child || s.assignedBuildingId?.startsWith('p_') ? '' : 'warn', s.child ? `[[baby]] ${i18n.t('family.tooYoung')}` : jobName));
+    jobRow.appendChild(el('span', job || ruin || s.child || s.assignedBuildingId?.startsWith('p_') ? '' : 'warn', s.child ? `[[baby]] ${i18n.t('family.tooYoung', { g: genderOf(s) })}` : jobName));
     const actions = el('div', 'person-actions');
     actions.appendChild(button('?', 'btn-small btn-ghost', () => {
       this.expandedId = this.expandedId === s.id ? null : s.id;
@@ -270,7 +270,7 @@ export class PeoplePanel {
     for (const f of factors) {
       const row = el('div', 'bp-row');
       row.append(
-        el('span', '', i18n.t(`morale.${f.key}`)),
+        el('span', '', i18n.t(`morale.${f.key}`, { g: genderOf(s) })),
         el('span', `bp-value ${f.value >= 0 ? 'positive' : 'negative'}`, f.key === 'base' ? String(f.value) : `${f.value > 0 ? '+' : ''}${f.value}`),
       );
       box.appendChild(row);

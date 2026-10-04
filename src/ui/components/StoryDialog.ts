@@ -1,4 +1,5 @@
 import { i18n } from '../../i18n/I18nManager';
+import { vibrate } from '../../utils/haptics';
 import { CHARACTERS, shownChoices, shownLines, type Chapter, type StoryEffect, type StoryLine } from '../../data/story';
 import type { ResourceType } from '../../core/GameState';
 import type { ChapterOutcome } from '../../systems/StorySystem';
@@ -14,6 +15,8 @@ export interface StoryPlayOptions {
   costLabel: (cost: Partial<Record<ResourceType, number>>) => string;
   /** Applies the choice (null for chapters without one) and returns what happened. */
   finish: (key: string | null) => ChapterOutcome;
+  /** A chapter this player already saw in an earlier timeline: the talk can be skipped (the decision still has to be made). */
+  canSkip?: boolean;
   /** Replaying from the journal: no choices, no effects. */
   replay?: { choice: string | null };
   sfx: (name: string) => void;
@@ -118,6 +121,16 @@ export class StoryDialog {
     box.appendChild(text);
     box.appendChild(el('div', 'story-next', '▼'));
     root.appendChild(box);
+    if (opts.canSkip && !this.finishing) {
+      const skip = el('button', 'btn btn-small btn-ghost story-skip', i18n.t('story.skip'));
+      skip.addEventListener('click', (e) => {
+        e.stopPropagation();
+        window.clearInterval(this.typing);
+        this.queue = [];
+        this.next();
+      });
+      root.appendChild(skip);
+    }
     const full = line.text[locale];
     let i = 0;
     window.clearInterval(this.typing);
@@ -171,7 +184,7 @@ export class StoryDialog {
         e.stopPropagation();
         if (!ok) return;
         opts.sfx('choice');
-        navigator.vibrate?.(12);
+        vibrate(12);
         this.resolve(c.key);
       });
       box.appendChild(btn);

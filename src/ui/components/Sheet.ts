@@ -1,4 +1,5 @@
 import { el, setRich } from '../dom';
+import { vibrate } from '../../utils/haptics';
 import { uiSound } from '../../audio/uiSound';
 import { i18n } from '../../i18n/I18nManager';
 
@@ -34,7 +35,7 @@ export class Sheet {
     close.setAttribute('aria-label', i18n.t('journal.close'));
     close.addEventListener('click', (e) => {
       e.stopPropagation();
-      navigator.vibrate?.(8);
+      vibrate(8);
       this.hide();
     });
     const handle = el('div', 'sheet-handle');

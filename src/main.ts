@@ -1,8 +1,24 @@
 import { GameApp } from './app';
 import { logCrash } from './core/crashGuard';
+import { SaveManager } from './core/SaveManager';
+import { i18n } from './i18n/I18nManager';
+import { applyTextSize } from './ui/textSize';
+import { hideSplash } from './ui/splash';
+
+applyTextSize();
+
+// With ?debug, a Pixi "destroyed while still bound" warning also prints where it came from.
+if (import.meta.env.DEV || location.search.includes('debug')) {
+  const warn = console.warn.bind(console);
+  console.warn = (...args: unknown[]) => {
+    if (String(args[0]).includes('destroyed while still bound')) console.log('[pixi-trace]', new Error().stack?.split('\n').slice(2, 12).join(' <- '));
+    warn(...args);
+  };
+}
 
 /** A start that fails (no WebGL, assets that did not load) used to leave a black screen: say so, and offer a retry. */
 function showStartupError(): void {
+  hideSplash();
   if (document.getElementById('startup-error')) return;
   const box = document.createElement('div');
   box.id = 'startup-error';
@@ -24,11 +40,27 @@ function failed(err: unknown): void {
   showStartupError();
 }
 
-try {
-  new GameApp().start().catch(failed);
-} catch (err) {
-  failed(err);
+/**
+ * The game was Hebrew-only by default. Whoever already has a save keeps Hebrew (they have been playing in it); a brand-new
+ * player gets the language of their device. Nobody who picked a language in Settings is touched.
+ */
+async function chooseDefaultLanguage(): Promise<void> {
+  try {
+    if (localStorage.getItem('lastbunker_lang')) return;
+    const hasSave = await new SaveManager().hasSave();
+    const device = (navigator.language || 'he').toLowerCase();
+    i18n.storeLocale(hasSave || device.startsWith('he') ? 'he' : 'en');
+  } catch {
+    // storage blocked: the app falls back to Hebrew as before
+  }
 }
+
+async function boot(): Promise<void> {
+  await chooseDefaultLanguage();
+  await new GameApp().start();
+}
+
+boot().catch(failed);
 
 // Only in production builds: a dev-mode service worker would cache stale modules.
 if (import.meta.env.PROD && 'serviceWorker' in navigator) {

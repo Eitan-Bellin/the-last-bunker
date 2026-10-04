@@ -3,6 +3,27 @@ import he from './he.json';
 
 export type Locale = 'en' | 'he';
 
+/** Grammatical gender of the person a sentence is about ('n' = unknown or mixed: the string keeps its "X/Y" forms). */
+export type Gender = 'm' | 'f' | 'n';
+
+const FINAL_TO_MEDIAL: Record<string, string> = { 'ך': 'כ', 'ם': 'מ', 'ן': 'נ', 'ף': 'פ', 'ץ': 'צ' };
+const GENDER_SLASH = /([א-ת]+)\/([א-ת]+)/g;
+
+/**
+ * Hebrew strings are written for both genders ("נפצע/ה", "עלה/תה", "בן/בת"). When the speaker is known, pick the right form.
+ * Masculine = the part before the slash. Feminine = the whole word after it, or the base with the suffix added.
+ */
+export function resolveGender(text: string, g: Gender): string {
+  if (g === 'n') return text;
+  return text.replace(GENDER_SLASH, (_m, a: string, b: string) => {
+    if (g === 'm') return a;
+    if (b.length >= a.length) return b; // a full word of its own: בן/בת, היה/הייתה
+    if (b === 'תה' && a.endsWith('ה')) return `${a.slice(0, -1)}תה`; // עלה/תה
+    const last = a[a.length - 1];
+    return (FINAL_TO_MEDIAL[last] ? a.slice(0, -1) + FINAL_TO_MEDIAL[last] : a) + b;
+  });
+}
+
 const LOCALE_KEY = 'lastbunker_lang';
 
 const strings: Record<Locale, Record<string, string>> = { en, he };
@@ -42,12 +63,15 @@ export class I18nManager {
     }
   }
 
+  /** `params.g` ('m' | 'f') picks the gendered forms of a Hebrew sentence about one person; it is not substituted into the text. */
   t(key: string, params?: Record<string, string | number>): string {
     let text = strings[this.locale]?.[key] ?? strings.en[key] ?? key;
     if (params) {
       for (const [k, v] of Object.entries(params)) {
+        if (k === 'g') continue;
         text = text.split(`{${k}}`).join(String(v));
       }
+      if (this.locale === 'he' && (params.g === 'm' || params.g === 'f')) text = resolveGender(text, params.g);
     }
     return text;
   }
@@ -62,8 +86,9 @@ export class I18nManager {
 
   formatCompact(n: number): string {
     if (n < 1000) return Math.floor(n).toString();
-    if (n < 1_000_000) return (n / 1000).toFixed(1) + 'K';
-    if (n < 1_000_000_000) return (n / 1_000_000).toFixed(1) + 'M';
+    // Round first, then pick the unit: 999,950 is "1.0M", not "1000.0K".
+    if (n < 999_950) return (n / 1000).toFixed(1) + 'K';
+    if (n < 999_950_000) return (n / 1_000_000).toFixed(1) + 'M';
     return (n / 1_000_000_000).toFixed(1) + 'B';
   }
 

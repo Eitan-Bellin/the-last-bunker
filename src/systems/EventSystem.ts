@@ -340,7 +340,11 @@ export function bunkerDefense(state: GameState): number {
   defense += specTotal(state, 'defense');
   if (state.storyFlags.includes('gideon:joined')) defense += 10;
   // [Danger C1] Residents help a little; whoever is posted at an armory fights much harder. The Wall adds 50.
-  for (const s of state.survivors) if (!s.isOnMission && !s.child) defense += s.stats.strength * 0.15;
+  for (const s of state.survivors) {
+    if (s.isOnMission || s.child) continue;
+    defense += s.stats.strength * 0.15;
+    if (s.traits.includes('paranoid')) defense += 3; // always watching the door
+  }
   for (const b of state.buildings) {
     if (b.type !== 'armory' || b.isConstructing || incidentBlocks(state, b)) continue;
     for (const id of b.assignedSurvivorIds) {

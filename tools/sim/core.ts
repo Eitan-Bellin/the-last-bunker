@@ -46,6 +46,8 @@ export interface SimOptions {
   noDanger?: boolean;
   /** Concurrent expedition teams when the engine has no limit of its own. */
   teams?: number;
+  /** Press Genesis this many times (the bot buys nothing in the shop) and keep playing: the second timeline's milestones go to `timeline2`. */
+  rebirths?: number;
   onProgress?: (fraction: number, label: string) => void;
   /** Lets a browser page breathe between chunks. */
   yieldFn?: () => Promise<void>;
@@ -67,6 +69,9 @@ export interface OfflineEntry {
 export interface SimResult {
   seed: number; mode: SimMode; wallSeconds: number; playSeconds: number; runMs: number;
   milestones: Record<string, Milestone>;
+  /** With --rebirths: milestones of the timeline after Genesis (times counted from the rebirth). */
+  timeline2?: Record<string, Milestone>;
+  rebirths?: number;
   genesis: { wall: number; play: number; payout: number } | null;
   rebirthPayoutEnd: number;
   samples: Sample[];
@@ -145,8 +150,14 @@ export function installDeterminism(seed: number): { clock: { now: number }; rest
 /** Stands in for SaveManager: the simulator must never touch the player's IndexedDB save. */
 class MemorySave {
   private data: string | null = null;
-  async save(state: GameState): Promise<void> { this.data = JSON.stringify(state); }
+  async saveJson(json: string): Promise<void> { this.data = json; }
+  async snapshotPrev(): Promise<boolean> { return true; }
+  async loadSafe(): Promise<{ status: string; state: GameState | null }> {
+    return this.data ? { status: 'ok', state: JSON.parse(this.data) as GameState } : { status: 'missing', state: null };
+  }
   async load(): Promise<GameState | null> { return this.data ? (JSON.parse(this.data) as GameState) : null; }
+  async readBackup(): Promise<GameState | null> { return null; }
+  async listBackups(): Promise<unknown[]> { return []; }
   async deleteSave(): Promise<void> { this.data = null; }
   async hasSave(): Promise<boolean> { return this.data !== null; }
   exportSave(state: GameState): string { return JSON.stringify(state); }
@@ -172,7 +183,8 @@ function buildStepper(e: GameEngine, warnings: string[]): { names: string[]; run
     const [, sys, method, args] = m;
     if (sys === 'stateManager' || typeof (eng[sys] as Loose | undefined)?.[method] !== 'function') continue;
     const a = args.trim();
-    const kind: Call['kind'] = a === '' ? 'none' : /stateManager/.test(a) ? (a.includes(',') ? 'smdt' : 'sm') : 'dt';
+    // tick() hands the state manager over as `sm` (a local alias) or as `this.stateManager`.
+    const kind: Call['kind'] = a === '' ? 'none' : /\b(sm|stateManager)\b/.test(a) ? (a.includes(',') ? 'smdt' : 'sm') : 'dt';
     calls.push({ sys, method, kind });
   }
   if (calls.length < 5) {
@@ -280,7 +292,15 @@ export async function runSim(o: SimOptions): Promise<SimResult> {
     projectStages: 0, caravans: { ok: 0, lost: 0 }, weeklyDone: 0, // [LateGame]
     bot: { actions: {} as Record<string, number>, pulledForRuins: 0, journalReads: 0, queuedResearch: 0, longTrips: 0 },
   };
-  const mark = (k: string) => { if (!R.milestones[k]) R.milestones[k] = { play: Math.round(play()), wall: Math.round(wall) }; };
+  /** After a rebirth the milestones of the new timeline are kept apart, with times counted from the rebirth. */
+  let timelineStart = 0;
+  let rebirthsDone = 0;
+  let rebirthPending = false;
+  const timeline2: Record<string, Milestone> = {};
+  const mark = (k: string) => {
+    if (rebirthsDone === 0) { if (!R.milestones[k]) R.milestones[k] = { play: Math.round(play()), wall: Math.round(wall) }; return; }
+    if (!timeline2[k]) timeline2[k] = { play: Math.round(play()), wall: Math.round(wall - timelineStart) };
+  };
   const acted = (kind: string) => {
     R.bot.actions[kind] = (R.bot.actions[kind] ?? 0) + 1;
     const p = play();
@@ -366,6 +386,8 @@ export async function runSim(o: SimOptions): Promise<SimResult> {
       mark('GENESIS available');
       R.genesis = { wall: Math.round(wall), play: Math.round(play()), payout: e.metaSystem.rebirthGain(s) };
     }
+    // A player who wants the next timeline presses Genesis as soon as it is on offer.
+    if (rebirthsDone < (o.rebirths ?? 0) && e.metaSystem.canRebirth(s)) rebirthPending = true;
   };
 
   // ---- the bot ----
@@ -753,6 +775,13 @@ export async function runSim(o: SimOptions): Promise<SimResult> {
     const end = wall + seconds;
     let t = 0;
     while (wall < end - 1e-9) {
+      if (rebirthPending) {
+        rebirthPending = false;
+        await e.rebirth();
+        rebirthsDone++;
+        timelineStart = wall;
+        stepper = buildStepper(e, warnings);
+      }
       try {
         stepper.run(1);
       } catch (err) {
@@ -880,7 +909,7 @@ export async function runSim(o: SimOptions): Promise<SimResult> {
   const result: SimResult = {
     seed: o.seed, mode: o.mode, wallSeconds: Math.round(wall), playSeconds: Math.round(play()),
     runMs: Math.round((typeof performance !== 'undefined' ? performance.now() : 0) - t0),
-    milestones: R.milestones, genesis: R.genesis, rebirthPayoutEnd: e.metaSystem.rebirthGain(s),
+    milestones: R.milestones, timeline2: rebirthsDone > 0 ? timeline2 : undefined, rebirths: rebirthsDone, genesis: R.genesis, rebirthPayoutEnd: e.metaSystem.rebirthGain(s),
     samples: R.samples, capShare, famineSeconds: R.famine, thirstSeconds: R.thirst, deaths: R.deaths, injuries: R.injuries,
     danger: { ...R.danger, minPop: R.danger.minPop === Infinity ? s.survivors.length : R.danger.minPop },
     incidents: R.incidents, missions: R.missions, missionFails: R.missionFails, kids: R.kids, arrivals: R.arrivals, events: R.events,
