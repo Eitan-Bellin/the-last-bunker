@@ -223,6 +223,9 @@ export const ICON_SVG = {
     + '<path d="M12 2.9c.6-1.2 1.8-1.3 2.4-.6" ' + S + ' stroke-width="1.3"/><path d="M6 21c.7-3 3.2-4.6 6-4.6s5.3 1.6 6 4.6z" opacity=".6"/>',
   rings: '<circle cx="8.8" cy="13.8" r="5.6" ' + S + ' stroke-width="2.1"/><circle cx="15.2" cy="13.8" r="5.6" ' + S + ' stroke-width="2.1" opacity=".6"/>'
     + '<path d="M15.2 3.2l1.6 1.8-1.6 1.8-1.6-1.8z"/>',
+  // Decision Inbox: a tray with a card dropping in.
+  inbox: '<path d="M3 13.5 5.6 5.2A1.5 1.5 0 0 1 7 4.2h10a1.5 1.5 0 0 1 1.4 1L21 13.5V19a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 19z" opacity=".6"/>'
+    + '<path d="M3 13.5h5.2l1.3 2.6h5l1.3-2.6H21V19a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 19z"/><rect x="8" y="6.5" width="8" height="1.8" rx=".6"/><rect x="8" y="9.6" width="8" height="1.8" rx=".6"/>',
   journal: '<rect x="4" y="2.5" width="15" height="19" rx="1.5"/><rect x="4" y="2.5" width="3" height="19" rx="1" opacity=".6"/>'
     + '<path d="M9.5 7.5h6.5M9.5 11h6.5M9.5 14.5h4" stroke="#000" stroke-opacity=".5" stroke-width="1.4" stroke-linecap="round"/><path d="M19 5h1.5v3H19z" opacity=".6"/>',
   tape: '<rect x="2" y="5" width="20" height="14" rx="2"/><rect x="5" y="8" width="14" height="5.4" rx="2.7" ' + CUT + '/>'

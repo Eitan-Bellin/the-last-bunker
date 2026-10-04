@@ -192,6 +192,8 @@ export interface GameStats {
 export interface ActiveEvent {
   id: string;
   data: Record<string, unknown>;
+  /** Play time it was posted (the answer deadline counts from here). Absent in older saves. */
+  at?: number;
 }
 
 export interface MissionReport {

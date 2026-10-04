@@ -72,3 +72,17 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px
 
 /* A story scene already seen in an earlier timeline can be skipped. */
 .story-skip { position: fixed; top: max(14px, env(safe-area-inset-top)); inset-inline-end: 14px; z-index: 5; opacity: 0.85; }
+
+/* [Long game] Decision Inbox */
+.inbox-btn { position: relative; }
+.inbox-btn .nav-badge { top: -6px; inset-inline-end: -6px; }
+.inbox-btn.has-cards { color: #ffd27a; border-color: rgba(255, 210, 122, 0.6); }
+.inbox-card { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 52px; margin: 0 0 8px; padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 10px; color: inherit; font: inherit; text-align: start; cursor: pointer; }
+.inbox-card:active { transform: scale(0.99); }
+.inbox-card.urgent { border-color: rgba(255, 110, 90, 0.7); background: rgba(255, 90, 70, 0.1); }
+.inbox-icon { flex: none; font-size: 1.3em; }
+.inbox-title { flex: 1; min-width: 0; }
+.inbox-left { flex: none; font-size: 0.85em; opacity: 0.75; }
+.inbox-left.soon { color: #ffb36a; opacity: 1; }
+.inbox-empty { opacity: 0.7; text-align: center; padding: 24px 8px; }

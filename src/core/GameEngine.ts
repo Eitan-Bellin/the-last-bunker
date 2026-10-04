@@ -26,6 +26,7 @@ import { DeathSystem } from '../systems/DeathSystem'; // [Danger]
 import { MaintenanceSystem } from '../systems/MaintenanceSystem';
 import { AwayDanger, type AwayDangerReport } from '../systems/AwayDanger';
 import { DIG_LORE, seedRuins } from '../data/ruins';
+import { InboxSystem } from '../systems/InboxSystem';
 import { logCrash } from './crashGuard';
 import { WASTE_TRACKED } from '../data/resources';
 
@@ -115,6 +116,8 @@ export class GameEngine {
   rushSystem: RushSystem;
   shopSystem: ShopSystem;
   projectSystem: ProjectSystem; // [LateGame B1]
+  /** [Long game] The Decision Inbox's own cards. */
+  inboxSystem: InboxSystem;
   /** The step list, in order (see registerSystems). New systems add themselves with register(). */
   private systems: EngineSystem[] = [];
   /** Game seconds gathered toward the next run of the slow systems. */
@@ -184,6 +187,7 @@ export class GameEngine {
     this.eventSystem.setDeath(this.deathSystem);
     this.incidentSystem.setDeath(this.deathSystem);
     this.incidentSystem.setBuildings(this.buildingSystem);
+    this.inboxSystem = new InboxSystem(this.stateManager);
     this.awayDanger = new AwayDanger(this.stateManager, this.rng, this.eventSystem, this.incidentSystem, this.deathSystem);
     bus.on('survivor:died', (s: unknown) => this.deathSystem.onDeath(s as import('./GameState').SurvivorState));
     bus.on('survivor:died', (s: unknown) => this.familySystem.forget((s as { id: string }).id));
@@ -242,6 +246,8 @@ export class GameEngine {
       { name: 'project', online: dt => this.projectSystem.update(dt), offline: dt => this.projectSystem.update(dt) }, // [LateGame B1]
       // [Danger C3] Rooms wear while away too (at the away efficiency).
       { name: 'maintenance', online: dt => this.maintenanceSystem.update(dt), offline: (dt, eff) => this.maintenanceSystem.update(dt * eff) },
+      // Card deadlines run on world time, so a safe default can be taken while the player is away.
+      { name: 'inbox', slow: true, online: () => this.inboxSystem.update(), offline: () => this.inboxSystem.update() },
       { name: 'achievements', slow: true, online: () => this.metaSystem.checkAchievements() },
       { name: 'objective', slow: true, online: () => this.objectiveSystem.update() },
       { name: 'era', slow: true, online: () => this.eraSystem.update() },

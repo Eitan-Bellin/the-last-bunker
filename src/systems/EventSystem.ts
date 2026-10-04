@@ -65,7 +65,23 @@ interface EventDef {
   init?: (state: GameState, ctx: Ctx) => Record<string, unknown>;
   choices: (data: Record<string, unknown>) => EventChoice[];
   resolve: (choice: string, data: Record<string, unknown>, ctx: Ctx) => EventResult;
+  /** The choice made for the player when nobody answers in time (default: the last one that is possible, usually "decline"). */
+  fallback?: string;
+  /** Never decided for the player (it waits however long it takes). */
+  noExpire?: boolean;
 }
+
+/** [Long game] Seconds of play an event waits in the Decision Inbox before its safe default is taken. */
+export const EVENT_DEADLINE = 600;
+
+/** When the event on the table expires (play time), or null if it never does. */
+export function eventDeadline(ev: { id: string; at?: number } | null | undefined): number | null {
+  if (!ev || ev.at === undefined || EVENTS.find(e => e.id === ev.id)?.noExpire) return null;
+  return ev.at + EVENT_DEADLINE;
+}
+
+/** What expiring an event did (for the inbox toast). */
+export interface EventExpired { id: string; key: string; data: Record<string, unknown>; result: EventResult }
 
 const MORALE_BUFF_DURATION = 300;
 
@@ -289,6 +305,7 @@ const EVENTS: EventDef[] = [
     // [Danger C1] Raids now come on their own clock with a warning (see raidTick); this stays so an older save's open dialog still resolves.
     id: 'raiders',
     weight: 1.3,
+    noExpire: true,
     condition: () => false,
     init: (s, ctx) => {
       const strength = Math.round(12 + s.buildings.length * 2 + s.stats.totalPlayTime / 900 + ctx.rng.nextInt(0, 8));
@@ -568,6 +585,7 @@ export class EventSystem {
 
   update(): void {
     this.raidTick(); // [Danger C1]
+    this.expireTick();
     const state = this.ctx.sm.state;
     // An empty bunker doesn't wait for the usual gap.
     if (!state.activeEvent && state.survivors.length === 0 && state.nextEventAt > state.stats.totalPlayTime + 45) {
@@ -582,7 +600,7 @@ export class EventSystem {
       const pair = state.survivors.length >= 6 && state.maxPopulation - state.survivors.length >= 2 && this.ctx.rng.chance(0.2);
       const def = EVENTS.find(e => e.id === (pair ? 'group' : 'wanderer'))!;
       const data = { ...def.init!(state, this.ctx), knock: 1 };
-      this.ctx.sm.applyDelta({ path: 'activeEvent', value: { id: def.id, data } });
+      this.ctx.sm.applyDelta({ path: 'activeEvent', value: { id: def.id, data, at: now } });
       bus.emit('event:triggered', def.id);
       return;
     }
@@ -618,8 +636,38 @@ export class EventSystem {
     }
 
     const data = picked.init?.(state, this.ctx) ?? {};
-    this.ctx.sm.applyDelta({ path: 'activeEvent', value: { id: picked.id, data } });
+    this.ctx.sm.applyDelta({ path: 'activeEvent', value: { id: picked.id, data, at: state.stats.totalPlayTime } });
     bus.emit('event:triggered', picked.id);
+  }
+
+  /**
+   * [Long game] An event nobody answered in time takes its safe default (the inbox shows it as decided).
+   * The clock is play time, so it never runs out while the player is away.
+   */
+  private expireTick(): void {
+    const state = this.ctx.sm.state;
+    const ev = state.activeEvent;
+    if (!ev) return;
+    const now = state.stats.totalPlayTime;
+    if (ev.at === undefined) {
+      this.ctx.sm.applyDelta({ path: 'activeEvent', value: { ...ev, at: now } });
+      return;
+    }
+    const due = eventDeadline(ev);
+    if (due === null || now < due) return;
+    const def = EVENTS.find(e => e.id === ev.id);
+    const choices = def?.choices(ev.data) ?? [];
+    const order = [...(def?.fallback ? choices.filter(c => c.key === def.fallback) : []), ...[...choices].reverse()];
+    for (const c of order) {
+      if (!this.isChoiceAvailable(c)) continue;
+      const result = this.resolve(c.key);
+      if (result) {
+        bus.emit('event:expired', { id: ev.id, key: c.key, data: ev.data, result } satisfies EventExpired);
+        return;
+      }
+    }
+    // Nothing possible (cannot happen for today's events): let it wait rather than loop.
+    this.ctx.sm.applyDelta({ path: 'activeEvent', value: { ...ev, at: now } });
   }
 
   getChoices(): EventChoice[] {

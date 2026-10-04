@@ -8,7 +8,7 @@ import { expeditionEvent } from '../../data/expeditionEvents';
 import type { ActiveMission } from '../../core/GameState';
 import type { GameApp } from '../../app';
 
-const EVENT_ICONS: Record<string, string> = {
+export const EVENT_ICONS: Record<string, string> = {
   wanderer: '[[door]]',
   group: '[[people]]',
   stash: '[[storage]]',

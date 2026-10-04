@@ -673,5 +673,16 @@
   "traitDesc.paranoid": "+3 הגנה לבונקר, תמיד על המשמר",
   "traitDesc.loner": "+25% כשעובד/ת לבד בחדר",
   "traitDesc.nightOwl": "+20% בשעות הלילה",
-  "story.skip": "דלגו על השיחה"
+  "story.skip": "דלגו על השיחה",
+  "inbox.title": "החלטות",
+  "inbox.new": "מחכה לך: {name}",
+  "inbox.empty": "אין החלטות פתוחות. הבונקר מסתדר לבד בינתיים.",
+  "inbox.waits": "מחכה לך",
+  "inbox.left": "להחליט תוך {t}",
+  "inbox.later": "אחר כך",
+  "inbox.missionAsks": "צוות משלחת שואל מה לעשות",
+  "inbox.reportOk": "דוח משלחת: הצוות חזר",
+  "inbox.reportBad": "דוח משלחת: זה נגמר רע",
+  "inbox.expired": "לא הייתה תשובה בזמן: \"{name}\", הבונקר בחר \"{choice}\"",
+  "inbox.expiredItem": "לא הייתה תשובה בזמן: \"{name}\" קיבל את ברירת המחדל הבטוחה"
 }

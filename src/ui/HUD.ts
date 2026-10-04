@@ -102,7 +102,16 @@ export class HUD {
     this.supplyBtn.addEventListener('click', () => this.onSupply?.());
 
     // gfx-p0: the menu moved to the bottom nav (createBottomNav) so this row fits a 360 px phone.
-    infoRow.append(this.eraChip, pop, morale, clock, this.supplyBtn, journal);
+    // [Long game] The Decision Inbox: shown from the second era on, with how many cards wait.
+    this.inboxBtn = el('button', 'lang-btn inbox-btn', '[[inbox]]');
+    this.inboxBtn.style.display = 'none';
+    this.inboxBtn.setAttribute('aria-label', i18n.t('inbox.title'));
+    this.inboxBadge = el('span', 'nav-badge');
+    this.inboxBadge.style.display = 'none';
+    this.inboxBtn.appendChild(this.inboxBadge);
+    this.inboxBtn.addEventListener('click', () => this.onInbox?.());
+
+    infoRow.append(this.eraChip, pop, morale, clock, this.supplyBtn, this.inboxBtn, journal);
     topBar.appendChild(infoRow);
     this.container.appendChild(topBar);
   }
@@ -118,6 +127,17 @@ export class HUD {
 
   private eraChip!: HTMLButtonElement;
   onJournal: (() => void) | null = null;
+  onInbox: (() => void) | null = null;
+  private inboxBtn!: HTMLButtonElement;
+  private inboxBadge!: HTMLElement;
+
+  /** The inbox button: hidden until the inbox is in use; the badge shows the waiting cards. */
+  setInbox(visible: boolean, count: number): void {
+    this.inboxBtn.style.display = visible ? '' : 'none';
+    this.inboxBadge.style.display = count > 0 ? '' : 'none';
+    this.setText(this.inboxBadge, String(count));
+    this.inboxBtn.classList.toggle('has-cards', count > 0);
+  }
   onEra: (() => void) | null = null;
 
   setJournalUnread(n: number): void {

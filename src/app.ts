@@ -48,6 +48,7 @@ import './styles/bunker-os.css';
 import './styles/depth.css';
 import './styles/touch.css';
 import { FeedbackController } from './ui/controllers/feedback';
+import { InboxController } from './ui/controllers/inbox';
 import { SaveController } from './ui/controllers/saves';
 import { LoreController } from './ui/controllers/lore';
 import { DigController } from './ui/controllers/dig';
@@ -71,6 +72,7 @@ const BUBBLE_CHECK_MS = 9000;
 export class GameApp {
   // Controllers: each owns one part of the game screen's behaviour (src/ui/controllers/).
   readonly feedback = new FeedbackController(this);
+  readonly inbox = new InboxController(this);
   readonly saves = new SaveController(this);
   readonly lore = new LoreController(this);
   readonly dig = new DigController(this);
@@ -382,6 +384,7 @@ export class GameApp {
       if (this.journal.isVisible) this.journal.refresh(state);
       if (this.eraPanel.isVisible) this.eraPanel.refresh(state);
       if (this.projectsPanel.isVisible) this.projectsPanel.refresh(state); // [LateGame B1]
+      this.inbox.refresh(state);
       const marks = doneProjects(state).join(',');
       if (marks !== this.projectMarks) { this.projectMarks = marks; setSurfaceProjects(marks ? marks.split(',') : []); } // [LateGame B1] surface markers
       this.updateBadges();
@@ -402,9 +405,10 @@ export class GameApp {
       else if ((state.danger?.memorialQueue?.length ?? 0) > 0) this.danger.showMemorial(); // [Danger C5]
       else if (this.raidResult) { const r = this.raidResult; this.raidResult = null; this.danger.showRaidResult(r); } // [Danger C1]
       else if (this.dangerPrompt) { this.dangerPrompt = false; if (this.danger.dangerBanner()) this.danger.showDanger(); } // [Danger C1/C2]
-      else if (state.activeEvent) this.events.showEvent();
-      else if (asking) this.events.showMissionChoice(asking);
-      else if (state.missionReports.length > 0) this.events.showMissionReport(state.missionReports[0]);
+      // [Long game] After the first era these wait in the Decision Inbox; emergencies and the story still open by themselves.
+      else if (this.inbox.autoOpenEvent(state)) this.events.showEvent();
+      else if (asking && !this.inbox.defers(state)) this.events.showMissionChoice(asking);
+      else if (state.missionReports.length > 0 && !this.inbox.defers(state)) this.events.showMissionReport(state.missionReports[0]);
       else if (this.pendingChapter && !document.querySelector('.era-banner')) this.story.playChapter(this.pendingChapter);
     }
     this.checkShortages();
@@ -728,6 +732,7 @@ export class GameApp {
     };
 
     this.feedback.install();
+    this.inbox.install();
 
     bus.on('state:loaded', () => {
       this.closeSheets();
@@ -760,7 +765,7 @@ export class GameApp {
   private anyPanelOpen(): boolean {
     return this.buildMenu.isVisible || this.buildingPanel.isVisible || this.peoplePanel.isVisible || this.researchPanel.isVisible
       || this.surfacePanel.isVisible || this.menuPanel.isVisible || this.ruinPanel.isVisible || this.journal.isVisible
-      || this.eraPanel.isVisible || this.projectsPanel.isVisible || this.loreReader.isVisible;
+      || this.eraPanel.isVisible || this.projectsPanel.isVisible || this.loreReader.isVisible || this.inbox.isVisible;
   }
 
   /**
@@ -812,6 +817,7 @@ export class GameApp {
     this.journal.hide();
     this.eraPanel.hide();
     this.projectsPanel.hide(); // [LateGame B1]
+    this.inbox.hide();
   }
 
   // ---- [Danger] raid warnings, disasters, memorials (LATEGAME-PLAN part C) ----

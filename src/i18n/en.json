@@ -673,5 +673,16 @@
   "traitDesc.paranoid": "+3 bunker defense, always on watch",
   "traitDesc.loner": "+25% when working alone in a room",
   "traitDesc.nightOwl": "+20% at night",
-  "story.skip": "Skip the scene"
+  "story.skip": "Skip the scene",
+  "inbox.title": "Decisions",
+  "inbox.new": "Waiting for you: {name}",
+  "inbox.empty": "Nothing waits for a decision. The bunker runs itself for now.",
+  "inbox.waits": "waits for you",
+  "inbox.left": "decide within {t}",
+  "inbox.later": "Later",
+  "inbox.missionAsks": "An expedition team asks what to do",
+  "inbox.reportOk": "Expedition report: the team is back",
+  "inbox.reportBad": "Expedition report: it went badly",
+  "inbox.expired": "No answer in time: \"{name}\", the bunker chose \"{choice}\"",
+  "inbox.expiredItem": "No answer in time: \"{name}\" took its safe default"
 }
