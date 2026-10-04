@@ -26,8 +26,8 @@ export interface QualityProfile {
 }
 export const QUALITY_PROFILE: Record<QualityLevel, QualityProfile> = {
   high: { res: 2.5, msaa: true, passes: 4, grain: true, fps: [60, 60, 30] },
-  medium: { res: 2, msaa: false, passes: 2, grain: false, fps: [60, 30, 15] },
-  low: { res: 1.5, msaa: false, passes: 0, grain: false, fps: [30, 20, 10] },
+  medium: { res: 1.5, msaa: false, passes: 2, grain: false, fps: [60, 30, 15] },
+  low: { res: 1, msaa: false, passes: 0, grain: false, fps: [30, 20, 10] },
 };
 
 export function storedQuality(): QualityLevel | null {
@@ -420,6 +420,9 @@ class CompositeFilter extends Filter {
         uBloom: rtA.source,
       },
     });
+    // Pixi filters render at resolution 1 unless told otherwise: the whole world used to be drawn at one pixel per CSS pixel
+    // and stretched to the screen, which is what made the game blurry on every phone at every quality level.
+    this.resolution = 'inherit';
     this.rtA = rtA;
     this.rtB = rtB;
     const u = this.resources.compositeUniforms.uniforms;
