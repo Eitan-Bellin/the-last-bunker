@@ -16,6 +16,12 @@ export type ResourceType =
   | 'isotope7'
   | 'blueprints'
   | 'vaultCoins'
+  // Long game, tier 2 refined goods (see src/data/resources.ts).
+  | 'components'
+  | 'alloys'
+  | 'data'
+  | 'influence'
+  | 'seedCores'
   // [Economy A1] Trade credits: what storage overflow turns into (no cap); spent in the shop.
   | 'credits';
 
@@ -461,6 +467,11 @@ export function createInitialState(): GameState {
       blueprints: { amount: 0, cap: Infinity, productionRate: 0, consumptionRate: 0 },
       vaultCoins: { amount: 0, cap: Infinity, productionRate: 0, consumptionRate: 0 },
       credits: { amount: 0, cap: Infinity, productionRate: 0, consumptionRate: 0 },
+      components: { amount: 0, cap: 0, productionRate: 0, consumptionRate: 0 },
+      alloys: { amount: 0, cap: 0, productionRate: 0, consumptionRate: 0 },
+      data: { amount: 0, cap: 0, productionRate: 0, consumptionRate: 0 },
+      influence: { amount: 0, cap: 0, productionRate: 0, consumptionRate: 0 },
+      seedCores: { amount: 0, cap: 0, productionRate: 0, consumptionRate: 0 },
     },
     buildings: [],
     survivors: [],

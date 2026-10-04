@@ -27,6 +27,7 @@ import { MaintenanceSystem } from '../systems/MaintenanceSystem';
 import { AwayDanger, type AwayDangerReport } from '../systems/AwayDanger';
 import { DIG_LORE, seedRuins } from '../data/ruins';
 import { logCrash } from './crashGuard';
+import { WASTE_TRACKED } from '../data/resources';
 
 const TICK_RATE = 10;
 const TICK_INTERVAL = 1000 / TICK_RATE;
@@ -55,7 +56,6 @@ const AWAY_DOOR_MAX = 3;
 /** Away from home, word travels slower: newcomers come at half the usual pace. */
 const AWAY_ARRIVAL_SLOWDOWN = 2;
 /** Resources whose overflow the welcome-back report counts (power is meant to be spent at once). */
-const WASTE_TRACKED: ResourceType[] = ['food', 'water', 'materials', 'medicine', 'knowledge', 'scrap'];
 
 export interface OfflineReport {
   seconds: number;
