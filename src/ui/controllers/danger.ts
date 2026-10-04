@@ -1,10 +1,12 @@
+import { getDef } from '../../data/buildingDefs';
+import type { BuildingType, RaidStance } from '../../core/GameState';
 import { vibrate } from '../../utils/haptics';
 import { i18n } from '../../i18n/I18nManager';
 import { costRow, el } from '../../ui/dom';
 import { portraitFor, portraitUrl } from '../../data/portraits';
 import { INCIDENTS, DISASTERS, disasterCost } from '../../data/incidents';
 import { CEREMONY_COST } from '../../systems/DeathSystem';
-import { bunkerDefense, raidTribute, type RaidResult } from '../../systems/EventSystem';
+import { bunkerDefense, defenseParts, raidTribute, type RaidResult } from '../../systems/EventSystem';
 import type { GameApp } from '../../app';
 
 /** Raids, disasters, incidents in rooms, and the memorial. */
@@ -83,20 +85,41 @@ export class DangerController {
       return;
     }
     if (!d.raid) return;
+    const raid = d.raid;
     const tribute = raidTribute(state) as Record<string, number>;
-    const weak = bunkerDefense(state) < d.raid.strength;
-    body.append(
-      el('p', 'modal-body', i18n.t('danger.raid.body', { strength: d.raid.strength, defense: bunkerDefense(state), time: i18n.formatDuration(raidLeft) })),
-      el('p', `bp-hint ${weak ? 'negative-text' : ''}`, i18n.t(weak ? 'danger.raid.hintWeak' : 'danger.raid.hintOk')),
-    );
+    const kind = raid.kind;
+    const stance = raid.stance ?? 'hold';
+    const defHold = bunkerDefense(state, kind, 'hold');
+    const defSally = bunkerDefense(state, kind, 'sally');
+    const weak = defHold < raid.strength;
+    body.append(el('p', 'modal-body', i18n.t('danger.raid.body', { strength: raid.strength, defense: defHold, time: i18n.formatDuration(raidLeft) })));
+    // [P2] The scout report: who is coming and what stops them.
+    if (kind) {
+      const p = defenseParts(state);
+      body.append(
+        el('p', 'modal-sub', `[[eye]] ${i18n.t(`raid.kind.${kind}`)}`),
+        el('p', 'bp-hint', i18n.t('raid.parts', { walls: Math.round(p.walls), guards: Math.round(p.guards), residents: Math.round(p.residents) })),
+      );
+    }
+    body.appendChild(el('p', `bp-hint ${weak ? 'negative-text' : ''}`, i18n.t(weak ? 'danger.raid.hintWeak' : 'danger.raid.hintOk')));
     if (note) body.appendChild(note);
+    const choose = (s: RaidStance) => () => {
+      this.app.engine.eventSystem.setStance(s);
+      this.app.engine.notifyInteraction();
+      this.app.engine.requestSave();
+      this.app.modal.hide();
+      this.app.toasts.show(`[[armory]] ${i18n.t(`raid.stance.${s}.set`)}`, 'info');
+    };
+    const odds = (v: number) => i18n.t(v >= raid.strength ? 'raid.odds.win' : 'raid.odds.lose', { def: v, str: raid.strength });
     this.app.modal.show({
       icon: '[[armory]]',
       title: i18n.t('danger.raid.title'),
       body,
       actions: [
+        { label: `${stance === 'hold' ? '✓ ' : ''}${i18n.t('raid.stance.hold')}`, className: !weak ? 'btn-primary' : 'btn-secondary', detail: el('span', 'difficulty-desc', odds(defHold)), onClick: choose('hold') },
+        ...(kind ? [{ label: `${stance === 'sally' ? '✓ ' : ''}${i18n.t('raid.stance.sally')}`, className: weak && defSally >= raid.strength ? 'btn-primary' : 'btn-secondary', detail: el('span', 'difficulty-desc', odds(defSally)), onClick: choose('sally') }] : []),
         {
-          label: i18n.t('danger.raid.pay'), className: weak ? 'btn-primary' : 'btn-secondary', disabled: !this.app.engine.eventSystem.canPayTribute(),
+          label: i18n.t('danger.raid.pay'), className: weak && defSally < raid.strength ? 'btn-primary' : 'btn-secondary', disabled: !this.app.engine.eventSystem.canPayTribute(),
           detail: costRow(state, tribute),
           onClick: () => {
             this.app.engine.eventSystem.payTribute();
@@ -105,7 +128,7 @@ export class DangerController {
             this.app.modal.hide();
           },
         },
-        { label: i18n.t('danger.raid.hold'), className: weak ? 'btn-secondary' : 'btn-primary', onClick: () => this.app.modal.hide() },
+        ...(kind ? [{ label: `${stance === 'hide' ? '✓ ' : ''}${i18n.t('raid.stance.hide')}`, className: 'btn-secondary', detail: el('span', 'difficulty-desc', i18n.t('raid.stance.hide.desc')), onClick: choose('hide') }] : []),
       ],
     });
   }
@@ -119,6 +142,8 @@ export class DangerController {
       body.appendChild(el('p', 'modal-sub negative-text', `[[bandage]] ${i18n.t('mission.injury', { name: this.app.localName(inj.name), n: inj.damage, ...this.app.gByName(inj.name, (inj as { id?: string }).id) })}`));
     }
     if (r.died) body.appendChild(el('p', 'modal-sub negative-text', `[[skull]] ${i18n.t('raid.result.died', { name: this.app.localName(r.died), ...this.app.gByName(r.died) })}`));
+    // [P2] A room wrecked in the rout: it waits as a ruin, and comes back as it was once restored.
+    if (r.wrecked) body.appendChild(el('p', 'modal-sub negative-text', `[[pick]] ${i18n.t('raid.result.wrecked', { room: getDef(r.wrecked as BuildingType)?.name[i18n.currentLocale] ?? r.wrecked })}`));
     this.app.audio.play(r.key === 'win' || r.key === 'winCaptive' ? 'achievement' : 'error');
     this.app.modal.show({
       icon: '[[armory]]',

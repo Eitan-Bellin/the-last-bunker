@@ -431,7 +431,7 @@ export class IncidentSystem {
     const canKill = allowDeath && !isQuiet(state) && !!this.death;
     const kill = (id: string) => {
       const name = this.sm.state.survivors.find(s => s.id === id)?.name;
-      if (name && this.death?.kill(id)) res.died.push(name);
+      if (name && this.death?.kill(id, `disaster:${dz.kind}`)) res.died.push(name);
     };
     const now = Date.now();
     switch (dz.kind) {

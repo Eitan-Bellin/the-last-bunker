@@ -101,3 +101,6 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px
 .foreman { margin-top: 12px; }
 .foreman-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 6px 0; }
 .foreman-text { flex: 1; min-width: 0; }
+
+/* [P2] Season chip */
+.season-btn { position: relative; }

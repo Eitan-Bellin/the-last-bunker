@@ -1,3 +1,4 @@
+import { inBreather, threatPace } from './ThreatSystem';
 import { difficultyOf } from '../data/difficulty';
 import type { DisasterKind, GameState } from '../core/GameState';
 import type { StateManager } from '../core/StateManager';
@@ -71,7 +72,8 @@ export class AwayDanger {
     }
     // New rolls, at half the usual pace.
     if ((state0.era ?? 0) >= 2) {
-      const raidRate = (RAIDS_PER_DAY[Math.min(3, state0.era)] ?? 1) * AWAY_FREQUENCY / 86400;
+      // [P2] The threat director sets the pace, and a breather keeps raiders away.
+      const raidRate = inBreather(state0) ? 1e-9 : (RAIDS_PER_DAY[Math.min(3, state0.era)] ?? 1) * AWAY_FREQUENCY * threatPace(state0) / 86400;
       const disasterRate = DISASTERS_PER_DAY * AWAY_FREQUENCY / 86400;
       for (const [rate, type] of [[raidRate, 'raid'], [disasterRate, 'disaster']] as const) {
         if (state0.danger.raid && type === 'raid') continue;
@@ -123,15 +125,15 @@ export class AwayDanger {
     return report;
   }
 
-  /** After more than a day of ignored danger, an injury sometimes turns fatal (most of the time). */
+  /** After more than a day of ignored danger, an injury sometimes turns fatal (by difficulty). */
   private ignoredToll(): boolean {
-    return this.rng.chance(0.65);
+    return this.rng.chance(difficultyOf(this.sm.state).awayToll);
   }
 
   /** The most badly hurt adult does not recover. */
   private lose(report: AwayDangerReport): void {
     const weakest = [...this.sm.state.survivors].filter(s => !s.child).sort((a, b) => a.health - b.health)[0];
-    if (weakest && this.death.kill(weakest.id)) report.died.push(weakest.name);
+    if (weakest && this.death.kill(weakest.id, 'away')) report.died.push(weakest.name);
   }
 
   /** A random disaster the bunker could suffer, without ever putting it on the countdown. */

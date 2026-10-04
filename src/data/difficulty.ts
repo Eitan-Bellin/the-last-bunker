@@ -20,12 +20,24 @@ export interface DifficultyDef {
   awayDeaths: boolean;
   /** Legacy (Genesis payout) multiplier, by the easiest difficulty the run was played on. */
   legacy: number;
+  /** [P2] Whether anyone can die at all (Settler: injuries only, never a death). */
+  canDie: boolean;
+  /** [P2] Online, health never drops below this (Settler keeps everyone standing). */
+  onlineHealthFloor: number;
+  /** [P2] Hours without new raids after a hard hit or a death. */
+  breatherHours: number;
+  /** [P2] The threat director's meter is scaled by this. */
+  threat: number;
+  /** [P2] A crushing raid can wreck a room (it becomes a ruin to restore). */
+  roomDamage: boolean;
+  /** [P2] After a day of ignored danger away, the chance an injury turns fatal. */
+  awayToll: number;
 }
 
 export const DIFFICULTIES: readonly DifficultyDef[] = [
-  { id: 'settler', icon: '[[heart]]', consumption: 0.8, raidStrength: 0.75, awayHealthFloor: 35, startStock: 0.5, awayDeaths: false, legacy: 0.75 },
-  { id: 'warden', icon: '[[vault]]', consumption: 1, raidStrength: 1, awayHealthFloor: 15, startStock: 0, awayDeaths: true, legacy: 1 },
-  { id: 'last', icon: '[[skull]]', consumption: 1.25, raidStrength: 1.3, awayHealthFloor: 1, startStock: -0.25, awayDeaths: true, legacy: 1.4 },
+  { id: 'settler', icon: '[[heart]]', consumption: 0.8, raidStrength: 0.75, awayHealthFloor: 35, startStock: 0.5, awayDeaths: false, legacy: 0.75, canDie: false, onlineHealthFloor: 5, breatherHours: 18, threat: 0.7, roomDamage: false, awayToll: 0 },
+  { id: 'warden', icon: '[[vault]]', consumption: 1, raidStrength: 1, awayHealthFloor: 15, startStock: 0, awayDeaths: true, legacy: 1, canDie: true, onlineHealthFloor: 0, breatherHours: 10, threat: 1, roomDamage: true, awayToll: 0.4 },
+  { id: 'last', icon: '[[skull]]', consumption: 1.25, raidStrength: 1.3, awayHealthFloor: 1, startStock: -0.25, awayDeaths: true, legacy: 1.4, canDie: true, onlineHealthFloor: 0, breatherHours: 4, threat: 1.3, roomDamage: true, awayToll: 0.65 },
 ];
 
 export function difficultyOf(state: GameState): DifficultyDef {

@@ -268,10 +268,15 @@ export interface Grief {
   tag?: string;
 }
 
+/** [P2] Who is coming: many light scavengers (walls stop them) or a few hard marauders (guards stop them). */
+export type RaidKind = 'scavengers' | 'marauders';
+/** [P2] How the bunker meets them: hold the door, send the guards out, or hide everyone below and let them take what they find. */
+export type RaidStance = 'hold' | 'sally' | 'hide';
+
 export interface DangerState {
   disasters: Disaster[];
   /** An approaching raid: it hits at hitAt (play seconds); until then the player can pay or prepare. */
-  raid: { hitAt: number; strength: number } | null;
+  raid: { hitAt: number; strength: number; kind?: RaidKind; stance?: RaidStance } | null;
   /** Play-second clocks; 0 = not scheduled yet. */
   nextRaidAt: number;
   nextDisasterAt: number;
@@ -318,6 +323,11 @@ export interface Ruin {
   total: number;
   started: boolean;
   lore: string | null;
+  /** [P2] A room wrecked by raiders comes back at its old level and role. */
+  restoresLevel?: number;
+  restoresSpec?: string | null;
+  /** [P2] Its own price and work (instead of the ruin kind's). */
+  cost?: Partial<Record<ResourceType, number>>;
 }
 
 export interface GameState {

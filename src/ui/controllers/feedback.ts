@@ -1,3 +1,4 @@
+import { SEASONS, nextSeason, seasonAt } from '../../data/seasons';
 import { ACTS } from '../../data/acts';
 import { vibrate } from '../../utils/haptics';
 import { getProject } from '../../data/projects';
@@ -281,6 +282,20 @@ export class FeedbackController {
       };
       setTimeout(show, 600);
     });
+    // [P2] The turn of the seasons.
+    bus.on('season:change', (id: unknown) => {
+      const s = SEASONS.find(x => x.id === id);
+      if (!s) return;
+      this.app.audio.play('paper');
+      this.app.toasts.show(`[[${s.icon}]] ${i18n.t('season.now', { name: s.name[i18n.currentLocale], desc: s.desc[i18n.currentLocale] })}`, 'info');
+    });
+    this.app.hud.onSeason = () => {
+      const st = this.app.state;
+      const now = seasonAt(st);
+      const next = nextSeason(st);
+      const loc = i18n.currentLocale;
+      this.app.toasts.show(`[[${now.def.icon}]] ${i18n.t('season.forecast', { now: now.def.name[loc], desc: now.def.desc[loc], next: next.name[loc], t: i18n.formatDuration(now.left), nextDesc: next.desc[loc] })}`, 'info');
+    };
     bus.on('dig:start', () => {
       this.app.toasts.show(`[[pick]] ${i18n.t('dig.started', { n: this.app.state.currentFloors + 1, t: i18n.formatDuration(this.app.state.longGame?.dig.total ?? 0) })}`, 'info');
     });

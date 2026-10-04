@@ -1,3 +1,4 @@
+import { difficultyOf } from '../data/difficulty';
 import type { Fallen, GameState, Grief, SurvivorState } from '../core/GameState';
 import type { StateManager } from '../core/StateManager';
 import { bus } from '../core/EventBus';
@@ -47,17 +48,18 @@ export class DeathSystem {
   }
 
   /** Takes a living person out of the bunker (the same bookkeeping as starving to death) and announces it. */
-  kill(id: string): boolean {
+  /** `cause` is told with the death (raid, disaster:<kind>, away, health). On Settler nobody dies: returns false. */
+  kill(id: string, cause = 'other'): boolean {
     const state = this.sm.state;
     const s = state.survivors.find(x => x.id === id);
-    if (!s) return false;
+    if (!s || !difficultyOf(state).canDie) return false;
     this.sm.applyDelta({ path: 'survivors', value: state.survivors.filter(x => x.id !== id) });
     this.sm.applyDelta({
       path: 'buildings',
       value: this.sm.state.buildings.map(b => (b.assignedSurvivorIds.includes(id)
         ? { ...b, assignedSurvivorIds: b.assignedSurvivorIds.filter(x => x !== id) } : b)),
     });
-    bus.emit('survivor:died', s);
+    bus.emit('survivor:died', s, cause);
     return true;
   }
 

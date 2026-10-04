@@ -89,6 +89,7 @@ export function seedRuins(): Ruin[] {
 }
 
 export function ruinCost(r: Ruin): Partial<Record<ResourceType, number>> {
+  if (r.cost) return { ...r.cost };
   const base = RUIN_KINDS[r.kind].cost;
   const out: Partial<Record<ResourceType, number>> = {};
   for (const [k, v] of Object.entries(base)) out[k as ResourceType] = Math.round((v ?? 0) * (r.w / 2));

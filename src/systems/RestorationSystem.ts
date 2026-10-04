@@ -191,6 +191,9 @@ export class RestorationSystem {
         this.sm.applyDeltas([
           { path: `buildings.${idx}.isConstructing`, value: false },
           { path: `buildings.${idx}.constructionProgress`, value: b.constructionTotal },
+          // [P2] A room the raiders wrecked comes back as it was.
+          ...(ruin.restoresLevel ? [{ path: `buildings.${idx}.level`, value: ruin.restoresLevel }] : []),
+          ...(ruin.restoresSpec ? [{ path: `buildings.${idx}.specialization`, value: ruin.restoresSpec }] : []),
         ]);
         this.buildings.recalculateMaxPopulation(this.sm);
       }

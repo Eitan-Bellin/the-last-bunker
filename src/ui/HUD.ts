@@ -1,3 +1,4 @@
+import { seasonAt, seasonsActive } from '../data/seasons';
 import { resourceDef } from '../data/resources';
 import type { GameState, ResourceType } from '../core/GameState';
 import { vibrate } from '../utils/haptics';
@@ -96,6 +97,11 @@ export class HUD {
     this.clockValue.dir = 'ltr';
     this.clockIcon = el('span', 'info-icon', '[[sun]]');
     clock.append(this.clockIcon, this.clockValue);
+    // [P2] The season: its icon and the days left; a tap tells the forecast.
+    this.seasonBtn = el('button', 'lang-btn season-btn', '[[clover]]');
+    this.seasonBtn.style.display = 'none';
+    this.seasonBtn.setAttribute('aria-label', i18n.t('season.title'));
+    this.seasonBtn.addEventListener('click', () => this.onSeason?.());
 
     // The daily supply drop (NICE3): a crate button that only shows while today's crate is unopened.
     this.supplyBtn = el('button', 'lang-btn supply-btn', '[[gift]]');
@@ -113,7 +119,7 @@ export class HUD {
     this.inboxBtn.appendChild(this.inboxBadge);
     this.inboxBtn.addEventListener('click', () => this.onInbox?.());
 
-    infoRow.append(this.eraChip, pop, morale, clock, this.supplyBtn, this.inboxBtn, journal);
+    infoRow.append(this.eraChip, pop, morale, clock, this.seasonBtn, this.supplyBtn, this.inboxBtn, journal);
     topBar.appendChild(infoRow);
     this.container.appendChild(topBar);
   }
@@ -130,6 +136,9 @@ export class HUD {
   private eraChip!: HTMLButtonElement;
   onJournal: (() => void) | null = null;
   onInbox: (() => void) | null = null;
+  onSeason: (() => void) | null = null;
+  private seasonBtn!: HTMLButtonElement;
+  private seasonSig = '';
   private inboxBtn!: HTMLButtonElement;
   private inboxBadge!: HTMLElement;
 
@@ -303,6 +312,17 @@ export class HUD {
         if (opens > 0 && act >= opens) tier2 = true;
       }
       this.resourceEls.values().next().value?.root.parentElement?.classList.toggle('tier2', tier2);
+    }
+    // [P2] Season chip (from the second Act).
+    const season = seasonsActive(state) ? seasonAt(state) : null;
+    const sSig = season ? `${season.def.id}|${Math.ceil(season.left / 86400)}` : '';
+    if (sSig !== this.seasonSig) {
+      this.seasonSig = sSig;
+      this.seasonBtn.style.display = season ? '' : 'none';
+      if (season) {
+        setRich(this.seasonBtn, `[[${season.def.icon}]]`);
+        this.seasonBtn.title = `${season.def.name[i18n.currentLocale]} · ${i18n.formatDuration(season.left)}`;
+      }
     }
     const nowMs = performance.now();
     const dtRoll = Math.min(0.1, (nowMs - this.lastUpdate) / 1000);

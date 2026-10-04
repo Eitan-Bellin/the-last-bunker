@@ -1,3 +1,4 @@
+import { seasonEffects } from '../data/seasons';
 import type { BuildingInstance, GameState, ResourceType, ResourceState } from '../core/GameState';
 import type { StateManager, StateDelta } from '../core/StateManager';
 import { getDef, effectiveLevel, levelMultiplier, workforceMultiplier } from '../data/buildingDefs';
@@ -41,6 +42,8 @@ registerModifier({
   mult: ({ resource }) => (resource === 'power' ? 1 : moraleNow),
 });
 registerModifier({ id: 'echo', mult: ({ state }) => prestigeMultiplier(state) });
+// [P2] The season leans on food, water or materials.
+registerModifier({ id: 'season', mult: ({ state, resource }) => seasonEffects(state)?.output[resource] ?? 1 });
 // [Long game] A room that is changing its role produces nothing until the work is done.
 registerModifier({ id: 'retool', mult: ({ state, building }) => (retooling(state, building) ? 0 : 1) });
 
@@ -80,11 +83,13 @@ export class ResourceSystem {
 
     let powerProd = 0;
     let powerDemand = 0;
+    // [P2] Winter heating.
+    const seasonPower = seasonEffects(state)?.powerDemand ?? 1;
     for (const b of state.buildings) {
       const level = effectiveLevel(b);
       const def = getDef(b.type);
       if (!def || level <= 0) continue;
-      powerDemand += roomPowerDraw(def.powerConsumption, level);
+      powerDemand += roomPowerDraw(def.powerConsumption, level) * seasonPower;
       const p = def.production?.power;
       if (p && !incidentBlocks(state, b)) powerProd += this.powerOutput(state, b, level);
     }

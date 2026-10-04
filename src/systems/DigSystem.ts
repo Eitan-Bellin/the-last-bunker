@@ -2,6 +2,7 @@ import type { GameState, SurvivorState } from '../core/GameState';
 import type { StateManager } from '../core/StateManager';
 import { bus } from '../core/EventBus';
 import { masteryMultiplier } from '../data/mastery';
+import { getDef } from '../data/buildingDefs';
 import type { BuildingSystem } from './BuildingSystem';
 import type { PopulationSystem } from './PopulationSystem';
 
@@ -72,7 +73,10 @@ export class DigSystem {
     this.population.assignSurvivorToBuilding(this.sm, survivorId, null);
   }
 
-  /** Fills the crew: idle adults first, then the least skilled workers of the fullest rooms. */
+  /**
+   * Fills the crew: idle adults first, then the least skilled workers of the fullest rooms. It never takes the last
+   * hand from a room that keeps people alive (power, water, food).
+   */
   autoStaff(): number {
     let added = 0;
     for (let guard = 0; guard < 8; guard++) {
@@ -80,8 +84,13 @@ export class DigSystem {
       if (!this.active(state) || this.crew(state).length >= this.wanted(state)) break;
       const free = state.survivors.filter(s => !s.child && !s.isOnMission && s.assignedBuildingId !== DIG_CREW);
       const idle = free.find(s => !s.assignedBuildingId);
+      const vital = (id: string) => {
+        const b = state.buildings.find(x => x.id === id);
+        const prod = b ? getDef(b.type)?.production : undefined;
+        return !!b && !!prod && (!!prod.power || !!prod.water || !!prod.food) && b.assignedSurvivorIds.length <= 1;
+      };
       const pick = idle ?? free
-        .filter(s => s.assignedBuildingId && !s.assignedBuildingId.startsWith('p_') && !s.assignedBuildingId.startsWith('r_'))
+        .filter(s => s.assignedBuildingId && !s.assignedBuildingId.startsWith('p_') && !s.assignedBuildingId.startsWith('r_') && !vital(s.assignedBuildingId))
         .sort((a, b) => {
           const ra = state.buildings.find(x => x.id === a.assignedBuildingId)?.assignedSurvivorIds.length ?? 0;
           const rb = state.buildings.find(x => x.id === b.assignedBuildingId)?.assignedSurvivorIds.length ?? 0;

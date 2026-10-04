@@ -72,6 +72,12 @@ export class EraPanel {
       el('div', 'era-tagline', act.tagline[locale]),
       el('div', 'act-limits', i18n.t('act.limits', { level: act.levelCap, people: act.popCap, floors: act.floorCap })),
     );
+    // [P2] How tempting the bunker looks out there.
+    if (this.lastState?.longGame) {
+      const t = this.lastState.longGame.threat;
+      const calm = t.breatherUntil > this.lastState.longGame.meta.worldT;
+      card.appendChild(el('div', 'act-limits', `[[skull]] ${i18n.t('threat.meter', { n: Math.round(t.meter) })}${calm ? ` · ${i18n.t('threat.breather', { t: i18n.formatDuration(t.breatherUntil - this.lastState.longGame.meta.worldT) })}` : ''}`));
+    }
     const last = act.id >= ACTS.length;
     card.appendChild(el('div', 'bp-section-title', last ? i18n.t('act.goalsGenesis') : i18n.t('act.goalsNext', { name: ACTS[act.id].name[locale] })));
     this.actBars = [];

@@ -44,6 +44,8 @@ export interface SimOptions {
   returnMode?: 'restart' | 'resume';
   /** [Danger] A control run with raids, disasters, wear and away danger switched off (compare Genesis timing). */
   noDanger?: boolean;
+  /** [P2] Difficulty picked at the start (settler / warden / last), when the engine has one. */
+  difficulty?: string;
   /** Concurrent expedition teams when the engine has no limit of its own. */
   teams?: number;
   /** Press Genesis this many times (the bot buys nothing in the shop) and keep playing: the second timeline's milestones go to `timeline2`. */
@@ -79,7 +81,7 @@ export interface SimResult {
   samples: Sample[];
   capShare: Record<string, number>;
   famineSeconds: number; thirstSeconds: number;
-  deaths: { total: number; famine: number; other: number };
+  deaths: { total: number; famine: number; other: number; causes?: Record<string, number> };
   injuries: { expedition: number; raid: number; sickness: number };
   /** [Danger] raids, disasters, upkeep, away danger and when each death happened (wall days). */
   danger: {
@@ -88,6 +90,8 @@ export interface SimResult {
     deathDays: number[]; minPop: number; minPopDay: number;
     /** [strength, defense, pop, era] at each raid warning (tuning aid). */
     raidLog: number[][];
+    /** [P2] Raid outcomes by kind of raider and stance: "marauders/hold/win". */
+    byKind?: Record<string, number>;
   };
   incidents: number; missions: number; missionFails: number; kids: number;
   arrivals: { accepted: number; refused: number; doorAdmitted: number };
@@ -265,6 +269,7 @@ export async function runSim(o: SimOptions): Promise<SimResult> {
   e.rng.seed = o.seed;
   (e as unknown as { setupNewGame: () => void }).setupNewGame();
   sm.applyDelta({ path: 'storyFlags', value: [...sm.state.storyFlags, 'intro:done'] });
+  if (o.difficulty) fn(e, 'setDifficulty')?.(o.difficulty);
   let stepper = buildStepper(e, warnings);
   const stepList = stepper.names;
 
@@ -280,13 +285,13 @@ export async function runSim(o: SimOptions): Promise<SimResult> {
     samples: [] as Sample[],
     capTicks: {} as Record<string, number>, capSamples: 0,
     famine: 0, thirst: 0,
-    deaths: { total: 0, famine: 0, other: 0 },
+    deaths: { total: 0, famine: 0, other: 0, causes: {} as Record<string, number> },
     injuries: { expedition: 0, raid: 0, sickness: 0 },
     incidents: 0, missions: 0, missionFails: 0, kids: 0,
     danger: {
       raids: {} as Record<string, number>, disasterStarted: 0, disasterHandled: 0, disasterStruck: {} as Record<string, number>,
       tributes: 0, maintained: 0, away: { raids: 0, raidsLost: 0, disasters: 0, hurt: 0, died: 0 },
-      deathDays: [] as number[], minPop: Infinity, minPopDay: 0, raidLog: [] as number[][],
+      deathDays: [] as number[], minPop: Infinity, minPopDay: 0, raidLog: [] as number[][], byKind: {} as Record<string, number>,
     },
     arrivals: { accepted: 0, refused: 0, doorAdmitted: 0 },
     events: {} as Record<string, number>,
@@ -319,15 +324,25 @@ export async function runSim(o: SimOptions): Promise<SimResult> {
   const offs = [
     bus.on('era:advance', (era: unknown) => mark(`era ${era} ${ERAS[era as number]?.key ?? ''}`.trim())),
     bus.on('act:advance', (act: unknown) => mark(`act ${act}`)), // [Long game]
-    bus.on('survivor:died', () => {
+    bus.on('survivor:died', (_s: unknown, cause: unknown) => {
       R.deaths.total++;
+      const c = String(cause ?? 'other');
+      R.deaths.causes![c] = (R.deaths.causes![c] ?? 0) + 1;
       const s = state();
       if (s.resources.food.amount <= 0 || s.resources.water.amount <= 0) R.deaths.famine++; else R.deaths.other++;
       mark('first death');
       R.danger.deathDays.push(+(wall / 86400).toFixed(2));
     }),
     // [Danger] raid outcomes, disasters, away danger
-    bus.on('raid:resolved', (r: unknown) => { const k = (r as { key: string }).key; R.danger.raids[k] = (R.danger.raids[k] ?? 0) + 1; }),
+    bus.on('raid:resolved', (r: unknown) => {
+      const x = r as { key: string; kind?: string; stance?: string };
+      R.danger.raids[x.key] = (R.danger.raids[x.key] ?? 0) + 1;
+      if (x.kind) {
+        const out = x.key.startsWith('win') ? 'win' : x.key;
+        const k = `${x.kind}/${x.stance ?? 'hold'}/${out}`;
+        R.danger.byKind![k] = (R.danger.byKind![k] ?? 0) + 1;
+      }
+    }),
     bus.on('disaster:start', () => { R.danger.disasterStarted++; }),
     bus.on('disaster:handled', () => { R.danger.disasterHandled++; }),
     bus.on('disaster:struck', (r: unknown) => { const k = (r as { kind: string }).kind; R.danger.disasterStruck[k] = (R.danger.disasterStruck[k] ?? 0) + 1; }),
@@ -428,7 +443,10 @@ export async function runSim(o: SimOptions): Promise<SimResult> {
     // A raid is coming: post guards, and pay the toll if the door still looks too weak.
     const freshRaid = !!d.raid && !noticed.has(`raid:${d.raid.hitAt}`);
     if (d.raid && notice(`raid:${d.raid.hitAt}`)) {
-      let def = bunkerDefense(state());
+      // [P2] The scout says who is coming: weigh the defense against that kind (older engines ignore the extra arguments).
+      const kind = (d.raid as { kind?: string }).kind as Parameters<typeof bunkerDefense>[1];
+      const defOf = (stance: 'hold' | 'sally' = 'hold') => (bunkerDefense as (s: unknown, k?: unknown, st?: unknown) => number)(state(), kind, stance);
+      let def = defOf();
       if (freshRaid && R.danger.raidLog.length < 40) R.danger.raidLog.push([d.raid.strength, def, state().survivors.length, state().era]);
       if (def < d.raid.strength) {
         const armory = state().buildings.find(b => b.type === 'armory' && !b.isConstructing);
@@ -438,9 +456,15 @@ export async function runSim(o: SimOptions): Promise<SimResult> {
             acted('guard');
           }
         }
-        def = bunkerDefense(state());
+        def = defOf();
       }
-      if (def < d.raid.strength && e.eventSystem.canPayTribute()) { e.eventSystem.payTribute(); R.danger.tributes++; acted('tribute'); }
+      const setStance = fn(e.eventSystem, 'setStance');
+      if (def < d.raid.strength && setStance && kind) {
+        // Still short: send the guards out if that is enough, else pay, else hide everyone below.
+        if (defOf('sally') >= d.raid.strength) { setStance('sally'); acted('stance'); }
+        else if (e.eventSystem.canPayTribute()) { e.eventSystem.payTribute(); R.danger.tributes++; acted('tribute'); }
+        else { setStance('hide'); acted('stance'); }
+      } else if (def < d.raid.strength && e.eventSystem.canPayTribute()) { e.eventSystem.payTribute(); R.danger.tributes++; acted('tribute'); }
     }
     for (const dz of d.disasters) {
       if (!notice(`dz:${dz.id}`)) continue;

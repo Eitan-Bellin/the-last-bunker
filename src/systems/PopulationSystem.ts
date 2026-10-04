@@ -129,7 +129,7 @@ export class PopulationSystem {
         path: 'buildings',
         value: state.buildings.map(b => ({ ...b, assignedSurvivorIds: b.assignedSurvivorIds.filter(id => !deadIds.has(id)) })),
       });
-      for (const d of died) bus.emit('survivor:died', d);
+      for (const d of died) bus.emit('survivor:died', d, 'health');
     }
     for (const l of leveled) bus.emit('survivor:levelup', l.survivor, l.stat);
 

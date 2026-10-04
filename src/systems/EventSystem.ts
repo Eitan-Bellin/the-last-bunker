@@ -1,3 +1,7 @@
+import { roomSlots } from '../data/buildingDefs';
+import { seasonEffects } from '../data/seasons';
+import { inBreather, threatPace, threatStrength } from './ThreatSystem';
+import type { RaidKind, RaidStance, Ruin } from '../core/GameState';
 import { difficultyOf } from '../data/difficulty';
 import type { GameState, ResourceType, SurvivorState } from '../core/GameState';
 import { projectArrivalSpeed } from '../data/projects'; // [LateGame B1]
@@ -345,33 +349,52 @@ const EVENTS: EventDef[] = [
   },
 ];
 
-/** Total defense: armories (scaled by guards), the fortified door research and the residents themselves. */
-export function bunkerDefense(state: GameState): number {
-  let defense = 5;
+/**
+ * [P2] Defense in three parts. Walls: the door, the fortified-door research, the Wall and other projects, room roles.
+ * Guards: armories (scaled by their crew) and whoever is posted there. Residents: everyone else pitching in.
+ */
+export function defenseParts(state: GameState): { walls: number; guards: number; residents: number } {
+  let walls = 5, guards = 0, residents = 0;
   for (const b of state.buildings) {
     const d = getDef(b.type)?.effects?.defense;
     const level = effectiveLevel(b);
     if (!d || level <= 0 || incidentBlocks(state, b)) continue;
-    defense += (d.base + d.perLevel * (level - 1)) * workforceMultiplier(state, b);
+    guards += (d.base + d.perLevel * (level - 1)) * workforceMultiplier(state, b);
   }
-  if (hasFeature(state, 'fortifiedDoor')) defense += 15;
-  defense += specTotal(state, 'defense');
-  if (state.storyFlags.includes('gideon:joined')) defense += 10;
+  if (hasFeature(state, 'fortifiedDoor')) walls += 15;
+  walls += specTotal(state, 'defense');
+  if (state.storyFlags.includes('gideon:joined')) guards += 10;
   // [Danger C1] Residents help a little; whoever is posted at an armory fights much harder. The Wall adds 50.
   for (const s of state.survivors) {
     if (s.isOnMission || s.child) continue;
-    defense += s.stats.strength * 0.15;
-    if (s.traits.includes('paranoid')) defense += 3; // always watching the door
+    residents += s.stats.strength * 0.15;
+    if (s.traits.includes('paranoid')) residents += 3; // always watching the door
   }
   for (const b of state.buildings) {
     if (b.type !== 'armory' || b.isConstructing || incidentBlocks(state, b)) continue;
     for (const id of b.assignedSurvivorIds) {
       const g = state.survivors.find(s => s.id === id);
-      if (g && !g.isOnMission && !g.child) defense += 2 + g.stats.strength * 0.4;
+      if (g && !g.isOnMission && !g.child) guards += 2 + g.stats.strength * 0.4;
     }
   }
-  defense += projectDefense(state);
-  return Math.round(defense);
+  walls += projectDefense(state);
+  return { walls, guards, residents };
+}
+
+/** [P2] How much each part counts against each kind of raider (walls stop scavengers, guards stop marauders). */
+export const DEFENSE_WEIGHTS: Record<RaidKind, { walls: number; guards: number }> = {
+  scavengers: { walls: 1.5, guards: 0.7 },
+  marauders: { walls: 0.6, guards: 1.5 },
+};
+/** [P2] Sending the guards out makes them fight harder (and get hurt more). */
+export const SALLY_GUARDS = 1.4;
+
+/** Total defense; against a known kind of raider (and stance) the parts are weighted. */
+export function bunkerDefense(state: GameState, kind?: RaidKind, stance: RaidStance = 'hold'): number {
+  const p = defenseParts(state);
+  if (!kind) return Math.round(p.walls + p.guards + p.residents);
+  const w = DEFENSE_WEIGHTS[kind];
+  return Math.round(p.walls * w.walls + p.guards * w.guards * (stance === 'sally' ? SALLY_GUARDS : 1) + p.residents);
 }
 
 // ---- [Danger C1] era-scaled raids: a warning, five minutes to react, and outcome tiers ----
@@ -389,9 +412,14 @@ const ROUT_RATIO = 1.5;
 const GUARD_DEATH_CHANCE = 0.25;
 
 export interface RaidResult {
-  key: 'win' | 'winCaptive' | 'loseSmall' | 'loseBig' | 'tribute';
+  key: 'win' | 'winCaptive' | 'loseSmall' | 'loseBig' | 'tribute' | 'hidden';
   strength: number;
   defense: number;
+  /** [P2] Who came and how the bunker met them. */
+  kind?: RaidKind;
+  stance?: RaidStance;
+  /** [P2] The room wrecked in a rout (its type). */
+  wrecked?: string;
   gains?: Resources;
   injured: { name: string; damage: number }[];
   /** The guard who fell in a rout (the memorial follows). */
@@ -399,10 +427,19 @@ export interface RaidResult {
   captive?: string;
 }
 
-/** What the lookout sees coming: 10 + 8 per era + 0.15 per resident, ±25%, scaled to the bunker. */
+/** What the lookout sees coming: 10 + 8 per era + 0.15 per resident, ±25%, scaled to the bunker, the threat and the season. */
 export function raidStrength(state: GameState, roll = 0.5): number {
   const base = 10 + 8 * Math.max(0, state.era ?? 0) + 0.15 * state.survivors.length;
-  return Math.max(10, Math.round(base * RAID_SCALE * (1 + state.survivors.length / RAID_CROWD) * (0.75 + roll * 0.5) * difficultyOf(state).raidStrength));
+  return Math.max(10, Math.round(base * RAID_SCALE * (1 + state.survivors.length / RAID_CROWD) * (0.75 + roll * 0.5)
+    * difficultyOf(state).raidStrength * threatStrength(state)));
+}
+
+/** [P2] Chance the raid is won against the stated strength (the scout's estimate shown to the player): 0 or 1, it is decided by the numbers. */
+export function raidOdds(state: GameState, stance: RaidStance = 'hold'): number | null {
+  const raid = state.danger.raid;
+  if (!raid) return null;
+  if (stance === 'hide') return 0;
+  return bunkerDefense(state, raid.kind, stance) >= raid.strength ? 1 : 0;
 }
 
 /** The toll that sends the raiders away: a fifth of the food and scrap. */
@@ -435,7 +472,9 @@ export function arrivalGap(state: GameState, roll = 0.5): number {
   const mood = morale >= 70 ? 0.8 : morale < 35 ? 1.4 : 1;
   const hunger = state.resources.food.amount <= 0 || state.resources.water.amount <= 0 ? 2 : 1;
   // [LateGame B1] the field radio mast project brings newcomers faster
-  return Math.round(base * radio * mood * hunger * (0.75 + roll * 0.5) / projectArrivalSpeed(state));
+  // [P2] More people travel in spring, fewer in winter.
+  const season = seasonEffects(state)?.arrivals ?? 1;
+  return Math.round(base * radio * mood * hunger * season * (0.75 + roll * 0.5) / projectArrivalSpeed(state));
 }
 
 export class EventSystem {
@@ -471,7 +510,8 @@ export class EventSystem {
     if (flags.includes('gideon:paid')) w *= 0.6;
     if (flags.includes('gideon:joined') || flags.includes('gideon:beaten')) w *= 0.35;
     const base = RAID_GAP[Math.min(3, Math.max(2, state.era ?? 2))] ?? 7200;
-    return Math.round((base / w) * (0.7 + this.ctx.rng.next() * 0.6));
+    // [P2] The threat director sets the pace.
+    return Math.round((base / w / threatPace(state)) * (0.7 + this.ctx.rng.next() * 0.6));
   }
 
   scheduleRaid(): void {
@@ -481,7 +521,9 @@ export class EventSystem {
   /** The lookout spots them: the clock starts, and the player may pay, post guards, or fight. */
   startRaid(): { hitAt: number; strength: number } {
     const state = this.ctx.sm.state;
-    const raid = { hitAt: state.stats.totalPlayTime + RAID_WARNING, strength: raidStrength(state, this.ctx.rng.next()) };
+    // [P2] The scout report: who is coming is known at once (the forecast is exact).
+    const kind: RaidKind = this.ctx.rng.chance(0.5) ? 'scavengers' : 'marauders';
+    const raid = { hitAt: state.stats.totalPlayTime + RAID_WARNING, strength: raidStrength(state, this.ctx.rng.next()), kind, stance: 'hold' as RaidStance };
     this.setDanger({ raid });
     bus.emit('raid:warning', raid);
     return raid;
@@ -501,12 +543,47 @@ export class EventSystem {
       return;
     }
     if (now < d.nextRaidAt) return;
-    // The breather after a death, and nobody to defend an empty bunker.
-    if (isQuiet(state) || state.survivors.length < 3) {
+    // The breather after a death or a hard hit, and nobody to defend an empty bunker.
+    if (isQuiet(state) || inBreather(state) || state.survivors.length < 3) {
       this.setDanger({ nextRaidAt: now + 900 });
       return;
     }
     this.startRaid();
+  }
+
+  /**
+   * [P2] Raiders wreck a working room on the top levels (never beds, halls or districts): it turns into a ruin that,
+   * once restored, comes back at the same level and role. Returns the room type, or null if nothing could be wrecked.
+   */
+  private wreckRoom(): string | null {
+    const sm = this.ctx.sm;
+    const state = sm.state;
+    const pick = this.ctx.rng.shuffle(state.buildings.filter(b => !b.isConstructing && b.position.floor <= 1 && b.type !== 'quarters'
+      && b.type !== 'elevator' && !getDef(b.type)?.effects?.maxPopulation && roomSlots(b.type) <= 3 && getDef(b.type)?.maxLevel === 10))[0];
+    if (!pick) return null;
+    const w = roomSlots(pick.type);
+    const d = state.danger;
+    const level = pick.level;
+    const ruin: Ruin = {
+      id: `r_raid${d.nextId}`, floor: pick.position.floor, x: pick.position.x, w, kind: 'wreck', restoresTo: pick.type, flooded: false,
+      progress: 0, total: Math.round(600 + 400 * level), started: false, lore: null,
+      restoresLevel: level, restoresSpec: pick.specialization ?? null,
+      cost: { materials: Math.round(40 * level * level), scrap: 5 * level },
+    };
+    this.setDanger({ nextId: d.nextId + 1 });
+    const crew = new Set(pick.assignedSurvivorIds);
+    sm.applyDelta({ path: 'buildings', value: state.buildings.filter(x => x.id !== pick.id) });
+    sm.applyDelta({ path: 'survivors', value: sm.state.survivors.map(s => (crew.has(s.id) ? { ...s, assignedBuildingId: null } : s)) });
+    sm.applyDelta({ path: 'ruins', value: [...sm.state.ruins, ruin] });
+    this.ctx.incidents?.prune();
+    bus.emit('building:demolished', pick.id);
+    return pick.type;
+  }
+
+  /** [P2] The player's stance for the coming raid. */
+  setStance(stance: RaidStance): void {
+    const raid = this.ctx.sm.state.danger.raid;
+    if (raid) this.setDanger({ raid: { ...raid, stance } });
   }
 
   /** Seconds left before the raiders arrive (null = none coming). */
@@ -538,9 +615,16 @@ export class EventSystem {
     const raid = state.danger.raid;
     if (!raid) return null;
     const strength = raid.strength;
-    const defense = bunkerDefense(state);
-    const result: RaidResult = { key: 'tribute', strength, defense, injured: [] };
-    if (choice === 'tribute') {
+    const stance: RaidStance = opts.soft ? 'hold' : raid.stance ?? 'hold';
+    const defense = bunkerDefense(state, raid.kind, stance);
+    const result: RaidResult = { key: 'tribute', strength, defense, injured: [], kind: raid.kind, stance };
+    if (choice === 'fight' && stance === 'hide') {
+      // Everyone below: nobody is hurt, but the raiders take their pick of the stores.
+      result.key = 'hidden';
+      const lost = { scrap: -Math.floor(state.resources.scrap.amount * 0.3), food: -Math.floor(state.resources.food.amount * 0.15), materials: -Math.floor(state.resources.materials.amount * 0.1) };
+      this.ctx.resources.gain(sm, lost);
+      result.gains = nonZero(lost);
+    } else if (choice === 'tribute') {
       this.ctx.resources.spend(sm, raidTribute(state) as Record<string, number>);
       this.setDanger({ ignoredSince: null });
     } else if (defense >= strength) {
@@ -566,7 +650,7 @@ export class EventSystem {
       const defenders = this.ctx.rng.shuffle(state.survivors.filter(s => !s.isOnMission && !s.child))
         .sort((a, b) => Number(guards.has(b.id)) - Number(guards.has(a.id)));
       const floor = opts.soft ? 15 : 5;
-      for (const v of defenders.slice(0, this.ctx.rng.chance(0.5) ? 2 : 1)) {
+      for (const v of defenders.slice(0, (this.ctx.rng.chance(0.5) ? 2 : 1) + (stance === 'sally' ? 1 : 0))) {
         const health = Math.max(floor, v.health - (opts.soft ? 25 : 35));
         updateSurvivor(this.ctx, v.id, { health });
         result.injured.push({ name: v.name, damage: Math.round(v.health - health) });
@@ -574,9 +658,11 @@ export class EventSystem {
       const mayDie = (opts.allowDeath ?? !opts.soft) && !isQuiet(sm.state) && !!this.ctx.death;
       if (rout && mayDie && defenders.length && this.ctx.rng.chance(GUARD_DEATH_CHANCE)) {
         const fallen = defenders[0];
-        if (this.ctx.death!.kill(fallen.id)) result.died = fallen.name;
+        if (this.ctx.death!.kill(fallen.id, 'raid')) result.died = fallen.name;
       }
       if (!opts.soft) this.ctx.incidents?.startBreach();
+      // [P2] A rout wrecks a room by the door (it comes back at its old level once restored).
+      if (rout && !opts.soft && difficultyOf(state).roomDamage) result.wrecked = this.wreckRoom() ?? undefined;
     }
     this.setDanger({ raid: null });
     this.scheduleRaid();

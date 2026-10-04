@@ -30,6 +30,7 @@ import { InboxSystem } from '../systems/InboxSystem';
 import { DigSystem } from '../systems/DigSystem';
 import { ActSystem } from '../systems/ActSystem';
 import { ForemanSystem } from '../systems/ForemanSystem';
+import { ThreatSystem } from '../systems/ThreatSystem';
 import { difficultyOf, easier } from '../data/difficulty';
 import type { Difficulty } from './state/longGame';
 import { logCrash } from './crashGuard';
@@ -54,6 +55,8 @@ const OFFLINE_EFFICIENCY = 0.8;
 const SLEEP_GAP_MS = 20_000;
 const OFFLINE_MAX_SECONDS = 86_400;
 const OFFLINE_STEP_SECONDS = 60;
+/** [P2] Seconds of play after a return during which hunger cannot kill (see graceUntil). */
+const RETURN_GRACE = 600;
 
 /** Most newcomers who gather at the door while the player is away. */
 const AWAY_DOOR_MAX = 3;
@@ -125,10 +128,16 @@ export class GameEngine {
   digSystem: DigSystem;
   actSystem: ActSystem;
   foremanSystem: ForemanSystem;
+  threatSystem: ThreatSystem;
   /** The step list, in order (see registerSystems). New systems add themselves with register(). */
   private systems: EngineSystem[] = [];
   /** Game seconds gathered toward the next run of the slow systems. */
   private slowClock = 0;
+  /**
+   * [P2] Play time until which hunger and thirst cannot take anyone below the away floor: coming back to an empty
+   * larder gives the player time to fix it before anyone dies (no hostile returns).
+   */
+  private graceUntil = 0;
   /** Set by simulate() while catching up: what the rooms made beyond full storage, per resource. */
   private offlineWaste: Partial<Record<ResourceType, number>> | null = null;
 
@@ -197,6 +206,7 @@ export class GameEngine {
     this.inboxSystem = new InboxSystem(this.stateManager);
     this.digSystem = new DigSystem(this.stateManager, this.buildingSystem, this.populationSystem);
     this.actSystem = new ActSystem(this.stateManager, this.buildingSystem);
+    this.threatSystem = new ThreatSystem(this.stateManager);
     this.foremanSystem = new ForemanSystem(this.stateManager, this.maintenanceSystem, this.projectSystem, this.populationSystem, this.digSystem);
     this.awayDanger = new AwayDanger(this.stateManager, this.rng, this.eventSystem, this.incidentSystem, this.deathSystem);
     bus.on('survivor:died', (s: unknown) => this.deathSystem.onDeath(s as import('./GameState').SurvivorState));
@@ -246,7 +256,8 @@ export class GameEngine {
       },
       { name: 'building', online: dt => this.buildingSystem.update(sm, dt), offline: dt => this.buildingSystem.update(sm, dt) },
       // [Danger C4] Away, hunger can hurt but never takes a resident below the difficulty's health floor.
-      { name: 'population', online: dt => this.populationSystem.update(sm, dt), offline: dt => this.populationSystem.update(sm, dt, difficultyOf(sm.state).awayHealthFloor) },
+      { name: 'population', online: dt => this.populationSystem.update(sm, dt, Math.max(difficultyOf(sm.state).onlineHealthFloor,
+        sm.state.stats.totalPlayTime < this.graceUntil ? difficultyOf(sm.state).awayHealthFloor : 0)), offline: dt => this.populationSystem.update(sm, dt, difficultyOf(sm.state).awayHealthFloor) },
       { name: 'event', online: () => this.eventSystem.update() },
       { name: 'research', online: dt => this.researchSystem.update(sm, dt), offline: dt => this.researchSystem.update(sm, dt) },
       { name: 'exploration', online: dt => this.explorationSystem.update(dt), offline: dt => this.explorationSystem.update(dt) },
@@ -259,6 +270,8 @@ export class GameEngine {
       { name: 'dig', online: dt => this.digSystem.update(dt), offline: dt => this.digSystem.update(dt) },
       { name: 'act', slow: true, online: () => this.actSystem.update() },
       // The Foreman's standing orders run away too (that is the point of them).
+      // [P2] The threat meter, breathers and the turn of the seasons run on world time, online and away.
+      { name: 'threat', online: dt => this.threatSystem.update(dt), offline: dt => this.threatSystem.update(dt) },
       { name: 'foreman', online: dt => this.foremanSystem.update(dt), offline: dt => this.foremanSystem.update(dt) },
       { name: 'maintenance', online: dt => this.maintenanceSystem.update(dt), offline: (dt, eff) => this.maintenanceSystem.update(dt * eff) },
       // Card deadlines run on world time, so a safe default can be taken while the player is away.
@@ -529,6 +542,8 @@ export class GameEngine {
     const credits = Math.round(this.resourceSystem.creditsMade - creditsBefore);
     // [Danger C4] The soft version of raids and disasters, with the 24-hour safety net.
     const danger = this.awayDanger.run(seconds);
+    // A real absence (not a short tab switch): the return grace starts now.
+    if (seconds > 300) this.graceUntil = sm.state.stats.totalPlayTime + RETURN_GRACE;
     if (danger.raids + danger.disasters.length > 0) bus.emit('danger:away', danger);
     return { seconds, gained, wasted, converted, credits, absorbed, arrivals, missions, research, danger };
   }
