@@ -34,6 +34,19 @@
         "--strictPort"
       ],
       "port": 4199
+    },
+    {
+      "name": "longgame",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": [
+        "vite",
+        "preview",
+        "C:/Users/eitan/Desktop/last-bunker-longgame",
+        "--port",
+        "4299",
+        "--strictPort"
+      ],
+      "port": 4299
     }
   ]
 }
