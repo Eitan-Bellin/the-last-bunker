@@ -1,3 +1,4 @@
+import { LONG_RESEARCH } from './researchLong';
 import type { BuildingType, ResourceType } from '../core/GameState';
 
 export type ResearchBranch = 'infrastructure' | 'survival' | 'exploration' | 'society' | 'defense' | 'genesis' | 'refinement';
@@ -21,7 +22,16 @@ export interface ResearchDef {
   time: number;
   requires: string[];
   effects: ResearchEffect[];
+  /** [Long game P3] First Act in which the node can be researched. */
+  act?: number;
+  /** [Long game P3] Doctrine fork: one node per fork per run; choosing it closes the others. */
+  fork?: string;
+  /** [Long game P3] Eureka: a node that matches how the bunker is played costs 30% less and takes 40% less time. */
+  eureka?: { kind: EurekaKind; n: number };
 }
+
+/** What a Eureka looks at. */
+export type EurekaKind = 'floors' | 'explored' | 'specialized' | 'pop' | 'crises' | 'charters' | 'lore';
 
 export const BRANCHES: { id: ResearchBranch; icon: string; name: Record<string, string> }[] = [
   { id: 'infrastructure', icon: '[[power]]', name: { he: 'תשתיות', en: 'Infrastructure' } },
@@ -37,7 +47,7 @@ export const BRANCHES: { id: ResearchBranch; icon: string; name: Record<string, 
  * The fixed tree. Late tiers are deliberately slow (tier 3 ×2, tier 4 ×4, tier 5 ×8 of the old times),
  * so Genesis lands after days, not hours, and a queued node is worth leaving overnight.
  */
-export const RESEARCH: ResearchDef[] = [
+const BASE_RESEARCH: ResearchDef[] = [
   // Infrastructure
   {
     id: 'insulatedWiring', branch: 'infrastructure', tier: 1, icon: '[[plug]]',
@@ -224,6 +234,9 @@ export const RESEARCH: ResearchDef[] = [
  * Each level adds +5% to one resource; cost grows ×1.6 and time ×1.35 per level, so storage caps
  * (and the Storage Memory prestige upgrade) decide how far a run can push them.
  */
+/** The whole tree: the original nodes and the long game's (src/data/researchLong.ts). */
+export const RESEARCH: ResearchDef[] = [...BASE_RESEARCH, ...LONG_RESEARCH];
+
 export interface RefinementDef {
   id: string;
   resource: ResourceType;

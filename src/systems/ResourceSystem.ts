@@ -1,3 +1,6 @@
+import { hasMutator } from '../data/mutators';
+import { lawAppetite, lawOutput } from '../data/laws';
+import { hasFeature } from './ResearchSystem';
 import { seasonEffects } from '../data/seasons';
 import type { BuildingInstance, GameState, ResourceType, ResourceState } from '../core/GameState';
 import type { StateManager, StateDelta } from '../core/StateManager';
@@ -7,7 +10,7 @@ import { chainFactor, chainInputs, inputFed, inputRate } from '../data/chains';
 import { incidentBlocks } from '../data/incidents';
 import { specOf } from '../data/specializations';
 import { BASE_CAPS, OVERFLOW_CREDITS, POWER_FLOOR, TICKED_RESOURCES } from '../data/resources';
-import { modifierProduct, prepareModifiers, registerModifier } from './modifiers';
+import { modifierBreakdown, modifierProduct, prepareModifiers, registerModifier } from './modifiers';
 import { difficultyOf } from '../data/difficulty';
 import { actCapBonus } from '../data/pricing';
 
@@ -42,8 +45,21 @@ registerModifier({
   mult: ({ resource }) => (resource === 'power' ? 1 : moraleNow),
 });
 registerModifier({ id: 'echo', mult: ({ state }) => prestigeMultiplier(state) });
+// [P3] Laws in force.
+registerModifier({ id: 'laws', mult: ({ state, resource }) => (state.longGame?.policy.laws.length ? lawOutput(state, resource) : 1) });
 // [P2] The season leans on food, water or materials.
-registerModifier({ id: 'season', mult: ({ state, resource }) => seasonEffects(state)?.output[resource] ?? 1 });
+registerModifier({
+  id: 'season',
+  mult: ({ state, resource }) => {
+    let m = seasonEffects(state)?.output[resource] ?? 1;
+    // [P5] Harsh Winters mutator: every season's penalty doubled.
+    if (m < 1 && hasMutator(state, 'harshWinters')) m = 1 - (1 - m) * 2;
+    // [P3] Winter Stores (and the Mycelium doctrine) halve a season's food penalty.
+    return m < 1 && resource === 'food' && hasFeature(state, 'winterStores') ? 1 - (1 - m) / 2 : m;
+  },
+});
+// [P5] Lean Years mutator.
+registerModifier({ id: 'mutators', mult: ({ state, resource }) => (resource === 'food' && hasMutator(state, 'leanYears') ? 0.85 : 1) });
 // [Long game] A room that is changing its role produces nothing until the work is done.
 registerModifier({ id: 'retool', mult: ({ state, building }) => (retooling(state, building) ? 0 : 1) });
 
@@ -84,7 +100,8 @@ export class ResourceSystem {
     let powerProd = 0;
     let powerDemand = 0;
     // [P2] Winter heating.
-    const seasonPower = seasonEffects(state)?.powerDemand ?? 1;
+    const rawSeason = seasonEffects(state)?.powerDemand ?? 1;
+    const seasonPower = hasFeature(state, 'geothermal') ? 1 : hasMutator(state, 'harshWinters') ? 1 + (rawSeason - 1) * 2 : rawSeason;
     for (const b of state.buildings) {
       const level = effectiveLevel(b);
       const def = getDef(b.type);
@@ -112,7 +129,7 @@ export class ResourceSystem {
       }
     }
 
-    const appetite = difficultyOf(state).consumption;
+    const appetite = difficultyOf(state).consumption * lawAppetite(state);
     for (const s of state.survivors) {
       if (s.isOnMission) continue;
       const glutton = s.traits.includes('glutton') ? 2 : 1;
@@ -182,6 +199,66 @@ export class ResourceSystem {
     this.pendingCredits = 0;
   }
 
+  /**
+   * [Long game UX] Where a resource comes from and where it goes, per second, grouped by room type (and "people"),
+   * with the modifier stack of its biggest producer. Same formulas as update(); for the resource drawer.
+   */
+  breakdown(state: GameState, r: ResourceType): {
+    sources: { key: string; value: number; count: number }[];
+    sinks: { key: string; value: number; count: number }[];
+    modifiers: { id: string; mult: number }[];
+  } {
+    prepareModifiers(state);
+    const powerRatio = state.powerRatio ?? 1;
+    const src = new Map<string, { value: number; count: number }>();
+    const snk = new Map<string, { value: number; count: number }>();
+    const add = (m: Map<string, { value: number; count: number }>, key: string, v: number) => {
+      if (v <= 1e-6) return;
+      const e = m.get(key) ?? { value: 0, count: 0 };
+      e.value += v;
+      e.count++;
+      m.set(key, e);
+    };
+    let top: { b: BuildingInstance; v: number } | null = null;
+    const seasonPower = hasFeature(state, 'geothermal') ? 1 : seasonEffects(state)?.powerDemand ?? 1;
+    for (const b of state.buildings) {
+      const level = effectiveLevel(b);
+      const def = getDef(b.type);
+      if (!def || level <= 0) continue;
+      let v = 0;
+      if (r === 'power') {
+        if (def.production?.power && !incidentBlocks(state, b)) v = this.powerOutput(state, b, level);
+        add(snk, b.type, roomPowerDraw(def.powerConsumption, level) * seasonPower);
+      } else {
+        v = this.computeOutput(state, b, powerRatio)[r] ?? 0;
+      }
+      const spec = specOf(b);
+      const extra = spec?.extra?.[r];
+      if (extra && !incidentBlocks(state, b)) {
+        const roleScale = spec?.levelScaled ? (level / 5) * chainFactor(state, b) * (retooling(state, b) ? 0 : 1) : 1;
+        v += extra * powerRatio * roleScale;
+      }
+      add(src, b.type, v);
+      if (v > 0 && (!top || v > top.v)) top = { b, v };
+      if (!incidentBlocks(state, b)) for (const input of chainInputs(b)) {
+        if (input.resource === r && inputFed(state, input)) add(snk, b.type, inputRate(input, b));
+      }
+    }
+    if (r === 'food' || r === 'water') {
+      const appetite = difficultyOf(state).consumption * lawAppetite(state);
+      let people = 0;
+      for (const s of state.survivors) {
+        if (s.isOnMission) continue;
+        const size = s.child ? 0.5 : 1;
+        people += (r === 'food' ? FOOD_PER_SURVIVOR * (s.traits.includes('glutton') ? 2 : 1) : WATER_PER_SURVIVOR) * size * appetite;
+      }
+      if (people > 0) snk.set('people', { value: people, count: state.survivors.filter(s => !s.isOnMission).length });
+    }
+    const list = (m: Map<string, { value: number; count: number }>) => [...m.entries()].map(([key, e]) => ({ key, ...e })).sort((a, b) => b.value - a.value);
+    const modifiers = top ? modifierBreakdown({ state, building: top.b, resource: r, powerRatio: r === 'power' ? 1 : powerRatio }) : [];
+    return { sources: list(src), sinks: list(snk), modifiers };
+  }
+
   /** Per-second output of one building under current conditions. */
   getBuildingOutput(state: GameState, building: BuildingInstance): Partial<Record<ResourceType, number>> {
     const level = effectiveLevel(building);
@@ -238,6 +315,8 @@ export class ResourceSystem {
     // [Economy A4] Per-era storage multiplier (power is not stored in bulk, so it stays as is).
     const eraMult = eraCapMultiplier(state);
     if (eraMult > 1) for (const r of Object.keys(caps) as ResourceType[]) if (r !== 'power') caps[r] = Math.round((caps[r] ?? 0) * eraMult);
+    // [P5] Scarcity mutator: every store a quarter smaller (power aside).
+    if (hasMutator(state, 'scarcity')) for (const r of Object.keys(caps) as ResourceType[]) if (r !== 'power') caps[r] = Math.round((caps[r] ?? 0) * 0.75);
     // [Long game] L2: the Act's currencies hold a set number of hours of their reference income, so any price fits.
     for (const [r, v] of Object.entries(actCapBonus(state)) as [ResourceType, number][]) caps[r] = (caps[r] ?? 0) + v;
     return caps;

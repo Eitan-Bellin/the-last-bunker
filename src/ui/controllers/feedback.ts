@@ -1,3 +1,4 @@
+import { ENDINGS } from '../../data/endings';
 import { SEASONS, nextSeason, seasonAt } from '../../data/seasons';
 import { ACTS } from '../../data/acts';
 import { vibrate } from '../../utils/haptics';
@@ -13,7 +14,7 @@ import { RESOURCE_ICONS } from '../../ui/dom';
 import type { Objective } from '../../systems/ObjectiveSystem';
 import type { ResourceType, SurvivorState, SurvivorStats } from '../../core/GameState';
 import { isDistrict } from '../../data/buildingDefs';
-import { showActBanner, showEraBanner } from '../../ui/components/EraPanel';
+import { showActBanner, showEndingBanner, showEraBanner } from '../../ui/components/EraPanel';
 import { ERAS } from '../../data/eras';
 import { RUIN_KINDS } from '../../data/ruins';
 import type { RuinClearedInfo } from '../../systems/RestorationSystem';
@@ -296,6 +297,30 @@ export class FeedbackController {
       const loc = i18n.currentLocale;
       this.app.toasts.show(`[[${now.def.icon}]] ${i18n.t('season.forecast', { now: now.def.name[loc], desc: now.def.desc[loc], next: next.name[loc], t: i18n.formatDuration(now.left), nextDesc: next.desc[loc] })}`, 'info');
     };
+    // [P4] A contract paid.
+    bus.on('contract:done', (issuer: unknown) => {
+      const p = getPartner(issuer as string);
+      this.app.audio.play('coin');
+      this.app.toasts.show(`[[cart]] ${i18n.t('contract.done', { issuer: p ? p.name[i18n.currentLocale] : i18n.t('contract.drifters') })}`, 'good');
+      this.app.engine.requestSave();
+    });
+    bus.on('outpost:damaged', () => this.app.toasts.show(`[[flag]] ${i18n.t('outpost.hit')}`, 'bad'));
+    // [P5] The ending of the run.
+    bus.on('ending', (id: unknown) => {
+      const ending = ENDINGS.find(e => e.id === id);
+      if (!ending) return;
+      this.app.engine.requestSave();
+      const show = () => {
+        if (this.app.storyOpen || this.app.modal.isVisible || document.querySelector('.era-banner')) { setTimeout(show, 1500); return; }
+        this.app.audio.play('era');
+        this.app.storyOpen = true;
+        this.app.closeSheets();
+        showEndingBanner(ending, () => { this.app.storyOpen = false; });
+      };
+      setTimeout(show, 800);
+    });
+    // [P5] A new timeline: choose its hardships (if any) for more Legacy.
+    bus.on('rebirth', () => setTimeout(() => this.app.story.chooseMutators(), 1500));
     bus.on('dig:start', () => {
       this.app.toasts.show(`[[pick]] ${i18n.t('dig.started', { n: this.app.state.currentFloors + 1, t: i18n.formatDuration(this.app.state.longGame?.dig.total ?? 0) })}`, 'info');
     });

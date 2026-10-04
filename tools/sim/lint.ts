@@ -1,9 +1,14 @@
 // Data checks for CI (run by tools/sim/lint.mjs): research is a sound DAG, every cost names a real resource,
-// and every resource has a name in both languages. Price-versus-storage checks join when the Acts set the caps (P1).
+// every resource has a name in both languages, and every upgrade and dig of Acts II-VII fits in storage (L2).
 import { RESEARCH } from '../../src/data/research';
 import { BUILDING_DEFS } from '../../src/data/buildingDefs';
 import { ALL_RESOURCES, RESOURCES } from '../../src/data/resources';
-import type { ResourceType } from '../../src/core/GameState';
+import type { BuildingType, ResourceType } from '../../src/core/GameState';
+import { createInitialState } from '../../src/core/GameState';
+import { ACTS } from '../../src/data/acts';
+import { TUNING } from '../../src/data/tuning';
+import { BuildingSystem } from '../../src/systems/BuildingSystem';
+import { ResourceSystem } from '../../src/systems/ResourceSystem';
 
 export function lintData(i18n: Record<string, Record<string, string>>): string[] {
   const problems: string[] = [];
@@ -42,6 +47,35 @@ export function lintData(i18n: Record<string, Record<string, string>>): string[]
     for (const r of RESOURCES) {
       const key = `resources.${r.id as ResourceType}`;
       if (r.tier !== 2 && !(key in dict)) problems.push(`${lang}: missing ${key}`);
+    }
+  }
+  // [L2] Every room upgrade and every dig an Act allows must fit in maxPaymentShare of that Act's storage
+  // (storage from the Act alone: era 3, no Storage rooms; rooms only add to it). Act I keeps its hand-tuned prices,
+  // which expect a Storage room.
+  const bs = new BuildingSystem();
+  const rs = new ResourceSystem();
+  for (const act of ACTS.filter(a => a.id >= 2)) {
+    const s = createInitialState();
+    s.era = 3;
+    s.longGame.meta.act = act.id;
+    const caps = rs.computeCaps(s);
+    const over = (what: string, cost: Record<string, number>) => {
+      for (const [r, v] of Object.entries(cost)) {
+        if (r === 'scrap' || r === 'blueprints') continue; // scarce goods have their own small prices
+        const cap = caps[r as ResourceType] ?? 0;
+        if (v > cap * TUNING.maxPaymentShare) problems.push(`Act ${act.id}: ${what} costs ${v} ${r}, more than ${TUNING.maxPaymentShare} of storage ${cap}`);
+      }
+    };
+    for (const [type, def] of Object.entries(BUILDING_DEFS)) {
+      const top = Math.min(def.maxLevel, Math.max(1, Math.floor((act.levelCap * def.maxLevel) / 10)));
+      for (let level = 1; level < top; level++) {
+        over(`${type} level ${level}->${level + 1}`, bs.getUpgradeCost({ id: 'x', type: type as BuildingType, level, position: { x: 0, y: 0, floor: 0 }, assignedSurvivorIds: [], constructionProgress: 0, constructionTotal: 0, isConstructing: false, specialization: null }));
+      }
+    }
+    const prev = act.id > 1 ? ACTS[act.id - 2].floorCap : 3;
+    for (let floors = prev; floors < act.floorCap; floors++) {
+      s.currentFloors = floors;
+      over(`dig to B${floors + 1}`, bs.digCost(s));
     }
   }
   return problems;

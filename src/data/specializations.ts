@@ -98,6 +98,30 @@ export const SPECIALIZATIONS: SpecDef[] = [
     desc: { he: 'מייצר רכיבים מגרוטאות · 60% מהחומרים', en: 'Makes components from scrap · 60% of the materials' },
   },
   {
+    // [P5] Data: the archive of the new world, mined from the lab's knowledge.
+    id: 'dataVault', type: 'laboratory', icon: 'knowledge', act: 5, outputMult: 0.5, levelScaled: true,
+    extra: { data: 0.006 },
+    inputs: [{ resource: 'knowledge', base: 0.3, perLevel: 0.3 }],
+    name: { he: 'כספת נתונים', en: 'Data Vault' },
+    desc: { he: 'הופך ידע לנתונים · 50% מהידע', en: 'Turns knowledge into data · 50% of the knowledge' },
+  },
+  {
+    // [P5] Influence: where the bunker meets its neighbours and decides together.
+    id: 'councilHall', type: 'canteen', icon: 'chat', act: 6, levelScaled: true,
+    extra: { influence: 0.004 },
+    inputs: [{ resource: 'food', base: 0.3, perLevel: 0.3 }],
+    name: { he: 'אולם המועצה', en: 'Council Hall' },
+    desc: { he: 'מייצר השפעה מארוחות משותפות עם השכנים', en: 'Makes influence from shared meals with the neighbours' },
+  },
+  {
+    // [P5] Seed cores: the matter of the next world, forged from the bunker's best goods.
+    id: 'seedForge', type: 'reactor', icon: 'isotope7', act: 7, outputMult: 0.5, levelScaled: true, risk: 1.5,
+    extra: { seedCores: 0.0025 },
+    inputs: [{ resource: 'alloys', base: 0.006, perLevel: 0.2 }, { resource: 'data', base: 0.004, perLevel: 0.2 }],
+    name: { he: 'כור זרעים', en: 'Seed Forge' },
+    desc: { he: 'מתיך סגסוגות ונתונים לליבות זרע · 50% מהחשמל', en: 'Fuses alloys and data into seed cores · 50% of the power' },
+  },
+  {
     id: 'salvageYard', type: 'workshop', icon: 'recycle', extra: { scrap: 0.15 },
     name: { he: 'מגרש פירוק', en: 'Salvage Yard' }, desc: { he: '+0.15 גרוטאות לשנייה', en: '+0.15 scrap per second' },
   },

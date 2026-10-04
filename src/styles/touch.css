@@ -104,3 +104,15 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px
 
 /* [P2] Season chip */
 .season-btn { position: relative; }
+
+/* [P3] Doctrine and Eureka tags */
+.doctrine-tag { color: #ffd27a; }
+.eureka-on { color: #7affb0; }
+
+/* [Long game UX] Next up */
+.next-up .next-row { margin: 4px 0; line-height: 1.35; }
+
+/* [P4] Outposts on the surface map */
+.outpost-flag { fill: #ffd27a; }
+.outpost-flag.building { fill: #9a9aa8; }
+.outpost-flag.damaged { fill: #ff5a4a; }

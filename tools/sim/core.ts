@@ -324,6 +324,8 @@ export async function runSim(o: SimOptions): Promise<SimResult> {
   const offs = [
     bus.on('era:advance', (era: unknown) => mark(`era ${era} ${ERAS[era as number]?.key ?? ''}`.trim())),
     bus.on('act:advance', (act: unknown) => mark(`act ${act}`)), // [Long game]
+    bus.on('ending', (id: unknown) => mark(`ending ${id}`)), // [P5]
+    bus.on('research:complete', (id: unknown) => { const f = (researchData.RESEARCH as unknown as { id: string; fork?: string }[]).find(r => r.id === id)?.fork; if (f) mark(`doctrine ${id}`); }), // [P3]
     bus.on('survivor:died', (_s: unknown, cause: unknown) => {
       R.deaths.total++;
       const c = String(cause ?? 'other');
@@ -565,9 +567,14 @@ export async function runSim(o: SimOptions): Promise<SimResult> {
       const d = (defOf ? defOf(state(), id) : researchData.RESEARCH.find(r => r.id === id)) as { cost?: Record<string, number> } | undefined;
       return d?.cost?.knowledge ?? 0;
     };
+    // [P3] Doctrine forks: each seed follows one path per fork (seed 1 the first option, seed 2 the second...).
+    const all = researchData.RESEARCH as unknown as { id: string; fork?: string }[];
+    const forks = [...new Set(all.map(r => r.fork).filter(Boolean))] as string[];
+    const chosen = new Set(forks.map((f, fi) => { const opts = all.filter(r => r.fork === f); return opts[(o.seed + fi) % opts.length].id; }));
+    const onPath = (id: string) => { const f = all.find(r => r.id === id)?.fork; return !f || chosen.has(id); };
     // Main tree first (cheapest), endless refinements only when nothing else is open; fill the queue if there is one.
     for (let i = 0; i < 6; i++) {
-      const next = ids.filter(id => e.researchSystem.canStart(state(), id))
+      const next = ids.filter(id => onPath(id) && e.researchSystem.canStart(state(), id))
         .sort((a, b) => Number(refIds.has(a)) - Number(refIds.has(b)) || costK(a) - costK(b))[0];
       if (!next) break;
       const hadActive = !!e.researchSystem.activeId(state());
@@ -640,6 +647,9 @@ export async function runSim(o: SimOptions): Promise<SimResult> {
     const out: [string, number][] = [];
     if (act >= 3) out.push(['assemblyLine', act >= 4 ? 3 : 2]);
     if (act >= 4) out.push(['arcFurnace', 2]);
+    if (act >= 5) out.push(['dataVault', 2]);
+    if (act >= 6) out.push(['councilHall', 2]);
+    if (act >= 7) out.push(['seedForge', 1]);
     return out;
   };
   const specializeAndDig = () => {
@@ -764,6 +774,32 @@ export async function runSim(o: SimOptions): Promise<SimResult> {
 
   // ---- [LateGame] big projects, trade caravans, mastery training (all feature-detected) ----
   /** Funds and staffs the active big project: hand-delivers what the stores can spare and fills the crew. */
+  /** [P4] Takes every contract the bunker can afford without dropping a store below 30%, and sends free hands on crew jobs. */
+  const takeContracts = () => {
+    const inbox = (e as unknown as Loose).inboxSystem as Loose | undefined;
+    if (!inbox) return;
+    const items = (state() as unknown as { longGame?: { inbox: { items: { id: number; kind: string; data: Record<string, unknown> }[] } } }).longGame?.inbox.items ?? [];
+    for (const it of items.filter(i => i.kind === 'contract')) {
+      const give = (it.data.give ?? {}) as Record<string, number>;
+      const s = state();
+      const safe = Object.entries(give).every(([r, v]) => (s.resources[r as ResourceType]?.amount ?? 0) - v >= (s.resources[r as ResourceType]?.cap ?? 0) * 0.3);
+      if (!safe) continue;
+      if (fn(inbox, 'resolve')?.(it.id, 'accept')) { acted('contract'); mark('first contract'); }
+    }
+  };
+
+  /** [P4] Claims an outpost when the Act allows one and the bunker can pay. */
+  const buildOutposts = () => {
+    const os = (e as unknown as Loose).outpostSystem as Loose | undefined;
+    if (!os) return;
+    const s = state();
+    const hexes = s.explorationMap.filter(h => h.explored && h.biome !== 'bunker' && !fn(os, 'block')?.(s, h.x, h.y))
+      .sort((a, b) => surfaceData.hexDistance(a.x, a.y) - surfaceData.hexDistance(b.x, b.y));
+    const h = hexes[0];
+    if (h && e.resourceSystem.canAfford(s, fn(os, 'cost')?.(s) as Record<string, number>) && fn(os, 'build')?.(h.x, h.y)) { acted('outpost'); mark('first outpost'); }
+    for (const o of (fn(os, 'list')?.(state()) as { id: number; damaged: boolean }[] ?? [])) if (o.damaged && fn(os, 'repair')?.(o.id)) acted('outpostRepair');
+  };
+
   const lgProjects = () => {
     const ps = (e as unknown as Loose).projectSystem as Loose | undefined;
     if (!ps) return;
@@ -828,6 +864,10 @@ export async function runSim(o: SimOptions): Promise<SimResult> {
       specializeAndDig();
       ruinsAndStaff();
       lgProjects(); lgTrain(); // [LateGame]
+      takeContracts(); buildOutposts(); // [P4]
+      // [P3] Laws: each seed keeps its own order of preference.
+      const enact = fn(e, 'enactLaw');
+      if (enact) { const order = ['freeSchools', 'doubleShifts', 'openDoors', 'rationing', 'martialLaw', 'dayOfRest']; for (let k = 0; k < order.length; k++) if (enact(order[(k + o.seed) % order.length])) acted('law'); }
       if (wall < holdTeamsAfter) { lgCaravans(); expeditions(false); } // [LateGame] caravans first, one at a time
     } catch (err) {
       warn(`bot error: ${String((err as Error)?.stack ?? err).split('\n').slice(0, 2).join(' | ')}`);

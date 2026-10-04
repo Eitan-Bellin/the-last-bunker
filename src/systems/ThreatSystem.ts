@@ -1,3 +1,6 @@
+import { hasMutator } from '../data/mutators';
+import { lawThreat } from '../data/laws';
+import { hasFeature } from './ResearchSystem';
 import type { StateManager } from '../core/StateManager';
 import type { GameState } from '../core/GameState';
 import { bus } from '../core/EventBus';
@@ -26,12 +29,14 @@ export function threatTarget(state: GameState): number {
   for (const b of state.buildings) if (b.type === 'radioTower' && !b.isConstructing) radio += b.level;
   const act = state.longGame?.meta.act ?? 1;
   const raw = 10 + 30 * wealth + 1.5 * radio + 0.15 * state.survivors.length + 6 * act + (state.storyFlags.includes('project:radioMast') ? 8 : 0);
-  return Math.max(0, Math.min(100, raw * difficultyOf(state).threat));
+  const bastion = (state.prestige.upgrades['ksBastion'] ? 15 : 0) - (hasMutator(state, 'restless') ? 20 : 0); // [P5] keystone, mutator
+  return Math.max(0, Math.min(100, (raw + lawThreat(state) - bastion) * difficultyOf(state).threat));
 }
 
 /** Raids come this many times more often than the base pace (1 at a meter of 50). */
 export function threatPace(state: GameState): number {
-  return 0.5 + (state.longGame?.threat.meter ?? 50) / 100;
+  // [P3] The Diplomacy doctrine keeps a fifth of the gangs away.
+  return (0.5 + (state.longGame?.threat.meter ?? 50) / 100) * (hasFeature(state, 'diplomacy') ? 0.8 : 1);
 }
 
 /** Raiders' strength factor from the meter and the season. */

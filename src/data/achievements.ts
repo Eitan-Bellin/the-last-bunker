@@ -104,4 +104,55 @@ export const ACHIEVEMENTS: AchievementDef[] = [
     name: { he: 'לידה מחדש', en: 'Reborn' }, desc: { he: 'השלם את פרויקט בראשית', en: 'Complete Project Genesis' },
     check: s => s.prestige.rebirthCount >= 1,
   },
+  // [Long game] Milestones of the long game.
+  {
+    id: 'actRebuild', icon: '[[flag]]', reward: { materials: 500 },
+    name: { he: 'הבונקר נאטם', en: 'Sealed In' }, desc: { he: 'הגיעו למערכה II', en: 'Reach Act II' },
+    check: s => (s.longGame?.meta.act ?? 0) >= 2,
+  },
+  {
+    id: 'actSettle', icon: '[[flag]]', reward: { components: 100 },
+    name: { he: 'מושבה של ממש', en: 'A Real Colony' }, desc: { he: 'הגיעו למערכה III', en: 'Reach Act III' },
+    check: s => (s.longGame?.meta.act ?? 0) >= 3,
+  },
+  {
+    id: 'actExpand', icon: '[[flag]]', reward: { alloys: 50 },
+    name: { he: 'עיר מתחת לאדמה', en: 'A City Below' }, desc: { he: 'הגיעו למערכה IV', en: 'Reach Act IV' },
+    check: s => (s.longGame?.meta.act ?? 0) >= 4,
+  },
+  {
+    id: 'actRise', icon: '[[sun]]', reward: { data: 50 },
+    name: { he: 'שחר', en: 'Dawn' }, desc: { he: 'הגיעו למערכה V', en: 'Reach Act V' },
+    check: s => (s.longGame?.meta.act ?? 0) >= 5,
+  },
+  {
+    id: 'actGovern', icon: '[[books]]', reward: { influence: 30 },
+    name: { he: 'רפובליקה', en: 'Republic' }, desc: { he: 'הגיעו למערכה VI', en: 'Reach Act VI' },
+    check: s => (s.longGame?.meta.act ?? 0) >= 6,
+  },
+  {
+    id: 'theEnd', icon: '[[clover]]', reward: { seedCores: 5 },
+    name: { he: 'סוף הסיפור', en: 'The End of the Story' }, desc: { he: 'סיימו את המערכה האחרונה', en: 'Finish the last Act' },
+    check: s => s.storyFlags.some(f => f.startsWith('ending:')),
+  },
+  {
+    id: 'deepest', icon: '[[pick]]', reward: { scrap: 500 },
+    name: { he: 'לב האדמה', en: 'Heart of the Earth' }, desc: { he: 'חפרו 24 קומות', en: 'Dig 24 levels' },
+    check: s => s.currentFloors >= 24,
+  },
+  {
+    id: 'trusted', icon: '[[cart]]', reward: { materials: 2000 },
+    name: { he: 'שם טוב', en: 'A Good Name' }, desc: { he: 'השלימו 100 חוזים', en: 'Complete 100 contracts' },
+    check: s => ((s.stats as unknown as { contractsDone?: number }).contractsDone ?? 0) >= 100,
+  },
+  {
+    id: 'doctrinaire', icon: '[[flag]]', reward: { knowledge: 1000 },
+    name: { he: 'דרך משלכם', en: 'A Way of Your Own' }, desc: { he: 'בחרו בארבע דוקטרינות', en: 'Choose four doctrines' },
+    check: s => ['fission', 'geothermal', 'solarArray', 'hydroDoctrine', 'mycelium', 'surfaceFarms', 'commune', 'meritocracy', 'militia', 'fortress', 'rangers', 'diplomacy'].filter(id => s.research[id]?.completed).length >= 4,
+  },
+  {
+    id: 'settlerSaint', icon: '[[heart]]', reward: { medicine: 50 },
+    name: { he: 'אף אחד לא נשאר מאחור', en: 'Nobody Left Behind' }, desc: { he: 'הגיעו למערכה III בלי מקרה מוות', en: 'Reach Act III without a death' },
+    check: s => (s.longGame?.meta.act ?? 0) >= 3 && (s.danger?.fallen?.length ?? 0) === 0,
+  },
 ];

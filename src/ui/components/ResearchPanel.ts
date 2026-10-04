@@ -174,6 +174,12 @@ export class ResearchPanel {
       el('span', 'tier-chip', level === null ? `T${def.tier}` : i18n.t('research.level', { n: level })),
     );
     card.append(top, el('div', 'build-item-desc', def.desc[locale] ?? def.desc.en));
+    // [P3] Doctrine forks and Eureka.
+    if (def.fork) card.appendChild(el('div', 'bp-hint doctrine-tag', `[[flag]] ${i18n.t('research.doctrine')}`));
+    if (def.eureka && status !== 'done') {
+      const got = rs.eureka(state, def);
+      card.appendChild(el('div', `bp-hint ${got ? 'eureka-on' : ''}`, `[[sparkle]] ${i18n.t(got ? 'research.eurekaOn' : `research.eureka.${def.eureka.kind}`, { n: def.eureka.n })}`));
+    }
 
     if (status === 'done') {
       card.appendChild(el('div', 'research-done', `[[check]] ${i18n.t('research.done')}`));
@@ -188,7 +194,13 @@ export class ResearchPanel {
       card.appendChild(meta);
       const pending = new Set([rs.activeId(state), ...rs.queue(state)]);
       const missing = def.requires.filter(r => !state.research[r]?.completed && !pending.has(r));
-      if (missing.length > 0) {
+      const block = rs.blockReason(state, def.id);
+      if (block === 'act') {
+        card.appendChild(el('div', 'bp-hint', `[[lock]] ${i18n.t('research.actLock', { n: def.act ?? 0 })}`));
+      } else if (block === 'fork') {
+        const other = rs.forkTaken(state, def.id);
+        card.appendChild(el('div', 'bp-hint', `[[lock]] ${i18n.t('research.forkClosed', { name: other?.name[locale] ?? '' })}`));
+      } else if (missing.length > 0) {
         const names = missing.map(r => rs.defOf(state, r)?.name[locale] ?? r).join(', ');
         card.appendChild(el('div', 'bp-hint', `[[lock]] ${i18n.t('research.requires', { list: names })}`));
       } else {

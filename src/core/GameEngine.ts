@@ -1,3 +1,5 @@
+import { MUTATORS } from '../data/mutators';
+import { LAWS, lawCost, lawSlots } from '../data/laws';
 import { StateManager } from './StateManager';
 import { SaveManager, type BackupKind } from './SaveManager';
 import { stillOwner } from './singleInstance';
@@ -31,6 +33,8 @@ import { DigSystem } from '../systems/DigSystem';
 import { ActSystem } from '../systems/ActSystem';
 import { ForemanSystem } from '../systems/ForemanSystem';
 import { ThreatSystem } from '../systems/ThreatSystem';
+import { ContractSystem } from '../systems/ContractSystem';
+import { OutpostSystem } from '../systems/OutpostSystem';
 import { difficultyOf, easier } from '../data/difficulty';
 import type { Difficulty } from './state/longGame';
 import { logCrash } from './crashGuard';
@@ -129,6 +133,8 @@ export class GameEngine {
   actSystem: ActSystem;
   foremanSystem: ForemanSystem;
   threatSystem: ThreatSystem;
+  contractSystem: ContractSystem;
+  outpostSystem: OutpostSystem;
   /** The step list, in order (see registerSystems). New systems add themselves with register(). */
   private systems: EngineSystem[] = [];
   /** Game seconds gathered toward the next run of the slow systems. */
@@ -207,6 +213,8 @@ export class GameEngine {
     this.digSystem = new DigSystem(this.stateManager, this.buildingSystem, this.populationSystem);
     this.actSystem = new ActSystem(this.stateManager, this.buildingSystem);
     this.threatSystem = new ThreatSystem(this.stateManager);
+    this.outpostSystem = new OutpostSystem(this.stateManager, this.resourceSystem, this.explorationSystem);
+    this.contractSystem = new ContractSystem(this.stateManager, this.inboxSystem, this.resourceSystem, this.populationSystem);
     this.foremanSystem = new ForemanSystem(this.stateManager, this.maintenanceSystem, this.projectSystem, this.populationSystem, this.digSystem);
     this.awayDanger = new AwayDanger(this.stateManager, this.rng, this.eventSystem, this.incidentSystem, this.deathSystem);
     bus.on('survivor:died', (s: unknown) => this.deathSystem.onDeath(s as import('./GameState').SurvivorState));
@@ -272,6 +280,9 @@ export class GameEngine {
       // The Foreman's standing orders run away too (that is the point of them).
       // [P2] The threat meter, breathers and the turn of the seasons run on world time, online and away.
       { name: 'threat', online: dt => this.threatSystem.update(dt), offline: dt => this.threatSystem.update(dt) },
+      // [P4] Contract offers and crews on jobs run on world time, online and away (offers lapse while nobody answers).
+      { name: 'contracts', slow: true, online: () => this.contractSystem.update(), offline: () => this.contractSystem.update() },
+      { name: 'outposts', online: dt => this.outpostSystem.update(dt), offline: (dt, eff) => this.outpostSystem.update(dt * eff) },
       { name: 'foreman', online: dt => this.foremanSystem.update(dt), offline: dt => this.foremanSystem.update(dt) },
       { name: 'maintenance', online: dt => this.maintenanceSystem.update(dt), offline: (dt, eff) => this.maintenanceSystem.update(dt * eff) },
       // Card deadlines run on world time, so a safe default can be taken while the player is away.
@@ -338,7 +349,7 @@ export class GameEngine {
     const up = this.stateManager.state.prestige.upgrades;
     // [Progression hook] Quick Start stock and Pre-dug levels (MetaSystem.applyStartBonuses).
     this.metaSystem.applyStartBonuses(this.stateManager);
-    for (let i = 0; i < 3 + (up['veteranSurvivors'] ?? 0); i++) {
+    for (let i = 0; i < 3 + (up['veteranSurvivors'] ?? 0) + (up['ksFounders'] ? 2 : 0); i++) {
       this.populationSystem.addSurvivor(this.stateManager, this.populationSystem.createSurvivor(this.rng));
     }
 
@@ -461,7 +472,7 @@ export class GameEngine {
     // [Long game] The world clock, difficulty and scenario carry into the next timeline; the Act starts over.
     if (old.longGame) {
       const m = old.longGame.meta;
-      fresh.longGame.meta = { ...fresh.longGame.meta, difficulty: m.difficulty, diffLowest: m.diffLowest, scenario: m.scenario, mutators: [...m.mutators], runIndex: m.runIndex + 1, worldT: m.worldT, actSince: m.worldT };
+      fresh.longGame.meta = { ...fresh.longGame.meta, difficulty: m.difficulty, diffLowest: m.difficulty, scenario: m.scenario, mutators: [...m.mutators], runIndex: m.runIndex + 1, worldT: m.worldT, actSince: m.worldT };
     }
     this.stateManager.loadState(fresh);
     this.rng.seed = fresh.randomSeed;
@@ -542,6 +553,8 @@ export class GameEngine {
     const credits = Math.round(this.resourceSystem.creditsMade - creditsBefore);
     // [Danger C4] The soft version of raids and disasters, with the 24-hour safety net.
     const danger = this.awayDanger.run(seconds);
+    // [P2] The player is back: the "danger ignored" streak ends (a day of neglect is a day away, not any day since).
+    if (difficultyOf(sm.state).id !== 'last' && sm.state.danger.ignoredSince !== null) sm.applyDelta({ path: 'danger', value: { ...sm.state.danger, ignoredSince: null } });
     // A real absence (not a short tab switch): the return grace starts now.
     if (seconds > 300) this.graceUntil = sm.state.stats.totalPlayTime + RETURN_GRACE;
     if (danger.raids + danger.disasters.length > 0) bus.emit('danger:away', danger);
@@ -596,6 +609,34 @@ export class GameEngine {
         sm.applyDelta({ path: `resources.${r}.amount`, value: Math.min(res.cap, Math.max(0, Math.round(res.amount * (1 + extra)))) });
       }
     }
+    this.requestSave();
+  }
+
+  /** [P5] The run's mutators (only while it has just begun). */
+  setMutators(ids: string[]): void {
+    const sm = this.stateManager;
+    if (!sm.state.longGame || sm.state.longGame.meta.act > 1) return;
+    sm.applyDelta({ path: 'longGame.meta.mutators', value: ids.filter(id => MUTATORS.some(m => m.id === id)) });
+    this.requestSave();
+  }
+
+  /** [P3] Passes a law (if a slot is free and it can be paid). */
+  enactLaw(id: string): boolean {
+    const sm = this.stateManager;
+    const lg = sm.state.longGame;
+    if (!lg || lg.policy.laws.includes(id) || lg.policy.laws.length >= lawSlots(sm.state) || !LAWS.some(l => l.id === id)) return false;
+    if (!this.resourceSystem.spend(sm, lawCost(sm.state))) return false;
+    sm.applyDelta({ path: 'longGame.policy.laws', value: [...lg.policy.laws, id] });
+    this.buildingSystem.recalculateMaxPopulation(sm);
+    this.requestSave();
+    return true;
+  }
+
+  repealLaw(id: string): void {
+    const sm = this.stateManager;
+    const lg = sm.state.longGame;
+    if (!lg) return;
+    sm.applyDelta({ path: 'longGame.policy.laws', value: lg.policy.laws.filter(x => x !== id) });
     this.requestSave();
   }
 

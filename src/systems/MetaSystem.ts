@@ -1,3 +1,4 @@
+import { mutatorLegacy } from '../data/mutators';
 import type { GameState, ResourceType } from '../core/GameState';
 import type { StateManager } from '../core/StateManager';
 import type { ResourceSystem } from './ResourceSystem';
@@ -8,6 +9,7 @@ import { MAX_FLOORS } from '../data/zones';
 import { hasFeature } from './ResearchSystem';
 import { MAX_ACT, actComplete, actOf } from '../data/acts';
 import { DIFFICULTIES } from '../data/difficulty';
+import { ENDINGS } from '../data/endings';
 
 /** Project Genesis gate (the design's "big decision"): the research plus a grown, era-3 bunker. */
 export const GENESIS_MIN_SURVIVORS = 40;
@@ -85,7 +87,10 @@ export class MetaSystem {
       const raw = 100 * actsDone + 10 * Math.max(0, state.currentFloors - 3) + 5 * topRooms + 2 * researched
         + state.survivors.length + 5 * state.achievements.length;
       const diff = DIFFICULTIES.find(d => d.id === lg.meta.diffLowest)?.legacy ?? 1;
-      return Math.floor(raw * diff * (1 + 0.1 * state.prestige.rebirthCount));
+      // [P3] Heritage research: +10%.
+      // [P5] The run's ending adds its share.
+      const ending = ENDINGS.find(e => state.storyFlags.includes(`ending:${e.id}`));
+      return Math.floor(raw * diff * (1 + 0.1 * state.prestige.rebirthCount) * (hasFeature(state, 'heritage') ? 1.1 : 1) * (1 + (ending?.legacy ?? 0) + mutatorLegacy(state)));
     }
     const explored = state.explorationMap.filter(h => h.explored).length;
     const raw = 5 + Math.sqrt(state.stats.totalFoodProduced / 20) + state.survivors.length * 2 + researched * 2 + explored
@@ -124,6 +129,8 @@ export class MetaSystem {
     if (!def) return false;
     const level = this.upgradeLevel(state, id);
     if (level >= def.maxLevel) return false;
+    // [P5] One keystone per group.
+    if (def.keystone && PRESTIGE_UPGRADES.some(u => u.keystone === def.keystone && u.id !== id && this.upgradeLevel(state, u.id) > 0)) return false;
     const cost = upgradeCost(def, level);
     if (this.isotope(state) < cost) return false;
     this.sm.applyDelta({ path: 'resources.isotope7.amount', value: state.resources.isotope7.amount - cost });

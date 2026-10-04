@@ -7,7 +7,7 @@ import { i18n } from '../i18n/I18nManager';
 import { RESOURCE_ICONS, el, setRich } from './dom';
 
 /** [Long game] Components and alloys join the row from their Act on (the row then has four columns). */
-const VISIBLE_RESOURCES: ResourceType[] = ['food', 'water', 'power', 'materials', 'medicine', 'knowledge', 'components', 'alloys'];
+const VISIBLE_RESOURCES: ResourceType[] = ['food', 'water', 'power', 'materials', 'medicine', 'knowledge', 'components', 'alloys', 'data', 'influence', 'seedCores'];
 
 export type NavKey = 'build' | 'surface' | 'research' | 'people';
 
@@ -308,8 +308,10 @@ export class HUD {
       let tier2 = false;
       for (const [rt, els] of this.resourceEls) {
         const opens = resourceDef(rt)?.act ?? 0;
-        els.root.style.display = act >= opens ? '' : 'none';
-        if (opens > 0 && act >= opens) tier2 = true;
+        // Tier-2 goods: the current Act's and the one before (older ones still show in costs and in the drawer).
+        const show = opens === 0 || (act >= opens && opens >= act - 1);
+        els.root.style.display = show ? '' : 'none';
+        if (opens > 0 && show) tier2 = true;
       }
       this.resourceEls.values().next().value?.root.parentElement?.classList.toggle('tier2', tier2);
     }

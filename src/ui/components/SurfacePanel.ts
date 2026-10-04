@@ -3,7 +3,7 @@ import type { GameEngine } from '../../core/GameEngine';
 import { i18n } from '../../i18n/I18nManager';
 import { BIOMES, MAP_RADIUS, POIS, hexDistance, type BiomeId } from '../../data/surface';
 import { MAX_TEAM, maxTeams } from '../../systems/ExplorationSystem';
-import { RESOURCE_ICONS, STAT_ICONS, bar, button, el, setBar, setRich } from '../dom';
+import { RESOURCE_ICONS, STAT_ICONS, bar, button, el, setBar, setRich , costRow } from '../dom';
 import { uiSound } from '../../audio/uiSound';
 import { renderTrade } from './TradePanel'; // [LateGame B2]
 import { getPartner } from '../../data/trade';
@@ -110,6 +110,7 @@ export class SurfacePanel {
       state.explorationMap.map(h => `${h.revealed ? 1 : 0}${h.explored ? 1 : 0}${h.poi ?? ''}`).join(''),
       state.activeMissions.map(m => `${m.hexX},${m.hexY}`).join(';'),
       this.selected ? `${this.selected.q},${this.selected.r}` : '',
+      JSON.stringify(state.longGame?.world.outposts ?? []), // [P4]
     ].join('|');
     if (sig === this.mapSig) return;
     this.mapSig = sig;
@@ -143,6 +144,12 @@ export class SurfacePanel {
         parts.push(`<g class="hex-icon" transform="translate(${(x - 12 * s).toFixed(1)} ${(y - 12 * s).toFixed(1)}) scale(${s})">${ICON_SVG[iconName]}</g>`);
       } else if (icon) {
         parts.push(`<text x="${x.toFixed(1)}" y="${(y + 5).toFixed(1)}" class="hex-q" text-anchor="middle">${icon}</text>`);
+      }
+      // [P4] An outpost: a flag in the corner (dim while building, red when damaged).
+      const op = this.engine.outpostSystem.at(state, hex.x, hex.y);
+      if (op) {
+        const cls = op.damaged ? 'outpost-flag damaged' : op.readyAt > (state.longGame?.meta.worldT ?? 0) ? 'outpost-flag building' : 'outpost-flag';
+        parts.push(`<g class="${cls}" transform="translate(${(x + 2).toFixed(1)} ${(y - S * 0.85).toFixed(1)}) scale(0.45)">${ICON_SVG.flag}</g>`);
       }
       if (targets.has(`${hex.x},${hex.y}`)) {
         parts.push(`<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${S * 0.7}" class="mission-ring"/>`);
@@ -199,6 +206,43 @@ export class SurfacePanel {
     }
   }
 
+  /** [P4] The outpost on this area: its state and yield, or what claiming it takes. */
+  private renderOutpost(state: GameState, x: number, y: number): HTMLElement {
+    const os = this.engine.outpostSystem;
+    const box = el('div', 'bp-card outpost-card');
+    const o = os.at(state, x, y);
+    const now = state.longGame?.meta.worldT ?? 0;
+    const refresh = () => { this.cardSig = this.mapSig = ''; this.refresh(this.engine.stateManager.state); };
+    if (o) {
+      box.appendChild(el('div', 'bp-section-title', `[[flag]] ${i18n.t('outpost.title')}`));
+      if (o.readyAt > now) box.appendChild(el('div', 'bp-hint', i18n.t('outpost.building', { t: i18n.formatDuration(o.readyAt - now) })));
+      else if (o.damaged) {
+        box.appendChild(el('div', 'bp-hint negative-text', i18n.t('outpost.damaged')));
+        const cost = os.repairCost(state);
+        box.append(costRow(state, cost), button(i18n.t('outpost.repair'), 'btn-primary', () => { if (os.repair(o.id)) { uiSound('click'); this.engine.requestSave(); } refresh(); }, !this.engine.resourceSystem.canAfford(state, cost)));
+      } else {
+        const y2 = os.yieldPerHour(state, o);
+        const pos = Object.entries(y2).filter(([, v]) => (v ?? 0) > 0).map(([r, v]) => `${RESOURCE_ICONS[r] ?? ''} +${i18n.formatCompact(v ?? 0)}`).join('  ');
+        box.appendChild(el('div', 'bp-hint', i18n.t('outpost.yield', { list: pos })));
+      }
+      return box;
+    }
+    const block = os.block(state, x, y);
+    if (block === 'act' || block === 'home') return el('div');
+    box.appendChild(el('div', 'bp-section-title', `[[flag]] ${i18n.t('outpost.claim')}`));
+    if (block) {
+      box.appendChild(el('div', 'bp-hint', i18n.t(`outpost.block.${block}`, { n: os.max(state) })));
+      return box;
+    }
+    const cost = os.cost(state);
+    box.append(
+      el('div', 'bp-hint', i18n.t('outpost.claimHint', { t: i18n.formatDuration(os.buildSeconds(state)), n: os.list(state).length, max: os.max(state) })),
+      costRow(state, cost),
+      button(`[[flag]] ${i18n.t('outpost.build')}`, 'btn-primary', () => { if (os.build(x, y)) { uiSound('place'); this.engine.requestSave(); } refresh(); }, !this.engine.resourceSystem.canAfford(state, cost)),
+    );
+    return box;
+  }
+
   private renderCard(state: GameState): void {
     const hex = this.selected ? this.engine.explorationSystem.getHex(state, this.selected.q, this.selected.r) : undefined;
     const ex = this.engine.explorationSystem;
@@ -207,6 +251,7 @@ export class SurfacePanel {
     for (const id of this.team) if (!eligible.some(s => s.id === id)) this.team.delete(id);
     const sig = [
       hex ? `${hex.x},${hex.y},${hex.explored},${hex.poi},${ex.inReach(state, hex)}` : 'none',
+      JSON.stringify(state.longGame?.world.outposts ?? []), state.longGame?.meta.act ?? 0, Math.floor((state.longGame?.meta.worldT ?? 0) / 60), // [P4]
       [...this.team].join(','),
       eligible.map(s => s.id).join(','),
       state.activeMissions.length,
@@ -245,6 +290,7 @@ export class SurfacePanel {
     );
     box.appendChild(info);
 
+    box.appendChild(this.renderOutpost(state, hex.x, hex.y)); // [P4]
     const loot = el('div', 'cost-row');
     const lootTypes = new Set<string>(Object.keys(biome.loot));
     if (poi) Object.keys(poi.loot).forEach(k => lootTypes.add(k));

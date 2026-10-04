@@ -9,7 +9,8 @@ import { TUNING } from './tuning';
  * Each finished stage pays a permanent reward (the project's effect, in equal steps); the last stage opens
  * the project's finale. About 28 stages in all: roughly 4-6 days of play for an engaged player.
  */
-export type ProjectId = 'radioMast' | 'purifier' | 'greenhouse' | 'metroTunnel' | 'archive' | 'wall' | 'vaultSeal' | 'genesisCore';
+export type ProjectId = 'radioMast' | 'purifier' | 'greenhouse' | 'metroTunnel' | 'archive' | 'wall' | 'vaultSeal' | 'genesisCore'
+  | 'deepFoundry' | 'surfaceGate' | 'skyDome' | 'tradeLeague' | 'constitution' | 'ark';
 
 export interface ProjectStage {
   cost: Partial<Record<ResourceType, number>>;
@@ -126,12 +127,64 @@ export const PROJECTS: ProjectDef[] = [
   },
   {
     // [Long game] Act IV's charter and the road to Genesis: a seed of the new world, built from the bunker's best goods.
-    id: 'genesisCore', icon: '[[isotope7]]', flag: 'project:genesisCore', era: 3, act: 4,
+    id: 'genesisCore', icon: '[[isotope7]]', flag: 'project:genesisCore', era: 3, act: 7,
     name: { he: 'ליבת בראשית', en: 'Genesis Core' },
     desc: { he: 'מכונה שתשמור את כל מה שלמדתם, כדי שהעולם הבא יתחיל ממקום טוב יותר. דורשת את הסגסוגות והרכיבים הטובים ביותר שהבונקר יודע לייצר.', en: 'A machine that keeps everything you have learned, so the next world starts from a better place. It takes the finest alloys and components the bunker can make.' },
     finale: { he: 'פרויקט בראשית נפתח', en: 'Project Genesis opens' },
-    stages: rep(6, i => ({ cost: charter(4, {}, 0.15)(i), hours: 10, crew: 4 + Math.floor(i / 2) })),
+    stages: rep(6, i => ({ cost: charter(7, {}, 0.15)(i), hours: 10, crew: 4 + Math.floor(i / 2) })),
     effects: { resourceMult: { knowledge: 0.3 } },
+  },
+  {
+    // [P5] Act IV: the furnaces under the deepest floor.
+    id: 'deepFoundry', icon: '[[alloys]]', flag: 'project:deepFoundry', era: 3, act: 4,
+    name: { he: 'היציקה העמוקה', en: 'The Deep Foundry' },
+    desc: { he: 'כבשנים ענקיים בעומק הסלע, שם החום של כדור הארץ עושה חצי מהעבודה.', en: 'Huge furnaces deep in the rock, where the earth\'s own heat does half the work.' },
+    finale: { he: 'סגסוגות +25%, ומערכה V נפתחת', en: 'Alloys +25%, and Act V opens' },
+    stages: rep(5, i => ({ cost: charter(4, { scrap: 500 })(i), hours: 8, crew: 4 })),
+    effects: { resourceMult: { alloys: 0.25 } },
+  },
+  {
+    // [P5] Act V: back to the surface, for good.
+    id: 'surfaceGate', icon: '[[door]]', flag: 'project:surfaceGate', era: 3, act: 5,
+    name: { he: 'שער פני השטח', en: 'The Surface Gate' },
+    desc: { he: 'מעלית ענק ושער כפול: הדרך החוצה כבר לא תהיה מסע, אלא יציאה של בוקר.', en: 'A giant lift and a double gate: going outside will no longer be an expedition, just a morning walk.' },
+    finale: { he: 'משלחות מהירות פי 1.5', en: 'Expeditions 1.5 times faster' },
+    stages: rep(5, i => ({ cost: charter(5, { materials: 200000 })(i), hours: 10, crew: 5 })),
+    effects: { expeditionSpeed: 1.5 },
+  },
+  {
+    id: 'skyDome', icon: '[[sun]]', flag: 'project:skyDome', era: 3, act: 5,
+    name: { he: 'כיפת השמיים', en: 'The Sky Dome' },
+    desc: { he: 'כיפה שקופה מעל הכניסה: ילדים שנולדו בבונקר יראו שמיים בפעם הראשונה.', en: 'A clear dome over the entrance: children born in the bunker will see the sky for the first time.' },
+    finale: { he: 'אוכל +20% והמורל עולה', en: 'Food +20% and morale rises' },
+    stages: rep(5, i => ({ cost: charter(5, { food: 20000 })(i), hours: 10, crew: 5 })),
+    effects: { resourceMult: { food: 0.2 } },
+  },
+  {
+    // [P5] Act VI: the bunker becomes a republic among neighbours.
+    id: 'tradeLeague', icon: '[[cart]]', flag: 'project:tradeLeague', era: 3, act: 6,
+    name: { he: 'ברית הסחר', en: 'The Trade League' },
+    desc: { he: 'דרכים קבועות, מחסנים משותפים ושוק אחד לכל היישובים.', en: 'Fixed roads, shared stores and one market for every settlement.' },
+    finale: { he: 'ניצולים מגיעים פי 1.5 מהר יותר', en: 'Newcomers arrive 1.5 times faster' },
+    stages: rep(5, i => ({ cost: charter(6, { materials: 300000 })(i), hours: 10, crew: 5 })),
+    effects: { arrivalSpeed: 1.5 },
+  },
+  {
+    id: 'constitution', icon: '[[books]]', flag: 'project:constitution', era: 3, act: 6,
+    name: { he: 'החוקה', en: 'The Constitution' },
+    desc: { he: 'מי מחליט, איך, ומה אסור לעולם. נכתבת יחד עם כל מי שגר כאן.', en: 'Who decides, how, and what is never allowed. Written together with everyone who lives here.' },
+    finale: { he: 'ידע +20% ותור מחקר נוסף', en: 'Knowledge +20% and one more research slot' },
+    stages: rep(4, i => ({ cost: charter(6, { knowledge: 20000 })(i), hours: 12, crew: 4 })),
+    effects: { resourceMult: { knowledge: 0.2 }, researchQueue: 1 },
+  },
+  {
+    // [P5] Act VII: what will cross into the next world.
+    id: 'ark', icon: '[[vault]]', flag: 'project:ark', era: 3, act: 7,
+    name: { he: 'התיבה', en: 'The Ark' },
+    desc: { he: 'כספת שתעבור לעולם הבא: זרעים, ספרים, שמות, ושיר שהילדים שרים.', en: 'A vault that will cross into the next world: seeds, books, names, and a song the children sing.' },
+    finale: { he: 'התיבה מוכנה', en: 'The Ark is ready' },
+    stages: rep(5, i => ({ cost: charter(7, { alloys: 3000, data: 1500 })(i), hours: 10, crew: 6 })),
+    effects: { defense: 30 },
   },
 ];
 

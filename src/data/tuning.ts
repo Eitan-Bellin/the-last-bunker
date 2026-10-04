@@ -18,7 +18,12 @@ export const TUNING = {
   priceMinutes: 3,
   priceGrowth: 1.74,
   /** Reference income of each Act's currency per hour (index = Act; see ACT_CURRENCY in pricing.ts). */
-  refIncome: [0, 3000, 80000, 400, 120, 120, 120, 120],
+  refIncome: [0, 3000, 80000, 400, 120, 90, 60, 20],
+  /**
+   * [P4] From Act II every price (and the storage that holds it) is this many times its hours: contracts and outposts
+   * bring income on top of the rooms, so the same Acts take the same days.
+   */
+  priceScale: 3.5,
   /** From Act III on, this share of a price is also asked in each older currency (in its own reference income). */
   olderCurrencyShare: 0.4,
   /** L2: each Act's currency can be stored for this many hours of its reference income (index = current Act). */
@@ -28,12 +33,21 @@ export const TUNING = {
   digHours: 1.2,
   digHoursGrowth: 1.15,
   /** Charter project stages, in hours of their Act's income (index = Act). */
-  charterStageHours: [0, 3, 17, 12, 9],
+  charterStageHours: [0, 3, 17, 12, 9, 9, 9, 9],
+  /** [P4] Contracts: an offer every so many world seconds, open this long, at most this many waiting; paid in hours of income. */
+  contractEvery: 1800,
+  contractDeadline: 5400,
+  contractMaxOpen: 6,
+  contractRewardHours: 2,
+  /** [P4] Outposts: cost and build time in hours (x1.1 / x1.12 per outpost already held), yield in hours of income per hour. */
+  outpostHours: 3,
+  outpostBuildHours: 4,
+  outpostYieldHours: 0.12,
   /** Longest a single room upgrade takes. */
   maxUpgradeSeconds: 20 * 3600,
   /** Digging: seconds per new floor (index = floors after the dig); deeper floors grow by digTimeGrowth each. */
   digSeconds: [0, 0, 0, 0, 60, 300, 1800, 3600, 7200],
-  digTimeGrowth: 1.25,
+  digTimeGrowth: 1.15,
 } as const;
 
 export type Tuning = typeof TUNING;

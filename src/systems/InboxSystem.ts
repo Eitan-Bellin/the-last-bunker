@@ -13,6 +13,8 @@ export interface InboxChoice {
   /** i18n key of the button. */
   label: string;
   cost?: Record<string, number>;
+  /** False when the choice cannot be taken right now (e.g. not enough free people). */
+  available?: boolean;
 }
 
 export interface InboxKind {
@@ -21,6 +23,8 @@ export interface InboxKind {
   body: string;
   icon: string;
   choices(item: InboxItem, state: GameState): InboxChoice[];
+  /** Values for the title and body placeholders (default: the item's data as text). */
+  params?(item: InboxItem, locale: string): Record<string, string>;
   apply(item: InboxItem, key: string, sm: StateManager): void;
 }
 
@@ -82,7 +86,7 @@ export class InboxSystem {
     const def = item ? kinds.get(item.kind) : undefined;
     if (!item || !def) return false;
     const choice = def.choices(item, this.sm.state).find(c => c.key === key);
-    if (!choice) return false;
+    if (!choice || choice.available === false) return false;
     if (choice.cost) {
       for (const [r, v] of Object.entries(choice.cost)) {
         if ((this.sm.state.resources[r as keyof GameState['resources']]?.amount ?? 0) < v) return false;

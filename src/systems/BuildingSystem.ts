@@ -1,10 +1,11 @@
+import { hasFeature } from './ResearchSystem';
 import type { GameState, BuildingType, BuildingInstance, Position } from '../core/GameState';
 import type { StateManager } from '../core/StateManager';
 import { bus } from '../core/EventBus';
 import { getDef, effectiveLevel, isDistrict, roomFloors, roomSlots, specLevel, type BuildingDef } from '../data/buildingDefs';
 import { actOf, levelCapFor } from '../data/acts';
 import { TUNING } from '../data/tuning';
-import { actPrice, digHours, floorAct, levelAct, upgradeHours } from '../data/pricing';
+import { actPrice, digHours, floorAct, levelAct, payableHours, upgradeHours } from '../data/pricing';
 import { districtDef, nextDistrict } from '../data/districts';
 import { BASE_FLOORS, MAX_FLOORS, allowedFloors } from '../data/zones';
 import { RETOOL_PRICE_MULT, RETOOL_SECONDS, SPEC_COST, specTotal, specsFor } from '../data/specializations';
@@ -37,6 +38,7 @@ export class BuildingSystem {
 
   update(sm: StateManager, dt: number): void {
     const state = sm.state;
+    this.artisan = !!state.prestige.upgrades['ksArtisan'];
     let changed = false;
 
     for (let i = 0; i < state.buildings.length; i++) {
@@ -79,6 +81,9 @@ export class BuildingSystem {
     return costs;
   }
 
+  /** [P5] Set by the engine each tick from the Artisan keystone (getUpgradeCost has no state). */
+  artisan = false;
+
   getUpgradeCost(building: BuildingInstance): Record<string, number> {
     const def = getDef(building.type);
     if (!def) return {};
@@ -86,7 +91,10 @@ export class BuildingSystem {
     // Rooms with five levels (districts, halls) count each level as two.
     const mk = Math.round(((building.level + 1) * 10) / def.maxLevel);
     if (mk >= 4) {
-      const costs = actPrice(levelAct(mk), upgradeHours(mk) * (def.maxLevel < 10 ? 2 : 1));
+      // [P5] The Artisan keystone: a sixth cheaper (and the doubled steps of five-level rooms).
+      const act = levelAct(mk);
+      const hours = Math.min(payableHours(act), upgradeHours(mk) * (def.maxLevel < 10 ? 2 : 1)) * (this.artisan ? 0.85 : 1);
+      const costs = actPrice(act, hours);
       const gentle = Math.pow(def.costMultiplier, Math.min(building.level, 5));
       for (const r of SCARCE_COSTS) if (def.baseCost[r]) costs[r] = Math.ceil(def.baseCost[r] * gentle);
       return costs;
@@ -235,7 +243,8 @@ export class BuildingSystem {
     }
     maxPop += specTotal(sm.state, 'population');
     // [Long game] The Act holds the bunker's size; nobody already inside is ever turned out.
-    maxPop = Math.min(maxPop, Math.max(actOf(sm.state).popCap, sm.state.survivors.length));
+    const cap = Math.round(actOf(sm.state).popCap * (sm.state.prestige.upgrades['ksSettler'] ? 1.1 : 1)); // [P5] keystone
+    maxPop = Math.min(maxPop, Math.max(cap, sm.state.survivors.length));
     sm.applyDelta({ path: 'maxPopulation', value: maxPop });
   }
 
@@ -278,8 +287,10 @@ export class BuildingSystem {
   digTime(state: GameState): number {
     const n = state.currentFloors + 1;
     const table = TUNING.digSeconds;
-    if (n < table.length) return table[n];
-    return Math.round(table[table.length - 1] * Math.pow(TUNING.digTimeGrowth, n - (table.length - 1)));
+    // [P3] Deep Drilling research: a quarter faster.
+    const drill = hasFeature(state, 'deepDrilling') ? 0.75 : 1;
+    if (n < table.length) return Math.round(table[n] * drill);
+    return Math.round(table[table.length - 1] * Math.pow(TUNING.digTimeGrowth, n - (table.length - 1)) * drill);
   }
 
   /** People the dig needs for full speed (fewer dig proportionally slower). */

@@ -93,7 +93,12 @@ export const ERAS: EraDef[] = [
       { text: { he: 'הגיעו ל־40 ניצולים', en: 'Reach 40 survivors' }, progress: s => [Math.min(40, s.survivors.length), 40] },
       { text: { he: 'ייצרו 250 חשמל בשנייה (כור עוזר מאוד)', en: 'Generate 250 power per second (a reactor helps a lot)' }, progress: s => [Math.min(250, powerOut(s)), 250] },
       { text: { he: 'חפרו 7 קומות', en: 'Dig 7 levels' }, progress: s => [Math.min(7, s.currentFloors), 7] },
-      { text: { he: 'חקרו 150 אזורים על פני השטח', en: 'Explore 150 areas of the surface' }, progress: s => [Math.min(150, explored(s)), 150] },
+      // [P4] The Undercity is earned by deeds, not by waiting for expeditions: fewer areas, and contracts with the world outside.
+      { text: { he: 'חקרו 80 אזורים על פני השטח', en: 'Explore 80 areas of the surface' }, progress: s => [Math.min(80, explored(s)), 80] },
+      {
+        text: { he: 'השלימו 8 חוזים (ממערכה II)', en: 'Complete 8 contracts (from Act II)' },
+        progress: s => (!s.longGame || s.longGame.meta.legacy ? [1, 1] : [Math.min(8, (s.stats as unknown as { contractsDone?: number }).contractsDone ?? 0), 8]),
+      },
       {
         text: { he: 'פרצו למחוז או בנו אולם דו־קומתי', en: 'Open a district or raise a two-storey hall' },
         progress: s => bool(['cave', 'lake', 'metro', 'atrium', 'reactorHall'].some(t => restored(s, t))),

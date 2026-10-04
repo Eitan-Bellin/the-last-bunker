@@ -1,9 +1,10 @@
+import { lawMorale } from '../data/laws';
 import type { GameState, SurvivorState, SurvivorStats, BuildingInstance } from '../core/GameState';
 import type { StateManager } from '../core/StateManager';
 import type { SeededRandom } from '../core/Random';
 import { bus } from '../core/EventBus';
 import { getDef, effectiveLevel, workforceMultiplier } from '../data/buildingDefs';
-import { researchBuildingMult, researchMorale } from './ResearchSystem';
+import { hasFeature, researchBuildingMult, researchMorale } from './ResearchSystem';
 import { chainFactor } from '../data/chains';
 import { incidentBlocks } from '../data/incidents';
 import { specMax, specTotal } from '../data/specializations';
@@ -145,6 +146,7 @@ export class PopulationSystem {
   accrueMastery(sm: StateManager, dt: number): void {
     const state = sm.state;
     const ranked: SurvivorState[] = [];
+    const merit = hasFeature(state, 'meritocracy');
     for (const s of state.survivors) {
       if (s.child || s.isOnMission || !s.assignedBuildingId) continue;
       const job = state.buildings.find(b => b.id === s.assignedBuildingId);
@@ -157,6 +159,7 @@ export class PopulationSystem {
       // A mentor in the same room speeds up everyone beside them.
       if (job && job.assignedSurvivorIds.some(id => id !== s.id && state.survivors.find(o => o.id === id)?.spec === 'mentor')) rate *= 1 + MENTOR_BOOST;
       const before = rankOf(s);
+      if (merit) rate *= 1.5; // [P3] Meritocracy doctrine
       s.mxp = (s.mxp ?? 0) + rate * dt;
       if (rankOfXp(s.mxp) > before) ranked.push(s);
     }
@@ -214,6 +217,8 @@ export class PopulationSystem {
 
     const research = researchMorale(state);
     if (research > 0) factors.push({ key: 'research', value: research });
+    const laws = lawMorale(state);
+    if (laws !== 0) factors.push({ key: 'laws', value: laws });
     const specs = specTotal(state, 'morale');
     if (specs > 0) factors.push({ key: 'specs', value: specs });
     if (s.partnerId && state.survivors.some(p => p.id === s.partnerId)) factors.push({ key: 'family', value: 6 });
@@ -250,6 +255,7 @@ export class PopulationSystem {
     sum += buffs;
     const research = researchMorale(state);
     if (research > 0) sum += research;
+    sum += lawMorale(state);
     const specs = specTotal(state, 'morale');
     if (specs > 0) sum += specs;
     let kids = 0;
