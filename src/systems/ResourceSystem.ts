@@ -7,6 +7,7 @@ import { incidentBlocks } from '../data/incidents';
 import { specOf } from '../data/specializations';
 import { BASE_CAPS, OVERFLOW_CREDITS, POWER_FLOOR, TICKED_RESOURCES } from '../data/resources';
 import { modifierProduct, prepareModifiers, registerModifier } from './modifiers';
+import { difficultyOf } from '../data/difficulty';
 
 const EMERGENCY_EFFICIENCY = 0.25;
 const FOOD_PER_SURVIVOR = 0.08;
@@ -99,12 +100,13 @@ export class ResourceSystem {
       }
     }
 
+    const appetite = difficultyOf(state).consumption;
     for (const s of state.survivors) {
       if (s.isOnMission) continue;
       const glutton = s.traits.includes('glutton') ? 2 : 1;
       const size = s.child ? 0.5 : 1;
-      consumption.food = (consumption.food ?? 0) + FOOD_PER_SURVIVOR * glutton * size;
-      consumption.water = (consumption.water ?? 0) + WATER_PER_SURVIVOR * size;
+      consumption.food = (consumption.food ?? 0) + FOOD_PER_SURVIVOR * glutton * size * appetite;
+      consumption.water = (consumption.water ?? 0) + WATER_PER_SURVIVOR * size * appetite;
     }
 
     // Production chains draw their inputs; specialized rooms add their side products.

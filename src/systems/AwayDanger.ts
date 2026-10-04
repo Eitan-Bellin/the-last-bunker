@@ -1,3 +1,4 @@
+import { difficultyOf } from '../data/difficulty';
 import type { DisasterKind, GameState } from '../core/GameState';
 import type { StateManager } from '../core/StateManager';
 import type { SeededRandom } from '../core/Random';
@@ -95,7 +96,7 @@ export class AwayDanger {
       if (this.sm.state.survivors.length === 0) break;
       // Unanswered danger: from the first one nobody reacted to, a day later deaths become possible.
       const ignored = this.sm.state.danger.ignoredSince;
-      const allowDeath = deathBudget > 0 && ignored !== null && when - ignored > DAY_MS;
+      const allowDeath = deathBudget > 0 && ignored !== null && when - ignored > DAY_MS && difficultyOf(this.sm.state).awayDeaths;
       if (ignored === null) this.sm.applyDelta({ path: 'danger', value: { ...this.sm.state.danger, ignoredSince: when } });
       if (ev.type === 'raid') {
         if (!this.sm.state.danger.raid) {

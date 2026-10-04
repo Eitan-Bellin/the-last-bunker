@@ -1,3 +1,6 @@
+import { el } from '../../ui/dom';
+import { hideSplash } from '../../ui/splash';
+import { DIFFICULTIES } from '../../data/difficulty';
 import { AudioEngine } from '../../audio/AudioEngine';
 import { i18n } from '../../i18n/I18nManager';
 import type { ResourceType } from '../../core/GameState';
@@ -71,6 +74,11 @@ export class StoryController {
   }
 
   playIntroSequence(): void {
+    // [Long game] A new game first asks how hard the world should be.
+    if (!this.app.state.storyFlags.includes('difficulty:chosen')) {
+      this.chooseDifficulty(() => this.playIntroSequence());
+      return;
+    }
     this.app.introPlaying = true;
     this.app.engine.paused = true;
     document.body.classList.add('intro-active');
@@ -86,6 +94,28 @@ export class StoryController {
         this.app.engine.requestSave();
         this.app.toasts.show(`[[flashlight]] ${i18n.t('intro.firstHint')}`, 'info');
       },
+    });
+  }
+
+  /** The three difficulties as one choice; `then` runs once one is picked. */
+  chooseDifficulty(then: () => void): void {
+    hideSplash();
+    this.app.engine.paused = true;
+    this.app.modal.show({
+      icon: '[[skull]]',
+      title: i18n.t('difficulty.title'),
+      body: i18n.t('difficulty.body'),
+      actions: DIFFICULTIES.map(d => ({
+        label: `${d.icon} ${i18n.t(`difficulty.${d.id}`)}`,
+        className: d.id === 'warden' ? 'btn-primary' : 'btn-secondary',
+        detail: el('span', 'difficulty-desc', i18n.t(`difficulty.${d.id}.desc`)),
+        onClick: () => {
+          this.app.modal.hide();
+          this.app.engine.setDifficulty(d.id);
+          this.app.audio.play('click');
+          then();
+        },
+      })),
     });
   }
 }

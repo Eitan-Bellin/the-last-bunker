@@ -86,3 +86,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px
 .inbox-left { flex: none; font-size: 0.85em; opacity: 0.75; }
 .inbox-left.soon { color: #ffb36a; opacity: 1; }
 .inbox-empty { opacity: 0.7; text-align: center; padding: 24px 8px; }
+
+/* [Long game] Difficulty choice: the name above its description */
+.modal-actions .btn:has(.difficulty-desc) { flex-direction: column; align-items: flex-start; gap: 4px; }
+.difficulty-desc { font-size: 0.85em; font-weight: normal; opacity: 0.85; line-height: 1.35; }

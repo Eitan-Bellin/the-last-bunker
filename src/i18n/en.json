@@ -684,5 +684,13 @@
   "inbox.reportOk": "Expedition report: the team is back",
   "inbox.reportBad": "Expedition report: it went badly",
   "inbox.expired": "No answer in time: \"{name}\", the bunker chose \"{choice}\"",
-  "inbox.expiredItem": "No answer in time: \"{name}\" took its safe default"
+  "inbox.expiredItem": "No answer in time: \"{name}\" took its safe default",
+  "difficulty.title": "How hard is the world out there?",
+  "difficulty.body": "Warden is the game as it was meant to be played. The choice holds for this bunker.",
+  "difficulty.settler": "Settler",
+  "difficulty.settler.desc": "Gentler raids, people eat less, more supplies at the start. Nobody dies while you are away.",
+  "difficulty.warden": "Warden",
+  "difficulty.warden.desc": "The intended balance: real danger, fair warnings, time to react.",
+  "difficulty.last": "The Last",
+  "difficulty.last.desc": "Hungrier people, stronger raiders, fewer supplies. Time away is truly dangerous."
 }

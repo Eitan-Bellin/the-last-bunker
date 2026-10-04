@@ -1,3 +1,4 @@
+import { difficultyOf } from '../data/difficulty';
 import type { GameState, ResourceType, SurvivorState } from '../core/GameState';
 import { projectArrivalSpeed } from '../data/projects'; // [LateGame B1]
 import type { StateManager } from '../core/StateManager';
@@ -401,7 +402,7 @@ export interface RaidResult {
 /** What the lookout sees coming: 10 + 8 per era + 0.15 per resident, ±25%, scaled to the bunker. */
 export function raidStrength(state: GameState, roll = 0.5): number {
   const base = 10 + 8 * Math.max(0, state.era ?? 0) + 0.15 * state.survivors.length;
-  return Math.max(10, Math.round(base * RAID_SCALE * (1 + state.survivors.length / RAID_CROWD) * (0.75 + roll * 0.5)));
+  return Math.max(10, Math.round(base * RAID_SCALE * (1 + state.survivors.length / RAID_CROWD) * (0.75 + roll * 0.5) * difficultyOf(state).raidStrength));
 }
 
 /** The toll that sends the raiders away: a fifth of the food and scrap. */

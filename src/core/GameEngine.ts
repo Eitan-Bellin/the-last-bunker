@@ -27,6 +27,8 @@ import { MaintenanceSystem } from '../systems/MaintenanceSystem';
 import { AwayDanger, type AwayDangerReport } from '../systems/AwayDanger';
 import { DIG_LORE, seedRuins } from '../data/ruins';
 import { InboxSystem } from '../systems/InboxSystem';
+import { difficultyOf, easier } from '../data/difficulty';
+import type { Difficulty } from './state/longGame';
 import { logCrash } from './crashGuard';
 import { WASTE_TRACKED } from '../data/resources';
 
@@ -49,8 +51,6 @@ const OFFLINE_EFFICIENCY = 0.8;
 const SLEEP_GAP_MS = 20_000;
 const OFFLINE_MAX_SECONDS = 86_400;
 const OFFLINE_STEP_SECONDS = 60;
-/** [Danger C4] Away, hunger can hurt but never takes a resident below this health. */
-const OFFLINE_HEALTH_FLOOR = 15;
 
 /** Most newcomers who gather at the door while the player is away. */
 const AWAY_DOOR_MAX = 3;
@@ -235,8 +235,8 @@ export class GameEngine {
         },
       },
       { name: 'building', online: dt => this.buildingSystem.update(sm, dt), offline: dt => this.buildingSystem.update(sm, dt) },
-      // [Danger C4] Away, hunger can hurt but never takes a resident below the health floor.
-      { name: 'population', online: dt => this.populationSystem.update(sm, dt), offline: dt => this.populationSystem.update(sm, dt, OFFLINE_HEALTH_FLOOR) },
+      // [Danger C4] Away, hunger can hurt but never takes a resident below the difficulty's health floor.
+      { name: 'population', online: dt => this.populationSystem.update(sm, dt), offline: dt => this.populationSystem.update(sm, dt, difficultyOf(sm.state).awayHealthFloor) },
       { name: 'event', online: () => this.eventSystem.update() },
       { name: 'research', online: dt => this.researchSystem.update(sm, dt), offline: dt => this.researchSystem.update(sm, dt) },
       { name: 'exploration', online: dt => this.explorationSystem.update(dt), offline: dt => this.explorationSystem.update(dt) },
@@ -543,6 +543,30 @@ export class GameEngine {
     sm.applyDelta({ path: 'awayDoorClock', value: clock });
     if (arrived > 0) sm.applyDelta({ path: 'doorWaiting', value: waiting });
     return arrived;
+  }
+
+  /**
+   * [Long game] Sets the difficulty. At the very start of a game it also adjusts the starting stock; the run remembers the
+   * easiest difficulty it was ever played on.
+   */
+  setDifficulty(d: Difficulty): void {
+    const sm = this.stateManager;
+    const lg = sm.state.longGame;
+    if (!lg) return;
+    const fresh = sm.state.stats.totalPlayTime < 60 && !sm.state.storyFlags.includes('difficulty:chosen');
+    sm.applyDeltas([
+      { path: 'longGame.meta.difficulty', value: d },
+      { path: 'longGame.meta.diffLowest', value: fresh ? d : easier(lg.meta.diffLowest, d) },
+      { path: 'storyFlags', value: [...new Set([...sm.state.storyFlags, 'difficulty:chosen'])] },
+    ]);
+    if (fresh) {
+      const extra = difficultyOf(sm.state).startStock;
+      for (const r of ['food', 'water', 'materials'] as const) {
+        const res = sm.state.resources[r];
+        sm.applyDelta({ path: `resources.${r}.amount`, value: Math.min(res.cap, Math.max(0, Math.round(res.amount * (1 + extra)))) });
+      }
+    }
+    this.requestSave();
   }
 
   /** The player's answer to the people waiting at the door: let in as many as there are beds, or turn them away. */
