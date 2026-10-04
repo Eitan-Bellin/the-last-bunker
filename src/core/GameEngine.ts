@@ -274,10 +274,11 @@ export class GameEngine {
         this.step(s.name, () => f(dt, efficiency));
       }
     }
-    if (mode === 'online') {
-      const sm = this.stateManager;
-      this.step('clock', () => sm.applyDelta({ path: 'stats.totalPlayTime', value: sm.state.stats.totalPlayTime + dt }));
-    }
+    const sm = this.stateManager;
+    if (mode === 'online') this.step('clock', () => sm.applyDelta({ path: 'stats.totalPlayTime', value: sm.state.stats.totalPlayTime + dt }));
+    // World time runs both online and away (seasons, contracts and the threat director live on it).
+    const lg = sm.state.longGame;
+    if (lg) sm.applyDelta({ path: 'longGame.meta.worldT', value: lg.meta.worldT + dt });
   }
 
   async init(): Promise<void> {
@@ -423,6 +424,11 @@ export class GameEngine {
     // Unspent rush charges are a gift from the daily crates: Genesis does not take them.
     fresh.rush = Math.max(old.rush ?? 0, fresh.rush);
     fresh.createdAt = Date.now();
+    // [Long game] The world clock, difficulty and scenario carry into the next timeline; the Act starts over.
+    if (old.longGame) {
+      const m = old.longGame.meta;
+      fresh.longGame.meta = { ...fresh.longGame.meta, difficulty: m.difficulty, diffLowest: m.diffLowest, scenario: m.scenario, mutators: [...m.mutators], runIndex: m.runIndex + 1, worldT: m.worldT, actSince: m.worldT };
+    }
     this.stateManager.loadState(fresh);
     this.rng.seed = fresh.randomSeed;
     this.buildingSystem.syncNextId(fresh);

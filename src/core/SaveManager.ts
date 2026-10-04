@@ -1,6 +1,6 @@
 import { get, set, del } from 'idb-keyval';
 import { compressToBase64, compressToUTF16, decompressFromBase64, decompressFromUTF16 } from 'lz-string';
-import type { GameState } from './GameState';
+import { SAVE_VERSION, type GameState } from './GameState';
 
 /**
  * Dev builds accept ?slot=<name> to play on a separate save (testing a fresh game
@@ -23,6 +23,8 @@ const ROLL_KEY = `${AUTO_SAVE_KEY}_roll`;
 const PREV_KEY = `${AUTO_SAVE_KEY}_prev`;
 /** The raw text of a main save that could not be read: it is never thrown away, so it can still be inspected or repaired. */
 const CORRUPT_KEY = `${AUTO_SAVE_KEY}_corrupt`;
+/** Before a save is migrated to a newer format, its raw text is kept once under this key + its version (never overwritten). */
+const PRE_MIGRATION_KEY = `${AUTO_SAVE_KEY}_v`;
 
 const ROLL_EVERY_MS = 30 * 60_000;
 const READ_RETRY_DELAYS = [0, 250, 700];
@@ -184,6 +186,8 @@ export class SaveManager {
     if (main.raw !== undefined && main.raw !== null && main.raw !== '') {
       const state = decode(main.raw);
       if (state) {
+        // A save from an older format: keep it exactly as it was, once, before the game migrates it.
+        if ((state.version ?? 1) < SAVE_VERSION) await this.keepPreMigration(main.raw, state.version ?? 1);
         // Remember the game we just loaded fine (best effort, never blocks the start).
         void set(BACKUP_KEY, main.raw).catch(() => undefined);
         return { status: 'ok', state };
@@ -196,6 +200,16 @@ export class SaveManager {
     // No main save. A surviving backup means the main one was lost (cleared storage, a bug): use it rather than starting over.
     const rescued = await this.bestBackup();
     return rescued ? { status: 'ok', state: rescued.state, recoveredFrom: rescued.kind } : { status: 'missing', state: null };
+  }
+
+  /** Stores the raw save under its old version's key, unless one is already there (the first copy is the true original). */
+  private async keepPreMigration(raw: string, version: number): Promise<void> {
+    const key = `${PRE_MIGRATION_KEY}${version}`;
+    try {
+      if ((await get(key)) === undefined) await set(key, raw);
+    } catch {
+      // best effort: never block the start (the session and rolling backups still hold it)
+    }
   }
 
   /** Legacy single-slot loader (kept for callers that only want the game or nothing). */

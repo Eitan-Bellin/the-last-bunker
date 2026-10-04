@@ -43,7 +43,7 @@ export function fingerprint(srcDir) {
 const EXTS = ['', '.ts', '.js', '.mjs', '.json', '/index.ts'];
 
 /**
- * @param {{ src?: string, tag?: string }} o  src: a folder holding core/, systems/, data/ (default: live src/).
+ * @param {{ src?: string, tag?: string, entry?: string }} o  src: a folder holding core/, systems/, data/ (default: live src/); entry: another entry file (default node-entry.ts).
  * @returns {Promise<{ file: string, fingerprint: object }>}
  */
 export async function bundleSim(o = {}) {
@@ -53,7 +53,7 @@ export async function bundleSim(o = {}) {
   const file = join(OUT_DIR, `sim-${o.tag ?? 'live'}-${process.pid}-${Date.now()}.mjs`);
   const redirect = srcDir !== LIVE_SRC;
   await build({
-    input: join(ROOT, 'tools', 'sim', 'node-entry.ts'),
+    input: o.entry ?? join(ROOT, 'tools', 'sim', 'node-entry.ts'),
     platform: 'node',
     logLevel: 'warn',
     // Feature detection reads exports that older code doesn't have; that is expected, not a problem.

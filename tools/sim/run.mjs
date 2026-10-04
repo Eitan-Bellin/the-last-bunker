@@ -50,7 +50,7 @@ log(`bundling ${args.src ?? 'src'} ...`);
 const { file: bundle, fingerprint } = await bundleSim({ src: args.src, tag: mode });
 log(`code ${fingerprint.src} #${fingerprint.hash}, newest change ${fingerprint.newestChange}; ${seeds.length} seed(s) on ${jobs} thread(s)`);
 
-const opts = seed => ({ mode, seed, hours, days, think, returnMode: args.return ?? 'restart', teams: args.teams ? Number(args.teams) : undefined, noDanger: !!args.nodanger, rebirths: args.rebirths ? Number(args.rebirths) : undefined });
+const opts = seed => ({ mode, seed, hours, days, think, returnMode: args.return ?? 'restart', teams: args.teams ? Number(args.teams) : undefined, noDanger: !!args.nodanger, rebirths: args.rebirths ? Number(args.rebirths) : undefined, dumpSave: !!args['dump-save'] });
 const results = [];
 const failures = [];
 const queue = [...seeds];
@@ -84,6 +84,14 @@ const data = {
 data.aggregate = aggregate(results);
 const text = results.length ? textReport(data) : 'no successful runs';
 console.log(`\n${text}`);
+// --dump-save <prefix>: each run's final game as <prefix>-seed<N>.json (kept out of the results JSON).
+if (args['dump-save']) {
+  for (const r of results) {
+    if (!r?.finalSave) continue;
+    writeFileSync(resolve(process.cwd(), `${args['dump-save']}-seed${r.seed}.json`), r.finalSave);
+    delete r.finalSave;
+  }
+}
 if (args.json) {
   const out = resolve(process.cwd(), args.json);
   mkdirSync(dirname(out), { recursive: true });

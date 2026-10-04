@@ -48,6 +48,8 @@ export interface SimOptions {
   teams?: number;
   /** Press Genesis this many times (the bot buys nothing in the shop) and keep playing: the second timeline's milestones go to `timeline2`. */
   rebirths?: number;
+  /** Return the final game state as save JSON (`finalSave`), e.g. to test save migrations on real games. */
+  dumpSave?: boolean;
   onProgress?: (fraction: number, label: string) => void;
   /** Lets a browser page breathe between chunks. */
   yieldFn?: () => Promise<void>;
@@ -942,6 +944,7 @@ export async function runSim(o: SimOptions): Promise<SimResult> {
       res: Object.fromEntries(TRACKED.map(k => [k, `${Math.round(s.resources[k].amount)}/${Math.round(s.resources[k].cap)}`])),
     },
     bot: R.bot, warnings, stepList,
+    ...(o.dumpSave ? { finalSave: JSON.stringify(e.stateManager.state) } : {}),
   };
   return result;
 }

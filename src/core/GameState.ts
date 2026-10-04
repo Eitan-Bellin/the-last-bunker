@@ -1,3 +1,5 @@
+import { createLongGame, migrateLongGame, type LongGameState } from './state/longGame';
+
 export interface ResourceState {
   amount: number;
   cap: number;
@@ -331,6 +333,8 @@ export interface GameState {
   explorationMap: ExplorationHex[];
   activeMissions: ActiveMission[];
   prestige: PrestigeState;
+  /** The long game: Act, difficulty, world clock and the newer systems' slices (src/core/state/longGame.ts). Absent before v5. */
+  longGame: LongGameState;
   settings: GameSettings;
   stats: GameStats;
   achievements: string[];
@@ -408,7 +412,7 @@ export function createLateGame(): LateGameState {
   };
 }
 
-export const SAVE_VERSION = 4;
+export const SAVE_VERSION = 5;
 
 export function migrateState(saved: GameState): GameState {
   const fresh = createInitialState();
@@ -446,6 +450,8 @@ export function migrateState(saved: GameState): GameState {
   merged.lateGame.trade = { ...createLateGame().trade, ...merged.lateGame.trade };
   merged.lateGame.weekly = { ...createLateGame().weekly, ...merged.lateGame.weekly };
   if (!merged.resources.credits) merged.resources.credits = { ...fresh.resources.credits };
+  // [Long game] v5: Act, difficulty, world clock and the empty slices of the newer systems.
+  merged.longGame = migrateLongGame(saved.longGame, saved.era ?? 0, merged.stats.totalPlayTime ?? 0, merged.prestige?.rebirthCount ?? 0);
   return merged;
 }
 
@@ -533,5 +539,6 @@ export function createInitialState(): GameState {
     shop: { day: null, bought: {}, week: null, weekBought: {} },
     activeProjectId: null,
     lateGame: createLateGame(),
+    longGame: createLongGame(),
   };
 }
