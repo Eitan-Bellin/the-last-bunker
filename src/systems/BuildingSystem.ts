@@ -5,7 +5,7 @@ import { bus } from '../core/EventBus';
 import { getDef, effectiveLevel, isDistrict, roomFloors, roomSlots, specLevel, type BuildingDef } from '../data/buildingDefs';
 import { actOf, levelCapFor } from '../data/acts';
 import { TUNING } from '../data/tuning';
-import { actPrice, digHours, floorAct, levelAct, upgradeHours } from '../data/pricing';
+import { actPrice, digHours, floorAct, levelAct, payableHours, upgradeHours } from '../data/pricing';
 import { districtDef, nextDistrict } from '../data/districts';
 import { BASE_FLOORS, MAX_FLOORS, allowedFloors } from '../data/zones';
 import { RETOOL_PRICE_MULT, RETOOL_SECONDS, SPEC_COST, specTotal, specsFor } from '../data/specializations';
@@ -92,7 +92,9 @@ export class BuildingSystem {
     const mk = Math.round(((building.level + 1) * 10) / def.maxLevel);
     if (mk >= 4) {
       // [P5] The Artisan keystone: a sixth cheaper (and the doubled steps of five-level rooms).
-      const costs = actPrice(levelAct(mk), upgradeHours(mk) * (def.maxLevel < 10 ? 2 : 1) * (this.artisan ? 0.85 : 1));
+      const act = levelAct(mk);
+      const hours = Math.min(payableHours(act), upgradeHours(mk) * (def.maxLevel < 10 ? 2 : 1)) * (this.artisan ? 0.85 : 1);
+      const costs = actPrice(act, hours);
       const gentle = Math.pow(def.costMultiplier, Math.min(building.level, 5));
       for (const r of SCARCE_COSTS) if (def.baseCost[r]) costs[r] = Math.ceil(def.baseCost[r] * gentle);
       return costs;

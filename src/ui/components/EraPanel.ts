@@ -105,6 +105,7 @@ export class EraPanel {
       el('div', 'era-tagline', act.tagline[locale]),
       el('div', 'act-limits', i18n.t('act.limits', { level: act.levelCap, people: act.popCap, floors: act.floorCap })),
     );
+    if (act.opens) card.appendChild(el('div', 'bp-hint', act.opens[locale]));
     // [P2] How tempting the bunker looks out there.
     if (this.lastState?.longGame) {
       const t = this.lastState.longGame.threat;
@@ -234,6 +235,7 @@ export function showActBanner(act: ActDef, onDone: () => void): void {
     el('div', 'era-banner-tagline', act.tagline[locale]),
     el('p', 'era-banner-story', i18n.t('act.opens', { level: act.levelCap, people: act.popCap, floors: act.floorCap })),
   );
+  if (act.opens) inner.appendChild(el('p', 'era-banner-story', act.opens[locale]));
   const btn = el('button', 'btn btn-primary', i18n.t('era.continue'));
   inner.appendChild(btn);
   overlay.appendChild(inner);

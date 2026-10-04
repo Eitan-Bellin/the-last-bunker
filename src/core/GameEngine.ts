@@ -282,7 +282,7 @@ export class GameEngine {
       { name: 'threat', online: dt => this.threatSystem.update(dt), offline: dt => this.threatSystem.update(dt) },
       // [P4] Contract offers and crews on jobs run on world time, online and away (offers lapse while nobody answers).
       { name: 'contracts', slow: true, online: () => this.contractSystem.update(), offline: () => this.contractSystem.update() },
-      { name: 'outposts', online: dt => this.outpostSystem.update(dt), offline: dt => this.outpostSystem.update(dt) },
+      { name: 'outposts', online: dt => this.outpostSystem.update(dt), offline: (dt, eff) => this.outpostSystem.update(dt * eff) },
       { name: 'foreman', online: dt => this.foremanSystem.update(dt), offline: dt => this.foremanSystem.update(dt) },
       { name: 'maintenance', online: dt => this.maintenanceSystem.update(dt), offline: (dt, eff) => this.maintenanceSystem.update(dt * eff) },
       // Card deadlines run on world time, so a safe default can be taken while the player is away.
@@ -472,7 +472,7 @@ export class GameEngine {
     // [Long game] The world clock, difficulty and scenario carry into the next timeline; the Act starts over.
     if (old.longGame) {
       const m = old.longGame.meta;
-      fresh.longGame.meta = { ...fresh.longGame.meta, difficulty: m.difficulty, diffLowest: m.diffLowest, scenario: m.scenario, mutators: [...m.mutators], runIndex: m.runIndex + 1, worldT: m.worldT, actSince: m.worldT };
+      fresh.longGame.meta = { ...fresh.longGame.meta, difficulty: m.difficulty, diffLowest: m.difficulty, scenario: m.scenario, mutators: [...m.mutators], runIndex: m.runIndex + 1, worldT: m.worldT, actSince: m.worldT };
     }
     this.stateManager.loadState(fresh);
     this.rng.seed = fresh.randomSeed;

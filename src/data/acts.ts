@@ -27,12 +27,16 @@ export interface ActDef {
   goals: ActGoal[];
   /** Projects that make up this Act's charter. */
   charter: string[];
+  /** [UX] What this Act opens, in plain words (shown on its title card). */
+  opens?: Record<'he' | 'en', string>;
 }
 
 const researched = (s: GameState) => Object.values(s.research).filter(r => r.completed).length;
 const allCleared = (s: GameState): [number, number] => {
-  const total = s.ruins?.length ?? 0;
-  return total === 0 ? [1, 1] : [Math.min(total, s.ruinsCleared ?? 0), total];
+  // A cleared ruin leaves the list: done = cleared, left = what still stands.
+  const left = s.ruins?.length ?? 0;
+  const done = s.ruinsCleared ?? 0;
+  return left === 0 ? [1, 1] : [done, done + left];
 };
 const atLeast = (have: number, want: number): [number, number] => [Math.min(have, want), want];
 /** Rooms at or above a level. */
@@ -62,6 +66,7 @@ export const ACTS: ActDef[] = [
       { text: { he: '10 חדרים ברמה 5', en: '10 rooms at level 5' }, progress: s => atLeast(roomsAt(s, 5), 10) },
     ],
     charter: ['radioMast', 'purifier'],
+    opens: { he: 'נפתחים: חוזים עם העולם בחוץ, מנהל העבודה, עונות השנה, ודוקטרינות חשמל ומזון במחקר. החלטות שאינן דחופות מחכות בתיבת ההחלטות.', en: 'Opens: contracts with the world outside, the Foreman, the seasons, and power and food doctrines in research. Decisions that can wait now wait in the Decisions inbox.' },
   },
   {
     id: 3,
@@ -74,6 +79,7 @@ export const ACTS: ActDef[] = [
       { text: { he: '8 חדרים ברמה 7', en: '8 rooms at level 7' }, progress: s => atLeast(roomsAt(s, 7), 8) },
     ],
     charter: ['greenhouse', 'archive', 'metroTunnel'],
+    opens: { he: 'נפתחים: רכיבים (פס הרכבה בבית המלאכה), מאחזים על פני השטח, החוק הראשון, ודוקטרינות חברה והגנה.', en: 'Opens: components (Assembly Line in the workshop), outposts on the surface, the first law, and society and defense doctrines.' },
   },
   {
     id: 4,
@@ -86,6 +92,7 @@ export const ACTS: ActDef[] = [
       { text: { he: 'הגיעו ל־90 ניצולים', en: 'Reach 90 survivors' }, progress: s => atLeast(s.survivors.length, 90) },
     ],
     charter: ['wall', 'deepFoundry'],
+    opens: { he: 'נפתחים: סגסוגות (כבשן קשת בגנרטור), חדרים עד רמה 9, ועוד מאחזים.', en: 'Opens: alloys (Arc Furnace in the generator), rooms up to level 9, and more outposts.' },
   },
   {
     id: 5,
@@ -98,6 +105,7 @@ export const ACTS: ActDef[] = [
       { text: { he: '8 חדרים ברמה 10', en: '8 rooms at level 10' }, progress: s => atLeast(roomsAt(s, 10), 8) },
     ],
     charter: ['surfaceGate', 'skyDome'],
+    opens: { he: 'נפתחים: נתונים (כספת נתונים במעבדה), רמה 10, חוק שני.', en: 'Opens: data (Data Vault in the lab), level 10, a second law.' },
   },
   {
     id: 6,
@@ -110,6 +118,7 @@ export const ACTS: ActDef[] = [
       { text: { he: 'חפרו 20 קומות', en: 'Dig 20 levels' }, progress: s => atLeast(s.currentFloors, 20) },
     ],
     charter: ['tradeLeague', 'constitution'],
+    opens: { he: 'נפתחים: השפעה (אולם המועצה בחדר האוכל), חוק שלישי.', en: 'Opens: influence (Council Hall in the canteen), a third law.' },
   },
   {
     id: 7,
@@ -122,6 +131,7 @@ export const ACTS: ActDef[] = [
       { text: { he: 'השלימו את כספת הזרעים (מחקר)', en: 'Complete the Seed Vault (research)' }, progress: s => [s.research.seedVault?.completed ? 1 : 0, 1] },
     ],
     charter: ['ark', 'genesisCore'],
+    opens: { he: 'נפתחים: ליבות זרע (כור הזרעים), התיבה וליבת בראשית.', en: 'Opens: seed cores (the Seed Forge), the Ark and the Genesis Core.' },
   },
 ];
 
@@ -147,5 +157,6 @@ export function actComplete(state: GameState, act: ActDef = actOf(state)): boole
 
 /** A room type's highest level right now: its own top level, held to the Act's ceiling. */
 export function levelCapFor(state: GameState, defMax: number): number {
-  return Math.min(defMax, actOf(state).levelCap);
+  // Rooms with fewer levels (districts and halls: 5) count each level as two Mk steps.
+  return Math.min(defMax, Math.max(1, Math.floor((actOf(state).levelCap * defMax) / 10)));
 }

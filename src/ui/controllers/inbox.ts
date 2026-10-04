@@ -56,9 +56,10 @@ export class InboxController {
     });
   }
 
-  /** True once the inbox takes over from pop-up dialogs (after the Remnant, the guided first era). */
+  /** True once the inbox takes over from pop-up dialogs. */
   defers(state: GameState): boolean {
-    return (state.era ?? 0) >= 1;
+    // From Act II (the first Act is guided by dialogs); a state without the long game falls back to the era.
+    return (state.longGame?.meta.act ?? ((state.era ?? 0) >= 1 ? 2 : 1)) >= 2;
   }
 
   /** Should the event on the table open by itself? Raids and other never-expiring events always do. */

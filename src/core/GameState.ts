@@ -340,6 +340,8 @@ export interface GameState {
   research: Record<string, ResearchNode>;
   /** Research waiting its turn after the active one (cost already paid; continues offline). */
   researchQueue: string[];
+  /** [P3] What each queued node was paid (a Eureka can change the price before it starts or is cancelled). */
+  researchPaid?: Record<string, Record<string, number>>;
   /** Levels of the repeatable Refinement research, by refinement id. */
   refinements: Record<string, number>;
   /** Baseline for relative endless objectives ("+N from now"), captured when a step begins. */

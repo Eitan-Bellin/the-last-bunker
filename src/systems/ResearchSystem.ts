@@ -225,6 +225,7 @@ export class ResearchSystem {
     this.resources.spend(sm, def.cost as Record<string, number>);
     if (this.activeId(sm.state)) {
       sm.applyDelta({ path: 'researchQueue', value: [...this.queue(sm.state), id] });
+      sm.applyDelta({ path: 'researchPaid', value: { ...(sm.state.researchPaid ?? {}), [id]: { ...def.cost } as Record<string, number> } });
     } else {
       this.begin(sm, id, def);
     }
@@ -251,10 +252,7 @@ export class ResearchSystem {
         break;
       }
     }
-    for (const d of dropped) {
-      const def = this.defOf(sm.state, d);
-      if (def) this.resources.gain(sm, def.cost);
-    }
+    for (const d of dropped) this.refund(sm, d);
     sm.applyDelta({ path: 'researchQueue', value: queue });
     return true;
   }
@@ -302,6 +300,20 @@ export class ResearchSystem {
     bus.emit('research:complete', id);
   }
 
+  /** Gives back what a queued node was paid (its current price for nodes queued before this was recorded). */
+  private refund(sm: StateManager, id: string): void {
+    const paid = sm.state.researchPaid?.[id] ?? this.defOf(sm.state, id)?.cost;
+    if (paid) this.resources.gain(sm, paid);
+    this.forgetPaid(sm, id);
+  }
+
+  private forgetPaid(sm: StateManager, id: string): void {
+    const all = sm.state.researchPaid;
+    if (!all || !(id in all)) return;
+    const { [id]: _gone, ...rest } = all;
+    sm.applyDelta({ path: 'researchPaid', value: rest });
+  }
+
   /** Moves the head of the queue into the lab (already paid for). */
   private startNextQueued(sm: StateManager): boolean {
     const queue = [...this.queue(sm.state)];
@@ -310,11 +322,12 @@ export class ResearchSystem {
       sm.applyDelta({ path: 'researchQueue', value: [...queue] });
       const def = this.defOf(sm.state, next);
       if (def && !sm.state.research[next]?.completed && def.requires.every(r => isResearched(sm.state, r))) {
+        this.forgetPaid(sm, next);
         this.begin(sm, next, def);
         return true;
       }
       // Can't run (should not happen: the queue keeps prerequisites ahead): refund and drop it.
-      if (def) this.resources.gain(sm, def.cost);
+      this.refund(sm, next);
     }
     return false;
   }

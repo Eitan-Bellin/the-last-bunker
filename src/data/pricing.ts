@@ -55,6 +55,14 @@ export function levelAct(level: number): number {
   return level <= 3 ? 1 : Math.min(5, Math.floor((level - 4) / 2) + 2);
 }
 
+/**
+ * [L2] Hours a single payment may ask in an Act: maxPaymentShare of the storage the Act gives (both before the price
+ * scale, which multiplies them alike). Upgrades and digs are held to it so any price can be stored and paid.
+ */
+export function payableHours(act: number): number {
+  return TUNING.maxPaymentShare * TUNING.capHours[Math.min(TUNING.capHours.length - 1, Math.max(1, act))];
+}
+
 /** Hours of income for an upgrade to `level` (the plan's 3 minutes x 1.74 per level). */
 export function upgradeHours(level: number): number {
   return (TUNING.priceMinutes / 60) * Math.pow(TUNING.priceGrowth, level - 1);
@@ -67,7 +75,7 @@ export function floorAct(floorCount: number): number {
 
 /** Hours of income to dig to `floorCount` floors (from B7; the first digs keep their old prices). */
 export function digHours(floorCount: number): number {
-  return TUNING.digHours * Math.pow(TUNING.digHoursGrowth, floorCount - 7);
+  return Math.min(payableHours(floorAct(floorCount)), TUNING.digHours * Math.pow(TUNING.digHoursGrowth, floorCount - 7));
 }
 
 /**
