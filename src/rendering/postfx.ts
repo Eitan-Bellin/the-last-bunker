@@ -25,9 +25,9 @@ export interface QualityProfile {
   fps: [number, number, number];
 }
 export const QUALITY_PROFILE: Record<QualityLevel, QualityProfile> = {
-  high: { res: 2, msaa: true, passes: 4, grain: true, fps: [60, 60, 30] },
-  medium: { res: 1.75, msaa: false, passes: 2, grain: false, fps: [60, 30, 15] },
-  low: { res: 1.25, msaa: false, passes: 0, grain: false, fps: [30, 20, 10] },
+  high: { res: 2.5, msaa: true, passes: 4, grain: true, fps: [60, 60, 30] },
+  medium: { res: 2, msaa: false, passes: 2, grain: false, fps: [60, 30, 15] },
+  low: { res: 1.5, msaa: false, passes: 0, grain: false, fps: [30, 20, 10] },
 };
 
 export function storedQuality(): QualityLevel | null {
@@ -138,9 +138,18 @@ export class PostFX {
     return this.forced ?? (isLiteMode() ? 'low' : this.monitor.quality);
   }
 
-  /** What the current level changes (see QUALITY_PROFILE). */
+  /**
+   * The level the player picked, or the device's starting level on Auto. Sharpness and picture rate follow this one only:
+   * the automatic frame-rate monitor may take the light effects down when the device struggles, but it must never make the
+   * picture blurry or choppy behind the player's back.
+   */
+  get baseLevel(): QualityLevel {
+    return this.forced ?? startQuality();
+  }
+
+  /** What the current level changes (see QUALITY_PROFILE): effects follow the live level, sharpness and rates the base level. */
   get profile(): QualityProfile {
-    return QUALITY_PROFILE[this.quality];
+    return { ...QUALITY_PROFILE[this.quality], res: QUALITY_PROFILE[this.baseLevel].res, fps: QUALITY_PROFILE[this.baseLevel].fps };
   }
 
   /** Player override from the settings menu (null = automatic). */
@@ -210,8 +219,8 @@ export class PostFX {
       c.passes = p.passes;
       // The world is drawn into the filter's texture, so smoothing its edges is a switch on the filter, changeable at any time.
       c.antialias = p.msaa ? 'on' : 'off';
-      this.applyResolution(p.res, now);
     }
+    this.applyResolution(QUALITY_PROFILE[this.baseLevel].res, now);
     this.vignette = VIGNETTE[Math.max(0, Math.min(VIGNETTE.length - 1, v.era))];
     const t = this.world.localTransform;
     // Tell the filter where the screen is, so it does not measure the whole 3000-object world every frame to find out.
