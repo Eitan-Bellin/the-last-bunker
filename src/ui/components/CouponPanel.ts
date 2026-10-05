@@ -12,7 +12,7 @@ export function couponValid(code: string): boolean {
   return code.replace(/\s+/g, '').toUpperCase() === COUPON_CODE;
 }
 
-type Kind = 'rush' | 'research' | 'build' | 'dig' | 'project' | 'missions' | 'fill';
+type Kind = 'rush' | 'research' | 'build' | 'dig' | 'project' | 'missions' | 'arrival' | 'fill';
 
 interface Row {
   kind: Kind;
@@ -29,6 +29,7 @@ const ROWS: Row[] = [
   { kind: 'dig', icon: '[[pick]]', amount: 1, max: 999 },
   { kind: 'project', icon: '[[worker]]', amount: 1, max: 50 },
   { kind: 'missions', icon: '[[surface]]', amount: 1, max: 999 },
+  { kind: 'arrival', icon: '[[door]]', amount: 5, max: 999 },
   { kind: 'fill', icon: '[[storage]]', amount: 0, max: 0 },
 ];
 
@@ -125,6 +126,11 @@ export class CouponPanel {
         const n = state.activeMissions.length;
         return n ? i18n.t('coupon.missions.on', { n }) : i18n.t('coupon.none');
       }
+      case 'arrival': {
+        if (state.survivors.length >= state.maxPopulation) return i18n.t('coupon.arrival.full');
+        const left = Math.max(0, Math.ceil(state.nextArrivalAt - state.stats.totalPlayTime));
+        return i18n.t('coupon.arrival.on', { t: `${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}` });
+      }
       case 'fill': return i18n.t('coupon.fill.hint');
     }
   }
@@ -184,6 +190,14 @@ export class CouponPanel {
             return { ...m, progress: Math.min(stop, m.progress + secs) };
           }),
         });
+        return true;
+      }
+      case 'arrival': {
+        // The next newcomer knocks sooner; with no free bed they would only wait at the door, so nothing happens.
+        const state = sm.state;
+        const now = state.stats.totalPlayTime;
+        if (state.survivors.length >= state.maxPopulation || state.nextArrivalAt <= now) return false;
+        sm.applyDelta({ path: 'nextArrivalAt', value: Math.max(now, state.nextArrivalAt - n * 60) });
         return true;
       }
       case 'fill': {
