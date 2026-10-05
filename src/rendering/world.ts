@@ -8,7 +8,11 @@ import { lineWidth, richLine } from './richText';
 import { steelTag } from './signage';
 
 export const WORLD_LEFT = -260;
-export const WORLD_RIGHT = BUILDING_W + 260;
+/** Right edge of the painted panorama's own span (the painting is scaled to this width, never to the wider world). */
+export const PAINT_RIGHT = BUILDING_W + 260;
+/** The surface carries on east of the bunker for the big projects' lots (src/rendering/projectSites.ts). */
+export const SURFACE_EAST = 1500;
+export const WORLD_RIGHT = PAINT_RIGHT + SURFACE_EAST;
 export const SKY_TOP = -300;
 const ENTRANCE_H = 52;
 
@@ -53,7 +57,7 @@ export function buildSurface(backdrop: Texture | null = null, rayTexture: Textur
   if (backdrop) {
     // The painting's horizon sits ~80% down; anchor it just below ground level.
     painted = new Sprite(backdrop);
-    const scale = (w + 40) / backdrop.width;
+    const scale = (PAINT_RIGHT - WORLD_LEFT + 40) / backdrop.width;
     painted.scale.set(scale);
     painted.position.set(WORLD_LEFT - 20, -backdrop.height * scale * 0.84);
     g.rect(WORLD_LEFT, SKY_TOP - 400, w, painted.y - SKY_TOP + 404).fill(0x0c0b10);

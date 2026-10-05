@@ -3,7 +3,7 @@ import { ArtLibrary, glowTexture, moteTexture } from '../art/ArtLibrary';
 import { bus } from '../core/EventBus';
 import { BUILDING_W, SHAFT_W } from './layout';
 import { hGradient, mix, seeded, softGlow, vGradient } from './draw';
-import { SKY_TOP, WORLD_LEFT, WORLD_RIGHT, type Animated } from './world';
+import { PAINT_RIGHT, SKY_TOP, WORLD_LEFT, WORLD_RIGHT, type Animated } from './world';
 import {
   Birds, Smoke, Weather, analyseSky, canvasTexture, cloudTexture, fogTexture, groundY, lightGrade, moonTexture, mulColor,
   silhouetteTexture, smoothstep, soilThickness, type SurfaceQuality, type View,
@@ -427,7 +427,8 @@ export function buildSurface2(
   let painted: Sprite | null = null;
   const info = backdrop ? analyseSky(backdrop, era) : null;
   // The painting spans [px0, px0 + pw] × [py0, 0.16 × its height below ground].
-  const pw = w + 40, px0 = WORLD_LEFT - 20;
+  // Scaled to the panorama's own span; past it the mirrored copies carry the land on east (the world is wider for the project lots).
+  const pw = PAINT_RIGHT - WORLD_LEFT + 40, px0 = WORLD_LEFT - 20;
   let ph = 600, py0 = -500;
   const skyX0 = WORLD_LEFT - SKY_EXT, skyX1 = WORLD_RIGHT + SKY_EXT;
   if (backdrop) {
@@ -440,7 +441,7 @@ export function buildSurface2(
     ext.rect(skyX0, -2600, skyX1 - skyX0, py0 + 2606).fill(vGradient([[0, VOID], [0.72, mix(VOID, topC, 0.5)], [1, topC]]));
     farBack.addChild(ext);
     // Mirrored copies continue the land past the world edges (they fade into the dark, see the vignette).
-    for (const [x, sx] of [[px0, -scale], [px0, scale], [px0 + 2 * pw, -scale]] as [number, number][]) {
+    for (const [x, sx] of [[px0, -scale], [px0, scale], [px0 + 2 * pw, -scale], [px0 + 2 * pw, scale]] as [number, number][]) {
       const s = new Sprite(backdrop);
       s.scale.set(sx, scale);
       s.position.set(x, py0);

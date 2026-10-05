@@ -10,7 +10,7 @@ import { hashString, seeded } from './draw';
 import { buildConstructionVisual, buildPaintedConstruction, buildRoomVisual, buildScaffold, type RoomVisual } from './roomArt';
 import { PEOPLE_STYLE, Person, ROOM_ACTIVITY, type Activity, type Lane } from './people';
 import { crowdFor, settleCrowds } from './workSpots'; // gfx-p0 people
-import { ProjectSites, SITES_RIGHT, type SiteInfo } from './projectSites';
+import { ProjectSites, type SiteInfo } from './projectSites';
 import { AMBIENCE_FOR, type AmbienceKey } from '../audio/ambience';
 import type { AmbienceMix } from '../audio/AudioEngine';
 import { Dust, buildDigSign, buildShaft, buildSurface, buildUnderground, buildUtilities, type Animated } from './world';
@@ -796,7 +796,8 @@ export class BunkerRenderer {
     if (maxX - minX <= halfW * 2) b.x0 = b.x1 = (minX + maxX) / 2;
     else { b.x0 = minX + halfW; b.x1 = maxX - halfW; }
     // An open sheet lets the camera go lower, so the deepest rooms can sit above it.
-    const minY = VIEW_TOP - 60, maxY = this.contentBottom() + this.bottomInset / z;
+    // Tall project buildings on the surface let the camera rise to their tops.
+    const minY = Math.min(VIEW_TOP, this.projectSites.top) - 60, maxY = this.contentBottom() + this.bottomInset / z;
     if (maxY - minY <= halfH * 2) b.y0 = b.y1 = minY + halfH;
     else { b.y0 = minY + halfH; b.y1 = maxY - halfH; }
   }
@@ -1202,7 +1203,7 @@ export class BunkerRenderer {
         view.progress.roundRect(0, 0, Math.max(3, (view.width - 30) * pct), 5, 2.5).fill(0xffb547);
       }
     }
-    this.extentR = Math.max(BUILDING_W, this.projectSites.any ? SITES_RIGHT : 0, ...[...this.views.values()].map(v => v.root.x + v.width));
+    this.extentR = Math.max(BUILDING_W, this.projectSites.right, ...[...this.views.values()].map(v => v.root.x + v.width));
     for (const [id, view] of this.views) {
       if (active.has(id)) continue;
       for (const child of [...view.people.children]) view.people.removeChild(child);
@@ -1756,7 +1757,7 @@ export class BunkerRenderer {
   /** Called by the app when a big project's progress changes. */
   setProjectSites(sites: SiteInfo[]): void {
     this.projectSites.set(sites);
-    if (this.projectSites.any) this.extentR = Math.max(this.extentR, SITES_RIGHT);
+    this.extentR = Math.max(this.extentR, this.projectSites.right);
   }
 
   private renderRuins(state: GameState): void {

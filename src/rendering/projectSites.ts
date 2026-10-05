@@ -34,11 +34,8 @@ export interface SiteView {
 const PORTAL_X = SHAFT_W / 2;
 const BASE = -5;
 
+/** The plain-shape stand-in for a building (shown while its painting loads): its own drawing size and the drawing. */
 interface Plan {
-  x: number;
-  /** Back row: smaller, a little higher and dimmer, so two rows of buildings fit east of the entrance. */
-  back?: boolean;
-  /** Width and height of the finished building. */
   w: number;
   h: number;
   draw: (g: Graphics) => void;
@@ -46,13 +43,9 @@ interface Plan {
 
 const steel = 0x8a8f98, dark = 0x3a3c44, concrete = 0x7a7670, rust = 0x8a5a3a;
 
-/**
- * Lots east of the entrance hill (it hides x < ~170, and the camera never goes west of the shaft),
- * in two rows: the front row stands on the ground line, the back row behind the gaps.
- */
 const PLANS: Record<string, Plan> = {
   genesisCore: {
-    x: 668, back: true, w: 46, h: 96, draw: g => {
+    w: 46, h: 96, draw: g => {
       g.rect(-23, -30, 46, 30).fill(dark);
       g.poly([-16, -30, 16, -30, 9, -86, -9, -86]).fill(0x4a4e5a);
       g.circle(0, -90, 10).fill(0x7af0ff).circle(0, -90, 5).fill(0xe8ffff);
@@ -60,7 +53,7 @@ const PLANS: Record<string, Plan> = {
     },
   },
   radioMast: {
-    x: 398, back: true, w: 40, h: 170, draw: g => {
+    w: 40, h: 170, draw: g => {
       g.poly([-18, 0, -3, -160, 3, -160, 18, 0]).stroke({ color: steel, width: 3 });
       for (let y = -20; y > -150; y -= 22) g.moveTo(-18 * (1 + y / 165), y).lineTo(18 * (1 + (y - 22) / 165), y - 22).stroke({ color: steel, width: 1.5 });
       g.rect(-2, -170, 4, 12).fill(steel);
@@ -69,7 +62,7 @@ const PLANS: Record<string, Plan> = {
     },
   },
   constitution: {
-    x: 760, back: true, w: 56, h: 74, draw: g => {
+    w: 56, h: 74, draw: g => {
       g.rect(-28, -44, 56, 44).fill(0xb8ac94);
       g.poly([-32, -44, 0, -62, 32, -44]).fill(0x9a8e76);
       for (let k = -22; k <= 22; k += 11) g.rect(k - 2.5, -40, 5, 40).fill(0xd8ccb2);
@@ -78,7 +71,7 @@ const PLANS: Record<string, Plan> = {
     },
   },
   surfaceGate: {
-    x: 492, back: true, w: 54, h: 112, draw: g => {
+    w: 54, h: 112, draw: g => {
       g.rect(-27, -40, 54, 40).fill(concrete);
       g.rect(-17, -34, 34, 34).fill(0x2a2a30).rect(-1, -34, 2, 34).fill(0x55555c);
       g.rect(-24, -112, 5, 72).fill(rust).rect(19, -112, 5, 72).fill(rust);
@@ -88,14 +81,14 @@ const PLANS: Record<string, Plan> = {
     },
   },
   wall: {
-    x: 262, w: 120, h: 40, draw: g => {
+    w: 120, h: 40, draw: g => {
       g.rect(-60, -32, 120, 32).fill(0x6a6a70);
       for (let k = -60; k < 60; k += 20) g.rect(k, -40, 12, 8).fill(0x7a7a80);
       for (let k = -50; k < 60; k += 24) g.rect(k, -22, 14, 3).fill(0x55555a);
     },
   },
   purifier: {
-    x: 356, w: 60, h: 80, draw: g => {
+    w: 60, h: 80, draw: g => {
       g.rect(-30, -40, 34, 40).fill(0x5a7a8a);
       g.rect(-34, -46, 42, 8).fill(0x7aa0b4);
       g.circle(18, -22, 12).fill(0x6a8ea0).rect(6, -22, 24, 22).fill(0x6a8ea0);
@@ -104,7 +97,7 @@ const PLANS: Record<string, Plan> = {
     },
   },
   greenhouse: {
-    x: 446, w: 92, h: 56, draw: g => {
+    w: 92, h: 56, draw: g => {
       g.ellipse(0, 0, 54, 5).fill({ color: 0x4a8a3a, alpha: 0.8 });
       g.rect(-44, -34, 88, 34).fill({ color: 0x9fe8a8, alpha: 0.42 });
       g.poly([-48, -34, 0, -56, 48, -34]).fill({ color: 0x8ad49a, alpha: 0.55 });
@@ -114,7 +107,7 @@ const PLANS: Record<string, Plan> = {
     },
   },
   skyDome: {
-    x: 540, w: 84, h: 52, draw: g => {
+    w: 84, h: 52, draw: g => {
       g.rect(-42, -8, 84, 8).fill(concrete);
       g.arc(0, -8, 40, Math.PI, 0).fill({ color: 0xbfe6ff, alpha: 0.35 });
       g.arc(0, -8, 40, Math.PI, 0).stroke({ color: 0xd8f0ff, width: 2, alpha: 0.9 });
@@ -122,7 +115,7 @@ const PLANS: Record<string, Plan> = {
     },
   },
   deepFoundry: {
-    x: 588, back: true, w: 64, h: 120, draw: g => {
+    w: 64, h: 120, draw: g => {
       g.rect(-32, -36, 64, 36).fill(0x5a4a42);
       g.rect(-24, -118, 12, 82).fill(0x6a5a50).rect(6, -100, 12, 64).fill(0x6a5a50);
       g.rect(-26, -120, 16, 5).fill(dark).rect(4, -102, 16, 5).fill(dark);
@@ -130,7 +123,7 @@ const PLANS: Record<string, Plan> = {
     },
   },
   metroTunnel: {
-    x: 628, w: 64, h: 44, draw: g => {
+    w: 64, h: 44, draw: g => {
       g.rect(-32, -38, 64, 38).fill(0x4a4048);
       g.arc(0, 0, 20, Math.PI, 0).fill(0x14121a);
       g.rect(-32, -44, 64, 7).fill(0x6a6a70);
@@ -138,7 +131,7 @@ const PLANS: Record<string, Plan> = {
     },
   },
   tradeLeague: {
-    x: 712, w: 76, h: 50, draw: g => {
+    w: 76, h: 50, draw: g => {
       const awn = [0xc84a3a, 0xd8a23a, 0x3a8ac8];
       for (let i = 0; i < 3; i++) {
         const x = -38 + i * 26;
@@ -150,7 +143,7 @@ const PLANS: Record<string, Plan> = {
     },
   },
   archive: {
-    x: 845, back: true, w: 56, h: 66, draw: g => {
+    w: 56, h: 66, draw: g => {
       g.rect(-28, -50, 56, 50).fill(0x8a7a5a);
       g.rect(-32, -58, 64, 9).fill(0xa8946a);
       for (let k = -18; k <= 18; k += 12) g.rect(k - 3, -42, 6, 10).fill(0xffd890);
@@ -158,7 +151,7 @@ const PLANS: Record<string, Plan> = {
     },
   },
   ark: {
-    x: 800, w: 80, h: 64, draw: g => {
+    w: 80, h: 64, draw: g => {
       g.poly([-40, -24, 40, -24, 30, 0, -30, 0]).fill(0x6a5038);
       g.rect(-24, -48, 48, 24).fill(0x7a6048);
       g.poly([-28, -48, 0, -64, 28, -48]).fill(0x5a4030);
@@ -166,7 +159,7 @@ const PLANS: Record<string, Plan> = {
     },
   },
   vaultSeal: {
-    x: 186, w: 40, h: 58, draw: g => {
+    w: 40, h: 58, draw: g => {
       g.rect(-20, -58, 40, 58).fill(concrete);
       g.circle(0, -30, 15).fill(0x9a9a9a).circle(0, -30, 11).fill(0x6a6a6a);
       for (let a = 0; a < 6; a++) g.moveTo(0, -30).lineTo(11 * Math.cos(a), -30 + 11 * Math.sin(a)).stroke({ color: 0xbababa, width: 1.5 });
@@ -175,20 +168,66 @@ const PLANS: Record<string, Plan> = {
   },
 };
 
-const BACK_SCALE = 0.8, BACK_RISE = 12;
-
-/** Width of each painting in world units (an adult is about 56 tall); the height follows the picture. */
-const ART_W: Record<string, number> = {
-  radioMast: 130, purifier: 100, greenhouse: 115, skyDome: 100, vaultSeal: 72, wall: 112, deepFoundry: 100, metroTunnel: 82,
-  archive: 92, surfaceGate: 96, tradeLeague: 112, constitution: 82, ark: 100, genesisCore: 82,
+/**
+ * Scale: an adult is about 48 units (1.75 m), so a metre is about 27 units. Buildings are drawn a little under
+ * life size (a game's usual squeeze), but always well above the people: from a market stall (about 3 m) to the
+ * radio mast and the foundry chimneys (8 to 10 m).
+ */
+const LOT_H: Record<string, number> = {
+  vaultSeal: 120, radioMast: 260, purifier: 150, greenhouse: 105, metroTunnel: 125, archive: 175, wall: 115,
+  deepFoundry: 210, surfaceGate: 210, skyDome: 115, tradeLeague: 85, constitution: 140, ark: 130, genesisCore: 185,
 };
+/** Width / height of each cut painting (public/art/kit/proj-<id>.webp). */
+const ASPECT: Record<string, number> = {
+  vaultSeal: 512 / 437, radioMast: 438 / 512, purifier: 512 / 392, greenhouse: 512 / 304, metroTunnel: 512 / 463,
+  archive: 512 / 376, wall: 512 / 431, deepFoundry: 512 / 501, surfaceGate: 512 / 441, skyDome: 512 / 315,
+  tradeLeague: 512 / 215, constitution: 512 / 350, ark: 512 / 305, genesisCore: 512 / 432,
+};
+/** Lots in the order the Acts open them, west to east: the settlement grows away from the entrance as the run goes on. */
+const ORDER = ['vaultSeal', 'radioMast', 'purifier', 'greenhouse', 'metroTunnel', 'archive', 'wall', 'deepFoundry',
+  'surfaceGate', 'skyDome', 'tradeLeague', 'constitution', 'ark', 'genesisCore'];
+/** Every other lot stands a step back (smaller, higher, dimmer), so neighbours may overlap a little and read as depth. */
+const BACK_SCALE = 0.85, BACK_RISE = 16;
+/** Neighbours overlap by this share of their half-widths. */
+const OVERLAP = 0.18;
+/** First lot: just east of the entrance hill (it hides x < ~170). */
+const FIRST_X = 250;
+
+interface Lot { x: number; back: boolean; w: number; h: number }
+const LOTS: Record<string, Lot> = {};
+{
+  let prevX = 0, prevHalf = 0;
+  ORDER.forEach((id, i) => {
+    const back = i % 2 === 1;
+    const h = LOT_H[id];
+    const w = h * ASPECT[id];
+    const half = (w * (back ? BACK_SCALE : 1)) / 2;
+    const x = i === 0 ? FIRST_X : prevX + (prevHalf + half) * (1 - OVERLAP);
+    LOTS[id] = { x: Math.round(x), back, w, h };
+    prevX = x;
+    prevHalf = half;
+  });
+}
+
+/** Right edge of a lot (the camera reaches the easternmost lot that has something on it). */
+export function lotRight(id: string): number {
+  const l = LOTS[id];
+  return l ? l.x + (l.w * (l.back ? BACK_SCALE : 1)) / 2 : 0;
+}
+
+/** Top of a lot's building and sign, in world y (negative is up), so the camera can rise to see it. */
+export function lotTop(id: string): number {
+  const l = LOTS[id];
+  return l ? BASE - (l.h * (l.back ? BACK_SCALE : 1)) - (l.back ? BACK_RISE : 0) - 40 : 0;
+}
+
+/** The plain shapes behind each painting are drawn at their own size; this fits them to the lot. */
+const shapeScale = (id: string) => LOT_H[id] / PLANS[id].h;
+
 /** The paintings stand on a dirt patch with a soft shadow: this share of the picture sits below the ground line. */
 const ART_SINK = 0.04;
 
 export const projectArtKey = (id: string) => `kit/proj-${id}`;
-
-/** Right edge of the lots (the camera may pan this far once something stands there). */
-export const SITES_RIGHT = Math.max(...Object.values(PLANS).map(p => p.x + (p.w * (p.back ? BACK_SCALE : 1)) / 2)) + 8;
 
 const labelStyle = new TextStyle({ fontFamily: 'Rubik, sans-serif', fontSize: 10, fontWeight: '700', fill: 0xffe6b0, stroke: { color: 0x14141e, width: 3 } });
 
@@ -235,16 +274,25 @@ export class ProjectSites {
     this.crew.label = 'projectCrews';
   }
 
-  /** Whether anything stands on any lot (the camera then reaches SITES_RIGHT). */
-  get any(): boolean {
-    return this.lots.size > 0;
+  /** East edge of the lots in use (0 when none): the camera may pan this far. */
+  get right(): number {
+    let r = 0;
+    for (const id of this.lots.keys()) r = Math.max(r, lotRight(id) + 30);
+    return r;
+  }
+
+  /** Highest point of the lots in use (0 when none): the camera may rise this far. */
+  get top(): number {
+    let t = 0;
+    for (const id of this.lots.keys()) t = Math.min(t, lotTop(id));
+    return t;
   }
 
   set(sites: SiteInfo[]): void {
     const keep = new Set<string>();
     for (const site of sites) {
       const plan = PLANS[site.id];
-      if (!plan) continue;
+      if (!plan || !LOTS[site.id]) continue;
       keep.add(site.id);
       const frac = Math.max(0, Math.min(1, site.frac));
       const sig = `${site.building}|${Math.round(frac * 100)}|${site.label}|${ArtLibrary.get(projectArtKey(site.id)) ? 'art' : 'shape'}`;
@@ -252,7 +300,7 @@ export class ProjectSites {
       if (old?.sig === sig) continue;
       old?.root.destroy({ children: true });
       const root = this.buildLot(site, plan, frac);
-      if (plan.back) this.layer.addChildAt(root, 0);
+      if (LOTS[site.id].back) this.layer.addChildAt(root, 0);
       else this.layer.addChild(root);
       this.lots.set(site.id, { root, sig });
       this.ensureView(site.id, plan);
@@ -265,13 +313,15 @@ export class ProjectSites {
   }
 
   /** Every lot gets a crew view, built or not, so people assigned to a just-picked project have somewhere to stand. */
-  ensureView(id: string, plan = PLANS[id]): SiteView | undefined {
-    if (!plan) return undefined;
+  ensureView(id: string, _plan = PLANS[id]): SiteView | undefined {
+    const lot = LOTS[id];
+    if (!lot) return undefined;
     let v = this.views.get(id);
     if (v) return v;
-    const width = Math.max(56, plan.w + 20);
+    // The crew works along the front half of the lot (people stand in front of the building, on the ground line).
+    const width = Math.max(70, Math.min(160, lot.w * 0.8));
     const root = new Container();
-    root.position.set(plan.x - width / 2, BASE + groundY(plan.x, PORTAL_X) - WALK_Y + 2);
+    root.position.set(lot.x - width / 2, BASE + groundY(lot.x, PORTAL_X) - WALK_Y + 2);
     const people = new Container();
     people.sortableChildren = true;
     root.addChild(people);
@@ -282,18 +332,19 @@ export class ProjectSites {
   }
 
   private buildLot(site: SiteInfo, plan: Plan, frac: number): Container {
+    const lot = LOTS[site.id];
     const root = new Container();
-    root.position.set(plan.x, BASE + groundY(plan.x, PORTAL_X) - (plan.back ? BACK_RISE : 0));
-    if (plan.back) root.scale.set(BACK_SCALE);
+    root.position.set(lot.x, BASE + groundY(lot.x, PORTAL_X) - (lot.back ? BACK_RISE : 0));
+    if (lot.back) root.scale.set(BACK_SCALE);
     const tex = ArtLibrary.get(projectArtKey(site.id));
-    const w = tex ? ART_W[site.id] ?? plan.w : plan.w;
-    const h = tex ? (w * tex.height) / tex.width * (1 - ART_SINK) : plan.h;
+    const { w, h } = lot;
     const make = (): Container => {
-      if (tex) return paintedBody(tex, w, plan.back ? 0xc4c0b8 : 0xffffff);
+      if (tex) return paintedBody(tex, w, lot.back ? 0xc4c0b8 : 0xffffff);
       const g = new Graphics();
       // Flat shapes against a painted backdrop: a warm, slightly dimmed tint keeps them from shouting (more for the back row).
-      g.tint = plan.back ? 0xb8b4ae : 0xe4e0d8;
+      g.tint = lot.back ? 0xb8b4ae : 0xe4e0d8;
       plan.draw(g);
+      g.scale.set(shapeScale(site.id));
       return g;
     };
     const body = make();
