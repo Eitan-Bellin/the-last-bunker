@@ -486,6 +486,8 @@ export const KIT: [string, [number, number]][] = [
   ['kit/wheel', [256, 256]], // surface: blast-door wheel
   ['kit/topsoil-R', [1024, 440]], ['kit/topsoil-L', [1024, 440]], // surface: topsoil cross-section strips
   ...Array.from({ length: 9 }, (_, i) => [`kit/prop-${i}`, [400, 400]] as [string, [number, number]]), // surface: props S-07 (+ mast S-08)
+  ...['radioMast', 'purifier', 'greenhouse', 'skyDome', 'vaultSeal', 'wall', 'deepFoundry', 'metroTunnel', 'archive', 'surfaceGate', 'tradeLeague', 'constitution', 'ark', 'genesisCore']
+    .map(id => [`kit/proj-${id}`, [512, 512]] as [string, [number, number]]), // surface: big project buildings (P-01/P-02 sheets, Moda)
   ...['crack-a', 'crack-b', 'crack-c', 'crack-d', 'crack-web', 'mould', 'soot', 'handprints', 'patch-b'].map(n => [`kit/decal-${n}`, [128, 128]] as [string, [number, number]]), // wear: decals (tools/decals.html)
   ...['stain-a', 'stain-b'].map(n => [`kit/decal-${n}`, [96, 256]] as [string, [number, number]]), ['kit/decal-rust-drip', [64, 192]], // wear: streaks
   ...['scratch-tally', 'chalk-tally', 'patch'].map(n => [`kit/decal-${n}`, [128, 96]] as [string, [number, number]]), // wear: tallies, cement patch

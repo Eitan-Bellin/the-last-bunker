@@ -30,6 +30,8 @@ interface KitJob {
   skip?: number[];
   /** Era recipe applied to the finished texture (see RECIPES). */
   recipe?: string;
+  /** Sprite: also key out pure-white pockets enclosed by the object (gaps in a lattice mast, under a stall). */
+  holes?: boolean;
 }
 
 /** Deterministic random for the recipes, so a rerun gives the same texture. */
@@ -130,7 +132,7 @@ const RECIPES: Record<string, (c: HTMLCanvasElement) => void> = {
 };
 
 /** Keys out a near-white background connected to the image border, with a soft edge. */
-function keyWhite(c: HTMLCanvasElement, tol = 34): void {
+function keyWhite(c: HTMLCanvasElement, tol = 34, holes = false): void {
   const ctx = c.getContext('2d')!;
   const W = c.width, H = c.height;
   const img = ctx.getImageData(0, 0, W, H);
@@ -152,6 +154,29 @@ function keyWhite(c: HTMLCanvasElement, tol = 34): void {
     if (x < W - 1) stack.push(i + 1);
     if (y > 0) stack.push(i - W);
     if (y < H - 1) stack.push(i + W);
+  }
+  if (holes) {
+    // Enclosed pockets of the background: strictly white, uncoloured and big enough not to be a painted highlight.
+    const pure = (i: number) => {
+      const r = d[i * 4], g = d[i * 4 + 1], b = d[i * 4 + 2];
+      return 255 - Math.min(r, g, b) < 16 && Math.max(r, g, b) - Math.min(r, g, b) < 10;
+    };
+    const seen = new Uint8Array(W * H);
+    for (let s = 0; s < W * H; s++) {
+      if (bg[s] || seen[s] || !pure(s)) continue;
+      const comp: number[] = [];
+      stack.push(s);
+      seen[s] = 1;
+      while (stack.length) {
+        const i = stack.pop()!;
+        comp.push(i);
+        const x = i % W, y = (i / W) | 0;
+        for (const n of [x > 0 ? i - 1 : -1, x < W - 1 ? i + 1 : -1, y > 0 ? i - W : -1, y < H - 1 ? i + W : -1]) {
+          if (n >= 0 && !seen[n] && !bg[n] && pure(n)) { seen[n] = 1; stack.push(n); }
+        }
+      }
+      if (comp.length >= 24) for (const i of comp) bg[i] = 1;
+    }
   }
   // Soft edge: pixels next to the background fade by how white they are.
   for (let i = 0; i < W * H; i++) {
@@ -237,6 +262,20 @@ export const KIT_JOBS: KitJob[] = [
   { src: 'kit/S-07-props.png', out: 'kit/prop-6', mode: 'sprite', crop: [0.625, 0.52, 0.755, 0.93], size: [400, 400] }, // surface: lamp post
   { src: 'kit/S-07-props.png', out: 'kit/prop-7', mode: 'sprite', crop: [0.815, 0.71, 0.95, 0.92], size: [400, 400] }, // surface: weeds and stone
   { src: 'kit/S-08-mast.png', out: 'kit/prop-8', mode: 'sprite', crop: [0, 0, 1, 1], size: [400, 400] }, // surface: antenna mast with beacon
+  { src: 'kit/P-01-projects-A.png', out: 'kit/proj-radioMast', mode: 'sprite', holes: true, crop: [0.060, 0.124, 0.272, 0.555], size: [512, 512] }, // big project building
+  { src: 'kit/P-01-projects-A.png', out: 'kit/proj-purifier', mode: 'sprite', holes: true, crop: [0.275, 0.213, 0.505, 0.551], size: [512, 512] }, // big project building
+  { src: 'kit/P-01-projects-A.png', out: 'kit/proj-greenhouse', mode: 'sprite', holes: true, crop: [0.505, 0.293, 0.722, 0.537], size: [512, 512] }, // big project building
+  { src: 'kit/P-01-projects-A.png', out: 'kit/proj-skyDome', mode: 'sprite', holes: true, crop: [0.728, 0.302, 0.945, 0.537], size: [512, 512] }, // big project building
+  { src: 'kit/P-01-projects-A.png', out: 'kit/proj-vaultSeal', mode: 'sprite', holes: true, crop: [0.055, 0.631, 0.264, 0.969], size: [512, 512] }, // big project building
+  { src: 'kit/P-01-projects-A.png', out: 'kit/proj-wall', mode: 'sprite', holes: true, crop: [0.278, 0.622, 0.505, 0.969], size: [512, 512] }, // big project building
+  { src: 'kit/P-01-projects-A.png', out: 'kit/proj-deepFoundry', mode: 'sprite', holes: true, crop: [0.507, 0.565, 0.740, 0.969], size: [512, 512] }, // big project building
+  { src: 'kit/P-01-projects-A.png', out: 'kit/proj-metroTunnel', mode: 'sprite', holes: true, crop: [0.742, 0.649, 0.942, 0.987], size: [512, 512] }, // big project building
+  { src: 'kit/P-02-projects-B.png', out: 'kit/proj-archive', mode: 'sprite', holes: true, crop: [0.060, 0.164, 0.340, 0.537], size: [512, 512] }, // big project building
+  { src: 'kit/P-02-projects-B.png', out: 'kit/proj-surfaceGate', mode: 'sprite', holes: true, crop: [0.360, 0.121, 0.640, 0.537], size: [512, 512] }, // big project building
+  { src: 'kit/P-02-projects-B.png', out: 'kit/proj-tradeLeague', mode: 'sprite', holes: true, crop: [0.655, 0.306, 0.945, 0.537], size: [512, 512] }, // big project building
+  { src: 'kit/P-02-projects-B.png', out: 'kit/proj-constitution', mode: 'sprite', holes: true, crop: [0.060, 0.626, 0.340, 0.933], size: [512, 512] }, // big project building
+  { src: 'kit/P-02-projects-B.png', out: 'kit/proj-ark', mode: 'sprite', holes: true, crop: [0.360, 0.644, 0.640, 0.942], size: [512, 512] }, // big project building
+  { src: 'kit/P-02-projects-B.png', out: 'kit/proj-genesisCore', mode: 'sprite', holes: true, crop: [0.660, 0.572, 0.940, 0.951], size: [512, 512] }, // big project building
 ];
 
 const log = document.getElementById('log')!;
@@ -345,7 +384,7 @@ async function run(): Promise<void> {
         const [cell, cx] = canvas(Math.round(cw) - 8, Math.round(ch) - 8);
         cx.drawImage(crop, (i % cols) * cw + 4, Math.floor(i / cols) * ch + 4, cell.width, cell.height, 0, 0, cell.width, cell.height);
         let out = cell;
-        if (job.mode === 'sprite') { keyWhite(out); out = trim(out); }
+        if (job.mode === 'sprite') { keyWhite(out, 34, !!job.holes); out = trim(out); }
         out = fit(out, job.size[0], job.size[1]);
         const bytes = await save(out, `${job.out}-${i}`);
         write(`${`${job.out}-${i}`.padEnd(18)} ${out.width}x${out.height}  ${(bytes / 1024).toFixed(0)} KB`);
@@ -358,7 +397,7 @@ async function run(): Promise<void> {
     }
     let out: HTMLCanvasElement;
     if (job.mode === 'sprite') {
-      keyWhite(crop);
+      keyWhite(crop, 34, !!job.holes);
       out = fit(trim(crop), job.size[0], job.size[1]);
       const bytes = await save(out, job.out);
       write(`${job.out.padEnd(18)} ${out.width}x${out.height}  ${(bytes / 1024).toFixed(0)} KB`);

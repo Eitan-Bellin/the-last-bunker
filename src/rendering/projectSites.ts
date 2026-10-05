@@ -1,4 +1,5 @@
-import { Container, Graphics, Text, TextStyle } from 'pixi.js';
+import { Container, Graphics, Sprite, Text, TextStyle, type Texture } from 'pixi.js';
+import { ArtLibrary } from '../art/ArtLibrary';
 import { SHAFT_W, WALK_Y } from './layout';
 import { groundY } from './surfaceLife';
 import type { Lane } from './people';
@@ -7,7 +8,8 @@ import type { Lane } from './people';
  * Big projects on the surface. Every project has its own lot above the bunker: while it is being built the lot
  * shows scaffolding, a fence, the part already standing (it rises with the stages) and a sign with the progress;
  * the crew stands on the lot and works. A finished project leaves its building there for good.
- * Drawn with plain shapes, so it works with both surface looks and needs no art.
+ * Each building is a painting (public/art/kit/proj-<id>.webp, cut from two sheets by tools/kit.html); until it loads,
+ * or if it fails, the lot falls back to plain shapes.
  */
 
 export interface SiteInfo {
@@ -175,10 +177,29 @@ const PLANS: Record<string, Plan> = {
 
 const BACK_SCALE = 0.8, BACK_RISE = 12;
 
+/** Width of each painting in world units (an adult is about 56 tall); the height follows the picture. */
+const ART_W: Record<string, number> = {
+  radioMast: 130, purifier: 100, greenhouse: 115, skyDome: 100, vaultSeal: 72, wall: 112, deepFoundry: 100, metroTunnel: 82,
+  archive: 92, surfaceGate: 96, tradeLeague: 112, constitution: 82, ark: 100, genesisCore: 82,
+};
+/** The paintings stand on a dirt patch with a soft shadow: this share of the picture sits below the ground line. */
+const ART_SINK = 0.04;
+
+export const projectArtKey = (id: string) => `kit/proj-${id}`;
+
 /** Right edge of the lots (the camera may pan this far once something stands there). */
 export const SITES_RIGHT = Math.max(...Object.values(PLANS).map(p => p.x + (p.w * (p.back ? BACK_SCALE : 1)) / 2)) + 8;
 
 const labelStyle = new TextStyle({ fontFamily: 'Rubik, sans-serif', fontSize: 10, fontWeight: '700', fill: 0xffe6b0, stroke: { color: 0x14141e, width: 3 } });
+
+function paintedBody(tex: Texture, w: number, tint: number): Container {
+  const s = new Sprite(tex);
+  s.anchor.set(0.5, 1 - ART_SINK);
+  s.width = w;
+  s.scale.y = s.scale.x;
+  s.tint = tint;
+  return s;
+}
 
 function scaffold(w: number, h: number): Graphics {
   const g = new Graphics();
@@ -226,7 +247,7 @@ export class ProjectSites {
       if (!plan) continue;
       keep.add(site.id);
       const frac = Math.max(0, Math.min(1, site.frac));
-      const sig = `${site.building}|${Math.round(frac * 100)}|${site.label}`;
+      const sig = `${site.building}|${Math.round(frac * 100)}|${site.label}|${ArtLibrary.get(projectArtKey(site.id)) ? 'art' : 'shape'}`;
       const old = this.lots.get(site.id);
       if (old?.sig === sig) continue;
       old?.root.destroy({ children: true });
@@ -264,24 +285,31 @@ export class ProjectSites {
     const root = new Container();
     root.position.set(plan.x, BASE + groundY(plan.x, PORTAL_X) - (plan.back ? BACK_RISE : 0));
     if (plan.back) root.scale.set(BACK_SCALE);
-    const body = new Graphics();
-    // Flat shapes against a painted backdrop: a warm, slightly dimmed tint keeps them from shouting (more for the back row).
-    body.tint = plan.back ? 0xb8b4ae : 0xe4e0d8;
-    plan.draw(body);
+    const tex = ArtLibrary.get(projectArtKey(site.id));
+    const w = tex ? ART_W[site.id] ?? plan.w : plan.w;
+    const h = tex ? (w * tex.height) / tex.width * (1 - ART_SINK) : plan.h;
+    const make = (): Container => {
+      if (tex) return paintedBody(tex, w, plan.back ? 0xc4c0b8 : 0xffffff);
+      const g = new Graphics();
+      // Flat shapes against a painted backdrop: a warm, slightly dimmed tint keeps them from shouting (more for the back row).
+      g.tint = plan.back ? 0xb8b4ae : 0xe4e0d8;
+      plan.draw(g);
+      return g;
+    };
+    const body = make();
     root.addChild(body);
     if (site.building) {
       // The part already standing rises with the work; a faint ghost shows what it will be.
-      const ghost = new Graphics();
-      plan.draw(ghost);
-      ghost.alpha = 0.14;
+      const ghost = make();
+      ghost.alpha = 0.16;
       root.addChildAt(ghost, 0);
       const shown = Math.max(0.08, frac);
-      const mask = new Graphics().rect(-plan.w / 2 - 60, -plan.h * shown - 2, plan.w + 120, plan.h * shown + 8).fill(0xffffff);
+      const mask = new Graphics().rect(-w / 2 - 60, -h * shown - 2, w + 120, h * shown + 20).fill(0xffffff);
       root.addChild(mask);
       body.mask = mask;
-      root.addChild(scaffold(plan.w, Math.min(plan.h, plan.h * shown + 24)));
+      root.addChild(scaffold(w * 0.86, Math.min(h, h * shown + 24)));
       const sign = new Container();
-      sign.position.set(0, -Math.min(plan.h, plan.h * shown + 24) - 22);
+      sign.position.set(0, -Math.min(h, h * shown + 24) - 22);
       const text = new Text({ text: site.label, style: labelStyle, resolution: 3 });
       text.anchor.set(0.5, 1);
       const bw = Math.max(44, Math.min(90, text.width));
@@ -293,7 +321,7 @@ export class ProjectSites {
     }
     root.eventMode = 'static';
     root.cursor = 'pointer';
-    root.hitArea = { contains: (x: number, y: number) => x >= -plan.w / 2 - 12 && x <= plan.w / 2 + 12 && y >= -plan.h - 40 && y <= 4 };
+    root.hitArea = { contains: (x: number, y: number) => x >= -w / 2 - 12 && x <= w / 2 + 12 && y >= -h - 40 && y <= 4 };
     root.on('pointertap', () => this.onTap?.(site.id));
     return root;
   }
