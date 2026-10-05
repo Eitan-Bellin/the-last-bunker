@@ -417,6 +417,8 @@ export interface LateGameState {
   trade: { deals: Record<string, number>; specials: string[]; caravans: number; lost: number };
   weekly: { week: string | null; id: string | null; base: Record<string, number>; done: boolean; won: number; cosmetics: string[] };
   trained: number;
+  /** The player pressed "stop": no project is picked automatically until they choose one again. */
+  projectsPaused?: boolean;
 }
 
 export function createLateGame(): LateGameState {

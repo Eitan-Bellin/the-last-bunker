@@ -1,7 +1,7 @@
 import { GameEngine, type OfflineReport } from './core/GameEngine';
 import { ProjectsPanel } from './ui/components/ProjectsPanel'; // [LateGame B1]
-import { doneProjects } from './data/projects'; // [LateGame B1]
-import { setSurfaceProjects } from './rendering/surface2'; // [LateGame B1]
+import { PROJECTS, projectDone, stagesDone } from './data/projects'; // [LateGame B1]
+import type { SiteInfo } from './rendering/projectSites'; // [LateGame B1]
 import { BunkerRenderer } from './rendering/BunkerRenderer';
 import { BRIGHTNESS_LEVELS } from './rendering/postfx';
 import { clearLiteMode, crashReport, installCrashGuard, isLiteMode, logCrash } from './core/crashGuard';
@@ -102,7 +102,6 @@ export class GameApp {
   loreReader = new LoreReader();
   private eraPanel = new EraPanel();
   private projectsPanel: ProjectsPanel; // [LateGame B1]
-  private projectMarks = ''; // [LateGame B1] surface markers already drawn
   introPlaying = false;
   private gradedEra = -1;
   /** Districts that broke through and still await their "discovered" dialog. */
@@ -390,8 +389,7 @@ export class GameApp {
       if (this.projectsPanel.isVisible) this.projectsPanel.refresh(state); // [LateGame B1]
       this.inbox.refresh(state);
       if (this.resourceSheet.isVisible) this.resourceSheet.refresh(state);
-      const marks = doneProjects(state).join(',');
-      if (marks !== this.projectMarks) { this.projectMarks = marks; setSurfaceProjects(marks ? marks.split(',') : []); } // [LateGame B1] surface markers
+      this.renderer.setProjectSites(this.projectSites(state)); // [LateGame B1] lots on the surface
       this.updateBadges();
     }
     if (now - this.lastProductionPopup > PRODUCTION_POPUP_MS) {
@@ -421,6 +419,26 @@ export class GameApp {
       this.dig.showDistrictFound(this.districtFoundQueue.shift()!);
     }
     this.lore.flushLoreQueue();
+  }
+
+  /** [LateGame B1] What stands on each project's lot: started or finished projects, and the active one even before its first stage. */
+  private projectSites(state: GameState): SiteInfo[] {
+    const ps = this.engine.projectSystem;
+    const out: SiteInfo[] = [];
+    for (const def of PROJECTS) {
+      const n = def.stages.length;
+      const done = stagesDone(state, def.id);
+      const active = state.activeProjectId === def.id;
+      if (projectDone(state, def.id)) {
+        out.push({ id: def.id, frac: 1, building: false, label: '' });
+        continue;
+      }
+      if (!active && done === 0) continue;
+      const part = active ? (ps.paidFraction(state, def.id) + ps.workFraction(state, def.id)) / 2 : 0;
+      const frac = (done + part) / n;
+      out.push({ id: def.id, frac, building: true, label: `${def.name[i18n.currentLocale]} · ${done + 1}/${n}` });
+    }
+    return out;
   }
 
   private updateBadges(): void {
@@ -642,6 +660,7 @@ export class GameApp {
       this.renderer.focusOn(r.x + r.w / 2, r.y + 50, 1.6);
     };
     this.ruinPanel.onStart = (id: string) => this.startRuin(id);
+    this.renderer.onProjectClick = () => { this.closeSheets(); this.projectsPanel.show(); }; // [LateGame B1] tap a lot on the surface
     this.renderer.onRuinClick = (ruinId: string) => {
       this.engine.notifyInteraction();
       if (this.placementMode) {

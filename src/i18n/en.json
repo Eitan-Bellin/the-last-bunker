@@ -589,6 +589,7 @@
   "proj.intro": "Long goals for the colony. Every stage needs resources and a crew, and every finished stage pays a lasting reward. {done} of {all} stages done.",
   "proj.open": "Big projects",
   "proj.finished": "Finished",
+  "proj.lockedAct": "Opens in Act {n}",
   "proj.locked": "Opens in the Colony era",
   "proj.stage": "Stage {n} of {all}",
   "proj.crew": "Crew {n}/{max}",

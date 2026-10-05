@@ -92,7 +92,7 @@ export class ProjectsPanel {
       return card;
     }
     if (!open) {
-      card.appendChild(el('div', 'bp-hint', `[[lock]] ${i18n.t('proj.locked')}`));
+      card.appendChild(el('div', 'bp-hint', `[[lock]] ${def.act ? i18n.t('proj.lockedAct', { n: def.act }) : i18n.t('proj.locked')}`));
       return card;
     }
     const stage = ps.stageOf(state, def.id)!;

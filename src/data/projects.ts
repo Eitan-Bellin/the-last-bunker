@@ -34,6 +34,8 @@ export interface ProjectEffects {
   refineDiscount?: number;
   /** Extra defense against raiders (read by the Danger system through projectDefense). */
   defense?: number;
+  /** Morale points for everyone (read by PopulationSystem.sharedMood through projectMorale). */
+  morale?: number;
 }
 
 export interface ProjectDef {
@@ -81,7 +83,7 @@ export const PROJECTS: ProjectDef[] = [
     id: 'radioMast', icon: '[[radioTower]]', flag: 'project:radioMast', era: 2, act: 2,
     name: { he: 'מגדל הרדיו בשטח', en: 'Field Radio Mast' },
     desc: { he: 'מגדל שידור ענק על פני השטח. הקול שלכם יגיע רחוק, ומי ששומע אותו יבוא.', en: 'A giant broadcast mast on the surface. Your voice will carry far, and those who hear it will come.' },
-    finale: { he: 'ניצולים מגיעים פי 2 מהר יותר, ואות "שידור לעולם" יוצא לאוויר', en: 'Newcomers arrive twice as fast, and a "broadcast to the world" goes on air' },
+    finale: { he: 'ניצולים מגיעים פי 2 מהר יותר, אבל גם פושטים שומעים את השידור', en: 'Newcomers arrive twice as fast, but raiders hear the broadcast too' },
     stages: rep(5, i => ({ cost: charter(2, { scrap: 200 })(i), hours: 6, crew: crewAt(i) })),
     effects: { arrivalSpeed: 2 },
   },
@@ -97,7 +99,7 @@ export const PROJECTS: ProjectDef[] = [
     id: 'greenhouse', icon: '[[wheat]]', flag: 'project:greenhouse', era: 2, act: 3,
     name: { he: 'חממה על פני השטח', en: 'Surface Greenhouse' },
     desc: { he: 'חממה גדולה מעל הבונקר, תחת שמיים חדשים. לא עוד רק אוכל מתחת לאדמה.', en: 'A big greenhouse above the bunker, under new skies. Food that no longer grows only underground.' },
-    finale: { he: 'האוכל +30%, ואזור ירוק נפתח על המפה', en: 'Food +30%, and a green zone opens on the map' },
+    finale: { he: 'האוכל +30%, וחממה ירוקה עומדת מעל הבונקר', en: 'Food +30%, and a green glasshouse stands above the bunker' },
     stages: rep(5, i => ({ cost: charter(3, { food: 4000, knowledge: 1500 })(i), hours: 6, crew: crewAt(i) })),
     effects: { resourceMult: { food: 0.3 } },
   },
@@ -105,7 +107,7 @@ export const PROJECTS: ProjectDef[] = [
     id: 'metroTunnel', icon: '[[car]]', flag: 'project:metroTunnel', era: 2, act: 3,
     name: { he: 'מנהרה למטרו', en: 'Metro Tunnel' },
     desc: { he: 'מנהרה ארוכה אל קו הרכבת הישן. מסלול קבוע אל העיר, בלי לצאת לאבק.', en: 'A long tunnel to the old rail line. A fixed road to the city, without walking through the dust.' },
-    finale: { he: 'משלחות מהירות פי 2, ונתיב סחר קבוע', en: 'Expeditions twice as fast, and a standing trade route' },
+    finale: { he: 'משלחות מהירות פי 2', en: 'Expeditions twice as fast' },
     stages: rep(5, i => ({ cost: charter(3, { scrap: 300 })(i), hours: 9, crew: crewAt(i) })),
     effects: { expeditionSpeed: 2 },
   },
@@ -156,9 +158,9 @@ export const PROJECTS: ProjectDef[] = [
     id: 'skyDome', icon: '[[sun]]', flag: 'project:skyDome', era: 3, act: 5,
     name: { he: 'כיפת השמיים', en: 'The Sky Dome' },
     desc: { he: 'כיפה שקופה מעל הכניסה: ילדים שנולדו בבונקר יראו שמיים בפעם הראשונה.', en: 'A clear dome over the entrance: children born in the bunker will see the sky for the first time.' },
-    finale: { he: 'אוכל +20% והמורל עולה', en: 'Food +20% and morale rises' },
+    finale: { he: 'אוכל +20% ומורל +8 לכולם', en: 'Food +20% and +8 morale for everyone' },
     stages: rep(5, i => ({ cost: charter(5, { food: 20000 })(i), hours: 10, crew: 5 })),
-    effects: { resourceMult: { food: 0.2 } },
+    effects: { resourceMult: { food: 0.2 }, morale: 8 },
   },
   {
     // [P5] Act VI: the bunker becomes a republic among neighbours.
@@ -255,6 +257,13 @@ export function projectRefineDiscount(state: GameState): number {
 export function projectDefense(state: GameState): number {
   let v = 0;
   for (const p of PROJECTS) if (p.effects.defense) v += p.effects.defense * earned(state, p);
+  return Math.round(v);
+}
+
+/** Morale points from the projects (the Sky Dome), in steps like the other rewards. */
+export function projectMorale(state: GameState): number {
+  let v = 0;
+  for (const p of PROJECTS) if (p.effects.morale) v += p.effects.morale * earned(state, p);
   return Math.round(v);
 }
 

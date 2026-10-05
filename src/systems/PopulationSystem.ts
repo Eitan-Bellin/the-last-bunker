@@ -1,3 +1,4 @@
+import { projectMorale } from '../data/projects';
 import { lawMorale } from '../data/laws';
 import type { GameState, SurvivorState, SurvivorStats, BuildingInstance } from '../core/GameState';
 import type { StateManager } from '../core/StateManager';
@@ -256,6 +257,7 @@ export class PopulationSystem {
     const research = researchMorale(state);
     if (research > 0) sum += research;
     sum += lawMorale(state);
+    sum += projectMorale(state); // the Sky Dome
     const specs = specTotal(state, 'morale');
     if (specs > 0) sum += specs;
     let kids = 0;

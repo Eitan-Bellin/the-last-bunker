@@ -10,6 +10,7 @@ import { hashString, seeded } from './draw';
 import { buildConstructionVisual, buildPaintedConstruction, buildRoomVisual, buildScaffold, type RoomVisual } from './roomArt';
 import { PEOPLE_STYLE, Person, ROOM_ACTIVITY, type Activity, type Lane } from './people';
 import { crowdFor, settleCrowds } from './workSpots'; // gfx-p0 people
+import { ProjectSites, SITES_RIGHT, type SiteInfo } from './projectSites';
 import { AMBIENCE_FOR, type AmbienceKey } from '../audio/ambience';
 import type { AmbienceMix } from '../audio/AudioEngine';
 import { Dust, buildDigSign, buildShaft, buildSurface, buildUnderground, buildUtilities, type Animated } from './world';
@@ -189,6 +190,10 @@ export class BunkerRenderer {
   onBuildingClick: ((buildingId: string) => void) | null = null;
   onDigClick: (() => void) | null = null;
   onRuinClick: ((ruinId: string) => void) | null = null;
+  /** Tap on a big project's lot on the surface. */
+  onProjectClick: ((projectId: string) => void) | null = null;
+  /** Big projects on the surface: scaffolding while they are built, the building when done, and the crew at work. */
+  private projectSites = new ProjectSites();
   /** A survivor was carried by the player and dropped on a room or ruin (null = empty space). */
   onPersonDrop: ((survivorId: string, targetId: string | null) => void) | null = null;
   onPersonTap: ((survivorId: string) => void) | null = null;
@@ -447,13 +452,14 @@ export class BunkerRenderer {
 
     this.surface = buildSurface();
     this.worldContainer.addChild(
-      this.surfaceHolder, this.undergroundHolder, this.bayHolder, this.slotLayer, this.highlightLayer,
+      this.surfaceHolder, this.projectSites.layer, this.projectSites.crew, this.undergroundHolder, this.bayHolder, this.slotLayer, this.highlightLayer,
       this.roomLayer, this.shaftHolder, this.utilitiesHolder, this.dust.graphics, this.digHolder, this.districtSignHolder, this.fxLayer, this.incidents.fx, this.disasterFx.fx,
       this.labelLayer, this.incidents.badges,
     );
     this.app.stage.addChild(this.worldContainer);
     this.worldContainer.filters = [this.grade];
     this.surfaceHolder.addChild(this.surface.container);
+    this.projectSites.onTap = id => { if (!this.isDragging) this.onProjectClick?.(id); };
     this.bayHolder.eventMode = 'none';
     PEOPLE_STYLE.painted = this.gfx2;
     if (this.gfx2) for (const k of KIT_KEYS) ArtLibrary.get(k);
@@ -1196,7 +1202,7 @@ export class BunkerRenderer {
         view.progress.roundRect(0, 0, Math.max(3, (view.width - 30) * pct), 5, 2.5).fill(0xffb547);
       }
     }
-    this.extentR = Math.max(BUILDING_W, ...[...this.views.values()].map(v => v.root.x + v.width));
+    this.extentR = Math.max(BUILDING_W, this.projectSites.any ? SITES_RIGHT : 0, ...[...this.views.values()].map(v => v.root.x + v.width));
     for (const [id, view] of this.views) {
       if (active.has(id)) continue;
       for (const child of [...view.people.children]) view.people.removeChild(child);
@@ -1358,7 +1364,9 @@ export class BunkerRenderer {
       }
       const job = s.assignedBuildingId ? state.buildings.find(b => b.id === s.assignedBuildingId) : undefined;
       const usable = job && !(job.isConstructing && job.level === 1);
-      const ruinView = s.assignedBuildingId ? this.ruinViews.get(s.assignedBuildingId) : undefined;
+      // A project crew stands on its lot on the surface (treated like a ruin crew: no bed, no room job).
+      const siteView = s.assignedBuildingId?.startsWith('p_') ? this.projectSites.ensureView(s.assignedBuildingId.slice(2)) : undefined;
+      const ruinView = s.assignedBuildingId ? this.ruinViews.get(s.assignedBuildingId) ?? siteView : undefined;
       const home = quarters.length ? quarters[idleIndex++ % quarters.length] : undefined;
       const roomId = ruinView ? s.assignedBuildingId : usable ? job!.id : home?.id ?? null;
       const view: { people: Container; lane: Lane } | undefined = ruinView ?? (roomId ? this.views.get(roomId) : undefined);
@@ -1391,7 +1399,7 @@ export class BunkerRenderer {
       }
       person.setTag(this.lod === 'close' ? this.nameOf?.(s) ?? s.name : null);
       person.setCondition(s.happiness, s.health);
-      const activity: Activity = ruinView ? 'dig' : usable ? ROOM_ACTIVITY[job!.type] ?? 'idle' : 'idle';
+      const activity: Activity = siteView ? 'hammer' : ruinView ? 'dig' : usable ? ROOM_ACTIVITY[job!.type] ?? 'idle' : 'idle';
       person.update(dt, this.time, 0.4 + (s.happiness / 100) * 0.6, activity);
     }
     settleCrowds(); // gfx-p0 people: release spots of people who left, stack overlapping name tags
@@ -1743,6 +1751,12 @@ export class BunkerRenderer {
       this.gradeNow = { ...this.gradeTarget };
       this.gradeDirty = false;
     }
+  }
+
+  /** Called by the app when a big project's progress changes. */
+  setProjectSites(sites: SiteInfo[]): void {
+    this.projectSites.set(sites);
+    if (this.projectSites.any) this.extentR = Math.max(this.extentR, SITES_RIGHT);
   }
 
   private renderRuins(state: GameState): void {

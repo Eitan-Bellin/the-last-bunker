@@ -98,6 +98,8 @@ export class ProjectSystem {
       const def = getProject(id);
       if (!def || !this.isAvailable(state, def) || projectDone(state, id)) return false;
     }
+    // "Stop" must stick: without this flag update() would pick the first open project again on the next tick.
+    if (!!state.lateGame.projectsPaused !== (id === null)) this.sm.applyDelta({ path: 'lateGame.projectsPaused', value: id === null });
     if (state.activeProjectId === id) return true;
     if (state.activeProjectId) this.releaseCrew(state.activeProjectId);
     this.sm.applyDelta({ path: 'activeProjectId', value: id });
@@ -231,7 +233,7 @@ export class ProjectSystem {
     const id = state.activeProjectId;
     if (!id) {
       // Nothing chosen yet: the first open project becomes active so overflow and crews have somewhere to go.
-      if ((state.era ?? 0) >= 2) this.advance(null);
+      if ((state.era ?? 0) >= 2 && !state.lateGame.projectsPaused) this.advance(null);
       return;
     }
     const def = getProject(id);
@@ -269,7 +271,10 @@ export class ProjectSystem {
   /** After a finished project the next unfinished one in the list becomes active, so the work (and overflow) flows on. */
   private advance(from: string | null): void {
     const state = this.sm.state;
-    const next = PROJECTS.find(p => p.id !== from && this.isAvailable(state, p) && !projectDone(state, p.id));
+    const open = PROJECTS.filter(p => p.id !== from && this.isAvailable(state, p) && !projectDone(state, p.id));
+    // The current Act's charter first (it is what opens the next Act), then the oldest open project.
+    const act = state.longGame?.meta.act;
+    const next = open.find(p => p.act === act) ?? open[0];
     if (state.activeProjectId !== (next?.id ?? null)) {
       if (state.activeProjectId) this.releaseCrew(state.activeProjectId);
       this.sm.applyDelta({ path: 'activeProjectId', value: next?.id ?? null });

@@ -347,55 +347,6 @@ export function surface2Sig(era: number): string {
 
 let mounted: Surface2 | null = null;
 
-// [LateGame B1] Small markers for finished big projects, drawn with plain shapes on the surface line.
-let projectIds: string[] = [];
-let markLayer: Container | null = null;
-const MARK_X: Record<string, number> = { radioMast: -190, purifier: 250, greenhouse: 345, metroTunnel: 650, archive: 850, wall: 140 };
-
-function drawMarks(): void {
-  const layer = markLayer;
-  if (!layer || layer.destroyed) return;
-  layer.removeChildren().forEach(c => c.destroy());
-  for (const id of projectIds) {
-    const x = MARK_X[id];
-    if (x === undefined) continue;
-    const y = PROP_BASE + ground(x);
-    const g = new Graphics();
-    if (id === 'radioMast') {
-      g.rect(-2, -150, 4, 150).fill(0x8a8f98);
-      g.rect(-14, -150, 28, 3).fill(0x8a8f98);
-      g.circle(0, -154, 4).fill(0xff3a3a);
-    } else if (id === 'purifier') {
-      g.rect(-22, -34, 44, 34).fill(0x5a7a8a);
-      g.rect(-26, -40, 52, 8).fill(0x7aa0b4);
-      g.rect(-4, -62, 8, 22).fill(0x4a6a7a);
-    } else if (id === 'greenhouse') {
-      g.rect(-30, -26, 60, 26).fill({ color: 0x9fe8a8, alpha: 0.45 });
-      g.poly([-34, -26, 0, -46, 34, -26]).fill({ color: 0x7ac48a, alpha: 0.6 });
-      g.rect(-30, -26, 60, 2).fill(0x4a6a4a);
-    } else if (id === 'metroTunnel') {
-      g.rect(-26, -30, 52, 30).fill(0x4a4048);
-      g.circle(0, -18, 14).fill(0x14121a);
-      g.rect(-26, -34, 52, 5).fill(0x6a6a70);
-    } else if (id === 'archive') {
-      g.rect(-20, -38, 40, 38).fill(0x8a7a5a);
-      g.rect(-24, -44, 48, 7).fill(0xa8946a);
-      g.rect(-4, -20, 8, 20).fill(0x3a2e22);
-    } else if (id === 'wall') {
-      g.rect(-70, -30, 140, 30).fill(0x6a6a70);
-      for (let k = -70; k < 70; k += 20) g.rect(k, -38, 12, 8).fill(0x7a7a80);
-    }
-    g.position.set(x, y);
-    layer.addChild(g);
-  }
-}
-
-/** Called by the app when the set of finished projects changes. */
-export function setSurfaceProjects(ids: string[]): void {
-  projectIds = ids;
-  drawMarks();
-}
-
 /** Puts the soil above the underground and the portal above the shaft; drops the previous surface's layers. */
 export function mountSurface2(s: Surface2, world: Container, underground: Container, shaft: Container): void {
   if (mounted && mounted !== s) {
@@ -641,9 +592,6 @@ export function buildSurface2(
     }
   }
   lit.addChild(props);
-  markLayer = new Container(); // [LateGame B1]
-  lit.addChild(markLayer);
-  drawMarks();
 
   // ---------- Topsoil cross-section (above the rock painting) ----------
   const soilKey = era >= 2 ? 'kit/topsoil-L' : 'kit/topsoil-R';
