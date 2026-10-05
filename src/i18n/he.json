@@ -59,6 +59,7 @@
   "building.constructing": "בבנייה – {time}",
   "building.upgrading": "משדרג – {time} (ממשיך לעבוד)",
   "building.capacity": "מיטות",
+  "building.bedsCapped": "החדרים נותנים {built} מיטות, אבל המערכה הזו מגבילה את הבונקר ל-{cap} אנשים. המערכה הבאה תפתח עוד מקום.",
   "building.morale": "בונוס מורל לכולם",
   "building.storage": "קיבולת אחסון נוספת",
   "building.unassign": "הסר",

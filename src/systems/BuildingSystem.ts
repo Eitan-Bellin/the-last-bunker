@@ -233,18 +233,8 @@ export class BuildingSystem {
   }
 
   recalculateMaxPopulation(sm: StateManager): void {
-    let maxPop = 0;
-    for (const building of sm.state.buildings) {
-      const pop = getDef(building.type)?.effects?.maxPopulation;
-      const level = effectiveLevel(building);
-      if (pop && level > 0) {
-        maxPop += pop.base + pop.perLevel * (level - 1);
-      }
-    }
-    maxPop += specTotal(sm.state, 'population');
     // [Long game] The Act holds the bunker's size; nobody already inside is ever turned out.
-    const cap = Math.round(actOf(sm.state).popCap * (sm.state.prestige.upgrades['ksSettler'] ? 1.1 : 1)); // [P5] keystone
-    maxPop = Math.min(maxPop, Math.max(cap, sm.state.survivors.length));
+    const maxPop = Math.min(bedsBuilt(sm.state), Math.max(bedCap(sm.state), sm.state.survivors.length));
     sm.applyDelta({ path: 'maxPopulation', value: maxPop });
   }
 
@@ -433,4 +423,20 @@ export class BuildingSystem {
   getMaxWorkers(type: BuildingType): number {
     return getDef(type)?.maxWorkers ?? 0;
   }
+}
+
+/** Beds the rooms give, before the Act's limit. */
+export function bedsBuilt(state: GameState): number {
+  let beds = 0;
+  for (const building of state.buildings) {
+    const pop = getDef(building.type)?.effects?.maxPopulation;
+    const level = effectiveLevel(building);
+    if (pop && level > 0) beds += pop.base + pop.perLevel * (level - 1);
+  }
+  return beds + specTotal(state, 'population');
+}
+
+/** The Act's limit on people in the bunker. */
+export function bedCap(state: GameState): number {
+  return Math.round(actOf(state).popCap * (state.prestige.upgrades['ksSettler'] ? 1.1 : 1)); // [P5] keystone
 }

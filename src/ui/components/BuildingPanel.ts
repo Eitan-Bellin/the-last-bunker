@@ -9,6 +9,7 @@ import { BUILDING_ICONS, RESOURCE_ICONS, STAT_ICONS, bar, button, costRow, el, s
 import { INCIDENTS, quickFixCost } from '../../data/incidents';
 import { boostReserve, chainInputs, inputFed, inputRate } from '../../data/chains';
 import { roomPowerDraw } from '../../systems/ResourceSystem';
+import { bedsBuilt } from '../../systems/BuildingSystem';
 import { allowedFloors } from '../../data/zones';
 import { RETOOL_SECONDS, specOf, specsFor } from '../../data/specializations';
 import type { Incident } from '../../core/GameState';
@@ -160,6 +161,11 @@ export class BuildingPanel {
     if (def.effects?.maxPopulation) {
       const p = def.effects.maxPopulation;
       stats.appendChild(this.row(`[[quarters]] ${i18n.t('building.capacity')}`, String(p.base + p.perLevel * (level - 1))));
+      // The Act's limit can leave beds unused: say so here, where the player upgrades for more.
+      const built = bedsBuilt(state);
+      if (built > state.maxPopulation) {
+        stats.appendChild(el('div', 'bp-note warning', i18n.t('building.bedsCapped', { built, cap: state.maxPopulation })));
+      }
     }
     if (def.effects?.morale) {
       const m = def.effects.morale;
@@ -203,7 +209,7 @@ export class BuildingPanel {
       stats.appendChild(r);
     }
     // S2: B1 is full of homes: say where more beds come from.
-    if (b.type === 'quarters' && !allowedFloors('quarters', state.currentFloors).some(f => this.engine.buildingSystem.findFreeSpot('quarters', f, state))) {
+    if (b.type === 'quarters' && bedsBuilt(state) <= state.maxPopulation && !allowedFloors('quarters', state.currentFloors).some(f => this.engine.buildingSystem.findFreeSpot('quarters', f, state))) {
       stats.appendChild(el('div', 'bp-hint', `[[pick]] ${i18n.t('building.digForHomes')}`));
     }
     root.appendChild(stats);

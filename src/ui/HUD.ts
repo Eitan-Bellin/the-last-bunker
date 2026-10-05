@@ -5,6 +5,7 @@ import { vibrate } from '../utils/haptics';
 import { timeOfDay } from '../data/dayCycle';
 import { i18n } from '../i18n/I18nManager';
 import { RESOURCE_ICONS, el, setRich } from './dom';
+import { bedsBuilt } from '../systems/BuildingSystem';
 
 /** [Long game] Components and alloys join the row from their Act on (the row then has four columns). */
 const VISIBLE_RESOURCES: ResourceType[] = ['food', 'water', 'power', 'materials', 'medicine', 'knowledge', 'scrap', 'components', 'alloys', 'data', 'influence', 'seedCores'];
@@ -346,7 +347,11 @@ export class HUD {
       els.root.classList.toggle('empty', res.amount <= 0 && res.consumptionRate > 0);
     }
 
-    this.setText(this.popValue, `${state.survivors.length}/${state.maxPopulation}`);
+    // A lock when the Act's limit holds back beds the rooms already give.
+    const built = bedsBuilt(state);
+    const capped = built > state.maxPopulation;
+    this.setText(this.popValue, `${state.survivors.length}/${state.maxPopulation}${capped ? ' [[lock]]' : ''}`);
+    this.popValue.parentElement!.title = capped ? i18n.t('building.bedsCapped', { built, cap: state.maxPopulation }) : '';
     // The door: a countdown to the next newcomer, or a warning that there are no free beds.
     const full = state.survivors.length >= state.maxPopulation && state.maxPopulation > 0;
     const left = Math.max(0, Math.ceil((state.nextArrivalAt ?? 0) - state.stats.totalPlayTime));

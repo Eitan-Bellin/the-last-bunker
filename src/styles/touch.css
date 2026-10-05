@@ -116,3 +116,6 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px
 .outpost-flag { fill: #ffd27a; }
 .outpost-flag.building { fill: #9a9aa8; }
 .outpost-flag.damaged { fill: #ff5a4a; }
+
+/* Beds the Act's limit holds back (room panel) */
+.bp-note.warning { margin: 4px 0 6px; font-size: 0.85em; line-height: 1.35; color: var(--warning); }

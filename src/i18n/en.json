@@ -59,6 +59,7 @@
   "building.constructing": "Constructing – {time}",
   "building.upgrading": "Upgrading – {time} (still working)",
   "building.capacity": "Beds",
+  "building.bedsCapped": "Your rooms give {built} beds, but this Act holds the bunker to {cap} people. The next Act opens more room.",
   "building.morale": "Morale bonus for everyone",
   "building.storage": "Extra storage",
   "building.unassign": "Remove",
