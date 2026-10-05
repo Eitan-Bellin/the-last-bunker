@@ -91,9 +91,9 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px
 .modal-actions .btn:has(.difficulty-desc) { flex-direction: column; align-items: flex-start; gap: 4px; }
 .difficulty-desc { font-size: 0.85em; font-weight: normal; opacity: 0.85; line-height: 1.35; }
 
-/* [Long game] Eight resources: four columns once components and alloys show */
-.resource-row.tier2 { grid-template-columns: repeat(4, 1fr); }
-.resource-row.tier2 .resource-item { padding-inline: 5px; }
+/* Seven base resources (scrap included) in four columns; tier-2 goods add a third row */
+.resource-row { grid-template-columns: repeat(4, 1fr); }
+.resource-row .resource-item { padding-inline: 5px; }
 
 /* [Long game] Act card and Foreman orders */
 .act-card .act-name { font-weight: 700; font-size: 1.1em; }

@@ -7,7 +7,7 @@ import { i18n } from '../i18n/I18nManager';
 import { RESOURCE_ICONS, el, setRich } from './dom';
 
 /** [Long game] Components and alloys join the row from their Act on (the row then has four columns). */
-const VISIBLE_RESOURCES: ResourceType[] = ['food', 'water', 'power', 'materials', 'medicine', 'knowledge', 'components', 'alloys', 'data', 'influence', 'seedCores'];
+const VISIBLE_RESOURCES: ResourceType[] = ['food', 'water', 'power', 'materials', 'medicine', 'knowledge', 'scrap', 'components', 'alloys', 'data', 'influence', 'seedCores'];
 
 export type NavKey = 'build' | 'surface' | 'research' | 'people';
 
