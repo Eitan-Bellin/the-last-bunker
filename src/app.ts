@@ -2,6 +2,7 @@ import { GameEngine, type OfflineReport } from './core/GameEngine';
 import { ProjectsPanel } from './ui/components/ProjectsPanel'; // [LateGame B1]
 import { PROJECTS, projectDone, stagesDone } from './data/projects'; // [LateGame B1]
 import type { SiteInfo } from './rendering/projectSites'; // [LateGame B1]
+import { CouponPanel, couponValid } from './ui/components/CouponPanel';
 import { BunkerRenderer } from './rendering/BunkerRenderer';
 import { BRIGHTNESS_LEVELS } from './rendering/postfx';
 import { clearLiteMode, crashReport, installCrashGuard, isLiteMode, logCrash } from './core/crashGuard';
@@ -102,6 +103,7 @@ export class GameApp {
   loreReader = new LoreReader();
   private eraPanel = new EraPanel();
   private projectsPanel: ProjectsPanel; // [LateGame B1]
+  private couponPanel: CouponPanel;
   introPlaying = false;
   private gradedEra = -1;
   /** Districts that broke through and still await their "discovered" dialog. */
@@ -139,6 +141,7 @@ export class GameApp {
     this.researchPanel = new ResearchPanel(this.engine);
     this.surfacePanel = new SurfacePanel(this.engine);
     this.projectsPanel = new ProjectsPanel(this.engine); // [LateGame B1]
+    this.couponPanel = new CouponPanel(this.engine, (text, good) => this.toasts.show(text, good ? 'good' : 'bad'));
     this.menuPanel = new MenuPanel(this.engine, {
       toggleLanguage: () => void this.toggleLanguage(),
       toggleSound: () => this.audio.toggle(),
@@ -180,6 +183,12 @@ export class GameApp {
       textSize: () => i18n.t(`settings.text.${currentTextSize()}`),
       cycleTextSize: () => { cycleTextSize(); },
       persistLabel: () => i18n.t(`settings.persist.${getPersistStatus()}`),
+      redeemCoupon: (code: string) => { // the coupon sheet: pick how much to skip or add
+        if (!couponValid(code)) return false;
+        this.closeSheets();
+        this.couponPanel.show();
+        return true;
+      },
     });
     this.ruinPanel = new RuinPanel(this.engine);
     this.resourceSheet = new ResourceSheet(this.engine);
@@ -843,6 +852,7 @@ export class GameApp {
     this.journal.hide();
     this.eraPanel.hide();
     this.projectsPanel.hide(); // [LateGame B1]
+    this.couponPanel.hide();
     this.inbox.hide();
     this.resourceSheet.hide();
   }

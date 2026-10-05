@@ -58,6 +58,8 @@ export interface MenuActions {
   cycleTextSize: () => void;
   /** Whether the browser promised to keep the save. */
   persistLabel: () => string;
+  /** Checks a coupon code and opens the coupon sheet when it is right. */
+  redeemCoupon: (code: string) => boolean;
 }
 
 export class MenuPanel {
@@ -211,6 +213,29 @@ export class MenuPanel {
       button(i18n.t('settings.diagnosticsCopy'), 'btn-small', () => { uiSound('switch'); this.actions.copyDiagnostics(); }));
     general.append(lang, sound, music, fx, gfx, gfxHint, bright, textSize, notify, notifyHint, diag);
     box.appendChild(general);
+
+    const coupon = el('div', 'bp-card');
+    coupon.appendChild(el('div', 'bp-section-title', `[[gift]] ${i18n.t('coupon.code')}`));
+    const codeRow = el('div', 'btn-row');
+    const code = el('input', 'coupon-code');
+    code.type = 'text';
+    code.autocomplete = 'off';
+    code.spellcheck = false;
+    code.placeholder = i18n.t('coupon.placeholder');
+    code.setAttribute('aria-label', i18n.t('coupon.code'));
+    const redeem = () => {
+      if (!code.value.trim()) return;
+      if (this.actions.redeemCoupon(code.value)) code.value = '';
+      else {
+        uiSound('cancel');
+        code.classList.add('bad');
+        setTimeout(() => code.classList.remove('bad'), 900);
+      }
+    };
+    code.addEventListener('keydown', e => { if (e.key === 'Enter') redeem(); });
+    codeRow.append(code, button(i18n.t('coupon.redeem'), 'btn-small', redeem));
+    coupon.appendChild(codeRow);
+    box.appendChild(coupon);
 
     const saves = el('div', 'bp-card');
     saves.appendChild(el('div', 'bp-section-title', `[[save]] ${i18n.t('settings.save')}`));

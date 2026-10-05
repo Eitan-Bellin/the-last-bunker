@@ -674,3 +674,19 @@ body.placement-mode #game-canvas { cursor: crosshair; }
 .supply-btn { color: #ffd27a; border-color: rgba(255, 210, 122, 0.6); animation: supply-bob 1.6s ease-in-out infinite; }
 @keyframes supply-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-2px); box-shadow: 0 0 8px rgba(255, 210, 122, 0.55); } }
 .welcome-door { margin-top: 10px; padding: 8px; border-radius: 10px; background: rgba(255, 210, 122, 0.08); border: 1px solid rgba(255, 210, 122, 0.3); }
+
+/* Coupon: the code box in Settings and the amount boxes in the coupon sheet. */
+.coupon-code, .coupon-amount {
+  background: rgba(0, 0, 0, 0.35);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 8px;
+  font-size: calc(13px * var(--fs, 1));
+  min-height: 34px;
+}
+.coupon-code { flex: 1; min-width: 0; letter-spacing: 0.08em; text-transform: uppercase; }
+.coupon-amount { width: 76px; text-align: center; }
+.coupon-code.bad { border-color: #ff6b6b; animation: coupon-shake 0.3s; }
+@keyframes coupon-shake { 25% { transform: translateX(-4px); } 75% { transform: translateX(4px); } }
+.coupon-sheet .btn-row { align-items: center; }
