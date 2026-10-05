@@ -12,7 +12,7 @@ export function couponValid(code: string): boolean {
   return code.replace(/\s+/g, '').toUpperCase() === COUPON_CODE;
 }
 
-type Kind = 'rush' | 'research' | 'build' | 'project' | 'missions' | 'fill';
+type Kind = 'rush' | 'research' | 'build' | 'dig' | 'project' | 'missions' | 'fill';
 
 interface Row {
   kind: Kind;
@@ -26,6 +26,7 @@ const ROWS: Row[] = [
   { kind: 'rush', icon: '[[rocket]]', amount: 10, max: 999 },
   { kind: 'research', icon: '[[research]]', amount: 1, max: 999 },
   { kind: 'build', icon: '[[build]]', amount: 1, max: 999 },
+  { kind: 'dig', icon: '[[pick]]', amount: 1, max: 999 },
   { kind: 'project', icon: '[[worker]]', amount: 1, max: 50 },
   { kind: 'missions', icon: '[[surface]]', amount: 1, max: 999 },
   { kind: 'fill', icon: '[[storage]]', amount: 0, max: 0 },
@@ -111,6 +112,11 @@ export class CouponPanel {
         const n = state.buildings.filter(b => b.isConstructing).length;
         return n ? i18n.t('coupon.build.on', { n }) : i18n.t('coupon.none');
       }
+      case 'dig': {
+        const d = state.longGame?.dig;
+        if (!d || d.floor == null) return i18n.t('coupon.none');
+        return i18n.t('coupon.dig.on', { n: d.floor + 1, h: Math.ceil(Math.max(0, d.total - d.progress) / 3600) });
+      }
       case 'project': {
         const id = state.activeProjectId;
         return id ? i18n.t('coupon.project.on') : i18n.t('coupon.none');
@@ -146,6 +152,14 @@ export class CouponPanel {
           any = true;
         });
         return any;
+      }
+      case 'dig': {
+        const d = sm.state.longGame?.dig;
+        if (!d || d.floor == null) return false;
+        sm.applyDelta({ path: 'longGame.dig.progress', value: Math.min(d.total, d.progress + n * 3600) });
+        // Opens the floor at once if the dig is now complete (even with no crew on site).
+        if (d.progress + n * 3600 >= d.total) e.digSystem.update(0);
+        return true;
       }
       case 'project': {
         let any = false;
