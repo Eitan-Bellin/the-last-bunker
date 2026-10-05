@@ -26,6 +26,9 @@ export class EraPanel {
   /** [Long game UX] Set by the app: the engine, for the "next up" card (objective, project ETA). */
   engine: GameEngine | null = null;
   private lastState: GameState | null = null;
+  /** [Long game UX] The Foreman's live lines: next-round countdown, then one report per order. */
+  private foremanNext: HTMLElement | null = null;
+  private foremanReports: HTMLElement[] = [];
 
   show(state: GameState): void {
     this.signature = '';
@@ -62,6 +65,7 @@ export class EraPanel {
         if (this.actLabels[i]) this.actLabels[i].textContent = c >= t ? '✓' : t > 1 ? `${Math.min(c, t)}/${t}` : '';
       });
     }
+    this.refreshForeman(state);
     era.next.forEach((g, i) => {
       const [c, t] = g.progress(state);
       setBar(this.bars[i], (Math.min(c, t) / t) * 100);
@@ -163,22 +167,46 @@ export class EraPanel {
     return box;
   }
 
-  /** [Long game] The Foreman's standing orders: routine handed over, on or off. */
+  /** [Long game] The Foreman's standing orders: routine handed over, each a clear on/off switch with what it last did. */
   private renderForeman(state: GameState): HTMLElement {
     const box = el('div', 'foreman');
     box.appendChild(el('div', 'bp-section-title', `[[worker]] ${i18n.t('foreman.title')}`));
     box.appendChild(el('div', 'bp-hint', i18n.t('foreman.hint')));
+    this.foremanReports = [];
     for (const o of FOREMAN_ORDERS) {
       const on = !!state.longGame?.foreman.orders[o];
-      const row = el('div', 'foreman-row');
-      row.append(el('span', 'foreman-text', i18n.t(`foreman.${o}`)), button(i18n.t(on ? 'settings.on' : 'settings.off'), on ? 'btn-primary btn-small' : 'btn-secondary btn-small', () => {
+      const row = el('div', `foreman-row ${on ? 'on' : 'off'}`);
+      const text = el('span', 'foreman-text');
+      const report = el('div', 'bp-hint foreman-report');
+      text.append(el('div', '', i18n.t(`foreman.${o}`)), report);
+      this.foremanReports.push(report);
+      const sw = button(on ? `✓ ${i18n.t('settings.on')}` : i18n.t('settings.off'), `btn-small foreman-switch ${on ? 'btn-primary' : 'btn-secondary'}`, () => {
         this.foreman?.set(o, !on);
         this.signature = '';
         if (this.lastState) this.refresh(this.lastState);
-      }));
+      });
+      sw.setAttribute('role', 'switch');
+      sw.setAttribute('aria-checked', String(on));
+      row.append(text, sw);
       box.appendChild(row);
     }
+    this.foremanNext = el('div', 'bp-hint');
+    box.appendChild(this.foremanNext);
     return box;
+  }
+
+  /** The live part of the Foreman box: what each order did on its last round and when the next one comes. */
+  private refreshForeman(state: GameState): void {
+    const f = this.foreman;
+    if (!f || !this.foremanNext?.isConnected) return;
+    const anyOn = FOREMAN_ORDERS.some(o => f.isOn(state, o));
+    this.foremanNext.textContent = anyOn ? i18n.t('foreman.next', { t: i18n.formatDuration(Math.ceil(f.nextRoundIn())) }) : i18n.t('foreman.allOff');
+    FOREMAN_ORDERS.forEach((o, i) => {
+      const r = f.last[o];
+      const line = this.foremanReports[i];
+      if (!line) return;
+      line.textContent = !f.isOn(state, o) ? '' : r ? i18n.t(`foreman.report.${r.key}`, { n: r.n ?? 0 }) : i18n.t('foreman.report.waiting');
+    });
   }
 
   private render(era: EraDef, act: ActDef | null): void {
