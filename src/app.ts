@@ -219,6 +219,8 @@ export class GameApp {
       (window as unknown as Record<string, unknown>).__renderer = this.renderer;
       (window as unknown as Record<string, unknown>).__audio = this.audio;
     }
+    // [perf] ?perf shows the overlay, ?debug/?perf expose __perf2() and __perfFixture(); nothing loads otherwise.
+    { const q = new URLSearchParams(location.search); if (import.meta.env.DEV || q.has('perf') || q.has('debug')) void import('./dev/perf').then(m => m.installPerf(this.renderer, this.engine, this.audio)); }
     if (import.meta.env.DEV) void import('./dev/storeShots').then(m => m.installStoreShots(this.renderer.app));
     if (import.meta.env.DEV) void import('./dev/camShots').then(m => m.installCamShots(this.renderer, () => this.state));
 

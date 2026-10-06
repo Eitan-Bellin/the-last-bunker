@@ -1598,12 +1598,20 @@ export class BunkerRenderer {
 
   /** Updates the scene, then draws it; the picture is drawn even when the update threw halfway. */
   render(state: GameState, dt: number, alpha: number): void {
+    const hook = this.perfHook; // [perf] only set while the probe (?perf) is on
+    const t0 = hook ? performance.now() : 0;
+    let t1 = 0;
     try {
       this.updateScene(state, dt, alpha);
     } finally {
+      if (hook) { t1 = performance.now(); hook.beforeDraw(); }
       this.draw();
+      if (hook) hook.afterDraw(t0, t1, performance.now());
     }
   }
+
+  /** [perf] Set by src/dev/perf.ts: counts what each picture costs (draw calls, render group rebuilds, update/draw time). */
+  perfHook: { beforeDraw(): void; afterDraw(t0: number, t1: number, t2: number): void } | null = null;
 
   private draw(): void {
     const gl = (this.app.renderer as { gl?: WebGL2RenderingContext }).gl;

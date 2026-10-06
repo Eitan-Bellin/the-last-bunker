@@ -1,0 +1,13 @@
+{
+  "_note": "Starting values; tightened after the plan's quick wins (see store/plan-2026-10/3-DONE.md). Only counts gate; milliseconds are reported, never gated.",
+  "scenarios": {
+    "f8-overview-medium":  { "floors": 8,  "people": 25, "camera": "overview", "quality": "medium" },
+    "f24-overview-medium": { "floors": 24, "people": 60, "camera": "overview", "quality": "medium" },
+    "f24-close-medium":    { "floors": 24, "people": 60, "camera": "close",    "quality": "medium" },
+    "f24-far-medium":      { "floors": 24, "people": 60, "camera": "far",      "quality": "medium" },
+    "f24-close-low":       { "floors": 24, "people": 60, "camera": "close",    "quality": "low" },
+    "f24-close-high":      { "floors": 24, "people": 60, "camera": "close",    "quality": "high" },
+    "f24-idle-medium":     { "floors": 24, "people": 60, "camera": "overview", "quality": "medium", "mode": "idle" }
+  },
+  "global": {}
+}
