@@ -1,16 +1,24 @@
 import { LAWS, lawCost, lawSlots } from '../../data/laws';
-import { ENDINGS, type EndingDef } from '../../data/endings';
+import { ENDINGS, endingScore, type EndingDef } from '../../data/endings';
 import type { GameEngine } from '../../core/GameEngine';
 import type { GameState, ResourceType } from '../../core/GameState';
 import { i18n } from '../../i18n/I18nManager';
 import { ERAS, eraOf, type EraDef } from '../../data/eras';
 import { Sheet } from './Sheet';
-import { RESOURCE_ICONS, bar, button, costRow, el, setBar } from '../dom';
+import { RESOURCE_ICONS, bar, button, costRow, el, setBar, setRich } from '../dom';
 import { ACTS, actOf, type ActDef } from '../../data/acts';
 import { FOREMAN_ACT, FOREMAN_ORDERS, type ForemanSystem } from '../../systems/ForemanSystem';
 import { actFraction, actRequirements, pickRequirement, type Requirement } from '../../systems/Guide';
 import type { ObjectiveAction } from '../../systems/ObjectiveSystem';
 import { resourceDef } from '../../data/resources';
+import { getScenario, homeShare, type HomeSite } from '../../data/scenarios';
+
+/** Sets a line of text that may hold icon tokens ([[food]]), only when it changed (the panel refreshes four times a second). */
+function setLine(node: HTMLElement | null, text: string): void {
+  if (!node || node.dataset.t === text) return;
+  node.dataset.t = text;
+  setRich(node, text);
+}
 
 /** How far ahead the forecast looks, in seconds. */
 const FORECAST_SECONDS = 6 * 3600;
@@ -105,20 +113,20 @@ export class EraPanel {
       if (!row) return;
       setBar(row.bar, r.fraction * 100);
       row.label.textContent = r.done ? '✓' : r.progress[1] > 1 ? `${r.progress[0]}/${r.progress[1]}` : '';
-      row.hint.textContent = r.done ? '' : r.text;
+      setLine(row.hint, r.done ? '' : r.text);
       row.row.classList.toggle('done', r.done);
       row.action = r.action;
     });
     const pick = pickRequirement(reqs);
     if (this.nowText) {
       if (pick) {
-        this.nowText.textContent = pick.text;
+        setLine(this.nowText, pick.text);
         this.nowAction = pick.action;
-        if (this.nowMeta) this.nowMeta.textContent = pick.title;
+        setLine(this.nowMeta, pick.title);
       } else {
-        this.nowText.textContent = i18n.t(act.id >= ACTS.length ? 'guide.genesis' : 'command.actDone');
+        setLine(this.nowText, i18n.t(act.id >= ACTS.length ? 'guide.genesis' : 'command.actDone'));
         this.nowAction = act.id >= ACTS.length ? { kind: 'genesis' } : null;
-        if (this.nowMeta) this.nowMeta.textContent = '';
+        setLine(this.nowMeta, '');
       }
       if (this.nowGo) this.nowGo.style.display = this.nowAction ? '' : 'none';
     }
@@ -231,6 +239,19 @@ export class EraPanel {
     box.replaceChildren(...rows);
   }
 
+  /** [P3-5] The bunkers of earlier timelines and what they send home. */
+  private renderHomes(homes: HomeSite[]): HTMLElement {
+    const locale = i18n.currentLocale;
+    const card = el('div', 'bp-card homes-card');
+    card.appendChild(el('div', 'bp-section-title', `[[vault]] ${i18n.t('home.title')}`));
+    card.appendChild(el('div', 'bp-hint', i18n.t('home.hint')));
+    for (const h of homes) {
+      const name = getScenario(h.scenario).name[locale];
+      card.appendChild(el('div', 'home-row', i18n.t('home.line', { name, act: ACTS[Math.min(ACTS.length, h.act) - 1]?.name[locale] ?? String(h.act), pct: Math.round(homeShare(h) * 100) })));
+    }
+    return card;
+  }
+
   /** [Q8] Where the ending leans: each ending's score and what raises it. */
   private renderEndings(): HTMLElement {
     const locale = i18n.currentLocale;
@@ -253,7 +274,7 @@ export class EraPanel {
 
   private refreshEndings(state: GameState): void {
     if (this.endingBars.length === 0) return;
-    const scores = ENDINGS.map(e => ({ e, s: e.score(state) }));
+    const scores = ENDINGS.map(e => ({ e, s: endingScore(state, e) }));
     const max = Math.max(1, ...scores.map(x => x.s));
     const lead = scores.reduce((a, b) => (b.s > a.s ? b : a)).e.id;
     for (const { e, s } of scores) {
@@ -346,6 +367,8 @@ export class EraPanel {
       root.appendChild(button(`[[build]] ${i18n.t('proj.open')}`, 'btn-primary', () => this.onOpenProjects?.())); // [LateGame B1]
       root.appendChild(this.renderForecast());
       if (act.id >= 2) root.appendChild(this.renderEndings());
+      const homes = (state.longGame?.meta.homes ?? []) as HomeSite[];
+      if (homes.length > 0) root.appendChild(this.renderHomes(homes));
       const extras = el('div', 'bp-card');
       if (act.id >= FOREMAN_ACT && this.foreman) extras.appendChild(this.renderForeman(state));
       if (lawSlots(state) > 0) extras.appendChild(this.renderLaws(state));

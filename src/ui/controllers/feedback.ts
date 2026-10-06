@@ -320,7 +320,8 @@ export class FeedbackController {
       setTimeout(show, 800);
     });
     // [P5] A new timeline: choose its hardships (if any) for more Legacy.
-    bus.on('rebirth', () => setTimeout(() => this.app.story.chooseMutators(), 1500));
+    // [P3-5] First where the next world begins, then the hardships.
+    bus.on('rebirth', () => setTimeout(() => this.app.story.chooseScenario(() => this.app.story.chooseMutators()), 1500));
     bus.on('dig:start', () => {
       this.app.toasts.show(`[[pick]] ${i18n.t('dig.started', { n: this.app.state.currentFloors + 1, t: i18n.formatDuration(this.app.state.longGame?.dig.total ?? 0) })}`, 'info');
     });

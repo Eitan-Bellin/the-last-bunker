@@ -120,7 +120,8 @@ function projectRequirement(engine: GameEngine, state: GameState, id: string): R
   const name = def.name[locale];
   if (!active) {
     // Someone else holds the lot: say so, switching is one tap in the Projects panel.
-    return { ...base, text: i18n.t(state.activeProjectId ? 'guide.projSwitch' : 'guide.projStart', { name }), action, immediate: true };
+    const key = state.activeProjectId ? 'guide.projSwitch' : def.variant && done === 0 ? 'guide.projStartDesign' : 'guide.projStart';
+    return { ...base, text: i18n.t(key, { name }), action, immediate: true };
   }
   const stage = ps.stageOf(state, id);
   const workers = ps.workers(state, id).length;

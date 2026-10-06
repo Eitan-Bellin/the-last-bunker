@@ -14,6 +14,7 @@ import { modifierBreakdown, modifierProduct, prepareModifiers, registerModifier 
 import { difficultyOf } from '../data/difficulty';
 import { actCapBonus } from '../data/pricing';
 import { TUNING } from '../data/tuning';
+import { scenarioOf } from '../data/scenarios';
 
 const EMERGENCY_EFFICIENCY = 0.25;
 const FOOD_PER_SURVIVOR = 0.08;
@@ -46,6 +47,8 @@ registerModifier({
   mult: ({ resource }) => (resource === 'power' ? 1 : moraleNow),
 });
 registerModifier({ id: 'echo', mult: ({ state }) => prestigeMultiplier(state) });
+// [P3-5] The scenario's own rules (what grows well in this place and what does not).
+registerModifier({ id: 'scenario', mult: ({ state, resource }) => scenarioOf(state).output?.[resource] ?? 1 });
 // [P2-1] The Technocracy doctrine: every room +5%.
 registerModifier({ id: 'technocracy', mult: ({ state }) => (hasFeature(state, 'technocracy') ? 1.05 : 1) });
 // [P3] Laws in force.

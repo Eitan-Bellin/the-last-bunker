@@ -1,5 +1,6 @@
 import type { GameState } from '../core/GameState';
 import { relationLevel } from './trade';
+import { scenarioOf } from './scenarios';
 
 /**
  * [Long game P5] How the run ends (long-game plan, pillar E): when the last Act is complete, the bunker's story closes
@@ -84,6 +85,11 @@ export const ENDINGS: EndingDef[] = [
   },
 ];
 
+/** The run's score for an ending: what the choices made, plus the lean of the place (scenario) it was lived in. */
+export function endingScore(state: GameState, e: EndingDef): number {
+  return e.score(state) + (scenarioOf(state).endingBonus?.[e.id] ?? 0);
+}
+
 export function endingOf(state: GameState): EndingDef {
-  return [...ENDINGS].sort((a, b) => b.score(state) - a.score(state))[0];
+  return [...ENDINGS].sort((a, b) => endingScore(state, b) - endingScore(state, a))[0];
 }

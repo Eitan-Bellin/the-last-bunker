@@ -959,5 +959,14 @@
   "ending.pick.commonwealth": "The Commonwealth",
   "ending.pick.fortress": "The Fortress",
   "ending.pick.garden": "The Garden",
-  "ending.pick.ark": "The Ark"
+  "ending.pick.ark": "The Ark",
+  "scenario.title": "Where does the next world begin?",
+  "scenario.body": "The bunker you just finished stays on as a home and sends part of its income to the new one. Pick a place: each has its own rules, and its own lean toward an ending.",
+  "home.title": "Homes",
+  "home.hint": "Bunkers of earlier timelines. From Act II each sends part of an hour of income home, every hour.",
+  "home.line": "{name} · reached {act} · sends {pct}% of an hour of income each hour",
+  "proj.design": "Choose a design (until the first stage is done):",
+  "proj.designLocked": "Design (fixed once the first stage is built):",
+  "proj.designA": "The original design",
+  "guide.projStartDesign": "Start the {name} project (Projects): you choose one of two designs"
 }

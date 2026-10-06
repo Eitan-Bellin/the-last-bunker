@@ -15,6 +15,7 @@ import type { ExplorationSystem } from './ExplorationSystem';
 import type { IncidentSystem } from './IncidentSystem';
 import { effectiveLevel, getDef, workforceMultiplier } from '../data/buildingDefs';
 import { hasFeature } from './ResearchSystem';
+import { scenarioOf } from '../data/scenarios';
 import { incidentBlocks } from '../data/incidents';
 import { specMax, specTotal } from '../data/specializations';
 import { projectDefense } from '../data/projects'; // [Danger C1] the Wall project
@@ -384,6 +385,7 @@ export function defenseParts(state: GameState): { walls: number; guards: number;
   if (hasFeature(state, 'fortress')) walls *= 1.5;
   if (hasFeature(state, 'isolationism')) walls *= 1.2; // [P2-1]
   if (hasFeature(state, 'shieldNetwork')) walls *= 1.2; // [P2-8]
+  walls *= scenarioOf(state).walls ?? 1; // [P3-5]
   if (hasFeature(state, 'rangers')) guards *= 1.4;
   if (hasFeature(state, 'armorPlating')) guards *= 1.2;
   if (hasFeature(state, 'militia')) residents *= 2;
@@ -506,7 +508,7 @@ export function arrivalGap(state: GameState, roll = 0.5): number {
   const hunger = state.resources.food.amount <= 0 || state.resources.water.amount <= 0 ? 2 : 1;
   // [LateGame B1] the field radio mast project brings newcomers faster
   // [P2] More people travel in spring, fewer in winter.
-  const doctrine = (hasFeature(state, 'isolationism') ? 1.25 : 1) * (hasFeature(state, 'expansionism') ? 0.85 : 1) * (hasFeature(state, 'confederation') ? 0.85 : 1); // [P2-1]
+  const doctrine = (hasFeature(state, 'isolationism') ? 1.25 : 1) * (hasFeature(state, 'expansionism') ? 0.85 : 1) * (hasFeature(state, 'confederation') ? 0.85 : 1) * (scenarioOf(state).arrivals ?? 1); // [P2-1] doctrines, [P3-5] the scenario
   const season = (seasonEffects(state)?.arrivals ?? 1) * (hasFeature(state, 'longRangeRadio') ? 0.8 : 1) * lawArrivals(state) * doctrine;
   return Math.round(base * radio * mood * hunger * season * (0.75 + roll * 0.5) / projectArrivalSpeed(state));
 }

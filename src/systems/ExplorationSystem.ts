@@ -17,6 +17,7 @@ import type { ActiveMission, JournalEntry } from '../core/GameState';
 import { projectExpeditionSpeed } from '../data/projects'; // [LateGame B1]
 import { CARAVAN_CREW, CARGO_TIERS, TRADE_VALUE, ambushChance, cargoValue, getPartner, partnerOpen, relationLevel, tradeRate, specialKey, type CargoTier } from '../data/trade'; // [LateGame B2]
 import { MASTERY_STEPS } from '../data/mastery'; // [LateGame B3]
+import { scenarioOf } from '../data/scenarios';
 
 /** Seconds the team waits for an answer before taking the cautious option. */
 export const ANSWER_TIMEOUT = 180;
@@ -396,6 +397,7 @@ export class ExplorationSystem {
     let t = p?.seconds ?? 7200;
     if (hasFeature(state, 'vehicles')) t *= 0.75;
     if (hasFeature(state, 'tradeRoads')) t *= 0.75; // [P2-8]
+    t *= scenarioOf(state).caravans ?? 1; // [P3-5]
     t /= projectExpeditionSpeed(state);
     return Math.round(t);
   }

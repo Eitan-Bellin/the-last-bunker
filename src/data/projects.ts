@@ -38,6 +38,13 @@ export interface ProjectEffects {
   morale?: number;
 }
 
+/** [P2-2] A second design for a project: same cost and crew, a different reward (chosen before the first stage is done). */
+export interface ProjectVariant {
+  label: Record<'he' | 'en', string>;
+  finale: Record<'he' | 'en', string>;
+  effects: ProjectEffects;
+}
+
 export interface ProjectDef {
   id: ProjectId;
   icon: string;
@@ -53,6 +60,8 @@ export interface ProjectDef {
   act?: number;
   stages: ProjectStage[];
   effects: ProjectEffects;
+  /** [P2-2] The alternative design ("B"); the project as written is design "A" (the default). */
+  variant?: ProjectVariant;
 }
 
 const rep = (n: number, f: (i: number) => ProjectStage): ProjectStage[] => Array.from({ length: n }, (_, i) => f(i));
@@ -86,6 +95,11 @@ export const PROJECTS: ProjectDef[] = [
     finale: { he: 'ניצולים מגיעים פי 2 מהר יותר, אבל גם פושטים שומעים את השידור', en: 'Newcomers arrive twice as fast, but raiders hear the broadcast too' },
     stages: rep(5, i => ({ cost: charter(2, { scrap: 200 })(i), hours: 6, crew: crewAt(i) })),
     effects: { arrivalSpeed: 2 },
+    variant: {
+      label: { he: 'צלחת מכוונת', en: 'Directional dish' },
+      finale: { he: 'ניצולים מגיעים מהר ב־50% וידע +10% · פחות שידור פתוח', en: 'Newcomers arrive 50% faster and knowledge +10% · less open broadcast' },
+      effects: { arrivalSpeed: 1.5, resourceMult: { knowledge: 0.1 } },
+    },
   },
   {
     id: 'purifier', icon: '[[waterPurifier]]', flag: 'project:purifier', era: 2, act: 2,
@@ -94,6 +108,11 @@ export const PROJECTS: ProjectDef[] = [
     finale: { he: 'המים בבונקר +40%, ואין יותר הרעלת מים', en: 'Bunker water +40%, and no more water poisoning' },
     stages: rep(4, i => ({ cost: charter(2, { water: 5000 })(i), hours: 4.5, crew: crewAt(i) })),
     effects: { resourceMult: { water: 0.4 } },
+    variant: {
+      label: { he: 'קולטי גשם', en: 'Rain collectors' },
+      finale: { he: 'מים +25% ואוכל +10%', en: 'Water +25% and food +10%' },
+      effects: { resourceMult: { water: 0.25, food: 0.1 } },
+    },
   },
   {
     id: 'greenhouse', icon: '[[wheat]]', flag: 'project:greenhouse', era: 2, act: 3,
@@ -102,6 +121,11 @@ export const PROJECTS: ProjectDef[] = [
     finale: { he: 'האוכל +30%, וחממה ירוקה עומדת מעל הבונקר', en: 'Food +30%, and a green glasshouse stands above the bunker' },
     stages: rep(5, i => ({ cost: charter(3, { food: 4000, knowledge: 1500 })(i), hours: 6, crew: crewAt(i) })),
     effects: { resourceMult: { food: 0.3 } },
+    variant: {
+      label: { he: 'כיפת ספריית זרעים', en: 'Seed-library dome' },
+      finale: { he: 'אוכל +15% וידע +15%', en: 'Food +15% and knowledge +15%' },
+      effects: { resourceMult: { food: 0.15, knowledge: 0.15 } },
+    },
   },
   {
     id: 'metroTunnel', icon: '[[car]]', flag: 'project:metroTunnel', era: 2, act: 3,
@@ -110,6 +134,11 @@ export const PROJECTS: ProjectDef[] = [
     finale: { he: 'משלחות מהירות פי 2', en: 'Expeditions twice as fast' },
     stages: rep(5, i => ({ cost: charter(3, { scrap: 300 })(i), hours: 9, crew: crewAt(i) })),
     effects: { expeditionSpeed: 2 },
+    variant: {
+      label: { he: 'מעלית מטענים', en: 'Freight lift' },
+      finale: { he: 'משלחות מהירות פי 1.5 וחומרים +10%', en: 'Expeditions 1.5 times faster and materials +10%' },
+      effects: { expeditionSpeed: 1.5, resourceMult: { materials: 0.1 } },
+    },
   },
   {
     id: 'archive', icon: '[[books]]', flag: 'project:archive', era: 2, act: 3,
@@ -118,6 +147,11 @@ export const PROJECTS: ProjectDef[] = [
     finale: { he: 'תור מחקר נוסף, ומחקרי שכלול זולים ב־25%', en: 'One more research queue slot, and refinement research is 25% cheaper' },
     stages: rep(4, i => ({ cost: charter(3, { knowledge: 8000, blueprints: 3 })(i), hours: 7.5, crew: crewAt(i) })),
     effects: { researchQueue: 1, refineDiscount: 0.25 },
+    variant: {
+      label: { he: 'בית ספר פתוח', en: 'Open school' },
+      finale: { he: 'תור מחקר נוסף וידע +15%', en: 'One more research queue slot and knowledge +15%' },
+      effects: { researchQueue: 1, resourceMult: { knowledge: 0.15 } },
+    },
   },
   {
     id: 'wall', icon: '[[armory]]', flag: 'project:wall', era: 2, act: 4,
@@ -126,6 +160,11 @@ export const PROJECTS: ProjectDef[] = [
     finale: { he: 'הגנה +50 מפני פושטים', en: '+50 defense against raiders' },
     stages: rep(5, i => ({ cost: charter(4, { scrap: 400 })(i), hours: 6, crew: crewAt(i) })),
     effects: { defense: 50 },
+    variant: {
+      label: { he: 'טבעת מגדלי תצפית', en: 'Ring of watchtowers' },
+      finale: { he: 'הגנה +30 ומשלחות מהירות פי 1.3', en: '+30 defense and expeditions 1.3 times faster' },
+      effects: { defense: 30, expeditionSpeed: 1.3 },
+    },
   },
   {
     // [Long game] Act IV's charter and the road to Genesis: a seed of the new world, built from the bunker's best goods.
@@ -135,6 +174,11 @@ export const PROJECTS: ProjectDef[] = [
     finale: { he: 'פרויקט בראשית נפתח', en: 'Project Genesis opens' },
     stages: rep(6, i => ({ cost: charter(7, {}, 0.15)(i), hours: 10, crew: 4 + Math.floor(i / 2) })),
     effects: { resourceMult: { knowledge: 0.3 } },
+    variant: {
+      label: { he: 'ליבת הד', en: 'Echo core' },
+      finale: { he: 'ידע +20% ואוכל +10%', en: 'Knowledge +20% and food +10%' },
+      effects: { resourceMult: { knowledge: 0.2, food: 0.1 } },
+    },
   },
   {
     // [P5] Act IV: the furnaces under the deepest floor.
@@ -144,6 +188,11 @@ export const PROJECTS: ProjectDef[] = [
     finale: { he: 'סגסוגות +25%, ומערכה V נפתחת', en: 'Alloys +25%, and Act V opens' },
     stages: rep(5, i => ({ cost: charter(4, { scrap: 500 })(i), hours: 8, crew: 4 })),
     effects: { resourceMult: { alloys: 0.25 } },
+    variant: {
+      label: { he: 'כבשן קר', en: 'Cold smelter' },
+      finale: { he: 'סגסוגות +15% ורכיבים +20%', en: 'Alloys +15% and components +20%' },
+      effects: { resourceMult: { alloys: 0.15, components: 0.2 } },
+    },
   },
   {
     // [P5] Act V: back to the surface, for good.
@@ -153,6 +202,11 @@ export const PROJECTS: ProjectDef[] = [
     finale: { he: 'משלחות מהירות פי 1.5', en: 'Expeditions 1.5 times faster' },
     stages: rep(5, i => ({ cost: charter(5, { materials: 200000 })(i), hours: 10, crew: 5 })),
     effects: { expeditionSpeed: 1.5 },
+    variant: {
+      label: { he: 'שער שיירות משוריין', en: 'Armored convoy gate' },
+      finale: { he: 'משלחות מהירות פי 1.25 והגנה +20', en: 'Expeditions 1.25 times faster and +20 defense' },
+      effects: { expeditionSpeed: 1.25, defense: 20 },
+    },
   },
   {
     id: 'skyDome', icon: '[[sun]]', flag: 'project:skyDome', era: 3, act: 5,
@@ -161,6 +215,11 @@ export const PROJECTS: ProjectDef[] = [
     finale: { he: 'אוכל +20% ומורל +8 לכולם', en: 'Food +20% and +8 morale for everyone' },
     stages: rep(5, i => ({ cost: charter(5, { food: 20000 })(i), hours: 10, crew: 5 })),
     effects: { resourceMult: { food: 0.2 }, morale: 8 },
+    variant: {
+      label: { he: 'כיפת תצפית', en: 'Observatory dome' },
+      finale: { he: 'מורל +8, נתונים +15% וידע +10%', en: '+8 morale, data +15% and knowledge +10%' },
+      effects: { morale: 8, resourceMult: { data: 0.15, knowledge: 0.1 } },
+    },
   },
   {
     // [P5] Act VI: the bunker becomes a republic among neighbours.
@@ -170,6 +229,11 @@ export const PROJECTS: ProjectDef[] = [
     finale: { he: 'ניצולים מגיעים פי 1.5 מהר יותר', en: 'Newcomers arrive 1.5 times faster' },
     stages: rep(5, i => ({ cost: charter(6, { materials: 300000 })(i), hours: 10, crew: 5 })),
     effects: { arrivalSpeed: 1.5 },
+    variant: {
+      label: { he: 'אולמות הגילדה', en: 'Guild halls' },
+      finale: { he: 'ניצולים מגיעים מהר פי 1.25 והשפעה +20%', en: 'Newcomers arrive 1.25 times faster and influence +20%' },
+      effects: { arrivalSpeed: 1.25, resourceMult: { influence: 0.2 } },
+    },
   },
   {
     id: 'constitution', icon: '[[books]]', flag: 'project:constitution', era: 3, act: 6,
@@ -178,6 +242,11 @@ export const PROJECTS: ProjectDef[] = [
     finale: { he: 'ידע +20% ותור מחקר נוסף', en: 'Knowledge +20% and one more research slot' },
     stages: rep(4, i => ({ cost: charter(6, { knowledge: 20000 })(i), hours: 12, crew: 4 })),
     effects: { resourceMult: { knowledge: 0.2 }, researchQueue: 1 },
+    variant: {
+      label: { he: 'מגילת זכויות', en: 'Charter of rights' },
+      finale: { he: 'מורל +6 והשפעה +25%', en: '+6 morale and influence +25%' },
+      effects: { morale: 6, resourceMult: { influence: 0.25 } },
+    },
   },
   {
     // [P5] Act VII: what will cross into the next world.
@@ -187,6 +256,11 @@ export const PROJECTS: ProjectDef[] = [
     finale: { he: 'התיבה מוכנה', en: 'The Ark is ready' },
     stages: rep(5, i => ({ cost: charter(7, { alloys: 3000, data: 1500 })(i), hours: 10, crew: 6 })),
     effects: { defense: 30 },
+    variant: {
+      label: { he: 'תיבת זרעים', en: 'Seed ark' },
+      finale: { he: 'ליבות זרע +20% ואוכל +10%', en: 'Seed cores +20% and food +10%' },
+      effects: { resourceMult: { seedCores: 0.2, food: 0.1 } },
+    },
   },
 ];
 
@@ -213,10 +287,20 @@ function earned(state: GameState, def: ProjectDef): number {
   return stagesDone(state, def.id) / def.stages.length;
 }
 
+/** [P2-2] Which design the player picked for a project ('a' unless they chose the alternative). */
+export function designOf(state: GameState, id: string): 'a' | 'b' {
+  return state.lateGame?.designs?.[id] === 'b' && !!getProject(id)?.variant ? 'b' : 'a';
+}
+
+/** The effects the project gives in this bunker: its chosen design's. */
+export function projectEffects(state: GameState, p: ProjectDef): ProjectEffects {
+  return designOf(state, p.id) === 'b' && p.variant ? p.variant.effects : p.effects;
+}
+
 /** Newcomer speed factor (1 = none). */
 export function projectArrivalSpeed(state: GameState): number {
   let f = 1;
-  for (const p of PROJECTS) if (p.effects.arrivalSpeed) f += (p.effects.arrivalSpeed - 1) * earned(state, p);
+  for (const p of PROJECTS) { const e = projectEffects(state, p); if (e.arrivalSpeed) f += (e.arrivalSpeed - 1) * earned(state, p); }
   return f;
 }
 
@@ -226,7 +310,7 @@ export function projectResourceBonus(state: GameState, r: ResourceType): number 
   const projects = state.lateGame?.projects;
   if (!projects) return 0;
   for (const p of PROJECTS) {
-    const m = p.effects.resourceMult?.[r];
+    const m = projectEffects(state, p).resourceMult?.[r];
     if (m && projects[p.id]) v += m * earned(state, p);
   }
   return v;
@@ -235,35 +319,35 @@ export function projectResourceBonus(state: GameState, r: ResourceType): number 
 /** Expedition speed factor (1 = none). */
 export function projectExpeditionSpeed(state: GameState): number {
   let f = 1;
-  for (const p of PROJECTS) if (p.effects.expeditionSpeed) f += (p.effects.expeditionSpeed - 1) * earned(state, p);
+  for (const p of PROJECTS) { const e = projectEffects(state, p); if (e.expeditionSpeed) f += (e.expeditionSpeed - 1) * earned(state, p); }
   return f;
 }
 
 /** Extra research queue slots (whole slots, granted when the project is finished). */
 export function projectQueueSlots(state: GameState): number {
   let n = 0;
-  for (const p of PROJECTS) if (p.effects.researchQueue && projectDone(state, p.id)) n += p.effects.researchQueue;
+  for (const p of PROJECTS) { const q = projectEffects(state, p).researchQueue; if (q && projectDone(state, p.id)) n += q; }
   return n;
 }
 
 /** Discount on refinement research (0.25 = -25%). */
 export function projectRefineDiscount(state: GameState): number {
   let v = 0;
-  for (const p of PROJECTS) if (p.effects.refineDiscount) v += p.effects.refineDiscount * earned(state, p);
+  for (const p of PROJECTS) { const d = projectEffects(state, p).refineDiscount; if (d) v += d * earned(state, p); }
   return v;
 }
 
 /** Extra raid defense from the wall. The Danger system adds this to its defense total. */
 export function projectDefense(state: GameState): number {
   let v = 0;
-  for (const p of PROJECTS) if (p.effects.defense) v += p.effects.defense * earned(state, p);
+  for (const p of PROJECTS) { const d = projectEffects(state, p).defense; if (d) v += d * earned(state, p); }
   return Math.round(v);
 }
 
 /** Morale points from the projects (the Sky Dome), in steps like the other rewards. */
 export function projectMorale(state: GameState): number {
   let v = 0;
-  for (const p of PROJECTS) if (p.effects.morale) v += p.effects.morale * earned(state, p);
+  for (const p of PROJECTS) { const m = projectEffects(state, p).morale; if (m) v += m * earned(state, p); }
   return Math.round(v);
 }
 

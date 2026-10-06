@@ -1,7 +1,7 @@
 import type { GameState, ResourceType } from '../../core/GameState';
 import type { GameEngine } from '../../core/GameEngine';
 import { i18n } from '../../i18n/I18nManager';
-import { PROJECTS, projectDone, stagesDone, type ProjectDef } from '../../data/projects';
+import { PROJECTS, designOf, projectDone, stagesDone, type ProjectDef } from '../../data/projects';
 import { Sheet } from './Sheet';
 import { RESOURCE_ICONS, bar, button, el } from '../dom';
 import { uiSound } from '../../audio/uiSound';
@@ -89,6 +89,35 @@ export class ProjectsPanel {
     this.sheet.body.replaceChildren(root);
   }
 
+  /** [P2-2] The two designs of a project: pick one before the first stage is done. */
+  private renderDesign(state: GameState, def: ProjectDef): HTMLElement {
+    const locale = i18n.currentLocale;
+    const ps = this.engine.projectSystem;
+    const chosen = designOf(state, def.id);
+    const locked = stagesDone(state, def.id) > 0;
+    const box = el('div', 'design-pick');
+    box.appendChild(el('div', 'bp-hint', i18n.t(locked ? 'proj.designLocked' : 'proj.design')));
+    const options: { id: 'a' | 'b'; label: string; finale: string }[] = [
+      { id: 'a', label: i18n.t('proj.designA'), finale: def.finale[locale] },
+      { id: 'b', label: def.variant!.label[locale], finale: def.variant!.finale[locale] },
+    ];
+    for (const o of options) {
+      const b = button(o.label, `btn-small design-opt ${chosen === o.id ? 'btn-primary' : 'btn-secondary'}`, () => {
+        if (ps.setDesign(def.id, o.id)) {
+          uiSound('click');
+          this.engine.requestSave();
+          this.sig = '';
+          this.refresh(this.engine.stateManager.state);
+        }
+      }, locked && chosen !== o.id);
+      b.setAttribute('aria-pressed', String(chosen === o.id));
+      const row = el('div', `design-row ${chosen === o.id ? 'on' : ''}`);
+      row.append(b, el('span', 'bp-hint', `[[gift]] ${o.finale}`));
+      box.appendChild(row);
+    }
+    return box;
+  }
+
   private renderProject(state: GameState, def: ProjectDef): HTMLElement {
     const ps = this.engine.projectSystem;
     const locale = i18n.currentLocale;
@@ -100,7 +129,8 @@ export class ProjectsPanel {
     head.append(el('span', 'research-name', `${def.icon} ${def.name[locale]}`), el('span', 'bp-hint', `${stagesDone(state, def.id)}/${def.stages.length}`));
     card.appendChild(head);
     card.appendChild(el('div', 'bp-hint', def.desc[locale]));
-    card.appendChild(el('div', 'bp-hint', `[[gift]] ${def.finale[locale]}`));
+    if (def.variant && !done) card.appendChild(this.renderDesign(state, def));
+    else card.appendChild(el('div', 'bp-hint', `[[gift]] ${(designOf(state, def.id) === 'b' && def.variant ? def.variant.finale : def.finale)[locale]}`));
     if (done) {
       card.appendChild(el('div', 'bp-hint', `[[check]] ${i18n.t('proj.finished')}`));
       return card;

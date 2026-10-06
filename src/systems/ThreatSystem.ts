@@ -1,11 +1,13 @@
 import { hasMutator } from '../data/mutators';
 import { lawThreat } from '../data/laws';
 import { hasFeature } from './ResearchSystem';
+import { scenarioOf } from '../data/scenarios';
 import type { StateManager } from '../core/StateManager';
 import type { GameState } from '../core/GameState';
 import { bus } from '../core/EventBus';
 import { difficultyOf } from '../data/difficulty';
 import { SEASONS, seasonAt, seasonsActive } from '../data/seasons';
+import { designOf } from '../data/projects';
 
 /**
  * [Long game] The threat director (long-game plan, pillar B). A meter (0-100) follows how tempting and how visible the
@@ -28,10 +30,10 @@ export function threatTarget(state: GameState): number {
   let radio = 0;
   for (const b of state.buildings) if (b.type === 'radioTower' && !b.isConstructing) radio += b.level;
   const act = state.longGame?.meta.act ?? 1;
-  const raw = 10 + 30 * wealth + 1.5 * radio + 0.15 * state.survivors.length + 6 * act + (state.storyFlags.includes('project:radioMast') ? 8 : 0);
+  const raw = 10 + 30 * wealth + 1.5 * radio + 0.15 * state.survivors.length + 6 * act + (state.storyFlags.includes('project:radioMast') ? (designOf(state, 'radioMast') === 'b' ? 4 : 8) : 0);
   const bastion = (state.prestige.upgrades['ksBastion'] ? 15 : 0) - (hasMutator(state, 'restless') ? 20 : 0); // [P5] keystone, mutator
   // [P2-1] The surface doctrines: Isolationism hides the bunker (-25%), Expansionism shows it (+10).
-  const doctrine = (hasFeature(state, 'expansionism') ? 10 : 0);
+  const doctrine = (hasFeature(state, 'expansionism') ? 10 : 0) + (scenarioOf(state).threat ?? 0); // [P3-5] the scenario
   return Math.max(0, Math.min(100, (raw + lawThreat(state) - bastion + doctrine) * difficultyOf(state).threat * (hasFeature(state, 'isolationism') ? 0.75 : 1)));
 }
 

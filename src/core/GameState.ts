@@ -426,6 +426,8 @@ export interface LateGameState {
   trained: number;
   /** The player pressed "stop": no project is picked automatically until they choose one again. */
   projectsPaused?: boolean;
+  /** [P2-2] The design ('a' or 'b') the player chose for a project (absent = 'a'). */
+  designs?: Record<string, 'a' | 'b'>;
   /** [Q1] Play seconds before which no story chapter may start (kept in the save: closing the game must not shorten the gap). */
   storyUntil?: number;
 }

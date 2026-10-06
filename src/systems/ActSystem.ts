@@ -1,7 +1,7 @@
 import type { StateManager } from '../core/StateManager';
 import { bus } from '../core/EventBus';
 import { ACTS, MAX_ACT, actComplete, actOf } from '../data/acts';
-import { ENDINGS, endingOf } from '../data/endings';
+import { ENDINGS, endingOf, endingScore } from '../data/endings';
 import type { BuildingSystem } from './BuildingSystem';
 import { registerInboxKind, type InboxSystem } from './InboxSystem';
 import { i18n } from '../i18n/I18nManager';
@@ -51,7 +51,7 @@ export class ActSystem {
 
   /** The endings this run fits, best first (the choice card offers these). */
   endingOptions(): string[] {
-    const ranked = ENDINGS.map(e => ({ id: e.id, s: e.score(this.sm.state) })).sort((a, b) => b.s - a.s);
+    const ranked = ENDINGS.map(e => ({ id: e.id, s: endingScore(this.sm.state, e) })).sort((a, b) => b.s - a.s);
     const floor = Math.max(OPTION_MIN_SCORE, ranked[0].s * OPTION_MIN_SHARE);
     return ranked.filter(r => r.s >= floor).slice(0, 3).map(r => r.id);
   }

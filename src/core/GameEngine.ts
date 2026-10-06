@@ -16,6 +16,9 @@ import { MetaSystem } from '../systems/MetaSystem';
 import { ObjectiveSystem } from '../systems/ObjectiveSystem';
 import { guideObjective } from '../systems/Guide';
 import { ChronicleSystem } from '../systems/ChronicleSystem';
+import { HomeSystem } from '../systems/HomeSystem';
+import { MAX_FLOORS } from '../data/zones';
+import { getScenario, scenarioUnlocked, type HomeSite } from '../data/scenarios';
 import { RestorationSystem } from '../systems/RestorationSystem';
 import { EraSystem } from '../systems/EraSystem';
 import { IncidentSystem } from '../systems/IncidentSystem';
@@ -140,6 +143,8 @@ export class GameEngine {
   outpostSystem: OutpostSystem;
   /** [Q14] The run's milestones. */
   chronicleSystem: ChronicleSystem;
+  /** [P3-5] Earlier timelines' bunkers that send income home. */
+  homeSystem: HomeSystem;
   /** The step list, in order (see registerSystems). New systems add themselves with register(). */
   private systems: EngineSystem[] = [];
   /** Game seconds gathered toward the next run of the slow systems. */
@@ -194,6 +199,7 @@ export class GameEngine {
     this.objectiveSystem = new ObjectiveSystem(this.stateManager, this.resourceSystem);
     this.objectiveSystem.guide = s => guideObjective(this, s); // [Q2]
     this.chronicleSystem = new ChronicleSystem(this.stateManager); // [Q14]
+    this.homeSystem = new HomeSystem(this.stateManager, this.resourceSystem); // [P3-5]
     // [P2-9] A new Act can widen the map (the outer rings are added around the old one).
     bus.on('act:advance', () => this.explorationSystem.ensureMap());
     this.restorationSystem = new RestorationSystem(this.stateManager, this.rng, this.resourceSystem, this.buildingSystem);
@@ -293,6 +299,8 @@ export class GameEngine {
       { name: 'contracts', slow: true, online: () => this.contractSystem.update(), offline: () => this.contractSystem.update() },
       { name: 'outposts', online: dt => this.outpostSystem.update(dt), offline: (dt, eff) => this.outpostSystem.update(dt * eff) },
       { name: 'foreman', online: dt => this.foremanSystem.update(dt), offline: dt => this.foremanSystem.update(dt) },
+      // [P3-5] Earlier timelines' bunkers send income home, also while away.
+      { name: 'homes', online: dt => this.homeSystem.update(dt), offline: (dt, eff) => this.homeSystem.update(dt * eff) },
       { name: 'maintenance', online: dt => this.maintenanceSystem.update(dt), offline: (dt, eff) => this.maintenanceSystem.update(dt * eff) },
       // Card deadlines run on world time, so a safe default can be taken while the player is away.
       { name: 'inbox', slow: true, online: () => this.inboxSystem.update(), offline: () => this.inboxSystem.update() },
@@ -501,6 +509,10 @@ export class GameEngine {
       fresh.longGame.meta = { ...fresh.longGame.meta, difficulty: m.difficulty, diffLowest: m.difficulty, scenario: m.scenario, mutators: [...m.mutators], runIndex: m.runIndex + 1, worldT: m.worldT, actSince: m.worldT };
       // [Q14] The Chronicle outlives the timeline: the earlier runs stay in the book.
       fresh.longGame.chronicle = [...(old.longGame.chronicle ?? [])];
+      // [P3-5] The bunker just finished stays on as a home that sends part of the income to the new one.
+      const ending = old.storyFlags.find(f => f.startsWith('ending:'))?.slice(7);
+      const home: HomeSite = { scenario: m.scenario, act: Math.min(7, Math.max(1, m.act)), run: m.runIndex, ending };
+      fresh.longGame.meta.homes = [...(m.homes ?? []), home];
     }
     this.stateManager.loadState(fresh);
     this.rng.seed = fresh.randomSeed;
@@ -646,6 +658,26 @@ export class GameEngine {
     if (!sm.state.longGame || sm.state.longGame.meta.act > 1) return;
     sm.applyDelta({ path: 'longGame.meta.mutators', value: ids.filter(id => MUTATORS.some(m => m.id === id)) });
     this.requestSave();
+  }
+
+  /** [P3-5] The place the new timeline begins in (only while it has just begun, and only a site that is open to the player). */
+  setScenario(id: string): boolean {
+    const sm = this.stateManager;
+    const lg = sm.state.longGame;
+    if (!lg || lg.meta.act > 1 || !scenarioUnlocked(sm.state, id)) return false;
+    const def = getScenario(id);
+    if (def.id !== id) return false;
+    // The previous choice (if any) is undone first, so picking twice does not stack the start bonuses.
+    const prev = getScenario(lg.meta.scenario);
+    if (prev.id === def.id) return true;
+    sm.applyDelta({ path: 'longGame.meta.scenario', value: def.id });
+    if (def.start?.floors && !sm.state.storyFlags.includes('scenario:started')) {
+      sm.applyDelta({ path: 'currentFloors', value: Math.min(MAX_FLOORS, sm.state.currentFloors + def.start.floors) });
+    }
+    if (def.start?.stock && !sm.state.storyFlags.includes('scenario:started')) this.resourceSystem.gain(sm, def.start.stock);
+    if (def.start && !sm.state.storyFlags.includes('scenario:started')) sm.applyDelta({ path: 'storyFlags', value: [...sm.state.storyFlags, 'scenario:started'] });
+    this.requestSave();
+    return true;
   }
 
   /** [P3] Passes a law (if a slot is free and it can be paid). */

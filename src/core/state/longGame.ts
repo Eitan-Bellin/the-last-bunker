@@ -23,6 +23,8 @@ export interface MetaState {
   worldT: number;
   /** True for a bunker that came from a save made before the long game (it skipped the new early systems). */
   legacy: boolean;
+  /** [P3-5, save v6] Bunkers of earlier timelines that still send part of the income home (see data/scenarios.ts). */
+  homes: { scenario: string; act: number; run: number; ending?: string }[];
 }
 
 /** [Economy lane] Digging a new floor: paid in stages, takes time and a crew. */
@@ -124,7 +126,7 @@ export interface LongGameState {
 
 export function createLongGame(): LongGameState {
   return {
-    meta: { act: 1, actSince: 0, difficulty: 'warden', diffLowest: 'warden', scenario: 'bunker17', mutators: [], runIndex: 0, worldT: 0, legacy: false },
+    meta: { act: 1, actSince: 0, difficulty: 'warden', diffLowest: 'warden', scenario: 'bunker17', mutators: [], runIndex: 0, worldT: 0, legacy: false, homes: [] },
     dig: { floor: null, paid: [], progress: 0, total: 0, crew: [] },
     threat: { meter: 0, seq: 0, nextAt: 0, breatherUntil: 0, scars: [] },
     season: { index: 0, startedAt: 0 },
