@@ -116,6 +116,17 @@ export class NumberPopupManager {
     }
   }
 
+  /** [perf] Popups are on screen (the engine keeps a smoother picture while they animate). */
+  get busy(): boolean {
+    return this.active.length > 0;
+  }
+
+  /** [perf] Is any popup inside this world rectangle? (A popup nobody can see does not need a smooth picture.) */
+  anyIn(x0: number, y0: number, x1: number, y1: number): boolean {
+    for (const p of this.active) if (p.x0 > x0 && p.x0 < x1 && p.y0 > y0 && p.y0 < y1) return true;
+    return false;
+  }
+
   /** Steps all popups; `dt` in seconds is optional (measured from the clock when omitted). */
   update(dt?: number): void {
     const now = performance.now();

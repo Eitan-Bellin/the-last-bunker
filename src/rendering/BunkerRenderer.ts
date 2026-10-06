@@ -5,7 +5,7 @@ import type { BuildingInstance, GameState, Position, Ruin, SurvivorState } from 
 import { effectiveLevel, getDef, isDistrict, roomFloors, roomSlots } from '../data/buildingDefs';
 import { SLOTS_PER_FLOOR } from '../systems/BuildingSystem';
 import { i18n } from '../i18n/I18nManager';
-import { BUILDING_W, DEPTH_X, DISTRICT_X, FLOOR_H, ROOM_H, SIDE_MARGIN, SLAB, SLOT_W, buildingH, buildingX, floorTop, slotX } from './layout';
+import { BUILDING_W, DEPTH_X, DISTRICT_X, FLOOR_H, ROOM_H, SIDE_MARGIN, SLAB, SLOT_W, TOPSOIL, buildingH, buildingX, floorTop, slotX } from './layout';
 import { hashString, seeded } from './draw';
 import { buildConstructionVisual, buildPaintedConstruction, buildRoomVisual, buildScaffold, type RoomVisual } from './roomArt';
 import { PEOPLE_STYLE, Person, ROOM_ACTIVITY, type Activity, type Lane } from './people';
@@ -14,7 +14,7 @@ import { ProjectSites, type SiteInfo } from './projectSites';
 import { AMBIENCE_FOR, type AmbienceKey } from '../audio/ambience';
 import type { AmbienceMix } from '../audio/AudioEngine';
 import { Dust, buildDigSign, buildShaft, buildSurface, buildUnderground, buildUtilities, type Animated } from './world';
-import { LAYOUT, VIEW, hashLayout } from './perfFx'; // [perf]
+import { LAYOUT, VIEW, bandize, hashLayout } from './perfFx'; // [perf]
 import { buildShaft2 } from './shaft';
 import { buildSurface2, mountSurface2, surface2Sig } from './surface2'; // [gfx2 surface]
 import { buildPaintedRoom, roomFlicker, setRoomFxQuality } from './paintedRoom'; // gfx-p0 rooms: quality
@@ -55,6 +55,8 @@ const FOCUS_SPRING = 7.5;
 const ZOOM_SPRING = 14;
 const SHAKE_PX = 16;
 const DOUBLE_TAP_MS = 320;
+/** [perf] A room out of the camera's reach for this long gives its look back (see renderRooms). */
+const PARK_AFTER_MS = 8000;
 
 interface RoomView {
   root: Container;
@@ -79,6 +81,9 @@ interface RoomView {
   gen?: number;
   /** [perf] The label wants to be shown (before the off-screen test in cullRooms). */
   labelOn?: boolean;
+  /** [perf] The layout hash the look was last built for; when the room left the camera's reach (performance.now), or 0. */
+  layoutH?: number;
+  outSince?: number;
   /** [perf] What the label was last drawn from: level, staff, constructing (packed), specialization, language. */
   lk?: number;
   lspec?: string | null;
@@ -475,12 +480,13 @@ export class BunkerRenderer {
     PEOPLE_STYLE.painted = this.gfx2;
     if (this.gfx2) for (const k of KIT_KEYS) ArtLibrary.get(k);
     // A painting finished loading: rebuild room visuals so placeholders switch to art.
-    ArtLibrary.onLoaded(() => {
-      for (const v of this.views.values()) v.visualSig = '';
-      for (const v of this.ruinViews.values()) v.visualSig = '';
-      this.undergroundSig = '';
-      this.utilitiesSig = '';
-      this.refreshSurface();
+    // [perf] Arrivals are gathered and applied together (applyLoadedArt): a painting used to rebuild the whole scene by itself,
+    // and the dozens that arrive at start-up did that dozens of times.
+    ArtLibrary.onLoaded(key => {
+      const now = performance.now();
+      if (this.artPending.size === 0) this.artFirstAt = now;
+      this.artPending.add(key);
+      this.artLastAt = now;
     });
     this.setupRenderGroups(); // [perf]
     this.setupCamera();
@@ -930,6 +936,17 @@ export class BunkerRenderer {
     this.updateTransform();
   }
 
+  /** [perf] The camera (or a carried person) is moving right now: the engine draws at its motion rate (60) while this holds. */
+  get cameraMoving(): boolean {
+    return this.drag !== null || (this.pointers.size > 0 && (this.isDragging || this.pinch !== null)) || this.focusTarget !== null
+      || this.camVX !== 0 || this.camVY !== 0 || this.zoomV !== 0 || this.wheelZoom !== null || this.trauma > 0 || this.punchT < 1;
+  }
+
+  /** [perf] Short animations on the picture (bursts, floating icons, a crisis in a room) that would stutter at the idle rate. */
+  get fxActive(): boolean {
+    return this.bursts.length > 0 || this.floaters.length > 0 || this.blockN > 0;
+  }
+
   /** One axis of the free camera; the new velocity is left in SPRING_V. */
   private axisStep(x: number, v: number, lo: number, hi: number, dt: number): number {
     if (x < lo || x > hi) {
@@ -1169,6 +1186,8 @@ export class BunkerRenderer {
     const roomsChanged = LAYOUT.rooms !== this.roomsH; // [perf]
     this.roomsH = LAYOUT.rooms;
     const gen = ++this.roomGen;
+    const now = performance.now();
+    this.buildsLeft = 3; // looks built per picture for rooms nobody is looking at yet (the ones about to scroll in)
     for (const b of state.buildings) {
       const def = getDef(b.type);
       if (!def) continue;
@@ -1183,12 +1202,29 @@ export class BunkerRenderer {
       const isNew = b.isConstructing && b.level === 1;
       // [perf] What a room's look depends on (type, place, level, who is next to it) is one number for the whole bunker (hashLayout):
       // the neighbour search and the signature string run only when it changed, or when the room has no look yet / a painting arrived.
-      if (roomsChanged || !view.visualSig) {
+      // Rooms far from the camera (more than a screen away) are not built, and one that has been far away for a while gives its look back
+      // (objects and, once nothing uses it, its painting): at 24 floors a close view needs a fraction of the rooms and paintings.
+      const zone = this.inZone(view);
+      if (zone) view.outSince = 0;
+      else if (!view.outSince) view.outSince = now;
+      else if (view.visual && !view.oldVisual && now - view.outSince > PARK_AFTER_MS) {
+        view.visual.container.destroy({ children: true });
+        view.visual = null;
+        view.visualSig = '';
+        view.layoutH = undefined;
+      }
+      if (zone && (view.layoutH !== LAYOUT.rooms || !view.visualSig) && (view.culled === false || view.culled === undefined || this.buildsLeft > 0)) {
       const openL = this.isOpenTo(state, b, -1);
       const openR = this.isOpenTo(state, b, 1);
       // The look follows the finished level, so an upgrade reveals the new painting when it completes.
       const artKey = isNew ? buildingArtKey(b.type, 0) : buildingArtKey(b.type, roomTier(effectiveLevel(b)));
       const texture = artKey ? ArtLibrary.get(artKey) : null;
+      // A painting on its way (it was released, or is new): keep what the room shows (or nothing yet) instead of drawing a stand-in.
+      if (artKey && !texture && !ArtLibrary.hasFailed(artKey)) {
+        view.layoutH = undefined;
+      } else {
+      view.layoutH = LAYOUT.rooms;
+      if (view.culled) this.buildsLeft--;
       const mirror = texture ? this.compoundIndex(state, b) % 2 === 1 : false;
       const visualSig = `${b.type}|${isNew}|${openL}|${openR}|${texture ? artKey : 'code'}|${mirror}`;
       if (view.visualSig !== visualSig) {
@@ -1215,6 +1251,7 @@ export class BunkerRenderer {
           this.burstAt(view.root.x + view.width / 2, view.root.y + view.height * 0.55, view.width);
           if (this.onScreen(view.root.x + view.width / 2, view.root.y + view.height / 2)) this.punch(finishedBuild ? 1 : 0.7); // [camera]
         }
+      }
       }
       }
       const upgrading = b.isConstructing && b.level > 1;
@@ -1263,6 +1300,14 @@ export class BunkerRenderer {
   /** [perf] Hash of the layout last drawn, and a per-picture stamp that marks the rooms still in the state (replaces a Set built every picture). */
   private roomsH = -1;
   private roomGen = 0;
+  private buildsLeft = 0;
+
+  /** [perf] Is the room within a screen's reach of the camera (the window in which rooms are built and kept)? */
+  private inZone(v: RoomView): boolean {
+    const w = VIEW.x1 - VIEW.x0, h = VIEW.y1 - VIEW.y0;
+    const r = v.root;
+    return r.x < VIEW.x1 + w * 0.75 && r.x + v.width > VIEW.x0 - w * 0.75 && r.y < VIEW.y1 + h && r.y + v.height > VIEW.y0 - h;
+  }
 
   private createView(b: BuildingInstance): RoomView {
     const width = roomSlots(b.type) * SLOT_W;
@@ -1455,7 +1500,7 @@ export class BunkerRenderer {
       person.setCondition(s.happiness, s.health);
       const activity: Activity = siteView ? 'hammer' : ruinView ? 'dig' : usable ? ROOM_ACTIVITY[job!.type] ?? 'idle' : 'idle';
       // [perf] Nobody watches a room that is off screen: its people stand still until it comes back into view.
-      if (!(view as { culled?: boolean }).culled) person.update(dt, this.time, 0.4 + (s.happiness / 100) * 0.6, activity);
+      if (!(siteView ? this.surfaceOff : (view as { culled?: boolean }).culled)) person.update(dt, this.time, 0.4 + (s.happiness / 100) * 0.6, activity);
     }
     settleCrowds(); // gfx-p0 people: release spots of people who left, stack overlapping name tags
     for (const [id, p] of this.people) {
@@ -1515,6 +1560,7 @@ export class BunkerRenderer {
     this.utilitiesHolder.removeChildren().forEach(c => c.destroy({ children: true }));
     this.bayHolder.removeChildren().forEach(c => c.destroy({ children: true }));
     this.front = null;
+    this.frontBands = null;
     this.decals = null; // [gfx2 wear]
     this.atmo = null; // [gfx2 wear]
     if (painted) {
@@ -1523,6 +1569,8 @@ export class BunkerRenderer {
       const lamps = this.worldLamps(state);
       this.front = buildFrontStructure(grid, state.buildings, this.floors, lamps, structureAmbient(this.surfaceEra) /* G4 lighting: era ambient */, kitState(this.surfaceEra));
       this.utilitiesHolder.addChild(this.group(this.front.container, 'front'));
+      this.frontBands = bandize(this.front.container, 'front', 3 * FLOOR_H, TOPSOIL); // [perf] only the bands the camera sees are drawn
+      this.frontBands.update();
       // [gfx2 signage] Zone plates, slab stencils and wall props (signage.ts).
       this.utilitiesHolder.addChild(this.group(buildSignage({
         buildings: state.buildings, ruins: state.ruins, floors: this.floors, era: Math.max(0, this.surfaceEra),
@@ -1604,6 +1652,9 @@ export class BunkerRenderer {
     // Pixi's own listener (registered first) has already re-initialised the GL systems by now.
     canvas.addEventListener('webglcontextrestored', () => {
       this.contextLost = false;
+      // [perf] The paintings gave up their decoded copies once on the GPU (ArtLibrary.trimBitmaps): they are loaded again from the cache.
+      ArtLibrary.reset();
+      if (this.gfx2) for (const k of KIT_KEYS) ArtLibrary.get(k);
       this.recoverGraphics();
     });
   }
@@ -1612,6 +1663,82 @@ export class BunkerRenderer {
    * Rooms wholly off screen are neither drawn nor animated: zoomed in, most of the bunker is out of view, and every
    * hidden room used to cost as much CPU and GPU as a visible one (heat, battery).
    */
+  /** [perf] When the paintings' decoded copies were last given back (ArtLibrary.trimBitmaps), and the last memory sweep. */
+  private lastTrim = 0;
+  private lastSweep = 0;
+  private artIdle = new Map<string, number>();
+
+  /**
+   * [perf] Room, hall, district and ruin paintings that no room shows any more (it left the camera's reach, see renderRooms) are released
+   * after 20 s: the GPU copy and the decoded copy go, and the painting is fetched again (from the cache) if a room needs it later.
+   */
+  private sweepArt(now: number): void {
+    this.lastSweep = now;
+    const used = new Set<string>();
+    for (const v of this.views.values()) {
+      const k = v.visualSig.split('|')[4];
+      if (k && k !== 'code') used.add(k);
+      if (v.oldVisual) used.add('*'); // a look is still fading: leave everything alone this round
+    }
+    for (const v of this.ruinViews.values()) {
+      const k = v.visualSig.split('|')[0];
+      if (k && k !== 'code') used.add(k);
+    }
+    if (used.has('*')) return;
+    const free: string[] = [];
+    for (const key of ArtLibrary.loadedKeys) {
+      if (!(key.startsWith('rooms/') || key.startsWith('halls/') || key.startsWith('districts/') || key.startsWith('ruins/'))) continue;
+      if (used.has(key)) {
+        this.artIdle.delete(key);
+        continue;
+      }
+      const since = this.artIdle.get(key);
+      if (since === undefined) this.artIdle.set(key, now);
+      else if (now - since > 20000) {
+        free.push(key);
+        this.artIdle.delete(key);
+      }
+    }
+    if (free.length) ArtLibrary.release(free);
+  }
+  /** [perf] Paintings that arrived since the last scene refresh, and when the first / the latest of them did. */
+  private artPending = new Set<string>();
+  private artFirstAt = 0;
+  private artLastAt = 0;
+
+  /** Applies the arrivals once they have settled (100 ms without a new one, or 600 ms since the first): only what used them is rebuilt. */
+  private applyLoadedArt(now: number): void {
+    if (this.artPending.size === 0 || (now - this.artLastAt < 100 && now - this.artFirstAt < 600)) return;
+    const keys = this.artPending;
+    this.artPending = new Set();
+    let structure = false;
+    let rooms = false;
+    let ruins = false;
+    for (const k of keys) {
+      if (k.startsWith('rooms/') || k.startsWith('halls/') || k.startsWith('districts/')) rooms = true;
+      else if (k.startsWith('ruins/')) ruins = true;
+      else structure = true;
+    }
+    if (rooms) {
+      // A room shows its painting or, until it arrives, a drawn stand-in ('code'): rebuild those waiting and those using a key that came.
+      for (const v of this.views.values()) {
+        const used = v.visualSig.split('|')[4];
+        if (used === 'code' || keys.has(used)) v.visualSig = '';
+      }
+    }
+    if (ruins) {
+      for (const v of this.ruinViews.values()) {
+        const used = v.visualSig.split('|')[0];
+        if (used === 'code' || keys.has(used)) v.visualSig = '';
+      }
+    }
+    if (structure) {
+      this.undergroundSig = '';
+      this.utilitiesSig = '';
+      this.refreshSurface();
+    }
+  }
+
   /** [perf] The world rectangle on screen (plus a margin for glows and shadows), shared with the effects through perfFx.VIEW. */
   private updateView(): void {
     const wc = this.worldContainer;
@@ -1709,10 +1836,17 @@ export class BunkerRenderer {
     this.lastFrame = now;
     this.time += dt;
 
+    this.applyLoadedArt(now);
+    if (now - this.lastTrim > 2000) {
+      this.lastTrim = now;
+      ArtLibrary.trimBitmaps((this.app.renderer as unknown as { uid: number }).uid);
+      if (now - this.lastSweep > 5000) this.sweepArt(now);
+    }
     hashLayout(state); // [perf] one cheap pass instead of strings joined from every building several times per picture
     if (state.currentFloors !== this.floors || this.structureGloom !== this.gloom || this.undergroundSig !== this.structureSig(state)) this.rebuildStructure(state);
     this.stepCamera(dt); // [camera]
     this.updateView(); // [perf]
+    this.frontBands?.update();
     this.updateLod(state, dt);
     this.renderRooms(state);
     this.renderRuins(state);
@@ -1721,10 +1855,18 @@ export class BunkerRenderer {
 
     const power = state.powerRatio ?? 1;
     (this.surface as { setQuality?: (q: 'high' | 'medium' | 'low') => void } | null)?.setQuality?.(this.postfx?.quality ?? 'high'); // gfx-p0 surface: particle budget
-    this.surface?.animate(this.time, power);
-    // The project lots share the surface's light, the painting's grade and the wind (src/rendering/projectSites.ts).
-    const s2 = this.surface as { light?: number; grade?: number; wind?: number } | null;
-    this.projectSites.animate(this.time, s2?.light ?? 0xffffff, s2?.grade ?? 0xffffff, this.nightNow, power, s2?.wind ?? 0.6);
+    // [perf] Far below the ground nothing of the surface (sky, weather, the project lots) can be seen: it is neither drawn nor animated.
+    const surfaceOff = VIEW.y0 > 20;
+    if (surfaceOff !== this.surfaceOff) {
+      this.surfaceOff = surfaceOff;
+      for (const c of [this.surfaceHolder, this.projectSites.layer, this.projectSites.smokeLayer, this.projectSites.glowLayer, this.projectSites.crew, this.projectSites.signLayer]) c.visible = !surfaceOff;
+    }
+    if (!surfaceOff) {
+      this.surface?.animate(this.time, power);
+      // The project lots share the surface's light, the painting's grade and the wind (src/rendering/projectSites.ts).
+      const s2 = this.surface as { light?: number; grade?: number; wind?: number } | null;
+      this.projectSites.animate(this.time, s2?.light ?? 0xffffff, s2?.grade ?? 0xffffff, this.nightNow, power, s2?.wind ?? 0.6);
+    }
     this.shaft?.animate(this.time, power);
     this.utilities?.animate(this.time, power);
     this.front?.animate(this.time, power);
@@ -1805,6 +1947,10 @@ export class BunkerRenderer {
   /** [perf] The far-zoom city map is up and covers the scene (see updateLod); time of its last redraw. */
   private mapCovers = false;
   private mapAt = -1;
+  /** [perf] The camera is far below the ground: the surface is hidden and not animated (see updateScene). */
+  private surfaceOff = false;
+  /** [perf] Band culling of the structure in front of the rooms (see bandize in perfFx.ts). */
+  private frontBands: { update(): void } | null = null;
 
   /** Each era has its own look: the Remnant is cold and drained, the Undercity warm and full. */
   private refreshSurface(): void {

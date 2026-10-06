@@ -52,7 +52,9 @@ const AUTO_SAVE_INTERVAL = 30_000;
  */
 const FRAME_ACTIVE_MS = 1000 / 60;
 /** How long after the last touch the picture stays at full speed (camera glides and flicks need it). */
-const ACTIVE_HOLD_MS = 1800;
+const ACTIVE_HOLD_MS = 600;
+/** How long after the camera stops the picture stays at its motion rate (the settle of a glide). */
+const MOTION_HOLD_MS = 500;
 const IDLE_AFTER_S = 30;
 const OFFLINE_EFFICIENCY = 0.8;
 /** Frames this far apart on the wall clock mean the device was asleep (not just slow). */
@@ -823,7 +825,24 @@ export class GameEngine {
   private pictureInterval(): number {
     const since = Date.now() - this.lastInteraction;
     const [active, calm, idle] = this.frameRates;
-    return 1000 / (since < ACTIVE_HOLD_MS ? active : this.isIdle ? idle : calm);
+    let fps = since < ACTIVE_HOLD_MS ? active : this.isIdle ? idle : calm;
+    // [perf] The camera moving (a drag, a glide, a zoom, a shake) is where smoothness shows: full rate for it, and a moment after.
+    if (performance.now() < this.motionUntil) fps = Math.max(fps, this.motionFps);
+    // Floating numbers, hearts and bursts are animated on the picture too: they would stutter at the idle rate.
+    if (this.fxBusy) fps = Math.max(fps, calm);
+    return 1000 / fps;
+  }
+
+  /** [perf] Picture rate while the camera moves (set from the quality profile each picture). */
+  motionFps = 60;
+  /** [perf] Until when (performance.now) the camera counts as moving; the app extends it each picture the camera is. */
+  motionUntil = 0;
+  /** [perf] Short animations (popups, bursts, incidents) are on screen: keep at least the watching rate. */
+  fxBusy = false;
+
+  /** [perf] Called by the app each picture while the camera is in motion. */
+  noteCameraMotion(): void {
+    this.motionUntil = performance.now() + MOTION_HOLD_MS;
   }
 
   async forceSave(): Promise<void> {

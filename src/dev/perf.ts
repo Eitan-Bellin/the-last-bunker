@@ -46,6 +46,8 @@ export interface PerfReport {
   /** The worst share of pictures in which a render group of more than 500 objects had to rebuild its instruction list. */
   structureChangedPct: number;
   groups: { label: string; objects: number; changedPct: number }[];
+  /** The render groups holding the most visible objects (the largest one is where to look for waste). */
+  biggest: string[];
   gpuTextureMB: number;
   gpuTextures: number;
   jsHeapMB: number;
@@ -198,16 +200,47 @@ export function installPerf(renderer: BunkerRenderer, engine: Any, audio?: Any):
       drawCalls: samples.length ? Math.round(samples.reduce((a, s) => a + s.calls, 0) / samples.length) : 0,
       renderablesDrawn, renderablesTotal, renderGroups: groupCount,
       structureChangedPct: big.length ? +Math.max(...big.map(g => (g.changed / g.frames) * 100)).toFixed(1) : 0,
-      groups: gs.sort((a, b) => b.changed / b.frames - a.changed / a.frames).slice(0, 14).map(g => ({ label: g.label, objects: g.objects, changedPct: +((g.changed / g.frames) * 100).toFixed(1) })),
+      groups: gs.slice().sort((a, b) => b.changed / b.frames - a.changed / a.frames).slice(0, 14).map(g => ({ label: g.label, objects: g.objects, changedPct: +((g.changed / g.frames) * 100).toFixed(1) })),
+      biggest: gs.slice().sort((a, b) => b.objects - a.objects).slice(0, 10).map(g => `${g.label}:${g.objects}`),
       gpuTextureMB: tex.mb, gpuTextures: tex.count,
       jsHeapMB: mem ? Math.round(mem.usedJSHeapSize / 1048576) : -1,
       longTasks: lt.length, longTaskMs: Math.round(lt.reduce((a, b) => a + b, 0)), longTaskMax: Math.round(Math.max(0, ...lt)),
     };
   };
 
-  const perf2 = Object.assign(() => report(), { reset });
+  /**
+   * Overdraw estimate: the screen area of every drawn object's bounding box, summed, divided by the screen area (so 6 means every pixel is
+   * drawn about six times). A box over-counts a little, but it ranks the layers; run once, it walks and measures the whole tree.
+   */
+  const overdraw = (): { factor: number; byGroup: Record<string, number> } => {
+    const sw = app.screen.width, sh = app.screen.height;
+    const byGroup: Record<string, number> = {};
+    let total = 0;
+    const walk = (o: Any, visible: boolean, label: string): void => {
+      const vis = visible && o.visible && o.renderable !== false && o.alpha !== 0;
+      if (!vis) return;
+      let lb = label;
+      if (o.isRenderGroup && o !== app.stage) lb = labelOf(o);
+      if (o.renderPipeId && o.renderPipeId !== 'container') {
+        const b = o.getBounds();
+        const w = Math.max(0, Math.min(b.x + b.width, sw) - Math.max(b.x, 0));
+        const h = Math.max(0, Math.min(b.y + b.height, sh) - Math.max(b.y, 0));
+        const a = (w * h) / (sw * sh);
+        total += a;
+        byGroup[lb] = (byGroup[lb] ?? 0) + a;
+      }
+      for (const c of o.children ?? []) walk(c, true, lb);
+    };
+    walk(app.stage, true, 'stage');
+    for (const k of Object.keys(byGroup)) byGroup[k] = +byGroup[k].toFixed(2);
+    return { factor: +total.toFixed(2), byGroup };
+  };
+
+  const perf2 = Object.assign(() => report(), { reset, overdraw });
   w.__perf2 = perf2;
-  w.__perfFixture = (floors = 24, people = 60) => buildFixture(engine, floors, people);
+  void import('../audio/dsp').then(m => { w.__audioStats = m.audioStats; }); // how long each sound's graph blocked the page
+  void import('../art/ArtLibrary').then(m => { w.__art = m.ArtLibrary; });
+  w.__perfFixture =(floors = 24, people = 60) => buildFixture(engine, floors, people);
   reset();
 
   // --- overlay (?perf) ------------------------------------------------------------------------------------------

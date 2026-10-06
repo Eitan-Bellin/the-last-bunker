@@ -29,16 +29,35 @@ export interface QualityProfile {
   passes: number;
   grain: boolean;
   fps: [number, number, number];
+  /** Picture rate while the camera moves (a drag, a glide, a zoom, a shake): the one time smoothness is seen the most. */
+  motion: number;
 }
+/** Desktops and laptops: wall power and a big cooler, so the picture rates stay generous. */
 export const QUALITY_PROFILE: Record<QualityLevel, QualityProfile> = {
-  high: { res: 3, mp: 3.4, msaa: true, passes: 4, grain: true, fps: [60, 60, 30] },
-  medium: { res: 2, mp: 1.8, msaa: false, passes: 2, grain: false, fps: [60, 30, 15] },
-  low: { res: 1.5, mp: 0.9, msaa: false, passes: 0, grain: false, fps: [30, 20, 10] },
+  high: { res: 3, mp: 3.4, msaa: true, passes: 4, grain: true, fps: [60, 60, 30], motion: 60 },
+  medium: { res: 2, mp: 1.8, msaa: false, passes: 2, grain: false, fps: [60, 30, 15], motion: 60 },
+  low: { res: 1.5, mp: 0.9, msaa: false, passes: 0, grain: false, fps: [30, 15, 8], motion: 30 },
 };
+/**
+ * Phones and tablets (plan 2026-10, D1 + D6). Heat is pixels x effects x pictures per second, and a still bunker needs few pictures:
+ * 60 only while the camera moves, 30 while the player is touching, 20 while they watch, 5 once they have stopped. Sharpness does not
+ * change (Medium keeps its 2x pixel density); High never uses multisampling (4x samples of a full-screen target is what cooked phones),
+ * caps the density at 2.25 and blurs with three passes instead of four.
+ */
+export const TOUCH_PROFILE: Record<QualityLevel, QualityProfile> = {
+  high: { res: 2.25, mp: 2.6, msaa: false, passes: 3, grain: true, fps: [45, 30, 10], motion: 60 },
+  medium: { res: 2, mp: 1.8, msaa: false, passes: 2, grain: false, fps: [30, 20, 5], motion: 60 },
+  low: { res: 1.5, mp: 0.9, msaa: false, passes: 0, grain: false, fps: [24, 12, 4], motion: 30 },
+};
+
+/** The table for this device. */
+export function profileOf(level: QualityLevel): QualityProfile {
+  return (isTouchDevice() ? TOUCH_PROFILE : QUALITY_PROFILE)[level];
+}
 
 /** Pixel density for a level on this screen: the device's own density, capped by the level and by its pixel budget. */
 export function targetResolution(level: QualityLevel): number {
-  const p = QUALITY_PROFILE[level];
+  const p = profileOf(level);
   const dpr = window.devicePixelRatio || 1;
   const css = Math.max(1, window.innerWidth * window.innerHeight);
   const budget = Math.sqrt((p.mp * 1e6) / css);
@@ -165,7 +184,12 @@ export class PostFX {
 
   /** What the current level changes (see QUALITY_PROFILE): effects follow the live level, sharpness and rates the base level. */
   get profile(): QualityProfile {
-    return { ...QUALITY_PROFILE[this.quality], res: QUALITY_PROFILE[this.baseLevel].res, fps: QUALITY_PROFILE[this.baseLevel].fps };
+    const live = profileOf(this.quality);
+    const base = profileOf(this.baseLevel);
+    // Effects follow the live level. So do the picture rates, but only downwards: when the automatic monitor had to step down because
+    // the device could not keep up, aiming for a lower rate is what actually cools it (it never raises a rate above the player's pick).
+    const fps = base.fps.map((f, i) => Math.min(f, live.fps[i])) as [number, number, number];
+    return { ...live, res: base.res, fps, motion: Math.min(base.motion, live.motion) };
   }
 
   /** Player override from the settings menu (null = automatic). */
@@ -231,7 +255,7 @@ export class PostFX {
     if (!fl?.includes(c)) this.world.filters = [...(fl ?? []).filter(x => x !== this.grade), c];
     if (q !== this.applied) {
       this.applied = q;
-      const p = QUALITY_PROFILE[q];
+      const p = profileOf(q);
       c.passes = p.passes;
       // The world is drawn into the filter's texture, so smoothing its edges is a switch on the filter, changeable at any time.
       this.msaa = p.msaa;
@@ -251,7 +275,7 @@ export class PostFX {
     c.setFrame({
       matrix: this.grade?.matrix as ArrayLike<number> | undefined,
       // Film grain is the costly part of the composite: full quality only.
-      grain: QUALITY_PROFILE[q].grain ? 0.055 : 0,
+      grain: profileOf(q).grain ? 0.055 : 0,
       seed: Math.floor(now / 42) % 997,
       vignette: this.vignette,
       night: this.night,

@@ -51,7 +51,9 @@ async function runScenario(port, name, sc) {
     await c.evalJs('setInterval(() => { __engine.paused = false; }, 200); true', false);
     const mode = sc.mode || 'active';
     // The player's touch is simulated by notifying the engine (no real input is needed): active = just touched, watch = a few seconds ago, idle = long ago.
-    const touch = mode === 'active' ? '__engine.notifyInteraction()' : mode === 'watch' ? '__engine.lastInteraction = Date.now() - 6000' : '__engine.lastInteraction = 0';
+    // moving = the camera is being dragged (the picture runs at its motion rate).
+    const touch = mode === 'active' ? '__engine.notifyInteraction()' : mode === 'moving' ? '__engine.notifyInteraction(); __engine.noteCameraMotion()'
+      : mode === 'watch' ? '__engine.lastInteraction = Date.now() - 6000' : '__engine.lastInteraction = 0';
     await c.evalJs(`window.__keep = setInterval(() => { ${touch} }, 100); true`, false);
     await sleep(9000);
     const [cx, cy, cz] = CAMERAS[sc.camera || 'overview'];
@@ -59,14 +61,20 @@ async function runScenario(port, name, sc) {
     await sleep(2500);
     if (throttle > 1) await c.send('Emulation.setCPUThrottlingRate', { rate: throttle });
     await sleep(1500);
+    // How fast this machine is right now (other programs share it): a fixed loop, in ms. Compare milliseconds only between runs with a similar value.
+    const cal = await c.evalJs('(() => { const t = performance.now(); let x = 0; for (let i = 0; i < 2e7; i++) x += Math.sqrt(i); return Math.round(performance.now() - t) + (x < 0 ? 1 : 0); })()');
     await c.evalJs('__perf2.reset(); true', false);
     await sleep(seconds * 1000);
     const rep = await c.evalJs('__perf2()');
+    rep.calMs = cal;
     // Allocation per picture: sample the heap while the scene runs for a few more seconds.
     await c.evalJs('__perf2.reset(); true', false);
     await c.send('HeapProfiler.startSampling', { samplingInterval: 2048, includeObjectsCollectedByMajorGC: true, includeObjectsCollectedByMinorGC: true });
     await sleep(Math.max(4, seconds) * 1000);
     const rep2 = await c.evalJs('__perf2()');
+    const od = await c.evalJs('__perf2.overdraw()');
+    rep.overdraw = od.factor;
+    rep.overdrawBy = Object.entries(od.byGroup).sort((a, b) => b[1] - a[1]).slice(0, 8).map(([k, v]) => `${k}:${v}`);
     const { profile } = await c.send('HeapProfiler.stopSampling');
     let total = 0;
     const walk = n => { total += n.selfSize; for (const ch of n.children || []) walk(ch); };
@@ -90,6 +98,43 @@ async function runScenario(port, name, sc) {
   } finally { c.close(); }
 }
 
+/**
+ * Audio start-up: after the first touch the game synthesizes its sounds. Reports when the first sounds are ready, when everything is,
+ * the long main-thread tasks in the first 60 s (they freeze the picture), and how far the renderer process's memory climbed.
+ */
+async function runAudio(port, sc) {
+  const c = await launch();
+  try {
+    await phoneSetup(c, { quality: 'medium', throttle: 1, dpr });
+    await c.send('Page.navigate', { url: `http://127.0.0.1:${port}/?debug` });
+    if (!await waitFor(c, '!!(window.__engine && window.__audio)')) throw new Error('game did not start');
+    await sleep(2500);
+    const th = sc.throttle || throttle;
+    const before = procMem(c.dir);
+    if (th > 1) await c.send('Emulation.setCPUThrottlingRate', { rate: th });
+    await c.evalJs(`window.__lt = []; new PerformanceObserver(l => { for (const e of l.getEntries()) window.__lt.push([Math.round(performance.now() - window.__t0), Math.round(e.duration)]); }).observe({ entryTypes: ['longtask'] });
+      window.__t0 = performance.now(); window.dispatchEvent(new PointerEvent('pointerdown')); true`, false);
+    let readyMs = null, doneMs = null, peak = 0;
+    for (let t = 0; t < 240000; t += 500) {
+      await sleep(500);
+      const s = await c.evalJs('({ st: __audio.debugState, ms: Math.round(performance.now() - window.__t0) })');
+      const m = procMem(c.dir); if (m) peak = Math.max(peak, m.renderer);
+      if (readyMs === null && (/ready=true/.test(s.st) || (/rendering=false/.test(s.st) && s.ms > 3000))) readyMs = s.ms;
+      if (/rendering=false/.test(s.st) && s.ms > 3000) { doneMs = s.ms; break; }
+    }
+    // keep watching a little: background work after "ready" must not freeze the picture either
+    await sleep(3000);
+    const lt = await c.evalJs('window.__lt');
+    const first60 = lt.filter(([at]) => at < 60000).map(x => x[1]);
+    const after = procMem(c.dir);
+    const builds = await c.evalJs('window.__audioStats ? window.__audioStats.builds : null');
+    if (th > 1) await c.send('Emulation.setCPUThrottlingRate', { rate: 1 });
+    if (arg('verbose', false)) console.log('   long tasks (at ms, duration):', JSON.stringify(first60.length ? lt.slice(0, 80) : []), '\n   graph builds (ms):', JSON.stringify(builds));
+    return { throttle: th, readyMs, doneMs, longTasks60: first60.length, longTaskMs60: first60.reduce((a, b) => a + b, 0), longTaskMax: Math.max(0, ...lt.map(x => x[1])),
+      rendererMB: { before: before?.renderer, peak, after: after?.renderer }, peakGainMB: before ? peak - before.renderer : null };
+  } finally { c.close(); }
+}
+
 const LIMITS = { maxDrawCalls: 'drawCalls', maxRenderables: 'renderablesDrawn', maxStructureChangedPct: 'structureChangedPct', maxAllocKBPerFrame: 'allocKBPerFrame', maxGpuTextureMB: 'gpuTextureMB', maxBusyPct: 'busyPct' };
 
 const { port, close } = await serve(dist);
@@ -99,10 +144,19 @@ try {
   for (const [name, sc] of Object.entries(budget.scenarios)) {
     if (only && !only.includes(name)) continue;
     process.stdout.write(`${name} ... `);
+    if (sc.kind === 'audio') {
+      const a = await runAudio(port, sc);
+      results.scenarios[name] = a;
+      console.log(`ready ${a.readyMs} ms  done ${a.doneMs} ms  long tasks(60s) ${a.longTasks60} = ${a.longTaskMs60} ms (max ${a.longTaskMax})  renderer MB ${JSON.stringify(a.rendererMB)}`);
+      const lim = (k, v, max) => { if (max !== undefined && v > max * 1.1) failures.push(`${name}: ${k} ${v} > ${max} (+10%)`); };
+      if (throttle === 1 && !sc.throttle) { lim('readyMs', a.readyMs, sc.maxReadyMs); lim('longTaskMs60', a.longTaskMs60, sc.maxLongTaskMs); lim('longTaskMax', a.longTaskMax, sc.maxLongTaskMax); lim('peakGainMB', a.peakGainMB, sc.maxPeakGainMB); }
+      continue;
+    }
     const rep = await runScenario(port, name, sc);
     results.scenarios[name] = rep;
     console.log(`calls ${rep.drawCalls}  objs ${rep.renderablesDrawn}/${rep.renderablesTotal}  rebuild ${rep.structureChangedPct}%  alloc ${rep.allocKBPerFrame} KB/frame  tex ${rep.gpuTextureMB} MB  `
-      + `${rep.fps} fps  frame ${rep.frameMsMed}/${rep.frameMsP95} ms  busy ${rep.busyPct}%  long ${rep.longTasks}  errors ${rep.consoleErrors}`);
+      + `${rep.fps} fps  frame ${rep.frameMsMed}/${rep.frameMsP95} ms  busy ${rep.busyPct}%  long ${rep.longTasks}  rss ${rep.mem ? `${rep.mem.renderer}/${rep.mem.gpu}` : '-'} MB  errors ${rep.consoleErrors}`);
+    if (arg('verbose', false)) console.log('   biggest: ' + rep.biggest.join('  ') + '\n   overdraw ' + rep.overdraw + 'x  by group: ' + rep.overdrawBy.join('  ') + '   cal ' + rep.calMs + ' ms');
     if (arg('verbose', false)) console.log('   groups: ' + rep.groups.map(g => `${g.label}(${g.objects}) ${g.changedPct}%`).join('  ') + `   groupsTotal ${rep.renderGroups}`);
     if (rep.consoleErrors) failures.push(`${name}: ${rep.consoleErrors} console errors`);
     for (const [limit, field] of Object.entries(LIMITS)) {

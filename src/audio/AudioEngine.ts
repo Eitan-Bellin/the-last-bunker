@@ -86,8 +86,15 @@ export class AudioEngine {
   private expeditionGain: GainNode | null = null;
   private expedition = false;
   private lastPlayed = new Map<Sfx, number>();
-  private rendering = false;
   private seedCounter = 1000;
+  // [perf] Synthesis is a queue of small jobs, run one at a time in idle moments, most urgent first (see enqueue).
+  private jobs: { id: string; prio: number; run: () => Promise<void> }[] = [];
+  private queued = new Set<string>();
+  private pumping = false;
+  /** The first sounds (interface effects, base ambience, the era's music) are there. */
+  private ready = false;
+  /** A device with little memory renders effects mono at 22 kHz and the loops at 16 kHz (about a third of the memory). */
+  private readonly light = isLiteMode() || ((navigator as unknown as { deviceMemory?: number }).deviceMemory ?? 8) <= 3;
   private beds = new Map<BedKey, GainNode>();
   private zoom: ZoomMix = 'mid';
   private musicLevel = MUSIC_LEVEL;
@@ -150,7 +157,7 @@ export class AudioEngine {
 
   /** For crash records. */
   get debugState(): string {
-    return this.ctx ? `${this.ctx.state} sfx=${this.sfx.size} rendering=${this.rendering}` : 'idle';
+    return this.ctx ? `${this.ctx.state} sfx=${this.sfx.size} rendering=${this.pumping || this.jobs.length > 0} ready=${this.ready} queued=${this.jobs.length}${this.light ? ' light' : ''}` : 'idle';
   }
 
   toggle(): void {
@@ -169,7 +176,7 @@ export class AudioEngine {
   }
 
   private async start(): Promise<void> {
-    if (this.ctx || this.rendering) return;
+    if (this.ctx) return;
     const Ctor = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
     if (!Ctor) return;
     this.ctx = new Ctor();
@@ -190,12 +197,117 @@ export class AudioEngine {
     this.musicBus = this.bus(MUSIC_LEVEL, this.musicOut);
     this.sfxBus = this.bus(SFX_LEVEL, this.fxOut);
     this.ambBus = this.bus(AMBIENCE_LEVEL, this.fxOut);
-    this.rendering = true;
-    try {
-      await this.renderAll();
-    } finally {
-      this.rendering = false;
+    this.queueInitial();
+  }
+
+  // ───────────────────────────── [perf] staged synthesis ─────────────────────────────
+  // Everything is still composed offline by the same builders (the sound is unchanged), but no longer all at once at the first
+  // touch while the phone is also drawing the scene: the first sounds go first, the rest is rendered one piece at a time when the
+  // page is idle, and each piece waits until it is needed (a room's ambience when that room comes into view, the dark layer at night).
+
+  /** Lower priority number = sooner. Same id twice is ignored. */
+  private enqueue(id: string, prio: number, run: () => Promise<void>): void {
+    if (this.queued.has(id)) {
+      const j = this.jobs.find(x => x.id === id);
+      if (j && prio < j.prio) { j.prio = prio; this.jobs.sort((a, b) => a.prio - b.prio); }
+      return;
     }
+    this.queued.add(id);
+    this.jobs.push({ id, prio, run });
+    this.jobs.sort((a, b) => a.prio - b.prio);
+    if (!this.pumping) void this.pump();
+  }
+
+  /** Waits for a quiet moment on the main thread (and for the page to be visible: nothing is composed in the background). */
+  private async quiet(urgent: boolean): Promise<void> {
+    while (document.hidden) await new Promise<void>(r => document.addEventListener('visibilitychange', () => r(), { once: true }));
+    await new Promise<void>(r => {
+      const ric = (window as unknown as { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number }).requestIdleCallback;
+      if (urgent || !ric) window.setTimeout(r, urgent ? 0 : 40);
+      else ric(() => r(), { timeout: 600 });
+    });
+  }
+
+  private async pump(): Promise<void> {
+    this.pumping = true;
+    try {
+      while (this.jobs.length && this.ctx) {
+        const job = this.jobs[0];
+        await this.quiet(job.prio < 20);
+        // A more urgent job may have arrived while waiting.
+        const next = this.jobs.shift()!;
+        try {
+          await next.run();
+        } catch {
+          // a sound that fails to render is simply missing
+        }
+        this.queued.delete(next.id);
+        // A breath between pieces: the memory of the last render can be collected before the next one starts.
+        await new Promise<void>(r => window.setTimeout(r, job.prio < 20 ? 0 : 30));
+      }
+    } finally {
+      this.pumping = false;
+    }
+  }
+
+  /** The interface sounds a player meets in the first minute; the others follow in the background. */
+  private static readonly FIRST_SFX: Sfx[] = ['click', 'open', 'tab', 'switch', 'modalOpen', 'confirm', 'cancel', 'collect', 'place', 'build', 'error', 'notify', 'assign', 'unassign', 'whoosh', 'coin', 'complete', 'type'];
+
+  private queueInitial(): void {
+    const names = Object.keys(SFX) as Sfx[];
+    for (const name of AudioEngine.FIRST_SFX) this.enqueueSfx(name, 0);
+    for (const name of names) if (!AudioEngine.FIRST_SFX.includes(name)) this.enqueueSfx(name, 20);
+    this.enqueueAmbience('base', 1);
+    this.enqueue(`lane:${this.era}`, 2, async () => { await this.startLane(this.era); });
+    this.enqueueBed(ERA_BEDS[Math.min(ERA_BEDS.length - 1, this.era)], 3);
+    this.enqueue('ready', 4, async () => { this.ready = true; });
+    // The rest, when the page is idle: the other eras' beds are rendered only if the era changes; the two big music layers are
+    // rendered at night / on an expedition, or at the end of the queue (not at all in lite mode, as before).
+    if (!isLiteMode()) {
+      this.enqueue('dark', 60, () => this.renderDark());
+      this.enqueue('pulse', 61, () => this.renderPulse());
+    }
+  }
+
+  private enqueueSfx(name: Sfx, prio: number): void {
+    if (this.sfx.has(name)) return;
+    this.enqueue(`sfx:${name}`, prio, async () => {
+      const def = SFX[name];
+      // The seed is the effect's place in the list (as it always was), so the sound is the same whatever order they are rendered in.
+      const seed = 100 + (Object.keys(SFX) as Sfx[]).indexOf(name);
+      const buffer = await renderOneShot(def.seconds, def.build, seed, def.reverb, this.light ? 22050 : undefined, this.light ? 1 : undefined);
+      this.sfx.set(name, normalize(buffer, SFX_PEAK[name] ?? 0.5));
+    });
+  }
+
+  private enqueueAmbience(key: AmbienceKey, prio: number): void {
+    if (this.ambience.has(key)) return;
+    this.enqueue(`amb:${key}`, prio, async () => {
+      const keys = Object.keys(AMBIENCE);
+      const buffer = await renderLoop(AMBIENCE_SECONDS, 2, AMBIENCE[key], 100 + Object.keys(SFX).length + keys.indexOf(key), 0.7, this.light ? 16000 : LOOP_RATE);
+      this.startAmbience(key, normalize(buffer, key === 'base' ? 0.18 : 0.3));
+    });
+  }
+
+  private enqueueBed(key: BedKey, prio: number): void {
+    if (this.beds.has(key)) return;
+    this.enqueue(`bed:${key}`, prio, async () => {
+      const keys: BedKey[] = [...ERA_BEDS, 'city']; // the order the seeds were first handed out in
+      const buffer = await renderLoop(BED_SECONDS, 2, BEDS[key], 100 + Object.keys(SFX).length + Object.keys(AMBIENCE).length + keys.indexOf(key), 0.85, this.light ? 16000 : LOOP_RATE);
+      this.startBed(key, normalize(buffer, key === 'city' ? 0.22 : 0.26));
+    });
+  }
+
+  private async renderDark(): Promise<void> {
+    if (this.darkGain || !this.ctx) return;
+    const dark = await renderLoop(LOOP_SECONDS, LOOP_TAIL, darkTheme, 13, 1.0, MUSIC_RATE);
+    this.darkGain = this.loopLayer(normalize(dark, 0.6), this.mood === 'dark' ? 1 : 0);
+  }
+
+  private async renderPulse(): Promise<void> {
+    if (this.expeditionGain || !this.ctx) return;
+    const pulse = await renderLoop(EXPEDITION_SECONDS, 2, expeditionPulse, 17, 0.6, MUSIC_RATE);
+    this.expeditionGain = this.loopLayer(normalize(pulse, 0.35), this.expedition ? 1 : 0);
   }
 
   private bus(level: number, dest: AudioNode): GainNode {
@@ -203,30 +315,6 @@ export class AudioEngine {
     g.gain.value = level;
     g.connect(dest);
     return g;
-  }
-
-  /** Short effects first so the UI has sound immediately, then ambience, then the music layers. */
-  private async renderAll(): Promise<void> {
-    let seed = 100;
-    for (const [name, def] of Object.entries(SFX) as [Sfx, typeof SFX[Sfx]][]) {
-      const buffer = await renderOneShot(def.seconds, def.build, seed++, def.reverb);
-      this.sfx.set(name, normalize(buffer, SFX_PEAK[name] ?? 0.5));
-    }
-    for (const [key, build] of Object.entries(AMBIENCE) as [AmbienceKey, typeof AMBIENCE[AmbienceKey]][]) {
-      const buffer = await renderLoop(AMBIENCE_SECONDS, 2, build, seed++, 0.7, LOOP_RATE);
-      this.startAmbience(key, normalize(buffer, key === 'base' ? 0.18 : 0.3));
-    }
-    await this.startLane(this.era);
-    for (const key of [...ERA_BEDS, 'city'] as BedKey[]) {
-      const buffer = await renderLoop(BED_SECONDS, 2, BEDS[key], seed++, 0.85, LOOP_RATE);
-      this.startBed(key, normalize(buffer, key === 'city' ? 0.22 : 0.26));
-    }
-    // Lite mode (the game was killed twice in an hour) leaves out the two big extra music layers: ~13 MB and a long render.
-    if (isLiteMode()) return;
-    const dark = await renderLoop(LOOP_SECONDS, LOOP_TAIL, darkTheme, 13, 1.0, MUSIC_RATE);
-    this.darkGain = this.loopLayer(normalize(dark, 0.6), this.mood === 'dark' ? 1 : 0);
-    const pulse = await renderLoop(EXPEDITION_SECONDS, 2, expeditionPulse, 17, 0.6, MUSIC_RATE);
-    this.expeditionGain = this.loopLayer(normalize(pulse, 0.35), this.expedition ? 1 : 0);
   }
 
   private loopLayer(buffer: AudioBuffer, level: number): GainNode {
@@ -295,11 +383,19 @@ export class AudioEngine {
     lane.nextStart += LOOP_SECONDS;
     // Compose the next segment ~25 s before this one ends.
     const delay = Math.max(1, startsAt + LOOP_SECONDS - 25 - ctx.currentTime) * 1000;
-    lane.timer = window.setTimeout(async () => {
+    const compose = async (): Promise<void> => {
       if (!lane.alive || !this.ctx) return;
+      // [perf] The audio clock stands still while the page is in the background (the context is suspended), so the next segment is
+      // not needed yet: wait for the player to come back instead of composing it for nobody.
+      if (document.hidden || this.ctx.state !== 'running') {
+        lane.timer = window.setTimeout(compose, 2000);
+        return;
+      }
+      await this.quiet(false);
       const next = await this.renderTheme(lane);
       if (lane.alive) this.schedule(lane, next);
-    }, delay);
+    };
+    lane.timer = window.setTimeout(compose, delay);
   }
 
   private themeLevel(): number {
@@ -351,6 +447,7 @@ export class AudioEngine {
     this.musicLevel = MUSIC_LEVEL * (zoom === 'far' ? 1.2 : zoom === 'close' ? 0.65 : 1);
     this.ramp(this.musicBus, this.musicLevel, 1.5);
     this.ramp(this.ambBus, AMBIENCE_LEVEL * (zoom === 'far' ? 0.7 : zoom === 'close' ? 1.25 : 1), 1.5);
+    if (zoom === 'far' && this.ctx) this.enqueueBed('city', 9); // the city hum is rendered the first time the far view is used
     this.updateBeds(2.5);
   }
 
@@ -366,6 +463,7 @@ export class AudioEngine {
   setMood(mood: MusicMood): void {
     if (mood === this.mood) return;
     this.mood = mood;
+    if (mood === 'dark' && !this.darkGain && this.ctx && !isLiteMode()) this.enqueue('dark', 9, () => this.renderDark());
     this.ramp(this.darkGain, mood === 'dark' ? 1 : 0, 6);
     this.ramp(this.lane?.gain, this.themeLevel(), 6);
   }
@@ -374,19 +472,24 @@ export class AudioEngine {
   setEra(era: number): void {
     if (era === this.era) return;
     this.era = era;
-    if (this.ctx && !this.rendering) void this.startLane(era);
+    if (this.ctx) {
+      this.enqueue(`lane:${era}`, 5, async () => { if (era === this.era) await this.startLane(era); });
+      this.enqueueBed(ERA_BEDS[Math.min(ERA_BEDS.length - 1, era)], 6);
+    }
     this.updateBeds(6);
   }
 
   setExpedition(active: boolean): void {
     if (active === this.expedition) return;
     this.expedition = active;
+    if (active && !this.expeditionGain && this.ctx && !isLiteMode()) this.enqueue('pulse', 9, () => this.renderPulse());
     this.ramp(this.expeditionGain, active ? 1 : 0, 3);
   }
 
   /** Room sounds follow the camera: louder for rooms in view, panned to their screen position. */
   setAmbience(mix: AmbienceMix[]): void {
     if (!this.ctx) return;
+    for (const m of mix) if (!this.ambience.has(m.key)) this.enqueueAmbience(m.key, 8); // rendered the first time a room of that kind is in view
     const t = this.ctx.currentTime;
     const wanted = new Map(mix.map(m => [m.key, m]));
     for (const [key, voice] of this.ambience) {
@@ -411,7 +514,10 @@ export class AudioEngine {
   play(name: Sfx, opts: { pan?: number; volume?: number } = {}): void {
     if (!this.enabled || !this.ctx || this.ctx.state !== 'running') return;
     const buffer = this.sfx.get(name);
-    if (!buffer) return;
+    if (!buffer) {
+      this.enqueueSfx(name, 5); // asked for before its turn in the background queue: next in line (this one is skipped)
+      return;
+    }
     const now = this.ctx.currentTime;
     if ((this.lastPlayed.get(name) ?? -1) > now - 0.04) return;
     this.lastPlayed.set(name, now);

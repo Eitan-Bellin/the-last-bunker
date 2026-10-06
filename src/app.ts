@@ -1,3 +1,4 @@
+import { VIEW } from './rendering/perfFx'; // [perf]
 import { GameEngine, type OfflineReport } from './core/GameEngine';
 import { ProjectsPanel } from './ui/components/ProjectsPanel'; // [LateGame B1]
 import { PROJECTS, projectDone, stagesDone } from './data/projects'; // [LateGame B1]
@@ -205,7 +206,8 @@ export class GameApp {
     await Promise.all([this.renderer.init(canvas), preloadIcons(SCENE_ICONS).catch(() => undefined)]);
     await this.engine.init();
     // Decode the paintings of the rooms already built so the first frame shows art, not placeholders.
-    const keys = this.state.buildings.map(b => buildingArtKey(b.type, roomTier(b.level))).filter((k): k is string => !!k);
+    // [perf] Only the rooms the first picture can show (the top of the bunker): the rest load when the camera comes near (renderRooms).
+    const keys = this.state.buildings.filter(b => b.position.floor < 10).map(b => buildingArtKey(b.type, roomTier(b.level))).filter((k): k is string => !!k);
     await Promise.all([ArtLibrary.preload([...new Set([...keys, 'backdrops/rock'])]), ArtLibrary.loadMeta(), ArtLibrary.loadBalance()]).catch(() => undefined);
 
     this.popups = new NumberPopupManager(this.renderer.worldContainer);
@@ -371,6 +373,11 @@ export class GameApp {
     this.renderer.frameTarget = this.engine.frameTargetMs;
     const fps = this.renderer.postfx?.profile.fps;
     if (fps) this.engine.frameRates = fps;
+    // [perf] 60 only while the camera moves; short animations keep the watching rate.
+    const prof = this.renderer.postfx?.profile;
+    if (prof) this.engine.motionFps = prof.motion;
+    if (this.renderer.cameraMoving) this.engine.noteCameraMotion();
+    this.engine.fxBusy = this.renderer.fxActive || this.popups.anyIn(VIEW.x0, VIEW.y0, VIEW.x1, VIEW.y1);
     try { this.renderer.render(state, dt, alpha); } catch (err) { logCrash('render', err); throw err; }
     this.guarded('hud', () => { this.hud.update(state); this.popups.update(); });
     this.guarded('ui', () => this.frameUi(state));

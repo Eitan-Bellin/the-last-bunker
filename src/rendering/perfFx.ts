@@ -108,6 +108,105 @@ function waterBeadTexture(): Texture {
   });
 }
 
+/**
+ * Splits a big static layer into horizontal bands (a few floors each), every band its own render group, and shows only the bands the
+ * camera can see (plan M1). The structure in front of the rooms is ~3,600 objects at 24 floors and about a sixth of them are ever on
+ * screen: Pixi walked, updated and batched all of them every picture. The pieces keep their look and their order inside a band;
+ * plain containers one level down (the shadows, the additive light spills) are copied per band with their blend mode, so nothing
+ * changes how it is drawn. Pieces too tall for one band (a pipe down the whole bunker) stay in a layer of their own, tested one by one.
+ * References to the pieces (the code that tints them each frame) stay valid: they are moved, not copied.
+ */
+export function bandize(root: Container, label: string, bandH: number, top: number): { update(): void; bands: number; tall: number } {
+  interface Band { c: Container; y0: number; y1: number; shown: boolean }
+  const bands = new Map<number, Band>();
+  const tall: { o: Container; y0: number; y1: number }[] = [];
+  const tallLayer = new Container();
+  tallLayer.label = `${label}Tall`;
+  tallLayer.eventMode = 'none';
+
+  const rangeOf = (o: Container, offY: number): [number, number] => {
+    const b = o.getLocalBounds();
+    let a = offY + o.y + b.minY * o.scale.y, z = offY + o.y + b.maxY * o.scale.y;
+    if (a > z) [a, z] = [z, a];
+    if (o.rotation !== 0) { const r = Math.max(b.maxX - b.minX, b.maxY - b.minY); a -= r; z += r; }
+    return [a, z];
+  };
+  const bandFor = (y0: number, y1: number): number => Math.floor(((y0 + y1) / 2 - top) / bandH);
+  const bandOf = (k: number): Band => {
+    let b = bands.get(k);
+    if (!b) {
+      const c = new Container();
+      c.label = `${label}Band`;
+      c.eventMode = 'none';
+      c.isRenderGroup = true;
+      bands.set(k, b = { c, y0: Infinity, y1: -Infinity, shown: true });
+    }
+    return b;
+  };
+  const isPlain = (o: Container) => (!o.renderPipeId || o.renderPipeId === 'container') && o.children.length > 0;
+
+  const copies = new Map<Container, Map<number, Container>>(); // plain container -> its copy in each band
+  const copyIn = (p: Container, k: number, band: Band): Container => {
+    let m = copies.get(p);
+    if (!m) copies.set(p, m = new Map());
+    let c = m.get(k);
+    if (!c) {
+      c = new Container();
+      c.blendMode = p.blendMode;
+      c.alpha = p.alpha;
+      c.tint = p.tint;
+      c.position.copyFrom(p.position);
+      c.scale.copyFrom(p.scale);
+      c.eventMode = 'none';
+      band.c.addChild(c);
+      m.set(k, c);
+    }
+    return c;
+  };
+
+  const place = (o: Container, parent: Container | null): void => {
+    const offY = parent ? parent.y : 0;
+    const [y0, y1] = rangeOf(o, offY);
+    if (!Number.isFinite(y0) || !Number.isFinite(y1) || y1 - y0 > bandH * 1.5) {
+      tall.push({ o, y0: Number.isFinite(y0) ? y0 : -1e9, y1: Number.isFinite(y1) ? y1 : 1e9 });
+      tallLayer.addChild(o);
+      return;
+    }
+    const k = bandFor(y0, y1);
+    const band = bandOf(k);
+    band.y0 = Math.min(band.y0, y0);
+    band.y1 = Math.max(band.y1, y1);
+    (parent ? copyIn(parent, k, band) : band.c).addChild(o);
+  };
+
+  for (const child of root.children.slice()) {
+    if (isPlain(child)) for (const leaf of child.children.slice()) place(leaf, child);
+    else place(child, null);
+    if (isPlain(child) && child.children.length === 0) child.destroy();
+  }
+  root.removeChildren();
+  const ordered = [...bands.entries()].sort((a, b) => a[0] - b[0]);
+  for (const [, b] of ordered) root.addChild(b.c);
+  root.addChild(tallLayer);
+
+  const list = ordered.map(([, b]) => b);
+  return {
+    bands: list.length,
+    tall: tall.length,
+    update(): void {
+      const { y0, y1 } = VIEW;
+      for (const b of list) {
+        const show = b.y1 > y0 && b.y0 < y1;
+        if (show !== b.shown) { b.shown = show; b.c.visible = show; }
+      }
+      for (const t of tall) {
+        const show = t.y1 > y0 && t.y0 < y1;
+        if (show !== t.o.visible) t.o.visible = show;
+      }
+    },
+  };
+}
+
 /** Dust motes drifting through the occupied floors: a pool of sprites, only the motes in view are shown. */
 export class Dust {
   readonly container = new Container();
@@ -132,19 +231,15 @@ export class Dust {
         vx: (rnd() - 0.5) * 4, vy: (rnd() - 0.5) * 3, ph: rnd() * Math.PI * 2,
       });
     }
-    // The pool follows the number of motes (a camera far out may see a few hundred).
-    const want = Math.min(this.MAX, this.motes.length);
-    while (this.pool.length < want) {
-      const s = new Sprite(discTexture());
-      s.anchor.set(0.5);
-      s.width = s.height = 2.4;
-      s.tint = 0xffe6c0;
-      s.blendMode = 'add';
-      s.alpha = 0;
-      this.pool.push(s);
-      this.container.addChild(s);
-    }
+    // The pool follows the number of motes (a camera far out may see a few hundred); sprites are created as they are needed.
+    this.want = Math.min(this.MAX, this.motes.length);
+    while (this.pool.length > this.want) this.pool.pop()!.destroy();
+    this.attached = Math.min(this.attached, this.pool.length);
   }
+
+  /** How many sprites exist and how many are attached to the container (only attached ones cost anything). */
+  private want = 0;
+  private attached = 0;
 
   update(dt: number, t: number): void {
     const { x0, y0, x1, y1 } = VIEW;
@@ -155,14 +250,35 @@ export class Dust {
       m.y += m.vy * dt;
       if (m.x < ROOMS_X) m.x += ROOMS_W;
       if (m.x > ROOMS_X + ROOMS_W) m.x -= ROOMS_W;
-      if (n < pool.length && m.x > x0 && m.x < x1 && m.y > y0 && m.y < y1) {
+      if (n < this.want && m.x > x0 && m.x < x1 && m.y > y0 && m.y < y1) {
+        if (n >= pool.length) pool.push(this.make());
         const s = pool[n++];
         s.position.set(m.x, m.y);
         s.alpha = 0.12 + 0.18 * (0.5 + 0.5 * Math.sin(t * 1.5 + m.ph));
       }
     }
-    // The sprites not used this picture stay in the batch but are invisible: showing and hiding would rebuild the group's draw list.
-    for (let i = n; i < pool.length; i++) if (pool[i].alpha !== 0) pool[i].alpha = 0;
+    // Attach what is needed (with some slack), detach a lot of unused ones only when many are idle: the container's draw list is rebuilt
+    // when the set changes, so it must not change every picture.
+    if (n > this.attached) this.attach(Math.min(pool.length, n + 24));
+    else if (n + 64 < this.attached) this.attach(n + 24);
+    for (let i = n; i < this.attached; i++) if (pool[i].alpha !== 0) pool[i].alpha = 0;
+  }
+
+  private make(): Sprite {
+    const s = new Sprite(discTexture());
+    s.anchor.set(0.5);
+    s.width = s.height = 2.4;
+    s.tint = 0xffe6c0;
+    s.blendMode = 'add';
+    s.alpha = 0;
+    return s;
+  }
+
+  private attach(count: number): void {
+    const pool = this.pool;
+    while (pool.length < count) pool.push(this.make());
+    while (this.attached < count) this.container.addChild(pool[this.attached++]);
+    while (this.attached > count) this.container.removeChild(pool[--this.attached]);
   }
 }
 
