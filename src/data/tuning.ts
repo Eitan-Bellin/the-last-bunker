@@ -35,14 +35,23 @@ export const TUNING = {
   /** Charter project stages, in hours of their Act's income (index = Act). */
   charterStageHours: [0, 3, 17, 12, 9, 9, 9, 9],
   /** [P4] Contracts: an offer every so many world seconds, open this long, at most this many waiting; paid in hours of income. */
-  contractEvery: 1800,
-  contractDeadline: 5400,
-  contractMaxOpen: 6,
-  contractRewardHours: 2,
+  contractEvery: 3600,
+  contractDeadline: 21600,
+  contractMaxOpen: 4,
+  contractRewardHours: 3,
+  /** [Q5] A supply contract asks this many hours of the bunker's own production of one scarce good (x0.8..1.2 by roll). */
+  contractAskHours: 1,
+  /** [Q5] A supply contract is safe to take automatically while the asked store stays above this share of its cap. */
+  contractSafeShare: 0.3,
   /** [P4] Outposts: cost and build time in hours (x1.1 / x1.12 per outpost already held), yield in hours of income per hour. */
   outpostHours: 3,
   outpostBuildHours: 4,
   outpostYieldHours: 0.12,
+  /** [Q10] From this Act, storage overflow turns into this share of the credits it used to. */
+  overflowDecayAct: 4,
+  overflowDecay: 0.25,
+  /** [Q10] Shop prices rise by this share of the base price for every Act after the first. */
+  shopActRamp: 0.5,
   /** Longest a single room upgrade takes. */
   maxUpgradeSeconds: 20 * 3600,
   /** Digging: seconds per new floor (index = floors after the dig); deeper floors grow by digTimeGrowth each. */

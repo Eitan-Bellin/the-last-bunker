@@ -1,5 +1,6 @@
 import type { GameState, ResourceType } from '../core/GameState';
 import type { IconName } from '../ui/icons';
+import { lateActTwoSystems } from './acts';
 
 /**
  * [Long game] Seasons (long-game plan, pillar B): four of them, about four real days each, on the world clock, so
@@ -61,7 +62,7 @@ export function nextSeason(state: GameState): SeasonDef {
 
 /** Seasons only matter once the bunker has a world to face (from the second Act). */
 export function seasonsActive(state: GameState): boolean {
-  return (state.longGame?.meta.act ?? 0) >= 2;
+  return lateActTwoSystems(state); // [Q7] from day ~4 of the run, not the moment Act II begins
 }
 
 /** The current season's effects, or none before seasons start. */

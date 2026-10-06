@@ -17,7 +17,7 @@ interface Bars {
 }
 
 export class PeoplePanel {
-  private sheet = new Sheet('people-sheet');
+  private sheet = new Sheet('people-sheet', 'people');
   private signature = '';
   private expandedId: string | null = null;
   private choosingFor: string | null = null;
@@ -212,7 +212,7 @@ export class PeoplePanel {
       card.appendChild(mastery);
       const row = el('div', 'person-actions');
       if (rank < MAX_RANK) {
-        const cost = trainingCost(s);
+        const cost = trainingCost(s, state.longGame?.meta.act ?? 1);
         const label = Object.entries(cost).map(([r, v]) => `${RESOURCE_ICONS[r] ?? r}${v}`).join(' ');
         row.appendChild(button(`[[books]] ${i18n.t('mastery.train')} ${label}`, 'btn-small', () => {
           if (this.engine.populationSystem.train(this.engine.stateManager, this.engine.resourceSystem, s.id)) {

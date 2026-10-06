@@ -91,6 +91,7 @@ export interface SurvivorState {
   happiness: number;
   assignedBuildingId: string | null;
   traits: string[];
+  /** [reserved: saved, not used yet] Gear for expeditions (balance plan, N19). */
   equipment: string[];
   isOnMission: boolean;
   /** Family (Sprint 6): partner, parents, and childhood. */
@@ -165,6 +166,7 @@ export interface ActiveMission {
 
 export interface PrestigeState {
   rebirthCount: number;
+  /** [reserved: saved, not used yet] A layer above Genesis (balance plan, P3-7). */
   ascensionCount: number;
   transcendenceCount: number;
   totalIsotope7Earned: number;
@@ -357,6 +359,7 @@ export interface GameState {
   storyFlags: string[];
   currentFloors: number;
   maxPopulation: number;
+  /** [reserved: saved, not used yet] */
   tensionValue: number;
   lastEventTime: number;
   randomSeed: number;
@@ -430,7 +433,8 @@ export function createLateGame(): LateGameState {
   };
 }
 
-export const SAVE_VERSION = 5;
+/** v6: the Chronicle (longGame.chronicle) and the standing orders added by the balance plan; a v5 save is kept once as lastbunker_auto_v5 before it migrates. */
+export const SAVE_VERSION = 6;
 
 export function migrateState(saved: GameState): GameState {
   const fresh = createInitialState();

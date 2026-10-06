@@ -13,6 +13,7 @@ import { BASE_CAPS, OVERFLOW_CREDITS, POWER_FLOOR, TICKED_RESOURCES } from '../d
 import { modifierBreakdown, modifierProduct, prepareModifiers, registerModifier } from './modifiers';
 import { difficultyOf } from '../data/difficulty';
 import { actCapBonus } from '../data/pricing';
+import { TUNING } from '../data/tuning';
 
 const EMERGENCY_EFFICIENCY = 0.25;
 const FOOD_PER_SURVIVOR = 0.08;
@@ -189,7 +190,8 @@ export class ResourceSystem {
     }
     if (left <= 0) return;
     log.converted += left;
-    this.pendingCredits += left * (OVERFLOW_CREDITS[rt] ?? 0);
+    // [Q10] From Act IV the overflow is worth a quarter: credits piled up (median 126K a return) with nothing worth buying.
+    this.pendingCredits += left * (OVERFLOW_CREDITS[rt] ?? 0) * ((state.longGame?.meta.act ?? 1) >= TUNING.overflowDecayAct ? TUNING.overflowDecay : 1);
   }
 
   private flushCredits(state: GameState, deltas: StateDelta[]): void {

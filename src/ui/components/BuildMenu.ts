@@ -11,7 +11,7 @@ import { buildingArtKey } from '../../art/registry';
 import { BUILDING_ICONS, costRow, el } from '../dom';
 
 export class BuildMenu {
-  private sheet = new Sheet('build-sheet');
+  private sheet = new Sheet('build-sheet', 'build');
   private signature = '';
 
   onSelectBuilding: ((type: BuildingType) => void) | null = null;

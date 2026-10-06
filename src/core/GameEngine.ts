@@ -14,6 +14,8 @@ import { ResearchSystem } from '../systems/ResearchSystem';
 import { ExplorationSystem } from '../systems/ExplorationSystem';
 import { MetaSystem } from '../systems/MetaSystem';
 import { ObjectiveSystem } from '../systems/ObjectiveSystem';
+import { guideObjective } from '../systems/Guide';
+import { ChronicleSystem } from '../systems/ChronicleSystem';
 import { RestorationSystem } from '../systems/RestorationSystem';
 import { EraSystem } from '../systems/EraSystem';
 import { IncidentSystem } from '../systems/IncidentSystem';
@@ -135,6 +137,8 @@ export class GameEngine {
   threatSystem: ThreatSystem;
   contractSystem: ContractSystem;
   outpostSystem: OutpostSystem;
+  /** [Q14] The run's milestones. */
+  chronicleSystem: ChronicleSystem;
   /** The step list, in order (see registerSystems). New systems add themselves with register(). */
   private systems: EngineSystem[] = [];
   /** Game seconds gathered toward the next run of the slow systems. */
@@ -187,6 +191,8 @@ export class GameEngine {
     this.eventSystem.setExploration(this.explorationSystem);
     this.metaSystem = new MetaSystem(this.stateManager, this.resourceSystem);
     this.objectiveSystem = new ObjectiveSystem(this.stateManager, this.resourceSystem);
+    this.objectiveSystem.guide = s => guideObjective(this, s); // [Q2]
+    this.chronicleSystem = new ChronicleSystem(this.stateManager); // [Q14]
     this.restorationSystem = new RestorationSystem(this.stateManager, this.rng, this.resourceSystem, this.buildingSystem);
     this.eraSystem = new EraSystem(this.stateManager);
     this.incidentSystem = new IncidentSystem(this.stateManager, this.rng, this.resourceSystem);
@@ -215,7 +221,7 @@ export class GameEngine {
     this.threatSystem = new ThreatSystem(this.stateManager);
     this.outpostSystem = new OutpostSystem(this.stateManager, this.resourceSystem, this.explorationSystem);
     this.contractSystem = new ContractSystem(this.stateManager, this.inboxSystem, this.resourceSystem, this.populationSystem);
-    this.foremanSystem = new ForemanSystem(this.stateManager, this.maintenanceSystem, this.projectSystem, this.populationSystem, this.digSystem);
+    this.foremanSystem = new ForemanSystem(this.stateManager, this.maintenanceSystem, this.projectSystem, this.populationSystem, this.digSystem, this.contractSystem, this.resourceSystem);
     this.awayDanger = new AwayDanger(this.stateManager, this.rng, this.eventSystem, this.incidentSystem, this.deathSystem);
     bus.on('survivor:died', (s: unknown) => this.deathSystem.onDeath(s as import('./GameState').SurvivorState));
     bus.on('survivor:died', (s: unknown) => this.familySystem.forget((s as { id: string }).id));
@@ -453,7 +459,8 @@ export class GameEngine {
     };
     fresh.resources.isotope7.amount = old.resources.isotope7.amount + gain;
     fresh.achievements = [...old.achievements];
-    fresh.storyFlags = old.storyFlags.filter(f => f.startsWith('event:radio') || f === 'intro:done');
+    // The "new system" cards (sys:*) were seen once: they are tips, not part of the timeline.
+    fresh.storyFlags = old.storyFlags.filter(f => f.startsWith('event:radio') || f === 'intro:done' || f.startsWith('sys:'));
     // What was learned from the previous residents carries into the new timeline.
     fresh.lore = [...(old.lore ?? [])];
     fresh.settings = { ...old.settings };
@@ -473,6 +480,8 @@ export class GameEngine {
     if (old.longGame) {
       const m = old.longGame.meta;
       fresh.longGame.meta = { ...fresh.longGame.meta, difficulty: m.difficulty, diffLowest: m.difficulty, scenario: m.scenario, mutators: [...m.mutators], runIndex: m.runIndex + 1, worldT: m.worldT, actSince: m.worldT };
+      // [Q14] The Chronicle outlives the timeline: the earlier runs stay in the book.
+      fresh.longGame.chronicle = [...(old.longGame.chronicle ?? [])];
     }
     this.stateManager.loadState(fresh);
     this.rng.seed = fresh.randomSeed;
@@ -627,6 +636,7 @@ export class GameEngine {
     if (!lg || lg.policy.laws.includes(id) || lg.policy.laws.length >= lawSlots(sm.state) || !LAWS.some(l => l.id === id)) return false;
     if (!this.resourceSystem.spend(sm, lawCost(sm.state))) return false;
     sm.applyDelta({ path: 'longGame.policy.laws', value: [...lg.policy.laws, id] });
+    this.chronicleSystem.note('law', id);
     this.buildingSystem.recalculateMaxPopulation(sm);
     this.requestSave();
     return true;

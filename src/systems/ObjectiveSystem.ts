@@ -15,6 +15,13 @@ export type ObjectiveAction =
   | { kind: 'research' }
   | { kind: 'surface' }
   | { kind: 'journal' }
+  // [Q2] Where the guide sends the player (see src/systems/Guide.ts).
+  | { kind: 'projects' }
+  | { kind: 'dig' }
+  | { kind: 'rooms' }
+  | { kind: 'ruins' }
+  | { kind: 'command' }
+  | { kind: 'genesis' }
   | null;
 
 export interface Objective {
@@ -207,6 +214,8 @@ function dynamicObjective(i: number, step: number): Objective {
 export class ObjectiveSystem {
   private sm: StateManager;
   private resources: ResourceSystem;
+  /** [Q2] After the tutorial a long-game run shows the guide's step (what blocks the Act) instead of the generic tasks. Set by the engine. */
+  guide: ((state: GameState) => Objective | null) | null = null;
 
   constructor(sm: StateManager, resources: ResourceSystem) {
     this.sm = sm;
@@ -215,7 +224,10 @@ export class ObjectiveSystem {
 
   current(state: GameState): Objective {
     const step = state.tutorialStep ?? 0;
-    return step < ONBOARDING.length ? ONBOARDING[step] : dynamicObjective(step - ONBOARDING.length, step);
+    if (step < ONBOARDING.length) return ONBOARDING[step];
+    // [Q2] The guide answers "what do I do now and why"; the endless generic tasks only fill in when it has no step.
+    const guided = this.guide?.(state);
+    return guided ?? dynamicObjective(step - ONBOARDING.length, step);
   }
 
   /** Maps a tutorial step saved under the old onboarding list onto the current list. */
@@ -259,6 +271,8 @@ export class ObjectiveSystem {
     this.updateWeekly();
     const state = this.sm.state;
     const obj = this.current(state);
+    // A guide step is a pointer, not a task: the Act itself finishes it (no reward, the tutorial step stays put).
+    if (obj.id.startsWith('guide:')) return;
     if (obj.skipIf?.(state)) {
       this.sm.applyDelta({ path: 'tutorialStep', value: (state.tutorialStep ?? 0) + 1 });
       return;

@@ -1,4 +1,5 @@
 import { hasKeystone } from '../data/prestige';
+import { lateActTwoSystems } from '../data/acts';
 import type { StateManager } from '../core/StateManager';
 import type { GameState, ResourceType } from '../core/GameState';
 import type { InboxItem } from '../core/state/longGame';
@@ -32,9 +33,13 @@ export interface ContractData {
 /** A crew job under way. */
 interface Job { id: number; crew: string[]; until: number; reward: Partial<Record<ResourceType, number>>; issuer: string }
 
-/** Goods a supply contract may ask for, and the share of storage it asks. */
-const ASKS: ResourceType[] = ['food', 'water', 'medicine', 'knowledge', 'scrap', 'materials'];
-const ASK_SHARE = 0.3;
+/**
+ * [Q5] Goods a supply contract may ask for: the ones the bunker never has in surplus. The old rule (30% of a store, drawn
+ * from food, water, materials...) asked for goods that sat at their cap anyway, so accepting cost nothing. Now the
+ * ask is about an hour of the bunker's own production of one scarce good.
+ */
+const ASKS: ResourceType[] = ['medicine', 'scrap', 'knowledge', 'components', 'alloys', 'data'];
+const FALLBACK_ASK: ResourceType[] = ['materials', 'food', 'water'];
 
 /**
  * [Long game P4] Contracts (long-game plan, pillar D): the active play that sets an engaged player apart from a casual
@@ -65,22 +70,51 @@ export class ContractSystem {
         ];
       },
       apply: (item, key) => this.apply(item, key),
-      params: (item, locale) => {
-        const d = item.data as unknown as ContractData;
-        const partner = getPartner(d.issuer);
-        const list = (o: Partial<Record<ResourceType, number>>) => Object.entries(o).map(([r, v]) => `${RESOURCE_ICONS[r] ?? ''} ${i18n.formatCompact(v ?? 0)}`).join('  ');
-        return {
-          issuer: partner ? partner.name[locale as 'he' | 'en'] : i18n.t('contract.drifters'),
-          ask: d.type === 'crew' ? i18n.t('contract.askCrew', { n: d.crew, h: d.hours }) : list(d.give),
-          reward: list(d.reward),
-        };
+      params: (item, locale) => this.cardParams(item, locale),
+      preview: (item, locale) => {
+        const p = this.cardParams(item, locale);
+        return `${p.ask}  →  ${p.reward}`;
       },
+      value: item => Object.values((item.data as unknown as ContractData).reward).reduce((s, v) => s + (v ?? 0), 0),
     });
+  }
+
+  private cardParams(item: InboxItem, locale: string): Record<string, string> {
+    const d = item.data as unknown as ContractData;
+    const partner = getPartner(d.issuer);
+    const list = (o: Partial<Record<ResourceType, number>>) => Object.entries(o).map(([r, v]) => `${RESOURCE_ICONS[r] ?? ''} ${i18n.formatCompact(v ?? 0)}`).join('  ');
+    return {
+      issuer: partner ? partner.name[locale as 'he' | 'en'] : i18n.t('contract.drifters'),
+      ask: d.type === 'crew' ? i18n.t('contract.askCrew', { n: d.crew, h: d.hours }) : list(d.give),
+      reward: list(d.reward),
+    };
+  }
+
+  /**
+   * [Q4/Q9] Whether taking a contract costs the bunker nothing it would miss: a supply contract leaves the asked store
+   * above a safe share of its cap; a crew job needs idle hands (it never pulls people off their rooms).
+   */
+  isSafe(state: GameState, item: InboxItem): boolean {
+    const d = item.data as unknown as ContractData;
+    if (d.type === 'crew') return state.survivors.filter(s => !s.child && !s.isOnMission && s.health > 50 && !s.assignedBuildingId).length >= d.crew;
+    return Object.entries(d.give).every(([r, v]) => {
+      const res = state.resources[r as ResourceType];
+      return !!res && res.amount - (v ?? 0) >= (isFinite(res.cap) ? res.cap : 0) * TUNING.contractSafeShare;
+    });
+  }
+
+  /** Takes every safe contract in the inbox; returns how many. */
+  acceptSafe(): number {
+    let n = 0;
+    for (const item of this.open(this.sm.state)) {
+      if (this.isSafe(this.sm.state, item) && this.inbox.resolve(item.id, 'accept')) n++;
+    }
+    return n;
   }
 
   /** Contracts start with the second Act (the first is learned without them). */
   active(state: GameState): boolean {
-    return (state.longGame?.meta.act ?? 0) >= 2;
+    return lateActTwoSystems(state); // [Q7] from day ~4, not the moment Act II begins
   }
 
   open(state: GameState): InboxItem[] {
@@ -150,9 +184,15 @@ export class ContractSystem {
     const reward = actBundle(act, hours * k);
     const give: Partial<Record<ResourceType, number>> = {};
     if (type === 'supply') {
-      const ask = ASKS[Math.floor(this.roll(n, 3) * ASKS.length)];
-      const cap = state.resources[ask]?.cap ?? 0;
-      give[ask] = Math.max(10, Math.round((isFinite(cap) ? cap : 100) * ASK_SHARE));
+      // The bunker's own production of a scarce good is the yardstick; goods it does not make yet are never asked for.
+      const open = ASKS.filter(r => (state.resources[r]?.productionRate ?? 0) > 0.001 && (state.resources[r]?.cap ?? 0) > 0);
+      const pool = open.length > 0 ? open : FALLBACK_ASK;
+      const ask = pool[Math.floor(this.roll(n, 3) * pool.length)];
+      const res = state.resources[ask];
+      const cap = res?.cap ?? 0;
+      const perHour = (res?.productionRate ?? 0) * 3600;
+      const want = (perHour > 0 ? perHour : (isFinite(cap) ? cap : 100) * 0.3) * TUNING.contractAskHours * (0.8 + 0.4 * this.roll(n, 7));
+      give[ask] = Math.max(10, Math.round(Math.min(want, (isFinite(cap) ? cap : want) * 0.5)));
     }
     return { issuer, type, give, crew: type === 'crew' ? 2 + Math.floor(this.roll(n, 4) * 2) : 0, hours: type === 'crew' ? 1 + Math.floor(this.roll(n, 5) * 2) : 0, reward };
   }

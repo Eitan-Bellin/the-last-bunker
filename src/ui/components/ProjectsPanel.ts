@@ -7,9 +7,14 @@ import { RESOURCE_ICONS, bar, button, el } from '../dom';
 import { uiSound } from '../../audio/uiSound';
 import { WEEKLY_CREDITS } from '../../data/challenges';
 
+/** Badge colours of the weekly prizes (ids from COSMETICS in src/data/challenges.ts). */
+const COSMETIC_COLORS: Record<string, string> = {
+  'plate:amber': '#e0a43a', 'flag:red': '#d9534a', 'plate:green': '#5fbf6a', 'flag:blue': '#4d8fe0', 'plate:violet': '#a779e0', 'flag:gold': '#f5d04a',
+};
+
 /** [LateGame B1/B4] Big projects: pick the one that is fed and crewed, deliver resources, see the weekly challenge. */
 export class ProjectsPanel {
-  private sheet = new Sheet('projects-sheet');
+  private sheet = new Sheet('projects-sheet', 'projects');
   private engine: GameEngine;
   private sig = '';
 
@@ -67,7 +72,16 @@ export class ProjectsPanel {
       card.appendChild(bar((weekly.cur / weekly.target) * 100, 'accent'));
       card.appendChild(el('div', 'bp-hint', weekly.done ? `[[check]] ${i18n.t('weekly.done')}` : i18n.t('weekly.prize', { n: WEEKLY_CREDITS, cur: weekly.cur, target: weekly.target })));
       const cos = state.lateGame.weekly.cosmetics;
-      if (cos.length) card.appendChild(el('div', 'bp-hint', `[[star]] ${i18n.t('weekly.cosmetics', { n: cos.length })}`));
+      if (cos.length) {
+        const shelf = el('div', 'cosmetic-shelf');
+        for (const c of cos) {
+          const chip = el('span', 'cosmetic-chip', i18n.t(`cosmetic.${c}`));
+          chip.dataset.kind = c.split(':')[0];
+          chip.style.setProperty('--cos', COSMETIC_COLORS[c] ?? '#c9a35a');
+          shelf.appendChild(chip);
+        }
+        card.append(el('div', 'bp-hint', `[[star]] ${i18n.t('weekly.cosmetics', { n: cos.length })}`), shelf);
+      }
       root.appendChild(card);
     }
 

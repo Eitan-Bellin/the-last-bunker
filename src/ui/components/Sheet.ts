@@ -21,10 +21,13 @@ export class Sheet {
   private panel: HTMLDivElement;
   private titleEl: HTMLHeadingElement;
   private open = false;
+  private helpBtn: HTMLButtonElement;
 
   onClose: (() => void) | null = null;
+  /** [Q6] Opens the Bunker Book at a topic; set once by the app. */
+  static onHelp: ((topic: string) => void) | null = null;
 
-  constructor(extraClass = '') {
+  constructor(extraClass = '', helpTopic: string | null = null) {
     this.overlay = el('div', 'sheet-overlay');
     this.overlay.addEventListener('click', (e) => {
       if (e.target === this.overlay) this.hide();
@@ -38,13 +41,24 @@ export class Sheet {
       vibrate(8);
       this.hide();
     });
+    // [Q6] The "?" plate: opens the Bunker Book at this sheet's topic (shown only when a topic was set).
+    this.helpBtn = el('button', 'sheet-help', '[[question]]');
+    this.helpBtn.style.display = 'none';
+    this.helpBtn.setAttribute('aria-label', i18n.t('book.title'));
+    this.helpBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      vibrate(8);
+      const topic = this.helpBtn.dataset.topic;
+      if (topic) Sheet.onHelp?.(topic);
+    });
     const handle = el('div', 'sheet-handle');
     this.titleEl = el('h2', 'sheet-title');
     this.body = el('div', 'sheet-body');
-    this.panel.append(close, handle, this.titleEl, this.body);
+    this.panel.append(close, this.helpBtn, handle, this.titleEl, this.body);
     this.overlay.appendChild(this.panel);
     document.body.appendChild(this.overlay);
     this.bindPullDown(handle);
+    this.setHelp(helpTopic);
 
     if (!escBound) {
       escBound = true;
@@ -139,8 +153,18 @@ export class Sheet {
     setRich(this.titleEl, text);
   }
 
+  /** [Q6] Puts a "?" plate on the sheet that opens the Bunker Book at the given topic (null removes it). */
+  setHelp(topic: string | null): void {
+    this.helpBtn.style.display = topic ? '' : 'none';
+    if (topic) this.helpBtn.dataset.topic = topic;
+  }
+
   show(): void {
-    if (!this.open) uiSound('open', 0.7, 150);
+    if (!this.open) {
+      uiSound('open', 0.7, 150);
+      // [Q6] The newest sheet is the top one (the Bunker Book opens over the sheet it was asked from).
+      document.body.appendChild(this.overlay);
+    }
     this.open = true;
     this.panel.style.transform = '';
     this.overlay.classList.add('open');

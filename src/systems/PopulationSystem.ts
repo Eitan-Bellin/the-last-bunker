@@ -171,13 +171,13 @@ export class PopulationSystem {
   canTrain(state: GameState, resources: ResourceSystem, s: SurvivorState): boolean {
     if (s.child || s.isOnMission || rankOf(s) >= MAX_RANK) return false;
     if (!state.buildings.some(b => b.type === 'trainingRoom' && effectiveLevel(b) > 0)) return false;
-    return resources.canAfford(state, trainingCost(s) as Record<string, number>);
+    return resources.canAfford(state, trainingCost(s, state.longGame?.meta.act ?? 1) as Record<string, number>);
   }
 
   train(sm: StateManager, resources: ResourceSystem, survivorId: string): boolean {
     const s = sm.state.survivors.find(x => x.id === survivorId);
     if (!s || !this.canTrain(sm.state, resources, s)) return false;
-    if (!resources.spend(sm, trainingCost(s) as Record<string, number>)) return false;
+    if (!resources.spend(sm, trainingCost(s, sm.state.longGame?.meta.act ?? 1) as Record<string, number>)) return false;
     const before = rankOf(s);
     s.mxp = (s.mxp ?? 0) + trainingGain(s);
     sm.applyDelta({ path: 'lateGame.trained', value: (sm.state.lateGame.trained ?? 0) + 1 });

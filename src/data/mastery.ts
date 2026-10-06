@@ -35,10 +35,12 @@ export function trainingGain(s: SurvivorState): number {
   return Math.round(span * 0.25);
 }
 
-/** Price of one quick training: knowledge and food, more for higher ranks. */
-export function trainingCost(s: SurvivorState): Partial<Record<ResourceType, number>> {
+/** Price of one quick training: knowledge and food, more for higher ranks. [Q10] From Act III it also asks components, so training stays a choice. */
+export function trainingCost(s: SurvivorState, act = 1): Partial<Record<ResourceType, number>> {
   const r = rankOf(s);
-  return { knowledge: 40 * r, food: 60 * r };
+  const cost: Partial<Record<ResourceType, number>> = { knowledge: 40 * r, food: 60 * r };
+  if (act >= 3) cost.components = 40 * r;
+  return cost;
 }
 
 export type SpecId = 'master' | 'mentor';

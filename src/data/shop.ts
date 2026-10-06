@@ -22,8 +22,9 @@ export const PROJECT_BOOST_SHARE = 0.25;
 export const SCRAP_BUNDLE = 20;
 
 export const SHOP_ITEMS: ShopItem[] = [
-  { id: 'blueprint', icon: '[[blueprints]]', price: 150 },
-  { id: 'scrap20', icon: '[[scrap]]', price: 40 },
+  // [Q10] A few a day: the shop's two unlimited items let credits buy any amount of progress.
+  { id: 'blueprint', icon: '[[blueprints]]', price: 150, dailyLimit: 3 },
+  { id: 'scrap20', icon: '[[scrap]]', price: 40, dailyLimit: 5 },
   // [Long game] Boosts are a treat, not a way around the game: a few a day.
   { id: 'researchBoost', icon: '[[research]]', price: 60, dailyLimit: 3 },
   { id: 'projectBoost', icon: '[[materials]]', price: 120, dailyLimit: 1 },

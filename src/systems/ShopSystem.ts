@@ -4,6 +4,7 @@ import type { ResourceSystem } from './ResourceSystem';
 import type { ResearchSystem } from './ResearchSystem';
 import type { SupplySystem } from './SupplySystem';
 import { localDay } from './SupplySystem';
+import { TUNING } from '../data/tuning';
 import { PROJECT_BOOST_SHARE, RESEARCH_BOOST_SECONDS, SCRAP_BUNDLE, SHOP_ITEMS, SHOP_PRICE_RAMP, type ShopItem, type ShopItemId } from '../data/shop';
 
 /** What the Projects system offers the shop (feature-detected: absent until that system exists). */
@@ -44,7 +45,9 @@ export class ShopSystem {
 
   price(state: GameState, item: ShopItem): number {
     const n = this.counts(state).day[item.id] ?? 0;
-    return Math.round(item.price * Math.pow(SHOP_PRICE_RAMP, n));
+    // [Q10] Dearer in later Acts, so the credits of a bigger bunker do not buy more than the first ones did.
+    const act = state.longGame?.meta.act ?? 1;
+    return Math.round(item.price * (1 + TUNING.shopActRamp * Math.max(0, act - 1)) * Math.pow(SHOP_PRICE_RAMP, n));
   }
 
   offers(state: GameState): ShopOffer[] {

@@ -1,0 +1,75 @@
+/* ---------- Command panel (balance plan, phase 1): what to do now, every requirement, a forecast, the ending's lean ---------- */
+
+.command { display: flex; flex-direction: column; gap: 10px; }
+.now-card { border-color: rgba(255, 212, 71, 0.55); }
+.now-text { font-weight: 700; line-height: 1.4; margin: 4px 0; }
+.now-meta { margin-bottom: 8px; }
+.now-go { align-self: flex-start; }
+
+.act-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.act-pct { font-weight: 700; color: var(--accent); font-variant-numeric: tabular-nums; }
+
+/* One requirement of the Act: a bar and what to do about it; the whole row is a button. */
+.req-row {
+  display: block; width: 100%; text-align: start; font: inherit; color: inherit;
+  background: none; border: 0; padding: 6px 0 8px; cursor: pointer;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+.req-row:first-of-type { border-top: 0; }
+.req-row:active { opacity: 0.8; }
+.req-row.done { opacity: 0.55; }
+.req-hint { margin-top: 4px; line-height: 1.35; }
+
+.forecast-row { display: grid; grid-template-columns: 1.3fr 0.8fr 1.4fr; gap: 8px; align-items: baseline; padding: 3px 0; font-size: calc(13px * var(--fs, 1)); }
+.forecast-now { text-align: end; font-variant-numeric: tabular-nums; }
+.forecast-then { color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+.forecast-row.bad .forecast-then { color: var(--danger, #ff6b5a); font-weight: 700; }
+.forecast-row.warn .forecast-then { color: #ffd447; }
+
+.ending-row { margin-top: 8px; }
+
+.era-head.compact { padding: 8px 10px; }
+.era-head.compact .era-tagline { display: none; }
+
+/* The chip's Act tag stays on narrow screens (the era's name is the part that folds away). */
+.era-chip .act-tag { font-variant-numeric: tabular-nums; letter-spacing: 0.02em; }
+
+/* Inbox cards: what a contract asks and pays, and which ones are safe to take. */
+.inbox-title { display: flex; flex-direction: column; gap: 2px; }
+.inbox-detail { font-size: 0.85em; opacity: 0.85; font-variant-numeric: tabular-nums; }
+.inbox-safe { font-size: 0.75em; color: #7affb0; }
+.inbox-all { width: 100%; margin-bottom: 8px; }
+
+/* Weekly prizes: collectible badges. */
+.cosmetic-shelf { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.cosmetic-chip { font-size: calc(11px * var(--fs, 1)); padding: 2px 8px; border-radius: 10px; border: 1px solid var(--cos, #c9a35a); color: var(--cos, #c9a35a); background: rgba(0, 0, 0, 0.25); }
+.cosmetic-chip[data-kind='flag'] { border-radius: 2px 10px 10px 2px; }
+
+/* The "?" plate on a sheet: mirrors the close plate on the other side. */
+.sheet-help {
+  position: sticky; top: 2px; z-index: 3; display: grid; place-items: center;
+  width: 36px; height: 36px; margin-inline-end: auto; margin-inline-start: -8px; margin-bottom: -36px; padding: 0;
+  border: 1px solid #0c0d0f; border-radius: var(--r-m);
+  background: linear-gradient(180deg, var(--steel-1), var(--steel-3));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14), 0 2px 4px rgba(0, 0, 0, 0.55);
+  color: #e8dcc4; cursor: pointer;
+}
+.sheet-help .ic { width: 18px; height: 18px; }
+.sheet-help:active { transform: translateY(1px); color: var(--amber); }
+
+/* The Bunker Book */
+.book { display: flex; flex-direction: column; gap: 10px; }
+.book-search { width: 100%; padding: 9px 12px; border-radius: 10px; border: 1px solid var(--border); background: rgba(0, 0, 0, 0.35); color: inherit; font: inherit; }
+.book-entry { border-top: 1px solid rgba(255, 255, 255, 0.07); padding: 2px 0; }
+.book-title { cursor: pointer; padding: 9px 0; font-weight: 600; list-style: none; }
+.book-title::-webkit-details-marker { display: none; }
+.book-text { margin: 0 0 10px; line-height: 1.5; color: var(--text-secondary); }
+
+/* The Chronicle */
+.chronicle-row { display: grid; grid-template-columns: 52px 22px 1fr; gap: 8px; align-items: baseline; padding: 5px 0; border-top: 1px solid rgba(255, 255, 255, 0.05); }
+.chronicle-row:first-of-type { border-top: 0; }
+.chronicle-day { font-size: 0.8em; opacity: 0.7; font-variant-numeric: tabular-nums; }
+
+/* [Q7] A button that a "new system" card points at glows for a few seconds. */
+@keyframes spot-glow { 0%, 100% { box-shadow: 0 0 0 0 rgba(255, 212, 71, 0); } 50% { box-shadow: 0 0 0 4px rgba(255, 212, 71, 0.85), 0 0 18px rgba(255, 212, 71, 0.6); } }
+.spotlight { animation: spot-glow 1.1s ease-in-out 8; border-radius: 8px; position: relative; z-index: 5; }

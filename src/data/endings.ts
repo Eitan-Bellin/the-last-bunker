@@ -11,6 +11,8 @@ export interface EndingDef {
   icon: string;
   name: Record<'he' | 'en', string>;
   text: Record<'he' | 'en', string>;
+  /** [Q8] What raises this ending's score, in plain words (shown in the Command panel). */
+  drivers: Record<'he' | 'en', string>;
   /** Extra Legacy (share of the Genesis payout). */
   legacy: number;
   /** How strongly this run fits the ending (the highest wins; the Ark is the default). */
@@ -24,6 +26,10 @@ const contracts = (s: GameState) => (s.stats as unknown as { contractsDone?: num
 export const ENDINGS: EndingDef[] = [
   {
     id: 'commonwealth', icon: '[[chat]]', legacy: 0.1,
+    drivers: {
+      he: 'דוקטרינת דיפלומטיה (הכי חזק), דוקטרינת קומונה, החוק "דלתות פתוחות", ידידות עם כל שלושת השותפים, ועוד ועוד חוזים',
+      en: 'The Diplomacy doctrine (strongest), the Commune doctrine, the Open Doors law, friendship with all three partners, and many contracts',
+    },
     name: { he: 'חבר העמים', en: 'The Commonwealth' },
     text: {
       he: 'בונקר 17 לא נשאר מתחת לאדמה. הדרכים שסללתם, החוזים ששמרתם והאנשים שהאכלתם הפכו שכנים לברית. כשתתחיל הבראשית, היא תתחיל עם חברים.',
@@ -35,6 +41,10 @@ export const ENDINGS: EndingDef[] = [
   },
   {
     id: 'fortress', icon: '[[vault]]', legacy: 0.1,
+    drivers: {
+      he: 'דוקטרינות מבצר וסיירים (חזקות), מיליציה ותורת הבונקר, והחוק "משטר צבאי"',
+      en: 'The Fortress and Rangers doctrines (strong), Militia and the Bunker Doctrine, and the Martial Law law',
+    },
     name: { he: 'המבצר', en: 'The Fortress' },
     text: {
       he: 'העולם ניסה לקחת ממכם שוב ושוב, ושוב ושוב הדלת החזיקה. מה שתעבירו לעולם הבא הוא לא רק זרעים וספרים, אלא הידיעה שאפשר לעמוד.',
@@ -44,6 +54,10 @@ export const ENDINGS: EndingDef[] = [
   },
   {
     id: 'garden', icon: '[[clover]]', legacy: 0.1,
+    drivers: {
+      he: 'דוקטרינת תפטיר או חוות שטח (הידרופוניקה נותנת פחות), כיפת השמיים, והחוקים "יום מנוחה" ו"קיצוב"',
+      en: 'The Mycelium or Surface Farms doctrine (Hydroponics counts less), the Sky Dome, and the Day of Rest and Rationing laws',
+    },
     name: { he: 'הגן', en: 'The Garden' },
     text: {
       he: 'מתחת לכיפת השמיים גדלים עכשיו עצים שאף אחד כאן לא ראה מעולם. אתם מוכנים לבראשית כמו שגננים מוכנים לאביב: עם זרעים בכיס וידיים בעפר.',
@@ -54,6 +68,10 @@ export const ENDINGS: EndingDef[] = [
   },
   {
     id: 'ark', icon: '[[vault]]', legacy: 0.05,
+    drivers: {
+      he: 'ברירת המחדל: מנצחת כשאף דרך אחרת לא פותחת פער ברור',
+      en: 'The default: wins when no other path pulls clearly ahead',
+    },
     name: { he: 'התיבה', en: 'The Ark' },
     text: {
       he: 'לא כל מה שבניתם ישרוד את המעבר. אבל השמות, השירים והזרעים בתיבה כן. מישהו בעולם הבא יפתח אותה, ויידע שהייתם כאן.',

@@ -9,7 +9,7 @@ import { uiSound } from '../../audio/uiSound';
 import { genesisRequirements } from './MenuPanel';
 
 export class ResearchPanel {
-  private sheet = new Sheet('research-sheet');
+  private sheet = new Sheet('research-sheet', 'research');
   private engine: GameEngine;
   private branch: ResearchBranch = 'infrastructure';
   private signature = '';

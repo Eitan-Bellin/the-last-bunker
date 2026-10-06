@@ -1,7 +1,7 @@
 import type { GameState, ResourceType } from '../core/GameState';
 import { hexDistance } from './surface';
 import { hasFeature } from '../systems/ResearchSystem';
-import { GENESIS_MIN_ERA, GENESIS_MIN_SURVIVORS } from '../systems/MetaSystem';
+import { genesisGateMet } from '../systems/MetaSystem';
 
 /**
  * The storyline (Sprint 6): chapters told by recurring characters, each unlocked by a milestone.
@@ -105,7 +105,9 @@ const mayaHome = (s: GameState) => s.survivors.some(x => x.name === 'Maya' && !x
 /** An expedition has reached the outer rings of the map (distance 6+ from the bunker). */
 const outerRing = (s: GameState) => s.explorationMap.some(h => h.explored && hexDistance(h.x, h.y) >= 6);
 /** Genesis is ready: the same gate as the rebirth button (MetaSystem.rebirthRequirements). */
-const genesisReady = (s: GameState) => hasFeature(s, 'genesis') && s.survivors.length >= GENESIS_MIN_SURVIVORS && (s.era ?? 0) >= GENESIS_MIN_ERA;
+const genesisReady = (s: GameState) => genesisGateMet(s);
+/** [Q1] The run is in this Act or later (a bunker from before the long game counts as Act VII: it keeps the classic story timing). */
+const actAtLeast = (s: GameState, n: number) => !s.longGame || s.longGame.meta.legacy || s.longGame.meta.act >= n;
 
 export const CHAPTERS: Chapter[] = [
   {
@@ -261,7 +263,7 @@ export const CHAPTERS: Chapter[] = [
   {
     id: 'platform', number: 9,
     title: { he: 'רציף 4', en: 'Platform 4' },
-    trigger: s => (s.era ?? 0) >= 3 && has(s, 'story:static'),
+    trigger: s => (s.era ?? 0) >= 3 && actAtLeast(s, 3) && has(s, 'story:static'),
     lines: [
       { who: 'ezra', when: terminusAlly, text: { he: 'בונקר 17! המנהרה שלכם פרצה הלילה לקו שלנו. שמעתי את המקדחות שלכם מרציף 4, כמו שכנים שמזיזים רהיטים.', en: 'Bunker 17! Your tunnel broke into our line last night. I heard your drills from platform 4, like neighbors moving furniture.' } },
       { who: 'ezra', when: s => !terminusAlly(s), text: { he: 'בונקר 17. אף פעם לא אמרתם לנו איפה אתם. אבל הלילה המקדחות שלכם פרצו לתוך המנהרה שלנו, אז עכשיו אנחנו יודעים.', en: 'Bunker 17. You never told us where you were. But last night your drills broke into our tunnel, so now we know.' } },
@@ -292,7 +294,8 @@ export const CHAPTERS: Chapter[] = [
   {
     id: 'fever', number: 10,
     title: { he: 'קדחת האפר', en: 'Ash Fever' },
-    trigger: s => s.survivors.length >= 40 && has(s, 'story:genesis'),
+    // [Q1] A bunker of 40 reaches Act III within days; the fever belongs to the expansion (Act IV).
+    trigger: s => s.survivors.length >= 40 && actAtLeast(s, 4) && has(s, 'story:genesis'),
     lines: [
       { who: 'narrator', text: { he: 'זה התחיל בשיעול בחדר האוכל. אחרי יומיים, תשעה אנשים בוערים מחום, ובמרפאה אין יותר מיטות.', en: 'It started with a cough in the canteen. Two days later nine people are burning with fever, and the medbay has no beds left.' } },
       { who: 'crew', when: s => has(s, 'clan:sheltered') || has(s, 'clan:children'), text: { he: 'זה התחיל במסדרון שבו ישנים אנשי השבט. אנשים כבר מתחילים ללחוש עליהם.', en: 'It started in the corridor where the Clan\'s people sleep. People are already whispering about them.' } },
@@ -351,7 +354,7 @@ export const CHAPTERS: Chapter[] = [
   {
     id: 'gate', number: 12,
     title: { he: 'השער', en: 'The Gate' },
-    trigger: s => s.survivors.length >= 50 && has(s, 'story:toll'),
+    trigger: s => s.survivors.length >= 50 && actAtLeast(s, 5) && has(s, 'story:toll'),
     lines: [
       { who: 'narrator', when: clanFriend, text: { he: 'חמישים אנשים חיים עכשיו מתחת לאדמה. בחוץ, ליד הדלת, מחכים עשרה אנשים משבט החלודה. הם באו בלי נשק.', en: 'Fifty people now live underground. Outside, by the door, ten people of the Rust Clan are waiting. They came unarmed.' } },
       { who: 'gideon', when: clanFriend, text: { he: 'השבט החליט. אנחנו לא רוצים לקחת יותר. אנחנו רוצים לשמור. תנו לנו לשמור על הדרכים שלכם, ואף שודד לא יתקרב לדלת הזאת.', en: 'The Clan has decided. We don\'t want to take anymore. We want to guard. Let us watch your roads, and no raider will come near this door.' } },
@@ -393,6 +396,7 @@ export const CHAPTERS: Chapter[] = [
   {
     id: 'decision', number: 13,
     title: { he: 'ההחלטה הגדולה', en: 'The Big Decision' },
+    // [Q1] Fires only when the Genesis button itself is open (the last Act done), not at the old research + 40 people gate.
     trigger: genesisReady,
     lines: [
       { who: 'noa', text: { he: 'בונקר 17, המכונה חמה. בראשית מוכנה.', en: 'Bunker 17, the machine is warm. Genesis is ready.' } },

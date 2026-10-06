@@ -7,6 +7,9 @@ import { bus } from '../core/EventBus';
 import { CHAPTERS, bindStoryState, getChapter, shownChoices, shownLines, type StoryEffect, type StoryLine } from '../data/story';
 
 const CHAPTER_GAP = 240;
+/** [Q1] From the late chapters on, at least an hour of play separates two chapters, so a run never ends in a flood of dialogs. */
+const LATE_CHAPTER = 9;
+const LATE_CHAPTER_GAP = 3600;
 /** Story characters never walk out in a "someone leaves" outcome; they have their own arcs. */
 const STORY_PEOPLE = new Set(['Maya', 'Gideon']);
 
@@ -96,7 +99,7 @@ export class StorySystem {
     this.sm.applyDelta({ path: 'storyFlags', value: [...new Set([...this.sm.state.storyFlags, ...flags, ...(effect?.flags ?? [])])] });
     this.sm.applyDelta({ path: 'prestige.storySeen', value: [...new Set([...(this.sm.state.prestige.storySeen ?? []), ch.id])] });
     this.offered = null;
-    this.nextAllowed = this.sm.state.stats.totalPlayTime + CHAPTER_GAP;
+    this.nextAllowed = this.sm.state.stats.totalPlayTime + (ch.number >= LATE_CHAPTER ? LATE_CHAPTER_GAP : CHAPTER_GAP);
     bus.emit('story:done', ch.id);
     return out;
   }

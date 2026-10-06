@@ -25,6 +25,10 @@ export interface InboxKind {
   choices(item: InboxItem, state: GameState): InboxChoice[];
   /** Values for the title and body placeholders (default: the item's data as text). */
   params?(item: InboxItem, locale: string): Record<string, string>;
+  /** [Q4] One line under the card's title in the list: what it asks and what it pays. */
+  preview?(item: InboxItem, locale: string): string;
+  /** [Q4] How much the card is worth (cards of the same kind sort by it, richest first). */
+  value?(item: InboxItem): number;
   apply(item: InboxItem, key: string, sm: StateManager): void;
 }
 

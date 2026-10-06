@@ -53,15 +53,20 @@ export interface SeasonState {
 /** [Society lane] Laws, political capital and the factions inside the bunker. */
 export interface PolicyState {
   laws: string[];
+  /** [reserved: saved, not used yet] Political capital (the Council; see the balance plan, N4). */
   capital: number;
+  /** [reserved: saved, not used yet] Faction approval. */
   approval: Record<string, number>;
+  /** [reserved: saved, not used yet] World time until which a faction strike lasts. */
   strikeUntil: number;
 }
 
 /** [World lane] Regions, outposts, treaties and contracts outside. */
 export interface WorldState {
+  /** [reserved: saved, not used yet] Named map regions (balance plan, N9). */
   regions: Record<string, unknown>;
   outposts: unknown[];
+  /** [reserved: saved, not used yet] Treaties with the outside partners (balance plan, N8). */
   treaties: Record<string, unknown>;
   contracts: unknown[];
   seq: number;
@@ -92,6 +97,18 @@ export interface ForemanState {
   orders: Record<string, unknown>;
 }
 
+/** [Q14] One line of the Chronicle (src/systems/ChronicleSystem.ts). */
+export interface ChronicleEntry {
+  /** World seconds when it happened. */
+  t: number;
+  /** What kind of milestone ('act', 'project', 'chapter', 'doctrine', ...). */
+  k: string;
+  id?: string;
+  n?: number;
+  /** The run (timeline) it belongs to: 0 for the first, +1 per Genesis. */
+  run: number;
+}
+
 export interface LongGameState {
   meta: MetaState;
   dig: DigState;
@@ -101,6 +118,8 @@ export interface LongGameState {
   world: WorldState;
   inbox: InboxState;
   foreman: ForemanState;
+  /** [Q14, save v6] The run's milestones; kept across Genesis so earlier timelines stay in the book. */
+  chronicle: ChronicleEntry[];
 }
 
 export function createLongGame(): LongGameState {
@@ -113,6 +132,7 @@ export function createLongGame(): LongGameState {
     world: { regions: {}, outposts: [], treaties: {}, contracts: [], seq: 0 },
     inbox: { items: [], seq: 0 },
     foreman: { orders: {} },
+    chronicle: [],
   };
 }
 
@@ -141,5 +161,6 @@ export function migrateLongGame(saved: Partial<LongGameState> | undefined, era: 
     world: { ...fresh.world, ...saved.world },
     inbox: { ...fresh.inbox, ...saved.inbox },
     foreman: { ...fresh.foreman, ...saved.foreman },
+    chronicle: Array.isArray(saved.chronicle) ? saved.chronicle : [],
   };
 }

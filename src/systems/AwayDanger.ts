@@ -4,7 +4,7 @@ import type { DisasterKind, GameState } from '../core/GameState';
 import type { StateManager } from '../core/StateManager';
 import type { SeededRandom } from '../core/Random';
 import { DAY_MS, isQuiet } from './DeathSystem';
-import { raidStrength, type EventSystem } from './EventSystem';
+import { raidProfile, raidStrength, type EventSystem } from './EventSystem';
 import type { IncidentSystem } from './IncidentSystem';
 import type { DeathSystem } from './DeathSystem';
 
@@ -15,8 +15,7 @@ import type { DeathSystem } from './DeathSystem';
  * comes back to a hurt bunker, not a graveyard.
  */
 const AWAY_FREQUENCY = 0.5;
-/** Raids and disasters a day for an engaged player, before the away discount. */
-const RAIDS_PER_DAY: Record<number, number> = { 2: 1, 3: 2 };
+/** Raids a day for an engaged player come from raidProfile (per Act); disasters stay flat. */
 const DISASTERS_PER_DAY = 1 / 2.5;
 
 export interface AwayDangerReport {
@@ -73,7 +72,7 @@ export class AwayDanger {
     // New rolls, at half the usual pace.
     if ((state0.era ?? 0) >= 2) {
       // [P2] The threat director sets the pace, and a breather keeps raiders away.
-      const raidRate = inBreather(state0) ? 1e-9 : (RAIDS_PER_DAY[Math.min(3, state0.era)] ?? 1) * AWAY_FREQUENCY * threatPace(state0) / 86400;
+      const raidRate = inBreather(state0) ? 1e-9 : raidProfile(state0).perDay * AWAY_FREQUENCY * threatPace(state0) / 86400;
       const disasterRate = DISASTERS_PER_DAY * AWAY_FREQUENCY / 86400;
       for (const [rate, type] of [[raidRate, 'raid'], [disasterRate, 'disaster']] as const) {
         if (state0.danger.raid && type === 'raid') continue;

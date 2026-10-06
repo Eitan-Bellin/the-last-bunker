@@ -60,10 +60,14 @@ export interface MenuActions {
   persistLabel: () => string;
   /** Checks a coupon code and opens the coupon sheet when it is right. */
   redeemCoupon: (code: string) => boolean;
+  /** [Q6] Opens the Bunker Book. */
+  openBook: () => void;
+  /** [Q14] Opens the Chronicle (the run's milestones). */
+  openChronicle: () => void;
 }
 
 export class MenuPanel {
-  private sheet = new Sheet('menu-sheet');
+  private sheet = new Sheet('menu-sheet', 'menu');
   private engine: GameEngine;
   private actions: MenuActions;
   private tab: MenuTab = 'settings';
@@ -142,6 +146,14 @@ export class MenuPanel {
 
   private renderSettings(): HTMLElement {
     const box = el('div', 'bp');
+    // [Q6/Q14] The book and the chronicle sit first: the questions a new player asks.
+    const guide = el('div', 'bp-card');
+    const book = el('div', 'bp-row');
+    book.append(el('span', '', `[[question]] ${i18n.t('book.title')}`), button(i18n.t('book.open'), 'btn-small', () => { uiSound('click'); this.actions.openBook(); }));
+    const chron = el('div', 'bp-row');
+    chron.append(el('span', '', `[[journal]] ${i18n.t('chronicle.title')}`), button(i18n.t('book.open'), 'btn-small', () => { uiSound('click'); this.actions.openChronicle(); }));
+    guide.append(book, chron);
+    box.appendChild(guide);
     const general = el('div', 'bp-card');
     const lang = el('div', 'bp-row');
     lang.append(el('span', '', `[[surface]] ${i18n.t('settings.language')}`),
