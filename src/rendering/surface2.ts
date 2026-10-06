@@ -2,6 +2,7 @@ import { Container, Graphics, MeshSimple, Sprite, Text, Texture, TilingSprite } 
 import { ArtLibrary, glowTexture, moteTexture } from '../art/ArtLibrary';
 import { bus } from '../core/EventBus';
 import { BUILDING_W, SHAFT_W } from './layout';
+import { GFX } from './gfxFeatures';
 import { hGradient, mix, seeded, softGlow, vGradient } from './draw';
 import { PAINT_RIGHT, SKY_TOP, WORLD_LEFT, WORLD_RIGHT, type Animated } from './world';
 import {
@@ -444,6 +445,9 @@ export function buildSurface2(
 
   // ---------- Sky and panorama (on the slow parallax layer) ----------
   let painted: Sprite | null = null;
+  // Plan 2026-10 Q7: the painting's copies; with GFX.skyLayers they show the sky-only texture and drift on their own layer.
+  const skySprites: Sprite[] = [];
+  let skyLayered = false;
   const info = backdrop ? analyseSky(backdrop, era) : null;
   // The painting spans [px0, px0 + pw] × [py0, 0.16 × its height below ground].
   // Scaled to the panorama's own span; past it the mirrored copies carry the land on east (the world is wider for the project lots).
@@ -471,6 +475,7 @@ export function buildSurface2(
       s.scale.set(sx, scale);
       s.position.set(x, py0);
       farBack.addChild(s);
+      skySprites.push(s);
       if (i === 1) painted = s;
       const l = info ? new Sprite(info.land) : null;
       if (l && info) {
@@ -822,10 +827,24 @@ export function buildSurface2(
       const surfaceShown = view.y0 < 60;
       // Parallax: the panorama follows the camera a little, so it reads as far away.
       const cx = (view.x0 + view.x1) / 2, cy = (view.y0 + view.y1) / 2;
-      const ox = Math.max(-30, Math.min(30, (cx - BUILDING_W / 2) * PAR_X));
-      const oy = Math.max(-18, Math.min(42, (cy - PAR_REF_Y) * PAR_Y));
+      const ox0 = Math.max(-30, Math.min(30, (cx - BUILDING_W / 2) * PAR_X));
+      const oy0 = Math.max(-18, Math.min(42, (cy - PAR_REF_Y) * PAR_Y));
+      // Two layers (plan 2026-10 Q7): the sky and its clouds follow the camera twice as much as the landscape does, so the
+      // skyline slides over the sky as the camera pans. Off at low quality and in lite mode (one texture instead of two).
+      let layered = GFX.skyLayers && !!info;
+      if (layered !== skyLayered) {
+        const tex = layered ? info!.skyOnly() : backdrop;
+        if (tex) {
+          for (const s of skySprites) s.texture = tex;
+          skyLayered = layered;
+        } else layered = false;
+      }
+      const ox = layered ? Math.max(-60, Math.min(60, (cx - BUILDING_W / 2) * PAR_X * 2)) : ox0;
+      const oy = layered ? Math.max(-36, Math.min(84, (cy - PAR_REF_Y) * PAR_Y * 2)) : oy0;
       far.position.set(ox, oy);
-      mid.position.set(ox * 0.5, oy * 0.5);
+      farLand.position.set(ox0 - ox, oy0 - oy);
+      farFx.position.set(ox0 - ox, oy0 - oy);
+      mid.position.set(ox0 * 0.5, oy0 * 0.5);
 
       // Weather: showers by the wall clock (or `window.__weather` = 'rain' | 'storm' | 'ash' | 'clear' in dev).
       const dev = (window as unknown as { __weather?: string }).__weather;

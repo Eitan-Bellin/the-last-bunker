@@ -4,6 +4,7 @@ import { SaveManager } from './core/SaveManager';
 import { i18n } from './i18n/I18nManager';
 import { applyTextSize } from './ui/textSize';
 import { hideSplash } from './ui/splash';
+import { installMaterials } from './ui/materials';
 
 applyTextSize();
 
@@ -57,6 +58,7 @@ async function chooseDefaultLanguage(): Promise<void> {
 
 async function boot(): Promise<void> {
   await chooseDefaultLanguage();
+  installMaterials(); // plan 2026-10 M7: the worn-steel texture of the HUD plates
   await new GameApp().start();
 }
 

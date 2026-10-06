@@ -3,8 +3,9 @@ import type { BuildingType, SurvivorState } from '../core/GameState';
 import { portraitFor, type PortraitDef } from '../data/portraits';
 import { hashString, shade } from './draw';
 import { ROOM_H } from './layout';
-import type { Crowd, CrowdMember, Spot } from './workSpots';
-import { Body3D, PEOPLE3D, UNITS_PER_M, bodyData, ppm, type Anim3, type BodyKind } from './people3d';
+import type { Crowd, CrowdMember, Rest, Spot } from './workSpots';
+import { Body3D, PEOPLE3D, UNITS_PER_M, bodyData, hasSetPoses, ppm, requestSetPoses, type Anim3, type BodyKind } from './people3d';
+import { GFX } from './gfxFeatures';
 
 const SPEED = 24;
 const FLOOR_FRONT = ROOM_H - 3;
@@ -245,6 +246,13 @@ export class Person implements CrowdMember {
   private blinkT = 0;
   /** Per-person phase offset, so a room's workers don't move in lockstep. */
   private off = 0;
+  /** Plan 2026-10 Q3: build variety from the id hash (height, width, skin lightness): no twins in a room. */
+  private sizeV = 1;
+  private widthV = 1;
+  private skinV = 1;
+  /** The room's ambient tint as the renderer set it (before the lamp pools of the painting are applied, Q2). */
+  private ambient = 0xffffff;
+  private placeRGB: [number, number, number] = [1, 1, 1];
 
   private crowd: Crowd | null = null;
   private spot: Spot | null = null;
@@ -254,6 +262,14 @@ export class Person implements CrowdMember {
   private arrive: 'snap' | 'walk' = 'snap';
   /** A short pause from work (stands, looks around) before carrying on. */
   private breather = false;
+
+  // Plan 2026-10 M5 (people use the set): lie in a bunk, sit on a bench or bunk edge, eat at the table.
+  private intent: 'none' | 'sleep' | 'sit' | 'eat' = 'none';
+  private rest: Rest | null = null;
+  private atRest = false;
+  /** 0 on the floor .. 1 on the bed or seat (the hop up and down, about 0.45 s). */
+  private restPhase = 0;
+  private restHit = false;
 
   // Pose cross-fade: the pose shown is blended from a snapshot of the last one into the new target over ~0.2 s.
   private cur: Pose = { ...REST };
@@ -268,6 +284,58 @@ export class Person implements CrowdMember {
   private tagRow = 0;
   private tagLift = 0;
   private tagBaseY = 0;
+
+  /**
+   * Plan 2026-10 M5: what the person would like to do with the room's furniture right now (the renderer decides from the
+   * clock: sleep at night, eat at mealtimes, sit now and then by day). It only takes effect where the painting has set data.
+   */
+  setIntent(intent: 'none' | 'sleep' | 'sit' | 'eat'): void {
+    this.intent = intent;
+  }
+
+  /** True while lying on a bed (so the renderer shows them instead of just a Zzz). */
+  get isSleeping(): boolean {
+    return this.rest?.kind === 'sleep' && this.restPhase > 0.5;
+  }
+
+  private restWanted(): boolean {
+    if (!GFX.sitSleep || !this.b3 || this.intent === 'none' || !this.crowd) return false;
+    if (!hasSetPoses(this.kind)) {
+      requestSetPoses(this.kind);
+      return false;
+    }
+    return true;
+  }
+
+  private restClaim(): void {
+    const c = this.crowd!;
+    if (this.intent === 'none') return;
+    const r = c.claimRest(this, this.intent, this.x);
+    if (!r) return;
+    this.rest = r;
+    this.atRest = false;
+    c.release(this);
+    this.spot = null;
+    this.breather = false;
+  }
+
+  private restLeave(): void {
+    this.crowd?.releaseRest(this);
+    if (this.atRest) {
+      this.atRest = false;
+      this.wait = 0;
+      this.replan = true;
+    }
+    if (this.restPhase <= 0) this.rest = null;
+  }
+
+  /** The animation of the place the person is on (a seated person now and then talks). */
+  private restAnim(t: number): Anim3 {
+    const k = this.rest!.kind;
+    if (k === 'sleep') return 'sleep';
+    if (k === 'eat' || this.intent === 'eat') return 'eat';
+    return (Math.floor((t + this.off) / 9) % 3 === 1 ? 'sitTalk' : 'sit');
+  }
 
   /** Whether this body was made for a child (rebuilt when they grow up). */
   readonly bornChild: boolean;
@@ -289,6 +357,9 @@ export class Person implements CrowdMember {
       return seed / 0x100000000;
     };
     this.off = this.rnd() * 10;
+    this.sizeV = 0.94 + this.rnd() * 0.12;
+    this.widthV = 0.92 + this.rnd() * 0.16;
+    this.skinV = 0.93 + this.rnd() * 0.14;
     this.shadow.ellipse(0, 0, 9, 2.8).fill({ color: 0x000000, alpha: 0.35 });
     // Draw order: back leg, back arm, torso (with head), front leg, front arm.
     this.thighB.addChild(this.shinB);
@@ -326,7 +397,7 @@ export class Person implements CrowdMember {
 
   /** Standing height to the top of the head (world units, before the depth scale). */
   private height(): number {
-    if (this.b3) return (this.b3.data.height * UNITS_PER_M) / ppm();
+    if (this.b3) return ((this.b3.data.height * UNITS_PER_M) / ppm()) * this.sizeV;
     const b = this.b;
     return (b.thigh + b.shin + b.torso + (2.6 + 9.8) * b.head) * this.baseScale;
   }
@@ -357,13 +428,28 @@ export class Person implements CrowdMember {
    * give it a two-layer contact shadow instead of a flat oval.
    */
   setAmbient(tint: number): void {
-    if (this.figure.tint === tint) return;
-    this.figure.tint = tint;
+    if (this.ambient === tint) return;
+    this.ambient = tint;
+    this.applyTint();
     this.light = Math.max((tint >> 16) & 255, (tint >> 8) & 255, tint & 255) / 255;
     if (this.contact) return;
     this.shadow.clear();
     this.shadow.ellipse(0, 0, 15, 3.6).fill({ color: 0x000000, alpha: 0.18 });
     this.shadow.ellipse(0, 0, 8, 2.2).fill({ color: 0x000000, alpha: 0.42 });
+  }
+
+  /**
+   * Plan 2026-10 Q2: the figure's tint is the room's ambient colour times the painting's own lamp pools at this spot:
+   * a little darker and cooler between the lamps, a little warmer and brighter under one (the average stays put).
+   */
+  private applyTint(): void {
+    let t = this.ambient;
+    if (GFX.place && !this.lifted && this.crowd?.lightAt(this.x, this.placeRGB)) {
+      const [kr, kg, kb] = this.placeRGB;
+      const c = (sh: number, k: number) => Math.max(0, Math.min(255, Math.round(((t >> sh) & 255) * k)));
+      t = (c(16, kr) << 16) | (c(8, kg) << 8) | c(0, kb);
+    }
+    if (this.figure.tint !== t) this.figure.tint = t;
   }
 
   /** Rebuilds the body when the job (outfit) changes. */
@@ -555,7 +641,8 @@ export class Person implements CrowdMember {
     const data = bodyData(this.kind);
     if (!data) return;
     this.b3 = new Body3D(data);
-    this.b3.container.scale.set(UNITS_PER_M / ppm() / this.baseScale);
+    const k3 = UNITS_PER_M / ppm() / this.baseScale;
+    this.b3.container.scale.set(k3 * this.widthV, k3 * this.sizeV);
     for (const c of [this.thighB, this.upperB, this.torso, this.thighF, this.upperF]) c.visible = false;
     this.figure.addChild(this.b3.container);
     const h = this.height();
@@ -569,7 +656,7 @@ export class Person implements CrowdMember {
     const o = this.outfit;
     if (!this.b3 || !o) return;
     this.b3.dress({
-      skin: mute(this.look.skin), top: mute(o.coat ?? o.top), bottom: mute(o.bottom), hair: mute(this.look.hair),
+      skin: mute(shade(this.look.skin, this.skinV)), top: mute(o.coat ?? o.top), bottom: mute(o.bottom), hair: mute(this.look.hair),
       beard: this.look.beard !== undefined ? mute(this.look.beard) : null, hairStyle: this.look.hairStyle,
       glasses: !!this.look.glasses, goggles: !!o.goggles, hat: o.hat, hatTint: mute(shade(o.top, 0.8)), hurt: this.hurt,
     });
@@ -580,16 +667,36 @@ export class Person implements CrowdMember {
     const b3 = this.b3!;
     if (moving) {
       const anim: Anim3 = carrying ? 'walkCarry' : this.hurt ? 'limp' : 'walk';
-      b3.show(anim, Math.floor(this.walk3 * b3.data.anims[anim].frames.length));
+      b3.show(anim, Math.floor(this.walk3 * b3.data.anims[anim].frames.length), GFX.fade);
       return;
     }
     let anim: Anim3;
-    if (this.breather) anim = 'look';
-    else if (act === 'idle') anim = this.wounded ? 'hunch' : this.mood === 'sad' ? 'sad' : 'idle';
+    if (this.rest && this.restPhase > 0.55) anim = this.restAnim(t);
+    else if (this.breather) anim = 'look';
+    else if (act === 'idle') anim = this.wounded ? 'hunch' : this.mood === 'sad' ? 'sad' : this.talkingTo(t) ? 'talk' : 'idle';
     else if (act === 'tend' && (this.job === 'laboratory' || this.job === 'reactorHall')) anim = 'inspect';
     else anim = WORK_ANIM[act];
     const a = b3.data.anims[anim] ?? b3.data.anims.idle;
-    b3.show(anim, Math.floor((t + this.off) * a.fps));
+    b3.show(anim, Math.floor((t + this.off) * a.fps), GFX.fade);
+  }
+
+  /**
+   * Plan 2026-10 M3: an idle person standing close to another gestures and nods for a few seconds every so often (and turns
+   * to them), instead of both standing like statues. Needs the set poses.
+   */
+  private talkingTo(t: number): boolean {
+    const c = this.crowd;
+    if (!GFX.sitSleep || !c || !this.b3 || !hasSetPoses(this.kind) || this.wounded) return false;
+    if (Math.floor((t + this.off) / 7) % 4 !== 0) return false;
+    for (const m of c.members) {
+      if (m === (this as unknown as CrowdMember) || m.goalX !== m.posX) continue;
+      const dx = m.posX - this.x;
+      if (Math.abs(dx) < 26 && Math.abs(m.posD - this.depth) < 0.4) {
+        this.facing = dx < 0 ? -1 : 1;
+        return true;
+      }
+    }
+    return false;
   }
 
   /** Mood and health show on the face (and posture). */
@@ -605,7 +712,15 @@ export class Person implements CrowdMember {
     if (mood !== this.mood) {
       this.mood = mood;
       this.drawFace();
+      this.faceStep();
     }
+  }
+
+  /** Plan 2026-10 M4: the 3D body's face overlay follows the mood and closes its eyes to blink and to sleep. */
+  private faceStep(): void {
+    if (!this.b3) return;
+    const asleep = !!this.rest && this.rest.kind === 'sleep' && this.restPhase > 0.55;
+    this.b3.setFace(this.mood, asleep || this.blinkT > 0);
   }
 
   private drawFace(blink = false): void {
@@ -643,6 +758,9 @@ export class Person implements CrowdMember {
     if (crowd === this.crowd && (!crowd || crowd.members.includes(this))) return;
     this.crowd?.leave(this);
     this.spot = null;
+    this.rest = null;
+    this.atRest = false;
+    this.restPhase = 0;
     this.crowd = crowd;
     crowd?.join(this);
     this.replan = true;
@@ -674,6 +792,12 @@ export class Person implements CrowdMember {
 
   setLifted(lifted: boolean): void {
     this.lifted = lifted;
+    if (lifted) {
+      this.crowd?.releaseRest(this);
+      this.rest = null;
+      this.atRest = false;
+      this.restPhase = 0;
+    }
     this.shadow.visible = !lifted && !this.contact;
     if (this.contact) this.contact.visible = !lifted;
     if (this.cast) this.cast.visible = !lifted;
@@ -767,9 +891,22 @@ export class Person implements CrowdMember {
 
   private sync(): void {
     if (this.lifted) return;
-    const y = FLOOR_BACK + (FLOOR_FRONT - FLOOR_BACK) * this.depth + (this.crowd?.dy ?? 0);
+    let y = FLOOR_BACK + (FLOOR_FRONT - FLOOR_BACK) * this.depth + (this.crowd?.dy ?? 0);
+    let scale = 0.94 + 0.12 * this.depth;
+    if (this.rest && this.restPhase > 0) {
+      const e = smooth(this.restPhase);
+      y += (this.rest.y - y) * e;
+      scale += (1 - scale) * e;
+      const hit = this.restPhase > 0.6;
+      if (hit !== this.restHit) {
+        this.restHit = hit;
+        const h = this.height();
+        this.container.hitArea = hit
+          ? (this.rest.kind === 'sleep' ? new Rectangle(-26, -14, 52, 18) : new Rectangle(-10, -h * 0.72 - 2, 20, h * 0.72 + 4))
+          : new Rectangle(-10, -h - 2, 20, h + 4);
+      }
+    }
     this.container.position.set(this.x, y);
-    const scale = 0.94 + 0.12 * this.depth;
     this.container.scale.set(scale);
     this.container.zIndex = Math.round(y * 10);
   }
@@ -928,6 +1065,15 @@ export class Person implements CrowdMember {
 
   /** Turning in place: the shown facing sweeps through zero (about 0.2 s for a full turn). */
   private turnStep(dt: number): void {
+    if (this.b3 && GFX.fade) {
+      // Plan 2026-10 Q1: turn in one step; the old orientation fades out as a mirrored ghost instead of squashing through zero width.
+      if (this.turn !== this.facing) {
+        this.b3.startFade(true);
+        this.turn = this.facing;
+      }
+      this.figure.scale.x = this.baseScale * this.facing;
+      return;
+    }
     const d = this.facing - this.turn;
     if (d !== 0) this.turn += Math.sign(d) * Math.min(Math.abs(d), dt * 10);
     const k = Math.sin((this.turn * Math.PI) / 2);
@@ -939,7 +1085,10 @@ export class Person implements CrowdMember {
     const c = this.cast;
     if (!c) return;
     const lamp = this.crowd?.lamp;
-    if (!lamp || this.light < 0.2) {
+    const rested = this.restPhase > 0.05;
+    if (this.contact) this.contact.visible = !rested && !this.lifted;
+    this.wallShadowStep(rested ? null : lamp ?? null);
+    if (rested || !lamp || this.light < 0.2) {
       c.visible = false;
       return;
     }
@@ -954,25 +1103,52 @@ export class Person implements CrowdMember {
   }
 
   /**
+   * Plan 2026-10 Q4: the person's shadow on the back wall, a skewed black copy of the same body sprites (no extra atlas)
+   * that leans away from the room's main lamp and sits closer to the body the nearer it stands to the wall.
+   */
+  private wallShadowStep(lamp: { x: number; h: number } | null): void {
+    const b3 = this.b3;
+    if (!b3) return;
+    if (!GFX.wallShadow || !lamp || this.lifted || this.light < 0.2) {
+      b3.shadow(false);
+      return;
+    }
+    const sh = b3.shadow(true)!;
+    if (sh.parent !== this.container) this.container.addChildAt(sh, this.contact ? 2 : 1);
+    const dx = this.x - lamp.x;
+    const sgn = dx < 0 ? -1 : 1;
+    const near = Math.min(1, Math.abs(dx) / 70);
+    const s3 = UNITS_PER_M / ppm();
+    sh.scale.set(s3 * this.widthV * this.facing * 1.04, s3 * this.sizeV * 0.9);
+    sh.skew.x = -sgn * (0.12 + 0.24 * near);
+    sh.position.set(sgn * (4 + 11 * near), -(5 + 11 * this.depth));
+    sh.alpha = (0.3 - 0.12 * this.depth) * Math.min(1, this.light * 1.1) * Math.max(0.5, 1 - Math.abs(dx) / 220);
+  }
+
+  /**
    * Advances behaviour: workers walk to a work spot at their room's equipment and work there facing it,
    * now and then moving to another free spot or straightening up for a breather; idlers wander to free floor.
    * `activity` is what this person does when standing still.
    */
   update(dt: number, t: number, energy: number, activity: Activity = 'idle'): void {
     this.try3d();
-    if (PEOPLE_STYLE.painted && !this.b3) {
+    this.b3?.step(dt);
+    if (PEOPLE_STYLE.painted) {
       // Blink every few seconds; breathing rides on the idle bob.
       this.blinkIn -= dt;
-      if (this.blinkIn <= 0 && this.blinkT <= 0) { this.blinkT = 0.13; this.drawFace(true); }
+      if (this.blinkIn <= 0 && this.blinkT <= 0) { this.blinkT = 0.13; if (!this.b3) this.drawFace(true); }
       if (this.blinkT > 0) {
         this.blinkT -= dt;
-        if (this.blinkT <= 0) { this.blinkIn = 2.5 + Math.random() * 4; this.drawFace(); }
+        if (this.blinkT <= 0) { this.blinkIn = 2.5 + Math.random() * 4; if (!this.b3) this.drawFace(); }
       }
+      this.faceStep();
     }
+    if (this.tag && this.isSleeping) this.tag.visible = false;
     if (this.tag) {
       // Name tags step up a row when they would overlap a neighbour's (see settleCrowds).
       this.tagLift += (this.tagRow * 8.5 - this.tagLift) * Math.min(1, dt * 8);
-      this.tag.y = this.tagBaseY - this.tagLift;
+      const base = this.restPhase > 0.6 && this.rest ? (this.rest.kind === 'sleep' ? -13 : -this.height() * 0.72 - 6) : this.tagBaseY;
+      this.tag.y = base - this.tagLift;
     }
     if (this.lifted) {
       // Dangling while being carried by the player.
@@ -991,7 +1167,26 @@ export class Person implements CrowdMember {
       this.replan = true;
       this.breather = false;
     }
-    if (this.replan) {
+    const restOn = !working && this.restWanted();
+    if (restOn && this.rest && !(this.rest.kind === this.intent || (this.intent === 'eat' && this.rest.kind === 'sit'))) {
+      // A different thing to do now (up from bed for a meal, say): drop the old place at once and look for the new one.
+      this.crowd?.releaseRest(this);
+      this.rest = null;
+      this.atRest = false;
+      this.restPhase = 0;
+      this.wait = 0;
+      this.replan = true;
+    }
+    if (!restOn && (this.rest || this.atRest)) this.restLeave();
+    if (restOn && !this.rest) this.restClaim();
+    const resting = restOn && !!this.rest;
+    if (resting && !this.atRest) {
+      // Walk to the bed or seat.
+      this.tx = this.rest!.x;
+      this.depthGoal = this.destDepth = 0.15;
+      this.wait = 0;
+    }
+    if (this.replan && !resting) {
       this.replan = false;
       const snap = this.arrive === 'snap';
       if (!snap && this.crowd) {
@@ -1045,6 +1240,21 @@ export class Person implements CrowdMember {
         this.wait = working ? this.workTime(act) : 1.5 + this.rnd() * 4;
       }
     }
+    if (resting) {
+      if (!this.atRest && !moving && Math.abs(this.x - this.rest!.x) < 0.6) {
+        this.atRest = true;
+        this.x = this.rest!.x;
+      }
+      if (this.atRest) {
+        this.wait = 1e9;
+        this.facing = this.rest!.face;
+        moving = false;
+      }
+    }
+    // The hop up onto the bed or seat and back down.
+    const toward = resting && this.atRest ? 1 : 0;
+    this.restPhase = Math.max(0, Math.min(1, this.restPhase + (toward ? dt : -dt) / 0.45));
+    if (!restOn && this.rest && this.restPhase <= 0) this.rest = null;
     if (moving) {
       const carrying = act === 'carry' || activity === 'carry';
       this.setMode(carrying ? 'walkCarry' : 'walk', 0.18);
@@ -1060,6 +1270,7 @@ export class Person implements CrowdMember {
     if (this.b3) this.show3(t, moving, act, act === 'carry' || activity === 'carry');
     else this.show(dt);
     this.sync();
+    this.applyTint();
     this.shadowStep();
   }
 }

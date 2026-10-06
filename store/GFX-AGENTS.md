@@ -45,5 +45,22 @@ Full plan (read it): https://claude.ai/artifact/7xyn75cA2RLCrdKuuC4Zce (use the 
 - Signage & in-world UI: new `src/rendering/signage.ts`; `buildUnderground` stencil/plaque part of `world.ts`, `drawLabel` / district sign / dig sign in BunkerRenderer.
 - Registry (`src/art/registry.ts` KIT list) and `tools/kit.ts` jobs: append-only edits, one line per asset, re-read first.
 
+## Style book (plan 2026-10, section 2.3): "a painted diorama lit by lamps"
+Eight rules every new asset and effect follows:
+1. **One light.** Underground light comes only from tungsten lamps (about 2700 K) against a bluish dark; the sun only on the surface and in shaft sections. Screens are the only source of saturated cyan.
+2. **One material.** Matte, dirty, painted ("oil paint with grain"): no outlines, nothing glossy.
+3. **One camera.** Front cross-section, horizon at 0.84 of the room's height, people projected at 18 degrees yaw / 7 degrees elevation (`tools/people3d.ts`).
+4. **Saturation is reserved.** Above 0.6 saturation only for alerts, fire and screens (the top-tier room paintings are baked toward the lamp-lit look by `tools/bake-tier2.py`).
+5. **One finish.** Everything goes through the same composite (grade, grain, soft bloom). Late pipeline layers (people, effects) share its grain and softness; the DOM UI gets only a thin CSS grain.
+6. **A person is part of the set.** Feet touch the floor (contact shadow), the lamp pools of the painting tint them (`lightStrip.ts`), a shadow falls on the wall, and they use what is painted: bunks, benches, tables (`roomSet.ts`).
+7. **UI looks made from the world:** worn steel, CRT glass, paper, not CSS gradients (`ui/materials.ts`, `bunker-os.css`).
+8. **Atmospheric depth:** near is sharp and dark, far is soft and bluish (fog, sky layers).
+
+### Style gate for any new asset (six questions, part of QA)
+1. Does it have outlines? (must not) 2. Is its peak saturation under 0.6 (except alerts/screens)? 3. Is its main light warm and from above? 4. Does its ground sit at 0.84 of the frame? 5. Does it pass the same finish recipe (balance + grain)? 6. Was it checked at all three quality levels and both brightness settings?
+
+### Quality switches (plan 2026-10)
+New finish features read `GFX` from `src/rendering/gfxFeatures.ts` (set per frame from the live quality level; crash-guard lite mode turns the expensive ones off): cross-fade, per-spot tint, wall shadow, light beams, sit/sleep poses, sky layers. Every new Pixi `Filter` needs `resolution: 'inherit'`.
+
 ## Report back
 Files changed, how it is hooked in, what was verified (shots saved to `store/compare/<your-tag>/`), anything unfinished.

@@ -27,6 +27,8 @@
   "hud.powerLow": "[[power]] Power shortage! Bunker running at {pct}%",
   "hud.nextArrival": "A newcomer arrives in {t}",
   "hud.bunkerFull": "No free beds – build or upgrade Quarters so more survivors can come",
+  "hud.moreRes": "Show all resources",
+  "hud.lessRes": "Show only the key resources",
   "placement.hint": "Choose a spot for {name}",
   "placement.cancel": "Cancel",
   "placement.invalid": "Can't build here",

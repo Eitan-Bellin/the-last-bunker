@@ -439,6 +439,55 @@
   .nav-btn { padding-block: 4px; }
 }
 
+/* ---------- plan 2026-10 M7: worn, brushed steel on the HUD plates and console buttons ---------- */
+
+.resource-item, .nav-btn, .lang-btn, .info-item { isolation: isolate; }
+.nav-btn, .lang-btn, .info-item { position: relative; }
+.resource-item::before, .nav-btn::before, .lang-btn::before, .info-item::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  background: var(--mat-steel, none) 0 0 / 128px 128px;
+  mix-blend-mode: overlay;
+  opacity: 0.55;
+  pointer-events: none;
+}
+.info-item::before { opacity: 0.3; }
+
+/* ---------- plan 2026-10 Q11/Q12: nothing clipped at 360 / 320 px, and a thinner HUD ---------- */
+
+/* "Show all resources" pill under the key row (only on phones, see HUD.ts). */
+.res-more {
+  display: none;
+  margin: 3px auto 0;
+  min-height: 18px;
+  padding: 0 12px;
+  border-radius: 9px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(0, 0, 0, 0.5);
+  color: #b8ad96;
+  font: 600 10px/16px 'Rubik', sans-serif;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  pointer-events: auto;
+}
+.res-more:active { transform: translateY(1px); }
+.hud-top.res-collapsible .res-more { display: block; min-height: 16px; margin-top: 2px; font-size: 9.5px; line-height: 14px; }
+.hud-top.res-collapsible { padding-bottom: 6px; }
+.hud-top.res-collapsible .info-row { margin-top: 3px; }
+
+/* The info row may never overflow on both sides (it used to centre its overflow and cut the first and last buttons). */
+.info-row { justify-content: safe center; }
+@media (max-width: 399px) {
+  /* Compact chips; when even so many are showing at once that they do not fit, the row wraps instead of clipping. */
+  .hud-top .info-row { gap: 3px; flex-wrap: wrap; justify-content: center; row-gap: 4px; }
+  .info-clock .info-icon { display: none; }
+  .hud-top .info-row .lang-btn { min-width: 30px; padding: 3px 5px; }
+  .info-item { padding: 2px 5px; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .sheet-overlay.open .sheet, .modal-overlay.open .modal { animation: none; }
   .hud-banner.incident, .btn-fight, .supply-btn, .info-arrival.negative { animation: none; }
