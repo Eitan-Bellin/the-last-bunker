@@ -443,3 +443,13 @@
   .sheet-overlay.open .sheet, .modal-overlay.open .modal { animation: none; }
   .hud-banner.incident, .btn-fight, .supply-btn, .info-arrival.negative { animation: none; }
 }
+
+/* People list: dozens of cards scroll inside one sheet, so each card must be cheap to paint on a phone. */
+.people-list .person-card {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 190px;
+}
+.people-list, .people-list * { text-shadow: none; }
+.people-list .bar-fill { transition: none; box-shadow: none; }
+.people-list .person-portrait { box-shadow: none; }
+.sheet.people-sheet { will-change: transform; }

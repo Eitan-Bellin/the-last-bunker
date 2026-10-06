@@ -782,8 +782,12 @@ export class GameApp {
     });
 
     // Any touch, drag, wheel or key counts: the picture draws at full speed while the player is handling the bunker.
+    // Touching a sheet (scrolling the people list) does not: the bunker behind it stays at the calm rate so the list gets the phone's power.
     for (const type of ['pointerdown', 'pointermove', 'wheel', 'keydown'] as const) {
-      document.addEventListener(type, () => this.engine.notifyInteraction(), { passive: true });
+      document.addEventListener(type, (e) => {
+        if (e.target instanceof Element && e.target.closest('.sheet')) return;
+        this.engine.notifyInteraction();
+      }, { passive: true });
     }
   }
 
