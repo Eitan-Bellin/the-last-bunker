@@ -46,6 +46,9 @@ async function runScenario(port, name, sc) {
     if (!await waitFor(c, '!!(window.__engine && window.__renderer && window.__renderer.postfx && window.__perf2)')) throw new Error('game did not start');
     await sleep(1500);
     await c.evalJs(`window.__perfFixture(${sc.floors}, ${sc.people})`);
+    // A fresh game opens with the intro, a difficulty sheet and era cards over the picture, and they pause the simulation: keep it
+    // running like in play (the overlays are DOM only; shots hide them).
+    await c.evalJs('setInterval(() => { __engine.paused = false; }, 200); true', false);
     const mode = sc.mode || 'active';
     // The player's touch is simulated by notifying the engine (no real input is needed): active = just touched, watch = a few seconds ago, idle = long ago.
     const touch = mode === 'active' ? '__engine.notifyInteraction()' : mode === 'watch' ? '__engine.lastInteraction = Date.now() - 6000' : '__engine.lastInteraction = 0';
@@ -74,7 +77,11 @@ async function runScenario(port, name, sc) {
     if (shotsDir) {
       fs.mkdirSync(shotsDir, { recursive: true });
       await sleep(600);
-      const shot = await c.send('Page.captureScreenshot', { format: 'png', clip: { x: 0, y: 0, width: 360, height: 740, scale: 0.5 } });
+      // Freeze the clock so before/after shots are comparable (night 0 = day), then wait a moment for the picture to settle.
+      await c.evalJs(`__renderer.setNight = () => {}; __renderer.nightNow = 0;
+        const st = document.createElement('style'); st.textContent = 'body *{visibility:hidden !important} #game-canvas{visibility:visible !important}'; document.head.appendChild(st); true`, false);
+      await sleep(1500);
+      const shot = await c.send('Page.captureScreenshot', { format: 'png', clip: { x: 0, y: 0, width: 360, height: 740, scale: +arg('shotscale', 0.5) } });
       fs.writeFileSync(path.join(shotsDir, `${name}.png`), Buffer.from(shot.data, 'base64'));
     }
     const errs = c.events.filter(e => e.method === 'Runtime.exceptionThrown' || (e.method === 'Runtime.consoleAPICalled' && e.params.type === 'error')).length;
@@ -96,6 +103,7 @@ try {
     results.scenarios[name] = rep;
     console.log(`calls ${rep.drawCalls}  objs ${rep.renderablesDrawn}/${rep.renderablesTotal}  rebuild ${rep.structureChangedPct}%  alloc ${rep.allocKBPerFrame} KB/frame  tex ${rep.gpuTextureMB} MB  `
       + `${rep.fps} fps  frame ${rep.frameMsMed}/${rep.frameMsP95} ms  busy ${rep.busyPct}%  long ${rep.longTasks}  errors ${rep.consoleErrors}`);
+    if (arg('verbose', false)) console.log('   groups: ' + rep.groups.map(g => `${g.label}(${g.objects}) ${g.changedPct}%`).join('  ') + `   groupsTotal ${rep.renderGroups}`);
     if (rep.consoleErrors) failures.push(`${name}: ${rep.consoleErrors} console errors`);
     for (const [limit, field] of Object.entries(LIMITS)) {
       const max = sc[limit];

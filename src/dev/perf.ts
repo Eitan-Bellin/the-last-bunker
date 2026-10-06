@@ -98,26 +98,25 @@ export function installPerf(renderer: BunkerRenderer, engine: Any, audio?: Any):
   const groupRoots: { stat: GroupStat; root: Any }[] = [];
   const scan = (): void => {
     let drawn = 0, total = 0;
-    const counts = new Map<GroupStat, number>();
+    const counts = new Map<Any, number>(); // visible renderables per group root (several groups share a label: rooms)
     groupRoots.length = 0;
-    const walk = (o: Any, visible: boolean, group: GroupStat | null): void => {
+    const walk = (o: Any, visible: boolean, root: Any, stat: GroupStat | null): void => {
       total++;
       const vis = visible && o.visible && o.renderable !== false;
-      if (vis && o.renderPipeId && o.renderPipeId !== 'container') {
-        drawn++;
-        if (group) counts.set(group, (counts.get(group) ?? 0) + 1);
-      }
-      let g = group;
+      if (vis && o.renderPipeId && o.renderPipeId !== 'container' && root) counts.set(root, (counts.get(root) ?? 0) + 1);
+      if (vis && o.renderPipeId && o.renderPipeId !== 'container') drawn++;
+      let r = root, s = stat;
       if (o === app.stage || o.isRenderGroup) {
-        g = statFor(labelOf(o));
-        groupRoots.push({ stat: g, root: o });
+        s = statFor(labelOf(o));
+        r = o;
+        groupRoots.push({ stat: s, root: o });
       }
       const kids = o.children;
       if (!kids) return;
-      for (let i = 0; i < kids.length; i++) walk(kids[i], vis, g);
+      for (let i = 0; i < kids.length; i++) walk(kids[i], vis, r, s);
     };
-    walk(app.stage, true, null);
-    for (const [g, c] of counts) g.objects = Math.max(g.objects, c);
+    walk(app.stage, true, null, null);
+    for (const g of groupRoots) g.stat.objects = Math.max(g.stat.objects, counts.get(g.root) ?? 0);
     renderablesDrawn = drawn;
     renderablesTotal = total;
     groupCount = groupRoots.length;
