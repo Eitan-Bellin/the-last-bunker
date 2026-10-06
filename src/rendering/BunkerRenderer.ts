@@ -452,7 +452,7 @@ export class BunkerRenderer {
 
     this.surface = buildSurface();
     this.worldContainer.addChild(
-      this.surfaceHolder, this.projectSites.layer, this.projectSites.crew, this.undergroundHolder, this.bayHolder, this.slotLayer, this.highlightLayer,
+      this.surfaceHolder, this.projectSites.layer, this.projectSites.smokeLayer, this.projectSites.glowLayer, this.projectSites.crew, this.projectSites.signLayer, this.undergroundHolder, this.bayHolder, this.slotLayer, this.highlightLayer,
       this.roomLayer, this.shaftHolder, this.utilitiesHolder, this.dust.graphics, this.digHolder, this.districtSignHolder, this.fxLayer, this.incidents.fx, this.disasterFx.fx,
       this.labelLayer, this.incidents.badges,
     );
@@ -1634,6 +1634,9 @@ export class BunkerRenderer {
     const power = state.powerRatio ?? 1;
     (this.surface as { setQuality?: (q: 'high' | 'medium' | 'low') => void } | null)?.setQuality?.(this.postfx?.quality ?? 'high'); // gfx-p0 surface: particle budget
     this.surface?.animate(this.time, power);
+    // The project lots share the surface's light, the painting's grade and the wind (src/rendering/projectSites.ts).
+    const s2 = this.surface as { light?: number; grade?: number; wind?: number } | null;
+    this.projectSites.animate(this.time, s2?.light ?? 0xffffff, s2?.grade ?? 0xffffff, this.nightNow, power, s2?.wind ?? 0.6);
     this.shaft?.animate(this.time, power);
     this.utilities?.animate(this.time, power);
     this.front?.animate(this.time, power);

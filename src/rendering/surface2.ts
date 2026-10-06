@@ -31,6 +31,10 @@ export interface Surface2 extends Animated {
   front: Container;
   /** gfx-p0: the renderer's quality ladder sets the particle budget and cloud/fog layers. */
   setQuality(q: SurfaceQuality): void;
+  /** The clock and weather tint of this frame, the panorama's own light grade, and the wind (for the project lots). */
+  light: number;
+  grade: number;
+  wind: number;
 }
 
 /** Portal look per era (0 wrecked, 1–2 cleared, 3 gatehouse); positions are relative to the trimmed sprite. */
@@ -368,6 +372,21 @@ function glow(x: number, y: number, size: number, color: number): Sprite {
   return s;
 }
 
+/** Alpha ramp for the east copies of the panorama: transparent at the left edge, opaque after `fade` of the width. */
+function eastFadeTexture(fade: number): Texture {
+  const c = document.createElement('canvas');
+  c.width = 512;
+  c.height = 4;
+  const ctx = c.getContext('2d')!;
+  const g = ctx.createLinearGradient(0, 0, 512, 0);
+  g.addColorStop(0, 'rgba(255,255,255,0)');
+  g.addColorStop(Math.min(0.95, fade), 'rgba(255,255,255,1)');
+  g.addColorStop(1, 'rgba(255,255,255,1)');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, 512, 4);
+  return Texture.from(c);
+}
+
 function contactShadow(x: number, y: number, w: number): Sprite {
   const s = new Sprite(glowTexture());
   s.anchor.set(0.5);
@@ -440,20 +459,37 @@ export function buildSurface2(
     const topC = info?.top ?? 0x0c0b10;
     ext.rect(skyX0, -2600, skyX1 - skyX0, py0 + 2606).fill(vGradient([[0, VOID], [0.72, mix(VOID, topC, 0.5)], [1, topC]]));
     farBack.addChild(ext);
-    // Mirrored copies continue the land past the world edges (they fade into the dark, see the vignette).
-    for (const [x, sx] of [[px0, -scale], [px0, scale], [px0 + 2 * pw, -scale], [px0 + 2 * pw, scale]] as [number, number][]) {
+    // West: a mirrored copy past the world edge (it fades into the dark, see the vignette). East, where the project
+    // lots stretch the world, a mirror would show its seam (the same tower twice, face to face): the painting repeats
+    // instead, each copy cross-fading into the one before over EAST_FADE units.
+    const EAST_FADE = 260;
+    const fadeTex = eastFadeTexture(EAST_FADE / pw);
+    const copies: [number, number, boolean][] = [[px0, -scale, false], [px0, scale, false]];
+    for (let k = 1; px0 + k * (pw - EAST_FADE) < WORLD_RIGHT + SKY_EXT; k++) copies.push([px0 + k * (pw - EAST_FADE), scale, true]);
+    copies.forEach(([x, sx, fade], i) => {
       const s = new Sprite(backdrop);
       s.scale.set(sx, scale);
       s.position.set(x, py0);
       farBack.addChild(s);
-      if (sx > 0) painted = s;
-      if (info) {
-        const l = new Sprite(info.land);
+      if (i === 1) painted = s;
+      const l = info ? new Sprite(info.land) : null;
+      if (l && info) {
         l.scale.set(sx * (backdrop.width / info.land.width), scale * (backdrop.height / info.land.height));
         l.position.set(x, py0);
         farLand.addChild(l);
       }
-    }
+      if (fade) {
+        for (const [target, layer] of [[s, farBack], [l, farLand]] as [Sprite | null, Container][]) {
+          if (!target) continue;
+          const m = new Sprite(fadeTex);
+          m.position.set(x, py0);
+          m.width = pw;
+          m.height = ph;
+          layer.addChild(m);
+          target.mask = m;
+        }
+      }
+    });
   } else {
     const g = new Graphics();
     g.rect(WORLD_LEFT, SKY_TOP, w, -SKY_TOP).fill(vGradient([[0, 0x14101e], [0.55, 0x3a2430], [0.85, 0x7a4a2e], [1, 0x9a6a3a]]));
@@ -759,10 +795,13 @@ export function buildSurface2(
   const view: View = { x0: WORLD_LEFT, x1: WORLD_RIGHT, y0: -400, y1: 400 };
   const lr = seeded(5150);
 
-  return {
+  const api: Surface2 = {
     container: root,
     soil,
     front,
+    light: 0xffffff,
+    grade,
+    wind: 0.6,
     setQuality: q => { quality = q; },
     animate: (t, power) => {
       // A replaced surface can still get one call after it was destroyed (the sprites are gone by then).
@@ -803,6 +842,7 @@ export function buildSurface2(
       const tint = rain > 0.01 ? mulColor(clock, mix(0xffffff, 0x98a2b0, rain * 0.7)) : clock;
       farBack.tint = farLand.tint = farFx.tint = tint;
       lit.tint = soil.tint = frontLit.tint = frontSmoke.tint = tint;
+      api.light = tint;
 
       // Night sky over the painted sunset (the painted sun goes with it).
       const nightA = smoothstep(0.3, 0.85, night) * 0.97;
@@ -821,6 +861,7 @@ export function buildSurface2(
       // Clouds drift with the wind; they thicken and grey in rain, darken at night.
       const gust = 0.6 + 0.4 * Math.sin(t * 0.37) * Math.sin(t * 0.13 + 1);
       const wind = gust * (1 + 0.6 * rain);
+      api.wind = wind;
       cloudHigh.tilePosition.x += dt * 3.2 * (0.7 + 0.3 * wind);
       cloudLow.tilePosition.x += dt * 6.5 * (0.6 + 0.4 * wind);
       const cTint = mulColor(mix(sky.cloud, 0x9aa2b2, rain * 0.75), mix(0xffffff, 0x2a3048, smoothstep(0.2, 0.9, night)));
@@ -909,4 +950,5 @@ export function buildSurface2(
       } else if (wheelKicks.length > 4) wheelKicks = wheelKicks.slice(-2);
     },
   };
+  return api;
 }

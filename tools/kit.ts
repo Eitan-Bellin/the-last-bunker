@@ -362,6 +362,40 @@ async function save(c: HTMLCanvasElement, key: string): Promise<number> {
   return blob.size;
 }
 
+/**
+ * Clean-up on a whole source sheet before any crop, in fractions of the sheet: `fill` paints white (keyed out later),
+ * `mirror` copies a band flipped left-right onto `toX` (to rebuild a symmetric part hidden under a mark).
+ */
+type PrepOp = { fill: [number, number, number, number] } | { mirror: [number, number, number, number]; toX: number };
+const D = (x: number) => x / 2000, V = (y: number) => y / 1125;
+const SOURCE_PREP: Record<string, PrepOp[]> = {
+  // The generator's "moda.app" badge in the bottom-right corner: over the tunnel's right pillar on A, by the Genesis base on B.
+  'kit/P-01-projects-A.png': [{ mirror: [D(1500), V(985), D(1600), V(1062)], toX: D(1740) }, { fill: [D(1840), V(985), D(1930), V(1062)] }],
+  'kit/P-02-projects-B.png': [{ mirror: [D(1385), V(988), D(1420), V(1060)], toX: D(1740) }, { fill: [D(1775), V(988), D(1930), V(1060)] }],
+};
+
+function prepSource(img: CanvasImageSource & { width: number; height: number }, ops: PrepOp[]): HTMLCanvasElement {
+  const [c, ctx] = canvas(img.width, img.height);
+  ctx.drawImage(img, 0, 0);
+  const W = img.width, H = img.height;
+  for (const op of ops) {
+    if ('fill' in op) {
+      const [x0, y0, x1, y1] = op.fill;
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(x0 * W, y0 * H, (x1 - x0) * W, (y1 - y0) * H);
+    } else {
+      const [x0, y0, x1, y1] = op.mirror;
+      const sw = (x1 - x0) * W, sh = (y1 - y0) * H;
+      ctx.save();
+      ctx.translate(op.toX * W + sw, y0 * H);
+      ctx.scale(-1, 1);
+      ctx.drawImage(c, x0 * W, y0 * H, sw, sh, 0, 0, sw, sh);
+      ctx.restore();
+    }
+  }
+  return c;
+}
+
 async function run(): Promise<void> {
   log.textContent = '';
   const only = new URLSearchParams(location.search).get('only');
@@ -369,7 +403,8 @@ async function run(): Promise<void> {
   for (const job of KIT_JOBS) {
     if (only && !job.out.includes(only)) continue;
     if (!available.has(job.src)) { write(`missing ${job.src}`); continue; }
-    const img = await load(`/__art/raw/${job.src}`);
+    const raw = await load(`/__art/raw/${job.src}`);
+    const img = SOURCE_PREP[job.src] ? prepSource(raw, SOURCE_PREP[job.src]) : raw;
     const [x0, y0, x1, y1] = job.crop;
     const sw = Math.round((x1 - x0) * img.width), sh = Math.round((y1 - y0) * img.height);
     const [crop, cctx] = canvas(sw, sh);

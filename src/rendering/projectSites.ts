@@ -1,7 +1,8 @@
 import { Container, Graphics, Sprite, Text, TextStyle, type Texture } from 'pixi.js';
-import { ArtLibrary } from '../art/ArtLibrary';
+import { ArtLibrary, glowTexture } from '../art/ArtLibrary';
 import { SHAFT_W, WALK_Y } from './layout';
-import { groundY } from './surfaceLife';
+import { Smoke, groundY, mulColor } from './surfaceLife';
+import { mix } from './draw';
 import type { Lane } from './people';
 
 /**
@@ -224,12 +225,39 @@ export function lotTop(id: string): number {
 /** The plain shapes behind each painting are drawn at their own size; this fits them to the lot. */
 const shapeScale = (id: string) => LOT_H[id] / PLANS[id].h;
 
-/** The paintings stand on a dirt patch with a soft shadow: this share of the picture sits below the ground line. */
-const ART_SINK = 0.04;
+/** The paintings stand on a dirt patch: this share of the picture sits below the ground line (the grass fringe covers it). */
+const ART_SINK = 0.07;
 
 export const projectArtKey = (id: string) => `kit/proj-${id}`;
 
 const labelStyle = new TextStyle({ fontFamily: 'Rubik, sans-serif', fontSize: 10, fontWeight: '700', fill: 0xffe6b0, stroke: { color: 0x14141e, width: 3 } });
+
+/**
+ * Lights and smoke on each painting, as fractions of the picture (0,0 top-left): windows and lamps glow at night,
+ * `always` ones (a furnace, the Genesis orb) burn day and night, `blink` ones flash like a beacon.
+ */
+interface Spot { x: number; y: number; size: number; color: number; always?: boolean; blink?: boolean }
+const WARM = 0xffc878, RED = 0xff4a3a;
+const SPOTS: Record<string, Spot[]> = {
+  radioMast: [{ x: 0.47, y: 0.03, size: 26, color: RED, blink: true }, { x: 0.66, y: 0.84, size: 40, color: WARM }],
+  purifier: [{ x: 0.79, y: 0.6, size: 40, color: WARM }],
+  greenhouse: [{ x: 0.5, y: 0.55, size: 120, color: 0xffd8a0 }],
+  skyDome: [{ x: 0.55, y: 0.6, size: 110, color: 0xffd8a0 }],
+  wall: [{ x: 0.42, y: 0.12, size: 44, color: WARM }, { x: 0.74, y: 0.14, size: 44, color: WARM }],
+  deepFoundry: [{ x: 0.5, y: 0.82, size: 90, color: 0xff7a2a, always: true }, { x: 0.52, y: 0.5, size: 50, color: WARM }],
+  metroTunnel: [{ x: 0.42, y: 0.1, size: 26, color: RED, blink: true }],
+  archive: [{ x: 0.3, y: 0.38, size: 46, color: WARM }, { x: 0.52, y: 0.38, size: 46, color: WARM }, { x: 0.3, y: 0.72, size: 46, color: WARM }],
+  tradeLeague: [{ x: 0.53, y: 0.4, size: 50, color: WARM }],
+  constitution: [{ x: 0.5, y: 0.72, size: 50, color: WARM }],
+  ark: [{ x: 0.33, y: 0.52, size: 40, color: WARM }, { x: 0.62, y: 0.48, size: 40, color: WARM }],
+  genesisCore: [{ x: 0.5, y: 0.08, size: 90, color: 0x7af0ff, always: true }],
+  surfaceGate: [{ x: 0.7, y: 0.55, size: 40, color: WARM }],
+};
+/** Chimney tops that smoke (the foundry's two stacks, the radio shack's stove pipe). */
+const SMOKE: Record<string, [number, number][]> = {
+  deepFoundry: [[0.32, 0.02], [0.6, 0.12]],
+  radioMast: [[0.7, 0.72]],
+};
 
 function paintedBody(tex: Texture, w: number, tint: number): Container {
   const s = new Sprite(tex);
@@ -240,38 +268,80 @@ function paintedBody(tex: Texture, w: number, tint: number): Container {
   return s;
 }
 
+/** Soft dark ellipse under a building, like the one under every surface prop. */
+function contactShadow(w: number): Sprite {
+  const s = new Sprite(glowTexture());
+  s.anchor.set(0.5);
+  s.width = w * 1.05;
+  s.height = Math.max(8, w * 0.12);
+  s.tint = 0x000000;
+  s.alpha = 0.55;
+  return s;
+}
+
+function glowSprite(size: number, color: number): Sprite {
+  const s = new Sprite(glowTexture());
+  s.anchor.set(0.5);
+  s.width = s.height = size;
+  s.tint = color;
+  s.blendMode = 'add';
+  s.alpha = 0;
+  return s;
+}
+
 function scaffold(w: number, h: number): Graphics {
   const g = new Graphics();
   const x0 = -w / 2 - 6, x1 = w / 2 + 6;
-  const wood = 0xc0954f;
+  // Weathered timber, not fresh pine: it must sit in the same muted world as the paintings.
+  const wood = 0x8a6a44, plank = 0x6e5236;
   for (let x = x0; x <= x1 + 0.1; x += Math.max(18, (x1 - x0) / Math.max(2, Math.round((x1 - x0) / 26)))) g.rect(x - 1.2, -h, 2.4, h).fill(wood);
   g.rect(x1 - 1.2, -h, 2.4, h).fill(wood);
-  for (let y = -18; y > -h; y -= 20) g.rect(x0 - 2, y, x1 - x0 + 4, 3).fill(0x9a7440);
+  for (let y = -18; y > -h; y -= 20) g.rect(x0 - 2, y, x1 - x0 + 4, 3).fill(plank);
   // Cross braces on the outer bays.
   for (let y = 0; y > -h + 20; y -= 20) {
     g.moveTo(x0, y).lineTo(x0 + 18, y - 20).stroke({ color: wood, width: 1, alpha: 0.8 });
     g.moveTo(x1, y).lineTo(x1 - 18, y - 20).stroke({ color: wood, width: 1, alpha: 0.8 });
   }
   // Hazard barrier at the foot.
-  for (let x = x0 - 8; x < x1 + 8; x += 8) g.rect(x, -9, 8, 4).fill(((x - x0) / 8) % 2 < 1 ? 0xf0c030 : 0x1a1a1a);
+  for (let x = x0 - 8; x < x1 + 8; x += 8) g.rect(x, -9, 8, 4).fill(((x - x0) / 8) % 2 < 1 ? 0xc8a032 : 0x1a1a1a);
   g.rect(x0 - 8, -9, 1.5, 9).fill(dark).rect(x1 + 6.5, -9, 1.5, 9).fill(dark);
   return g;
 }
 
+interface LotRecord {
+  root: Container;
+  sig: string;
+  /** Things that live outside the tinted layer (lights, sign) and go with the lot. */
+  extras: Container[];
+  lights: { s: Sprite; spot: Spot; ph: number }[];
+  smoke: Smoke[];
+}
+
 /**
  * Owns the lots: rebuilds a lot when its state changes and keeps a site view per lot for the crew.
- * `layer` holds the buildings, `crew` (added after it) the people, so the workers stand in front of the scaffolding.
+ * Layers, back to front: `layer` (the buildings, the poles and wires, the clutter between lots; lit like the rest of the
+ * surface by the clock, the weather and the painting's own light), `smokeLayer`, `glowLayer` (window light, never
+ * darkened by the night tint), `crew` (the people), `signLayer` (progress signs, always readable).
  */
 export class ProjectSites {
   readonly layer = new Container();
+  readonly smokeLayer = new Container();
+  readonly glowLayer = new Container();
   readonly crew = new Container();
+  readonly signLayer = new Container();
   readonly views = new Map<string, SiteView>();
-  private lots = new Map<string, { root: Container; sig: string }>();
+  private lots = new Map<string, LotRecord>();
+  /** Poles, wires and clutter: rebuilt when the set of lots changes. */
+  private decor = new Container();
+  private decorSig = '';
+  private lastT = -1;
   onTap: ((id: string) => void) | null = null;
 
   constructor() {
     this.layer.label = 'projectSites';
     this.crew.label = 'projectCrews';
+    this.layer.addChild(this.decor);
+    for (const c of [this.smokeLayer, this.glowLayer, this.signLayer]) c.eventMode = 'none';
   }
 
   /** East edge of the lots in use (0 when none): the camera may pan this far. */
@@ -298,17 +368,52 @@ export class ProjectSites {
       const sig = `${site.building}|${Math.round(frac * 100)}|${site.label}|${ArtLibrary.get(projectArtKey(site.id)) ? 'art' : 'shape'}`;
       const old = this.lots.get(site.id);
       if (old?.sig === sig) continue;
-      old?.root.destroy({ children: true });
-      const root = this.buildLot(site, plan, frac);
-      if (LOTS[site.id].back) this.layer.addChildAt(root, 0);
-      else this.layer.addChild(root);
-      this.lots.set(site.id, { root, sig });
+      if (old) this.drop(old);
+      const rec = this.buildLot(site, plan, frac, sig);
+      // Back-row lots go behind the front row, but in front of the poles and clutter (decor is child 0).
+      if (LOTS[site.id].back) this.layer.addChildAt(rec.root, 1);
+      else this.layer.addChild(rec.root);
+      this.lots.set(site.id, rec);
       this.ensureView(site.id, plan);
     }
-    for (const [id, lot] of this.lots) {
+    for (const [id, rec] of this.lots) {
       if (keep.has(id)) continue;
-      lot.root.destroy({ children: true });
+      this.drop(rec);
       this.lots.delete(id);
+    }
+    const decorSig = ORDER.filter(id => this.lots.has(id)).join(',');
+    if (decorSig !== this.decorSig) {
+      this.decorSig = decorSig;
+      this.buildDecor();
+    }
+  }
+
+  private drop(rec: LotRecord): void {
+    rec.root.destroy({ children: true });
+    for (const e of rec.extras) e.destroy({ children: true });
+  }
+
+  /**
+   * Light the lots like the rest of the surface: `light` is the surface's clock and weather tint, `grade` the
+   * panorama's own light (src/rendering/surface2.ts). Windows warm up as it gets dark; chimneys smoke.
+   */
+  animate(t: number, light: number, grade: number, night: number, power: number, wind: number): void {
+    const dt = this.lastT < 0 ? 0 : Math.min(0.1, Math.max(0, t - this.lastT));
+    this.lastT = t;
+    this.layer.tint = mulColor(light, grade);
+    this.smokeLayer.tint = light;
+    // The crew on the surface share the outdoor light (a little brighter than the buildings: they are closer).
+    this.crew.tint = mix(light, 0xffffff, 0.25);
+    const dark = Math.min(1, Math.max(0, (night - 0.25) / 0.5));
+    const on = Math.max(0, Math.min(1, power));
+    for (const rec of this.lots.values()) {
+      for (const l of rec.lights) {
+        const flick = 0.93 + 0.07 * Math.sin(t * 8 + l.ph) * Math.sin(t * 3.1 + l.ph);
+        if (l.spot.blink) l.s.alpha = (Math.sin(t * 3 + l.ph) > 0.35 ? 0.5 + 0.5 * dark : 0.06) * Math.max(0.3, on);
+        else if (l.spot.always) l.s.alpha = (0.5 + 0.35 * dark) * (0.85 + 0.15 * Math.sin(t * 1.7 + l.ph)) * flick;
+        else l.s.alpha = 0.72 * dark * on * flick;
+      }
+      for (const s of rec.smoke) s.update(dt, wind, 99, 0.8);
     }
   }
 
@@ -331,15 +436,19 @@ export class ProjectSites {
     return v;
   }
 
-  private buildLot(site: SiteInfo, plan: Plan, frac: number): Container {
+  private buildLot(site: SiteInfo, plan: Plan, frac: number, sig: string): LotRecord {
     const lot = LOTS[site.id];
+    const k = lot.back ? BACK_SCALE : 1;
+    const gy = BASE + groundY(lot.x, PORTAL_X) - (lot.back ? BACK_RISE : 0);
     const root = new Container();
-    root.position.set(lot.x, BASE + groundY(lot.x, PORTAL_X) - (lot.back ? BACK_RISE : 0));
-    if (lot.back) root.scale.set(BACK_SCALE);
+    root.position.set(lot.x, gy);
+    root.scale.set(k);
+    const rec: LotRecord = { root, sig, extras: [], lights: [], smoke: [] };
     const tex = ArtLibrary.get(projectArtKey(site.id));
     const { w, h } = lot;
+    // Back row: a touch of the horizon haze, so it reads as further away.
     const make = (): Container => {
-      if (tex) return paintedBody(tex, w, lot.back ? 0xc4c0b8 : 0xffffff);
+      if (tex) return paintedBody(tex, w, lot.back ? 0xc2c8cc : 0xffffff);
       const g = new Graphics();
       // Flat shapes against a painted backdrop: a warm, slightly dimmed tint keeps them from shouting (more for the back row).
       g.tint = lot.back ? 0xb8b4ae : 0xe4e0d8;
@@ -347,20 +456,22 @@ export class ProjectSites {
       g.scale.set(shapeScale(site.id));
       return g;
     };
+    root.addChild(contactShadow(w));
     const body = make();
     root.addChild(body);
+    const shown = site.building ? Math.max(0.08, frac) : 1;
     if (site.building) {
       // The part already standing rises with the work; a faint ghost shows what it will be.
       const ghost = make();
       ghost.alpha = 0.16;
-      root.addChildAt(ghost, 0);
-      const shown = Math.max(0.08, frac);
-      const mask = new Graphics().rect(-w / 2 - 60, -h * shown - 2, w + 120, h * shown + 20).fill(0xffffff);
+      root.addChildAt(ghost, 1);
+      const mask = new Graphics().rect(-w / 2 - 60, -h * shown - 2, w + 120, h * shown + 30).fill(0xffffff);
       root.addChild(mask);
       body.mask = mask;
       root.addChild(scaffold(w * 0.86, Math.min(h, h * shown + 24)));
+      // The sign stays readable at night: it lives in its own untinted layer.
       const sign = new Container();
-      sign.position.set(0, -Math.min(h, h * shown + 24) - 22);
+      sign.position.set(lot.x, gy - (Math.min(h, h * shown + 24) + 22) * k);
       const text = new Text({ text: site.label, style: labelStyle, resolution: 3 });
       text.anchor.set(0.5, 1);
       const bw = Math.max(44, Math.min(90, text.width));
@@ -368,12 +479,98 @@ export class ProjectSites {
         .roundRect(-bw / 2, 3, bw, 5, 2.5).fill({ color: 0x000000, alpha: 0.75 })
         .roundRect(-bw / 2, 3, Math.max(3, bw * frac), 5, 2.5).fill(0xffb547);
       sign.addChild(text, bar);
-      root.addChild(sign);
+      this.signLayer.addChild(sign);
+      rec.extras.push(sign);
+    }
+    if (tex) {
+      // Window light and smoke, placed on the painting; only on the part already standing.
+      const hp = w / (tex.width / tex.height);
+      const at = (fx: number, fy: number): [number, number] => [lot.x + (fx - 0.5) * w * k, gy + (fy - (1 - ART_SINK)) * hp * k];
+      const lights = new Container();
+      let i = 0;
+      for (const spot of SPOTS[site.id] ?? []) {
+        const [x, y] = at(spot.x, spot.y);
+        if (gy - y > h * shown * k + 2) continue;
+        const s = glowSprite(spot.size * k * 0.75, spot.color);
+        s.position.set(x, y);
+        lights.addChild(s);
+        rec.lights.push({ s, spot, ph: lot.x * 0.01 + i++ * 1.7 });
+      }
+      this.glowLayer.addChild(lights);
+      rec.extras.push(lights);
+      if (!site.building) {
+        const smoke = new Container();
+        for (const [fx, fy] of SMOKE[site.id] ?? []) {
+          const [x, y] = at(fx, fy);
+          rec.smoke.push(new Smoke(smoke, { x, y, rate: 1.6, life: 5, rise: 14, size: [5, 30], alpha: 0.28, color: 0xc8c0b8, drift: 9 }, 14, Math.round(x)));
+        }
+        this.smokeLayer.addChild(smoke);
+        rec.extras.push(smoke);
+      }
+    }
+    // Weeds grow over the foot of the building, like everywhere else on the surface.
+    const weeds = ArtLibrary.get('kit/prop-7');
+    if (weeds) {
+      for (const [fx, flip, sz] of [[-0.42, false, 20], [0.38, true, 16], [0.05, false, 13]] as [number, boolean, number][]) {
+        const s = new Sprite(weeds);
+        s.anchor.set(0.5, 0.92);
+        const sc = sz / weeds.height;
+        s.scale.set(flip ? -sc : sc, sc);
+        s.position.set(fx * w, 1);
+        root.addChild(s);
+      }
     }
     root.eventMode = 'static';
     root.cursor = 'pointer';
     root.hitArea = { contains: (x: number, y: number) => x >= -w / 2 - 12 && x <= w / 2 + 12 && y >= -h - 40 && y <= 4 };
     root.on('pointertap', () => this.onTap?.(site.id));
-    return root;
+    return rec;
+  }
+
+  /**
+   * What makes the lots one settlement and not a row of stickers: a power line on timber poles from the bunker
+   * entrance out to the last lot (wires sag between poles), and the clutter of a lived-in place in the gaps.
+   */
+  private buildDecor(): void {
+    this.decor.removeChildren().forEach(c => c.destroy({ children: true }));
+    const ids = ORDER.filter(id => this.lots.has(id));
+    if (!ids.length) return;
+    const g = new Graphics();
+    const lastRight = Math.max(...ids.map(id => lotRight(id)));
+    // Poles: one just east of the entrance, then about every 150 units out to the last lot.
+    const poles: [number, number][] = [];
+    for (let x = 175; x <= lastRight + 20; x += 150) poles.push([x, BASE + groundY(x, PORTAL_X) - BACK_RISE - 2]);
+    const H = 118;
+    for (const [x, y] of poles) {
+      g.rect(x - 1.6, y - H, 3.2, H).fill(0x4a3a2a);
+      g.rect(x - 11, y - H + 6, 22, 2.4).fill(0x3e3024);
+      for (const dx of [-9, 0, 9]) g.rect(x + dx - 1, y - H + 3, 2, 3.4).fill(0x8a8478);
+    }
+    // Wires: three sagging spans between neighbouring poles.
+    for (let i = 0; i + 1 < poles.length; i++) {
+      const [x0, y0] = poles[i];
+      const [x1, y1] = poles[i + 1];
+      for (const dx of [-9, 0, 9]) {
+        const ax = x0 + dx, ay = y0 - H + 3, bx = x1 + dx, by = y1 - H + 3;
+        g.moveTo(ax, ay).quadraticCurveTo((ax + bx) / 2, (ay + by) / 2 + 14, bx, by).stroke({ color: 0x1e1a18, width: 0.9, alpha: 0.8 });
+      }
+    }
+    this.decor.addChild(g);
+    // Clutter in the gaps between lots: barrels, sandbags, a lamp post, weeds (the surface's own props).
+    const kinds = [3, 2, 7, 6, 3, 7];
+    const heights: Record<number, number> = { 2: 22, 3: 30, 6: 92, 7: 16 };
+    for (let i = 0; i + 1 < ids.length; i++) {
+      const a = LOTS[ids[i]], b = LOTS[ids[i + 1]];
+      const kind = kinds[i % kinds.length];
+      const tex = ArtLibrary.get(`kit/prop-${kind}`);
+      if (!tex) continue;
+      const x = (a.x + b.x) / 2 + ((i * 37) % 23) - 11;
+      const s = new Sprite(tex);
+      s.anchor.set(0.5, 1);
+      const sc = heights[kind] / tex.height;
+      s.scale.set(i % 2 ? -sc : sc, sc);
+      s.position.set(x, BASE + groundY(x, PORTAL_X) + 2);
+      this.decor.addChild(s);
+    }
   }
 }
