@@ -7,6 +7,8 @@ import type { BuildingType, ResourceType } from '../../src/core/GameState';
 import { createInitialState } from '../../src/core/GameState';
 import { ACTS } from '../../src/data/acts';
 import { TUNING } from '../../src/data/tuning';
+import { BOOK, HELP_TOPICS } from '../../src/data/book';
+import { CHAPTERS } from '../../src/data/story';
 import { BuildingSystem } from '../../src/systems/BuildingSystem';
 import { ResourceSystem } from '../../src/systems/ResourceSystem';
 
@@ -35,6 +37,25 @@ export function lintData(i18n: Record<string, Record<string, string>>): string[]
     state.set(id, 'done');
   };
   for (const r of RESEARCH) visit(r.id, []);
+
+  // [P2-1] Every doctrine fork has at least two ways to go, and a fork's members share one Act.
+  const forks = new Map<string, typeof RESEARCH>();
+  for (const r of RESEARCH) if (r.fork) forks.set(r.fork, [...(forks.get(r.fork) ?? []), r]);
+  for (const [f, list] of forks) {
+    if (list.length < 2) problems.push(`fork ${f}: only ${list.length} option`);
+    if (new Set(list.map(x => x.act)).size > 1) problems.push(`fork ${f}: its options open in different Acts`);
+  }
+  // [Q6] The Bunker Book: unique entries, and every "?" topic leads to one.
+  const bookIds = new Set<string>();
+  for (const e of BOOK) { if (bookIds.has(e.id)) problems.push(`book: duplicate entry ${e.id}`); bookIds.add(e.id); }
+  for (const [panel, entry] of Object.entries(HELP_TOPICS)) if (!bookIds.has(entry)) problems.push(`book: topic ${panel} points to a missing entry ${entry}`);
+  // The story: unique ids and numbers.
+  const chIds = new Set<string>(); const chNums = new Set<number>();
+  for (const c of CHAPTERS) {
+    if (chIds.has(c.id)) problems.push(`story: duplicate chapter ${c.id}`);
+    if (chNums.has(c.number)) problems.push(`story: duplicate chapter number ${c.number}`);
+    chIds.add(c.id); chNums.add(c.number);
+  }
 
   // Rooms: costs in real resources.
   for (const [type, def] of Object.entries(BUILDING_DEFS)) {
@@ -70,6 +91,14 @@ export function lintData(i18n: Record<string, Record<string, string>>): string[]
       const top = Math.min(def.maxLevel, Math.max(1, Math.floor((act.levelCap * def.maxLevel) / 10)));
       for (let level = 1; level < top; level++) {
         over(`${type} level ${level}->${level + 1}`, bs.getUpgradeCost({ id: 'x', type: type as BuildingType, level, position: { x: 0, y: 0, floor: 0 }, assignedSurvivorIds: [], constructionProgress: 0, constructionTotal: 0, isConstructing: false, specialization: null }));
+      }
+    }
+    // [P2-8] A research of this Act that asks a late currency must fit in the storage the Act alone gives (knowledge and materials depend on rooms).
+    for (const r of RESEARCH.filter(x => (x.act ?? 0) === act.id)) {
+      for (const [res, v] of Object.entries(r.cost)) {
+        if (!['components', 'alloys', 'data', 'influence', 'seedCores'].includes(res)) continue;
+        const cap = caps[res as ResourceType] ?? 0;
+        if ((v ?? 0) > cap * TUNING.maxPaymentShare) problems.push(`Act ${act.id}: research ${r.id} costs ${v} ${res}, more than ${TUNING.maxPaymentShare} of storage ${cap}`);
       }
     }
     const prev = act.id > 1 ? ACTS[act.id - 2].floorCap : 3;

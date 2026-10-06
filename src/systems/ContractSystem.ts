@@ -44,9 +44,10 @@ const FALLBACK_ASK: ResourceType[] = ['materials', 'food', 'water'];
 
 /**
  * [Long game P4] Contracts (long-game plan, pillar D): the active play that sets an engaged player apart from a casual
- * one (pacing law L4). Every ~40 minutes of world time a partner (or the drifters on the roads) posts an offer to the
- * Decision Inbox; it waits two hours and then lapses (nothing is lost). Taking it costs goods or people's time and
- * pays hours of the Act's currency, and counts as a deal with the partner (their relation grows).
+ * one (pacing law L4). About once an hour of world time (TUNING.contractEvery) a partner (or the drifters on the roads)
+ * posts an offer to the Decision Inbox; it waits a few hours (TUNING.contractDeadline) and then lapses (nothing is lost).
+ * Taking it costs about an hour of a scarce good or people's time and pays hours of the Act's currency, and counts as a
+ * deal with the partner (their relation grows). [Q5] The ask is measured against the bunker's own production.
  */
 export class ContractSystem {
   private sm: StateManager;
