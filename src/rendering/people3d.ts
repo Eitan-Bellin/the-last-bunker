@@ -148,9 +148,24 @@ export interface Look3 {
   hairStyle: string; glasses: boolean; goggles: boolean; hat: string | null; hatTint: number; hurt: boolean;
 }
 
+/** Cross-fade length between two animations (plan 2026-10 Q1). */
+const FADE_S = 0.16;
+
+/** A frozen copy of the sprites on screen (the pose being faded out), built on the first transition. */
+interface Ghost {
+  container: Container;
+  layers: Sprite[];
+  headHolder: Container;
+  slots: Sprite[];
+}
+
 /**
  * A sprite body: four tinted layers plus head attachments. Lives inside the Person's figure container
  * (which handles facing, turning, lamp tint and shadows).
+ *
+ * Plan 2026-10: when the animation changes (or the person turns) the previous pose stays behind as a ghost that fades out
+ * over `FADE_S` while the new one fades in, so poses no longer jump; and a black copy of the body can be drawn for the
+ * shadow on the back wall (`shadow`, same textures, no extra atlas memory).
  */
 export class Body3D {
   readonly container = new Container();
@@ -158,6 +173,11 @@ export class Body3D {
   private headHolder = new Container();
   private slots: Record<Slot, Sprite>;
   private cur: Frame3 | null = null;
+  private curAnim = '';
+  private ghost: Ghost | null = null;
+  private fade = 1;
+  /** The shadow copy (black layers + hair), parented by the Person; null until asked for. */
+  private shadowSet: { container: Container; layers: Sprite[]; head: Container; hair: Sprite } | null = null;
 
   readonly data: BodyData;
 
@@ -205,12 +225,18 @@ export class Body3D {
     s.tint = a.tinted ? tint : 0xffffff;
   }
 
-  /** Shows frame `i` (wrapped) of an animation. Cheap when the frame is unchanged. */
-  show(anim: Anim3, i: number): void {
+  /**
+   * Shows frame `i` (wrapped) of an animation. Cheap when the frame is unchanged. A change of animation starts a
+   * cross-fade from the pose on screen when `fade` is set.
+   */
+  show(anim: Anim3, i: number, fade = false): void {
     const a = this.data.anims[anim] ?? this.data.anims.idle;
     const n = a.frames.length;
     const f = a.frames[((i % n) + n) % n];
     if (f === this.cur) return;
+    // (a turn that already started this frame's fade keeps its mirrored ghost)
+    if (fade && this.cur && anim !== this.curAnim && this.fade >= 1) this.startFade(false);
+    this.curAnim = anim;
     this.cur = f;
     for (let k = 0; k < 4; k++) {
       const s = this.layers[k];
@@ -225,5 +251,113 @@ export class Body3D {
     }
     this.headHolder.position.set(f.head[0], f.head[1]);
     this.headHolder.rotation = f.head[2] - this.data.headRef;
+    if (this.shadowSet) this.syncShadow();
+  }
+
+  /** Freezes what is on screen as a ghost and fades it out (mirrored when the figure has just turned around). */
+  startFade(mirror: boolean): void {
+    const g = (this.ghost ??= this.makeGhost());
+    for (let k = 0; k < 4; k++) {
+      const src = this.layers[k], dst = g.layers[k];
+      dst.visible = src.visible;
+      dst.texture = src.texture;
+      dst.position.copyFrom(src.position);
+      dst.tint = src.tint;
+    }
+    g.headHolder.position.copyFrom(this.headHolder.position);
+    g.headHolder.rotation = this.headHolder.rotation;
+    SLOTS.forEach((k, j) => {
+      const src = this.slots[k], dst = g.slots[j];
+      dst.visible = src.visible;
+      dst.texture = src.texture;
+      dst.position.copyFrom(src.position);
+      dst.tint = src.tint;
+    });
+    g.container.scale.x = mirror ? -1 : 1;
+    g.container.visible = true;
+    g.container.alpha = 1;
+    this.fade = 0;
+  }
+
+  private makeGhost(): Ghost {
+    const container = new Container();
+    const layers: Sprite[] = [];
+    for (let i = 0; i < 4; i++) {
+      const s = new Sprite(Texture.EMPTY);
+      layers.push(s);
+      container.addChild(s);
+    }
+    const headHolder = new Container();
+    const slots = SLOTS.map(() => {
+      const s = new Sprite(Texture.EMPTY);
+      s.visible = false;
+      headHolder.addChild(s);
+      return s;
+    });
+    container.addChild(headHolder);
+    container.visible = false;
+    // Under the live body, so the new pose settles over the fading old one.
+    this.container.addChildAt(container, 0);
+    return { container, layers, headHolder, slots };
+  }
+
+  /** Advances the cross-fade (call once a frame). */
+  step(dt: number): void {
+    if (this.fade >= 1) return;
+    this.fade = Math.min(1, this.fade + dt / FADE_S);
+    const a = this.fade * this.fade * (3 - 2 * this.fade);
+    if (this.ghost) {
+      this.ghost.container.alpha = 1 - a;
+      if (this.fade >= 1) this.ghost.container.visible = false;
+    }
+    // The new pose arrives in the first half so the two never add up to less than a body.
+    const m = this.fade >= 1 ? 1 : Math.min(1, a * 2);
+    for (const s of this.layers) s.alpha = m;
+    this.headHolder.alpha = m;
+  }
+
+  /** The black copy of the body for the back wall's shadow (hidden when `on` is false); parent it where it should be drawn. */
+  shadow(on: boolean): Container | null {
+    if (!on) {
+      if (this.shadowSet) this.shadowSet.container.visible = false;
+      return this.shadowSet?.container ?? null;
+    }
+    if (!this.shadowSet) {
+      const container = new Container();
+      const layers: Sprite[] = [];
+      for (let i = 0; i < 4; i++) {
+        const s = new Sprite(Texture.EMPTY);
+        s.tint = 0x000000;
+        layers.push(s);
+        container.addChild(s);
+      }
+      const head = new Container();
+      const hair = new Sprite(Texture.EMPTY);
+      hair.tint = 0x000000;
+      hair.visible = false;
+      head.addChild(hair);
+      container.addChild(head);
+      this.shadowSet = { container, layers, head, hair };
+      this.syncShadow();
+    }
+    this.shadowSet.container.visible = true;
+    return this.shadowSet.container;
+  }
+
+  private syncShadow(): void {
+    const sh = this.shadowSet;
+    if (!sh) return;
+    for (let k = 0; k < 4; k++) {
+      const src = this.layers[k], dst = sh.layers[k];
+      dst.visible = src.visible;
+      dst.texture = src.texture;
+      dst.position.copyFrom(src.position);
+    }
+    sh.head.position.copyFrom(this.headHolder.position);
+    sh.head.rotation = this.headHolder.rotation;
+    const hair = this.slots.hair;
+    sh.hair.visible = hair.visible;
+    sh.hair.texture = hair.texture;
+    sh.hair.position.copyFrom(hair.position);
   }
 }

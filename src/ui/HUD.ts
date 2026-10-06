@@ -10,6 +10,14 @@ import { bedsBuilt } from '../systems/BuildingSystem';
 /** [Long game] Components and alloys join the row from their Act on (the row then has four columns). */
 const VISIBLE_RESOURCES: ResourceType[] = ['food', 'water', 'power', 'materials', 'medicine', 'knowledge', 'scrap', 'components', 'alloys', 'data', 'influence', 'seedCores'];
 
+/**
+ * Plan 2026-10 Q12 (HUD diet): on a phone the top bar shows only these four, in one row. Every other resource of the Act
+ * joins the row only while it needs attention (empty, or low and draining); the "show all" pill under the row expands the
+ * rest (remembered), and a tap on any resource still opens its drawer.
+ */
+const CORE_RESOURCES = new Set<ResourceType>(['food', 'water', 'power', 'materials']);
+const MORE_KEY = 'lastbunker_hud_more';
+
 export type NavKey = 'build' | 'surface' | 'research' | 'people';
 
 export { timeOfDay };
@@ -34,6 +42,12 @@ export class HUD {
   private peopleBadge!: HTMLElement;
   private lastText = new WeakMap<HTMLElement, string>();
   private shown = new Map<ResourceType, number>();
+  /** Plan 2026-10 Q12: which resources the current Act opens, the "show all" pill and its state. */
+  private actShow = new Map<ResourceType, boolean>();
+  private topBar!: HTMLElement;
+  private moreBtn!: HTMLButtonElement;
+  private expanded = false;
+  private narrow = window.matchMedia('(max-width: 520px)');
   private lastUpdate = performance.now();
 
   onNav: ((key: NavKey) => void) | null = null;
@@ -71,6 +85,25 @@ export class HUD {
       this.resourceEls.set(rt, { root, value, rate, fill });
     }
     topBar.appendChild(resourceRow);
+    this.topBar = topBar;
+    try {
+      this.expanded = localStorage.getItem(MORE_KEY) === '1';
+    } catch {
+      this.expanded = false;
+    }
+    this.moreBtn = el('button', 'res-more');
+    this.moreBtn.addEventListener('click', () => {
+      this.expanded = !this.expanded;
+      try {
+        localStorage.setItem(MORE_KEY, this.expanded ? '1' : '0');
+      } catch {
+        // the choice just won't be remembered
+      }
+      vibrate(6);
+      this.lastMore = '';
+      if (this.lastState) this.update(this.lastState);
+    });
+    topBar.appendChild(this.moreBtn);
 
     const infoRow = el('div', 'info-row');
     const pop = el('div', 'info-item');
@@ -301,8 +334,11 @@ export class HUD {
   }
 
   private shownAct = -1;
+  private lastState: GameState | null = null;
+  private lastMore = '';
 
   update(state: GameState): void {
+    this.lastState = state;
     const act = state.longGame?.meta.act ?? 1;
     if (act !== this.shownAct) {
       this.shownAct = act;
@@ -311,7 +347,7 @@ export class HUD {
         const opens = resourceDef(rt)?.act ?? 0;
         // Tier-2 goods: the current Act's and the one before (older ones still show in costs and in the drawer).
         const show = opens === 0 || (act >= opens && opens >= act - 1);
-        els.root.style.display = show ? '' : 'none';
+        this.actShow.set(rt, show);
         if (opens > 0 && show) tier2 = true;
       }
       this.resourceEls.values().next().value?.root.parentElement?.classList.toggle('tier2', tier2);
@@ -330,6 +366,10 @@ export class HUD {
     const nowMs = performance.now();
     const dtRoll = Math.min(0.1, (nowMs - this.lastUpdate) / 1000);
     this.lastUpdate = nowMs;
+    // Plan 2026-10 Q12: on a phone only the key four show, plus whatever needs attention; the pill expands the rest.
+    const collapsible = this.narrow.matches;
+    const compact = collapsible && !this.expanded;
+    let hiddenCount = 0;
     for (const [rt, els] of this.resourceEls) {
       const res = state.resources[rt];
       // Counters roll toward their value instead of jumping.
@@ -345,6 +385,22 @@ export class HUD {
       els.fill.style.width = `${pct}%`;
       els.fill.className = `resource-fill-bar ${pct >= 99 ? 'full' : pct < 15 ? 'low' : ''}`;
       els.root.classList.toggle('empty', res.amount <= 0 && res.consumptionRate > 0);
+      const inAct = this.actShow.get(rt) !== false;
+      const attention = (res.amount <= 0 && res.consumptionRate > 0) || (pct < 15 && net < -0.005 && res.cap > 0);
+      const visible = inAct && (!compact || CORE_RESOURCES.has(rt) || attention);
+      if (inAct && !visible) hiddenCount++;
+      const want = visible ? '' : 'none';
+      if (els.root.style.display !== want) els.root.style.display = want;
+    }
+    this.topBar.classList.toggle('res-collapsible', collapsible);
+    const more = collapsible ? `${this.expanded ? 'less' : 'more'}|${hiddenCount}` : '';
+    if (more !== this.lastMore) {
+      this.lastMore = more;
+      const total = [...this.actShow.entries()].filter(([rt, s]) => s && !CORE_RESOURCES.has(rt)).length;
+      this.moreBtn.style.display = collapsible && total > 0 ? '' : 'none';
+      this.moreBtn.textContent = this.expanded ? '▴' : `▾ ${total}`;
+      this.moreBtn.setAttribute('aria-label', i18n.t(this.expanded ? 'hud.lessRes' : 'hud.moreRes'));
+      this.moreBtn.title = i18n.t(this.expanded ? 'hud.lessRes' : 'hud.moreRes');
     }
 
     // A lock when the Act's limit holds back beds the rooms already give.

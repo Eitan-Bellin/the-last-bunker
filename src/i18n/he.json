@@ -27,6 +27,8 @@
   "hud.powerLow": "[[power]] חוסר חשמל! הבונקר עובד ב־{pct}%",
   "hud.nextArrival": "ניצול חדש מגיע בעוד {t}",
   "hud.bunkerFull": "אין מיטות פנויות – בנו או שדרגו מגורים כדי שיגיעו עוד ניצולים",
+  "hud.moreRes": "הצגת כל המשאבים",
+  "hud.lessRes": "הצגת המשאבים העיקריים בלבד",
   "placement.hint": "בחרו מיקום עבור {name}",
   "placement.cancel": "ביטול",
   "placement.invalid": "אי אפשר לבנות כאן",

@@ -2,6 +2,7 @@ import type { Container } from 'pixi.js';
 import { ArtLibrary } from '../art/ArtLibrary';
 import { artEntry } from '../art/registry';
 import type { Activity, Lane } from './people';
+import { lightProfile, sampleProfile, type LightProfile } from './lightStrip';
 
 /**
  * gfx-p0 people: where survivors stand to work in each painting, so the chef stirs the pot on the stove,
@@ -112,6 +113,12 @@ export class Crowd {
   /** The main lamp (room-local x, and its height above the floor), or null when the room has none. */
   lamp: { x: number; h: number } | null = null;
   sig = '';
+  /** Plan 2026-10 Q2: the painting this crowd stands in front of (null for rooms without one), its mirroring and width. */
+  private artKey: string | null = null;
+  private mirrored = false;
+  private roomW = 1;
+  private profile: LightProfile | null = null;
+  private profileTry = 0;
 
   readonly container: Container;
 
@@ -121,6 +128,11 @@ export class Crowd {
 
   configure(sig: string, key: string | null, mirror: boolean, width: number, lane: Lane, height: number): void {
     this.sig = sig;
+    this.artKey = key;
+    this.mirrored = mirror;
+    this.roomW = Math.max(1, width);
+    this.profile = null;
+    this.profileTry = 0;
     const def = key ? ROOMS[key] : undefined;
     const fx = (f: number) => (mirror ? 1 - f : f) * width;
     for (const s of this.spots) s.owner = null;
@@ -143,6 +155,29 @@ export class Crowd {
       }
     }
     this.lamp = best;
+  }
+
+  /**
+   * Plan 2026-10 Q2: brightness and colour factors of the painting's lamp pools at room-local `x` (written into `out`),
+   * or false when the room has no painting or it is not measured yet (retried now and then while its texture loads).
+   */
+  lightAt(x: number, out: [number, number, number]): boolean {
+    if (!this.artKey) return false;
+    if (!this.profile) {
+      if (this.profileTry > 0) {
+        this.profileTry--;
+        return false;
+      }
+      this.profile = lightProfile(this.artKey);
+      if (!this.profile) {
+        this.profileTry = 120;
+        return false;
+      }
+    }
+    let f = x / this.roomW;
+    if (this.mirrored) f = 1 - f;
+    sampleProfile(this.profile, f, out);
+    return true;
   }
 
   join(m: CrowdMember): void {

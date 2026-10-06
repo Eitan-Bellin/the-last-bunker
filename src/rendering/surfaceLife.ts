@@ -229,6 +229,11 @@ export interface SkyInfo {
   top: number;
   /** Average colour of the lit landscape: the light the portal and props are graded to. */
   light: number;
+  /**
+   * Plan 2026-10 Q7: the painting with its landscape removed and the sky run down past the horizon, so the sky can drift
+   * on its own parallax layer under the landscape cut-out. Built on the first call (one more painting-sized texture).
+   */
+  skyOnly: () => Texture | null;
 }
 
 const skies = new Map<number, SkyInfo>();
@@ -331,10 +336,80 @@ export function analyseSky(tex: Texture, era: number): SkyInfo | null {
       }
     }
   }
+  let skyOnlyTex: Texture | null | undefined;
+  const buildSkyOnly = (): Texture | null => {
+    // Per column: the last sky pixel above the first land pixel; its colour (smoothed sideways) runs down from there.
+    const yb = new Int32Array(W);
+    const col = new Float32Array(W * 3);
+    for (let x = 0; x < W; x++) {
+      let last = 0;
+      for (let y = 0; y < H; y++) {
+        if (land[y * W + x]) break;
+        if (sky[y * W + x]) last = y;
+      }
+      yb[x] = last;
+      let r = 0, g = 0, b = 0, n = 0;
+      for (let y = Math.max(0, last - 3); y <= last; y++) {
+        const i = (y * W + x) * 4;
+        r += d[i]; g += d[i + 1]; b += d[i + 2]; n++;
+      }
+      col[x * 3] = r / n; col[x * 3 + 1] = g / n; col[x * 3 + 2] = b / n;
+    }
+    const sm = new Float32Array(W * 3);
+    for (let x = 0; x < W; x++) {
+      for (let ch = 0; ch < 3; ch++) {
+        let v = 0, n = 0;
+        for (let k = -6; k <= 6; k++) {
+          const xx = Math.min(W - 1, Math.max(0, x + k));
+          v += col[xx * 3 + ch];
+          n++;
+        }
+        sm[x * 3 + ch] = v / n;
+      }
+    }
+    const [fc, fctx] = makeCanvas(W, H);
+    const fimg = fctx.createImageData(W, H);
+    for (let y = 0; y < H; y++) {
+      for (let x = 0; x < W; x++) {
+        const i = (y * W + x) * 4;
+        const below = y > yb[x];
+        // Under the horizon the sky colour fades a little darker with depth (it is never seen unless the land layer drifts).
+        const k = below ? 1 - 0.18 * Math.min(1, (y - yb[x]) / (H * 0.25)) : 1;
+        fimg.data[i] = below ? sm[x * 3] * k : d[i];
+        fimg.data[i + 1] = below ? sm[x * 3 + 1] * k : d[i + 1];
+        fimg.data[i + 2] = below ? sm[x * 3 + 2] * k : d[i + 2];
+        fimg.data[i + 3] = 255;
+      }
+    }
+    fctx.putImageData(fimg, 0, 0);
+    const [oc, octx] = makeCanvas(TW, TH);
+    octx.imageSmoothingEnabled = true;
+    octx.drawImage(fc, 0, 0, TW, TH);
+    // The real painting over it wherever it is sky (soft-edged, like the landscape cut-out).
+    const [tc, tctx] = makeCanvas(TW, TH);
+    tctx.drawImage(res, 0, 0, TW, TH);
+    tctx.globalCompositeOperation = 'destination-in';
+    tctx.imageSmoothingEnabled = true;
+    tctx.filter = `blur(${Math.max(2, TW / W)}px)`;
+    tctx.drawImage(mc, 0, 0, TW, TH);
+    tctx.filter = 'none';
+    octx.drawImage(tc, 0, 0);
+    return canvasTexture(oc);
+  };
   const info: SkyInfo = {
     land: canvasTexture(lc),
     top: rgb(tr / tn, tg / tn, tb / tn),
     light: ln ? rgb(lr / ln, lg / ln, lb / ln) : 0xffffff,
+    skyOnly: () => {
+      if (skyOnlyTex === undefined) {
+        try {
+          skyOnlyTex = buildSkyOnly();
+        } catch {
+          skyOnlyTex = null;
+        }
+      }
+      return skyOnlyTex;
+    },
   };
   skies.set(tex.uid, info);
   return info;

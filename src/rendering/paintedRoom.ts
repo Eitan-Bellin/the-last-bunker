@@ -4,6 +4,7 @@ import { ArtLibrary, coneTexture, glowTexture, moteTexture } from '../art/ArtLib
 import { ROOM_H } from './layout';
 import { hGradient, vGradient } from './draw';
 import { crisisLight } from './crisisLight'; // gfx-p0 crisis
+import { GFX } from './gfxFeatures';
 import type { Animator, RoomVisual } from './roomArt';
 
 /**
@@ -65,12 +66,76 @@ function addLight(layer: Container, spot: LightSpot, W: number, H: number, mirro
     cone.alpha = 0.32;
     layer.addChild(cone);
   }
+  // Plan 2026-10 Q9: a soft shaft of light with streaks that sways a little under the bigger lamps (quality: GFX.beams).
+  let beam: Sprite | null = null;
+  if (beamBudget.n < beamBudget.max && spot.r >= 0.13 && spot.y < 0.4) {
+    beamBudget.n++;
+    beam = new Sprite(beamTexture());
+    beam.anchor.set(0.5, 0);
+    beam.tint = spot.color;
+    beam.width = Math.min(W * 0.9, spot.r * W * 3.4);
+    beam.height = Math.max(20, H * 0.96 - y);
+    beam.position.set(x, y + 2);
+    beam.alpha = 0;
+    layer.addChild(beam);
+  }
   const flicker = spot.flicker ?? 0;
+  const bw = beam ? beam.width : 0;
+  const bx = x;
   return (t) => {
     const w = flicker > 0 ? 1 - flicker * 0.35 * (1 - wobble(t, seed) * 1.4) : 1;
     glow.alpha = Math.max(0.15, Math.min(1, w)) * 0.85 * tame;
     if (cone) cone.alpha = glow.alpha * 0.36;
+    if (beam) {
+      const on = GFX.beams;
+      beam.visible = on;
+      if (on) {
+        // The shaft breathes slowly and leans a few degrees; its width follows the lamp's own dip.
+        beam.alpha = glow.alpha * (0.2 + 0.05 * Math.sin(t * 0.45 + seed)) * (0.5 + 0.5 * tame);
+        beam.skew.x = 0.05 * Math.sin(t * 0.21 + seed * 1.7);
+        beam.width = bw * (0.94 + 0.06 * Math.sin(t * 0.33 + seed * 0.6));
+        beam.x = bx;
+      }
+    }
   };
+}
+
+/** Plan 2026-10 Q9: how many beams a room may carry (reset per room by buildPaintedRoom). */
+const beamBudget = { n: 0, max: 2 };
+
+let beamTex: Texture | null = null;
+/** A downward shaft widening from its apex, with soft radial streaks (white; tinted per lamp). */
+function beamTexture(): Texture {
+  if (beamTex) return beamTex;
+  const w = 96, h = 128;
+  const c = document.createElement('canvas');
+  c.width = w;
+  c.height = h;
+  const ctx = c.getContext('2d')!;
+  const img = ctx.createImageData(w, h);
+  // Streak profile across the beam (by angle from the axis): a few octaves of 1-D value noise.
+  const hash = (n: number) => { const s = Math.sin(n * 127.1 + 311.7) * 43758.5453; return s - Math.floor(s); };
+  const noise = (x: number) => { const i = Math.floor(x), f = x - i, u = f * f * (3 - 2 * f); return hash(i) * (1 - u) + hash(i + 1) * u; };
+  const streak = (a: number) => 0.55 + 0.45 * (0.6 * noise(a * 5 + 3) + 0.4 * noise(a * 13 + 9));
+  for (let y = 0; y < h; y++) {
+    const ky = y / (h - 1);
+    const half = 0.12 + 0.88 * ky;
+    for (let x = 0; x < w; x++) {
+      const nx = ((x + 0.5) / w) * 2 - 1;
+      const a = nx / half;
+      let v = 0;
+      if (Math.abs(a) < 1) {
+        const edge = 1 - Math.abs(a);
+        v = edge * edge * (3 - 2 * edge) * streak(a) * Math.pow(1 - ky, 0.9) * Math.min(1, ky * 14 + 0.15);
+      }
+      const i = (y * w + x) * 4;
+      img.data[i] = img.data[i + 1] = img.data[i + 2] = 255;
+      img.data[i + 3] = Math.round(255 * Math.min(1, v));
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+  beamTex = Texture.from(c);
+  return beamTex;
 }
 
 // ---- gfx-p0 rooms: shared procedural textures for the painted-motion layer (made once, white, tinted per use) ----
@@ -900,6 +965,7 @@ export function buildPaintedRoom(
   // gfx-p0 rooms: bright paintings already carry their lamp light, so the live glow is tamed and cones are skipped.
   const lum = ArtLibrary.lumOf(entry.key) ?? 0.15;
   const tame = Math.max(0.25, Math.min(1, 1 - (lum - 0.15) * 1.7));
+  beamBudget.n = 0;
   ArtLibrary.lightsFor(entry).forEach((l, i) => animators.push(addLight(lights, l, W, H, mirror, seed + i * 7, tame, lum < 0.3)));
   (entry.fx ?? []).forEach((spot, i) => {
     const s = seed + i * 1.37;

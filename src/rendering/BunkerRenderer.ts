@@ -22,6 +22,7 @@ import { ArtLibrary } from '../art/ArtLibrary';
 import { artEntry, buildingArtKey, roomTier, ruinArtKey } from '../art/registry';
 import { buildCityMap, type CityMap } from './cityMap';
 import { PostFX, startQuality, targetResolution } from './postfx';
+import { setGfxQuality } from './gfxFeatures'; // plan 2026-10: quality switches of the new finish features
 import { isLiteMode, logCrash } from '../core/crashGuard';
 import { isTouchDevice } from '../utils/device';
 import { coneTexture } from '../art/ArtLibrary';
@@ -1623,6 +1624,7 @@ export class BunkerRenderer {
     this.lastFrame = now;
     this.time += dt;
 
+    setGfxQuality(this.postfx?.quality ?? 'high', isLiteMode());
     if (state.currentFloors !== this.floors || this.structureGloom !== this.gloom || this.undergroundSig !== this.structureSig(state)) this.rebuildStructure(state);
     this.stepCamera(dt); // [camera]
     this.updateLod(state, dt);
@@ -1694,7 +1696,9 @@ export class BunkerRenderer {
     }
     if (this.cityMap) {
       const target = lod === 'far' ? 1 : 0;
-      const a = this.cityMap.container.alpha + (target - this.cityMap.container.alpha) * (1 - Math.exp(-dt * 6)); // [camera] dt-exact
+      let a = this.cityMap.container.alpha + (target - this.cityMap.container.alpha) * (1 - Math.exp(-dt * 6)); // [camera] dt-exact
+      // Plan 2026-10 Q11: the far-zoom map's labels end their fade instead of lingering as a faint ghost over the rooms.
+      if (target === 0 && a < 0.06) a = 0;
       this.cityMap.container.alpha = a;
       this.cityMap.container.visible = a > 0.01;
       if (this.cityMap.container.visible) this.cityMap.animate(state, this.time, this.nightNow);

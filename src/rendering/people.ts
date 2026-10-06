@@ -5,6 +5,7 @@ import { hashString, shade } from './draw';
 import { ROOM_H } from './layout';
 import type { Crowd, CrowdMember, Spot } from './workSpots';
 import { Body3D, PEOPLE3D, UNITS_PER_M, bodyData, ppm, type Anim3, type BodyKind } from './people3d';
+import { GFX } from './gfxFeatures';
 
 const SPEED = 24;
 const FLOOR_FRONT = ROOM_H - 3;
@@ -245,6 +246,13 @@ export class Person implements CrowdMember {
   private blinkT = 0;
   /** Per-person phase offset, so a room's workers don't move in lockstep. */
   private off = 0;
+  /** Plan 2026-10 Q3: build variety from the id hash (height, width, skin lightness): no twins in a room. */
+  private sizeV = 1;
+  private widthV = 1;
+  private skinV = 1;
+  /** The room's ambient tint as the renderer set it (before the lamp pools of the painting are applied, Q2). */
+  private ambient = 0xffffff;
+  private placeRGB: [number, number, number] = [1, 1, 1];
 
   private crowd: Crowd | null = null;
   private spot: Spot | null = null;
@@ -289,6 +297,9 @@ export class Person implements CrowdMember {
       return seed / 0x100000000;
     };
     this.off = this.rnd() * 10;
+    this.sizeV = 0.94 + this.rnd() * 0.12;
+    this.widthV = 0.92 + this.rnd() * 0.16;
+    this.skinV = 0.93 + this.rnd() * 0.14;
     this.shadow.ellipse(0, 0, 9, 2.8).fill({ color: 0x000000, alpha: 0.35 });
     // Draw order: back leg, back arm, torso (with head), front leg, front arm.
     this.thighB.addChild(this.shinB);
@@ -326,7 +337,7 @@ export class Person implements CrowdMember {
 
   /** Standing height to the top of the head (world units, before the depth scale). */
   private height(): number {
-    if (this.b3) return (this.b3.data.height * UNITS_PER_M) / ppm();
+    if (this.b3) return ((this.b3.data.height * UNITS_PER_M) / ppm()) * this.sizeV;
     const b = this.b;
     return (b.thigh + b.shin + b.torso + (2.6 + 9.8) * b.head) * this.baseScale;
   }
@@ -357,13 +368,28 @@ export class Person implements CrowdMember {
    * give it a two-layer contact shadow instead of a flat oval.
    */
   setAmbient(tint: number): void {
-    if (this.figure.tint === tint) return;
-    this.figure.tint = tint;
+    if (this.ambient === tint) return;
+    this.ambient = tint;
+    this.applyTint();
     this.light = Math.max((tint >> 16) & 255, (tint >> 8) & 255, tint & 255) / 255;
     if (this.contact) return;
     this.shadow.clear();
     this.shadow.ellipse(0, 0, 15, 3.6).fill({ color: 0x000000, alpha: 0.18 });
     this.shadow.ellipse(0, 0, 8, 2.2).fill({ color: 0x000000, alpha: 0.42 });
+  }
+
+  /**
+   * Plan 2026-10 Q2: the figure's tint is the room's ambient colour times the painting's own lamp pools at this spot:
+   * a little darker and cooler between the lamps, a little warmer and brighter under one (the average stays put).
+   */
+  private applyTint(): void {
+    let t = this.ambient;
+    if (GFX.place && !this.lifted && this.crowd?.lightAt(this.x, this.placeRGB)) {
+      const [kr, kg, kb] = this.placeRGB;
+      const c = (sh: number, k: number) => Math.max(0, Math.min(255, Math.round(((t >> sh) & 255) * k)));
+      t = (c(16, kr) << 16) | (c(8, kg) << 8) | c(0, kb);
+    }
+    if (this.figure.tint !== t) this.figure.tint = t;
   }
 
   /** Rebuilds the body when the job (outfit) changes. */
@@ -555,7 +581,8 @@ export class Person implements CrowdMember {
     const data = bodyData(this.kind);
     if (!data) return;
     this.b3 = new Body3D(data);
-    this.b3.container.scale.set(UNITS_PER_M / ppm() / this.baseScale);
+    const k3 = UNITS_PER_M / ppm() / this.baseScale;
+    this.b3.container.scale.set(k3 * this.widthV, k3 * this.sizeV);
     for (const c of [this.thighB, this.upperB, this.torso, this.thighF, this.upperF]) c.visible = false;
     this.figure.addChild(this.b3.container);
     const h = this.height();
@@ -569,7 +596,7 @@ export class Person implements CrowdMember {
     const o = this.outfit;
     if (!this.b3 || !o) return;
     this.b3.dress({
-      skin: mute(this.look.skin), top: mute(o.coat ?? o.top), bottom: mute(o.bottom), hair: mute(this.look.hair),
+      skin: mute(shade(this.look.skin, this.skinV)), top: mute(o.coat ?? o.top), bottom: mute(o.bottom), hair: mute(this.look.hair),
       beard: this.look.beard !== undefined ? mute(this.look.beard) : null, hairStyle: this.look.hairStyle,
       glasses: !!this.look.glasses, goggles: !!o.goggles, hat: o.hat, hatTint: mute(shade(o.top, 0.8)), hurt: this.hurt,
     });
@@ -580,7 +607,7 @@ export class Person implements CrowdMember {
     const b3 = this.b3!;
     if (moving) {
       const anim: Anim3 = carrying ? 'walkCarry' : this.hurt ? 'limp' : 'walk';
-      b3.show(anim, Math.floor(this.walk3 * b3.data.anims[anim].frames.length));
+      b3.show(anim, Math.floor(this.walk3 * b3.data.anims[anim].frames.length), GFX.fade);
       return;
     }
     let anim: Anim3;
@@ -589,7 +616,7 @@ export class Person implements CrowdMember {
     else if (act === 'tend' && (this.job === 'laboratory' || this.job === 'reactorHall')) anim = 'inspect';
     else anim = WORK_ANIM[act];
     const a = b3.data.anims[anim] ?? b3.data.anims.idle;
-    b3.show(anim, Math.floor((t + this.off) * a.fps));
+    b3.show(anim, Math.floor((t + this.off) * a.fps), GFX.fade);
   }
 
   /** Mood and health show on the face (and posture). */
@@ -928,6 +955,15 @@ export class Person implements CrowdMember {
 
   /** Turning in place: the shown facing sweeps through zero (about 0.2 s for a full turn). */
   private turnStep(dt: number): void {
+    if (this.b3 && GFX.fade) {
+      // Plan 2026-10 Q1: turn in one step; the old orientation fades out as a mirrored ghost instead of squashing through zero width.
+      if (this.turn !== this.facing) {
+        this.b3.startFade(true);
+        this.turn = this.facing;
+      }
+      this.figure.scale.x = this.baseScale * this.facing;
+      return;
+    }
     const d = this.facing - this.turn;
     if (d !== 0) this.turn += Math.sign(d) * Math.min(Math.abs(d), dt * 10);
     const k = Math.sin((this.turn * Math.PI) / 2);
@@ -939,6 +975,7 @@ export class Person implements CrowdMember {
     const c = this.cast;
     if (!c) return;
     const lamp = this.crowd?.lamp;
+    this.wallShadowStep(lamp ?? null);
     if (!lamp || this.light < 0.2) {
       c.visible = false;
       return;
@@ -954,12 +991,36 @@ export class Person implements CrowdMember {
   }
 
   /**
+   * Plan 2026-10 Q4: the person's shadow on the back wall, a skewed black copy of the same body sprites (no extra atlas)
+   * that leans away from the room's main lamp and sits closer to the body the nearer it stands to the wall.
+   */
+  private wallShadowStep(lamp: { x: number; h: number } | null): void {
+    const b3 = this.b3;
+    if (!b3) return;
+    if (!GFX.wallShadow || !lamp || this.lifted || this.light < 0.2) {
+      b3.shadow(false);
+      return;
+    }
+    const sh = b3.shadow(true)!;
+    if (sh.parent !== this.container) this.container.addChildAt(sh, this.contact ? 2 : 1);
+    const dx = this.x - lamp.x;
+    const sgn = dx < 0 ? -1 : 1;
+    const near = Math.min(1, Math.abs(dx) / 70);
+    const s3 = UNITS_PER_M / ppm();
+    sh.scale.set(s3 * this.widthV * this.facing * 1.04, s3 * this.sizeV * 0.9);
+    sh.skew.x = -sgn * (0.12 + 0.24 * near);
+    sh.position.set(sgn * (4 + 11 * near), -(5 + 11 * this.depth));
+    sh.alpha = (0.3 - 0.12 * this.depth) * Math.min(1, this.light * 1.1) * Math.max(0.5, 1 - Math.abs(dx) / 220);
+  }
+
+  /**
    * Advances behaviour: workers walk to a work spot at their room's equipment and work there facing it,
    * now and then moving to another free spot or straightening up for a breather; idlers wander to free floor.
    * `activity` is what this person does when standing still.
    */
   update(dt: number, t: number, energy: number, activity: Activity = 'idle'): void {
     this.try3d();
+    this.b3?.step(dt);
     if (PEOPLE_STYLE.painted && !this.b3) {
       // Blink every few seconds; breathing rides on the idle bob.
       this.blinkIn -= dt;
@@ -1060,6 +1121,7 @@ export class Person implements CrowdMember {
     if (this.b3) this.show3(t, moving, act, act === 'carry' || activity === 'carry');
     else this.show(dt);
     this.sync();
+    this.applyTint();
     this.shadowStep();
   }
 }

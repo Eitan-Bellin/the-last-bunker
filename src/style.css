@@ -566,7 +566,7 @@ body.placement-mode #game-canvas { cursor: crosshair; }
 .mission-row { background: rgba(0, 0, 0, 0.35); border: 1px solid var(--border); border-radius: var(--radius); padding: 6px 10px; display: flex; flex-direction: column; gap: 4px; }
 .mission-name { font-size: calc(12px * var(--fs, 1)); font-weight: 600; }
 .surface-map { flex: 1; min-height: 0; overflow: auto; display: flex; align-items: safe center; justify-content: safe center; touch-action: pan-x pan-y; }
-.surface-map svg { width: 100%; max-width: 620px; min-width: 460px; height: auto; max-height: 100%; }
+.surface-map svg { width: 100%; max-width: 620px; min-width: min(460px, 100%); height: auto; max-height: 100%; }
 .surface-map .hex { cursor: pointer; }
 .surface-map .hex polygon { transition: filter 0.15s; }
 .surface-map .hex:hover polygon { filter: brightness(1.25); }
