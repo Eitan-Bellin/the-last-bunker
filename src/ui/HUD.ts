@@ -19,6 +19,8 @@ const CORE_RESOURCES = new Set<ResourceType>(['food', 'water', 'power', 'materia
 const MORE_KEY = 'lastbunker_hud_more';
 
 export type NavKey = 'build' | 'surface' | 'research' | 'people';
+/** Buttons a "new system" card can make glow (see src/ui/controllers/systems.ts). */
+export type SpotKey = NavKey | 'inbox' | 'season' | 'era';
 
 export { timeOfDay };
 
@@ -158,6 +160,17 @@ export class HUD {
     this.container.appendChild(topBar);
   }
 
+  /** [Q7] Makes a HUD button glow for a few seconds, so the player sees where the new thing lives. */
+  spotlight(key: SpotKey): void {
+    const target = key === 'inbox' ? this.inboxBtn : key === 'season' ? this.seasonBtn : key === 'era' ? this.eraChip
+      : this.container.querySelector<HTMLElement>(`.nav-btn[data-key="${key}"]`);
+    if (!target) return;
+    target.classList.remove('spotlight');
+    void target.offsetWidth;
+    target.classList.add('spotlight');
+    window.setTimeout(() => target.classList.remove('spotlight'), 9000);
+  }
+
   private journalBadge!: HTMLElement;
   private supplyBtn!: HTMLButtonElement;
   onSupply: (() => void) | null = null;
@@ -190,13 +203,19 @@ export class HUD {
     this.setText(this.journalBadge, String(n));
   }
 
-  setEra(key: string, name: string): void {
-    // The name sits in its own span so narrow screens can show the flag alone.
-    if (this.eraChip.dataset.era !== key || this.eraChip.title !== name) {
+  /**
+   * The chip shows where the run stands. [Q2] In a long game that is the Act and how far through it (the tag stays on narrow
+   * screens), the era's name is the quieter second half; the whole thing opens the Command panel.
+   */
+  setEra(key: string, name: string, actTag = '', title = name): void {
+    const sig = `${key}|${name}|${actTag}|${title}`;
+    if (this.eraChip.dataset.sig !== sig) {
+      this.eraChip.dataset.sig = sig;
       setRich(this.eraChip, '[[flag]]');
+      if (actTag) this.eraChip.appendChild(el('span', 'act-tag', actTag));
       this.eraChip.appendChild(el('span', 'era-name', name));
-      this.eraChip.title = name;
-      this.eraChip.setAttribute('aria-label', name);
+      this.eraChip.title = title;
+      this.eraChip.setAttribute('aria-label', title);
     }
     this.eraChip.dataset.era = key;
   }
@@ -220,7 +239,7 @@ export class HUD {
   setObjective(icon: string, text: string, progress: [number, number], reward: string): void {
     this.setText(this.objectiveText, `${icon} ${text}`);
     const [cur, target] = progress;
-    this.setText(this.objectiveMeta, `${target > 1 ? `${cur}/${target} · ` : ''}[[gift]] ${reward}`);
+    this.setText(this.objectiveMeta, `${target > 1 ? `${cur}/${target}` : ''}${reward ? `${target > 1 ? ' · ' : ''}[[gift]] ${reward}` : ''}`);
     this.objectiveEl.style.setProperty('--obj-progress', `${Math.round((cur / Math.max(1, target)) * 100)}%`);
   }
 

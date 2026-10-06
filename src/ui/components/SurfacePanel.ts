@@ -1,7 +1,7 @@
 import type { GameState } from '../../core/GameState';
 import type { GameEngine } from '../../core/GameEngine';
 import { i18n } from '../../i18n/I18nManager';
-import { BIOMES, MAP_RADIUS, POIS, hexDistance, type BiomeId } from '../../data/surface';
+import { BIOMES, MAP_RADIUS, POIS, hexDistance, mapRadiusFor, type BiomeId } from '../../data/surface';
 import { MAX_TEAM, maxTeams } from '../../systems/ExplorationSystem';
 import { RESOURCE_ICONS, STAT_ICONS, bar, button, el, setBar, setRich , costRow } from '../dom';
 import { uiSound } from '../../audio/uiSound';
@@ -120,8 +120,9 @@ export class SurfacePanel {
     if (sig === this.mapSig) return;
     this.mapSig = sig;
 
-    const w = S * SQRT3 * (2 * MAP_RADIUS + 1) + 4;
-    const h = S * 1.5 * 2 * MAP_RADIUS + 2 * S + 4;
+    const radius = Math.max(MAP_RADIUS, mapRadiusFor(state.longGame?.meta.act ?? 1), state.explorationMap.reduce((m, hx) => Math.max(m, hexDistance(hx.x, hx.y)), 0));
+    const w = S * SQRT3 * (2 * radius + 1) + 4;
+    const h = S * 1.5 * 2 * radius + 2 * S + 4;
     const parts: string[] = [];
     // Plan 2026-10 M6: the terrain is painted on a canvas behind the SVG, which keeps the clicks, icons and rings.
     parts.push(`<div class="map-wrap" style="aspect-ratio:${w.toFixed(1)}/${h.toFixed(1)}"><canvas class="map-paint"></canvas><svg viewBox="${-w / 2} ${-h / 2} ${w} ${h}" xmlns="http://www.w3.org/2000/svg">`);

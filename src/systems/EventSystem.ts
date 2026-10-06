@@ -15,6 +15,7 @@ import type { ExplorationSystem } from './ExplorationSystem';
 import type { IncidentSystem } from './IncidentSystem';
 import { effectiveLevel, getDef, workforceMultiplier } from '../data/buildingDefs';
 import { hasFeature } from './ResearchSystem';
+import { scenarioOf } from '../data/scenarios';
 import { incidentBlocks } from '../data/incidents';
 import { specMax, specTotal } from '../data/specializations';
 import { projectDefense } from '../data/projects'; // [Danger C1] the Wall project
@@ -382,6 +383,9 @@ export function defenseParts(state: GameState): { walls: number; guards: number;
   // [P3] Research and doctrines.
   if (hasFeature(state, 'tripwires')) walls += 15;
   if (hasFeature(state, 'fortress')) walls *= 1.5;
+  if (hasFeature(state, 'isolationism')) walls *= 1.2; // [P2-1]
+  if (hasFeature(state, 'shieldNetwork')) walls *= 1.2; // [P2-8]
+  walls *= scenarioOf(state).walls ?? 1; // [P3-5]
   if (hasFeature(state, 'rangers')) guards *= 1.4;
   if (hasFeature(state, 'armorPlating')) guards *= 1.2;
   if (hasFeature(state, 'militia')) residents *= 2;
@@ -411,6 +415,24 @@ export function bunkerDefense(state: GameState, kind?: RaidKind, stance: RaidSta
 export const RAID_WARNING = 300;
 /** Play seconds between raids for a player online ~2 h a day: about one a day in era 2, two in era 3. */
 const RAID_GAP: Record<number, number> = { 2: 7200, 3: 3600 };
+/**
+ * [Q11] Raids grow with the run's Act, not with the era (the era stops at 3 around day 7, so the danger used to stop
+ * growing there). Per Act: play seconds between raids, and raids a day away (before the away discount).
+ * A bunker from before the long game keeps its era table.
+ */
+const ACT_RAIDS: Record<number, { gap: number; perDay: number }> = {
+  2: { gap: 7200, perDay: 1 }, 3: { gap: 6000, perDay: 1.5 }, 4: { gap: 5000, perDay: 2 },
+  5: { gap: 4200, perDay: 2 }, 6: { gap: 3600, perDay: 2 }, 7: { gap: 3600, perDay: 2 },
+};
+const RAIDS_PER_DAY_ERA: Record<number, number> = { 2: 1, 3: 2 };
+
+export function raidProfile(state: GameState): { gap: number; perDay: number } {
+  const lg = state.longGame;
+  if (lg && !lg.meta.legacy) return ACT_RAIDS[Math.min(7, Math.max(2, lg.meta.act))];
+  const era = Math.min(3, Math.max(2, state.era ?? 2));
+  return { gap: RAID_GAP[era] ?? 7200, perDay: RAIDS_PER_DAY_ERA[era] ?? 1 };
+}
+
 /** The plan's strength formula is tuned against the bunker's real defense (see store/sim/C-*.json). */
 export const RAID_SCALE = 1.25;
 /** A bigger bunker draws bigger gangs: strength grows with the crowd as 1 + pop / this. */
@@ -435,9 +457,14 @@ export interface RaidResult {
   captive?: string;
 }
 
-/** What the lookout sees coming: 10 + 8 per era + 0.15 per resident, ±25%, scaled to the bunker, the threat and the season. */
+/** What the lookout sees coming: 10 + 8 per Act, then 6 more per Act after the third (8 per era in an older bunker) + 0.15 per resident, ±25%, scaled to the bunker, the threat and the season. */
 export function raidStrength(state: GameState, roll = 0.5): number {
-  const base = 10 + 8 * Math.max(0, state.era ?? 0) + 0.15 * state.survivors.length;
+  const lg = state.longGame;
+  // [Q11] In a long game the level follows the Act: 8 per Act up to Act III (as the old 8 per era), then 6 more per Act
+  // (was flat from day 7, when the era stopped at 3). Older bunkers keep 8 per era.
+  const act = lg?.meta.act ?? 1;
+  const level = lg && !lg.meta.legacy ? (act <= 3 ? 8 * act : 24 + 6 * (act - 3)) : 8 * Math.max(0, state.era ?? 0);
+  const base = 10 + level + 0.15 * state.survivors.length;
   return Math.max(10, Math.round(base * RAID_SCALE * (1 + state.survivors.length / RAID_CROWD) * (0.75 + roll * 0.5)
     * difficultyOf(state).raidStrength * threatStrength(state)));
 }
@@ -483,7 +510,8 @@ export function arrivalGap(state: GameState, roll = 0.5): number {
   const hunger = state.resources.food.amount <= 0 || state.resources.water.amount <= 0 ? 2 : 1;
   // [LateGame B1] the field radio mast project brings newcomers faster
   // [P2] More people travel in spring, fewer in winter.
-  const season = (seasonEffects(state)?.arrivals ?? 1) * (hasFeature(state, 'longRangeRadio') ? 0.8 : 1) * lawArrivals(state);
+  const doctrine = (hasFeature(state, 'isolationism') ? 1.25 : 1) * (hasFeature(state, 'expansionism') ? 0.85 : 1) * (hasFeature(state, 'confederation') ? 0.85 : 1) * (scenarioOf(state).arrivals ?? 1); // [P2-1] doctrines, [P3-5] the scenario
+  const season = (seasonEffects(state)?.arrivals ?? 1) * (hasFeature(state, 'longRangeRadio') ? 0.8 : 1) * lawArrivals(state) * doctrine;
   return Math.round(base * radio * mood * hunger * season * (0.75 + roll * 0.5) / projectArrivalSpeed(state));
 }
 
@@ -519,7 +547,7 @@ export class EventSystem {
     if (flags.includes('gideon:enemy')) w *= 1.8;
     if (flags.includes('gideon:paid')) w *= 0.6;
     if (flags.includes('gideon:joined') || flags.includes('gideon:beaten')) w *= 0.35;
-    const base = RAID_GAP[Math.min(3, Math.max(2, state.era ?? 2))] ?? 7200;
+    const base = raidProfile(state).gap;
     // [P2] The threat director sets the pace.
     return Math.round((base / w / threatPace(state)) * (0.7 + this.ctx.rng.next() * 0.6));
   }
@@ -533,7 +561,7 @@ export class EventSystem {
     const state = this.ctx.sm.state;
     // [P2] The scout report: who is coming is known at once (the forecast is exact).
     const kind: RaidKind = this.ctx.rng.chance(0.5) ? 'scavengers' : 'marauders';
-    const warning = RAID_WARNING + (hasFeature(state, 'watchtower') ? 180 : 0); // [P3] the watchtower sees them sooner
+    const warning = RAID_WARNING + (hasFeature(state, 'watchtower') ? 180 : 0) + (hasFeature(state, 'rapidResponse') ? 120 : 0); // [P3] the watchtower sees them sooner
     const raid = { hitAt: state.stats.totalPlayTime + warning, strength: raidStrength(state, this.ctx.rng.next()), kind, stance: 'hold' as RaidStance };
     this.setDanger({ raid });
     bus.emit('raid:warning', raid);

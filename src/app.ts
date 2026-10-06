@@ -34,7 +34,13 @@ import { RuinPanel } from './ui/components/RuinPanel';
 import { ResourceSheet } from './ui/components/ResourceSheet';
 import { JournalPanel, LoreReader } from './ui/components/JournalPanel';
 import { EraPanel } from './ui/components/EraPanel';
+import { HelpPanel } from './ui/components/HelpPanel';
+import { ChroniclePanel } from './ui/components/ChroniclePanel';
+import { Sheet } from './ui/components/Sheet';
 import { eraOf } from './data/eras';
+import { actOf } from './data/acts';
+import type { ObjectiveAction } from './systems/ObjectiveSystem';
+import { actFraction } from './systems/Guide';
 import { genderOf, genderOfName } from './data/portraits';
 import { ensurePersistentStorage, getPersistStatus } from './core/SaveManager';
 import { claimOwnership, onSuperseded } from './core/singleInstance';
@@ -49,6 +55,7 @@ import './styles/story.css';
 import './styles/bunker-os.css';
 import './styles/depth.css';
 import './styles/touch.css';
+import './styles/command.css';
 import { FeedbackController } from './ui/controllers/feedback';
 import { InboxController } from './ui/controllers/inbox';
 import { SaveController } from './ui/controllers/saves';
@@ -57,6 +64,7 @@ import { DigController } from './ui/controllers/dig';
 import { DangerController } from './ui/controllers/danger';
 import { EventController } from './ui/controllers/events';
 import { StoryController } from './ui/controllers/story';
+import { SystemsController } from './ui/controllers/systems';
 import { WelcomeController } from './ui/controllers/welcome';
 import { PRODUCTION_POPUP_MS, WorldController } from './ui/controllers/world';
 
@@ -85,6 +93,8 @@ export class GameApp {
   readonly story = new StoryController(this);
   readonly welcome = new WelcomeController(this);
   readonly world = new WorldController(this);
+  /** [Q7] "A new system" cards. */
+  readonly systems = new SystemsController(this);
   engine: GameEngine;
   renderer: BunkerRenderer;
   hud: HUD;
@@ -102,6 +112,8 @@ export class GameApp {
   journal = new JournalPanel();
   loreReader = new LoreReader();
   private eraPanel = new EraPanel();
+  private helpPanel = new HelpPanel(); // [Q6]
+  private chroniclePanel = new ChroniclePanel(); // [Q14]
   private projectsPanel: ProjectsPanel; // [LateGame B1]
   private couponPanel: CouponPanel;
   introPlaying = false;
@@ -183,6 +195,8 @@ export class GameApp {
       textSize: () => i18n.t(`settings.text.${currentTextSize()}`),
       cycleTextSize: () => { cycleTextSize(); },
       persistLabel: () => i18n.t(`settings.persist.${getPersistStatus()}`),
+      openBook: () => this.helpPanel.show(),
+      openChronicle: () => this.chroniclePanel.show(this.state),
       redeemCoupon: (code: string) => { // the coupon sheet: pick how much to skip or add
         if (!couponValid(code)) return false;
         this.closeSheets();
@@ -395,6 +409,7 @@ export class GameApp {
       if (this.ruinPanel.isVisible) this.ruinPanel.refresh(state);
       if (this.journal.isVisible) this.journal.refresh(state);
       if (this.eraPanel.isVisible) this.eraPanel.refresh(state);
+      if (this.chroniclePanel.isVisible) this.chroniclePanel.refresh(state);
       if (this.projectsPanel.isVisible) this.projectsPanel.refresh(state); // [LateGame B1]
       this.inbox.refresh(state);
       if (this.resourceSheet.isVisible) this.resourceSheet.refresh(state);
@@ -422,6 +437,7 @@ export class GameApp {
       else if (asking && !this.inbox.defers(state)) this.events.showMissionChoice(asking);
       else if (state.missionReports.length > 0 && !this.inbox.defers(state)) this.events.showMissionReport(state.missionReports[0]);
       else if (this.pendingChapter && !document.querySelector('.era-banner')) this.story.playChapter(this.pendingChapter);
+      else if (!document.querySelector('.era-banner')) this.systems.update(state);
     }
     this.checkShortages();
     if (this.districtFoundQueue.length && !this.modal.isVisible && !this.welcomeOpen && !this.introPlaying && !this.storyOpen && !this.storyDialog.isVisible) {
@@ -461,7 +477,7 @@ export class GameApp {
     this.dig.updateDigSign();
     this.updateAudio();
     const era = eraOf(state);
-    this.hud.setEra(era.key, era.name[i18n.currentLocale]);
+    this.updateEraChip(era);
     if (document.body.dataset.era !== era.key) document.body.dataset.era = era.key;
     if (era.id !== this.gradedEra) {
       this.renderer.setEra(era, this.gradedEra < 0);
@@ -480,6 +496,20 @@ export class GameApp {
     this.hud.setObjective(obj.icon, obj.text[i18n.currentLocale] ?? obj.text.en, obj.progress(state), reward);
   }
 
+  /** [Q2] The chip: the Act and how far through it, with the era as the quieter second half. */
+  private updateEraChip(era: ReturnType<typeof eraOf>): void {
+    const state = this.state;
+    const eraName = era.name[i18n.currentLocale];
+    if (!state.longGame || state.longGame.meta.legacy) {
+      this.hud.setEra(era.key, eraName);
+      return;
+    }
+    const act = actOf(state);
+    const pct = Math.floor(Math.min(0.99, actFraction(this.engine, state, act)) * 100);
+    const roman = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII'][act.id - 1] ?? String(act.id);
+    this.hud.setEra(era.key, eraName, `${roman}·${pct}%`, `${act.name[i18n.currentLocale]} · ${pct}% · ${eraName}`);
+  }
+
   private updateAudio(): void {
     const state = this.state;
     // Thunder rolls over the dead city now and then in the first eras.
@@ -493,9 +523,13 @@ export class GameApp {
   }
 
   private onObjectiveTap(): void {
-    const state = this.state;
-    const action = this.engine.objectiveSystem.current(state).action;
     this.audio.play('click');
+    this.runAction(this.engine.objectiveSystem.current(this.state).action);
+  }
+
+  /** [Q2] Takes the player to where an objective or a guide step is dealt with. */
+  private runAction(action: ObjectiveAction): void {
+    const state = this.state;
     this.closeSheets();
     if (!action) return;
     if (action.kind === 'build') {
@@ -509,10 +543,40 @@ export class GameApp {
         ?? (action.ruinKind ? state.ruins.find(r => r.kind === action.ruinKind) : undefined);
       if (target) this.openRuin(target.id, true);
       else if (action.restoresTo) this.buildMenu.show(state);
-    } else if (action.kind === 'journal') this.journal.show(state);
+    } else if (action.kind === 'projects') this.projectsPanel.show();
+    else if (action.kind === 'dig') this.dig.confirmDig();
+    else if (action.kind === 'command') this.eraPanel.show(state);
+    else if (action.kind === 'genesis') this.menuPanel.show('genesis');
+    else if (action.kind === 'ruins') {
+      const rs = this.engine.restorationSystem;
+      const target = state.ruins.find(r => r.started) ?? state.ruins.find(r => rs.canStart(state, r)) ?? state.ruins[0];
+      if (target) this.openRuin(target.id, true);
+    } else if (action.kind === 'rooms') this.focusUpgradeCandidate();
+    else if (action.kind === 'journal') this.journal.show(state);
     else if (action.kind === 'people') this.peoplePanel.show();
     else if (action.kind === 'research') this.researchPanel.show();
     else this.surfacePanel.show();
+  }
+
+  /** Opens the Bunker Book at an entry (used by the "new system" cards). */
+  openBook(topic?: string): void {
+    this.closeSheets();
+    this.helpPanel.show(topic);
+  }
+
+  /** The room most worth upgrading next (cheapest that the Act allows), opened for the player; the build menu when nothing qualifies. */
+  private focusUpgradeCandidate(): void {
+    const state = this.state;
+    const bs = this.engine.buildingSystem;
+    const total = (b: (typeof state.buildings)[number]) => Object.values(bs.getUpgradeCost(b)).reduce((s, v) => s + v, 0);
+    const pick = state.buildings
+      .filter(b => !b.isConstructing && bs.canUpgrade(b, state))
+      .sort((a, b) => b.level - a.level || total(a) - total(b))[0];
+    if (!pick) { this.buildMenu.show(state); return; }
+    const r = this.renderer.roomRect(pick.id);
+    if (r) this.renderer.focusOn(r.x + r.w / 2, r.y + 50, 1.6);
+    this.renderer.setSelected(pick.id);
+    this.buildingPanel.show(pick.id);
   }
 
   openRuin(ruinId: string, focus = false): void {
@@ -617,6 +681,8 @@ export class GameApp {
       this.resourceSheet.show(r, this.state);
     };
 
+    // [Q6] The "?" plate on a sheet opens the Bunker Book above it.
+    Sheet.onHelp = (topic) => { this.audio.play('click'); this.helpPanel.show(topic); };
     this.hud.onPlacementCancel = () => this.world.cancelPlacement();
     this.hud.onPopulation = () => {
       const s = this.state;
@@ -636,6 +702,7 @@ export class GameApp {
     this.eraPanel.onOpenProjects = () => { this.closeSheets(); this.projectsPanel.show(); }; // [LateGame B1]
     this.eraPanel.foreman = this.engine.foremanSystem; // [Long game]
     this.eraPanel.engine = this.engine;
+    this.eraPanel.onGo = (action) => { this.audio.play('click'); this.runAction(action); };
     this.hud.onEra = () => {
       this.audio.play('click');
       const wasOpen = this.eraPanel.isVisible;
@@ -800,7 +867,7 @@ export class GameApp {
   private anyPanelOpen(): boolean {
     return this.buildMenu.isVisible || this.buildingPanel.isVisible || this.peoplePanel.isVisible || this.researchPanel.isVisible
       || this.surfacePanel.isVisible || this.menuPanel.isVisible || this.ruinPanel.isVisible || this.journal.isVisible
-      || this.eraPanel.isVisible || this.projectsPanel.isVisible || this.loreReader.isVisible || this.inbox.isVisible || this.resourceSheet.isVisible;
+      || this.eraPanel.isVisible || this.projectsPanel.isVisible || this.helpPanel.isVisible || this.chroniclePanel.isVisible || this.loreReader.isVisible || this.inbox.isVisible || this.resourceSheet.isVisible;
   }
 
   /**
@@ -851,6 +918,8 @@ export class GameApp {
     this.ruinPanel.hide();
     this.journal.hide();
     this.eraPanel.hide();
+    this.helpPanel.hide();
+    this.chroniclePanel.hide();
     this.projectsPanel.hide(); // [LateGame B1]
     this.couponPanel.hide();
     this.inbox.hide();

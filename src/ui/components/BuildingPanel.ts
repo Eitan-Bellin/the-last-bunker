@@ -17,7 +17,7 @@ import { uiSound } from '../../audio/uiSound';
 import { maintenanceCard } from './MaintenanceCard'; // [Danger C3]
 
 export class BuildingPanel {
-  private sheet = new Sheet('building-sheet');
+  private sheet = new Sheet('building-sheet', 'building');
   private buildingId: string | null = null;
   private pickerOpen = false;
   /** NICE2: the demolish button was pressed once and waits for a confirmation. */

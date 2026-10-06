@@ -1,4 +1,5 @@
 import type { ResearchDef } from './research';
+import { LATE_RESEARCH } from './researchLate';
 
 /**
  * [Long game P3] The deeper research tree: four doctrine forks (one choice each, the others close for this run) and
@@ -209,4 +210,6 @@ export const LONG_RESEARCH: ResearchDef[] = [
     cost: { knowledge: 5000, alloys: 120, components: 300 }, time: 57600, requires: ['temporalTheory'],
     effects: [{ type: 'resourceMult', resource: 'food', value: 0.15 }, { type: 'resourceMult', resource: 'knowledge', value: 0.1 }],
   },
+  // ---- [P2-1 / P2-8] The late tree: see researchLate.ts ----
+  ...LATE_RESEARCH,
 ];

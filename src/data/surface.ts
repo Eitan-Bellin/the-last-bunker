@@ -65,6 +65,14 @@ export const POIS: Record<string, PoiDef> = {
 
 /** Two outer rings beyond the old radius 7: far enough that only Vehicles reach them (270 hexes in all). */
 export const MAP_RADIUS = 9;
+/**
+ * [P2-9] The map grows with the Acts, so exploring is not finished by day 15: one more ring from Act IV, V and VI
+ * (up to 469 hexes). A ring is added around the old map (its own seed), nothing inside it changes.
+ */
+export const MAP_RADIUS_MAX = 12;
+export function mapRadiusFor(act: number): number {
+  return Math.min(MAP_RADIUS_MAX, MAP_RADIUS + Math.max(0, act - 3));
+}
 /** How far a team can walk; the rings beyond need the Vehicles research. */
 export const FOOT_RADIUS = 7;
 

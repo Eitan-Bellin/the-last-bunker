@@ -14,6 +14,11 @@ import { ResearchSystem } from '../systems/ResearchSystem';
 import { ExplorationSystem } from '../systems/ExplorationSystem';
 import { MetaSystem } from '../systems/MetaSystem';
 import { ObjectiveSystem } from '../systems/ObjectiveSystem';
+import { guideObjective } from '../systems/Guide';
+import { ChronicleSystem } from '../systems/ChronicleSystem';
+import { HomeSystem } from '../systems/HomeSystem';
+import { MAX_FLOORS } from '../data/zones';
+import { getScenario, scenarioUnlocked, type HomeSite } from '../data/scenarios';
 import { RestorationSystem } from '../systems/RestorationSystem';
 import { EraSystem } from '../systems/EraSystem';
 import { IncidentSystem } from '../systems/IncidentSystem';
@@ -39,6 +44,7 @@ import { difficultyOf, easier } from '../data/difficulty';
 import type { Difficulty } from './state/longGame';
 import { logCrash } from './crashGuard';
 import { WASTE_TRACKED } from '../data/resources';
+import { hasFeature } from '../systems/ResearchSystem';
 
 const TICK_RATE = 10;
 const TICK_INTERVAL = 1000 / TICK_RATE;
@@ -135,6 +141,10 @@ export class GameEngine {
   threatSystem: ThreatSystem;
   contractSystem: ContractSystem;
   outpostSystem: OutpostSystem;
+  /** [Q14] The run's milestones. */
+  chronicleSystem: ChronicleSystem;
+  /** [P3-5] Earlier timelines' bunkers that send income home. */
+  homeSystem: HomeSystem;
   /** The step list, in order (see registerSystems). New systems add themselves with register(). */
   private systems: EngineSystem[] = [];
   /** Game seconds gathered toward the next run of the slow systems. */
@@ -187,6 +197,11 @@ export class GameEngine {
     this.eventSystem.setExploration(this.explorationSystem);
     this.metaSystem = new MetaSystem(this.stateManager, this.resourceSystem);
     this.objectiveSystem = new ObjectiveSystem(this.stateManager, this.resourceSystem);
+    this.objectiveSystem.guide = s => guideObjective(this, s); // [Q2]
+    this.chronicleSystem = new ChronicleSystem(this.stateManager); // [Q14]
+    this.homeSystem = new HomeSystem(this.stateManager, this.resourceSystem); // [P3-5]
+    // [P2-9] A new Act can widen the map (the outer rings are added around the old one).
+    bus.on('act:advance', () => this.explorationSystem.ensureMap());
     this.restorationSystem = new RestorationSystem(this.stateManager, this.rng, this.resourceSystem, this.buildingSystem);
     this.eraSystem = new EraSystem(this.stateManager);
     this.incidentSystem = new IncidentSystem(this.stateManager, this.rng, this.resourceSystem);
@@ -211,11 +226,11 @@ export class GameEngine {
     this.incidentSystem.setBuildings(this.buildingSystem);
     this.inboxSystem = new InboxSystem(this.stateManager);
     this.digSystem = new DigSystem(this.stateManager, this.buildingSystem, this.populationSystem);
-    this.actSystem = new ActSystem(this.stateManager, this.buildingSystem);
+    this.actSystem = new ActSystem(this.stateManager, this.buildingSystem, this.inboxSystem);
     this.threatSystem = new ThreatSystem(this.stateManager);
     this.outpostSystem = new OutpostSystem(this.stateManager, this.resourceSystem, this.explorationSystem);
     this.contractSystem = new ContractSystem(this.stateManager, this.inboxSystem, this.resourceSystem, this.populationSystem);
-    this.foremanSystem = new ForemanSystem(this.stateManager, this.maintenanceSystem, this.projectSystem, this.populationSystem, this.digSystem);
+    this.foremanSystem = new ForemanSystem(this.stateManager, this.maintenanceSystem, this.projectSystem, this.populationSystem, this.digSystem, this.contractSystem, this.resourceSystem);
     this.awayDanger = new AwayDanger(this.stateManager, this.rng, this.eventSystem, this.incidentSystem, this.deathSystem);
     bus.on('survivor:died', (s: unknown) => this.deathSystem.onDeath(s as import('./GameState').SurvivorState));
     bus.on('survivor:died', (s: unknown) => this.familySystem.forget((s as { id: string }).id));
@@ -284,6 +299,8 @@ export class GameEngine {
       { name: 'contracts', slow: true, online: () => this.contractSystem.update(), offline: () => this.contractSystem.update() },
       { name: 'outposts', online: dt => this.outpostSystem.update(dt), offline: (dt, eff) => this.outpostSystem.update(dt * eff) },
       { name: 'foreman', online: dt => this.foremanSystem.update(dt), offline: dt => this.foremanSystem.update(dt) },
+      // [P3-5] Earlier timelines' bunkers send income home, also while away.
+      { name: 'homes', online: dt => this.homeSystem.update(dt), offline: (dt, eff) => this.homeSystem.update(dt * eff) },
       { name: 'maintenance', online: dt => this.maintenanceSystem.update(dt), offline: (dt, eff) => this.maintenanceSystem.update(dt * eff) },
       // Card deadlines run on world time, so a safe default can be taken while the player is away.
       { name: 'inbox', slow: true, online: () => this.inboxSystem.update(), offline: () => this.inboxSystem.update() },
@@ -351,6 +368,15 @@ export class GameEngine {
     this.metaSystem.applyStartBonuses(this.stateManager);
     for (let i = 0; i < 3 + (up['veteranSurvivors'] ?? 0) + (up['ksFounders'] ? 2 : 0); i++) {
       this.populationSystem.addSurvivor(this.stateManager, this.populationSystem.createSurvivor(this.rng));
+    }
+    // [P2-1] The Vanguard doctrine: veterans of the last timeline wake up here too (fresh ids, their skills kept).
+    for (const v of this.stateManager.state.prestige.vanguard ?? []) {
+      const s = this.populationSystem.createSurvivor(this.rng);
+      this.populationSystem.addSurvivor(this.stateManager, { ...s, name: v.name, portraitIndex: v.portraitIndex, stats: { ...v.stats }, traits: [...v.traits], mxp: v.mxp, spec: v.spec });
+    }
+    // Both carry-overs are for this timeline's start only.
+    if (this.stateManager.state.prestige.vanguard || this.stateManager.state.prestige.seedBank) {
+      this.stateManager.applyDeltas([{ path: 'prestige.vanguard', value: undefined }, { path: 'prestige.seedBank', value: undefined }]);
     }
 
     // The Remnant: one dry dormitory where the newcomers camp; the rest of Bunker 17 must be won back.
@@ -439,10 +465,11 @@ export class GameEngine {
 
   /** Project Genesis: start over, keeping isotope-7, prestige upgrades, achievements and the story. */
   async rebirth(): Promise<void> {
+    if (!this.metaSystem.canRebirth(this.stateManager.state)) return;
+    this.actSystem.ensureEnding(); // [P2-3] a pending ending choice is settled before the timeline closes
     const old = this.stateManager.state;
-    if (!this.metaSystem.canRebirth(old)) return;
     await this.keepPrevious();
-    const gain = this.metaSystem.rebirthGain(old);
+    const gain = this.metaSystem.rebirthGain(this.stateManager.state);
     const fresh = createInitialState();
     fresh.prestige = {
       ...old.prestige,
@@ -451,9 +478,16 @@ export class GameEngine {
       // Remember which chapters this timeline told (chapters finished before this field existed are in storyFlags).
       storySeen: [...new Set([...(old.prestige.storySeen ?? []), ...old.storyFlags.filter(f => f.startsWith('story:')).map(f => f.slice(6))])],
     };
+    // [P2-1] What the late doctrines carry over: a stocked start, or the most experienced workers.
+    if (hasFeature(old, 'seedBank')) fresh.prestige.seedBank = true;
+    if (hasFeature(old, 'vanguard')) {
+      fresh.prestige.vanguard = [...old.survivors].filter(s => !s.child).sort((a, b) => (b.mxp ?? 0) - (a.mxp ?? 0)).slice(0, 3)
+        .map(s => ({ name: s.name, portraitIndex: s.portraitIndex, stats: { ...s.stats }, traits: [...s.traits], mxp: s.mxp ?? 0, spec: s.spec }));
+    }
     fresh.resources.isotope7.amount = old.resources.isotope7.amount + gain;
     fresh.achievements = [...old.achievements];
-    fresh.storyFlags = old.storyFlags.filter(f => f.startsWith('event:radio') || f === 'intro:done');
+    // The "new system" cards (sys:*) were seen once: they are tips, not part of the timeline.
+    fresh.storyFlags = old.storyFlags.filter(f => f.startsWith('event:radio') || f === 'intro:done' || f.startsWith('sys:'));
     // What was learned from the previous residents carries into the new timeline.
     fresh.lore = [...(old.lore ?? [])];
     fresh.settings = { ...old.settings };
@@ -473,6 +507,12 @@ export class GameEngine {
     if (old.longGame) {
       const m = old.longGame.meta;
       fresh.longGame.meta = { ...fresh.longGame.meta, difficulty: m.difficulty, diffLowest: m.difficulty, scenario: m.scenario, mutators: [...m.mutators], runIndex: m.runIndex + 1, worldT: m.worldT, actSince: m.worldT };
+      // [Q14] The Chronicle outlives the timeline: the earlier runs stay in the book.
+      fresh.longGame.chronicle = [...(old.longGame.chronicle ?? [])];
+      // [P3-5] The bunker just finished stays on as a home that sends part of the income to the new one.
+      const ending = old.storyFlags.find(f => f.startsWith('ending:'))?.slice(7);
+      const home: HomeSite = { scenario: m.scenario, act: Math.min(7, Math.max(1, m.act)), run: m.runIndex, ending };
+      fresh.longGame.meta.homes = [...(m.homes ?? []), home];
     }
     this.stateManager.loadState(fresh);
     this.rng.seed = fresh.randomSeed;
@@ -620,6 +660,26 @@ export class GameEngine {
     this.requestSave();
   }
 
+  /** [P3-5] The place the new timeline begins in (only while it has just begun, and only a site that is open to the player). */
+  setScenario(id: string): boolean {
+    const sm = this.stateManager;
+    const lg = sm.state.longGame;
+    if (!lg || lg.meta.act > 1 || !scenarioUnlocked(sm.state, id)) return false;
+    const def = getScenario(id);
+    if (def.id !== id) return false;
+    // The previous choice (if any) is undone first, so picking twice does not stack the start bonuses.
+    const prev = getScenario(lg.meta.scenario);
+    if (prev.id === def.id) return true;
+    sm.applyDelta({ path: 'longGame.meta.scenario', value: def.id });
+    if (def.start?.floors && !sm.state.storyFlags.includes('scenario:started')) {
+      sm.applyDelta({ path: 'currentFloors', value: Math.min(MAX_FLOORS, sm.state.currentFloors + def.start.floors) });
+    }
+    if (def.start?.stock && !sm.state.storyFlags.includes('scenario:started')) this.resourceSystem.gain(sm, def.start.stock);
+    if (def.start && !sm.state.storyFlags.includes('scenario:started')) sm.applyDelta({ path: 'storyFlags', value: [...sm.state.storyFlags, 'scenario:started'] });
+    this.requestSave();
+    return true;
+  }
+
   /** [P3] Passes a law (if a slot is free and it can be paid). */
   enactLaw(id: string): boolean {
     const sm = this.stateManager;
@@ -627,6 +687,7 @@ export class GameEngine {
     if (!lg || lg.policy.laws.includes(id) || lg.policy.laws.length >= lawSlots(sm.state) || !LAWS.some(l => l.id === id)) return false;
     if (!this.resourceSystem.spend(sm, lawCost(sm.state))) return false;
     sm.applyDelta({ path: 'longGame.policy.laws', value: [...lg.policy.laws, id] });
+    this.chronicleSystem.note('law', id);
     this.buildingSystem.recalculateMaxPopulation(sm);
     this.requestSave();
     return true;

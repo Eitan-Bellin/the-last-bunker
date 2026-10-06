@@ -7,6 +7,9 @@ import { bus } from '../core/EventBus';
 import { CHAPTERS, bindStoryState, getChapter, shownChoices, shownLines, type StoryEffect, type StoryLine } from '../data/story';
 
 const CHAPTER_GAP = 240;
+/** [Q1] From the late chapters on, at least an hour of play separates two chapters, so a run never ends in a flood of dialogs. */
+const LATE_CHAPTER = 9;
+const LATE_CHAPTER_GAP = 3600;
 /** Story characters never walk out in a "someone leaves" outcome; they have their own arcs. */
 const STORY_PEOPLE = new Set(['Maya', 'Gideon']);
 
@@ -52,7 +55,7 @@ export class StorySystem {
     if (!state.storyFlags.includes('intro:done')) return;
     const now = state.stats.totalPlayTime;
     if (this.nextAllowed < 0) this.nextAllowed = now + 45;
-    if (now < this.nextAllowed || (state.incidents?.length ?? 0) > 0 || state.activeEvent) return;
+    if (now < this.nextAllowed || now < (state.lateGame?.storyUntil ?? 0) || (state.incidents?.length ?? 0) > 0 || state.activeEvent) return;
     const ch = CHAPTERS.find(c => !state.storyFlags.includes(`story:${c.id}`) && c.trigger(state));
     if (!ch) return;
     this.offered = ch.id;
@@ -96,7 +99,10 @@ export class StorySystem {
     this.sm.applyDelta({ path: 'storyFlags', value: [...new Set([...this.sm.state.storyFlags, ...flags, ...(effect?.flags ?? [])])] });
     this.sm.applyDelta({ path: 'prestige.storySeen', value: [...new Set([...(this.sm.state.prestige.storySeen ?? []), ch.id])] });
     this.offered = null;
-    this.nextAllowed = this.sm.state.stats.totalPlayTime + CHAPTER_GAP;
+    const gap = ch.number >= LATE_CHAPTER ? LATE_CHAPTER_GAP : CHAPTER_GAP;
+    this.nextAllowed = this.sm.state.stats.totalPlayTime + gap;
+    // The late gap is long enough to outlive a session: it is kept in the save.
+    if (gap > CHAPTER_GAP) this.sm.applyDelta({ path: 'lateGame.storyUntil', value: this.nextAllowed });
     bus.emit('story:done', ch.id);
     return out;
   }

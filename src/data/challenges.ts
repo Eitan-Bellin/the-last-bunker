@@ -22,7 +22,10 @@ export interface ChallengeDef {
 
 export const WEEKLY_CREDITS = 300;
 
-/** Cosmetic prizes, handed out in order, one per challenge won. */
+/**
+ * Collectible prizes, handed out in order, one per challenge won. They are shown as badges in the Projects panel
+ * (src/ui/components/ProjectsPanel.ts); drawing them in the bunker scene (plate colours, entrance flags) is not done yet.
+ */
 export const COSMETICS = ['plate:amber', 'flag:red', 'plate:green', 'flag:blue', 'plate:violet', 'flag:gold'];
 
 const levels = (s: GameState) => s.buildings.reduce((n, b) => n + b.level, 0);

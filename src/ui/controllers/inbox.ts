@@ -1,6 +1,6 @@
 import { i18n } from '../../i18n/I18nManager';
 import { bus } from '../../core/EventBus';
-import { el, costRow } from '../../ui/dom';
+import { button, el, costRow } from '../../ui/dom';
 import { Sheet } from '../../ui/components/Sheet';
 import { eventDeadline, type EventExpired } from '../../systems/EventSystem';
 import { inboxKind } from '../../systems/InboxSystem';
@@ -14,6 +14,12 @@ interface Entry {
   key: string;
   icon: string;
   title: string;
+  /** [Q4] What it asks and what it pays, under the title. */
+  detail?: string;
+  /** [Q4] How much it is worth (richest first among cards of the same urgency). */
+  value?: number;
+  /** [Q4] A contract that costs nothing the bunker would miss. */
+  safe?: boolean;
   /** Seconds left before the safe default is taken (null = it waits). */
   left: number | null;
   urgent: boolean;
@@ -94,12 +100,16 @@ export class InboxController {
       if (!def) continue;
       out.push({
         key: `item:${item.id}`, icon: def.icon, title: i18n.t(def.title, this.params(item)),
+        detail: def.preview?.(item, i18n.currentLocale), value: def.value?.(item),
+        safe: item.kind === 'contract' && this.app.engine.contractSystem.isSafe(state, item),
         left: item.deadline === null ? null : Math.max(0, item.deadline - worldT), urgent: item.urgent,
         open: () => this.openItem(item.id),
       });
     }
-    // Most pressing first: urgent, then the nearest deadline, then the rest in arrival order.
-    return out.sort((a, b) => Number(b.urgent) - Number(a.urgent) || (a.left ?? Infinity) - (b.left ?? Infinity));
+    // [Q4] Most pressing first: urgent, then whatever lapses within the hour, then the richest, then the nearest deadline.
+    const soon = (e: Entry) => e.left !== null && e.left < 3600;
+    return out.sort((a, b) => Number(b.urgent) - Number(a.urgent) || Number(soon(b)) - Number(soon(a))
+      || (b.value ?? 0) - (a.value ?? 0) || (a.left ?? Infinity) - (b.left ?? Infinity));
   }
 
   /** Called a few times a second: keeps the HUD count and the open list current, and announces new cards once. */
@@ -128,7 +138,7 @@ export class InboxController {
   }
 
   show(): void {
-    this.sheet ??= new Sheet('inbox-sheet');
+    this.sheet ??= new Sheet('inbox-sheet', 'inbox');
     this.sheet.setTitle(`[[inbox]] ${i18n.t('inbox.title')}`);
     this.render(this.entries(this.app.state));
     this.sheet.show();
@@ -139,7 +149,7 @@ export class InboxController {
   private render(list: Entry[]): void {
     if (!this.sheet) return;
     // Rebuild only when the cards change; the time left is updated in place.
-    const key = list.map(e => e.key).join('|');
+    const key = list.map(e => `${e.key}${e.safe ? '+' : ''}`).join('|');
     if (key !== this.renderedKey) {
       this.renderedKey = key;
       const body = this.sheet.body;
@@ -148,10 +158,26 @@ export class InboxController {
         body.appendChild(el('p', 'inbox-empty', i18n.t('inbox.empty')));
         return;
       }
+      // [Q4] One tap for every contract that costs nothing the bunker would miss.
+      const safeCount = list.filter(e => e.safe).length;
+      if (safeCount >= 2) {
+        body.appendChild(button(i18n.t('contract.acceptSafe', { n: safeCount }), 'btn-primary btn-small inbox-all', () => {
+          const n = this.app.engine.contractSystem.acceptSafe();
+          if (n > 0) {
+            this.app.engine.requestSave();
+            this.app.audio.play('click');
+            this.app.toasts.show(`[[cart]] ${i18n.t('contract.safeTaken', { n })}`, 'good');
+          }
+        }));
+      }
       for (const e of list) {
         const card = el('button', `inbox-card${e.urgent ? ' urgent' : ''}`);
         card.dataset.key = e.key;
-        card.append(el('span', 'inbox-icon', e.icon), el('span', 'inbox-title', e.title), el('span', 'inbox-left'));
+        const main = el('span', 'inbox-title');
+        main.appendChild(el('span', 'inbox-name', e.title));
+        if (e.detail) main.appendChild(el('span', 'inbox-detail', e.detail));
+        if (e.safe) main.appendChild(el('span', 'inbox-safe', i18n.t('contract.safe')));
+        card.append(el('span', 'inbox-icon', e.icon), main, el('span', 'inbox-left'));
         card.addEventListener('click', () => {
           this.app.audio.play('click');
           this.sheet?.hide();

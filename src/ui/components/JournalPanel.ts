@@ -16,7 +16,7 @@ const KIND_ICON: Record<LoreKind, string> = {
 
 /** The residents' story collected so far: notes, logs, tapes, photos and letters. */
 export class JournalPanel {
-  private sheet = new Sheet('journal-sheet');
+  private sheet = new Sheet('journal-sheet', 'journal');
   private signature = '';
 
   onRead: ((id: string) => void) | null = null;

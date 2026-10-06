@@ -91,6 +91,7 @@ export interface SurvivorState {
   happiness: number;
   assignedBuildingId: string | null;
   traits: string[];
+  /** [reserved: saved, not used yet] Gear for expeditions (balance plan, N19). */
   equipment: string[];
   isOnMission: boolean;
   /** Family (Sprint 6): partner, parents, and childhood. */
@@ -164,7 +165,12 @@ export interface ActiveMission {
 }
 
 export interface PrestigeState {
+  /** [P2-1] Set by Genesis for the next timeline only (the Seed Store doctrine): start with stock and two dug floors. */
+  seedBank?: boolean;
+  /** [P2-1] Set by Genesis for the next timeline only (the Vanguard doctrine): the veterans who cross over, as the people they were. */
+  vanguard?: { name: string; portraitIndex: number; stats: SurvivorStats; traits: string[]; mxp: number; spec?: string }[];
   rebirthCount: number;
+  /** [reserved: saved, not used yet] A layer above Genesis (balance plan, P3-7). */
   ascensionCount: number;
   transcendenceCount: number;
   totalIsotope7Earned: number;
@@ -357,6 +363,7 @@ export interface GameState {
   storyFlags: string[];
   currentFloors: number;
   maxPopulation: number;
+  /** [reserved: saved, not used yet] */
   tensionValue: number;
   lastEventTime: number;
   randomSeed: number;
@@ -419,6 +426,10 @@ export interface LateGameState {
   trained: number;
   /** The player pressed "stop": no project is picked automatically until they choose one again. */
   projectsPaused?: boolean;
+  /** [P2-2] The design ('a' or 'b') the player chose for a project (absent = 'a'). */
+  designs?: Record<string, 'a' | 'b'>;
+  /** [Q1] Play seconds before which no story chapter may start (kept in the save: closing the game must not shorten the gap). */
+  storyUntil?: number;
 }
 
 export function createLateGame(): LateGameState {
@@ -430,7 +441,8 @@ export function createLateGame(): LateGameState {
   };
 }
 
-export const SAVE_VERSION = 5;
+/** v6: the Chronicle (longGame.chronicle) and the standing orders added by the balance plan; a v5 save is kept once as lastbunker_auto_v5 before it migrates. */
+export const SAVE_VERSION = 6;
 
 export function migrateState(saved: GameState): GameState {
   const fresh = createInitialState();

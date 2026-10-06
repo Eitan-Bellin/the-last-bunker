@@ -13,6 +13,8 @@ import { BASE_CAPS, OVERFLOW_CREDITS, POWER_FLOOR, TICKED_RESOURCES } from '../d
 import { modifierBreakdown, modifierProduct, prepareModifiers, registerModifier } from './modifiers';
 import { difficultyOf } from '../data/difficulty';
 import { actCapBonus } from '../data/pricing';
+import { TUNING } from '../data/tuning';
+import { scenarioOf } from '../data/scenarios';
 
 const EMERGENCY_EFFICIENCY = 0.25;
 const FOOD_PER_SURVIVOR = 0.08;
@@ -45,6 +47,10 @@ registerModifier({
   mult: ({ resource }) => (resource === 'power' ? 1 : moraleNow),
 });
 registerModifier({ id: 'echo', mult: ({ state }) => prestigeMultiplier(state) });
+// [P3-5] The scenario's own rules (what grows well in this place and what does not).
+registerModifier({ id: 'scenario', mult: ({ state, resource }) => scenarioOf(state).output?.[resource] ?? 1 });
+// [P2-1] The Technocracy doctrine: every room +5%.
+registerModifier({ id: 'technocracy', mult: ({ state }) => (hasFeature(state, 'technocracy') ? 1.05 : 1) });
 // [P3] Laws in force.
 registerModifier({ id: 'laws', mult: ({ state, resource }) => (state.longGame?.policy.laws.length ? lawOutput(state, resource) : 1) });
 // [P2] The season leans on food, water or materials.
@@ -189,7 +195,8 @@ export class ResourceSystem {
     }
     if (left <= 0) return;
     log.converted += left;
-    this.pendingCredits += left * (OVERFLOW_CREDITS[rt] ?? 0);
+    // [Q10] From Act IV the overflow is worth a quarter: credits piled up (median 126K a return) with nothing worth buying.
+    this.pendingCredits += left * (OVERFLOW_CREDITS[rt] ?? 0) * ((state.longGame?.meta.act ?? 1) >= TUNING.overflowDecayAct ? TUNING.overflowDecay : 1);
   }
 
   private flushCredits(state: GameState, deltas: StateDelta[]): void {

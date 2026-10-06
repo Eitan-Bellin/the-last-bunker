@@ -6,10 +6,17 @@ import type { MaintenanceSystem } from './MaintenanceSystem';
 import type { ProjectSystem } from './ProjectSystem';
 import type { PopulationSystem } from './PopulationSystem';
 import type { DigSystem } from './DigSystem';
+import type { ContractSystem } from './ContractSystem';
+import type { ResourceSystem } from './ResourceSystem';
+import { rankOf } from '../data/mastery';
 
 /** The Foreman's standing orders (long-game plan, pillar C): routine the player hands over instead of repeating. */
-export type ForemanOrder = 'maintain' | 'deposit' | 'staff';
-export const FOREMAN_ORDERS: ForemanOrder[] = ['maintain', 'deposit', 'staff'];
+export type ForemanOrder = 'maintain' | 'deposit' | 'staff' | 'train' | 'contracts';
+export const FOREMAN_ORDERS: ForemanOrder[] = ['maintain', 'deposit', 'staff', 'train', 'contracts'];
+/** [Q9] Training only runs while knowledge is at least this share of its cap, so the order never starves research. */
+const TRAIN_KNOWLEDGE_SHARE = 0.5;
+/** Quick trainings per round. */
+const TRAIN_PER_ROUND = 2;
 /** The Foreman takes orders from this Act on (the first Act is learned by hand). */
 export const FOREMAN_ACT = 2;
 /** Rooms are serviced once their wear passes this. */
@@ -30,12 +37,16 @@ export class ForemanSystem {
   private projects: ProjectSystem;
   private population: PopulationSystem;
   private dig: DigSystem;
+  private contracts: ContractSystem;
+  private resources: ResourceSystem;
   private clock = 0;
   /** The last round's result per order (not saved: the first round after a load fills it again). */
   readonly last: Partial<Record<ForemanOrder, ForemanReport>> = {};
 
-  constructor(sm: StateManager, maintenance: MaintenanceSystem, projects: ProjectSystem, population: PopulationSystem, dig: DigSystem) {
+  constructor(sm: StateManager, maintenance: MaintenanceSystem, projects: ProjectSystem, population: PopulationSystem, dig: DigSystem, contracts: ContractSystem, resources: ResourceSystem) {
     this.sm = sm;
+    this.contracts = contracts;
+    this.resources = resources;
     this.maintenance = maintenance;
     this.projects = projects;
     this.population = population;
@@ -74,7 +85,33 @@ export class ForemanSystem {
   }
 
   private run(order: ForemanOrder): void {
-    this.last[order] = order === 'maintain' ? this.maintain() : order === 'deposit' ? this.deposit() : this.staff();
+    this.last[order] = order === 'maintain' ? this.maintain() : order === 'deposit' ? this.deposit()
+      : order === 'staff' ? this.staff() : order === 'train' ? this.train() : this.takeContracts();
+  }
+
+  /** [Q9] Quick paid training for the most experienced workers who can still rank up (the training room's job, handed over). */
+  private train(): ForemanReport {
+    const state = this.sm.state;
+    if (!state.buildings.some(b => b.type === 'trainingRoom')) return { key: 'trainNoRoom' };
+    const k = state.resources.knowledge;
+    if (k.amount < k.cap * TRAIN_KNOWLEDGE_SHARE) return { key: 'trainSaving' };
+    let n = 0;
+    for (let i = 0; i < TRAIN_PER_ROUND; i++) {
+      const pick = this.sm.state.survivors
+        .filter(v => this.population.canTrain(this.sm.state, this.resources, v))
+        .sort((a, b) => (b.mxp ?? 0) - (a.mxp ?? 0) || rankOf(b) - rankOf(a))[0];
+      if (!pick || !this.population.train(this.sm, this.resources, pick.id)) break;
+      n++;
+    }
+    return n ? { key: 'trained', n } : { key: 'trainIdle' };
+  }
+
+  /** [Q9] Answers the contracts that cost nothing the bunker would miss; the rest wait in the inbox for the player. */
+  private takeContracts(): ForemanReport {
+    if (!this.contracts.active(this.sm.state)) return { key: 'contractsIdle' };
+    const n = this.contracts.acceptSafe();
+    if (n) return { key: 'contractsTaken', n };
+    return this.contracts.open(this.sm.state).length > 0 ? { key: 'contractsWait' } : { key: 'contractsIdle' };
   }
 
   private maintain(): ForemanReport {

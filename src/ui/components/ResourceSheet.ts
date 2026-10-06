@@ -10,7 +10,7 @@ import { Sheet } from './Sheet';
  * how long until it is full or empty, who makes it, who uses it, and why its biggest producer makes what it makes.
  */
 export class ResourceSheet {
-  private sheet = new Sheet('resource-sheet');
+  private sheet = new Sheet('resource-sheet', 'resources');
   private engine: GameEngine;
   private resource: ResourceType | null = null;
   private sig = '';

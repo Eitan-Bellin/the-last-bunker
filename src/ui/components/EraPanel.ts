@@ -1,34 +1,71 @@
 import { LAWS, lawCost, lawSlots } from '../../data/laws';
-import type { EndingDef } from '../../data/endings';
+import { ENDINGS, endingScore, type EndingDef } from '../../data/endings';
 import type { GameEngine } from '../../core/GameEngine';
-import type { GameState } from '../../core/GameState';
+import type { GameState, ResourceType } from '../../core/GameState';
 import { i18n } from '../../i18n/I18nManager';
 import { ERAS, eraOf, type EraDef } from '../../data/eras';
 import { Sheet } from './Sheet';
-import { bar, button, costRow, el, setBar } from '../dom';
+import { RESOURCE_ICONS, bar, button, costRow, el, setBar, setRich } from '../dom';
 import { ACTS, actOf, type ActDef } from '../../data/acts';
-import { getProject, stagesDone } from '../../data/projects';
 import { FOREMAN_ACT, FOREMAN_ORDERS, type ForemanSystem } from '../../systems/ForemanSystem';
+import { actFraction, actRequirements, pickRequirement, type Requirement } from '../../systems/Guide';
+import type { ObjectiveAction } from '../../systems/ObjectiveSystem';
+import { resourceDef } from '../../data/resources';
+import { getScenario, homeShare, type HomeSite } from '../../data/scenarios';
 
-/** Where the bunker stands in its story, and what it takes to reach the next era. */
+/** Sets a line of text that may hold icon tokens ([[food]]), only when it changed (the panel refreshes four times a second). */
+function setLine(node: HTMLElement | null, text: string): void {
+  if (!node || node.dataset.t === text) return;
+  node.dataset.t = text;
+  setRich(node, text);
+}
+
+/** How far ahead the forecast looks, in seconds. */
+const FORECAST_SECONDS = 6 * 3600;
+
+/** One requirement row of the Act card: a bar and the next step toward it. */
+interface ReqRow {
+  id: string;
+  row: HTMLElement;
+  bar: HTMLElement;
+  label: HTMLElement;
+  hint: HTMLElement;
+  /** What a tap does now (changes as the requirement's next step changes). */
+  action: ObjectiveAction;
+}
+
+/**
+ * The Command panel (it used to be the "Eras" panel): where the run stands and what blocks it.
+ * [Q2/Q3] The first card says what to do next and why, every requirement of the Act has its own next step and a tap
+ * that takes you there, a six-hour forecast shows what will run out or overflow, and the ending's lean is visible.
+ * The era's own goals only show for bunkers from before the long game (there they still drive the story).
+ */
 export class EraPanel {
-  private sheet = new Sheet('era-sheet');
+  private sheet = new Sheet('era-sheet', 'command');
   private signature = '';
   private bars: HTMLElement[] = [];
   private labels: HTMLElement[] = [];
   /** [LateGame B1] Opens the big projects panel. */
   onOpenProjects: (() => void) | null = null;
-  /** [Long game] The Act's goal bars (its own goals, then its charter projects). */
-  private actBars: HTMLElement[] = [];
-  private actLabels: HTMLElement[] = [];
+  /** [Q2] Where a tap on a step goes (the app opens the right panel). */
+  onGo: ((action: ObjectiveAction) => void) | null = null;
+  /** [Long game] The Act's requirement rows (its own goals, then its charter projects). */
+  private reqRows: ReqRow[] = [];
   /** [Long game] Set by the app: the Foreman whose standing orders are toggled here. */
   foreman: ForemanSystem | null = null;
-  /** [Long game UX] Set by the app: the engine, for the "next up" card (objective, project ETA). */
+  /** Set by the app: the engine, for the guide and the forecast. */
   engine: GameEngine | null = null;
   private lastState: GameState | null = null;
   /** [Long game UX] The Foreman's live lines: next-round countdown, then one report per order. */
   private foremanNext: HTMLElement | null = null;
   private foremanReports: HTMLElement[] = [];
+  private nowText: HTMLElement | null = null;
+  private nowMeta: HTMLElement | null = null;
+  private nowGo: HTMLButtonElement | null = null;
+  private nowAction: ObjectiveAction = null;
+  private forecastBox: HTMLElement | null = null;
+  private endingBars: { id: string; bar: HTMLElement; label: HTMLElement }[] = [];
+  private pctLabel: HTMLElement | null = null;
 
   show(state: GameState): void {
     this.signature = '';
@@ -44,27 +81,21 @@ export class EraPanel {
     return this.sheet.isVisible;
   }
 
+  private longGame(state: GameState): boolean {
+    return !!state.longGame && !state.longGame.meta.legacy;
+  }
+
   refresh(state: GameState): void {
     const era = eraOf(state);
     const act = state.longGame ? actOf(state) : null;
     this.lastState = state;
     const orders = FOREMAN_ORDERS.map(o => (state.longGame?.foreman.orders[o] ? 1 : 0)).join('') + (state.longGame?.policy.laws ?? []).join(',');
-    const goalIdx = act ? act.goals.findIndex(g => { const [c, t] = g.progress(state); return c < t; }) : -1;
-    const sig = `${era.id}|${act?.id ?? 0}|${orders}|${state.tutorialStep}|${goalIdx}|${state.activeProjectId}|${state.activeProjectId ? state.lateGame.projects[state.activeProjectId]?.stage ?? 0 : 0}|${i18n.currentLocale}`;
+    const sig = `${era.id}|${act?.id ?? 0}|${orders}|${state.tutorialStep}|${i18n.currentLocale}`;
     if (sig !== this.signature) {
       this.signature = sig;
       this.render(era, act);
     }
-    if (act) {
-      const rows: [number, number][] = [
-        ...act.goals.map(g => g.progress(state)),
-        ...act.charter.map(id => [stagesDone(state, id), getProject(id)?.stages.length ?? 1] as [number, number]),
-      ];
-      rows.forEach(([c, t], i) => {
-        setBar(this.actBars[i], (Math.min(c, t) / t) * 100);
-        if (this.actLabels[i]) this.actLabels[i].textContent = c >= t ? '✓' : t > 1 ? `${Math.min(c, t)}/${t}` : '';
-      });
-    }
+    if (act && this.engine) this.refreshAct(state, act);
     this.refreshForeman(state);
     era.next.forEach((g, i) => {
       const [c, t] = g.progress(state);
@@ -73,39 +104,57 @@ export class EraPanel {
     });
   }
 
-  /** [Long game UX] Three goals, short to long: the current objective, the Act's next goal, and the charter work. */
-  private renderNextUp(state: GameState, act: ActDef): HTMLElement {
-    const locale = i18n.currentLocale;
+  /** The live parts of the Act cards: the "next step" line, every requirement's bar and hint, the forecast, the ending's lean. */
+  private refreshAct(state: GameState, act: ActDef): void {
     const engine = this.engine!;
-    const card = el('div', 'bp-card next-up');
-    card.appendChild(el('div', 'bp-section-title', `[[target]] ${i18n.t('next.title')}`));
-    const obj = engine.objectiveSystem.current(state);
-    const [oc, ot] = obj.progress(state);
-    card.appendChild(el('div', 'next-row', `${i18n.t('next.short')}: ${obj.text[locale] ?? obj.text.en}${ot > 1 ? ` (${Math.min(oc, ot)}/${ot})` : ''}`));
-    const goal = act.goals.find(g => { const [c, t] = g.progress(state); return c < t; });
-    if (goal) {
-      const [c, t] = goal.progress(state);
-      card.appendChild(el('div', 'next-row', `${i18n.t('next.medium')}: ${goal.text[locale]} (${c}/${t})`));
+    const reqs = actRequirements(engine, state, act);
+    reqs.forEach((r, i) => {
+      const row = this.reqRows[i];
+      if (!row) return;
+      setBar(row.bar, r.fraction * 100);
+      row.label.textContent = r.done ? '✓' : r.progress[1] > 1 ? `${r.progress[0]}/${r.progress[1]}` : '';
+      setLine(row.hint, r.done ? '' : r.text);
+      row.row.classList.toggle('done', r.done);
+      row.action = r.action;
+    });
+    const pick = pickRequirement(reqs);
+    if (this.nowText) {
+      if (pick) {
+        setLine(this.nowText, pick.text);
+        this.nowAction = pick.action;
+        setLine(this.nowMeta, pick.title);
+      } else {
+        setLine(this.nowText, i18n.t(act.id >= ACTS.length ? 'guide.genesis' : 'command.actDone'));
+        this.nowAction = act.id >= ACTS.length ? { kind: 'genesis' } : null;
+        setLine(this.nowMeta, '');
+      }
+      if (this.nowGo) this.nowGo.style.display = this.nowAction ? '' : 'none';
     }
-    const pid = state.activeProjectId;
-    const charter = act.charter.find(id => stagesDone(state, id) < (getProject(id)?.stages.length ?? 0));
-    if (pid) {
-      const def = getProject(pid);
-      const eta = engine.projectSystem.workEta(state, pid);
-      const done = stagesDone(state, pid);
-      card.appendChild(el('div', 'next-row', `${i18n.t('next.long')}: ${def?.name[locale] ?? pid} · ${i18n.t('next.stage', { n: done + 1, all: def?.stages.length ?? 0 })}${isFinite(eta) ? ` · ${i18n.t('next.workLeft', { t: i18n.formatDuration(eta) })}` : ` · ${i18n.t('next.noCrew')}`}`));
-    } else if (charter) {
-      card.appendChild(el('div', 'next-row', `${i18n.t('next.long')}: ${i18n.t('next.pick', { name: getProject(charter)?.name[locale] ?? charter })}`));
-    }
+    if (this.pctLabel) this.pctLabel.textContent = `${Math.floor(Math.min(0.99, actFraction(engine, state, act)) * 100)}%`;
+    this.refreshForecast(state);
+    this.refreshEndings(state);
+  }
+
+  /** [N1] The first card: the one thing to do now, what it is for, and a button that takes you there. */
+  private renderNow(): HTMLElement {
+    const card = el('div', 'bp-card now-card');
+    card.appendChild(el('div', 'bp-section-title', `[[target]] ${i18n.t('command.now')}`));
+    this.nowText = el('div', 'now-text');
+    this.nowMeta = el('div', 'bp-hint now-meta');
+    this.nowGo = button(i18n.t('command.go'), 'btn-primary btn-small now-go', () => this.onGo?.(this.nowAction));
+    card.append(this.nowText, this.nowMeta, this.nowGo);
     return card;
   }
 
-  /** [Long game] The Act card: its name, what it allows, and what finishes it (goals and charter projects). */
+  /** [Long game] The Act card: its name, what it allows, and every requirement with its own next step. */
   private renderAct(act: ActDef): HTMLElement {
     const locale = i18n.currentLocale;
     const card = el('div', 'bp-card act-card');
+    this.pctLabel = el('span', 'act-pct');
+    const head = el('div', 'act-head');
+    head.append(el('div', 'act-name', act.name[locale]), this.pctLabel);
     card.append(
-      el('div', 'act-name', act.name[locale]),
+      head,
       el('div', 'era-tagline', act.tagline[locale]),
       el('div', 'act-limits', i18n.t('act.limits', { level: act.levelCap, people: act.popCap, floors: act.floorCap })),
     );
@@ -118,19 +167,21 @@ export class EraPanel {
     }
     const last = act.id >= ACTS.length;
     card.appendChild(el('div', 'bp-section-title', last ? i18n.t('act.goalsGenesis') : i18n.t('act.goalsNext', { name: ACTS[act.id].name[locale] })));
-    this.actBars = [];
-    this.actLabels = [];
-    const addRow = (text: string) => {
-      const row = el('div', 'era-goal');
+    this.reqRows = [];
+    const reqs: Requirement[] = this.engine && this.lastState ? actRequirements(this.engine, this.lastState, act) : [];
+    for (const r of reqs) {
+      const row = el('button', 'req-row');
+      const top = el('div', 'era-goal');
       const label = el('span', 'era-goal-count');
-      row.append(el('span', 'era-goal-text', text), label);
+      top.append(el('span', 'era-goal-text', `${r.icon} ${r.title}`), label);
       const b = bar(0, 'accent');
-      card.append(row, b);
-      this.actBars.push(b);
-      this.actLabels.push(label);
-    };
-    for (const g of act.goals) addRow(g.text[locale]);
-    for (const id of act.charter) addRow(`[[build]] ${i18n.t('act.charter', { name: getProject(id)?.name[locale] ?? id })}`);
+      const hint = el('div', 'bp-hint req-hint');
+      row.append(top, b, hint);
+      const entry: ReqRow = { id: r.id, row, bar: b, label, hint, action: r.action };
+      row.addEventListener('click', () => { if (entry.action) this.onGo?.(entry.action); });
+      card.appendChild(row);
+      this.reqRows.push(entry);
+    }
     const steps = el('div', 'era-timeline');
     for (const a of ACTS) {
       const step = el('div', `era-step ${a.id < act.id ? 'past' : a.id === act.id ? 'current' : 'future'}`);
@@ -138,9 +189,100 @@ export class EraPanel {
       steps.appendChild(step);
     }
     card.appendChild(steps);
-    if (act.id >= FOREMAN_ACT && this.foreman && this.lastState) card.appendChild(this.renderForeman(this.lastState));
-    if (this.lastState && this.engine && lawSlots(this.lastState) > 0) card.appendChild(this.renderLaws(this.lastState));
     return card;
+  }
+
+  /** [N1] Six hours ahead at today's rates: what runs dry, what overflows (and is wasted), what grows. */
+  private renderForecast(): HTMLElement {
+    const card = el('div', 'bp-card forecast-card');
+    card.appendChild(el('div', 'bp-section-title', `[[clock]] ${i18n.t('command.forecast')}`));
+    this.forecastBox = el('div', 'forecast');
+    card.append(this.forecastBox, el('div', 'bp-hint', i18n.t('command.forecastHint')));
+    return card;
+  }
+
+  private refreshForecast(state: GameState): void {
+    const box = this.forecastBox;
+    if (!box || !box.isConnected) return;
+    const act = state.longGame?.meta.act ?? 1;
+    const rows: HTMLElement[] = [];
+    const resources = (Object.keys(state.resources) as ResourceType[]).filter(r => {
+      const def = resourceDef(r);
+      if (!def || r === 'power' || r === 'isotope7' || r === 'credits' || r === 'blueprints' || r === 'vaultCoins') return false;
+      const opens = def.act ?? 0;
+      return opens === 0 || (act >= opens && opens >= act - 1);
+    });
+    for (const r of resources) {
+      const res = state.resources[r];
+      const net = res.productionRate - res.consumptionRate;
+      const cap = res.cap;
+      const finite = isFinite(cap) && cap > 0;
+      let text = i18n.t('command.steady');
+      let kind = '';
+      if (net < -0.0005 && res.amount > 0) {
+        const t = res.amount / -net;
+        if (t < FORECAST_SECONDS) { text = i18n.t('command.empty', { t: i18n.formatDuration(t) }); kind = 'bad'; }
+        else text = `${i18n.formatCompact(Math.max(0, res.amount + net * FORECAST_SECONDS))}`;
+      } else if (net > 0.0005 && finite) {
+        const t = (cap - res.amount) / net;
+        if (t <= 0) { text = i18n.t('command.full'); kind = 'warn'; }
+        else if (t < FORECAST_SECONDS) { text = i18n.t('command.fullIn', { t: i18n.formatDuration(t) }); kind = 'warn'; }
+        else text = `${i18n.formatCompact(Math.min(cap, res.amount + net * FORECAST_SECONDS))}`;
+      } else if (res.amount <= 0 && net < 0) { text = i18n.t('command.empty', { t: '0' }); kind = 'bad'; }
+      const row = el('div', `forecast-row ${kind}`);
+      row.append(el('span', 'forecast-res', `${RESOURCE_ICONS[r] ?? ''} ${i18n.t(`resources.${r}`)}`), el('span', 'forecast-now', i18n.formatCompact(res.amount)), el('span', 'forecast-then', text));
+      rows.push(row);
+    }
+    const sig = rows.map(r => r.textContent).join('|');
+    if (box.dataset.sig === sig) return;
+    box.dataset.sig = sig;
+    box.replaceChildren(...rows);
+  }
+
+  /** [P3-5] The bunkers of earlier timelines and what they send home. */
+  private renderHomes(homes: HomeSite[]): HTMLElement {
+    const locale = i18n.currentLocale;
+    const card = el('div', 'bp-card homes-card');
+    card.appendChild(el('div', 'bp-section-title', `[[vault]] ${i18n.t('home.title')}`));
+    card.appendChild(el('div', 'bp-hint', i18n.t('home.hint')));
+    for (const h of homes) {
+      const name = getScenario(h.scenario).name[locale];
+      card.appendChild(el('div', 'home-row', i18n.t('home.line', { name, act: ACTS[Math.min(ACTS.length, h.act) - 1]?.name[locale] ?? String(h.act), pct: Math.round(homeShare(h) * 100) })));
+    }
+    return card;
+  }
+
+  /** [Q8] Where the ending leans: each ending's score and what raises it. */
+  private renderEndings(): HTMLElement {
+    const locale = i18n.currentLocale;
+    const card = el('div', 'bp-card endings-card');
+    card.appendChild(el('div', 'bp-section-title', `[[flag]] ${i18n.t('command.endings')}`));
+    card.appendChild(el('div', 'bp-hint', i18n.t('command.endingsHint')));
+    this.endingBars = [];
+    for (const e of ENDINGS) {
+      const row = el('div', 'ending-row');
+      const top = el('div', 'era-goal');
+      const label = el('span', 'era-goal-count');
+      top.append(el('span', 'era-goal-text', `${e.icon} ${e.name[locale]}`), label);
+      const b = bar(0, 'accent');
+      row.append(top, b, el('div', 'bp-hint', e.drivers[locale]));
+      card.appendChild(row);
+      this.endingBars.push({ id: e.id, bar: b, label });
+    }
+    return card;
+  }
+
+  private refreshEndings(state: GameState): void {
+    if (this.endingBars.length === 0) return;
+    const scores = ENDINGS.map(e => ({ e, s: endingScore(state, e) }));
+    const max = Math.max(1, ...scores.map(x => x.s));
+    const lead = scores.reduce((a, b) => (b.s > a.s ? b : a)).e.id;
+    for (const { e, s } of scores) {
+      const row = this.endingBars.find(x => x.id === e.id);
+      if (!row) continue;
+      setBar(row.bar, (s / max) * 100);
+      row.label.textContent = e.id === lead ? `★ ${s.toFixed(1)}` : s.toFixed(1);
+    }
   }
 
   /** [P3] Laws: a few slots, each law a clear trade. */
@@ -212,42 +354,61 @@ export class EraPanel {
   private render(era: EraDef, act: ActDef | null): void {
     const locale = i18n.currentLocale;
     this.sheet.setTitle(`[[flag]] ${i18n.t('era.title')}`);
-    const root = el('div', 'era');
-    if (act && this.lastState && this.engine) root.appendChild(this.renderNextUp(this.lastState, act));
-    if (act) root.appendChild(this.renderAct(act));
-    const head = el('div', `era-head era-${era.key}`);
+    const root = el('div', 'era command');
+    const state = this.lastState;
+    const longGame = !!state && this.longGame(state);
+    this.nowText = this.nowMeta = this.nowGo = null;
+    this.forecastBox = null;
+    this.pctLabel = null;
+    this.endingBars = [];
+    if (act && this.engine && state) {
+      root.appendChild(this.renderNow());
+      root.appendChild(this.renderAct(act));
+      root.appendChild(button(`[[build]] ${i18n.t('proj.open')}`, 'btn-primary', () => this.onOpenProjects?.())); // [LateGame B1]
+      root.appendChild(this.renderForecast());
+      if (act.id >= 2) root.appendChild(this.renderEndings());
+      const homes = (state.longGame?.meta.homes ?? []) as HomeSite[];
+      if (homes.length > 0) root.appendChild(this.renderHomes(homes));
+      const extras = el('div', 'bp-card');
+      if (act.id >= FOREMAN_ACT && this.foreman) extras.appendChild(this.renderForeman(state));
+      if (lawSlots(state) > 0) extras.appendChild(this.renderLaws(state));
+      if (extras.childElementCount > 0) root.appendChild(extras);
+    }
+    // The era is the bunker's look and mood; only a bunker from before the long game still plays toward its goals.
+    const head = el('div', `era-head era-${era.key}${longGame ? ' compact' : ''}`);
     head.append(
       el('div', 'era-num', i18n.t('era.number', { n: era.id + 1 })),
       el('div', 'era-name', era.name[locale]),
       el('div', 'era-tagline', era.tagline[locale]),
     );
     root.appendChild(head);
-    root.appendChild(button(`[[build]] ${i18n.t('proj.open')}`, 'btn-primary', () => this.onOpenProjects?.())); // [LateGame B1]
     this.bars = [];
     this.labels = [];
-    if (era.next.length) {
-      const goals = el('div', 'bp-card');
-      goals.appendChild(el('div', 'bp-section-title', i18n.t('era.nextGoals', { name: ERAS[era.id + 1].name[locale] })));
-      for (const g of era.next) {
-        const row = el('div', 'era-goal');
-        const label = el('span', 'era-goal-count');
-        row.append(el('span', 'era-goal-text', g.text[locale]), label);
-        const b = bar(0, 'accent');
-        goals.append(row, b);
-        this.bars.push(b);
-        this.labels.push(label);
+    if (!longGame) {
+      if (era.next.length) {
+        const goals = el('div', 'bp-card');
+        goals.appendChild(el('div', 'bp-section-title', i18n.t('era.nextGoals', { name: ERAS[era.id + 1].name[locale] })));
+        for (const g of era.next) {
+          const row = el('div', 'era-goal');
+          const label = el('span', 'era-goal-count');
+          row.append(el('span', 'era-goal-text', g.text[locale]), label);
+          const b = bar(0, 'accent');
+          goals.append(row, b);
+          this.bars.push(b);
+          this.labels.push(label);
+        }
+        root.appendChild(goals);
+      } else {
+        root.appendChild(el('div', 'bp-card bp-hint', i18n.t('era.final')));
       }
-      root.appendChild(goals);
-    } else {
-      root.appendChild(el('div', 'bp-card bp-hint', i18n.t('era.final')));
+      const timeline = el('div', 'era-timeline');
+      for (const e of ERAS) {
+        const step = el('div', `era-step ${e.id < era.id ? 'past' : e.id === era.id ? 'current' : 'future'}`);
+        step.append(el('span', 'era-dot'), el('span', 'era-step-name', e.name[locale]));
+        timeline.appendChild(step);
+      }
+      root.appendChild(timeline);
     }
-    const timeline = el('div', 'era-timeline');
-    for (const e of ERAS) {
-      const step = el('div', `era-step ${e.id < era.id ? 'past' : e.id === era.id ? 'current' : 'future'}`);
-      step.append(el('span', 'era-dot'), el('span', 'era-step-name', e.name[locale]));
-      timeline.appendChild(step);
-    }
-    root.appendChild(timeline);
     this.sheet.body.replaceChildren(root);
   }
 }

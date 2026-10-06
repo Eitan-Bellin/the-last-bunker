@@ -91,6 +91,16 @@ export class ProjectSystem {
 
   // ---- choosing and staffing ----
 
+  /** [P2-2] Picks the project's design; only until its first stage is done (afterwards it is what was built). */
+  setDesign(id: string, design: 'a' | 'b'): boolean {
+    const state = this.sm.state;
+    const def = getProject(id);
+    if (!def?.variant && design === 'b') return false;
+    if (!def || stagesDone(state, id) > 0) return false;
+    this.sm.applyDelta({ path: 'lateGame.designs', value: { ...(state.lateGame.designs ?? {}), [id]: design } });
+    return true;
+  }
+
   /** Makes a project the active one (the crew of the previous one goes back to idle). */
   setActive(id: string | null): boolean {
     const state = this.sm.state;

@@ -25,6 +25,32 @@ export interface RebirthRequirement {
   target: number;
 }
 
+/** Every condition for Genesis, so the UI can show exactly what is still missing. */
+export function rebirthRequirementsOf(state: GameState): RebirthRequirement[] {
+  const research = hasFeature(state, 'genesis');
+  const pop = state.survivors.length;
+  const era = state.era ?? 0;
+  const reqs: RebirthRequirement[] = [
+    { key: 'genesis.reqResearch', met: research, current: research ? 1 : 0, target: 1 },
+    { key: 'genesis.reqSurvivors', met: pop >= GENESIS_MIN_SURVIVORS, current: pop, target: GENESIS_MIN_SURVIVORS },
+    { key: 'genesis.reqEra', met: era >= GENESIS_MIN_ERA, current: era, target: GENESIS_MIN_ERA },
+  ];
+  // [Long game] A new bunker reaches Genesis by finishing the last Act (its charter ends with the Genesis Core).
+  // A bunker from before the long game keeps the classic gate, so nobody loses the Genesis they were about to make.
+  const lg = state.longGame;
+  if (lg && !lg.meta.legacy) {
+    const act = actOf(state);
+    const done = act.id >= MAX_ACT && actComplete(state, act);
+    reqs.push({ key: 'genesis.reqAct', met: done, current: done ? MAX_ACT : act.id - 1, target: MAX_ACT });
+  }
+  return reqs;
+}
+
+/** [Q1] Whether the Genesis button is open (the story reads this to tell "the big decision" at the right time). */
+export function genesisGateMet(state: GameState): boolean {
+  return rebirthRequirementsOf(state).every(r => r.met);
+}
+
 /** Achievements and the Project Genesis (prestige) upgrade shop. */
 export class MetaSystem {
   private sm: StateManager;
@@ -52,23 +78,7 @@ export class MetaSystem {
 
   /** Every condition for Genesis, so the UI can show exactly what is still missing. */
   rebirthRequirements(state: GameState): RebirthRequirement[] {
-    const research = hasFeature(state, 'genesis');
-    const pop = state.survivors.length;
-    const era = state.era ?? 0;
-    const reqs: RebirthRequirement[] = [
-      { key: 'genesis.reqResearch', met: research, current: research ? 1 : 0, target: 1 },
-      { key: 'genesis.reqSurvivors', met: pop >= GENESIS_MIN_SURVIVORS, current: pop, target: GENESIS_MIN_SURVIVORS },
-      { key: 'genesis.reqEra', met: era >= GENESIS_MIN_ERA, current: era, target: GENESIS_MIN_ERA },
-    ];
-    // [Long game] A new bunker reaches Genesis by finishing the last Act (its charter ends with the Genesis Core).
-    // A bunker from before the long game keeps the classic gate, so nobody loses the Genesis they were about to make.
-    const lg = state.longGame;
-    if (lg && !lg.meta.legacy) {
-      const act = actOf(state);
-      const done = act.id >= MAX_ACT && actComplete(state, act);
-      reqs.push({ key: 'genesis.reqAct', met: done, current: done ? MAX_ACT : act.id - 1, target: MAX_ACT });
-    }
-    return reqs;
+    return rebirthRequirementsOf(state);
   }
 
   canRebirth(state: GameState): boolean {
@@ -90,7 +100,7 @@ export class MetaSystem {
       // [P3] Heritage research: +10%.
       // [P5] The run's ending adds its share.
       const ending = ENDINGS.find(e => state.storyFlags.includes(`ending:${e.id}`));
-      return Math.floor(raw * diff * (1 + 0.1 * state.prestige.rebirthCount) * (hasFeature(state, 'heritage') ? 1.1 : 1) * (1 + (ending?.legacy ?? 0) + mutatorLegacy(state)));
+      return Math.floor(raw * diff * (1 + 0.1 * state.prestige.rebirthCount) * (hasFeature(state, 'heritage') ? 1.1 : 1) * (hasFeature(state, 'arkLegacy') ? 1.15 : 1) * (1 + (ending?.legacy ?? 0) + mutatorLegacy(state)));
     }
     const explored = state.explorationMap.filter(h => h.explored).length;
     const raw = 5 + Math.sqrt(state.stats.totalFoodProduced / 20) + state.survivors.length * 2 + researched * 2 + explored
@@ -110,6 +120,13 @@ export class MetaSystem {
       for (const [r, v] of Object.entries(bonus) as [ResourceType, number][]) {
         sm.applyDelta({ path: `resources.${r}.amount`, value: sm.state.resources[r].amount + v });
       }
+    }
+    // [P2-1] The Seed Store doctrine of the previous timeline: the next world starts with stock and two dug floors.
+    if (sm.state.prestige.seedBank) {
+      for (const [r, v] of Object.entries({ materials: 600, scrap: 150, knowledge: 300 }) as [ResourceType, number][]) {
+        sm.applyDelta({ path: `resources.${r}.amount`, value: sm.state.resources[r].amount + v });
+      }
+      sm.applyDelta({ path: 'currentFloors', value: Math.min(MAX_FLOORS, sm.state.currentFloors + 2) });
     }
     const dug = up['preDug'] ?? 0;
     if (dug > 0) sm.applyDelta({ path: 'currentFloors', value: Math.min(MAX_FLOORS, sm.state.currentFloors + dug) });

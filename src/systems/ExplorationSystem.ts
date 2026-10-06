@@ -6,7 +6,7 @@ import type { PopulationSystem } from './PopulationSystem';
 import { bus } from '../core/EventBus';
 import { SeededRandom as Rng } from '../core/Random';
 import {
-  BIOMES, FOOT_RADIUS, HEX_NEIGHBORS, LONG_TRIP_LOOT, LONG_TRIP_TIME, MAP_RADIUS, POIS, baseTripSeconds, distanceLootMult, hexDistance,
+  BIOMES, FOOT_RADIUS, HEX_NEIGHBORS, LONG_TRIP_LOOT, LONG_TRIP_TIME, MAP_RADIUS, mapRadiusFor, POIS, baseTripSeconds, distanceLootMult, hexDistance,
   type BiomeId,
 } from '../data/surface';
 import { hasFeature } from './ResearchSystem';
@@ -17,6 +17,7 @@ import type { ActiveMission, JournalEntry } from '../core/GameState';
 import { projectExpeditionSpeed } from '../data/projects'; // [LateGame B1]
 import { CARAVAN_CREW, CARGO_TIERS, TRADE_VALUE, ambushChance, cargoValue, getPartner, partnerOpen, relationLevel, tradeRate, specialKey, type CargoTier } from '../data/trade'; // [LateGame B2]
 import { MASTERY_STEPS } from '../data/mastery'; // [LateGame B3]
+import { scenarioOf } from '../data/scenarios';
 
 /** Seconds the team waits for an answer before taking the cautious option. */
 export const ANSWER_TIMEOUT = 180;
@@ -94,13 +95,14 @@ export class ExplorationSystem {
   private extendMap(): void {
     const map = this.sm.state.explorationMap;
     const radius = map.reduce((m, h) => Math.max(m, hexDistance(h.x, h.y)), 0);
-    if (radius >= MAP_RADIUS) return;
+    const target = mapRadiusFor(this.sm.state.longGame?.meta.act ?? 1);
+    if (radius >= target) return;
     const rnd = new Rng(((this.sm.state.createdAt + 7919) % 2147483647) || 54321);
     const added: ExplorationHex[] = [];
-    for (let q = -MAP_RADIUS; q <= MAP_RADIUS; q++) {
-      for (let r = -MAP_RADIUS; r <= MAP_RADIUS; r++) {
+    for (let q = -target; q <= target; q++) {
+      for (let r = -target; r <= target; r++) {
         const d = hexDistance(q, r);
-        if (d <= radius || d > MAP_RADIUS) continue;
+        if (d <= radius || d > target) continue;
         const hex = makeHex(rnd, q, r);
         // Cells next to an explored edge hex are already in sight.
         const seen = d === radius + 1 && HEX_NEIGHBORS.some(([dq, dr]) => map.some(h => h.x === q + dq && h.y === r + dr && h.explored));
@@ -121,6 +123,7 @@ export class ExplorationSystem {
     if (long) t *= LONG_TRIP_TIME;
     if (hasFeature(state, 'vehicles')) t *= 0.5;
     t *= metroSpeedup(state);
+    if (hasFeature(state, 'surveyDrones')) t *= 0.8; // [P2-8]
     t /= projectExpeditionSpeed(state); // [LateGame B1] the metro tunnel project
     return Math.round(t);
   }
@@ -393,6 +396,8 @@ export class ExplorationSystem {
     const p = getPartner(partnerId);
     let t = p?.seconds ?? 7200;
     if (hasFeature(state, 'vehicles')) t *= 0.75;
+    if (hasFeature(state, 'tradeRoads')) t *= 0.75; // [P2-8]
+    t *= scenarioOf(state).caravans ?? 1; // [P3-5]
     t /= projectExpeditionSpeed(state);
     return Math.round(t);
   }
