@@ -100,7 +100,7 @@ export class MetaSystem {
       // [P3] Heritage research: +10%.
       // [P5] The run's ending adds its share.
       const ending = ENDINGS.find(e => state.storyFlags.includes(`ending:${e.id}`));
-      return Math.floor(raw * diff * (1 + 0.1 * state.prestige.rebirthCount) * (hasFeature(state, 'heritage') ? 1.1 : 1) * (1 + (ending?.legacy ?? 0) + mutatorLegacy(state)));
+      return Math.floor(raw * diff * (1 + 0.1 * state.prestige.rebirthCount) * (hasFeature(state, 'heritage') ? 1.1 : 1) * (hasFeature(state, 'arkLegacy') ? 1.15 : 1) * (1 + (ending?.legacy ?? 0) + mutatorLegacy(state)));
     }
     const explored = state.explorationMap.filter(h => h.explored).length;
     const raw = 5 + Math.sqrt(state.stats.totalFoodProduced / 20) + state.survivors.length * 2 + researched * 2 + explored
@@ -120,6 +120,13 @@ export class MetaSystem {
       for (const [r, v] of Object.entries(bonus) as [ResourceType, number][]) {
         sm.applyDelta({ path: `resources.${r}.amount`, value: sm.state.resources[r].amount + v });
       }
+    }
+    // [P2-1] The Seed Store doctrine of the previous timeline: the next world starts with stock and two dug floors.
+    if (sm.state.prestige.seedBank) {
+      for (const [r, v] of Object.entries({ materials: 600, scrap: 150, knowledge: 300 }) as [ResourceType, number][]) {
+        sm.applyDelta({ path: `resources.${r}.amount`, value: sm.state.resources[r].amount + v });
+      }
+      sm.applyDelta({ path: 'currentFloors', value: Math.min(MAX_FLOORS, sm.state.currentFloors + 2) });
     }
     const dug = up['preDug'] ?? 0;
     if (dug > 0) sm.applyDelta({ path: 'currentFloors', value: Math.min(MAX_FLOORS, sm.state.currentFloors + dug) });

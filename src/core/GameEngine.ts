@@ -41,6 +41,7 @@ import { difficultyOf, easier } from '../data/difficulty';
 import type { Difficulty } from './state/longGame';
 import { logCrash } from './crashGuard';
 import { WASTE_TRACKED } from '../data/resources';
+import { hasFeature } from '../systems/ResearchSystem';
 
 const TICK_RATE = 10;
 const TICK_INTERVAL = 1000 / TICK_RATE;
@@ -193,6 +194,8 @@ export class GameEngine {
     this.objectiveSystem = new ObjectiveSystem(this.stateManager, this.resourceSystem);
     this.objectiveSystem.guide = s => guideObjective(this, s); // [Q2]
     this.chronicleSystem = new ChronicleSystem(this.stateManager); // [Q14]
+    // [P2-9] A new Act can widen the map (the outer rings are added around the old one).
+    bus.on('act:advance', () => this.explorationSystem.ensureMap());
     this.restorationSystem = new RestorationSystem(this.stateManager, this.rng, this.resourceSystem, this.buildingSystem);
     this.eraSystem = new EraSystem(this.stateManager);
     this.incidentSystem = new IncidentSystem(this.stateManager, this.rng, this.resourceSystem);
@@ -217,7 +220,7 @@ export class GameEngine {
     this.incidentSystem.setBuildings(this.buildingSystem);
     this.inboxSystem = new InboxSystem(this.stateManager);
     this.digSystem = new DigSystem(this.stateManager, this.buildingSystem, this.populationSystem);
-    this.actSystem = new ActSystem(this.stateManager, this.buildingSystem);
+    this.actSystem = new ActSystem(this.stateManager, this.buildingSystem, this.inboxSystem);
     this.threatSystem = new ThreatSystem(this.stateManager);
     this.outpostSystem = new OutpostSystem(this.stateManager, this.resourceSystem, this.explorationSystem);
     this.contractSystem = new ContractSystem(this.stateManager, this.inboxSystem, this.resourceSystem, this.populationSystem);
@@ -358,6 +361,15 @@ export class GameEngine {
     for (let i = 0; i < 3 + (up['veteranSurvivors'] ?? 0) + (up['ksFounders'] ? 2 : 0); i++) {
       this.populationSystem.addSurvivor(this.stateManager, this.populationSystem.createSurvivor(this.rng));
     }
+    // [P2-1] The Vanguard doctrine: veterans of the last timeline wake up here too (fresh ids, their skills kept).
+    for (const v of this.stateManager.state.prestige.vanguard ?? []) {
+      const s = this.populationSystem.createSurvivor(this.rng);
+      this.populationSystem.addSurvivor(this.stateManager, { ...s, name: v.name, portraitIndex: v.portraitIndex, stats: { ...v.stats }, traits: [...v.traits], mxp: v.mxp, spec: v.spec });
+    }
+    // Both carry-overs are for this timeline's start only.
+    if (this.stateManager.state.prestige.vanguard || this.stateManager.state.prestige.seedBank) {
+      this.stateManager.applyDeltas([{ path: 'prestige.vanguard', value: undefined }, { path: 'prestige.seedBank', value: undefined }]);
+    }
 
     // The Remnant: one dry dormitory where the newcomers camp; the rest of Bunker 17 must be won back.
     this.stateManager.applyDelta({ path: 'ruins', value: seedRuins() });
@@ -445,10 +457,11 @@ export class GameEngine {
 
   /** Project Genesis: start over, keeping isotope-7, prestige upgrades, achievements and the story. */
   async rebirth(): Promise<void> {
+    if (!this.metaSystem.canRebirth(this.stateManager.state)) return;
+    this.actSystem.ensureEnding(); // [P2-3] a pending ending choice is settled before the timeline closes
     const old = this.stateManager.state;
-    if (!this.metaSystem.canRebirth(old)) return;
     await this.keepPrevious();
-    const gain = this.metaSystem.rebirthGain(old);
+    const gain = this.metaSystem.rebirthGain(this.stateManager.state);
     const fresh = createInitialState();
     fresh.prestige = {
       ...old.prestige,
@@ -457,6 +470,12 @@ export class GameEngine {
       // Remember which chapters this timeline told (chapters finished before this field existed are in storyFlags).
       storySeen: [...new Set([...(old.prestige.storySeen ?? []), ...old.storyFlags.filter(f => f.startsWith('story:')).map(f => f.slice(6))])],
     };
+    // [P2-1] What the late doctrines carry over: a stocked start, or the most experienced workers.
+    if (hasFeature(old, 'seedBank')) fresh.prestige.seedBank = true;
+    if (hasFeature(old, 'vanguard')) {
+      fresh.prestige.vanguard = [...old.survivors].filter(s => !s.child).sort((a, b) => (b.mxp ?? 0) - (a.mxp ?? 0)).slice(0, 3)
+        .map(s => ({ name: s.name, portraitIndex: s.portraitIndex, stats: { ...s.stats }, traits: [...s.traits], mxp: s.mxp ?? 0, spec: s.spec }));
+    }
     fresh.resources.isotope7.amount = old.resources.isotope7.amount + gain;
     fresh.achievements = [...old.achievements];
     // The "new system" cards (sys:*) were seen once: they are tips, not part of the timeline.

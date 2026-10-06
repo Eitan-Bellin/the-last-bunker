@@ -382,6 +382,8 @@ export function defenseParts(state: GameState): { walls: number; guards: number;
   // [P3] Research and doctrines.
   if (hasFeature(state, 'tripwires')) walls += 15;
   if (hasFeature(state, 'fortress')) walls *= 1.5;
+  if (hasFeature(state, 'isolationism')) walls *= 1.2; // [P2-1]
+  if (hasFeature(state, 'shieldNetwork')) walls *= 1.2; // [P2-8]
   if (hasFeature(state, 'rangers')) guards *= 1.4;
   if (hasFeature(state, 'armorPlating')) guards *= 1.2;
   if (hasFeature(state, 'militia')) residents *= 2;
@@ -504,7 +506,8 @@ export function arrivalGap(state: GameState, roll = 0.5): number {
   const hunger = state.resources.food.amount <= 0 || state.resources.water.amount <= 0 ? 2 : 1;
   // [LateGame B1] the field radio mast project brings newcomers faster
   // [P2] More people travel in spring, fewer in winter.
-  const season = (seasonEffects(state)?.arrivals ?? 1) * (hasFeature(state, 'longRangeRadio') ? 0.8 : 1) * lawArrivals(state);
+  const doctrine = (hasFeature(state, 'isolationism') ? 1.25 : 1) * (hasFeature(state, 'expansionism') ? 0.85 : 1) * (hasFeature(state, 'confederation') ? 0.85 : 1); // [P2-1]
+  const season = (seasonEffects(state)?.arrivals ?? 1) * (hasFeature(state, 'longRangeRadio') ? 0.8 : 1) * lawArrivals(state) * doctrine;
   return Math.round(base * radio * mood * hunger * season * (0.75 + roll * 0.5) / projectArrivalSpeed(state));
 }
 
@@ -554,7 +557,7 @@ export class EventSystem {
     const state = this.ctx.sm.state;
     // [P2] The scout report: who is coming is known at once (the forecast is exact).
     const kind: RaidKind = this.ctx.rng.chance(0.5) ? 'scavengers' : 'marauders';
-    const warning = RAID_WARNING + (hasFeature(state, 'watchtower') ? 180 : 0); // [P3] the watchtower sees them sooner
+    const warning = RAID_WARNING + (hasFeature(state, 'watchtower') ? 180 : 0) + (hasFeature(state, 'rapidResponse') ? 120 : 0); // [P3] the watchtower sees them sooner
     const raid = { hitAt: state.stats.totalPlayTime + warning, strength: raidStrength(state, this.ctx.rng.next()), kind, stance: 'hold' as RaidStance };
     this.setDanger({ raid });
     bus.emit('raid:warning', raid);

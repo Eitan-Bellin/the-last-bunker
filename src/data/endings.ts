@@ -27,8 +27,8 @@ export const ENDINGS: EndingDef[] = [
   {
     id: 'commonwealth', icon: '[[chat]]', legacy: 0.1,
     drivers: {
-      he: 'דוקטרינת דיפלומטיה (הכי חזק), דוקטרינת קומונה, החוק "דלתות פתוחות", ידידות עם כל שלושת השותפים, ועוד ועוד חוזים',
-      en: 'The Diplomacy doctrine (strongest), the Commune doctrine, the Open Doors law, friendship with all three partners, and many contracts',
+      he: 'דוקטרינת דיפלומטיה (הכי חזק), קומונה, קונפדרציה, רפובליקה ורפובליקת הסוחרים, החוק "דלתות פתוחות", ידידות עם כל שלושת השותפים, ועוד ועוד חוזים',
+      en: 'The Diplomacy doctrine (strongest), Commune, Confederation, Republic and Merchant Republic, the Open Doors law, friendship with all three partners, and many contracts',
     },
     name: { he: 'חבר העמים', en: 'The Commonwealth' },
     text: {
@@ -37,26 +37,28 @@ export const ENDINGS: EndingDef[] = [
     },
     // Read from the choices: the Diplomacy doctrine, the Commune, open doors, and friends on every road.
     score: s => (done(s, 'diplomacy') ? 3 : 0) + (done(s, 'commune') ? 1 : 0) + (law(s, 'openDoors') ? 1 : 0)
-      + (['terminus', 'clan', 'noa'].every(p => relationLevel(s, p) >= 5) ? 1 : 0) + Math.min(0.5, contracts(s) / 4000),
+      + (['terminus', 'clan', 'noa'].every(p => relationLevel(s, p) >= 5) ? 1 : 0) + Math.min(0.5, contracts(s) / 4000)
+      + (done(s, 'confederation') ? 1 : 0) + (done(s, 'merchantRepublic') ? 1 : 0) + (done(s, 'republic') ? 1 : 0),
   },
   {
     id: 'fortress', icon: '[[vault]]', legacy: 0.1,
     drivers: {
-      he: 'דוקטרינות מבצר וסיירים (חזקות), מיליציה ותורת הבונקר, והחוק "משטר צבאי"',
-      en: 'The Fortress and Rangers doctrines (strong), Militia and the Bunker Doctrine, and the Martial Law law',
+      he: 'דוקטרינות מבצר וסיירים (חזקות), מיליציה, בידוד, תורת הבונקר ורשת מגן, והחוק "משטר צבאי"',
+      en: 'The Fortress and Rangers doctrines (strong), Militia, Isolationism, the Bunker Doctrine and the Shield Network, and the Martial Law law',
     },
     name: { he: 'המבצר', en: 'The Fortress' },
     text: {
       he: 'העולם ניסה לקחת ממכם שוב ושוב, ושוב ושוב הדלת החזיקה. מה שתעבירו לעולם הבא הוא לא רק זרעים וספרים, אלא הידיעה שאפשר לעמוד.',
       en: 'The world tried to take from you again and again, and again and again the door held. What you carry into the next world is not only seeds and books, but the knowledge that one can stand.',
     },
-    score: s => (done(s, 'fortress') ? 2 : 0) + (done(s, 'rangers') ? 2 : 0) + (done(s, 'militia') ? 1 : 0) + (done(s, 'bunkerDoctrine') ? 1 : 0) + (law(s, 'martialLaw') ? 1 : 0),
+    score: s => (done(s, 'fortress') ? 2 : 0) + (done(s, 'rangers') ? 2 : 0) + (done(s, 'militia') ? 1 : 0) + (done(s, 'bunkerDoctrine') ? 1 : 0) + (law(s, 'martialLaw') ? 1 : 0)
+      + (done(s, 'isolationism') ? 1 : 0) + (done(s, 'shieldNetwork') ? 0.5 : 0),
   },
   {
     id: 'garden', icon: '[[clover]]', legacy: 0.1,
     drivers: {
-      he: 'דוקטרינת תפטיר או חוות שטח (הידרופוניקה נותנת פחות), כיפת השמיים, והחוקים "יום מנוחה" ו"קיצוב"',
-      en: 'The Mycelium or Surface Farms doctrine (Hydroponics counts less), the Sky Dome, and the Day of Rest and Rationing laws',
+      he: 'דוקטרינת תפטיר או חוות שטח (הידרופוניקה נותנת פחות), כיפת השמיים, חממות עליונות, חוות העם וסינתזת זרעים, והחוקים "יום מנוחה" ו"קיצוב"',
+      en: 'The Mycelium or Surface Farms doctrine (Hydroponics counts less), the Sky Dome, Sky Greenhouses, the People\'s Farms and Seed Synthesis, and the Day of Rest and Rationing laws',
     },
     name: { he: 'הגן', en: 'The Garden' },
     text: {
@@ -64,20 +66,21 @@ export const ENDINGS: EndingDef[] = [
       en: 'Under the Sky Dome now grow trees nobody here had ever seen. You are ready for Genesis the way gardeners are ready for spring: seeds in the pocket and hands in the soil.',
     },
     score: s => (done(s, 'mycelium') || done(s, 'surfaceFarms') ? 2 : done(s, 'hydroDoctrine') ? 1 : 0) + (s.storyFlags.includes('project:skyDome') ? 1 : 0)
-      + (law(s, 'dayOfRest') ? 1 : 0) + (law(s, 'rationing') ? 0.5 : 0),
+      + (law(s, 'dayOfRest') ? 1 : 0) + (law(s, 'rationing') ? 0.5 : 0)
+      + (done(s, 'skyGreenhouses') ? 0.5 : 0) + (done(s, 'peoplesFarms') ? 0.5 : 0) + (done(s, 'seedSynthesis') ? 0.5 : 0),
   },
   {
     id: 'ark', icon: '[[vault]]', legacy: 0.05,
     drivers: {
-      he: 'ברירת המחדל: מנצחת כשאף דרך אחרת לא פותחת פער ברור',
-      en: 'The default: wins when no other path pulls clearly ahead',
+      he: 'ברירת המחדל: מנצחת כשאף דרך אחרת לא פותחת פער ברור. דוקטרינות החצייה (הארכיון, מחסן הזרעים, החלוצים) מחזקות אותה',
+      en: 'The default: wins when no other path pulls clearly ahead. The crossing doctrines (the Archive, the Seed Store, the Vanguard) strengthen it',
     },
     name: { he: 'התיבה', en: 'The Ark' },
     text: {
       he: 'לא כל מה שבניתם ישרוד את המעבר. אבל השמות, השירים והזרעים בתיבה כן. מישהו בעולם הבא יפתח אותה, ויידע שהייתם כאן.',
       en: 'Not everything you built will survive the crossing. But the names, the songs and the seeds in the Ark will. Someone in the next world will open it, and know that you were here.',
     },
-    score: () => 1.5,
+    score: s => 1.5 + (done(s, 'archiveCrossing') ? 1 : 0) + (done(s, 'seedCrossing') ? 0.5 : 0) + (done(s, 'vanguardCrossing') ? 0.5 : 0),
   },
 ];
 

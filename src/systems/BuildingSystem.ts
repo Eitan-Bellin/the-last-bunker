@@ -278,7 +278,7 @@ export class BuildingSystem {
     const n = state.currentFloors + 1;
     const table = TUNING.digSeconds;
     // [P3] Deep Drilling research: a quarter faster.
-    const drill = hasFeature(state, 'deepDrilling') ? 0.75 : 1;
+    const drill = (hasFeature(state, 'deepDrilling') ? 0.75 : 1) * (hasFeature(state, 'deepMining') ? 0.8 : 1); // [P2-1] the Deep Mining doctrine
     if (n < table.length) return Math.round(table[n] * drill);
     return Math.round(table[table.length - 1] * Math.pow(TUNING.digTimeGrowth, n - (table.length - 1)) * drill);
   }
@@ -438,5 +438,6 @@ export function bedsBuilt(state: GameState): number {
 
 /** The Act's limit on people in the bunker. */
 export function bedCap(state: GameState): number {
-  return Math.round(actOf(state).popCap * (state.prestige.upgrades['ksSettler'] ? 1.1 : 1)); // [P5] keystone
+  // [P5] keystone; [P2-1] the Confederation doctrine adds places.
+  return Math.round(actOf(state).popCap * (state.prestige.upgrades['ksSettler'] ? 1.1 : 1)) + (hasFeature(state, 'confederation') ? 15 : 0);
 }

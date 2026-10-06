@@ -1,5 +1,6 @@
 import { hasKeystone } from '../data/prestige';
 import { lateActTwoSystems } from '../data/acts';
+import { hasFeature } from './ResearchSystem';
 import type { StateManager } from '../core/StateManager';
 import type { GameState, ResourceType } from '../core/GameState';
 import type { InboxItem } from '../core/state/longGame';
@@ -179,7 +180,8 @@ export class ContractSystem {
     const type: ContractType = this.roll(n, 2) < 0.6 ? 'supply' : 'crew';
     const hours = type === 'crew' ? TUNING.contractRewardHours * 1.6 : TUNING.contractRewardHours;
     // [P5] The Cartographer keystone: contracts pay a quarter more.
-    const k = hasKeystone(state, 'ksCartographer') ? 1.25 : 1;
+    // [P2-1] The Merchant Republic doctrine: contracts pay 30% more.
+    const k = (hasKeystone(state, 'ksCartographer') ? 1.25 : 1) * (hasFeature(state, 'merchantRepublic') ? 1.3 : 1);
     // Paid in the same mix prices ask for, so a contract helps with every currency the Act needs.
     const reward = actBundle(act, hours * k);
     const give: Partial<Record<ResourceType, number>> = {};

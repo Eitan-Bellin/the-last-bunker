@@ -165,6 +165,10 @@ export interface ActiveMission {
 }
 
 export interface PrestigeState {
+  /** [P2-1] Set by Genesis for the next timeline only (the Seed Store doctrine): start with stock and two dug floors. */
+  seedBank?: boolean;
+  /** [P2-1] Set by Genesis for the next timeline only (the Vanguard doctrine): the veterans who cross over, as the people they were. */
+  vanguard?: { name: string; portraitIndex: number; stats: SurvivorStats; traits: string[]; mxp: number; spec?: string }[];
   rebirthCount: number;
   /** [reserved: saved, not used yet] A layer above Genesis (balance plan, P3-7). */
   ascensionCount: number;
@@ -422,6 +426,8 @@ export interface LateGameState {
   trained: number;
   /** The player pressed "stop": no project is picked automatically until they choose one again. */
   projectsPaused?: boolean;
+  /** [Q1] Play seconds before which no story chapter may start (kept in the save: closing the game must not shorten the gap). */
+  storyUntil?: number;
 }
 
 export function createLateGame(): LateGameState {

@@ -4,6 +4,7 @@ import { bus } from '../core/EventBus';
 import { BIOMES, type BiomeId } from '../data/surface';
 import { ACT_CURRENCY, actPrice, refIncome } from '../data/pricing';
 import { TUNING } from '../data/tuning';
+import { hasFeature } from './ResearchSystem';
 import type { ResourceSystem } from './ResourceSystem';
 import type { ExplorationSystem } from './ExplorationSystem';
 
@@ -53,7 +54,7 @@ export class OutpostSystem {
   }
 
   max(state: GameState): number {
-    return MAX_OUTPOSTS[Math.min(MAX_OUTPOSTS.length - 1, state.longGame?.meta.act ?? 0)];
+    return MAX_OUTPOSTS[Math.min(MAX_OUTPOSTS.length - 1, state.longGame?.meta.act ?? 0)] + (hasFeature(state, 'expansionism') ? 2 : 0); // [P2-1]
   }
 
   cost(state: GameState): Record<string, number> {
@@ -113,6 +114,8 @@ export class OutpostSystem {
     for (const [r, range] of Object.entries(biome?.loot ?? {}) as [ResourceType, [number, number]][]) {
       out[r] = (out[r] ?? 0) + ((range[0] + range[1]) / 2) * 6;
     }
+    // [P2-1] The Expansionism doctrine: outposts yield 40% more (what they eat stays the same).
+    if (hasFeature(state, 'expansionism')) for (const r of Object.keys(out) as ResourceType[]) out[r] = (out[r] ?? 0) * 1.4;
     out.food = (out.food ?? 0) - 6;
     out.water = (out.water ?? 0) - 6;
     return out;

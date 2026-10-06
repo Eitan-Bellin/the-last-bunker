@@ -952,5 +952,12 @@
   "sys.laws.title": "New: laws",
   "sys.laws.body": "You have a law slot. A law is a trade: more output for less morale, more defense for less freedom. You can repeal it later. Laws are in the Command panel.",
   "sys.currency.title": "A new currency: {name}",
-  "sys.currency.body": "From this Act, prices are mostly in {name}. A room specialized for it makes it (see the room's panel), and the Book explains the late resources."
+  "sys.currency.body": "From this Act, prices are mostly in {name}. A room specialized for it makes it (see the room's panel), and the Book explains the late resources.",
+  "mod.technocracy": "Technocracy",
+  "ending.choose.title": "Which ending is yours?",
+  "ending.choose.body": "The last Act is done, and more than one ending fits how you played: {list}. Choose how the story closes. If you do not answer in time, the best fit is told. Genesis settles it too.",
+  "ending.pick.commonwealth": "The Commonwealth",
+  "ending.pick.fortress": "The Fortress",
+  "ending.pick.garden": "The Garden",
+  "ending.pick.ark": "The Ark"
 }

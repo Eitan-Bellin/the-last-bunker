@@ -46,6 +46,8 @@ registerModifier({
   mult: ({ resource }) => (resource === 'power' ? 1 : moraleNow),
 });
 registerModifier({ id: 'echo', mult: ({ state }) => prestigeMultiplier(state) });
+// [P2-1] The Technocracy doctrine: every room +5%.
+registerModifier({ id: 'technocracy', mult: ({ state }) => (hasFeature(state, 'technocracy') ? 1.05 : 1) });
 // [P3] Laws in force.
 registerModifier({ id: 'laws', mult: ({ state, resource }) => (state.longGame?.policy.laws.length ? lawOutput(state, resource) : 1) });
 // [P2] The season leans on food, water or materials.
