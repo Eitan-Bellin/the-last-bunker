@@ -9,7 +9,9 @@ import { BUILDING_W, DEPTH_X, DISTRICT_X, FLOOR_H, ROOM_H, SIDE_MARGIN, SLAB, SL
 import { hashString, seeded } from './draw';
 import { buildConstructionVisual, buildPaintedConstruction, buildRoomVisual, buildScaffold, type RoomVisual } from './roomArt';
 import { PEOPLE_STYLE, Person, ROOM_ACTIVITY, type Activity, type Lane } from './people';
-import { crowdFor, settleCrowds } from './workSpots'; // gfx-p0 people
+import { crowdFor, restCountFor, settleCrowds } from './workSpots'; // gfx-p0 people
+import { GFX, setGfxQuality } from './gfxFeatures';
+import { timeOfDay } from '../data/dayCycle';
 import { ProjectSites, type SiteInfo } from './projectSites';
 import { AMBIENCE_FOR, type AmbienceKey } from '../audio/ambience';
 import type { AmbienceMix } from '../audio/AudioEngine';
@@ -22,7 +24,6 @@ import { ArtLibrary } from '../art/ArtLibrary';
 import { artEntry, buildingArtKey, roomTier, ruinArtKey } from '../art/registry';
 import { buildCityMap, type CityMap } from './cityMap';
 import { PostFX, startQuality, targetResolution } from './postfx';
-import { setGfxQuality } from './gfxFeatures'; // plan 2026-10: quality switches of the new finish features
 import { isLiteMode, logCrash } from '../core/crashGuard';
 import { isTouchDevice } from '../utils/device';
 import { coneTexture } from '../art/ArtLibrary';
@@ -1344,6 +1345,21 @@ export class BunkerRenderer {
     const seen = new Set<string>();
     const sleeping = new Map<string, number>();
     let idleIndex = 0;
+    // Plan 2026-10 M5: at mealtimes (7, 12 and 19 o'clock on the bunker clock) a few idle people eat at the canteen's table.
+    const hour = timeOfDay(state.stats.totalPlayTime).hour;
+    const mealMap = new Map<string, string>();
+    const forcedMeal = (window as unknown as { __forceMeal?: boolean }).__forceMeal;
+    const mealOn = this.gfx2 && GFX.sitSleep && this.nightNow < 0.65 && (forcedMeal ?? (hour === 7 || hour === 12 || hour === 19));
+    if (mealOn) {
+      const free = state.survivors.filter(sv => !sv.isOnMission && !sv.assignedBuildingId)
+        .sort((a, b) => hashString(a.id + hour) - hashString(b.id + hour));
+      let next = 0;
+      for (const cb of state.buildings) {
+        if (cb.type !== 'canteen' || (cb.isConstructing && cb.level === 1)) continue;
+        const cap = restCountFor(this.views.get(cb.id)?.visualSig ?? '', 'eat');
+        for (let i = 0; i < cap && next < free.length; i++) mealMap.set(free[next++].id, cb.id);
+      }
+    }
     for (const s of state.survivors) {
       if (s.isOnMission) continue;
       seen.add(s.id);
@@ -1370,7 +1386,8 @@ export class BunkerRenderer {
       const siteView = s.assignedBuildingId?.startsWith('p_') ? this.projectSites.ensureView(s.assignedBuildingId.slice(2)) : undefined;
       const ruinView = s.assignedBuildingId ? this.ruinViews.get(s.assignedBuildingId) ?? siteView : undefined;
       const home = quarters.length ? quarters[idleIndex++ % quarters.length] : undefined;
-      const roomId = ruinView ? s.assignedBuildingId : usable ? job!.id : home?.id ?? null;
+      const meal = !ruinView && !usable ? mealMap.get(s.id) : undefined;
+      const roomId = ruinView ? s.assignedBuildingId : usable ? job!.id : meal ?? home?.id ?? null;
       const view: { people: Container; lane: Lane } | undefined = ruinView ?? (roomId ? this.views.get(roomId) : undefined);
       if (!view) {
         person.container.parent?.removeChild(person.container);
@@ -1379,8 +1396,8 @@ export class BunkerRenderer {
       }
       // At night the idle go to bed in the bunks: hidden, with a Zzz over the dormitory.
       const asleep = !ruinView && !usable && this.nightNow > 0.65;
-      person.container.visible = !asleep;
-      if (asleep) sleeping.set(roomId!, (sleeping.get(roomId!) ?? 0) + 1);
+      // Plan 2026-10 M5: where the painting has beds and seats, the idle use them (lie down at night, eat at mealtimes, sit by day).
+      person.setIntent(!this.gfx2 || ruinView || usable ? 'none' : asleep ? 'sleep' : meal ? 'eat' : (hashString(s.id) + hour) % 5 < 2 ? (mealOn ? 'eat' : 'sit') : 'none');
       if (person.roomId !== roomId || person.container.parent !== view.people) {
         view.people.addChild(person.container);
         person.placeIn(roomId!, view.lane);
@@ -1403,6 +1420,10 @@ export class BunkerRenderer {
       person.setCondition(s.happiness, s.health);
       const activity: Activity = siteView ? 'hammer' : ruinView ? 'dig' : usable ? ROOM_ACTIVITY[job!.type] ?? 'idle' : 'idle';
       person.update(dt, this.time, 0.4 + (s.happiness / 100) * 0.6, activity);
+      // Whoever is not in a bed at night is still hidden, with a Zzz over the dormitory.
+      const lying = person.isSleeping;
+      person.container.visible = !asleep || lying;
+      if (asleep && !lying) sleeping.set(roomId!, (sleeping.get(roomId!) ?? 0) + 1);
     }
     settleCrowds(); // gfx-p0 people: release spots of people who left, stack overlapping name tags
     for (const [id, p] of this.people) {

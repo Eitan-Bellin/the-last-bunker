@@ -101,7 +101,7 @@ const ell = (bone: string, c: V3, r: V3, group: number, region: Region, col: V3,
 const box = (bone: string, c: V3, h: V3, round: number, group: number, region: Region, col: V3): LP => ({ bone, type: 2, a: c, b: [h[0], 0, 0], c: [0, h[1], 0], r1: h[2], round, group, region, col });
 
 /** Albedo of the tinted regions (the game multiplies these by the outfit / skin colour). */
-const SKIN = grey(1), EYE = grey(0.16), BROW = grey(0.55), LIP = grey(0.82);
+const SKIN = grey(1);
 const CLOTH = grey(0.96), CLOTH_D = grey(0.84), PANTS = grey(0.95);
 const BOOT = hex(0x3a2c22), SOLE = hex(0x1e1814), BELT = hex(0x2e2620), BUCKLE = hex(0x8a8070);
 
@@ -140,10 +140,9 @@ export function bodyPrims(b: Body, gripN: number, gripF: number): LP[] {
   L.push(cone('head', [0.094 * hs, 0.108 * hs, 0], [0.118 * hs, 0.074 * hs, 0], 0.012 * hs, 0.017 * hs, G.face, Region.Skin, SKIN));
   for (const s of [1, -1]) {
     L.push(ell('head', [-0.012 * hs, 0.092 * hs, s * 0.086 * hs], [0.022 * hs, 0.032 * hs, 0.012 * hs], G.face, Region.Skin, SKIN));
-    L.push(ell('head', [0.08 * hs, 0.106 * hs, s * 0.036 * hs], [0.013 * hs, 0.011 * hs, 0.014 * hs], G.detail, Region.Skin, EYE));
-    L.push(ell('head', [0.088 * hs, 0.132 * hs, s * 0.036 * hs], [0.012 * hs, 0.006 * hs, 0.022 * hs], G.detail, Region.Skin, BROW));
+    // (Plan 2026-10 M4: eyes, brows and mouth are no longer part of the render; the game draws them as a face overlay
+    // at 4x the resolution, with a mood and a blink, see src/rendering/faces.ts.)
   }
-  L.push(ell('head', [0.098 * hs, 0.046 * hs, 0], [0.008 * hs, 0.006 * hs, 0.024 * hs], G.detail, Region.Skin, LIP));
   // Arms: deltoid, sleeve, rolled cuff, bare forearm, hand.
   for (const [s, g, grip] of [['N', G.armN, gripN], ['F', G.armF, gripF]] as const) {
     L.push(ell(`sh${s}`, [-0.004, -0.012, 0], [0.06 * ls, 0.064 * ls, 0.058 * ls], g, Region.Top, CLOTH));
@@ -680,3 +679,79 @@ export const ANIMS: Record<string, Anim> = {
 };
 
 export const ANIM_ORDER = Object.keys(ANIMS);
+
+/**
+ * Plan 2026-10 M3: poses that use the set. Their origin (the sprite pivot) is the SURFACE the person is on, not the floor:
+ * the seat of a chair, bench or bunk edge (feet hang 0.45 m below it, which is where a chair's floor is), or the mattress
+ * (the body lies on it). The game places the pivot at the painted seat / bed, so one render serves every height.
+ * Rendered by tools/people3d.html?set into people/<body>-set.webp + people-set.json (kept apart from the main atlases).
+ */
+const SEAT_Y = 0.13; // pelvis centre above the seat surface
+const SIT_BASE: Pose = {
+  py: SEAT_Y - 0.995, sp: 0.04, fx_N: 0.43, fx_F: 0.4, fy_N: -0.435, fy_F: -0.435, fa_N: 0.02, fa_F: 0.02,
+  sF_N: 0.22, eF_N: 1.0, wF_N: 0.1, sF_F: 0.2, eF_F: 1.05, wF_F: 0.1, g_N: 0.3, g_F: 0.3,
+};
+const LIE_BASE: Pose = {
+  pp: -Math.PI / 2, py: 0.125 - 0.995, px: 0, sp: 0, cl: 0, nk: 0.05, hd: -0.12,
+  fx_N: 0.97, fx_F: 0.95, fy_N: 0.0, fy_F: 0.0, fa_N: 1.3, fa_F: 1.2,
+  sF_N: -0.08, eF_N: 0.3, wF_N: 0, sF_F: -0.1, eF_F: 0.25, wF_F: 0, g_N: 0.3, g_F: 0.3, sA_N: 0.12, sA_F: 0.12,
+};
+
+export const SET_ANIMS: Record<string, Anim> = {
+  // Seated, resting: breathing, a slow look around.
+  sit: {
+    frames: 10, fps: 4,
+    keys: [
+      [0, { ...SIT_BASE, cl: 0.0, nk: 0.02, hy: 0 }],
+      [0.25, { ...SIT_BASE, cl: 0.03, py: SIT_BASE.py - 0.004, nk: 0.03, hy: 0.28 }, 'ease'],
+      [0.5, { ...SIT_BASE, cl: 0.0, nk: 0.02, hy: 0.28 }, 'ease'],
+      [0.75, { ...SIT_BASE, cl: 0.03, py: SIT_BASE.py - 0.004, nk: 0.05, hy: -0.12, hd: 0.06 }, 'ease'],
+    ],
+    lag: FOLLOW,
+  },
+  // Seated, talking: hands out in turn, nodding.
+  sitTalk: {
+    frames: 12, fps: 7,
+    keys: [
+      [0, { ...SIT_BASE, sF_N: 0.7, eF_N: 1.5, wF_N: -0.1, g_N: 0.4, nk: 0.02, hd: 0.02, sp: 0.06 }],
+      [0.2, { ...SIT_BASE, sF_N: 0.95, eF_N: 1.2, wF_N: 0.2, nk: 0.06, hd: 0.1, sp: 0.07 }],
+      [0.45, { ...SIT_BASE, sF_N: 0.55, eF_N: 1.1, sF_F: 0.5, eF_F: 1.4, nk: 0.0, hd: -0.03, sp: 0.05 }],
+      [0.7, { ...SIT_BASE, sF_N: 0.85, eF_N: 1.5, sF_F: 0.25, eF_F: 1.1, nk: 0.05, hd: 0.12, sp: 0.07 }],
+    ],
+    lag: FOLLOW,
+  },
+  // Seated at a table, leaning in: the spoon goes to the mouth, the other hand rests on the table.
+  eat: {
+    frames: 12, fps: 5,
+    keys: [
+      [0, { ...SIT_BASE, sp: 0.2, cl: 0.06, nk: 0.14, hd: 0.08, sF_N: 0.55, eF_N: 1.25, wF_N: -0.1, sF_F: 0.55, eF_F: 0.7, g_N: 0.7, g_F: 0.3 }, 'ease'],
+      [0.25, { ...SIT_BASE, sp: 0.2, cl: 0.06, nk: 0.14, hd: 0.08, sF_N: 0.5, eF_N: 0.95, wF_N: -0.2, sF_F: 0.55, eF_F: 0.7, g_N: 0.7 }, 'ease'],
+      [0.5, { ...SIT_BASE, sp: 0.12, cl: 0.04, nk: 0.06, hd: 0.02, sF_N: 0.75, eF_N: 2.2, wF_N: 0.5, sF_F: 0.55, eF_F: 0.7, g_N: 0.7 }, 'ease'],
+      [0.7, { ...SIT_BASE, sp: 0.12, cl: 0.04, nk: 0.06, hd: 0.0, sF_N: 0.75, eF_N: 2.25, wF_N: 0.5, g_N: 0.7 }, 'ease'],
+    ],
+    lag: { nk: 0.04, hd: 0.06, eF_N: 0.03, wF_N: 0.05 },
+  },
+  // Lying on the back, head to the left (the game mirrors it): breathing, an occasional shift.
+  sleep: {
+    frames: 8, fps: 2,
+    keys: [
+      [0, { ...LIE_BASE, cl: 0.0, py: LIE_BASE.py }],
+      [0.4, { ...LIE_BASE, cl: 0.035, py: LIE_BASE.py + 0.006, sp: 0.01 }, 'ease'],
+      [0.8, { ...LIE_BASE, cl: 0.0, py: LIE_BASE.py, hd: -0.18, nk: 0.02 }, 'ease'],
+    ],
+    lag: { cl: 0.03, hd: 0.08, nk: 0.05 },
+  },
+  // Standing and talking: a hand makes the point, the head nods.
+  talk: {
+    frames: 12, fps: 7,
+    keys: [
+      [0, { sF_N: 0.7, eF_N: 1.4, wF_N: -0.1, g_N: 0.4, sF_F: 0.1, eF_F: 0.4, nk: 0.02, hd: 0.0, sp: 0.04, fx_N: 0.05, fx_F: -0.05 }],
+      [0.2, { sF_N: 0.95, eF_N: 1.1, wF_N: 0.2, hd: 0.1, nk: 0.05, sp: 0.07 }],
+      [0.5, { sF_N: 0.55, eF_N: 1.3, sF_F: 0.55, eF_F: 1.3, hd: -0.03, sp: 0.04 }],
+      [0.75, { sF_N: 0.85, eF_N: 1.5, sF_F: 0.15, eF_F: 0.5, hd: 0.1, nk: 0.04, sp: 0.07 }],
+    ],
+    lag: FOLLOW,
+  },
+};
+
+export const SET_ORDER = Object.keys(SET_ANIMS);

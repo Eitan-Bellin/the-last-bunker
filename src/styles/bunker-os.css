@@ -439,6 +439,23 @@
   .nav-btn { padding-block: 4px; }
 }
 
+/* ---------- plan 2026-10 M7: worn, brushed steel on the HUD plates and console buttons ---------- */
+
+.resource-item, .nav-btn, .lang-btn, .info-item { isolation: isolate; }
+.nav-btn, .lang-btn, .info-item { position: relative; }
+.resource-item::before, .nav-btn::before, .lang-btn::before, .info-item::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  background: var(--mat-steel, none) 0 0 / 128px 128px;
+  mix-blend-mode: overlay;
+  opacity: 0.55;
+  pointer-events: none;
+}
+.info-item::before { opacity: 0.3; }
+
 /* ---------- plan 2026-10 Q11/Q12: nothing clipped at 360 / 320 px, and a thinner HUD ---------- */
 
 /* "Show all resources" pill under the key row (only on phones, see HUD.ts). */

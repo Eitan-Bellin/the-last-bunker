@@ -3,6 +3,7 @@ import { ArtLibrary } from '../art/ArtLibrary';
 import { artEntry } from '../art/registry';
 import type { Activity, Lane } from './people';
 import { lightProfile, sampleProfile, type LightProfile } from './lightStrip';
+import { ROOM_SET } from './roomSet';
 
 /**
  * gfx-p0 people: where survivors stand to work in each painting, so the chef stirs the pot on the stove,
@@ -100,6 +101,17 @@ export interface Spot {
   owner: CrowdMember | null;
 }
 
+/** Plan 2026-10 M5: a place in a painting where someone lies, sits or eats (from roomSet.ts, in room-local units). */
+export interface Rest {
+  kind: 'sleep' | 'sit' | 'eat';
+  /** Room-local x of the pivot, and y of the surface (mattress top or seat). */
+  x: number;
+  y: number;
+  /** The way the body faces (a sleeper's head is on the left when this is 1). */
+  face: 1 | -1;
+  owner: CrowdMember | null;
+}
+
 const MIN_GAP = 15;
 
 /** The people of one room: who holds which work spot, free floor for the rest, and the lamp shadows fall from. */
@@ -119,6 +131,8 @@ export class Crowd {
   private roomW = 1;
   private profile: LightProfile | null = null;
   private profileTry = 0;
+  /** Places to lie, sit and eat (empty for rooms without set data). */
+  rests: Rest[] = [];
 
   readonly container: Container;
 
@@ -133,6 +147,12 @@ export class Crowd {
     this.roomW = Math.max(1, width);
     this.profile = null;
     this.profileTry = 0;
+    for (const r of this.rests) r.owner = null;
+    const set = key ? ROOM_SET[key] : undefined;
+    this.rests = [
+      ...(set?.beds ?? []).map((b): Rest => ({ kind: 'sleep', x: (mirror ? 1 - b.x : b.x) * width, y: b.y * height, face: ((mirror ? -b.head : b.head) === -1 ? 1 : -1) as 1 | -1, owner: null })),
+      ...(set?.seats ?? []).map((t): Rest => ({ kind: t.kind, x: (mirror ? 1 - t.x : t.x) * width, y: t.y * height, face: (mirror ? -t.face : t.face) as 1 | -1, owner: null })),
+    ];
     const def = key ? ROOMS[key] : undefined;
     const fx = (f: number) => (mirror ? 1 - f : f) * width;
     for (const s of this.spots) s.owner = null;
@@ -188,6 +208,7 @@ export class Crowd {
     const i = this.members.indexOf(m);
     if (i >= 0) this.members.splice(i, 1);
     for (const s of this.spots) if (s.owner === m) s.owner = null;
+    for (const r of this.rests) if (r.owner === m) r.owner = null;
   }
 
   /** Whether the floor between two points crosses a pit or the water. */
@@ -214,6 +235,25 @@ export class Crowd {
     for (const s of this.spots) if (s.owner === m) s.owner = null;
   }
 
+  /** Claims the free place of a kind nearest to x (beds in order, lower bunks first), or null when there is none. */
+  claimRest(m: CrowdMember, kind: Rest['kind'], x: number): Rest | null {
+    let best: Rest | null = null;
+    let bestD = Infinity;
+    for (const r of this.rests) {
+      // Eating prefers a place made for it (a table seat) but a bunk edge will do.
+      if (!(r.kind === kind || (kind === 'eat' && r.kind === 'sit')) || (r.owner && r.owner !== m)) continue;
+      if (r.owner === m) return r;
+      const d = kind === 'sleep' ? this.rests.indexOf(r) : Math.abs(r.x - x) + (r.kind === kind ? 0 : 400);
+      if (d < bestD) { bestD = d; best = r; }
+    }
+    if (best) best.owner = m;
+    return best;
+  }
+
+  releaseRest(m: CrowdMember): void {
+    for (const r of this.rests) if (r.owner === m) r.owner = null;
+  }
+
   /** Room left on the floor: the best of a few random points, as far as possible from everyone else's goal. */
   freeX(m: CrowdMember, from: number, rnd: () => number): number {
     let bestX = from, bestGap = -1;
@@ -235,6 +275,14 @@ export class Crowd {
   }
 }
 
+/** How many places of a kind the painting in a room view's signature has (0 without set data); see roomSet.ts. */
+export function restCountFor(visualSig: string, kind: 'bed' | 'sit' | 'eat'): number {
+  const key = visualSig.split('|').find(p => p in ROOM_SET);
+  if (!key) return 0;
+  const d = ROOM_SET[key];
+  return kind === 'bed' ? d.beds?.length ?? 0 : (d.seats ?? []).filter(t => t.kind === kind).length;
+}
+
 const crowds = new WeakMap<Container, Crowd>();
 const touched = new Set<Crowd>();
 
@@ -252,7 +300,7 @@ export function crowdFor(layer: Container, lane: Lane, visualSig: string, width:
   const sig = `${painted}|${visualSig}|${width}`;
   if (c.sig !== sig) {
     const parts = visualSig.split('|');
-    const i = parts.findIndex(p => p in ROOMS);
+    const i = parts.findIndex(p => p in ROOMS || p in ROOM_SET);
     const key = painted && i >= 0 ? parts[i] : null;
     c.configure(sig, key, key !== null && parts[i + 1] === 'true', width, lane, height);
   }

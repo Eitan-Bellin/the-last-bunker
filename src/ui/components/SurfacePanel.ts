@@ -8,6 +8,7 @@ import { uiSound } from '../../audio/uiSound';
 import { renderTrade } from './TradePanel'; // [LateGame B2]
 import { getPartner } from '../../data/trade';
 import { ICON_SVG, isIcon } from '../icons';
+import { ensureBiomeTiles, paintWorldMap } from './worldMap'; // plan 2026-10 M6
 
 const S = 20;
 const SQRT3 = Math.sqrt(3);
@@ -78,6 +79,10 @@ export class SurfacePanel {
 
   hide(): void {
     this.overlay.classList.remove('open');
+    // The painted terrain is a few MB of canvas: let it go while the map is closed (it is redrawn on the next open).
+    const painted = this.mapBox.querySelector<HTMLCanvasElement>('.map-paint');
+    if (painted) painted.width = painted.height = 0;
+    this.mapSig = '';
   }
 
   get isVisible(): boolean {
@@ -118,19 +123,17 @@ export class SurfacePanel {
     const w = S * SQRT3 * (2 * MAP_RADIUS + 1) + 4;
     const h = S * 1.5 * 2 * MAP_RADIUS + 2 * S + 4;
     const parts: string[] = [];
-    parts.push(`<svg viewBox="${-w / 2} ${-h / 2} ${w} ${h}" xmlns="http://www.w3.org/2000/svg">`);
+    // Plan 2026-10 M6: the terrain is painted on a canvas behind the SVG, which keeps the clicks, icons and rings.
+    parts.push(`<div class="map-wrap" style="aspect-ratio:${w.toFixed(1)}/${h.toFixed(1)}"><canvas class="map-paint"></canvas><svg viewBox="${-w / 2} ${-h / 2} ${w} ${h}" xmlns="http://www.w3.org/2000/svg">`);
     const targets = new Set(state.activeMissions.map(m => `${m.hexX},${m.hexY}`));
 
     for (const hex of state.explorationMap) {
       const { x, y } = hexCenter(hex.x, hex.y);
       const biome = BIOMES[hex.biome as BiomeId];
       const sel = this.selected && this.selected.q === hex.x && this.selected.r === hex.y;
-      let fill = '#15151d';
-      let stroke = '#22222c';
-      if (hex.revealed) {
-        fill = css(biome.color, hex.explored ? 1 : 0.55);
-        stroke = css(biome.color, hex.explored ? 1.3 : 0.8);
-      }
+      // The colour of a hex now comes from the painted terrain behind; the polygon only catches taps and marks the selection.
+      const fill = hex.revealed ? 'rgba(0,0,0,0.001)' : 'none';
+      const stroke = 'none';
       const attrs = hex.revealed ? ` data-q="${hex.x}" data-r="${hex.y}" class="hex"` : ' class="hex fog"';
       parts.push(`<g${attrs}><polygon points="${hexPoints(x, y)}" fill="${fill}" stroke="${sel ? '#ffffff' : stroke}" stroke-width="${sel ? 2.5 : 1}"/>`);
       let icon = '';
@@ -160,8 +163,15 @@ export class SurfacePanel {
       const t = hexCenter(m.hexX, m.hexY);
       parts.push(`<line x1="0" y1="0" x2="${t.x.toFixed(1)}" y2="${t.y.toFixed(1)}" class="mission-line"/>`);
     }
-    parts.push('</svg>');
+    parts.push('</svg></div>');
     this.mapBox.innerHTML = parts.join('');
+    const canvas = this.mapBox.querySelector<HTMLCanvasElement>('.map-paint');
+    if (canvas) {
+      const hexes = state.explorationMap.map(hx => ({ x: hx.x, y: hx.y, biome: hx.biome, revealed: hx.revealed, explored: hx.explored }));
+      void ensureBiomeTiles().then(() => {
+        if (canvas.isConnected) paintWorldMap(canvas, hexes, w, h, S - 1, hexCenter);
+      });
+    }
   }
 
   private renderMissions(state: GameState): void {

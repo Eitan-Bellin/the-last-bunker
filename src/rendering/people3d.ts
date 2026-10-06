@@ -1,4 +1,5 @@
 import { Assets, Container, Rectangle, Sprite, Texture } from 'pixi.js';
+import { HEAD_SCALE, faceTexture, type FaceMood } from './faces';
 
 /**
  * Graphics phase 1: pre-rendered 3D bodies for the people (see tools/people3d.ts for the pipeline).
@@ -32,7 +33,9 @@ export const UNITS_PER_M = 27;
 export type BodyKind = 'man' | 'woman' | 'child' | 'elder';
 export type Anim3 =
   | 'idle' | 'look' | 'sad' | 'hunch' | 'walk' | 'limp' | 'walkCarry' | 'carry' | 'water' | 'hammer' | 'wrench' | 'stir'
-  | 'type' | 'inspect' | 'lift' | 'tend' | 'dig' | 'punch' | 'run' | 'dangle';
+  | 'type' | 'inspect' | 'lift' | 'tend' | 'dig' | 'punch' | 'run' | 'dangle'
+  // Plan 2026-10 M3: the set poses (their own atlases, loaded on demand)
+  | 'sit' | 'sitTalk' | 'eat' | 'sleep' | 'talk';
 
 type Rect6 = [number, number, number, number, number, number];
 
@@ -94,6 +97,57 @@ export function ppm(): number {
   return meta?.ppm ?? 0;
 }
 
+/** The animations of one atlas (frames cut out of it as sub-textures). */
+function buildAnims(atlas: Texture, mb: MetaBody): Record<string, Anim3Data> {
+  const anims: Record<string, Anim3Data> = {};
+  for (const [name, a] of Object.entries(mb.anims)) {
+    anims[name] = {
+      fps: a.fps,
+      stride: a.stride ?? 1,
+      frames: a.f.map(f => ({
+        tex: f.l.map(r => (r ? new Texture({ source: atlas.source, frame: new Rectangle(r[0], r[1], r[2], r[3]) }) : null)),
+        off: f.l.map(r => (r ? [r[4], r[5]] as [number, number] : [0, 0] as [number, number])),
+        head: f.h,
+      })),
+    };
+  }
+  return anims;
+}
+
+// --- Plan 2026-10 M3: the set poses (sit, sitTalk, eat, sleep, talk) live in their own small atlases, loaded on demand ---
+let setMeta: { bodies: Record<string, MetaBody> } | null | undefined;
+const setLoading = new Set<BodyKind>();
+const setReady = new Set<BodyKind>();
+
+/** True once the body has its set poses (sit, eat, sleep, talk). */
+export function hasSetPoses(kind: BodyKind): boolean {
+  return setReady.has(kind);
+}
+
+/** Starts loading the set poses of a body type (a few hundred KB, ~2 MB of texture memory); no-op when loaded or loading. */
+export function requestSetPoses(kind: BodyKind): void {
+  if (setReady.has(kind) || setLoading.has(kind) || setMeta === null) return;
+  setLoading.add(kind);
+  void (async () => {
+    try {
+      if (setMeta === undefined) {
+        const r = await fetch(url('people/people-set.json'));
+        setMeta = r.ok ? await r.json() : null;
+      }
+      const mb = setMeta?.bodies[kind];
+      const body = bodies.get(kind);
+      if (!mb || !body) return;
+      const atlas = await Assets.load<Texture>({ src: url(mb.atlas), data: { autoGenerateMipmaps: true, scaleMode: 'linear' } });
+      Object.assign(body.anims, buildAnims(atlas, mb));
+      setReady.add(kind);
+    } catch {
+      setMeta = null; // missing art: people simply keep standing
+    } finally {
+      setLoading.delete(kind);
+    }
+  })();
+}
+
 async function loadBody(kind: BodyKind): Promise<void> {
   await loadMeta();
   const m = meta;
@@ -102,18 +156,7 @@ async function loadBody(kind: BodyKind): Promise<void> {
   attachLoading ??= Assets.load<Texture>({ src: url(m.attach.atlas), data: { autoGenerateMipmaps: true, scaleMode: 'linear' } }).then(t => { attachTex = t; });
   const [atlas] = await Promise.all([Assets.load<Texture>({ src: url(mb.atlas), data: { autoGenerateMipmaps: true, scaleMode: 'linear' } }), attachLoading]);
   const sub = (src: Texture, x: number, y: number, w: number, h: number) => new Texture({ source: src.source, frame: new Rectangle(x, y, w, h) });
-  const anims: Record<string, Anim3Data> = {};
-  for (const [name, a] of Object.entries(mb.anims)) {
-    anims[name] = {
-      fps: a.fps,
-      stride: a.stride ?? 1,
-      frames: a.f.map(f => ({
-        tex: f.l.map(r => (r ? sub(atlas, r[0], r[1], r[2], r[3]) : null)),
-        off: f.l.map(r => (r ? [r[4], r[5]] as [number, number] : [0, 0] as [number, number])),
-        head: f.h,
-      })),
-    };
-  }
+  const anims = buildAnims(atlas, mb);
   const attach: BodyData['attach'] = {};
   const items = m.attach.items[kind] ?? {};
   for (const [id, r] of Object.entries(items)) {
@@ -172,6 +215,10 @@ export class Body3D {
   private layers: Sprite[] = [];
   private headHolder = new Container();
   private slots: Record<Slot, Sprite>;
+  /** Plan 2026-10 M4: the eyes, brows and mouth overlay (under the hair and hats). */
+  private face = new Sprite(Texture.EMPTY);
+  private faceMood: FaceMood = 'neutral';
+  private faceClosed = false;
   private cur: Frame3 | null = null;
   private curAnim = '';
   private ghost: Ghost | null = null;
@@ -195,7 +242,19 @@ export class Body3D {
       this.slots[k] = s;
       this.headHolder.addChild(s);
     }
+    this.face.anchor.set(0.5);
+    this.headHolder.addChildAt(this.face, 0);
     this.container.addChild(this.headHolder);
+    this.setFace('neutral', false);
+  }
+
+  /** The face overlay: a mood and eyes open or closed (cheap when unchanged). */
+  setFace(mood: FaceMood, closed: boolean): void {
+    if (mood === this.faceMood && closed === this.faceClosed && this.face.texture !== Texture.EMPTY) return;
+    this.faceMood = mood;
+    this.faceClosed = closed;
+    this.face.texture = faceTexture(mood, closed);
+    this.face.scale.set(HEAD_SCALE[this.data.kind] / 4);
   }
 
   /** Clothes, skin and head gear (colours already muted by the caller). */
@@ -205,6 +264,7 @@ export class Body3D {
     this.layers[2].tint = l.skin;
     this.layers[3].tint = 0xffffff;
     const hood = l.hat === 'hazmat';
+    this.face.visible = !hood;
     this.setSlot('hair', !hood && l.hairStyle !== 'bald' ? `hair-${l.hairStyle}` : null, l.hair);
     this.setSlot('beard', !hood && l.beard !== null ? 'beard' : null, l.beard ?? 0);
     this.setSlot('eyes', hood ? null : l.glasses ? 'glasses' : l.goggles ? 'goggles' : null, 0xffffff);
