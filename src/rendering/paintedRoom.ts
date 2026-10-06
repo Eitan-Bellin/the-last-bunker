@@ -5,6 +5,7 @@ import { ROOM_H } from './layout';
 import { hGradient, vGradient } from './draw';
 import { crisisLight } from './crisisLight'; // gfx-p0 crisis
 import type { Animator, RoomVisual } from './roomArt';
+import { viewport } from '../utils/viewport'; // [perf] window size without forcing layout
 
 /**
  * Shared flicker (G4): every painted room publishes how far its lamps are dipped right now (1 = steady),
@@ -852,8 +853,8 @@ function onScreen(c: Container, W: number, H: number): boolean {
   const m = c.worldTransform;
   const x0 = m.tx, y0 = m.ty, x1 = m.tx + m.a * W, y1 = m.ty + m.d * H;
   const pad = 60;
-  return Math.max(x0, x1) > -pad && Math.min(x0, x1) < window.innerWidth + pad
-    && Math.max(y0, y1) > -pad && Math.min(y0, y1) < window.innerHeight + pad;
+  return Math.max(x0, x1) > -pad && Math.min(x0, x1) < viewport.w + pad
+    && Math.max(y0, y1) > -pad && Math.min(y0, y1) < viewport.h + pad;
 }
 
 /**

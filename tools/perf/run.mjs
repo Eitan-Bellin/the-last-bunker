@@ -72,7 +72,21 @@ async function runScenario(port, name, sc) {
     await c.send('HeapProfiler.startSampling', { samplingInterval: 2048, includeObjectsCollectedByMajorGC: true, includeObjectsCollectedByMinorGC: true });
     await sleep(Math.max(4, seconds) * 1000);
     const rep2 = await c.evalJs('__perf2()');
-    const od = await c.evalJs('__perf2.overdraw()');
+    // Overdraw estimate (same method as src/dev/perf.ts, injected so that older builds without it can be measured too).
+    const od = await c.evalJs(`(() => {
+      const app = __renderer.app, sw = app.screen.width, sh = app.screen.height, byGroup = {}; let total = 0;
+      const walk = (o, visible, label) => {
+        const vis = visible && o.visible && o.renderable !== false && o.alpha !== 0; if (!vis) return;
+        let lb = label; if (o.isRenderGroup && o !== app.stage) lb = o.label && o.label !== 'Container' ? String(o.label) : 'group';
+        if (o.renderPipeId && o.renderPipeId !== 'container') { const b = o.getBounds();
+          const w = Math.max(0, Math.min(b.x + b.width, sw) - Math.max(b.x, 0)), h = Math.max(0, Math.min(b.y + b.height, sh) - Math.max(b.y, 0));
+          const a = (w * h) / (sw * sh); total += a; byGroup[lb] = (byGroup[lb] || 0) + a; }
+        for (const ch of o.children || []) walk(ch, true, lb);
+      };
+      walk(app.stage, true, 'stage');
+      for (const k of Object.keys(byGroup)) byGroup[k] = +byGroup[k].toFixed(2);
+      return { factor: +total.toFixed(2), byGroup };
+    })()`);
     rep.overdraw = od.factor;
     rep.overdrawBy = Object.entries(od.byGroup).sort((a, b) => b[1] - a[1]).slice(0, 8).map(([k, v]) => `${k}:${v}`);
     const { profile } = await c.send('HeapProfiler.stopSampling');
@@ -156,7 +170,8 @@ async function runOffline(port, sc) {
       const sliced = typeof __engine.simulateSliced === 'function';
       const t0 = performance.now();
       let frames = 0; const raf = () => { frames++; requestAnimationFrame(raf); }; requestAnimationFrame(raf);
-      await (sliced ? __engine.simulateSliced(${sc.hours || 24} * 3600, 0.8) : Promise.resolve(__engine.simulate(${sc.hours || 24} * 3600, 0.8)));
+      // comeBack is what the game runs when the player returns after being away (it sets up everything around the simulation too).
+      await Promise.resolve(__engine.comeBack(${sc.hours || 24} * 3600));
       const total = performance.now() - t0;
       await new Promise(r => setTimeout(r, 300));
       return { sliced, totalMs: Math.round(total), longTasks: lt.length, longestMs: Math.round(Math.max(0, ...lt)), sumLongMs: Math.round(lt.reduce((a, b) => a + b, 0)), frames };
@@ -187,15 +202,15 @@ try {
       results.scenarios[name] = a;
       console.log(`ready ${a.readyMs} ms  done ${a.doneMs} ms  long tasks(60s) ${a.longTasks60} = ${a.longTaskMs60} ms (max ${a.longTaskMax})  renderer MB ${JSON.stringify(a.rendererMB)}`);
       const lim = (k, v, max) => { if (max !== undefined && v > max * 1.1) failures.push(`${name}: ${k} ${v} > ${max} (+10%)`); };
-      if (throttle === 1 && !sc.throttle) { lim('readyMs', a.readyMs, sc.maxReadyMs); lim('longTaskMs60', a.longTaskMs60, sc.maxLongTaskMs); lim('longTaskMax', a.longTaskMax, sc.maxLongTaskMax); lim('peakGainMB', a.peakGainMB, sc.maxPeakGainMB); }
+      if (throttle === 1 && !sc.throttle) { lim('readyMs', a.readyMs, sc.maxReadyMs); lim('longTaskMs60', a.longTaskMs60, sc.maxLongTaskMs); lim("longTaskMax", a.longTaskMax, sc.maxLongTaskMax); lim('peakGainMB', a.peakGainMB, sc.maxPeakGainMB); }
       continue;
     }
     const rep = await runScenario(port, name, sc);
     results.scenarios[name] = rep;
     console.log(`calls ${rep.drawCalls}  objs ${rep.renderablesDrawn}/${rep.renderablesTotal}  rebuild ${rep.structureChangedPct}%  alloc ${rep.allocKBPerFrame} KB/frame  tex ${rep.gpuTextureMB} MB  `
       + `${rep.fps} fps  frame ${rep.frameMsMed}/${rep.frameMsP95} ms  busy ${rep.busyPct}%  long ${rep.longTasks}  rss ${rep.mem ? `${rep.mem.renderer}/${rep.mem.gpu}` : '-'} MB  errors ${rep.consoleErrors}`);
-    if (arg('verbose', false)) console.log('   biggest: ' + rep.biggest.join('  ') + '\n   overdraw ' + rep.overdraw + 'x  by group: ' + rep.overdrawBy.join('  ') + '   cal ' + rep.calMs + ' ms');
-    if (arg('verbose', false)) console.log('   groups: ' + rep.groups.map(g => `${g.label}(${g.objects}) ${g.changedPct}%`).join('  ') + `   groupsTotal ${rep.renderGroups}`);
+    if (arg('verbose', false)) console.log('   biggest: ' + (rep.biggest || []).join('  ') + '\n   overdraw ' + rep.overdraw + 'x  by group: ' + rep.overdrawBy.join('  ') + '   cal ' + rep.calMs + ' ms');
+    if (arg('verbose', false)) console.log('   groups: ' + (rep.groups || []).map(g => `${g.label}(${g.objects}) ${g.changedPct}%`).join('  ') + `   groupsTotal ${rep.renderGroups}`);
     if (rep.consoleErrors) failures.push(`${name}: ${rep.consoleErrors} console errors`);
     for (const [limit, field] of Object.entries(LIMITS)) {
       const max = sc[limit];

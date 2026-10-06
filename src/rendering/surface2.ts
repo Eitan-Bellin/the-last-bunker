@@ -1,6 +1,7 @@
 import { Container, Graphics, MeshSimple, Sprite, Text, Texture, TilingSprite } from 'pixi.js';
 import { ArtLibrary, glowTexture, moteTexture } from '../art/ArtLibrary';
 import { bus } from '../core/EventBus';
+import { viewport } from '../utils/viewport'; // [perf] window size without forcing layout
 import { BUILDING_W, SHAFT_W } from './layout';
 import { hGradient, mix, seeded, softGlow, vGradient } from './draw';
 import { PAINT_RIGHT, SKY_TOP, WORLD_LEFT, WORLD_RIGHT, type Animated } from './world';
@@ -815,9 +816,9 @@ export function buildSurface2(
       if (wc && wc.scale.x > 0) {
         const s = wc.scale.x;
         view.x0 = -wc.x / s;
-        view.x1 = (window.innerWidth - wc.x) / s;
+        view.x1 = (viewport.w - wc.x) / s;
         view.y0 = -wc.y / s;
-        view.y1 = (window.innerHeight - wc.y) / s;
+        view.y1 = (viewport.h - wc.y) / s;
       }
       const surfaceShown = view.y0 < 60;
       // Parallax: the panorama follows the camera a little, so it reads as far away.

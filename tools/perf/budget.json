@@ -1,15 +1,22 @@
 {
-  "_note": "Starting values; tightened after the plan's quick wins (see store/plan-2026-10/3-DONE.md). Only counts gate; milliseconds are reported, never gated.",
+  "_note": "The gate (node tools/perf/run.mjs --check) fails a build that goes more than 10% over a figure here. Only counts gate (draw calls, objects drawn, share of pictures in which a big render group rebuilt, JS allocation per picture, GPU texture MB, idle main-thread share, freeze lengths); milliseconds are reported, never gated. The limits below are what the build measured when the plan's quick wins and the medium phase landed (plus ~8% room); tighten them as the game gets lighter, never loosen one without saying why. Plan targets for comparison are in 'targets'.",
   "scenarios": {
-    "f8-overview-medium":  { "floors": 8,  "people": 25, "camera": "overview", "quality": "medium" },
-    "f24-overview-medium": { "floors": 24, "people": 60, "camera": "overview", "quality": "medium" },
-    "f24-close-medium":    { "floors": 24, "people": 60, "camera": "close",    "quality": "medium" },
-    "f24-far-medium":      { "floors": 24, "people": 60, "camera": "far",      "quality": "medium" },
-    "f24-close-low":       { "floors": 24, "people": 60, "camera": "close",    "quality": "low" },
-    "f24-close-high":      { "floors": 24, "people": 60, "camera": "close",    "quality": "high" },
-    "f24-idle-medium":     { "floors": 24, "people": 60, "camera": "overview", "quality": "medium", "mode": "idle" },
-    "audio-start":         { "kind": "audio" },
-    "offline-24h":         { "kind": "offline", "floors": 24, "people": 60, "hours": 24 }
+    "f8-overview-medium":  { "floors": 8,  "people": 25, "camera": "overview", "quality": "medium", "maxDrawCalls": 420, "maxRenderables": 3800, "maxStructureChangedPct": 5, "maxAllocKBPerFrame": 520, "maxGpuTextureMB": 260 },
+    "f24-overview-medium": { "floors": 24, "people": 60, "camera": "overview", "quality": "medium", "maxDrawCalls": 730, "maxRenderables": 7100, "maxStructureChangedPct": 5, "maxAllocKBPerFrame": 600, "maxGpuTextureMB": 280 },
+    "f24-close-medium":    { "floors": 24, "people": 60, "camera": "close",    "quality": "medium", "maxDrawCalls": 440, "maxRenderables": 4400, "maxStructureChangedPct": 5, "maxAllocKBPerFrame": 430, "maxGpuTextureMB": 280 },
+    "f24-far-medium":      { "floors": 24, "people": 60, "camera": "far",      "quality": "medium", "maxDrawCalls": 220, "maxRenderables": 800,  "maxStructureChangedPct": 5, "maxAllocKBPerFrame": 2000, "maxGpuTextureMB": 290 },
+    "f24-close-low":       { "floors": 24, "people": 60, "camera": "close",    "quality": "low",    "maxDrawCalls": 420, "maxRenderables": 4000, "maxStructureChangedPct": 5, "maxAllocKBPerFrame": 430, "maxGpuTextureMB": 280 },
+    "f24-close-high":      { "floors": 24, "people": 60, "camera": "close",    "quality": "high",   "maxDrawCalls": 450, "maxRenderables": 4450, "maxStructureChangedPct": 5, "maxAllocKBPerFrame": 430, "maxGpuTextureMB": 280 },
+    "f24-idle-medium":     { "floors": 24, "people": 60, "camera": "overview", "quality": "medium", "mode": "idle", "maxDrawCalls": 720, "maxRenderables": 7100, "maxStructureChangedPct": 5, "maxAllocKBPerFrame": 1300, "maxGpuTextureMB": 280, "maxBusyPct": 12 },
+    "audio-start":         { "kind": "audio", "maxReadyMs": 25000, "maxLongTaskMs": 2500, "maxLongTaskMax": 700, "maxPeakGainMB": 650 },
+    "offline-24h":         { "kind": "offline", "floors": 24, "people": 60, "hours": 24, "maxLongestMs": 150 }
   },
-  "global": {}
+  "global": { "jsGzKB": 520 },
+  "targets": {
+    "_note": "From 3-mobile-performance.md (not yet met everywhere: overdraw, objects drawn, draw calls need the deferred M2/M5 work and a real device).",
+    "f24-close-medium": { "maxDrawCalls": 120, "maxRenderables": 1500, "maxAllocKBPerFrame": 100, "maxGpuTextureMB": 120 },
+    "f24-overview-medium": { "maxDrawCalls": 150, "maxRenderables": 1500, "maxAllocKBPerFrame": 100, "maxGpuTextureMB": 120 },
+    "idle": { "maxBusyPct": 5 },
+    "audio": { "maxReadyMs": 3000, "maxLongTaskMs": 50 }
+  }
 }

@@ -7,6 +7,7 @@ import { TOPSOIL } from './layout';
 import { nightLight } from './structure';
 import { isLiteMode } from '../core/crashGuard';
 import { isTouchDevice } from '../utils/device';
+import { viewport } from '../utils/viewport'; // [perf] window size without forcing layout
 
 const BLOOM_SCALE = 0.25;
 const QUALITY_KEY = 'lastbunker_gfx';
@@ -59,7 +60,7 @@ export function profileOf(level: QualityLevel): QualityProfile {
 export function targetResolution(level: QualityLevel): number {
   const p = profileOf(level);
   const dpr = window.devicePixelRatio || 1;
-  const css = Math.max(1, window.innerWidth * window.innerHeight);
+  const css = Math.max(1, viewport.w * viewport.h);
   const budget = Math.sqrt((p.mp * 1e6) / css);
   return Math.max(1, Math.round(Math.min(dpr, p.res, budget) * 4) / 4);
 }

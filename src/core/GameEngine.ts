@@ -533,7 +533,7 @@ export class GameEngine {
    * 2 s of work on a desktop and 10 s on a mid-range phone, which used to freeze everything (and a phone may decide the page is dead).
    * Each slice works for about `sliceMs` and then gives the browser a turn; the result is exactly that of `simulate`.
    */
-  async simulateSliced(seconds: number, efficiency: number, sliceMs = 10): Promise<OfflineReport> {
+  async simulateSliced(seconds: number, efficiency: number, sliceMs = 16): Promise<OfflineReport> {
     const run = this.simStart(seconds, efficiency);
     try {
       while (run.remaining > 0) {
@@ -893,6 +893,8 @@ export class GameEngine {
     if (performance.now() < this.motionUntil) fps = Math.max(fps, this.motionFps);
     // Floating numbers, hearts and bursts are animated on the picture too: they would stutter at the idle rate.
     if (this.fxBusy) fps = Math.max(fps, calm);
+    // Working through an absence (see comeBack) takes the time the pictures would: draw few of them meanwhile (8 a second).
+    if (this.catchingUp) return Math.max(1000 / fps, 125);
     return 1000 / fps;
   }
 
