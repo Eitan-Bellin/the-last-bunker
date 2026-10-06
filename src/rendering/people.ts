@@ -673,11 +673,30 @@ export class Person implements CrowdMember {
     let anim: Anim3;
     if (this.rest && this.restPhase > 0.55) anim = this.restAnim(t);
     else if (this.breather) anim = 'look';
-    else if (act === 'idle') anim = this.wounded ? 'hunch' : this.mood === 'sad' ? 'sad' : 'idle';
+    else if (act === 'idle') anim = this.wounded ? 'hunch' : this.mood === 'sad' ? 'sad' : this.talkingTo(t) ? 'talk' : 'idle';
     else if (act === 'tend' && (this.job === 'laboratory' || this.job === 'reactorHall')) anim = 'inspect';
     else anim = WORK_ANIM[act];
     const a = b3.data.anims[anim] ?? b3.data.anims.idle;
     b3.show(anim, Math.floor((t + this.off) * a.fps), GFX.fade);
+  }
+
+  /**
+   * Plan 2026-10 M3: an idle person standing close to another gestures and nods for a few seconds every so often (and turns
+   * to them), instead of both standing like statues. Needs the set poses.
+   */
+  private talkingTo(t: number): boolean {
+    const c = this.crowd;
+    if (!GFX.sitSleep || !c || !this.b3 || !hasSetPoses(this.kind) || this.wounded) return false;
+    if (Math.floor((t + this.off) / 7) % 4 !== 0) return false;
+    for (const m of c.members) {
+      if (m === (this as unknown as CrowdMember) || m.goalX !== m.posX) continue;
+      const dx = m.posX - this.x;
+      if (Math.abs(dx) < 26 && Math.abs(m.posD - this.depth) < 0.4) {
+        this.facing = dx < 0 ? -1 : 1;
+        return true;
+      }
+    }
+    return false;
   }
 
   /** Mood and health show on the face (and posture). */
@@ -1124,6 +1143,7 @@ export class Person implements CrowdMember {
       }
       this.faceStep();
     }
+    if (this.tag && this.isSleeping) this.tag.visible = false;
     if (this.tag) {
       // Name tags step up a row when they would overlap a neighbour's (see settleCrowds).
       this.tagLift += (this.tagRow * 8.5 - this.tagLift) * Math.min(1, dt * 8);
