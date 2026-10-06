@@ -189,7 +189,7 @@ button {
   padding: 6px 0;
   padding-bottom: max(6px, env(safe-area-inset-bottom));
   border-top: 1px solid var(--border);
-  backdrop-filter: blur(10px);
+  /* [perf] no backdrop-filter: a blur over the live canvas is a GPU pass every picture (96% opaque anyway) */
   z-index: 15;
 }
 
@@ -627,11 +627,11 @@ body.placement-mode #game-canvas { cursor: crosshair; }
   border: 1px solid rgba(255, 212, 71, 0.45);
   background:
     linear-gradient(90deg, rgba(255, 212, 71, 0.18) var(--obj-progress, 0%), transparent var(--obj-progress, 0%)),
-    rgba(16, 16, 34, 0.88);
+    rgba(16, 16, 34, 0.92);
   font-size: calc(12px * var(--fs, 1));
   cursor: pointer;
   text-align: start;
-  backdrop-filter: blur(6px);
+  /* [perf] no backdrop-filter (see the nav bar) */
 }
 [dir="rtl"] .objective {
   background:

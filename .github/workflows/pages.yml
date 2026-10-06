@@ -32,6 +32,17 @@ jobs:
       - run: node tools/sim/smoke.mjs
       - run: node tools/sim/lint.mjs
       - run: npx vite build
+      # Performance regression check (tools/perf/run.mjs, budget in tools/perf/budget.json): draw calls, objects drawn, allocation per
+      # picture, texture memory. It reports but does not block the deploy (a headless runner can be flaky); remove `continue-on-error`
+      # to make it a gate.
+      - run: node tools/perf/run.mjs --check --only f8-overview-medium,f24-close-medium,f24-idle-medium --out perf-results.json
+        continue-on-error: true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: perf-results
+          path: perf-results.json
+          if-no-files-found: ignore
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

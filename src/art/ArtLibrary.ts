@@ -80,6 +80,11 @@ class ArtLibraryImpl {
     return null;
   }
 
+  /** [perf] The painting could not be loaded (a stand-in is drawn instead of waiting for it). */
+  hasFailed(key: string): boolean {
+    return this.failed.has(key);
+  }
+
   has(key: string): boolean {
     return this.textures.has(key);
   }
@@ -100,13 +105,75 @@ class ArtLibraryImpl {
         src: this.url(key),
         data: { autoGenerateMipmaps: !isLiteMode(), scaleMode: 'linear' }, // lite mode: a quarter less texture memory
       });
+      // [perf] The library decides when a painting leaves the GPU (release), so Pixi's own idle sweep must not take it away behind
+      // our back: a painting whose decoded copy has been given up (trimBitmaps) cannot be uploaded a second time.
+      tex.source.autoGarbageCollect = false;
       this.textures.set(key, tex);
+      this.loadedAt.set(key, performance.now());
       for (const fn of this.listeners) fn(key);
     } catch {
       this.failed.add(key);
     } finally {
       this.pending.delete(key);
     }
+  }
+
+  private loadedAt = new Map<string, number>();
+  private trimmed = new Set<string>();
+
+  /**
+   * [perf] A decoded painting stays in memory twice: as the bitmap the browser decoded and as the texture on the GPU. Once the GPU has it
+   * (it has been drawn at least once, a moment ago) the bitmap is closed, which gives back its full RGBA size (~165 MB at 24 floors).
+   * Returns how many were closed. Safe because the GPU copy is never discarded by Pixi (autoGarbageCollect is off) and everything is
+   * reloaded from the network cache after a lost graphics context (reset).
+   */
+  trimBitmaps(gpuUid: number): number {
+    const now = performance.now();
+    let n = 0;
+    for (const [key, tex] of this.textures) {
+      if (this.trimmed.has(key) || now - (this.loadedAt.get(key) ?? now) < 2500) continue;
+      const src = tex.source as unknown as { resource: unknown; _gpuData?: Record<number, unknown> };
+      if (!src._gpuData?.[gpuUid]) continue; // not drawn yet: the GPU does not have it
+      const res = src.resource as { close?: () => void } | null;
+      if (typeof ImageBitmap !== 'undefined' && res instanceof ImageBitmap) {
+        res.close?.();
+        n++;
+      }
+      this.trimmed.add(key);
+    }
+    return n;
+  }
+
+  /** [perf] Drops paintings nobody uses any more (texture, GPU copy and bitmap); the next `get` loads them again. */
+  release(keys: Iterable<string>): void {
+    for (const key of keys) {
+      const tex = this.textures.get(key);
+      if (!tex) continue;
+      this.textures.delete(key);
+      this.loadedAt.delete(key);
+      this.trimmed.delete(key);
+      try {
+        void Assets.unload(this.url(key));
+      } catch {
+        tex.destroy(true);
+      }
+    }
+  }
+
+  /** How many paintings are held and how many of those have given back their decoded copy (diagnostics). */
+  get stats(): { held: number; trimmed: number } {
+    return { held: this.textures.size, trimmed: this.trimmed.size };
+  }
+
+  /** Keys of the paintings held right now (for the memory sweep). */
+  get loadedKeys(): string[] {
+    return [...this.textures.keys()];
+  }
+
+  /** [perf] After a lost graphics context nothing on the GPU can be trusted and the decoded copies are gone: forget everything and reload on demand. */
+  reset(): void {
+    this.release([...this.textures.keys()]);
+    this.failed.clear();
   }
 }
 

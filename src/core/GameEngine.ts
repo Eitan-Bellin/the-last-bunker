@@ -58,7 +58,9 @@ const AUTO_SAVE_INTERVAL = 30_000;
  */
 const FRAME_ACTIVE_MS = 1000 / 60;
 /** How long after the last touch the picture stays at full speed (camera glides and flicks need it). */
-const ACTIVE_HOLD_MS = 1800;
+const ACTIVE_HOLD_MS = 600;
+/** How long after the camera stops the picture stays at its motion rate (the settle of a glide). */
+const MOTION_HOLD_MS = 500;
 const IDLE_AFTER_S = 30;
 const OFFLINE_EFFICIENCY = 0.8;
 /** Frames this far apart on the wall clock mean the device was asleep (not just slow). */
@@ -73,6 +75,21 @@ const AWAY_DOOR_MAX = 3;
 /** Away from home, word travels slower: newcomers come at half the usual pace. */
 const AWAY_ARRIVAL_SLOWDOWN = 2;
 /** Resources whose overflow the welcome-back report counts (power is meant to be spent at once). */
+
+/** A running away-simulation (see simulate / simulateSliced). */
+interface SimRun {
+  seconds: number;
+  efficiency: number;
+  before: Partial<Record<ResourceType, number>>;
+  arrivals: number;
+  missions: number;
+  research: string[];
+  wastedRaw: Partial<Record<ResourceType, number>>;
+  creditsBefore: number;
+  stepSize: number;
+  remaining: number;
+  off: (() => void)[];
+}
 
 export interface OfflineReport {
   seconds: number;
@@ -349,7 +366,7 @@ export class GameEngine {
       this.recoveredFrom = loaded.recoveredFrom ?? null;
       this.recoveredAt = loaded.recoveredFrom ? (loaded.state.timestamp ?? null) : null;
       this.adoptState(loaded.state);
-      this.handleOfflineProgression();
+      await this.handleOfflineProgression();
       this.eraSystem.catchUp();
     } else {
       // A storage error or an unreadable save is not "no save": show something to look at, but never write over what may still be there.
@@ -523,14 +540,15 @@ export class GameEngine {
     bus.emit('rebirth', gain);
   }
 
-  private handleOfflineProgression(): void {
+  private async handleOfflineProgression(): Promise<void> {
     const state = this.stateManager.state;
     const now = Date.now();
     const offlineMs = now - state.timestamp;
     if (offlineMs < 60_000) return;
 
     const offlineSeconds = Math.min(offlineMs / 1000, OFFLINE_MAX_SECONDS);
-    this.offlineReport = this.simulate(offlineSeconds, this.offlineEfficiency());
+    // [perf] In slices: the splash screen keeps moving, and the start does not freeze for 10 s on a mid-range phone after a day away.
+    this.offlineReport = await this.simulateSliced(offlineSeconds, this.offlineEfficiency());
     this.stateManager.applyDelta({ path: 'timestamp', value: now });
     bus.emit('offline:processed', this.offlineReport);
   }
@@ -541,36 +559,71 @@ export class GameEngine {
    * and notes the teams and research that finished, so the welcome-back screen has a story to tell.
    */
   simulate(seconds: number, efficiency: number): OfflineReport {
+    const run = this.simStart(seconds, efficiency);
+    try {
+      while (run.remaining > 0) this.simStep(run);
+    } finally {
+      this.simStop(run);
+    }
+    return this.simFinish(run);
+  }
+
+  /**
+   * [perf] The same simulation spread over many short slices, so the page stays alive while it runs: a day away is 1,440 steps, about
+   * 2 s of work on a desktop and 10 s on a mid-range phone, which used to freeze everything (and a phone may decide the page is dead).
+   * Each slice works for about `sliceMs` and then gives the browser a turn; the result is exactly that of `simulate`.
+   */
+  async simulateSliced(seconds: number, efficiency: number, sliceMs = 16): Promise<OfflineReport> {
+    const run = this.simStart(seconds, efficiency);
+    try {
+      while (run.remaining > 0) {
+        const t0 = performance.now();
+        do this.simStep(run); while (run.remaining > 0 && performance.now() - t0 < sliceMs);
+        // A message hop, not setTimeout(0): the browser may draw and handle touches between slices, and there is no 4 ms floor to wait out.
+        if (run.remaining > 0) await new Promise<void>(r => { const ch = new MessageChannel(); ch.port1.onmessage = () => { ch.port1.close(); r(); }; ch.port2.postMessage(0); });
+      }
+    } finally {
+      this.simStop(run);
+    }
+    return this.simFinish(run);
+  }
+
+  private simStart(seconds: number, efficiency: number): SimRun {
     const sm = this.stateManager;
     const before: Partial<Record<ResourceType, number>> = {};
     for (const [k, v] of Object.entries(sm.state.resources)) before[k as ResourceType] = v.amount;
     const arrivals = this.gatherAtDoor(seconds);
 
-    let missions = 0;
-    const research: string[] = [];
-    const offMission = bus.on('mission:complete', () => { missions++; });
-    const offResearch = bus.on('research:complete', (id: unknown) => { research.push(id as string); });
-    const wastedRaw: Partial<Record<ResourceType, number>> = {};
+    const run: SimRun = {
+      seconds, efficiency, before, arrivals, missions: 0, research: [], wastedRaw: {}, creditsBefore: 0,
+      // Short absences are simulated finely, long ones coarsely: the cost grows with the number of steps (and with the crowd).
+      stepSize: seconds > 300 ? OFFLINE_STEP_SECONDS : seconds > 60 ? 5 : 1,
+      remaining: seconds, off: [],
+    };
+    run.off.push(bus.on('mission:complete', () => { run.missions++; }));
+    run.off.push(bus.on('research:complete', (id: unknown) => { run.research.push(id as string); }));
     // [Economy A1] overflow is now converted/absorbed by ResourceSystem; count only this run's share.
     this.resourceSystem.overflowLog = {};
-    const creditsBefore = this.resourceSystem.creditsMade;
+    run.creditsBefore = this.resourceSystem.creditsMade;
+    this.offlineWaste = run.wastedRaw;
+    return run;
+  }
 
-    // Short absences are simulated finely, long ones coarsely: the cost grows with the number of steps (and with the crowd).
-    const stepSize = seconds > 300 ? OFFLINE_STEP_SECONDS : seconds > 60 ? 5 : 1;
-    let remaining = seconds;
-    this.offlineWaste = wastedRaw;
-    try {
-      while (remaining > 0) {
-        const step = Math.min(stepSize, remaining);
-        this.advance(step, 'offline', efficiency);
-        remaining -= step;
-      }
-    } finally {
-      this.offlineWaste = null;
-      offMission();
-      offResearch();
-    }
+  private simStep(run: SimRun): void {
+    const step = Math.min(run.stepSize, run.remaining);
+    this.advance(step, 'offline', run.efficiency);
+    run.remaining -= step;
+  }
 
+  private simStop(run: SimRun): void {
+    this.offlineWaste = null;
+    for (const off of run.off) off();
+    run.off = [];
+  }
+
+  private simFinish(run: SimRun): OfflineReport {
+    const sm = this.stateManager;
+    const { seconds, before, arrivals, missions, research, wastedRaw, creditsBefore } = run;
     const gained: Partial<Record<ResourceType, number>> = {};
     for (const [k, v] of Object.entries(sm.state.resources)) {
       if (k === 'credits') continue; // reported separately as converted overflow
@@ -742,7 +795,7 @@ export class GameEngine {
       if (away < 2) return;
       // The frame loop may already have noticed the gap (a frame can run before this event): do not count it twice.
       if (Date.now() - this.lastWall < away * 1000 - 2000) return;
-      this.comeBack(away);
+      void this.comeBack(away);
     });
   }
 
@@ -750,8 +803,17 @@ export class GameEngine {
   private lastWall = 0;
 
   /** The player is back after `away` seconds: the bunker works through the gap, and the new "last seen" time is saved right away. */
-  private comeBack(away: number): void {
-    const report = this.simulate(Math.min(away, OFFLINE_MAX_SECONDS), away > 60 ? this.offlineEfficiency() : 1);
+  private async comeBack(away: number): Promise<void> {
+    if (this.catchingUp) return;
+    // [perf] Worked through in slices (the picture keeps moving); meanwhile the clock does not tick and nothing is saved, so a state
+    // that is half way through the absence is never written down.
+    this.catchingUp = true;
+    let report: OfflineReport;
+    try {
+      report = await this.simulateSliced(Math.min(away, OFFLINE_MAX_SECONDS), away > 60 ? this.offlineEfficiency() : 1);
+    } finally {
+      this.catchingUp = false;
+    }
     this.lastTickTime = performance.now();
     this.tickAccumulator = 0;
     this.lastWall = Date.now();
@@ -760,6 +822,9 @@ export class GameEngine {
     this.requestSave();
     if (away > 60) bus.emit('offline:processed', report);
   }
+
+  /** [perf] The away-simulation is running in slices (see comeBack). */
+  private catchingUp = false;
 
   stop(): void {
     this.running = false;
@@ -784,7 +849,7 @@ export class GameEngine {
     const slept = this.lastWall > 0 && wall - this.lastWall > SLEEP_GAP_MS && !document.hidden;
     const sleptFor = (wall - this.lastWall) / 1000;
     this.lastWall = wall;
-    if (slept) this.comeBack(sleptFor);
+    if (slept) void this.comeBack(sleptFor);
 
     const elapsed = Math.min(timestamp - this.lastTickTime, 1000);
     this.lastTickTime = timestamp;
@@ -793,7 +858,7 @@ export class GameEngine {
     this.idleSeconds = (Date.now() - this.lastInteraction) / 1000;
 
     // While a cinematic plays the world holds its breath: no ticks, no events.
-    if (this.paused) this.tickAccumulator = 0;
+    if (this.paused || this.catchingUp) this.tickAccumulator = 0;
     while (this.tickAccumulator >= TICK_INTERVAL) {
       this.tickAccumulator -= TICK_INTERVAL;
       this.tick();
@@ -837,7 +902,7 @@ export class GameEngine {
 
   /** Writes the game to storage. Never throws: a failed write is counted, logged, and reported to the player after the second miss. */
   private async autoSave(): Promise<void> {
-    if (this.saveBlocked) return;
+    if (this.saveBlocked || this.catchingUp) return; // [perf] never write a state that is half way through an absence
     // Another copy of the game started after this one: it owns the save now, and this one must not write over it.
     if (!stillOwner()) {
       this.saveBlocked = true;
@@ -884,7 +949,26 @@ export class GameEngine {
   private pictureInterval(): number {
     const since = Date.now() - this.lastInteraction;
     const [active, calm, idle] = this.frameRates;
-    return 1000 / (since < ACTIVE_HOLD_MS ? active : this.isIdle ? idle : calm);
+    let fps = since < ACTIVE_HOLD_MS ? active : this.isIdle ? idle : calm;
+    // [perf] The camera moving (a drag, a glide, a zoom, a shake) is where smoothness shows: full rate for it, and a moment after.
+    if (performance.now() < this.motionUntil) fps = Math.max(fps, this.motionFps);
+    // Floating numbers, hearts and bursts are animated on the picture too: they would stutter at the idle rate.
+    if (this.fxBusy) fps = Math.max(fps, calm);
+    // Working through an absence (see comeBack) takes the time the pictures would: draw few of them meanwhile (8 a second).
+    if (this.catchingUp) return Math.max(1000 / fps, 125);
+    return 1000 / fps;
+  }
+
+  /** [perf] Picture rate while the camera moves (set from the quality profile each picture). */
+  motionFps = 60;
+  /** [perf] Until when (performance.now) the camera counts as moving; the app extends it each picture the camera is. */
+  motionUntil = 0;
+  /** [perf] Short animations (popups, bursts, incidents) are on screen: keep at least the watching rate. */
+  fxBusy = false;
+
+  /** [perf] Called by the app each picture while the camera is in motion. */
+  noteCameraMotion(): void {
+    this.motionUntil = performance.now() + MOTION_HOLD_MS;
   }
 
   async forceSave(): Promise<void> {

@@ -4,6 +4,17 @@ export const SAMPLE_RATE = 44100;
 
 export type Builder = (ctx: OfflineAudioContext, out: AudioNode, wet: AudioNode, rnd: () => number) => void;
 
+/** How long building each sound's node graph blocked the page (the synchronous part of a render); read by the perf probe. */
+export const audioStats = { builds: [] as number[], max: 0 };
+function timedBuild(build: Builder, ctx: OfflineAudioContext, dry: AudioNode, wet: AudioNode, rnd: () => number): void {
+  const t = performance.now();
+  build(ctx, dry, wet, rnd);
+  const ms = performance.now() - t;
+  audioStats.builds.push(Math.round(ms));
+  if (audioStats.builds.length > 400) audioStats.builds.shift();
+  audioStats.max = Math.max(audioStats.max, ms);
+}
+
 export function midi(n: number): number {
   return 440 * Math.pow(2, (n - 69) / 12);
 }
@@ -73,6 +84,17 @@ export function concreteImpulse(ctx: BaseAudioContext, seconds = 3.2, decay = 0.
   return buf;
 }
 
+/** The gain a ConvolverNode applies to its response when `normalize` is on (the Web Audio spec's calibration: -58 dB at 44.1 kHz). */
+function convolverScale(channels: Float32Array[], rate: number): number {
+  let power = 0;
+  for (const c of channels) for (let i = 0; i < c.length; i++) power += c[i] * c[i];
+  power = Math.sqrt(power / (channels.length * channels[0].length));
+  if (!Number.isFinite(power) || power < 0.000125) power = 0.000125;
+  return (1 / power) * Math.pow(10, -58 * 0.05) * (44100 / rate);
+}
+
+const scaleCache = new Map<string, number>();
+
 /** Shared graph: dry bus and a reverb bus, both into a gentle master compressor. */
 function chain(ctx: OfflineAudioContext, reverbMix: number): { dry: GainNode; wet: GainNode } {
   const comp = ctx.createDynamicsCompressor();
@@ -85,9 +107,28 @@ function chain(ctx: OfflineAudioContext, reverbMix: number): { dry: GainNode; we
   const dry = ctx.createGain();
   dry.connect(comp);
   const verb = ctx.createConvolver();
-  verb.buffer = concreteImpulse(ctx);
+  const full = concreteImpulse(ctx);
+  // [perf] Setting a 3.2 s response on a convolver costs ~55 ms of main-thread time, and a 0.3 s click can never use more than its
+  // own length of it. Cut the response to what the render can reach, and keep the loudness exactly as it was: with the response cut,
+  // "normalize" would measure a different power, so the full response's gain is applied by hand (matches to 1e-6 in a test).
+  const reach = Math.min(full.length, Math.ceil(ctx.length) + 8);
+  let wetScale = 1;
+  if (reach < full.length) {
+    const key = `${ctx.sampleRate}`;
+    let scale = scaleCache.get(key);
+    if (scale === undefined) {
+      scale = convolverScale([full.getChannelData(0), full.getChannelData(1)], ctx.sampleRate);
+      scaleCache.set(key, scale);
+    }
+    const cut = ctx.createBuffer(2, reach, ctx.sampleRate);
+    cut.copyToChannel(full.getChannelData(0).subarray(0, reach), 0);
+    cut.copyToChannel(full.getChannelData(1).subarray(0, reach), 1);
+    verb.normalize = false;
+    verb.buffer = cut;
+    wetScale = scale;
+  } else verb.buffer = full;
   const wetOut = ctx.createGain();
-  wetOut.gain.value = reverbMix;
+  wetOut.gain.value = reverbMix * wetScale;
   verb.connect(wetOut).connect(comp);
   const wet = ctx.createGain();
   wet.connect(verb);
@@ -118,7 +159,7 @@ export async function renderLoop(seconds: number, tail: number, build: Builder, 
   const total = seconds + tail;
   const ctx = new OfflineAudioContext(2, Math.ceil(rate * total), rate);
   const { dry, wet } = chain(ctx, reverbMix);
-  build(ctx, dry, wet, seeded(seed));
+  timedBuild(build, ctx, dry, wet, seeded(seed));
   const rendered = await ctx.startRendering();
   const len = Math.floor(rate * seconds);
   const tailLen = rendered.length - len;
@@ -139,15 +180,15 @@ export async function renderLoop(seconds: number, tail: number, build: Builder, 
 export async function renderSegment(seconds: number, tail: number, build: Builder, seed: number, reverbMix: number, rate: number): Promise<AudioBuffer> {
   const ctx = new OfflineAudioContext(2, Math.ceil(rate * (seconds + tail)), rate);
   const { dry, wet } = chain(ctx, reverbMix);
-  build(ctx, dry, wet, seeded(seed));
+  timedBuild(build, ctx, dry, wet, seeded(seed));
   return ctx.startRendering();
 }
 
-/** Renders a one-shot effect. */
-export async function renderOneShot(seconds: number, build: Builder, seed = 1, reverbMix = 0.6): Promise<AudioBuffer> {
-  const ctx = new OfflineAudioContext(2, Math.ceil(SAMPLE_RATE * seconds), SAMPLE_RATE);
+/** Renders a one-shot effect (a lighter rate and a single channel for devices with little memory). */
+export async function renderOneShot(seconds: number, build: Builder, seed = 1, reverbMix = 0.6, rate = SAMPLE_RATE, channels = 2): Promise<AudioBuffer> {
+  const ctx = new OfflineAudioContext(channels, Math.ceil(rate * seconds), rate);
   const { dry, wet } = chain(ctx, reverbMix);
-  build(ctx, dry, wet, seeded(seed));
+  timedBuild(build, ctx, dry, wet, seeded(seed));
   return ctx.startRendering();
 }
 

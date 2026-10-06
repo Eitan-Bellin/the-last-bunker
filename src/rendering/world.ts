@@ -6,6 +6,7 @@ import { BUILDING_W, DEPTH_TOP, DEPTH_X, DISTRICT_X, FLOOR_H, ROOMS_W, ROOMS_X, 
 import { block, hGradient, seeded, shade, softGlow, vGradient } from './draw';
 import { lineWidth, richLine } from './richText';
 import { steelTag } from './signage';
+import { FlowBeads } from './perfFx';
 
 export const WORLD_LEFT = -260;
 /** Right edge of the painted panorama's own span (the painting is scaled to this width, never to the wider world). */
@@ -468,8 +469,6 @@ export function buildUtilities(buildings: BuildingInstance[], floors: number, pa
   const root = new Container();
   root.eventMode = 'none';
   const g = new Graphics();
-  const flow = new Graphics();
-  flow.blendMode = 'add';
   const runs: Run[] = [];
 
   for (let f = 0; f < floors; f++) {
@@ -518,28 +517,12 @@ export function buildUtilities(buildings: BuildingInstance[], floors: number, pa
     if (waterDrops.length && !painted) runs.push({ y: yW, x0: SHAFT_W - 18, x1: Math.max(...waterDrops), kind: 'water', drops: waterDrops, gaps: halls });
   }
 
-  root.addChild(g, flow);
+  // The current along the mains: pooled sprites in view only (src/rendering/perfFx.ts), not circles redrawn every picture.
+  const flow = new FlowBeads(runs.map(r => ({ y: r.y, x0: r.x0, x1: r.x1, kind: r.kind, gaps: r.gaps })), painted);
+  root.addChild(g, flow.container);
   return {
     container: root,
-    animate: (t, power) => {
-      flow.clear();
-      for (const r of runs) {
-        if (r.kind === 'power' && power < 0.3) continue;
-        const speed = r.kind === 'power' ? 90 : 30;
-        const spacing = r.kind === 'power' ? 38 : 24;
-        for (let x = r.x0 + ((t * speed) % spacing); x < r.x1; x += spacing) {
-          if (r.gaps.some(([g0, g1]) => x >= g0 && x <= g1)) continue;
-          if (r.kind === 'power') {
-            // Over the painted conduit the current is a faint glint, not a string of beads.
-            const k = painted ? 0.4 : 1;
-            flow.circle(x, r.y, painted ? 1 : 1.5).fill({ color: 0xffd860, alpha: 0.9 * power * k });
-            flow.circle(x, r.y, 3.4).fill({ color: 0xffb030, alpha: 0.22 * power * k });
-          } else {
-            flow.circle(x, r.y, 1.2).fill({ color: 0x9ad8ff, alpha: 0.7 });
-          }
-        }
-      }
-    },
+    animate: (t, power) => flow.animate(t, power),
   };
 }
 
@@ -604,43 +587,8 @@ export function buildDigSign(floors: number, text: string, cost: string, rock: T
   return root;
 }
 
-/** Dust motes drifting through the occupied floors. */
-export class Dust {
-  readonly graphics = new Graphics();
-  private motes: { x: number; y: number; vx: number; vy: number; ph: number }[] = [];
-  private floors = 0;
-
-  constructor() {
-    this.graphics.blendMode = 'add';
-    this.graphics.eventMode = 'none';
-  }
-
-  setFloors(floors: number): void {
-    if (floors === this.floors) return;
-    this.floors = floors;
-    const rnd = seeded(99 + floors);
-    this.motes = [];
-    for (let i = 0; i < 26 * floors; i++) {
-      this.motes.push({
-        x: ROOMS_X + rnd() * ROOMS_W, y: floorTop(0) + rnd() * floors * FLOOR_H,
-        vx: (rnd() - 0.5) * 4, vy: (rnd() - 0.5) * 3, ph: rnd() * Math.PI * 2,
-      });
-    }
-  }
-
-  update(dt: number, t: number): void {
-    const g = this.graphics;
-    g.clear();
-    for (const m of this.motes) {
-      m.x += m.vx * dt;
-      m.y += m.vy * dt;
-      if (m.x < ROOMS_X) m.x += ROOMS_W;
-      if (m.x > ROOMS_X + ROOMS_W) m.x -= ROOMS_W;
-      const a = 0.12 + 0.18 * (0.5 + 0.5 * Math.sin(t * 1.5 + m.ph));
-      g.circle(m.x, m.y, 1).fill({ color: 0xffe6c0, alpha: a });
-    }
-  }
-}
+/** Dust motes drifting through the occupied floors: pooled sprites now, only those in view (src/rendering/perfFx.ts). */
+export { Dust } from './perfFx';
 
 export function roomWidth(b: BuildingInstance): number {
   return roomSlots(b.type) * SLOT_W;
