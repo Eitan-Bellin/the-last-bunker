@@ -57,7 +57,10 @@ export async function launch(extraArgs = []) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bunker-perf-'));
   const args = ['--headless=new', `--remote-debugging-port=${port}`, `--user-data-dir=${dir}`, '--no-first-run', '--no-default-browser-check',
     '--enable-precise-memory-info', '--window-size=400,800', '--autoplay-policy=no-user-gesture-required', '--disable-background-timer-throttling',
-    '--disable-renderer-backgrounding', '--disable-backgrounding-occluded-windows', ...extraArgs, 'about:blank'];
+    '--disable-renderer-backgrounding', '--disable-backgrounding-occluded-windows',
+    // A CI machine has no GPU: software GL (the counts the gate uses do not depend on it), and no sandbox inside the runner's container.
+    ...(process.env.CI ? ['--no-sandbox', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] : []),
+    ...extraArgs, 'about:blank'];
   const proc = spawn(chromePath(), args, { stdio: 'ignore' });
   let version = null;
   for (let i = 0; i < 60 && !version; i++) { try { version = await getJson(`http://127.0.0.1:${port}/json/version`); } catch { await sleep(250); } }

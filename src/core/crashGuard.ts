@@ -12,7 +12,8 @@ const LOG_KEY = 'lastbunker_crashlog';
 const HEARTBEAT_KEY = 'lastbunker_hb';
 const DEATHS_KEY = 'lastbunker_deaths';
 const LITE_KEY = 'lastbunker_lite';
-const HEARTBEAT_MS = 4000;
+// [perf] Every 15 s (was 4): the write is synchronous (on Android a blocking disk write on the main thread) and samples the GPU texture list.
+const HEARTBEAT_MS = 15000;
 const MAX_LOG = 30;
 const HOUR = 3_600_000;
 /** Lite mode lasts this long, then the normal graphics return (closing the app by hand twice used to switch it on for good). */

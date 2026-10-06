@@ -249,11 +249,13 @@ export function installPerf(renderer: BunkerRenderer, engine: Any, audio?: Any):
     box.style.cssText = 'position:fixed;left:4px;bottom:4px;z-index:99999;margin:0;padding:4px 6px;border-radius:6px;pointer-events:none;'
       + 'background:rgba(0,0,0,.72);color:#9fe9a8;font:10px/1.25 ui-monospace,Menlo,Consolas,monospace;white-space:pre;max-width:96vw;overflow:hidden';
     document.body.appendChild(box);
+    // The plan's standing budget for a full bunker on a phone (3-mobile-performance.md, 7.3): a figure over it is flagged with "!".
+    const over = (v: number, max: number) => (v > max ? `${v}!` : `${v}`);
     window.setInterval(() => {
       const r = report();
       box.textContent = `${r.fps} fps (want ${r.target})  upd ${r.updateMsMed} + draw ${r.drawMsMed} ms (p95 ${r.frameMsP95})\n`
-        + `calls ${r.drawCalls}  objs ${r.renderablesDrawn}/${r.renderablesTotal}  groups ${r.renderGroups}  rebuild ${r.structureChangedPct}%\n`
-        + `tex ${r.gpuTextureMB} MB (${r.gpuTextures})  heap ${r.jsHeapMB} MB  busy ${r.busyPct}%  q ${r.quality} x${r.res}\n`
+        + `calls ${over(r.drawCalls, 150)}  objs ${over(r.renderablesDrawn, 1500)}/${r.renderablesTotal}  groups ${r.renderGroups}  rebuild ${over(r.structureChangedPct, 5)}%\n`
+        + `tex ${over(r.gpuTextureMB, 120)} MB (${r.gpuTextures})  heap ${over(r.jsHeapMB, 100)} MB  busy ${r.busyPct}%  q ${r.quality} x${r.res}\n`
         + `long tasks ${r.longTasks} (${r.longTaskMs} ms, max ${r.longTaskMax})`
         + (audio?.debugState ? `\naudio ${audio.debugState}` : '');
       reset();

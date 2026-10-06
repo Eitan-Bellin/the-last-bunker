@@ -164,6 +164,11 @@ export class PostFX {
     }
   }
 
+  /** Diagnostics: how the pictures are going (see PerformanceMonitor.summary) and how often the automatic level changed. */
+  get health(): { p50Ms: number; p95Ms: number; jankPct: number; levelChanges: number; lastChangeAtS: number } {
+    return { ...this.monitor.summary(), levelChanges: this.monitor.changes, lastChangeAtS: this.monitor.lastChangeAt };
+  }
+
   get forcedQuality(): QualityLevel | null {
     return this.forced;
   }

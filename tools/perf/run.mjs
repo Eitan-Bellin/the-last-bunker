@@ -42,7 +42,7 @@ async function runScenario(port, name, sc) {
   try {
     await phoneSetup(c, { quality: sc.quality, throttle: 1, dpr });
     await c.send('HeapProfiler.enable');
-    await c.send('Page.navigate', { url: `http://127.0.0.1:${port}/?debug` });
+    await c.send('Page.navigate', { url: `http://127.0.0.1:${port}/?debug${arg("query", "")}` });
     if (!await waitFor(c, '!!(window.__engine && window.__renderer && window.__renderer.postfx && window.__perf2)')) throw new Error('game did not start');
     await sleep(1500);
     await c.evalJs(`window.__perfFixture(${sc.floors}, ${sc.people})`);
@@ -135,6 +135,37 @@ async function runAudio(port, sc) {
   } finally { c.close(); }
 }
 
+/**
+ * Coming back after a day away: the bunker is simulated 1,440 steps forward. Reports the longest freeze of the page (a long task) and
+ * the total time. Builds without simulateSliced (older ones) run the simulation in one piece, which is what this measures against.
+ */
+async function runOffline(port, sc) {
+  const c = await launch();
+  try {
+    await phoneSetup(c, { quality: 'medium', throttle: 1, dpr });
+    await c.send('Page.navigate', { url: `http://127.0.0.1:${port}/?debug` });
+    if (!await waitFor(c, '!!(window.__engine && window.__renderer && window.__perf2)')) throw new Error('game did not start');
+    await sleep(1500);
+    await c.evalJs(`window.__perfFixture(${sc.floors || 24}, ${sc.people || 60})`);
+    await c.evalJs('setInterval(() => { __engine.paused = false; __engine.notifyInteraction(); }, 100); true', false);
+    await sleep(5000);
+    const th = sc.throttle || throttle;
+    if (th > 1) await c.send('Emulation.setCPUThrottlingRate', { rate: th });
+    const r = await c.evalJs(`(async () => {
+      const lt = []; const ob = new PerformanceObserver(l => { for (const e of l.getEntries()) lt.push(e.duration); }); ob.observe({ entryTypes: ['longtask'] });
+      const sliced = typeof __engine.simulateSliced === 'function';
+      const t0 = performance.now();
+      let frames = 0; const raf = () => { frames++; requestAnimationFrame(raf); }; requestAnimationFrame(raf);
+      await (sliced ? __engine.simulateSliced(${sc.hours || 24} * 3600, 0.8) : Promise.resolve(__engine.simulate(${sc.hours || 24} * 3600, 0.8)));
+      const total = performance.now() - t0;
+      await new Promise(r => setTimeout(r, 300));
+      return { sliced, totalMs: Math.round(total), longTasks: lt.length, longestMs: Math.round(Math.max(0, ...lt)), sumLongMs: Math.round(lt.reduce((a, b) => a + b, 0)), frames };
+    })()`);
+    if (th > 1) await c.send('Emulation.setCPUThrottlingRate', { rate: 1 });
+    return { throttle: th, ...r };
+  } finally { c.close(); }
+}
+
 const LIMITS = { maxDrawCalls: 'drawCalls', maxRenderables: 'renderablesDrawn', maxStructureChangedPct: 'structureChangedPct', maxAllocKBPerFrame: 'allocKBPerFrame', maxGpuTextureMB: 'gpuTextureMB', maxBusyPct: 'busyPct' };
 
 const { port, close } = await serve(dist);
@@ -144,6 +175,13 @@ try {
   for (const [name, sc] of Object.entries(budget.scenarios)) {
     if (only && !only.includes(name)) continue;
     process.stdout.write(`${name} ... `);
+    if (sc.kind === 'offline') {
+      const o = await runOffline(port, sc);
+      results.scenarios[name] = o;
+      console.log(`${o.sliced ? 'sliced' : 'one piece'}: total ${o.totalMs} ms  longest freeze ${o.longestMs} ms  long tasks ${o.longTasks} (${o.sumLongMs} ms)  frames drawn meanwhile ${o.frames}`);
+      if (throttle === 1 && sc.maxLongestMs !== undefined && o.longestMs > sc.maxLongestMs * 1.1) failures.push(`${name}: longest freeze ${o.longestMs} ms > ${sc.maxLongestMs} (+10%)`);
+      continue;
+    }
     if (sc.kind === 'audio') {
       const a = await runAudio(port, sc);
       results.scenarios[name] = a;

@@ -79,11 +79,15 @@ interface RoomView {
   culled?: boolean;
   /** [perf] Stamp of the last picture in which the room was still in the state (see renderRooms). */
   gen?: number;
+  /** [perf] The root is in the scene (rooms out of view are taken out of it, see cullRooms). */
+  attached?: boolean;
   /** [perf] The label wants to be shown (before the off-screen test in cullRooms). */
   labelOn?: boolean;
   /** [perf] The layout hash the look was last built for; when the room left the camera's reach (performance.now), or 0. */
   layoutH?: number;
   outSince?: number;
+  /** [perf] Since when the room has been waiting for its painting (performance.now). */
+  waitSince?: number;
   /** [perf] What the label was last drawn from: level, staff, constructing (packed), specialization, language. */
   lk?: number;
   lspec?: string | null;
@@ -102,6 +106,8 @@ interface RuinView {
   bar: Graphics | null;
   /** [perf] Off screen this frame. */
   culled?: boolean;
+  /** [perf] The root is in the scene (rooms out of view are taken out of it, see cullRooms). */
+  attached?: boolean;
 }
 
 interface Burst {
@@ -352,6 +358,7 @@ export class BunkerRenderer {
   personPos(survivorId: string): { x: number; y: number } | null {
     const p = this.people.get(survivorId);
     if (!p?.container.parent || !p.container.visible) return null;
+    if (!p.container.parent.parent?.parent) return null; // [perf] the room (or lot) is out of view and out of the scene
     const g = p.container.getGlobalPosition();
     const w = this.worldContainer.toLocal(g);
     return { x: w.x, y: w.y - 34 };
@@ -518,6 +525,7 @@ export class BunkerRenderer {
       c.label = label;
       c.isRenderGroup = true;
     }
+    this.roomLayer.sortableChildren = true; // rooms come and go with the camera (cullRooms); their z-index keeps the order
   }
 
   private contentBottom(): number {
@@ -1219,10 +1227,14 @@ export class BunkerRenderer {
       // The look follows the finished level, so an upgrade reveals the new painting when it completes.
       const artKey = isNew ? buildingArtKey(b.type, 0) : buildingArtKey(b.type, roomTier(effectiveLevel(b)));
       const texture = artKey ? ArtLibrary.get(artKey) : null;
-      // A painting on its way (it was released, or is new): keep what the room shows (or nothing yet) instead of drawing a stand-in.
-      if (artKey && !texture && !ArtLibrary.hasFailed(artKey)) {
+      // A painting on its way (it was released, or is new): keep what the room shows instead of drawing a stand-in; a room that has
+      // shown nothing yet gets the drawn stand-in after 0.7 s (a slow connection must not leave a new room empty).
+      const waiting = !!artKey && !texture && !ArtLibrary.hasFailed(artKey) && !(!view.visual && view.waitSince !== undefined && now - view.waitSince > 700);
+      if (waiting) {
+        if (view.waitSince === undefined) view.waitSince = now;
         view.layoutH = undefined;
       } else {
+      view.waitSince = undefined;
       view.layoutH = LAYOUT.rooms;
       if (view.culled) this.buildsLeft--;
       const mirror = texture ? this.compoundIndex(state, b) % 2 === 1 : false;
@@ -1301,6 +1313,7 @@ export class BunkerRenderer {
   private roomsH = -1;
   private roomGen = 0;
   private buildsLeft = 0;
+  private nextRoomZ = 0;
 
   /** [perf] Is the room within a screen's reach of the camera (the window in which rooms are built and kept)? */
   private inZone(v: RoomView): boolean {
@@ -1315,6 +1328,7 @@ export class BunkerRenderer {
     const root = new Container();
     root.label = 'room';
     root.isRenderGroup = true; // [perf] a room is its own render group: its particles never rebuild the rest
+    root.zIndex = this.nextRoomZ++; // draw order stays the order of creation when rooms are taken out of the scene and put back
     root.position.set(buildingX(b), floorTop(b.position.floor));
     const visualHolder = new Container();
     const people = new Container();
@@ -1335,7 +1349,7 @@ export class BunkerRenderer {
     label.position.set(buildingX(b) + width / 2, floorTop(b.position.floor) - SLAB / 2);
     return {
       root, visualHolder, visual: null, oldVisual: null, fade: 0, scaffold: null, people, outline, label, progress: null,
-      visualSig: '', labelSig: '', width, height,
+      visualSig: '', labelSig: '', width, height, attached: true,
       lane: { x0: DEPTH_X + 10, x1: width - DEPTH_X - 10 },
     };
   }
@@ -1500,7 +1514,7 @@ export class BunkerRenderer {
       person.setCondition(s.happiness, s.health);
       const activity: Activity = siteView ? 'hammer' : ruinView ? 'dig' : usable ? ROOM_ACTIVITY[job!.type] ?? 'idle' : 'idle';
       // [perf] Nobody watches a room that is off screen: its people stand still until it comes back into view.
-      if (!(siteView ? this.surfaceOff : (view as { culled?: boolean }).culled)) person.update(dt, this.time, 0.4 + (s.happiness / 100) * 0.6, activity);
+      if (!(siteView ? this.surfaceOff : (view as { culled?: boolean }).culled) && !this.lowSkip) person.update(dt, this.time, 0.4 + (s.happiness / 100) * 0.6, activity);
     }
     settleCrowds(); // gfx-p0 people: release spots of people who left, stack overlapping name tags
     for (const [id, p] of this.people) {
@@ -1666,6 +1680,9 @@ export class BunkerRenderer {
   /** [perf] When the paintings' decoded copies were last given back (ArtLibrary.trimBitmaps), and the last memory sweep. */
   private lastTrim = 0;
   private lastSweep = 0;
+  /** [perf] Low quality steps some animation every other picture (see updateScene). */
+  private lowSkip = false;
+  private frameNo = 0;
   private artIdle = new Map<string, number>();
 
   /**
@@ -1757,7 +1774,7 @@ export class BunkerRenderer {
       const seen = r.x < x1 && r.x + v.width > x0 && r.y < y1 && r.y + v.height > y0;
       // [perf] Under the opaque far-zoom city map nothing of the rooms is seen either: no animation, no people updates.
       v.culled = !seen || this.mapCovers;
-      if (r.visible !== seen) r.visible = seen;
+      if (seen !== v.attached) { v.attached = seen; if (seen) this.roomLayer.addChild(r); else this.roomLayer.removeChild(r); } // [perf] a room out of view is not in the scene at all (155 render groups were walked every picture)
       const shown = seen && !this.mapCovers;
       if (v.visualHolder.visible !== shown) { v.visualHolder.visible = shown; v.people.visible = shown; }
       // The name tag goes with its room (it used to be drawn for all 119 rooms: 43% of the draw calls).
@@ -1768,7 +1785,7 @@ export class BunkerRenderer {
       const r = v.root;
       const seen = r.x < x1 && r.x + v.width > x0 && r.y < y1 && r.y + ROOM_H > y0;
       v.culled = !seen || this.mapCovers;
-      if (r.visible !== seen) r.visible = seen;
+      if (seen !== v.attached) { v.attached = seen; if (seen) this.roomLayer.addChild(r); else this.roomLayer.removeChild(r); }
       if (v.label.visible !== seen) v.label.visible = seen;
     }
     // [P6] The structure, by height only (it spans the whole width anyway).
@@ -1867,15 +1884,22 @@ export class BunkerRenderer {
       const s2 = this.surface as { light?: number; grade?: number; wind?: number } | null;
       this.projectSites.animate(this.time, s2?.light ?? 0xffffff, s2?.grade ?? 0xffffff, this.nightNow, power, s2?.wind ?? 0.6);
     }
+    // [perf] Low is really cheaper: the wear decals are not drawn, and the lamps' flicker, the rooms' and the people's animation step every
+    // other picture (their motion is driven by the clock, so it only becomes a little coarser: Low draws at ~24 pictures a second anyway).
+    const lowQ = this.postfx?.quality === 'low';
+    this.lowSkip = lowQ && (++this.frameNo & 1) === 1;
+    if (this.decals && this.decals.container.visible === lowQ) this.decals.container.visible = !lowQ;
     this.shaft?.animate(this.time, power);
     this.utilities?.animate(this.time, power);
-    this.front?.animate(this.time, power);
-    this.decals?.animate(this.time, power); // [gfx2 wear]
+    if (!this.lowSkip) {
+      this.front?.animate(this.time, power);
+      if (!lowQ) this.decals?.animate(this.time, power); // [gfx2 wear]
+    }
     this.atmo?.update(this.time, dt, power, this.worldContainer, this.app.screen, this.postfx?.quality ?? 'high'); // [gfx2 wear]
     setRoomFxQuality(this.postfx?.quality ?? 'high'); // gfx-p0 rooms: heat haze on high, fewer particles on low
     this.cullRooms();
     for (const [id, v] of this.views) {
-      if (!v.culled) {
+      if (!v.culled && !this.lowSkip) {
         v.visual?.animate(this.time, power);
         v.scaffold?.animate(this.time, power);
       }
@@ -2077,7 +2101,7 @@ export class BunkerRenderer {
     const label = new Container();
     label.position.set(slotX(r.x) + width / 2, floorTop(r.floor) + ROOM_H * 0.3);
     label.eventMode = 'none';
-    return { root, visual: null, people, label, visualSig: '', labelSig: '', width, bar: null, lane: { x0: 14, x1: width - 14 } };
+    return { root, visual: null, people, label, visualSig: '', labelSig: '', width, bar: null, attached: true, lane: { x0: 14, x1: width - 14 } };
   }
 
   /** Floating badge over a ruin: tap to clear, needs a pump, needs hands, and the work progress. */

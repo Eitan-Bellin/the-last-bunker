@@ -37,6 +37,19 @@ export class PerformanceMonitor {
     this.lastTime = timestamp;
   }
 
+  /** Level changes so far this session (and when the last one was, ms since the page started), for the diagnostics report. */
+  changes = 0;
+  lastChangeAt = 0;
+
+  /** Diagnostics: median and 95th-percentile time between pictures over the last ~60 pictures, and how many were slower than twice the target. */
+  summary(): { p50Ms: number; p95Ms: number; jankPct: number } {
+    const n = this.frameTimes.length;
+    if (!n) return { p50Ms: 0, p95Ms: 0, jankPct: 0 };
+    const s = this.frameTimes.slice().sort((a, b) => a - b);
+    const q = (p: number) => Math.round(s[Math.min(n - 1, Math.floor(n * p))] * 10) / 10; // in 60-fps terms
+    return { p50Ms: q(0.5), p95Ms: q(0.95), jankPct: Math.round((s.filter(x => x > 2 * (1000 / 60)).length / n) * 100) };
+  }
+
   /** Typical (median) picture rate in 60-fps terms: a lone slow frame does not move it. */
   get averageFps(): number {
     if (this.frameTimes.length === 0) return 60;
@@ -63,6 +76,8 @@ export class PerformanceMonitor {
         this.badWindows = 0;
         if (this.quality === 'high') this.quality = 'medium';
         else if (this.quality === 'medium') this.quality = 'low';
+        this.changes++;
+        this.lastChangeAt = Math.round(performance.now() / 1000);
         this.frameTimes.length = 0; // judge the new level on its own frames
         this.quietUntil = performance.now() + 5000;
       }
@@ -72,6 +87,8 @@ export class PerformanceMonitor {
       if (this.stableFrames > this.requiredStableFrames && !this.lowBattery) {
         if (this.quality === 'low') this.quality = 'medium';
         else if (this.quality === 'medium' && this.maxQuality === 'high') this.quality = 'high';
+        this.changes++;
+        this.lastChangeAt = Math.round(performance.now() / 1000);
         this.stableFrames = 0;
         this.frameTimes.length = 0;
         this.quietUntil = performance.now() + 5000;

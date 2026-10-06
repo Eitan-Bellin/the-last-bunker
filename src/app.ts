@@ -329,6 +329,7 @@ export class GameApp {
       heapMB: mem ? Math.round(mem.usedJSHeapSize / 1048576) : null,
       ...this.renderer.gpuStats(),
       quality: this.renderer.postfx?.quality ?? null,
+      frames: this.renderer.postfx?.health ?? null, // [perf] p50/p95 time between pictures (60-fps units), share of janky ones, level changes
       bright: this.renderer.postfx?.brightness ?? null,
       lite: isLiteMode(),
       audio: this.audio.debugState,

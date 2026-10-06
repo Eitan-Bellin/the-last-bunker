@@ -8,7 +8,8 @@
     "f24-close-low":       { "floors": 24, "people": 60, "camera": "close",    "quality": "low" },
     "f24-close-high":      { "floors": 24, "people": 60, "camera": "close",    "quality": "high" },
     "f24-idle-medium":     { "floors": 24, "people": 60, "camera": "overview", "quality": "medium", "mode": "idle" },
-    "audio-start":         { "kind": "audio" }
+    "audio-start":         { "kind": "audio" },
+    "offline-24h":         { "kind": "offline", "floors": 24, "people": 60, "hours": 24 }
   },
   "global": {}
 }

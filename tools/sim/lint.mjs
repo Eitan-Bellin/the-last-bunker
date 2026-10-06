@@ -22,6 +22,14 @@ for (const k of Object.keys(i18n.en)) {
   if (k in i18n.he && holes(i18n.en[k]) !== holes(i18n.he[k])) problems.push(`i18n: ${k} placeholders differ (en {${holes(i18n.en[k])}} vs he {${holes(i18n.he[k])}})`);
 }
 
+// Performance budget (tools/perf/run.mjs gates a build on it): the file exists and names scenarios and limits.
+try {
+  const b = JSON.parse(readFileSync(join(ROOT, 'tools', 'perf', 'budget.json'), 'utf8'));
+  if (!b.scenarios || !Object.keys(b.scenarios).length) problems.push('perf: tools/perf/budget.json has no scenarios');
+} catch (e) {
+  problems.push(`perf: tools/perf/budget.json is missing or not valid JSON (${e.message})`);
+}
+
 const { file } = await bundleSim({ tag: 'lint', entry: join(HERE, 'lint.ts') });
 const mod = await import(pathToFileURL(file).href);
 problems.push(...mod.lintData(i18n));
