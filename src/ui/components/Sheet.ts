@@ -162,8 +162,10 @@ export class Sheet {
   show(): void {
     if (!this.open) {
       uiSound('open', 0.7, 150);
-      // [Q6] The newest sheet is the top one (the Bunker Book opens over the sheet it was asked from).
-      document.body.appendChild(this.overlay);
+      // [Q6] The newest sheet is the top sheet (the Bunker Book opens over the sheet it was asked from), but always below dialogs.
+      const modal = document.querySelector('.modal-overlay');
+      if (modal && modal.parentElement === document.body) document.body.insertBefore(this.overlay, modal);
+      else document.body.appendChild(this.overlay);
     }
     this.open = true;
     this.panel.style.transform = '';

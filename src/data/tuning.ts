@@ -36,8 +36,8 @@ export const TUNING = {
   charterStageHours: [0, 3, 17, 12, 9, 9, 9, 9],
   /** [P4] Contracts: an offer every so many world seconds, open this long, at most this many waiting; paid in hours of income. */
   contractEvery: 3600,
-  contractDeadline: 21600,
-  contractMaxOpen: 4,
+  contractDeadline: 14400,
+  contractMaxOpen: 3,
   contractRewardHours: 3,
   /** [Q5] A supply contract asks this many hours of the bunker's own production of one scarce good (x0.8..1.2 by roll). */
   contractAskHours: 1,

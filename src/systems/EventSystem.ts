@@ -457,11 +457,13 @@ export interface RaidResult {
   captive?: string;
 }
 
-/** What the lookout sees coming: 10 + 9 per Act (8 per era in an older bunker) + 0.15 per resident, ±25%, scaled to the bunker, the threat and the season. */
+/** What the lookout sees coming: 10 + 8 per Act, then 6 more per Act after the third (8 per era in an older bunker) + 0.15 per resident, ±25%, scaled to the bunker, the threat and the season. */
 export function raidStrength(state: GameState, roll = 0.5): number {
   const lg = state.longGame;
-  // [Q11] 9 per Act in a long game (was 8 per era: flat from day 7), the old 8 per era for older bunkers.
-  const level = lg && !lg.meta.legacy ? 9 * lg.meta.act : 8 * Math.max(0, state.era ?? 0);
+  // [Q11] In a long game the level follows the Act: 8 per Act up to Act III (as the old 8 per era), then 6 more per Act
+  // (was flat from day 7, when the era stopped at 3). Older bunkers keep 8 per era.
+  const act = lg?.meta.act ?? 1;
+  const level = lg && !lg.meta.legacy ? (act <= 3 ? 8 * act : 24 + 6 * (act - 3)) : 8 * Math.max(0, state.era ?? 0);
   const base = 10 + level + 0.15 * state.survivors.length;
   return Math.max(10, Math.round(base * RAID_SCALE * (1 + state.survivors.length / RAID_CROWD) * (0.75 + roll * 0.5)
     * difficultyOf(state).raidStrength * threatStrength(state)));
