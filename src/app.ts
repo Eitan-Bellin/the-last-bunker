@@ -60,6 +60,7 @@ import { arrivalGap, type RaidResult } from './systems/EventSystem';
 import { DialogQueue, type DialogSource } from './ui/dialogQueue'; // [plan4:UX-10]
 import { getChapter } from './data/story';
 import { districtDef } from './data/districts';
+import { haptic } from './utils/haptics'; // [plan4:UX-20]
 import './style.css';
 import './styles/story.css';
 import './styles/bunker-os.css';
@@ -67,6 +68,7 @@ import './styles/depth.css';
 import './styles/command.css';
 import './styles/checkin.css'; // [plan4:Gameplay] dialog queue card, gesture tips, check-in screen
 import './styles/touch.css'; // [plan4:UX-5] last again (its header says so): its 44px targets must beat the older sheet-help sizes in command.css
+import './styles/placement.css'; // [plan4:ST-19] the confirm bar and the chips over the ghost room
 import './styles/a11y.css'; // [plan4:AC-2] the accessibility layer, last of all: reduced motion, colour modes, focus rings
 import { FeedbackController } from './ui/controllers/feedback';
 import { InboxController } from './ui/controllers/inbox';
@@ -927,9 +929,8 @@ export class GameApp {
     this.renderer.onRuinClick = (ruinId: string) => {
       this.engine.notifyInteraction();
       if (this.placementMode) {
-        this.audio.play('error');
         const r = this.state.ruins.find(x => x.id === ruinId);
-        if (r) this.world.rejectAt({ x: r.x, y: 0, floor: r.floor });
+        if (r) this.world.ghostTap({ x: r.x, y: 0, floor: r.floor }); // [plan4:ST-19]
         return;
       }
       this.audio.play('click');
@@ -951,8 +952,16 @@ export class GameApp {
     };
     this.renderer.nameOf = (s: { name: string }) => this.localName(s.name);
     this.renderer.onBubbleTap = (id: string) => this.world.collectBubble(id);
+    this.renderer.onPersonLift = () => haptic('impact'); // [plan4:UX-20] the lift; the drop's own impact is in WorldController.dropSurvivor
+    this.renderer.onPersonHover = (sid, tid, sx, sy) => this.world.hoverPerson(sid, tid, sx, sy);
     this.renderer.onPersonDrop = (sid: string, target: string | null) => { this.tips.learned('hold'); this.world.dropSurvivor(sid, target); }; // [plan4:UX-11]
     this.renderer.onPersonTap = (sid: string) => {
+      if (this.placementMode) {
+        // [plan4:ST-19] While choosing a spot a tap on someone is a tap on the room they stand in (the ghost shows why it cannot go there), not the people panel.
+        const room = this.state.buildings.find(b => b.id === this.state.survivors.find(s => s.id === sid)?.assignedBuildingId);
+        if (room) this.world.ghostTap(room.position);
+        return;
+      }
       this.audio.play('click');
       this.closeSheets();
       this.peoplePanel.show(sid);
@@ -991,28 +1000,20 @@ export class GameApp {
 
     this.buildingPanel.onClose = () => this.renderer.setSelected(null);
 
+    // [plan4:ST-19] A tap on a slot no longer builds: it puts the ghost of the room there (Build on the bar confirms, WorldController.confirmPlacement).
     this.renderer.onTileClick = (pos: Position) => {
       this.engine.notifyInteraction();
       if (!this.placementMode) return;
-      if (this.world.tryPlaceBuilding(this.placementMode, pos)) {
-        this.audio.play('place');
-        const c = this.renderer.slotCenter(pos);
-        this.renderer.burstAt(c.x, c.y + 30, 80);
-        this.renderer.shake(2, 0.25);
-        this.world.cancelPlacement();
-      } else {
-        this.audio.play('error');
-        this.world.rejectAt(pos);
-      }
+      this.world.ghostTap(pos);
     };
+    this.renderer.onBuildingLongPress = (id: string) => this.world.roomActions(id); // [plan4:ST-19] press and hold a room: Move
 
     this.renderer.onBuildingClick = (buildingId: string) => {
       this.engine.notifyInteraction();
       const building = this.state.buildings.find(b => b.id === buildingId);
       if (!building) return;
       if (this.placementMode) {
-        this.audio.play('error');
-        this.world.rejectAt(building.position);
+        this.world.ghostTap(building.position); // [plan4:ST-19] the ghost shows there why it cannot stand on a room
         return;
       }
       this.audio.play('click');

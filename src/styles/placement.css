@@ -1,0 +1,138 @@
+/* [plan4:ST-19] Placing a room: the confirm bar above the bottom nav and the chips that follow the ghost room.
+   Imported once from app.ts. Targets are 48px tall and 56px wide at least; every font goes through --fs (Text size XL); the bar keeps clear of the
+   safe areas (the nav's --nav-h already contains the home-bar inset) and of the depth ruler; the thumb side follows data-onehand. */
+
+.placement-bar {
+  position: fixed;
+  left: max(8px, env(safe-area-inset-left));
+  right: max(8px, env(safe-area-inset-right));
+  bottom: calc(var(--nav-h, 72px) + var(--obj-h, 0px) + 10px);
+  margin-inline: auto;
+  width: max-content;
+  max-width: calc(100% - 16px - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px));
+  z-index: 24;
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+  padding: 8px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.6);
+  animation: pl-rise 0.16s ease-out;
+}
+.placement-bar[style*="none"] { animation: none; }
+@keyframes pl-rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+:root[data-motion="reduced"] .placement-bar { animation: none; }
+
+.pl-btn {
+  min-width: 56px;
+  min-height: 48px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: rgba(30, 38, 34, 0.95);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: calc(13px * var(--fs, 1));
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.pl-btn .ic { width: 1.25em; height: 1.25em; flex: none; }
+.pl-btn:active { transform: translateY(1px); }
+.pl-cancel { color: #ffd0cc; border-color: rgba(255, 85, 85, 0.5); }
+.pl-rec { color: var(--accent); border-color: var(--accent); }
+.pl-build {
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  row-gap: 2px;
+  background: rgba(36, 78, 50, 0.95);
+  border: 2px solid var(--ok);
+  color: #eaffef;
+}
+/* Not ready (no ghost yet, or the spot is refused): a dashed frame and a duller face, so it is not colour alone (still tappable: it says why). */
+.pl-build.idle { border-style: dashed; background: rgba(30, 38, 34, 0.95); color: var(--text-secondary); }
+.pl-build .cost-row { gap: 4px; flex-wrap: nowrap; }
+.pl-build .cost-chip { font-size: calc(11px * var(--fs, 1)); padding: 1px 5px; }
+.pl-cost-slot { display: inline-flex; }
+
+/* Keep the bar's thumb side: Build is the button under the thumb (one-hand mode), the others sit beside it. */
+:root[data-onehand="right"] .placement-bar { direction: ltr; margin-inline: auto 0; }
+:root[data-onehand="left"] .placement-bar { direction: ltr; flex-direction: row-reverse; margin-inline: 0 auto; }
+/* The depth ruler hugs the screen edge on the thumb's opposite side: leave it clear on a phone. */
+.placement-bar-on .depth-ruler { opacity: 0.6; }
+
+/* Narrow phones: the Best spot button shows only its icon and a short label, the price chips may wrap under "Build". */
+@media (max-width: 380px) {
+  .pl-btn { padding-inline: 8px; }
+  .pl-rec .pl-lbl { max-width: 5.6em; line-height: 1.1; text-align: center; }
+  .pl-build .cost-row { flex-wrap: wrap; justify-content: center; }
+}
+
+/* ---- chips that follow the ghost ---- */
+.placement-chips {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 14;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 4px;
+  width: max-content;
+  max-width: calc(100vw - 16px);
+  pointer-events: none;
+  will-change: transform;
+}
+.pl-chip, .placement-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 9px;
+  border-radius: 12px;
+  background: rgba(10, 12, 14, 0.92);
+  border: 1px solid var(--info);
+  color: #eaf4ff;
+  font-size: calc(12px * var(--fs, 1));
+  font-weight: 700;
+  line-height: 1.25;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.55);
+  white-space: nowrap;
+  --chip-i: var(--ic-dot);
+  --chip-c: var(--info);
+}
+.pl-chip::before, .placement-hint::before {
+  content: '';
+  width: 0.95em;
+  height: 0.95em;
+  flex: none;
+  background: var(--chip-c);
+  -webkit-mask: var(--chip-i) center / contain no-repeat;
+  mask: var(--chip-i) center / contain no-repeat;
+}
+/* Status is told by the icon and the line style as well as the colour (AC-7): solid good, dashed warning, double bad. */
+.pl-chip.good { border-color: var(--ok); border-style: solid; --chip-i: var(--ic-check); --chip-c: var(--ok); }
+.pl-chip.warn, .placement-hint.warn { border-color: var(--warn); border-style: dashed; --chip-i: var(--ic-warn); --chip-c: var(--warn); }
+.pl-chip.bad, .placement-hint.bad { border-color: var(--bad); border-style: double; border-width: 3px; --chip-i: var(--ic-cross); --chip-c: var(--bad); color: #ffe0de; white-space: normal; max-width: min(86vw, 320px); }
+.pl-chip.info { --chip-i: var(--ic-dot); --chip-c: var(--info); }
+
+.placement-hint {
+  position: fixed;
+  left: 0;
+  right: 0;
+  margin-inline: auto;
+  width: max-content;
+  max-width: calc(100% - 24px);
+  bottom: calc(var(--nav-h, 72px) + var(--obj-h, 0px) + var(--pl-h, 64px) + 18px);
+  z-index: 25;
+  white-space: normal;
+  pointer-events: none;
+}
+
+/* Placement mode: the crosshair cursor of the older stylesheet is wrong for the grab-and-drag ghost. */
+body.placement-mode #game-canvas { cursor: default; }

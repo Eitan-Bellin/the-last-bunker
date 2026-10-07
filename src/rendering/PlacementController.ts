@@ -18,7 +18,7 @@ export interface PlacementHost {
 const DASH = 7;
 
 /** Traces a dashed rectangle outline into the pending path (the caller strokes it). Highlights are built once per placement, not per frame. */
-function dashedRect(g: Graphics, x: number, y: number, w: number, h: number, dash: number, gap: number): void {
+export function dashedRect(g: Graphics, x: number, y: number, w: number, h: number, dash: number, gap: number): void {
   const edge = (x0: number, y0: number, x1: number, y1: number): void => {
     const len = Math.hypot(x1 - x0, y1 - y0);
     const ux = (x1 - x0) / len, uy = (y1 - y0) / len;
@@ -41,6 +41,8 @@ export class PlacementController {
   private readonly highlightLayer: Graphics;
   /** [plan4:X-2] How far each floor reaches (slots x in [-w, e)); the classic 12 east until the renderer passes the saved layout. */
   private extentOf: (floor: number) => { w: number; e: number } = () => ({ w: 0, e: BASE_EAST });
+  /** [plan4:ST-19] How many floors the pad covers (for slotAtWorld). */
+  private floorCount = 0;
 
   constructor(host: PlacementHost, slotLayer: Container, highlightLayer: Graphics) {
     this.host = host;
@@ -51,17 +53,11 @@ export class PlacementController {
   /** Replaces the tap pad for a bunker of `floors` floors. */
   rebuildPad(floors: number, extentOf?: (floor: number) => { w: number; e: number }): void {
     if (extentOf) this.extentOf = extentOf;
+    this.floorCount = floors;
     this.slotLayer.removeChildren().forEach(c => c.destroy());
     // [perf] The empty slots are one tappable area that works out which slot was hit, not 12 objects per floor (288 at 24 floors).
     const pad = new Container();
-    const slotAt = (px: number, py: number): Position | null => {
-      const s = slotAtX(px);
-      const { floor: f, offset } = floorAtY(py);
-      if (s === null || f < 0 || f >= floors || offset >= ROOM_H) return null;
-      const ext = this.extentOf(f);
-      if (s < -ext.w || s >= ext.e) return null;
-      return { x: s, y: 0, floor: f };
-    };
+    const slotAt = (px: number, py: number): Position | null => this.slotAtWorld(px, py);
     pad.hitArea = { contains: (px: number, py: number) => slotAt(px, py) !== null };
     pad.eventMode = 'static';
     pad.cursor = 'pointer';
@@ -72,6 +68,24 @@ export class PlacementController {
       if (pos) this.host.onTileClick(pos);
     });
     this.slotLayer.addChild(pad);
+  }
+
+  /** [plan4:ST-19] The slot a world point falls in (null over the shaft, a slab, a gallery or outside what the floors reach). */
+  slotAtWorld(px: number, py: number): Position | null {
+    const s = slotAtX(px);
+    const { floor: f, offset } = floorAtY(py);
+    if (s === null || f < 0 || f >= this.floorCount || offset >= ROOM_H) return null;
+    const ext = this.extentOf(f);
+    if (s < -ext.w || s >= ext.e) return null;
+    return { x: s, y: 0, floor: f };
+  }
+
+  /** [plan4:ST-19] Is a world point anywhere inside the bunker's outline (slots, shaft, slabs): a tap there is not a tap on "empty space". */
+  insideBunker(px: number, py: number): boolean {
+    if (this.floorCount <= 0) return false;
+    let w = 0, e = BASE_EAST;
+    for (let f = 0; f < this.floorCount; f++) { const x = this.extentOf(f); if (x.w > w) w = x.w; if (x.e > e) e = x.e; }
+    return px >= (w > 0 ? slotX(-w) : 0) - 8 && px <= slotX(e) + 4 && py >= floorTop(0) - 6 && py <= floorTop(this.floorCount - 1) + ROOM_H + SLAB;
   }
 
   setHighlight(isValid: ((pos: Position) => boolean) | null, levels: number, floors: number): void {
