@@ -179,6 +179,14 @@ export class ResourceSystem {
     }
 
     const deltas: StateDelta[] = [];
+    // [plan4:BL-25] The pre-war vault makes blueprints: whole numbers and not a ticked resource, so the fraction builds up in stats.planDust and each whole plan moves over.
+    const plans = production.blueprints ?? 0;
+    if (plans > 0) {
+      const dust = (state.stats.planDust ?? 0) + plans * dt;
+      const whole = Math.floor(dust);
+      deltas.push({ path: 'stats.planDust', value: dust - whole });
+      if (whole > 0) deltas.push({ path: 'resources.blueprints.amount', value: (state.resources.blueprints?.amount ?? 0) + whole });
+    }
     for (const rt of TICKED_RESOURCES) {
       const res = state.resources[rt];
       const prod = production[rt] ?? 0;

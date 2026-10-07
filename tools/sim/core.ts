@@ -568,7 +568,8 @@ export async function runSim(o: SimOptions): Promise<SimResult> {
   };
 
   /** [plan4:BL-15..32] Research nodes that only unlock a wave 2 room. */
-  const WAVE2_ROOMS = ['quarantineWard', 'solarArray', 'windTurbine', 'watchtower', 'garage', 'decon', 'aquaculture', 'market', 'nursery', 'school', 'bathhouse', 'memorialHall'];
+  const WAVE2_ROOMS = ['quarantineWard', 'solarArray', 'windTurbine', 'watchtower', 'garage', 'decon', 'aquaculture', 'market', 'nursery', 'school', 'bathhouse', 'memorialHall',
+    'geothermal', 'oldVault', 'componentsPlant', 'alloyFoundry', 'dataCenter', 'forum', 'seedLab']; // plan4:BL-24,25,34..38 wave 3 nodes ride along (the districts' nodes too)
   const lateRoomNode = new Set(researchData.RESEARCH.filter(r => r.effects.some(x => x.type === 'unlock' && WAVE2_ROOMS.includes(x.building))).map(r => r.id));
   const startResearch = () => {
     const ids = [...researchData.RESEARCH.map(r => r.id)];
@@ -612,7 +613,9 @@ export async function runSim(o: SimOptions): Promise<SimResult> {
   /** [plan4] The rooms of the redesign's first wave: the bot builds them last and upgrades them last (core rooms carry the Act goals). */
   const NEW_ROOMS: BuildingType[] = ['batteryBank', 'commons', 'library', 'recycler', 'condenser', 'mushroomFarm', 'gatePost', 'barracks',
     // [plan4:BL-15..32] wave 2
-    'quarantineWard', 'solarArray', 'windTurbine', 'watchtower', 'garage', 'decon', 'aquaculture', 'market', 'nursery', 'school', 'bathhouse', 'memorialHall'];
+    'quarantineWard', 'solarArray', 'windTurbine', 'watchtower', 'garage', 'decon', 'aquaculture', 'market', 'nursery', 'school', 'bathhouse', 'memorialHall',
+    // [plan4:BL-34..38] wave 3
+    'componentsPlant', 'alloyFoundry', 'dataCenter', 'forum', 'seedLab'];
   const hallsStillFit = (type: BuildingType, pos: { x: number; y: number; floor: number }) => {
     const s = state();
     const fake = { id: 'b_fake', type, level: 1, position: pos, assignedSurvivorIds: [], constructionProgress: 0, constructionTotal: 1, isConstructing: true, specialization: null };
@@ -678,6 +681,12 @@ export async function runSim(o: SimOptions): Promise<SimResult> {
     wantNew('solarArray', 2, act >= 4 ? 3 : 2, net('power') < 3 || act >= 3);
     wantNew('windTurbine', 3, act >= 5 ? 3 : 1, net('power') < 3 || act >= 4);
     wantNew('watchtower', 3, act >= 5 ? 2 : 1);
+    // [plan4:BL-34..38] The Act rooms: one each, in the Act that introduces the currency (research, the Act's price and the spot are the only other gates).
+    wantNew('componentsPlant', 3, 1);
+    wantNew('alloyFoundry', 4, 1);
+    wantNew('dataCenter', 5, 1);
+    wantNew('forum', 6, 1);
+    wantNew('seedLab', 7, 1);
     noSpaceFor = null;
     for (const type of want) {
       if (!BUILDABLE_TYPES.includes(type) || !isBuildingUnlocked(s, type)) continue;

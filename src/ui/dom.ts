@@ -70,6 +70,14 @@ export const BUILDING_ICONS: Record<string, string> = {
   school: tok('school'),
   bathhouse: tok('bathhouse'),
   memorialHall: tok('memorialHall'),
+  // [plan4:BL-24,25,34..38] wave 3
+  geothermal: tok('geothermal'),
+  oldVault: tok('oldVault'),
+  componentsPlant: tok('componentsPlant'),
+  alloyFoundry: tok('alloyFoundry'),
+  dataCenter: tok('dataCenter'),
+  forum: tok('forum'),
+  seedLab: tok('seedLab'),
 };
 // [plan4:ST-16] stand-in icons for the surface row's rooms until Rooms-Data's own arrive (??= keeps theirs)
 BUILDING_ICONS.solarArray ??= tok('sun');
@@ -128,6 +136,15 @@ export function el<K extends keyof HTMLElementTagNameMap>(
   if (className) node.className = className;
   if (text !== undefined) setRich(node, text);
   return node;
+}
+
+/**
+ * [plan4:BL-25,34..38] A production rate for the panels: per second as usual, but a trickle (the pre-war vault's blueprints, a forum's influence:
+ * under 0.01 a second) is shown per hour, since "+0.00 /s" says nothing.
+ */
+export function rateText(perSecond: number): string {
+  if (perSecond > 0 && perSecond < 0.005) return `${i18n.formatRate(perSecond * 3600)} ${i18n.t('resources.perHour')}`;
+  return `${i18n.formatRate(perSecond)} ${i18n.t('resources.perSecond')}`;
 }
 
 export function costRow(state: GameState, cost: Record<string, number>): HTMLDivElement {

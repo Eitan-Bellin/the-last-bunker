@@ -76,7 +76,15 @@ export type BuildingType =
   | 'nursery'
   | 'school'
   | 'bathhouse'
-  | 'memorialHall';
+  | 'memorialHall'
+  // [plan4:BL-24,25,34..38] wave 3: two districts (dug, never placed) and the five Act rooms
+  | 'geothermal'
+  | 'oldVault'
+  | 'componentsPlant'
+  | 'alloyFoundry'
+  | 'dataCenter'
+  | 'forum'
+  | 'seedLab';
 
 export interface BuildingInstance {
   id: string;
@@ -250,6 +258,8 @@ export interface GameStats {
   totalMissionsCompleted: number;
   totalCrisesSurvived: number;
   totalPrestigeResets: number;
+  /** [plan4:BL-25] The fraction of a blueprint the pre-war vault has made so far (blueprints are whole numbers; whole ones move to the resource). migrateState fills 0. */
+  planDust: number;
 }
 
 export interface ActiveEvent {
@@ -292,7 +302,7 @@ export interface Incident {
 
 // ---- [Danger] raids, disasters, maintenance and mourning (LATEGAME-PLAN part C) ----
 
-export type DisasterKind = 'collapse' | 'deepFlood' | 'epidemic' | 'meltdown';
+export type DisasterKind = 'collapse' | 'deepFlood' | 'epidemic' | 'meltdown' | 'steam'; // [plan4:BL-24] steam = the geothermal vent bursting
 
 /** A disaster with a countdown: handle it before the deadline or it strikes. */
 export interface Disaster {
@@ -642,6 +652,7 @@ export function createInitialState(): GameState {
       totalMissionsCompleted: 0,
       totalCrisesSurvived: 0,
       totalPrestigeResets: 0,
+      planDust: 0,
     },
     achievements: [],
     storyFlags: [],

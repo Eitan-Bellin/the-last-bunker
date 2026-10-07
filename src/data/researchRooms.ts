@@ -144,4 +144,55 @@ export const ROOM_RESEARCH: ResearchDef[] = [
     cost: { knowledge: 35, materials: 40 }, time: 240, requires: ['waterFiltration'],
     effects: [{ type: 'unlock', building: 'bathhouse' }],
   },
+  // ---- [plan4:BL-24,25,34..38] wave 3: the two Act districts (the node also gates the tunnel, see districts.ts needsResearch) and the five Act rooms ----
+  // Prices stay small on purpose, like the other room nodes (a room is a choice, not a milestone); the Act room nodes chain on each other so they come one Act apart.
+  {
+    id: 'microfab', branch: 'infrastructure', tier: 5, icon: '[[componentsPlant]]', act: 3,
+    name: { he: 'מיקרו־ייצור', en: 'Micro-fabrication' },
+    desc: { he: 'פותח: מפעל רכיבים – פי אחד וחצי רכיבים מפס הרכבה', en: 'Unlocks: Components Plant – one and a half times the components of an assembly line' },
+    cost: { knowledge: 200, scrap: 100 }, time: 3600, requires: ['advancedEngineering'],
+    effects: [{ type: 'unlock', building: 'componentsPlant' }],
+  },
+  {
+    id: 'geothermalVents', branch: 'infrastructure', tier: 6, icon: '[[geothermal]]', act: 4,
+    name: { he: 'מערות קיטור', en: 'Steam Vents' },
+    desc: { he: 'פותח: מערת קיטור – חשמל בלי דלק בקומות העמוקות (מחוז)', en: 'Unlocks: Geothermal Vent – power without fuel on the deep levels (a district)' },
+    cost: { knowledge: 220, scrap: 80 }, time: 3600, requires: ['deepDrilling'],
+    effects: [{ type: 'unlock', building: 'geothermal' }],
+  },
+  {
+    id: 'alloyCasting', branch: 'infrastructure', tier: 6, icon: '[[alloyFoundry]]', act: 4,
+    name: { he: 'יציקת סגסוגות', en: 'Alloy Casting' },
+    desc: { he: 'פותח: יצקת סגסוגות – פי אחד וחצי סגסוגות מכבשן קשת', en: 'Unlocks: Alloy Foundry – one and a half times the alloys of an arc furnace' },
+    cost: { knowledge: 260, scrap: 110 }, time: 4800, requires: ['microfab'],
+    effects: [{ type: 'unlock', building: 'alloyFoundry' }],
+  },
+  {
+    id: 'vaultSurvey', branch: 'exploration', tier: 7, icon: '[[oldVault]]', act: 5,
+    name: { he: 'סקר הכספות', en: 'Vault Survey' },
+    desc: { he: 'פותח: כספת טרום־מלחמה – תוכניות חדשות מהארכיון הישן (מחוז)', en: 'Unlocks: Pre-War Vault – new blueprints from the old archive (a district)' },
+    cost: { knowledge: 240, scrap: 90 }, time: 3600, requires: ['deepDrilling'],
+    effects: [{ type: 'unlock', building: 'oldVault' }],
+  },
+  {
+    id: 'dataCenter', branch: 'infrastructure', tier: 7, icon: '[[dataCenter]]', act: 5,
+    name: { he: 'מרכז נתונים', en: 'Data Center' },
+    desc: { he: 'פותח: מרכז נתונים – פי אחד וחצי נתונים מכספת נתונים', en: 'Unlocks: Data Center – one and a half times the data of a data vault' },
+    cost: { knowledge: 320, scrap: 120 }, time: 6000, requires: ['alloyCasting'],
+    effects: [{ type: 'unlock', building: 'dataCenter' }],
+  },
+  {
+    id: 'civicForum', branch: 'society', tier: 8, icon: '[[forum]]', act: 6,
+    name: { he: 'פורום אזרחי', en: 'Civic Forum' },
+    desc: { he: 'פותח: פורום האזרחים – פי אחד וחצי השפעה מאולם מועצה', en: 'Unlocks: Citizens\' Forum – one and a half times the influence of a council hall' },
+    cost: { knowledge: 380, scrap: 130 }, time: 7200, requires: ['leadership'],
+    effects: [{ type: 'unlock', building: 'forum' }],
+  },
+  {
+    id: 'seedGenetics', branch: 'survival', tier: 8, icon: '[[seedLab]]', act: 7,
+    name: { he: 'גנטיקת זרעים', en: 'Seed Genetics' },
+    desc: { he: 'פותח: מעבדת זרעים – פי אחד וחצי ליבות זרע מכור זרעים', en: 'Unlocks: Seed Lab – one and a half times the seed cores of a seed forge' },
+    cost: { knowledge: 450, scrap: 150 }, time: 9000, requires: ['dataCenter'],
+    effects: [{ type: 'unlock', building: 'seedLab' }],
+  },
 ];

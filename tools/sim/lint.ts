@@ -9,7 +9,7 @@ import { StateManager } from '../../src/core/StateManager';
 import { SeededRandom } from '../../src/core/Random';
 import { allowedFloors, crossesGallery } from '../../src/data/zones';
 import { DISTRICTS, availableDistricts, nextDistrict } from '../../src/data/districts';
-import { DISTRICT_KEYS } from '../../src/art/registry';
+import { DISTRICT_ART_ALIAS, DISTRICT_KEYS } from '../../src/art/registry';
 import { DISTRICT_GAP, DISTRICT_X, FLOOR_H, GALLERY_MAX, ROOM_H, SLOT_W, buildingX, floorTop, slotX } from '../../src/rendering/geom';
 import { GFX } from '../../src/rendering/gfxFeatures';
 import { ALL_RESOURCES, RESOURCES } from '../../src/data/resources';
@@ -478,7 +478,7 @@ export function districtAndGalleryProblems(games: { name: string; json: string |
   for (const d of DISTRICTS) {
     if (!(DISTRICT_KINDS as string[]).includes(d.kind)) fail(`${d.kind} is in DISTRICTS but not in DISTRICT_KINDS`);
     if (!BUILDING_DEFS[d.kind as BuildingType]) fail(`${d.kind} has no entry in buildings.json`);
-    if (!(DISTRICT_KEYS as readonly string[]).includes(d.kind)) fail(`${d.kind} has no painting key in DISTRICT_KEYS (art/registry.ts)`);
+    if (!(DISTRICT_KEYS as readonly string[]).includes(d.kind) && !DISTRICT_ART_ALIAS[d.kind]) fail(`${d.kind} has no painting key in DISTRICT_KEYS or DISTRICT_ART_ALIAS (art/registry.ts)`); // plan4:BL-24,25
     if (!Number.isInteger(d.floor) || d.floor < 1 || d.floor > 22) fail(`${d.kind}: floor rule ${d.floor} is not a level a tunnel can open on (1..22)`);
     if (floors.has(d.floor)) fail(`${d.kind}: floor ${d.floor} already holds another district (one per floor)`);
     floors.add(d.floor);

@@ -312,6 +312,7 @@ export class IncidentSystem {
       if (b.position.floor >= 5 && plain) out.push({ kind: 'collapse', buildingId: b.id, w: 1 + wear / 20 });
       if (b.type === 'waterPump' || b.type === 'waterPurifier') out.push({ kind: 'deepFlood', buildingId: b.id, w: 1 + wear / 20 });
       if (b.type === 'reactor' && effectiveLevel(b) >= 4 && wear >= 40) out.push({ kind: 'meltdown', buildingId: b.id, w: 3 });
+      if (b.type === 'geothermal' && effectiveLevel(b) >= 3 && wear >= 40) out.push({ kind: 'steam', buildingId: b.id, w: 3 }); // plan4:BL-24 a worn vent bursts like a reactor melts
     }
     const pop = state.survivors.length;
     if (pop >= EPIDEMIC_POP && state.buildings.some(b => b.type === 'medbay' && !b.isConstructing)) {
@@ -497,7 +498,8 @@ export class IncidentSystem {
         }
         break;
       }
-      case 'meltdown': {
+      case 'meltdown':
+      case 'steam': { // plan4:BL-24 the vent shuts and burns its crew like a melted reactor does
         if (!b) break;
         res.hurt = this.hurt(b.assignedSurvivorIds, soft ? 25 : 45, floor);
         this.setDanger({ disabled: { ...this.sm.state.danger.disabled, [b.id]: now + (soft ? DAY_MS / 4 : DAY_MS) } });
