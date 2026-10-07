@@ -109,3 +109,20 @@ export function lintData(i18n: Record<string, Record<string, string>>): string[]
   }
   return problems;
 }
+
+/**
+ * [plan4:QA-3] NON-FAILING report: places that still derive the floor from a Y coordinate (`/ FLOOR_H`) or assume a fixed slot count
+ * (`SLOTS_PER_FLOOR`) outside rendering/geom.ts. The redesign (variable floor heights and widths) must route all of these through geom.ts;
+ * once the count reaches 0 a later wave turns the report into a gate (return the lines as problems instead of warnings).
+ */
+export function legacyGeometryWarnings(files: { rel: string; text: string }[]): string[] {
+  const hits: string[] = [];
+  for (const { rel, text } of files) {
+    if (rel === 'rendering/geom.ts') continue;
+    text.split('\n').forEach((line: string, i: number) => {
+      if (/\/\s*FLOOR_H\b/.test(line)) hits.push(`${rel}:${i + 1}: reverse floor lookup "/ FLOOR_H"`);
+      if (/\bSLOTS_PER_FLOOR\b/.test(line)) hits.push(`${rel}:${i + 1}: SLOTS_PER_FLOOR`);
+    });
+  }
+  return hits;
+}
