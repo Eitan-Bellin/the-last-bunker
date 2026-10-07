@@ -2,6 +2,7 @@
 //
 //   npm run build && node tools/a11y/audit.mjs                       # all viewports x text scales, JSON + summary
 //   node tools/a11y/audit.mjs --quick                                 # one viewport, one scale (fast)
+//   node tools/a11y/audit.mjs --aids                                  # with zoom buttons, large targets, one-hand mode, high contrast on
 //   node tools/a11y/audit.mjs --url http://localhost:5173/            # use a running dev server instead of serving dist
 //   node tools/a11y/audit.mjs --tag after --shots store/compare/a11y/shots
 //
@@ -33,6 +34,8 @@ const shotsDir = arg('shots', '') ? path.resolve(String(arg('shots'))) : null;
 const strict = !!arg('strict', false);
 const only = arg('only', '') ? String(arg('only')).split(',') : null; // scene names
 const extraQuery = String(arg('query', ''));
+// --aids: every optional accessibility layer at once (zoom buttons, large targets, one-hand, high contrast, captions): the layers must not break each other.
+const aids = !!arg('aids', false);
 
 const VIEWPORTS = quick ? [[390, 844]] : [[375, 667], [390, 844], [430, 932]];
 const SCALES = quick ? [1.1] : [1.1, 1.4, 1.6];
@@ -83,6 +86,32 @@ const SCENES = [
   })),
 ];
 
+// [plan4:AC-15, wave 3] Scenes for the UI of waves 1-3: they poke the app through the debug handle (`?debug` gives window.__app) and leave
+// everything as they found it. `app()` runs a snippet with `a` (the app), `st` (the state) and `b` (the first ordinary room).
+const app = (c, js) => c.evalJs(`(() => { const a = window.__app, st = a.engine.stateManager.state; const b = st.buildings.find(x => !x.isConstructing && !['elevator','cave','lake','metro'].includes(x.type) && x.position.floor >= 0 && !/^(district|gallery)/.test(String(x.type))); ${js}; return true; })()`);
+const NEW_SCENES = [
+  { name: 'structure-list', run: async (c) => { await app(c, 'a.toggleStructure()'); await sleep(700); }, after: async (c) => { await app(c, 'a.closeSheets()'); await sleep(450); } },
+  // The room panel with the "Doors and exits" card: bulkheads, stairwell and vents are researched, one door is sealed so every state shows.
+  { name: 'room-panel-doors', run: async (c) => {
+      await app(c, `for (const id of ['bulkheads','emergencyExits','ventilation']) st.research[id] = { id, completed: true, progress: 1, total: 1, isResearching: false };
+        if (b) { st.layout.doors = st.layout.doors || {}; for (let k = 0; k < 4; k++) st.layout.doors[b.position.floor + ':' + (b.position.x + k)] = k % 2 ? 'sealed' : 'closed'; a.buildingPanel.show(b.id); }`);
+      await sleep(900);
+    }, after: async (c) => { await app(c, 'a.closeSheets()'); await sleep(450); } },
+  // The Command panel carries the "Safety" card (shut doors, fire code).
+  { name: 'command-safety', run: async (c) => { await app(c, 'a.closeSheets(); a.eraPanel.show(st)'); await sleep(900); }, after: async (c) => { await app(c, 'a.closeSheets()'); await sleep(450); } },
+  // The placement bar and highlights while a room is being placed, then the relocate confirmation of an existing room.
+  { name: 'placement-bar', run: async (c) => { await app(c, 'if (b) a.world.startPlacement(b.type)'); await sleep(900); }, after: async (c) => { await app(c, 'a.world.cancelPlacement()'); await sleep(450); } },
+  { name: 'relocate-dialog', run: async (c) => { await app(c, 'if (b) a.world.roomActions(b.id)'); await sleep(900); }, after: async (c) => { await app(c, 'a.modal.hide()'); await sleep(450); } },
+  { name: 'checkin', run: async (c) => {
+      await app(c, `a.welcome.showWelcome({ seconds: 7200, gained: { food: 120, water: 80 }, wasted: {}, converted: {}, credits: 0, absorbed: {}, arrivals: 1, missions: 1, research: [] })`);
+      await sleep(1000);
+    }, after: async (c) => { await app(c, 'a.welcomeOpen = false; a.modal.hide()'); await sleep(450); } },
+  { name: 'whatsnew', run: async (c) => { await app(c, 'a.whatsNew.open(st)'); await sleep(900); }, after: async (c) => { await app(c, 'a.modal.hide()'); await sleep(450); } },
+  { name: 'gesture-tip', run: async (c) => { await app(c, `a.tips.show({ id: 'pinch', flag: 'tip:audit', textKey: 'tip.pinch', ghost: 'pinch', due: () => true })`); await sleep(900); }, after: async (c) => { await app(c, 'a.tips.hide()'); await sleep(450); } },
+  // The depth ruler is asleep (an 18 px grab strip) until the camera moves vertically: wake it so its names and chips are measured.
+  { name: 'depth-ruler', run: async (c) => { await c.evalJs(`document.querySelectorAll('.depth-ruler').forEach(r => r.classList.add('on')); true`); await sleep(400); }, after: async (c) => { await c.evalJs(`document.querySelectorAll('.depth-ruler').forEach(r => r.classList.remove('on')); true`); } },
+];
+
 async function auditConfig(c, port, w, h, scale, raw) {
   await c.send('Emulation.setDeviceMetricsOverride', { width: w, height: h, deviceScaleFactor: 2, mobile: true });
   const base = extUrl || `http://127.0.0.1:${port}/`;
@@ -90,7 +119,7 @@ async function auditConfig(c, port, w, h, scale, raw) {
   await sleep(1500);
   await seed(c, raw);
   // Text scale as the player would have chosen it (a11y.ts reads this key before the game starts).
-  await c.evalJs(`localStorage.setItem('lastbunker_a11y', JSON.stringify({ textScale: ${scale} })); localStorage.setItem('lastbunker_gfx', 'low'); true`);
+  await c.evalJs(`localStorage.setItem('lastbunker_a11y', JSON.stringify({ textScale: ${scale}, ...${JSON.stringify(aids ? { zoomButtons: true, largeTargets: true, oneHand: 'right', contrast: 'high', captions: true } : {})} })); localStorage.setItem('lastbunker_gfx', 'low'); true`);
   await c.send('Page.navigate', { url: `${base}?slot=a11y&debug${extraQuery}` });
   const ok = await waitFor(c, '!!(window.__engine && window.__renderer && document.querySelector(".hud-bottom"))', 120, 500);
   if (!ok) throw new Error(`game did not start at ${w}x${h}`);
@@ -107,7 +136,7 @@ async function auditConfig(c, port, w, h, scale, raw) {
     await click(c, `[...document.querySelectorAll('.modal-overlay.open .modal-actions button')].pop()`);
     await sleep(600);
   }
-  for (const sc of SCENES) {
+  for (const sc of [...SCENES, ...NEW_SCENES]) {
     if (only && !only.includes(sc.name)) continue;
     try {
       await sc.run(c);

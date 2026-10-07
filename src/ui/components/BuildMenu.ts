@@ -260,8 +260,12 @@ export class BuildMenu {
     const { def, type } = e;
     const full = e.count >= e.max;
     const card = el('div', `bm-card${e.unlocked ? '' : ' locked'}${e.unlocked && (!e.affordable || full) ? ' disabled' : ''}`);
-    card.setAttribute('role', 'button');
-    card.tabIndex = 0;
+    // [plan4:AC-8] A room you can build is a button named by the room; a locked one holds its own "what opens it" button, so it is a group
+    // (a button inside a button is invalid), and a card that cannot be picked now says so (the grey look was the only sign).
+    const pickable = e.unlocked && !full && e.affordable;
+    card.setAttribute('role', e.unlocked ? 'button' : 'group');
+    if (e.unlocked) card.tabIndex = 0;
+    if (e.unlocked && !pickable) card.setAttribute('aria-disabled', 'true');
 
     const thumb = el('div', 'build-icon build-thumb bm-thumb');
     const art = buildingArtKey(type, 0);
@@ -276,7 +280,10 @@ export class BuildMenu {
 
     const info = el('div', 'build-info bm-info');
     const head = el('div', 'bm-head');
-    head.appendChild(el('div', 'build-item-name', def.name[locale] ?? def.name.en));
+    const nameEl = el('div', 'build-item-name', def.name[locale] ?? def.name.en);
+    nameEl.id = `bm-name-${type}`; // [plan4:AC-8] the card's accessible name
+    card.setAttribute('aria-labelledby', nameEl.id);
+    head.appendChild(nameEl);
     const slots = roomSlots(type);
     const dots = el('span', 'bm-dots');
     dots.setAttribute('role', 'img');
@@ -284,7 +291,10 @@ export class BuildMenu {
     for (let i = 0; i < slots; i++) dots.appendChild(el('span', 'bm-dot'));
     head.appendChild(dots);
     info.appendChild(head);
-    info.appendChild(el('div', 'build-item-desc', def.description[locale] ?? def.description.en));
+    const descEl = el('div', 'build-item-desc', def.description[locale] ?? def.description.en);
+    descEl.id = `bm-desc-${type}`;
+    card.setAttribute('aria-describedby', descEl.id);
+    info.appendChild(descEl);
 
     const outs = this.outputs(def);
     if (outs.length) {
