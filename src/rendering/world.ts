@@ -7,6 +7,8 @@ import { block, hGradient, seeded, shade, softGlow, vGradient } from './draw';
 import { lineWidth, richLine } from './richText';
 import { steelTag } from './signage';
 import { FlowBeads } from './perfFx';
+import { GFX } from './gfxFeatures';
+import { buildStrata } from './strata';
 
 export const WORLD_LEFT = -260;
 /** Right edge of the painted panorama's own span (the painting is scaled to this width, never to the wider world). */
@@ -167,7 +169,12 @@ export function buildUnderground(
   rockLayers.eventMode = 'none';
   const deep = bottom + 1100;
 
-  if (rock) {
+  // [plan4:ST-10] Five geology bands (src/rendering/strata.ts) replace the single stretched painting; `?gx=-strata` brings the old one back.
+  const strataLayer = GFX.strata ? buildStrata(deep, WORLD_LEFT_U, WORLD_RIGHT, { rock }) : null;
+  if (strataLayer) rockLayers.addChild(strataLayer);
+  const painted = !!rock || !!strataLayer;
+  const dk = strataLayer ? 0.8 : 1; // the bands carry their own depth shading
+  if (rock && !strataLayer) {
     // The painting runs topsoil → clay → gravel → sandstone → bedrock; stretch it over the dug depth.
     const strataSprite = new TilingSprite({ texture: rock, width: w, height: bottom });
     const s = Math.max(0.3, bottom / rock.height);
@@ -191,18 +198,18 @@ export function buildUnderground(
     }
   }
   const rockG = new Graphics();
-  if (!rock) {
+  if (!painted) {
     const strata = [0x5a4430, 0x4a3828, 0x3e3226, 0x34302c, 0x2a2826, 0x201e1e];
     const bandH = bottom / strata.length;
     for (let i = 0; i < strata.length; i++) rockG.rect(WORLD_LEFT_U, i * bandH, w, bandH + 1).fill(strata[i]);
     rockG.rect(WORLD_LEFT_U, bottom, w, deep - bottom).fill(strata[strata.length - 1]);
   }
   // Lighter than before (the strata stayed near-black); deeper rock sinks cold and dark.
-  rockG.rect(WORLD_LEFT_U, 0, w, bottom).fill(vGradient([[0, 0x000000, rock ? 0.1 : 0], [0.7, 0x04060a, rock ? 0.28 : 0.2], [1, 0x05070c, rock ? 0.46 : 0.4]]));
-  rockG.rect(WORLD_LEFT_U, bottom, w, deep - bottom).fill(vGradient([[0, 0x05070c, rock ? 0.46 : 0.4], [0.35, 0x05070c, 0.8], [1, 0x05070c, 0.95]]));
+  rockG.rect(WORLD_LEFT_U, 0, w, bottom).fill(vGradient([[0, 0x000000, painted ? 0.1 * dk : 0], [0.7, 0x04060a, painted ? 0.28 * dk : 0.2], [1, 0x05070c, painted ? 0.46 * dk : 0.4]]));
+  rockG.rect(WORLD_LEFT_U, bottom, w, deep - bottom).fill(vGradient([[0, 0x05070c, painted ? 0.46 * dk : 0.4], [0.35, 0x05070c, strataLayer ? 0.5 : 0.8], [1, 0x05070c, strataLayer ? 0.72 : 0.95]]));
   rockLayers.addChild(rockG);
   if (casing) rockLayers.addChild(rockDetails(floors, districts, exts));
-  for (let i = 0; i < (rock ? 0 : 220); i++) {
+  for (let i = 0; i < (painted ? 0 : 220); i++) {
     const x = WORLD_LEFT_U + rnd() * w, y = 8 + rnd() * (bottom - 20);
     const r = 1.5 + rnd() * 5;
     const pts: number[] = [];
@@ -213,7 +220,7 @@ export function buildUnderground(
     }
     g.poly(pts).fill({ color: shade(0x7a6a58, 0.6 + rnd() * 0.5), alpha: 0.5 });
   }
-  for (let i = 0; i < (rock ? 0 : 14); i++) {
+  for (let i = 0; i < (painted ? 0 : 14); i++) {
     const x = WORLD_LEFT_U + rnd() * w;
     g.moveTo(x, 2).bezierCurveTo(x + 6, 14, x - 5, 26, x + 3, 30 + rnd() * 20).stroke({ color: 0x2a1e16, width: 1.2, alpha: 0.7 });
   }
