@@ -179,3 +179,25 @@ canvas:focus-visible { outline-offset: -3px; }
 .book-text, .book-title { font-size: max(16px, calc(14px * var(--fs, 1))); }
 .book-text { line-height: 1.6; }
 .book-title { min-height: 44px; display: flex; align-items: center; }
+
+/* The build menu writes its own tick / cross into each cost chip: the generic AC-7 mark would double it. */
+.bm-cost .cost-chip::before { content: none; }
+
+/* ---- AC-3: a state is never shown by fading its text (opacity / filter on a whole card gave 3.2:1 and 4.15:1). ---------------------------
+   Locked and finished cards keep full-strength text; the shape says the state (dashed frame = not yet) and only the icon is dimmed. */
+.research-card.done { opacity: 1; }
+.research-card.locked { filter: none; border-style: dashed; border-color: var(--border); }
+.research-card.locked .ic { filter: grayscale(0.7) brightness(0.8); }
+.ach-card { opacity: 1; border-style: dashed; border-color: var(--border); }
+.ach-card.done { border-style: solid; border-color: rgba(255, 212, 71, 0.5); }
+.ach-card:not(.done) .ach-icon { opacity: 0.6; }
+/* A price inside a gold button: dark chip, so the green / red numbers keep their contrast (they were 2.1:1 on the gold). */
+.btn-primary .cost-chip { background: rgba(0, 0, 0, 0.8); }
+/* The "people at the door" pulse dips to 45% opacity: that is 2.5:1 for a moment. A shallower dip keeps it readable. */
+@keyframes arrival-pulse { 50% { opacity: 0.8; } }
+
+/* ---- AC-12/AC-15: buttons are 44px boxes (cards of the room, doors, safety, command panels were 34-39px); small buttons keep their look and ---
+   reach 44px through the ::after hit area (touch.css), which also needs a minimum width so a "?" does not become a sliver. */
+.btn:not(.btn-small) { min-height: var(--tap, 44px); }
+.tab-btn { min-height: var(--tap, 44px); }
+.btn-small { min-width: 36px; }
