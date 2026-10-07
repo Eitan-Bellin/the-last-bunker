@@ -646,6 +646,8 @@ export interface Lit {
   base: number;
   parts: number[];
   y: number;
+  /** [plan4:ST-11] The floor's tint, multiplied into the lit colour (0xffffff or absent = none). */
+  mul?: number;
 }
 
 /** What every lamp in reach adds to the light at (x, y), split by the room the lamp hangs in. */

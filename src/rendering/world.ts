@@ -179,7 +179,7 @@ export function buildUnderground(
   const deep = bottom + 1100;
 
   // [plan4:ST-10] Five geology bands (src/rendering/strata.ts) replace the single stretched painting; `?gx=-strata` brings the old one back.
-  const strataLayer = GFX.strata ? buildStrata(deep, WORLD_LEFT_U, WORLD_RIGHT, { rock }) : null;
+  const strataLayer = GFX.strata ? buildStrata(deep, WORLD_LEFT_U, WORLD_RIGHT, { rock, ambient: 0.5 - gloom * 0.35 }) : null;
   if (strataLayer) rockLayers.addChild(strataLayer);
   const painted = !!rock || !!strataLayer;
   const dk = strataLayer ? 0.8 : 1; // the bands carry their own depth shading
