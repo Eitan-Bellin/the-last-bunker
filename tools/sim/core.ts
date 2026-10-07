@@ -668,14 +668,16 @@ export async function runSim(o: SimOptions): Promise<SimResult> {
     wantNew('school', 3, 1, kids > 1);
     wantNew('bathhouse', 2, 1, pop >= 20);
     wantNew('memorialHall', 2, 1);
-    wantNew('solarArray', 2, act >= 4 ? 3 : 2, net('power') < 3);
-    wantNew('windTurbine', 3, act >= 5 ? 2 : 1, net('power') < 3);
-    wantNew('watchtower', 2, 1);
     wantNew('quarantineWard', 3, 1, pop >= 30);
     wantNew('garage', 3, 1);
     wantNew('decon', 3, 1);
     wantNew('aquaculture', 3, 1);
     wantNew('market', 3, 1);
+    // [plan4:ST-16] The surface row (open from Act II): panels while power is thin, a turbine once the gusts are worth a room, a lookout against raids.
+    // findSpot walks allowedFloors, which for these is floor -1 only (a gate post takes floor 0 first, then the row).
+    wantNew('solarArray', 2, act >= 4 ? 3 : 2, net('power') < 3 || act >= 3);
+    wantNew('windTurbine', 3, act >= 5 ? 3 : 1, net('power') < 3 || act >= 4);
+    wantNew('watchtower', 3, act >= 5 ? 2 : 1);
     noSpaceFor = null;
     for (const type of want) {
       if (!BUILDABLE_TYPES.includes(type) || !isBuildingUnlocked(s, type)) continue;

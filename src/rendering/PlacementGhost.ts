@@ -1,6 +1,6 @@
 import { Container, Graphics, type FederatedPointerEvent, type Texture } from 'pixi.js';
 import type { BuildingType, Position } from '../core/GameState';
-import { roomSlots } from '../data/buildingDefs';
+import { getDef, roomSlots } from '../data/buildingDefs';
 import { ArtLibrary } from '../art/ArtLibrary';
 import { artEntry, buildingArtKey } from '../art/registry';
 import { statusTint, reducedMotion } from '../utils/a11y';
@@ -8,6 +8,7 @@ import { SLOT_W, buildingH, floorTop, slotX } from './geom';
 import { hashString, seeded } from './draw';
 import { buildPaintedRoom } from './paintedRoom';
 import { buildRoomVisual } from './roomArt';
+import { buildSurfaceBlock } from './surfaceRow'; // plan4:ST-16
 import { dashedRect } from './PlacementController';
 import { depthGains } from './structure';
 
@@ -148,7 +149,8 @@ export class PlacementGhost {
     this.art.removeChildren().forEach(c => c.destroy({ children: true }));
     this.paintedTex = null;
     const w = roomSlots(type) * SLOT_W, h = buildingH(type);
-    const key = buildingArtKey(type, 0);
+    const outdoors = getDef(type)?.place?.floors === 'surface'; // plan4:ST-16 a surface-only room is a structure outdoors, never an interior painting
+    const key = outdoors ? null : buildingArtKey(type, 0);
     const tex = key ? ArtLibrary.get(key) : null;
     const rnd = seeded(hashString(`ghost-${type}`));
     let container: Container;
@@ -160,7 +162,7 @@ export class PlacementGhost {
       this.paintedTex = tex;
       this.artWait = 0;
     } else {
-      container = buildRoomVisual(type, w, false, false, rnd).container;
+      container = (outdoors ? buildSurfaceBlock(type, w, false, hashString(`ghost-${type}`)) : buildRoomVisual(type, w, false, false, rnd)).container; // plan4:ST-16
       this.artWait = key ? 0.4 : 0; // the painting is on its way: swap it in when it arrives
     }
     this.artKey = key ?? '';

@@ -297,6 +297,7 @@ export class BuildMenu {
     const place = def.place?.floors;
     if (place === 'deep') meta.appendChild(el('span', 'zone-chip', `[[pick]] ${i18n.t('build.deepOnly')}`));
     else if (place === 'surface') meta.appendChild(el('span', 'zone-chip', `[[surface]] ${i18n.t('build.surfaceOnly')}`));
+    else if (place === 'entranceOrSurface') meta.appendChild(el('span', 'zone-chip', `[[surface]] ${i18n.t('build.entranceOrSurface')}`)); // plan4:ST-16
     else {
       const floors = allowedFloors(type);
       if (floors.length === 1) {

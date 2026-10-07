@@ -38,6 +38,47 @@ export function placementChecks(games: { name: string; json: string }[]): { prob
     }
     notes.push(`${g.name}: bestSpot checked for ${checked} room types`);
 
+    // ---- [plan4:ST-16] the surface row: closed = no spot; open = spots on floor -1 only inside slots -11..-4; best spot valid; a tap on the row answers; building fills it ----
+    {
+      const closed = { ...base, layout: { ...base.layout, surfaceOpen: false } } as GameState;
+      const open = { ...base, layout: { ...base.layout, surfaceOpen: true } } as GameState;
+      let rowTypes = 0;
+      for (const type of BUILDABLE_TYPES) {
+        const where = getDef(type)?.place?.floors;
+        if (where !== 'surface' && where !== 'entranceOrSurface') continue;
+        rowTypes++;
+        const w = roomSlots(type);
+        if (validSpots(type, closed, bs).some(p => p.floor === -1)) fail(`${g.name}: ${type} has a spot on the closed surface row`);
+        const spots = validSpots(type, open, bs).filter(p => p.floor === -1);
+        const copies = getDef(type)?.maxCopies;
+        const full = copies !== undefined && base.buildings.filter(b => b.type === type).length >= copies;
+        if (!spots.length && !full && !(getDef(type)?.place?.needsFlag)) fail(`${g.name}: ${type} has no spot on the open surface row`);
+        for (const p of spots) if (p.x < -11 || p.x + w > -3) fail(`${g.name}: ${type} spot slot ${p.x} is outside slots -11..-4`);
+        const best = bestSpot(type, open, bs);
+        if (best && bs.placeBlock(type, best, open) !== null) fail(`${g.name}: bestSpot(${type}) on the open row is not valid`);
+        if (where === 'surface' && best && best.floor !== -1) fail(`${g.name}: bestSpot(${type}) = floor ${best.floor}, a surface-only room`);
+        if (spots.length) {
+          const tap = spotForTap(type, -1, spots[0].x, open, bs);
+          if (tap.block !== null) fail(`${g.name}: a tap on the open surface slot ${spots[0].x} for ${type} answers ${tap.block}`);
+          // Fill the row with this type until it says no: every placement stays inside the row and never overlaps.
+          const sm = new StateManager();
+          sm.loadState(JSON.parse(JSON.stringify(open)) as GameState);
+          let n = 0;
+          for (let guard = 0; guard < 12; guard++) {
+            const spot = validSpots(type, sm.state, bs).find(p => p.floor === -1);
+            if (!spot) break;
+            if (!bs.placeBuilding(type, spot, sm)) { fail(`${g.name}: placeBuilding(${type}) refused a valid surface spot`); break; }
+            n++;
+          }
+          const row = sm.state.buildings.filter(b => b.position.floor === -1);
+          const used = new Set<number>();
+          for (const b of row) for (let x = b.position.x; x < b.position.x + roomSlots(b.type); x++) { if (used.has(x)) fail(`${g.name}: two surface rooms share slot ${x}`); used.add(x); }
+          if (!n && !full) fail(`${g.name}: no ${type} could be built on the open surface row`);
+        }
+      }
+      notes.push(`${g.name}: surface row checked for ${rowTypes} room types`);
+    }
+
     // ---- spotForTap: a tap on a valid slot gives that slot; on an occupied one the reason ----
     const occ = base.buildings.find(b => b.position.floor >= 0 && !!getDef(b.type) && b.type !== 'cave' && b.type !== 'lake' && b.type !== 'metro');
     if (occ) {

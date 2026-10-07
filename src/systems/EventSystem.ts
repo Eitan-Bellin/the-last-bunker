@@ -600,8 +600,11 @@ export class EventSystem {
   private wreckRoom(): string | null {
     const sm = this.ctx.sm;
     const state = sm.state;
-    const pick = this.ctx.rng.shuffle(state.buildings.filter(b => !b.isConstructing && b.position.floor <= 1 && b.type !== 'quarters'
-      && b.type !== 'elevator' && !getDef(b.type)?.effects?.maxPopulation && roomSlots(b.type) <= 3 && getDef(b.type)?.maxLevel === 10))[0];
+    const pool = state.buildings.filter(b => !b.isConstructing && b.position.floor <= 1 && b.type !== 'quarters'
+      && b.type !== 'elevator' && !getDef(b.type)?.effects?.maxPopulation && roomSlots(b.type) <= 3 && getDef(b.type)?.maxLevel === 10);
+    // [plan4:ST-16] The surface row is the raiders' first target (twice the odds) unless a working gate post, or the wall project, covers it.
+    const covered = state.storyFlags.includes('project:wall') || state.buildings.some(b => b.type === 'gatePost' && !b.isConstructing);
+    const pick = this.ctx.rng.shuffle(covered ? pool : pool.flatMap(b => (b.position.floor === -1 ? [b, b] : [b])))[0];
     if (!pick) return null;
     const w = roomSlots(pick.type);
     const d = state.danger;

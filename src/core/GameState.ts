@@ -413,8 +413,16 @@ export function createLayout(): LayoutState {
 /** [plan4:X-2] Slots east of the shaft on a floor without a wing (the classic 12). */
 export const BASE_EAST = 12;
 
+/**
+ * [plan4:ST-16] The surface (gate-house) row is floor -1. Its slots are -11..-4: west of the shaft and clear of the portal's hill (slots -3..-1 stand under it;
+ * see store/plan-2026-10/4-redesign/S0-surface-survey.md). As an extent that is {w: 11, e: -3}: a room fits when x >= -11 and x + width <= -3.
+ */
+export const SURFACE_FLOOR = -1;
+export const SURFACE_EXT: { w: number; e: number } = { w: 11, e: -3 };
+
 /** [plan4:X-3] How far a floor reaches: the saved wing sizes, or no west wing and the classic 12 slots east. */
 export function floorExtent(state: Pick<GameState, 'layout'>, floor: number): { w: number; e: number } {
+  if (floor === -1) return { w: SURFACE_EXT.w, e: SURFACE_EXT.e }; // [plan4:ST-16] the gate-house row: slots -11..-4, west of the portal's hill (never saved)
   const x = state.layout?.ext?.[String(floor)];
   return x ? { w: x.w, e: x.e } : { w: 0, e: BASE_EAST };
 }

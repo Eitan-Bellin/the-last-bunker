@@ -161,7 +161,7 @@ export function buildSurface(backdrop: Texture | null = null, rayTexture: Textur
  */
 export function buildUnderground(
   floors: number, locale: string, gloom = 0.3, rock: Texture | null = null, districts: number[] = [], casing: Container | null = null,
-  exts: readonly Ext[] = [], districtSlot: Readonly<Record<number, number>> = {},
+  exts: readonly Ext[] = [], districtSlot: Readonly<Record<number, number>> = {}, rockWest = 0, // plan4:ST-16 slots the rock must reach west for the surface row (no wing, no casing)
 ): Container {
   const root = new Container();
   const g = new Graphics();
@@ -169,7 +169,7 @@ export function buildUnderground(
   const bottom = floorTop(floors) + 170;
   // [plan4:ST-4] The rock reaches further west only when a wing needs it (the plain bunker keeps the classic world edge).
   const maxW = exts.reduce((m, x) => Math.max(m, x.w), 0), maxE = exts.reduce((m, x) => Math.max(m, x.e), BASE_EAST);
-  const WORLD_LEFT_U = worldLeft(maxW);
+  const WORLD_LEFT_U = worldLeft(Math.max(maxW, rockWest)); // plan4:ST-16
   const extOf = (f: number): Ext => exts[f] ?? { w: 0, e: BASE_EAST };
   const w = WORLD_RIGHT - WORLD_LEFT_U;
   // gfx-p0 light: the rock layers sit behind the casing (they used to darken it too), and the earth carries on

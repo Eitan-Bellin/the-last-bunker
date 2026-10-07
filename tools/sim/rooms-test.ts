@@ -100,8 +100,8 @@ export function roomsChecks(games: { name: string; json: string }[]): { problems
     // ---- placement: the roof row, the lake, the flag ----
     {
       const open = { ...base, layout: { ...base.layout, surfaceOpen: true } };
-      if (bs.placeBlock('solarArray', { x: 0, y: 0, floor: -1 }, open) !== null) fail(`${g.name}: solar array refused on an open roof row`);
-      if (bs.placeBlock('solarArray', { x: 0, y: 0, floor: -1 }, { ...base, layout: { ...base.layout, surfaceOpen: false } }) !== 'surface') fail(`${g.name}: solar array was accepted with the roof row closed`);
+      if (bs.placeBlock('solarArray', { x: -8, y: 0, floor: -1 }, open) !== null) fail(`${g.name}: solar array refused on an open roof row`);
+      if (bs.placeBlock('solarArray', { x: -8, y: 0, floor: -1 }, { ...base, layout: { ...base.layout, surfaceOpen: false } }) !== 'surface') fail(`${g.name}: solar array was accepted with the roof row closed`);
       if (bs.placeBlock('solarArray', { x: 0, y: 0, floor: 0 }, open) === null) fail(`${g.name}: solar array was accepted underground`);
       if (bs.placeBlock('memorialHall', { x: 0, y: 0, floor: 0 }, base) !== 'locked') fail(`${g.name}: memorial hall is not locked without its flag`);
       if (isBuildingUnlocked(base, 'memorialHall')) fail(`${g.name}: memorial hall counts as unlocked without its flag`);

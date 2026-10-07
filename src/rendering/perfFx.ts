@@ -45,6 +45,7 @@ export function hashLayout(state: GameState): void {
   let he = 2166136261;
   const ext = state.layout?.ext;
   if (ext) for (const k in ext) he = mix(mix(mix(he, sh(k)), ext[k].w + 64), ext[k].e + 64);
+  if (state.layout?.surfaceOpen) he = mix(he, 0x5f); // plan4:ST-16 the gate-house yard opening changes the world's west edge and the surface
   hu = mix(hu, he);
   LAYOUT.ext = he;
   LAYOUT.rooms = hr;
