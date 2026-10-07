@@ -124,6 +124,14 @@ export const BOOK: BookEntry[] = [
       en: 'Survivors arrive at the door on a clock (the countdown by the headcount). With no free bed they wait outside. High morale, the radio mast and some laws speed arrivals up.',
     },
   },
+  {
+    id: 'touch', icon: '[[hand]]', group: 'basics',
+    title: { he: 'מגע ומצלמה', en: 'Touch and camera' },
+    text: {
+      he: 'גררו באצבע כדי להזיז את המבט. צבטו בשתי אצבעות כדי להתקרב ולהתרחק. הקשה כפולה על חדר ממקדת בו, ועוד הקשה כפולה חוזרת לתצוגה הרחבה. לחצו והחזיקו על ניצול כדי להרים אותו, גררו אותו לחדר ושחררו כדי לשבץ אותו שם. כשיש אגפים, אפשר להרחיב קומה לצדדים. את הטיפים אפשר להציג שוב בהגדרות.',
+      en: 'Drag with a finger to move around. Pinch with two fingers to zoom in and out. Double-tap a room to frame it, and double-tap again to return to the wide view. Press and hold a survivor to pick them up, drag them to a room and let go to assign them there. Once there are wings, a floor can be widened sideways. The tips can be shown again in Settings.',
+    },
+  },
   // ---- people and work ----
   {
     id: 'mastery', icon: '[[medal]]', group: 'people',

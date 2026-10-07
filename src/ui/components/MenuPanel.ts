@@ -66,6 +66,9 @@ export interface MenuActions {
   openBook: () => void;
   /** [Q14] Opens the Chronicle (the run's milestones). */
   openChronicle: () => void;
+  /** [plan4:UX-11] Forget which gesture tips were seen / play the opening story again (no change to the game). */
+  showTipsAgain?: () => void;
+  replayIntro?: () => void;
 }
 
 export class MenuPanel {
@@ -149,6 +152,17 @@ export class MenuPanel {
     this.sheet.body.replaceChildren(root);
   }
 
+  /** [plan4:UX-11] Learning aids, as a block of their own: the gesture tips again, and the opening story again. */
+  private renderTipsBlock(): HTMLElement {
+    const card = el('div', 'bp-card settings-learn');
+    const tips = button(`[[hand]] ${i18n.t('settings.tipsAgain')}`, 'btn-secondary learn-btn', () => { uiSound('click'); this.actions.showTipsAgain?.(); });
+    const intro = button(`[[flashlight]] ${i18n.t('settings.introAgain')}`, 'btn-secondary learn-btn', () => { uiSound('click'); this.actions.replayIntro?.(); });
+    if (!this.actions.showTipsAgain) tips.hidden = true;
+    if (!this.actions.replayIntro) intro.hidden = true;
+    card.append(tips, intro);
+    return card;
+  }
+
   private renderSettings(): HTMLElement {
     const box = el('div', 'bp');
     // [Q6/Q14] The book and the chronicle sit first: the questions a new player asks.
@@ -159,6 +173,7 @@ export class MenuPanel {
     chron.append(el('span', '', `[[journal]] ${i18n.t('chronicle.title')}`), button(i18n.t('book.open'), 'btn-small', () => { uiSound('click'); this.actions.openChronicle(); }));
     guide.append(book, chron);
     box.appendChild(guide);
+    box.appendChild(this.renderTipsBlock());
     const general = el('div', 'bp-card');
     const lang = el('div', 'bp-row');
     lang.append(el('span', '', `[[surface]] ${i18n.t('settings.language')}`),

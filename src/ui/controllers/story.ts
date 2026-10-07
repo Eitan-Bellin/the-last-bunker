@@ -99,6 +99,26 @@ export class StoryController {
     });
   }
 
+  /**
+   * [plan4:UX-11] "Watch the intro again" (Settings): the opening panels once more, over a paused game. It changes nothing in the save
+   * (no flags, no toast, no difficulty question) and gives the game back exactly as it was, paused or not.
+   */
+  replayIntro(): void {
+    if (this.app.introPlaying) return;
+    const wasPaused = this.app.engine.paused;
+    this.app.introPlaying = true;
+    this.app.engine.paused = true;
+    document.body.classList.add('intro-active');
+    playIntro({
+      play: (sfx) => this.app.audio.play(sfx),
+      onDone: () => {
+        this.app.introPlaying = false;
+        this.app.engine.paused = wasPaused;
+        document.body.classList.remove('intro-active');
+      },
+    });
+  }
+
   /** [P3-5] After a Genesis: where the next timeline begins (the bunker just finished stays on as a home). */
   chooseScenario(then: () => void): void {
     const locale = i18n.currentLocale;
