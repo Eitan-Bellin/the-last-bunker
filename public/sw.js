@@ -3,12 +3,26 @@
 //  - Hashed build files (/assets/*): cache first, they never change under the same name.
 //  - Everything else here (paintings, art tables, icons): shown from the cache at once and re-checked in the background (one cheap conditional
 //    request per file per session), so a changed painting or table reaches players without anyone having to bump a version number.
-const CACHE = 'lastbunker-v3';
+const CACHE = 'lastbunker-v4';
 const SHELL = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png', './favicon-64.png'];
 const NAVIGATE_TIMEOUT_MS = 4000;
 
+// Plan 4 wave 3: the build writes asset-manifest.json (every script and stylesheet, including the chunks fetched only on demand: the
+// string tables, the Bunker Book, the sound recipes). Installing caches them all, so the game works offline after the first visit
+// whatever the player has opened so far. Best effort: a missing manifest (dev server) or one failing file never blocks the install.
+async function precacheBuild(cache) {
+  try {
+    const res = await fetch('./asset-manifest.json', { cache: 'no-cache' });
+    if (!res.ok) return;
+    const files = await res.json();
+    await Promise.all(files.map((f) => cache.add(f).catch(() => undefined)));
+  } catch (err) {
+    // offline or no manifest: the files are cached as they are used
+  }
+}
+
 self.addEventListener('install', (event) => {
-  event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(SHELL)).then(() => self.skipWaiting()));
+  event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(SHELL).then(() => precacheBuild(cache))).then(() => self.skipWaiting()));
 });
 
 self.addEventListener('activate', (event) => {

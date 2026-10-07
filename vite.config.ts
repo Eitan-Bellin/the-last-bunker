@@ -103,10 +103,30 @@ function pixiWebglOnly(): Plugin {
   };
 }
 
+/**
+ * Plan 4 wave 3 (perf): code split off the main chunk (string tables, the Bunker Book, the sound recipes) is fetched only when needed, so
+ * a player who goes offline right after the first visit could be missing one of those files. This writes `asset-manifest.json`, the list of
+ * every script and stylesheet of the build that the game can ask for, and the service worker (public/sw.js) puts them all in its cache when
+ * it installs. The `?debug` probe chunk and the unused renderer stubs are left out.
+ */
+function assetManifest(): Plugin {
+  return {
+    name: 'asset-manifest',
+    apply: 'build',
+    generateBundle(_options, bundle) {
+      const files = Object.values(bundle)
+        .filter(o => /\.(js|css)$/.test(o.fileName) && o.name !== 'perf' && !String(o.name).startsWith('_pixi-renderer-stub'))
+        .map(o => `./${o.fileName}`)
+        .sort();
+      this.emitFile({ type: 'asset', fileName: 'asset-manifest.json', source: JSON.stringify(files) });
+    },
+  };
+}
+
 export default defineConfig(({ command }) => ({
   // Relative asset paths so the build works from any host or sub-folder (and as an installed PWA).
   base: './',
-  plugins: [artPipeline(), pixiWebglOnly()],
+  plugins: [artPipeline(), pixiWebglOnly(), assetManifest()],
   // Production only: the string tables load as their own chunks (src/i18n/locales.ts). Dev and the Node test bundles keep them linked in.
   define: command === 'build' ? { __LAZY_LOCALES__: 'true' } : {},
   build: {
