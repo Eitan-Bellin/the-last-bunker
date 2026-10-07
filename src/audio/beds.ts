@@ -1,9 +1,11 @@
 import { envelope, fmBell, filter, gain, metalHit, midi, noiseBuffer, noiseHit, osc, type Builder } from './dsp';
+import type { BedKey } from './bedKeys';
+export type { BedKey } from './bedKeys';
+export { ERA_BEDS } from './bedKeys';
 
 /** Long ambience beds: one per era, plus the city hum heard from far away. */
 export const BED_SECONDS = 16;
 
-export type BedKey = 'remnant' | 'restoration' | 'colony' | 'undercity' | 'city';
 
 /** Noise through a band filter whose amplitude breathes with a slow LFO. */
 function breathingNoise(
@@ -107,5 +109,3 @@ export const BEDS: Record<BedKey, Builder> = {
     o.start(0);
   },
 };
-
-export const ERA_BEDS: BedKey[] = ['remnant', 'restoration', 'colony', 'undercity'];
