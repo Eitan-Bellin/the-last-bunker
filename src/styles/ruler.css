@@ -26,7 +26,8 @@
   border-right: none;
   border-radius: 8px 0 0 8px;
   overflow: hidden;
-  font-size: calc(10px * min(var(--fs, 1), 1.3));
+  font-size: calc(9px * min(var(--fs, 1), 1.3));
+  letter-spacing: -0.02em;
   line-height: 1;
   color: var(--text-secondary);
 }
