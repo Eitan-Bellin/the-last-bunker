@@ -5,6 +5,7 @@ import { i18n } from '../i18n/I18nManager';
 import { GFX, gfxLevel } from './gfxFeatures';
 import { BASE_EAST, ROOMS_X, ROOM_H, SHAFT_GAP, SLAB, SLOT_W, floorTop, slotX, type Ext } from './geom';
 import { VIEW } from './perfFx';
+import { hashString } from './draw';
 import { occupancy } from './occupancy';
 import { DOOR_H, DOOR_W, openingsOfFloor } from './openings';
 import { LIP, PIPES_H, PIPES_Y, depthGains, type KitState } from './structure';
@@ -25,6 +26,15 @@ import type { Animated } from './world';
  */
 
 type DoorState = 'open' | 'closed' | 'sealed';
+
+const strCache = new Map<string, number>();
+/** Hash of a short string, remembered (the same few ids, kinds and door keys every picture). */
+const strN = (s: string): number => {
+  let v = strCache.get(s);
+  if (v === undefined) { v = hashString(s); strCache.set(s, v); }
+  return v;
+};
+const mixN = (h: number, v: number): number => Math.imul(h ^ (v | 0), 16777619) >>> 0;
 type InfraItem = GameState['layout']['infra'][number];
 
 interface Ctx {
@@ -72,8 +82,8 @@ export class InfraLayer implements Animated {
   readonly container = new Container();
   private ctx: Ctx | null = null;
   private state: Pick<GameState, 'layout' | 'buildings' | 'ruins' | 'currentFloors'> | null = null;
-  private sig = '';
-  private doorSig = '';
+  private sig = -1;
+  private doorSig = -1;
   private doors: DoorView[] = [];
   private sections: Section[] = [];
   private fans: Fan[] = [];
@@ -108,24 +118,28 @@ export class InfraLayer implements Animated {
     }
   }
 
-  private structureSig(): string {
+  /**
+   * What the layer is built from, as one number (this runs every picture, so no strings are made): the level count and kit, the switches, the infra items, the
+   * keys of the doors, the reach of every floor (the wings decide where the feed lines run) and how many rooms stand.
+   */
+  private structureSig(): number {
     const l = this.state?.layout;
-    if (!l) return '';
-    let s = this.ctx!.floors + '|' + this.ctx!.st + '|' + (GFX.bulkheads ? 1 : 0) + (GFX.branches ? 1 : 0) + (gfxLevel() === 'low' ? 'L' : '') + '|';
-    for (const it of l.infra) s += `${it.id}.${it.kind}.${it.floor}.${it.x}.${it.floors ?? 1};`;
-    s += '|';
-    for (const k in l.doors) s += k + ';';
-    // The wings decide where the feed lines run.
-    s += '|' + this.ctx!.exts.map(e => `${e.w}.${e.e}`).join(',') + '|' + this.state!.buildings.length;
-    return s;
+    const c = this.ctx;
+    if (!l || !c) return 0;
+    let h = mixN(mixN(mixN(2166136261, c.floors), strN(c.st)), (GFX.bulkheads ? 1 : 0) | (GFX.branches ? 2 : 0) | (gfxLevel() === 'low' ? 4 : 0));
+    for (const it of l.infra) h = mixN(mixN(mixN(mixN(mixN(mixN(h, strN(it.id)), strN(it.kind)), it.floor + 8), it.x + 64), (it.floors ?? 1) + 1), 7);
+    for (const k in l.doors) h = mixN(h, strN(k));
+    for (let i = 0; i < c.exts.length; i++) h = mixN(mixN(h, c.exts[i].w + 64), c.exts[i].e + 64);
+    return mixN(h, this.state!.buildings.length);
   }
 
-  private doorStatesSig(): string {
+  /** The states of the doors as one number (read every picture; a change redraws the feed lines). */
+  private doorStatesSig(): number {
     const d = this.state?.layout?.doors;
-    if (!d) return '';
-    let s = '';
-    for (const k in d) s += `${k}=${d[k]};`;
-    return s;
+    let h = 2166136261;
+    if (!d) return h;
+    for (const k in d) h = mixN(mixN(h, strN(k)), strN(d[k]));
+    return h;
   }
 
   private clear(): void {
@@ -241,7 +255,7 @@ export class InfraLayer implements Animated {
       return (ch(16, r) << 16) | (ch(8, g) << 8) | ch(0, b);
     };
     fr.rect(x - PASS_W / 2, y0, PASS_W, PASS_H).fill(0x110e0a);
-    fr.rect(x - PASS_W / 2, y0 + PASS_H * 0.45, PASS_W, PASS_H * 0.55).fill({ color: 0xffb868, alpha: 0.3 });
+    for (let k = 0; k < 6; k++) fr.rect(x - PASS_W / 2, y0 + PASS_H * (0.3 + k * 0.115), PASS_W, PASS_H * (0.7 - k * 0.115)).fill({ color: k < 3 ? 0x2c2012 : 0xffb868, alpha: k < 3 ? 0.16 : 0.07 });
     fr.rect(x - 7.6, y0 - 6, 3, PASS_H + 6).fill(steel(0x7e8488));
     fr.rect(x + 4.6, y0 - 6, 3, PASS_H + 6).fill(steel(0x6c7276));
     fr.rect(x - 7.6, y0 - 6, 0.9, PASS_H + 6).fill({ color: 0xffffff, alpha: 0.18 });

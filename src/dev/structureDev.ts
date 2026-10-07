@@ -1,6 +1,8 @@
 import { Rectangle } from 'pixi.js';
 import type { BunkerRenderer } from '../rendering/BunkerRenderer';
 import type { GameState } from '../core/GameState';
+import { isLiteMode } from '../core/crashGuard';
+import { gfxLevel } from '../rendering/gfxFeatures';
 
 /**
  * [plan4:ST-11/13/14/15/17] Dev-only helpers of the Structure-Render work (never in production builds):
@@ -15,15 +17,17 @@ export function installStructureDev(renderer: BunkerRenderer, getState: () => Ga
     const fx = (renderer as unknown as { postfx?: { forced: string | null } }).postfx;
     if (fx) fx.forced = 'high';
     const forceNight = (window as unknown as { __forceNight?: number }).__forceNight;
-    for (let i = 0; i < frames; i++) {
-      // A jump to rooms whose paintings the memory sweep gave back (rooms unseen for 20 s) draws once with a released texture before they rebuild; that is a
-      // property of the jump (the game pans gradually), so the shot swallows it and draws on.
+    // A jump to rooms whose paintings the memory sweep gave back (rooms unseen for 20 s) draws with a released texture until the rooms have rebuilt (a few a
+    // picture); the game pans gradually and rebuilds ahead of the view, a jump does not. The shot draws on until `frames` pictures came out clean (at most 120).
+    let clean = 0;
+    for (let i = 0; i < 120 && clean < frames; i++) {
       try {
         if (typeof forceNight === 'number') renderer.setNight(forceNight);
         renderer.render(getState(), 1 / 60, 1);
         renderer.app.renderer.render(renderer.app.stage);
+        clean++;
       } catch {
-        // retried by the next frame
+        clean = 0;
       }
       await new Promise(r => setTimeout(r, 16));
     }
@@ -33,6 +37,8 @@ export function installStructureDev(renderer: BunkerRenderer, getState: () => Ga
     }) as HTMLCanvasElement;
     return canvas.toDataURL('image/png').split(',')[1];
   };
+  /** Quality state for the shots: the level the features read, the post-fx level and the lite-mode flag. */
+  w.__gfxState = () => ({ gfx: gfxLevel(), q: (renderer as unknown as { postfx?: { quality: string } }).postfx?.quality, lite: isLiteMode() });
   w.__setInfra = (items: GameState['layout']['infra']): boolean => {
     getState().layout.infra = items;
     return true;

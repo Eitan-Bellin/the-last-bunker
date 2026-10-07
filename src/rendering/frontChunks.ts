@@ -5,7 +5,7 @@ import { roomFlicker } from './paintedRoom';
 import { GFX, gfxLevel } from './gfxFeatures';
 import { DOOR_H, DOOR_W, openingsOfFloor, type Opening } from './openings';
 import {
-  ceilingPanelTexture, floorNumberTexture, floorStyle, floorStyles, heavySlabTexture, kindLight, latticeTexture, mulTint, perforatedSlabTexture, pipeColumnTexture, type FloorStyle,
+  ceilingPanelTexture, floorNumberTexture, floorStyles, heavySlabTexture, kindLight, latticeTexture, mulTint, perforatedSlabTexture, pipeColumnTexture, type FloorStyle,
 } from './floorIdentity';
 import { VIEW } from './perfFx';
 import { BASE_EAST, ROOMS_X, ROOM_H, SHAFT_GAP, SLAB, SLOT_W, TOPSOIL, floorAtY, floorTop, slotX, type Ext } from './layout';
@@ -354,7 +354,7 @@ export class FrontChunks implements Animated {
       root.addChild(t);
       return t;
     };
-    const addLit = (tex: Texture, x: number, y: number, w: number, h: number, ccx: number, ccy: number, lampGain: number, baseGain: number) => {
+    const addLit = (tex: Texture, x: number, y: number, w: number, h: number, ccx: number, ccy: number, lampGain: number, baseGain: number, into: Container = root) => {
       const sp = new Sprite(tex);
       sp.position.set(x, y);
       sp.width = w;
@@ -364,8 +364,11 @@ export class FrontChunks implements Animated {
       const node: Lit = { node: sp, base: Math.min(0.9, ambient * lift * baseGain), parts, y: ccy, mul };
       lit.push(node);
       sp.tint = mulTint(shadeAt(lightOf(node.base, node.parts, 1, flicker), ccy), mul);
-      root.addChild(sp);
+      into.addChild(sp);
     };
+    // [plan4:ST-11] The floor-identity overlays (ceiling panels, slab girders and plates, column variants, number tags) are plain sprites: kept together in two layers
+    // above the tiling sprites they dress, so the batcher draws them in a call or two (a sprite between two tiling sprites would cost a draw call of its own).
+    const ovl1 = new Container(), ovl2 = new Container();
     const shade = (tex: Texture, x: number, y: number, w: number, h: number, alpha: number, flipX = false) => {
       const s = new Sprite(tex);
       s.tint = 0x000000;
@@ -396,7 +399,7 @@ export class FrontChunks implements Animated {
           if (!mine((x + x1) / 2, grid.ext[f]) || inSpan(x, x1, spans)) continue;
           add(pipeTex, x, y, w, PIPES_H, PIPES_H / pipeTex.height, x + w / 2, y + PIPES_H / 2);
           // [plan4:ST-11] A covered ceiling: pale panels hung under the bundle (the pipes show above them).
-          if (panelTex && sty.ceil === 1) addLit(panelTex, x, y + 2.5, w, PIPES_H - 2.5, x + w / 2, y + PIPES_H / 2, 1, 1);
+          if (panelTex && sty.ceil === 1) addLit(panelTex, x, y + 2.5, w, PIPES_H - 2.5, x + w / 2, y + PIPES_H / 2, 1, 1, ovl1);
         }
       }
     }
@@ -449,9 +452,9 @@ export class FrontChunks implements Animated {
           // The nosing catches the lamps of the room standing on it.
           addLit(lip, x, line.y, w, 6, x + w / 2, line.y - 6, 1.5, 0.95);
           // [plan4:ST-11] Slab variants: heavy girders under reactors and generators, perforated plate on the working and deep levels (the roof slab stays plain).
-          if (line.y > TOPSOIL && sty.slab === 1 && heavyTex) addLit(heavyTex, x, line.y, w, SLAB_DRAW, x + w / 2, line.y + SLAB_DRAW / 2, 1, 0.9);
+          if (line.y > TOPSOIL && sty.slab === 1 && heavyTex) addLit(heavyTex, x, line.y, w, SLAB_DRAW, x + w / 2, line.y + SLAB_DRAW / 2, 1, 0.9, ovl1);
           else if (line.y > TOPSOIL && sty.slab === 2 && perfTex) {
-            for (let px = x; px < x1 - 0.5; px += SLOT_W / 2) addLit(perfTex, px, line.y, Math.min(SLOT_W / 2, x1 - px), SLAB_DRAW, px + SLOT_W / 4, line.y + SLAB_DRAW / 2, 1, 0.9);
+            for (let px = x; px < x1 - 0.5; px += SLOT_W / 2) addLit(perfTex, px, line.y, Math.min(SLOT_W / 2, x1 - px), SLAB_DRAW, px + SLOT_W / 4, line.y + SLAB_DRAW / 2, 1, 0.9, ovl1);
           }
         }
         // The slab ends bear into the casing walls: a soft dark where they enter.
@@ -472,6 +475,7 @@ export class FrontChunks implements Animated {
       }
     }
 
+    root.addChild(ovl1); // [plan4:ST-11] ceiling panels and slab overlays, above the pipe and slab tilings
     // Warm night guide lights at the column feet (fixture always there, lit only at night).
     const guide = (x: number, floorY: number, kl?: FloorStyle) => {
       const fy = floorY - 13;
@@ -584,8 +588,8 @@ export class FrontChunks implements Animated {
       const py = y0 + 5;
       // The passage: dark, a little warmer toward the floor where the neighbouring room's lamps reach.
       dg.rect(x - hw, py, pw, ph).fill(0x0c0907);
-      dg.rect(x - hw, py + ph * 0.45, pw, ph * 0.55).fill({ color: 0x2c2012, alpha: 0.55 });
-      dg.rect(x - hw, py + ph * 0.72, pw, ph * 0.28).fill({ color: warm, alpha: 0.2 });
+      // A soft rise of warm light toward the floor from stacked translucent bands (a gradient fill would need a texture of its own).
+      for (let k = 0; k < 6; k++) dg.rect(x - hw, py + ph * (0.3 + k * 0.115), pw, ph * (0.7 - k * 0.115)).fill({ color: k < 3 ? 0x2c2012 : warm, alpha: k < 3 ? 0.16 : 0.07 });
       if (op.style === 'slide') {
         // The leaf slid half way into the wall; a slit window, a handle, vertical slats.
         dg.rect(x + 0.4, py, hw - 0.4, ph - 1.5).fill(steel(0x62686c));
@@ -689,7 +693,7 @@ export class FrontChunks implements Animated {
             const dir = x < 0 ? 1 : -1;
             timberEnd(x, top, dir);
             // [plan4:ST-11] The floor's number on the post at the end of a wing.
-            if (idOn) addLit(floorNumberTexture(f, sty.band), x - dir * 5 - 8, ceil + 17, 16, 9, x, top + ROOM_H / 2, 0.4, 0.8);
+            if (idOn) addLit(floorNumberTexture(f, sty.band), x - dir * 5 - 8, ceil + 17, 16, 9, x, top + ROOM_H / 2, 0.4, 0.8, ovl2);
           } else if (col.door) doorFrame(x, top);
           else {
             // The lamps hang inside the rooms, so the column's front face only catches grazing light: half the lamp light and a little less ambient.
@@ -697,8 +701,8 @@ export class FrontChunks implements Animated {
             cc.tilePosition.set(0, 0);
             // [plan4:ST-11] Column variants: lattice-laced steel or a structural pipe laid over the kit column; the east wall column carries the floor's number.
             const over = latticeTex ?? pipeColTex;
-            if (over) addLit(over, x - COLUMN_W / 2, top - 1, COLUMN_W, ROOM_H + 2, x, top + ROOM_H / 2, 0.5, 0.8);
-            if (idOn && !col.r) addLit(floorNumberTexture(f, sty.band), x - 9, ceil + 7, 16, 9, x, top + ROOM_H / 2, 0.4, 0.8);
+            if (over) addLit(over, x - COLUMN_W / 2, top - 1, COLUMN_W, ROOM_H + 2, x, top + ROOM_H / 2, 0.5, 0.8, ovl2);
+            if (idOn && !col.r) addLit(floorNumberTexture(f, sty.band), x - 9, ceil + 7, 16, 9, x, top + ROOM_H / 2, 0.4, 0.8, ovl2);
           }
           // Base and cap plates where the column meets the slabs.
           const plates = new Graphics();
@@ -755,6 +759,7 @@ export class FrontChunks implements Animated {
           if (!inSpan(x - 1, x + 1, below) && hr(f + 977, x) < 0.75) guide(x, floorY, idOn ? sty : undefined);
         }
       }
+      root.addChild(ovl2);
       root.addChild(fixtures);
       root.addChild(timbers);
       root.addChild(doors);
