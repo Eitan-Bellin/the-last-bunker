@@ -222,7 +222,7 @@ export class CameraController {
     this.untouched = true;
     const sp = this.host.floorSpan();
     // Phone: the shaft and the first rooms next to it, just under the top HUD. Wider screens: the whole building, centred.
-    this.camX = width < PHONE_W ? width / 2 / this.zoom - SIDE_MARGIN + sp.l : (sp.l + sp.r) / 2;
+    this.camX = width < PHONE_W ? this.coreX() : (sp.l + sp.r) / 2;
     const usable = height - hudTop() - hudBottom();
     this.camY = VIEW_TOP + usable / 2 / this.zoom;
     this.stopCamera();
@@ -527,6 +527,26 @@ export class CameraController {
     this.camY = y;
     this.clampCamera();
     this.updateTransform();
+  }
+
+  /** Camera x that puts the shaft and the first rooms at the left edge of the screen (the default phone view). */
+  private coreX(): number {
+    return this.host.app.screen.width / 2 / this.zoom - SIDE_MARGIN;
+  }
+
+  /** [plan4:ST-12] Section chips: spring-pan to the west wing's end, the core (shaft side) or the east wing's end. Bounds clamp the target. */
+  panToSector(kind: 'west' | 'core' | 'east'): void {
+    this.panToX(kind === 'west' ? -1e6 : kind === 'east' ? 1e6 : this.coreX());
+  }
+
+  /** [plan4:ST-12] Which section the camera looks at (nearest of the three targets). */
+  sectorNow(): 'west' | 'core' | 'east' {
+    const half = this.host.app.screen.width / 2 / this.zoom, core = this.coreX();
+    const sp = this.host.floorSpan();
+    const west = Math.min(core, Math.min(0, sp.l) - SIDE_MARGIN + half), east = Math.max(core, this.host.extentR() + SIDE_MARGIN - half);
+    const x = this.focusTarget ? this.focusTarget.x : this.camX;
+    const dw = Math.abs(x - west), dc = Math.abs(x - core), de = Math.abs(x - east);
+    return dc <= dw && dc <= de ? 'core' : dw < de ? 'west' : 'east';
   }
 
   /** [plan4:ST-12] Section chips: spring-pan to a world x (keeps y and zoom). */

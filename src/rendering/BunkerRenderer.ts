@@ -469,6 +469,16 @@ export class BunkerRenderer {
     return floorTop(this.floors + 1) + 20;
   }
 
+  /** [plan4:ST-12] Camera facade for the depth ruler and the section chips (src/ui/components/DepthRuler.ts). */
+  get camera(): CameraController {
+    return this.cam;
+  }
+
+  /** [plan4:ST-12] Widest floor reach in world x (west wing end, east end). */
+  get floorSpan(): Readonly<{ l: number; r: number }> {
+    return this.span;
+  }
+
   /** [plan4:ST-12] Current camera zoom (world px to screen px), for screen-space text and the depth ruler. */
   get cameraZoom(): number {
     return this.cam.zoom;
