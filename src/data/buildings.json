@@ -1177,7 +1177,7 @@
     },
     "description": {
       "en": "Vehicles, tools and a crane. Lets more expedition teams go out and fills the caravans.",
-      "he": "רכבים, כלים ומנוף. מאפשר לעוד צוותי משלחת לצאת, ומשביע את השיירות."
+      "he": "רכבים, כלים ומנוף. מאפשר לעוד צוותי משלחת לצאת, ומוסיף למטען של השיירות."
     },
     "tier": 3,
     "size": {

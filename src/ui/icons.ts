@@ -282,9 +282,8 @@ export const ICON_SVG = {
     + '<path d="M7.4 6V3.6h9.2V6" ' + S + ' stroke-width="1.7"/><rect x="9.6" y="7.3" width="4.8" height="2.4" rx=".6" ' + CUT + '/><path d="M9 14.5l6 4M15 14.5l-6 4" stroke="#000" stroke-opacity=".5" stroke-width="1.3"/>',
   garage: '<path d="M2 9.6 12 3.4l10 6.2V21H2z" opacity=".6"/><rect x="5" y="11.4" width="14" height="9.6" rx=".8"/>'
     + '<path d="M5.6 14.2h12.8M5.6 16.6h12.8M5.6 19h12.8" stroke="#000" stroke-opacity=".5" stroke-width="1.2"/>',
-  decon: '<rect x="3" y="3" width="18" height="3.4" rx="1.2"/><path d="M12 6.4v2.4" ' + S + ' stroke-width="1.7"/>'
-    + '<path d="M7 11.2l-1.2 2.6M10 11.6l-.8 3.4M14 11.6l.8 3.4M17 11.2l1.2 2.6M12 11.8v4.4" ' + S + ' stroke-width="1.8" opacity=".7"/>'
-    + '<path d="M3 21h18" ' + S + ' stroke-width="2.2"/><circle cx="12" cy="18.6" r="1.6"/>',
+  decon: '<path d="M2.6 21.4V10.6a9.4 9.4 0 0 1 18.8 0v10.8z" opacity=".6"/><path d="M6.6 21.4V11.2a5.4 5.4 0 0 1 10.8 0v10.2z" ' + CUT + '/>'
+    + '<path d="M12 8.4c-1 1.3-1.6 2-1.6 2.9a1.6 1.6 0 0 0 3.2 0c0-.9-.6-1.6-1.6-2.9zM8.6 14c-.7.9-1.1 1.4-1.1 2a1.1 1.1 0 0 0 2.2 0c0-.6-.4-1.1-1.1-2zM15.4 14c-.7.9-1.1 1.4-1.1 2a1.1 1.1 0 0 0 2.2 0c0-.6-.4-1.1-1.1-2z"/>',
   aquaculture: '<path d="M2.6 12.8c2.6-3.8 6.2-5.6 10.2-5.6 3 0 5.6 1 7.6 2.8l1.8-2v7.6l-1.8-2c-2 1.8-4.6 2.8-7.6 2.8-4 0-7.6-1.8-10.2-5.6z"/>'
     + '<circle cx="8" cy="11.4" r="1.2" ' + CUT + '/><path d="M2 20.6c2-1.6 3.6-1.6 5.6 0s3.6 1.6 5.6 0 3.6-1.6 5.6 0" ' + S + ' stroke-width="1.8" opacity=".7"/>',
   market: '<path d="M2.6 8.2 4.6 3h14.8l2 5.2z"/><path d="M4.4 8.2v2.4a2.4 2.4 0 0 0 4.8 0 2.4 2.4 0 0 0 4.8 0 2.4 2.4 0 0 0 4.8 0V8.2" opacity=".6"/>'

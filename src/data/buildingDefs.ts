@@ -214,6 +214,12 @@ export const SYNERGIES: SynergyRule[] = [
   { a: 'batteryBank', b: 'generator', effect: 'powerLoss', value: 0.05 },
   { a: 'batteryBank', b: 'reactor', effect: 'powerLoss', value: 0.05 },
   { a: 'mushroomFarm', b: 'waterPump', effect: 'output', value: 0.1 },
+  // [plan4:BL-15..32] pairs of the wave 2 rooms. Every value is a fraction (the 0.2 total cap applies): childCapacity 0.2 = +20% places (the plan's "+2" in a form the cap allows).
+  { a: 'bathhouse', b: 'quarters', effect: 'hygiene', value: 0.2 },
+  { a: 'nursery', b: 'quarters', effect: 'childGrowth', value: 0.05 },
+  { a: 'school', b: 'nursery', effect: 'childCapacity', value: 0.2 },
+  { a: 'garage', b: 'armory', effect: 'cargo', value: 0.05 },
+  { a: 'quarantineWard', b: 'medbay', effect: 'healMult', value: 0.15 },
 ];
 /** Neighbours that count, and the most a room can gain in all. */
 export const SYNERGY_MAX_NEIGHBOURS = 3;
