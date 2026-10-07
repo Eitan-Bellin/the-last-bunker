@@ -15,7 +15,11 @@
     "audio-start":         { "kind": "audio", "maxReadyMs": 25000, "maxLongTaskMs": 2500, "maxLongTaskMax": 700, "maxPeakGainMB": 650 },
     "offline-24h":         { "kind": "offline", "floors": 24, "people": 60, "hours": 24, "maxLongestMs": 150 }
   },
-  "global": { "jsGzKB": 520 },
+  "global": {
+    "_note": "jsGzKB = every .js file in dist/assets, gzipped (what the service worker keeps); initialJsGzKB = the scripts index.html loads plus their static imports (the first load). Plan 4 wave 3 (perf-wave3.md): the old 520 was measured on the pre-plan-4 build (521) and is NOT met any more: plan 4 added about 120 KB of rooms, art and layout code (642 KB at the start of wave 3), and wave 3 recovered 19 KB of the total (Pixi WebGPU/Canvas renderers dropped) and 81 KB of the first load (string tables, Bunker Book and sound recipes fetched on demand). The limits below are what the wave-3 build measured; tighten them when code is removed, never loosen without writing why here.",
+    "jsGzKB": 625,
+    "initialJsGzKB": 560
+  },
   "targets": {
     "_note": "From 3-mobile-performance.md (not yet met everywhere: overdraw, objects drawn, draw calls need the deferred M2/M5 work and a real device).",
     "f24-close-medium": { "maxDrawCalls": 120, "maxRenderables": 1500, "maxAllocKBPerFrame": 100, "maxGpuTextureMB": 120 },

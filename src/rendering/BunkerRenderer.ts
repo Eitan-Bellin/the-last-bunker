@@ -1590,15 +1590,20 @@ export class BunkerRenderer {
 
   /** Dust cloud when a ruin is cleared. */
   burstAt(x: number, y: number, width: number): void {
-    for (let i = 0; i < 26; i++) {
-      const s = new Sprite(moteTexture());
-      s.anchor.set(0.5);
-      s.tint = i % 3 === 0 ? 0xffd27a : 0xc9bda6;
-      s.scale.set(0.6 + Math.random() * 1.1);
-      s.position.set(x + (Math.random() - 0.5) * width * 0.8, y + (Math.random() - 0.5) * 20);
-      if (i % 3 === 0) s.blendMode = 'add';
-      this.fxLayer.addChild(s);
-      this.bursts.push({ s, vx: (Math.random() - 0.5) * 60, vy: -10 - Math.random() * 40, life: 0, max: 1 + Math.random() * 1.2 });
+    // [plan4 perf] The plain motes go into the layer first and the additive ones after them: a blend change breaks the batch, so the old
+    // alternation (every third one additive) cost a draw call per mote (26 per cloud), this costs two.
+    for (const additive of [false, true]) {
+      for (let i = 0; i < 26; i++) {
+        if ((i % 3 === 0) !== additive) continue;
+        const s = new Sprite(moteTexture());
+        s.anchor.set(0.5);
+        s.tint = additive ? 0xffd27a : 0xc9bda6;
+        s.scale.set(0.6 + Math.random() * 1.1);
+        s.position.set(x + (Math.random() - 0.5) * width * 0.8, y + (Math.random() - 0.5) * 20);
+        if (additive) s.blendMode = 'add';
+        this.fxLayer.addChild(s);
+        this.bursts.push({ s, vx: (Math.random() - 0.5) * 60, vy: -10 - Math.random() * 40, life: 0, max: 1 + Math.random() * 1.2 });
+      }
     }
   }
 
