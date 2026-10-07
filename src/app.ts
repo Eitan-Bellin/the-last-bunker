@@ -771,6 +771,7 @@ export class GameApp {
     };
     this.hud.onObjectiveTap = () => this.onObjectiveTap();
     this.renderer.onDigClick = () => this.dig.confirmDig();
+    this.renderer.onWingDig = (floor, side) => { this.audio.play('click'); this.dig.confirmWingDig(floor, side); }; // [plan4:ST-3]
     this.renderer.onElevator = () => {
       if (this.renderer.zoomLevel !== 'far' && Math.random() < 0.6) this.audio.play('elevator', { volume: 0.35 });
     };

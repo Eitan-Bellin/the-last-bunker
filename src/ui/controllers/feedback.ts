@@ -326,8 +326,16 @@ export class FeedbackController {
     // [P5] A new timeline: choose its hardships (if any) for more Legacy.
     // [P3-5] First where the next world begins, then the hardships.
     bus.on('rebirth', () => setTimeout(() => this.app.story.chooseScenario(() => this.app.story.chooseMutators()), 1500));
-    bus.on('dig:start', () => {
-      this.app.toasts.show(`[[pick]] ${i18n.t('dig.started', { n: this.app.state.currentFloors + 1, t: i18n.formatDuration(this.app.state.longGame?.dig.total ?? 0) })}`, 'info');
+    bus.on('dig:start', (_floor: unknown, total: unknown) => {
+      this.app.toasts.show(`[[pick]] ${i18n.t('dig.started', { n: this.app.state.currentFloors + 1, t: i18n.formatDuration((total as number | undefined) ?? this.app.state.longGame?.dig.total ?? 0) })}`, 'info');
+    });
+    // [plan4:ST-3] Wings: the dig starts, and a step opens (the camera goes to the floor).
+    bus.on('wing:start', (floor: unknown, side: unknown, total: unknown) => {
+      this.app.toasts.show(`[[pick]] ${i18n.t('wing.started', { n: (floor as number) + 1, side: i18n.t(`wing.side.${side as string}`), t: i18n.formatDuration(total as number) })}`, 'info');
+    });
+    bus.on('wing:dug', (floor: unknown, side: unknown) => {
+      this.app.toasts.show(`[[pick]] ${i18n.t('wing.done', { n: (floor as number) + 1, side: i18n.t(`wing.side.${side as string}`) })}`, 'good');
+      this.app.renderer.focusFloor(floor as number);
     });
   }
 }

@@ -34,6 +34,10 @@ export interface DigState {
   progress: number;
   total: number;
   crew: string[];
+  /** [plan4:ST-3] What is being dug: a new floor (the default, also for saves from before) or a side wing of `floor`. */
+  kind?: 'floor' | 'wing';
+  /** [plan4:ST-3] Which wing of `floor` (kind 'wing'). */
+  side?: 'w' | 'e';
 }
 
 /** [Danger lane] The threat director. */
@@ -114,6 +118,8 @@ export interface ChronicleEntry {
 export interface LongGameState {
   meta: MetaState;
   dig: DigState;
+  /** [plan4:ST-3] The second dig, open after the Parallel Digging research (absent in older saves; migrateLongGame fills it). */
+  dig2?: DigState;
   threat: ThreatState;
   season: SeasonState;
   policy: PolicyState;
@@ -127,7 +133,9 @@ export interface LongGameState {
 export function createLongGame(): LongGameState {
   return {
     meta: { act: 1, actSince: 0, difficulty: 'warden', diffLowest: 'warden', scenario: 'bunker17', mutators: [], runIndex: 0, worldT: 0, legacy: false, homes: [] },
-    dig: { floor: null, paid: [], progress: 0, total: 0, crew: [] },
+    dig: { floor: null, paid: [], progress: 0, total: 0, crew: [], kind: 'floor' },
+    // [plan4:ST-3] The second dig slot (opens with the Parallel Digging research).
+    dig2: { floor: null, paid: [], progress: 0, total: 0, crew: [], kind: 'floor' },
     threat: { meter: 0, seq: 0, nextAt: 0, breatherUntil: 0, scars: [] },
     season: { index: 0, startedAt: 0 },
     policy: { laws: [], capital: 0, approval: {}, strikeUntil: 0 },
@@ -157,6 +165,7 @@ export function migrateLongGame(saved: Partial<LongGameState> | undefined, era: 
   return {
     meta: { ...fresh.meta, ...saved.meta },
     dig: { ...fresh.dig, ...saved.dig },
+    dig2: { ...fresh.dig2!, ...saved.dig2 },
     threat: { ...fresh.threat, ...saved.threat },
     season: { ...fresh.season, ...saved.season },
     policy: { ...fresh.policy, ...saved.policy },

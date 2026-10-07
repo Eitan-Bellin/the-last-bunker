@@ -595,6 +595,8 @@ export async function runSim(o: SimOptions): Promise<SimResult> {
   };
 
   let noSpaceFor: BuildingType | null = null;
+  /** [plan4:ST-3] Rooms standing when the last wing step was started: the next step waits until something was built in the room it made. */
+  let roomsAtLastWing = -1;
   const build = () => {
     const s = state();
     const want: BuildingType[] = [];
@@ -690,6 +692,22 @@ export async function runSim(o: SimOptions): Promise<SimResult> {
     // Older engines dig only when crowded; with Acts the bot digs as deep as the Act allows (the Act goals ask for depth).
     const digSys = (e as unknown as Loose).digSystem as Loose | undefined;
     const crowded = s.buildings.length / Math.max(1, s.currentFloors) > 4.5 || noSpaceFor !== null || !!digSys;
+    // [plan4:ST-3/ST-5] No place for a wanted room: widen a wing when that makes room cheaper (per slot) than a new floor, or when no floor can be dug
+    // (the Act's depth cap). A new floor is 12 slots, a wing step 2. Feature-detected: older engines have no wings.
+    const wingStep = fn(bsys, 'digWing'), wingList = fn(bsys, 'wingOptions');
+    if (wingStep && wingList && noSpaceFor !== null && s.buildings.length > roomsAtLastWing) {
+      const price = (c: Record<string, number>) => Object.values(c).reduce((a, v) => a + v, 0);
+      const blockNow = e.buildingSystem.digBlock ? e.buildingSystem.digBlock(s) : null;
+      const floorPerSlot = blockNow === 'act' || blockNow === 'max' ? Infinity : price(e.buildingSystem.digCost(s)) / 12;
+      const zone = allowedFloors(noSpaceFor, s.currentFloors);
+      const opts = (wingList(s) as { floor: number; side: 'w' | 'e'; cost: Record<string, number>; block: string | null }[])
+        // Only out of a surplus (like upgrades): what is left after paying must stay at 40% of storage, so a wing never starves the next floor or Act.
+        .filter(w => w.block === null && zone.includes(w.floor)
+          && Object.entries(w.cost).every(([r, v]) => { const x = s.resources[r as ResourceType]; return !x || x.amount - v >= 0.4 * x.cap; }))
+        .sort((a, b) => price(a.cost) - price(b.cost) || (a.side === 'e' ? 0 : 1) - (b.side === 'e' ? 0 : 1) || a.floor - b.floor);
+      const w = opts[0];
+      if (w && price(w.cost) / 2 < floorPerSlot && wingStep(sm, w.floor, w.side)) { roomsAtLastWing = s.buildings.length; mark('first wing'); acted('wing'); }
+    }
     if (crowded && e.buildingSystem.canDig(s) && e.resourceSystem.canAfford(s, e.buildingSystem.digCost(s))) {
       e.resourceSystem.spend(sm, e.buildingSystem.digCost(s));
       e.buildingSystem.dig(sm);
