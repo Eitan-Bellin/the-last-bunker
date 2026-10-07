@@ -1,13 +1,14 @@
-import { Application, ColorMatrixFilter, Container, Graphics, Rectangle, Text, TextStyle } from 'pixi.js';
+import { Application, ColorMatrixFilter, Container, Graphics, Rectangle, Text } from 'pixi.js';
+import { CameraController, HUD_BOTTOM, HUD_TOP } from './CameraController'; // [plan4 X-1]
+import { PlacementController } from './PlacementController'; // [plan4 X-1]
+import { RoomViews, type RoomView, type RuinView } from './RoomViews'; // [plan4 X-1]
 import type { IconName } from '../ui/icons';
 import type { EraDef } from '../data/eras';
 import type { BuildingInstance, GameState, Position, Ruin, SurvivorState } from '../core/GameState';
-import { effectiveLevel, getDef, isDistrict, roomFloors, roomSlots } from '../data/buildingDefs';
-import { SLOTS_PER_FLOOR } from '../systems/BuildingSystem';
+import { effectiveLevel, isDistrict, roomFloors, roomSlots } from '../data/buildingDefs';
 import { i18n } from '../i18n/I18nManager';
-import { BUILDING_W, DEPTH_X, DISTRICT_X, FLOOR_H, ROOM_H, SIDE_MARGIN, SLAB, SLOT_W, TOPSOIL, buildingH, buildingX, floorTop, slotX } from './layout';
+import { BUILDING_W, DISTRICT_X, FLOOR_H, ROOM_H, SLOT_W, TOPSOIL, buildingH, buildingX, floorTop, slotX } from './layout';
 import { hashString, seeded } from './draw';
-import { buildConstructionVisual, buildPaintedConstruction, buildRoomVisual, buildScaffold, type RoomVisual } from './roomArt';
 import { PEOPLE_STYLE, Person, ROOM_ACTIVITY, type Activity, type Lane } from './people';
 import { crowdFor, restCountFor, settleCrowds } from './workSpots'; // gfx-p0 people
 import { GFX, setGfxQuality } from './gfxFeatures';
@@ -19,7 +20,7 @@ import { Dust, buildDigSign, buildShaft, buildSurface, buildUnderground, buildUt
 import { LAYOUT, VIEW, bandize, hashLayout } from './perfFx'; // [perf]
 import { buildShaft2 } from './shaft';
 import { buildSurface2, mountSurface2, surface2Sig } from './surface2'; // [gfx2 surface]
-import { buildPaintedRoom, roomFlicker, setRoomFxQuality } from './paintedRoom'; // gfx-p0 rooms: quality
+import { roomFlicker, setRoomFxQuality } from './paintedRoom'; // gfx-p0 rooms: quality
 import { lineWidth, richLine } from './richText';
 import { ArtLibrary } from '../art/ArtLibrary';
 import { artEntry, buildingArtKey, roomTier, ruinArtKey } from '../art/registry';
@@ -28,7 +29,7 @@ import { PostFX, startQuality, targetResolution } from './postfx';
 import { isLiteMode, logCrash } from '../core/crashGuard';
 import { isTouchDevice } from '../utils/device';
 import { coneTexture } from '../art/ArtLibrary';
-import { buildRuinVisual, type RuinVisual } from './ruinArt';
+import { buildRuinVisual } from './ruinArt';
 import { iconSprite } from './richText';
 import { glowTexture, moteTexture } from '../art/ArtLibrary';
 import { Sprite } from 'pixi.js';
@@ -39,78 +40,11 @@ const NAME_LOCALIZER = new PopulationSystem();
 import { setPopupBlocker } from '../ui/components/NumberPopup'; // [camera]
 import { buildDecals, type DecalLayer } from './decals'; // [gfx2 wear]
 import { buildAtmosphere, type Atmosphere } from './atmosphere'; // [gfx2 wear]
-import { specOf } from '../data/specializations';
 import { ROOMS_W, ROOMS_X } from './layout';
-import { buildSignage, sprayOutline, steelTag, tagLamp } from './signage';
+import { buildSignage, sprayOutline, steelTag } from './signage';
 import { KIT_KEYS, buildBays,buildCasing, buildFrontStructure, depthGains, structureAmbient, gfx2Enabled, kitReady, kitState, occupancy, type WorldLamp } from './structure';
 
-const DRAG_THRESHOLD = 6;
-const HUD_TOP = 150;
-const HUD_BOTTOM = 72;
-const VIEW_TOP = -140;
-const MAX_ZOOM = 3;
-// [camera] Feel constants: glide friction (1/s), edge spring and focus spring (rad/s, critically damped),
-// shake size at full trauma (screen px), double-tap window.
-const FRICTION = 4.2;
-const EDGE_SPRING = 13;
-const FOCUS_SPRING = 7.5;
-const ZOOM_SPRING = 14;
-const SHAKE_PX = 16;
-const DOUBLE_TAP_MS = 320;
-/** [perf] A room out of the camera's reach for this long gives its look back (see renderRooms). */
-const PARK_AFTER_MS = 8000;
 
-interface RoomView {
-  root: Container;
-  visualHolder: Container;
-  visual: RoomVisual | null;
-  /** Previous look fading out after the room changed tier. */
-  oldVisual: Container | null;
-  fade: number;
-  scaffold: RoomVisual | null;
-  people: Container;
-  outline: Graphics;
-  label: Container;
-  progress: Graphics | null;
-  visualSig: string;
-  labelSig: string;
-  lane: Lane;
-  width: number;
-  height: number;
-  /** Off screen this frame: not drawn and not animated. */
-  culled?: boolean;
-  /** [perf] Stamp of the last picture in which the room was still in the state (see renderRooms). */
-  gen?: number;
-  /** [perf] The root is in the scene (rooms out of view are taken out of it, see cullRooms). */
-  attached?: boolean;
-  /** [perf] The label wants to be shown (before the off-screen test in cullRooms). */
-  labelOn?: boolean;
-  /** [perf] The layout hash the look was last built for; when the room left the camera's reach (performance.now), or 0. */
-  layoutH?: number;
-  outSince?: number;
-  /** [perf] Since when the room has been waiting for its painting (performance.now). */
-  waitSince?: number;
-  /** [perf] What the label was last drawn from: level, staff, constructing (packed), specialization, language. */
-  lk?: number;
-  lspec?: string | null;
-  lloc?: string;
-}
-
-interface RuinView {
-  root: Container;
-  visual: RuinVisual | null;
-  people: Container;
-  label: Container;
-  visualSig: string;
-  labelSig: string;
-  lane: Lane;
-  width: number;
-  bar: Graphics | null;
-  /** [perf] Off screen this frame. */
-  culled?: boolean;
-  /** [perf] The root is in the scene (rooms out of view are taken out of it, see cullRooms). */
-  attached?: boolean;
-}
 
 interface Burst {
   s: Sprite;
@@ -120,7 +54,6 @@ interface Burst {
   max: number;
 }
 
-const nameStyle = new TextStyle({ fontFamily: 'Rubik, sans-serif', fontSize: 10, fontWeight: '600', fill: 0xffffff });
 
 export class BunkerRenderer {
   app = new Application();
@@ -152,47 +85,9 @@ export class BunkerRenderer {
   private labelLayer = new Container();
   private digHolder = new Container();
 
-  private camX = BUILDING_W / 2;
-  private camY = 0;
-  private baseZoom = 1;
-  private zoom = 1;
-  private isDragging = false;
-  private pointerDown = false;
-  private dragStartX = 0;
-  private dragStartY = 0;
-  private camStartX = 0;
-  private camStartY = 0;
-  // [camera] Camera physics (see the camera section after setupCamera): velocities in world units/s, zoom in ln-space.
-  private camVX = 0;
-  private camVY = 0;
-  private zoomV = 0;
-  private focusTarget: { x: number; y: number; z: number } | null = null;
-  private wheelZoom: number | null = null;
-  private zoomAnchorX = 0;
-  private zoomAnchorY = 0;
-  private pointers = new Map<number, { x: number; y: number }>();
-  private pinch: { d0: number; z0: number; wx: number; wy: number } | null = null;
-  /** Last pointer positions (t, x, y) × 8 for the release velocity. */
-  private samples = new Float64Array(24);
-  private sampleN = 0;
-  private downAt = 0;
-  private lastTap = { t: 0, x: 0, y: 0 };
-  private swallowClickUntil = 0;
-  /** Screen px at the bottom covered by an open sheet; the camera may rest lower while it is open. */
-  private bottomInset = 0;
-  private framedId: string | null = null;
   /** Rooms (or floors, for a blackout) with an active incident: popups stay out of them. */
   private blockRects: { x: number; y: number; w: number; h: number }[] = [];
   private blockN = 0;
-  private insetCheck = 0;
-  private bnd = { x0: 0, x1: 0, y0: 0, y1: 0 };
-  private trauma = 0;
-  private traumaDecay = 1;
-  private punchT = 9;
-  private punchAmt = 0;
-  private punchDX = 0;
-  private punchDY = 0;
-  private readonly calm = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   private views = new Map<string, RoomView>();
   private ruinViews = new Map<string, RuinView>();
@@ -234,18 +129,60 @@ export class BunkerRenderer {
   private disasterFx = new DisasterLayer();
   postfx: PostFX | null = null;
 
+  // [plan4 X-1] The camera, the empty-slot pad / placement highlight and the room views live in their own modules (CameraController.ts,
+  // PlacementController.ts, RoomViews.ts); this class stays the facade the rest of the game talks to.
+  private readonly cam: CameraController;
+  private readonly placement: PlacementController;
+  private readonly roomViews: RoomViews;
+
+  constructor() {
+    const r = this;
+    this.cam = new CameraController({
+      get app() { return r.app; },
+      get worldContainer() { return r.worldContainer; },
+      contentBottom: () => r.contentBottom(),
+      extentR: () => r.extentR,
+      projectTop: () => r.projectSites.top,
+      time: () => r.time,
+      selectedId: () => r.selectedId,
+      roomRect: id => r.roomRect(id),
+      targetRect: id => {
+        const room = r.views.get(id);
+        if (room) return { x: room.root.x, y: room.root.y, w: room.width, h: room.height };
+        const ruin = r.ruinViews.get(id);
+        return ruin ? { x: ruin.root.x, y: ruin.root.y, w: ruin.width, h: ROOM_H } : null;
+      },
+      targetAt: (sx, sy) => r.targetAt(sx, sy),
+      carryPointer: () => (r.drag ? r.drag.pointerId : null),
+      moveCarried: (sx, sy) => r.movePersonTo(sx, sy),
+      endCarry: (sx, sy) => r.endDrag(sx, sy),
+      cancelPress: () => window.clearTimeout(r.pressTimer),
+    });
+    this.placement = new PlacementController({
+      isDragging: () => r.cam.isDragging,
+      onTileClick: pos => r.onTileClick?.(pos),
+    }, this.slotLayer, this.highlightLayer);
+    this.roomViews = new RoomViews({
+      gfx2: this.gfx2,
+      selectedId: () => r.selectedId,
+      isDragging: () => r.cam.isDragging,
+      onBuildingClick: id => r.onBuildingClick?.(id),
+      projectRight: () => r.projectSites.right,
+      setExtentR: x => { r.extentR = x; },
+      burstAt: (x, y, w) => r.burstAt(x, y, w),
+      onScreen: (x, y) => r.onScreen(x, y),
+      punch: k => r.punch(k),
+      mapCovers: () => r.mapCovers,
+    }, this.views, this.ruinViews, this.roomLayer, this.labelLayer);
+  }
+
   /**
    * [camera] Camera shake for big moments (a crisis breaking out, a new era, the drill): adds trauma; the shake is
    * trauma² × smooth noise, so it starts at about `amount` screen px and eases out over `seconds`.
    * Strong shakes (≥ 4) also land a downward kick and a zoom punch.
    */
   shake(amount: number, seconds: number): void {
-    const t = Math.min(1, Math.sqrt(Math.max(0, amount) / SHAKE_PX));
-    if (t >= this.trauma) {
-      this.trauma = t;
-      this.traumaDecay = t / Math.max(0.05, seconds);
-    } else this.trauma = Math.min(1, this.trauma + t * 0.25);
-    if (amount >= 4) this.punch(amount / 5, 0, 1);
+    this.cam.shake(amount, seconds);
   }
 
   /**
@@ -253,14 +190,7 @@ export class BunkerRenderer {
    * (screen direction, ~6 px × strength). For build complete, collect, crisis start.
    */
   punch(strength = 1, dirX = 0, dirY = 0): void {
-    const s = Math.min(2.5, strength) * (this.calm ? 0.4 : 1);
-    // A punch already in flight keeps the stronger one.
-    if (this.punchT < 0.12 && this.punchAmt >= 0.03 * s) return;
-    this.punchT = 0;
-    this.punchAmt = 0.03 * s;
-    const len = Math.hypot(dirX, dirY) || 1;
-    this.punchDX = (dirX / len) * 6 * s;
-    this.punchDY = (dirY / len) * 6 * s;
+    this.cam.punch(strength, dirX, dirY);
   }
   private floaters: { s: Sprite; vy: number; life: number; max: number; vx: number }[] = [];
 
@@ -340,7 +270,7 @@ export class BunkerRenderer {
     sign.cursor = 'pointer';
     sign.hitArea = new Rectangle(DISTRICT_X, top, w, ROOM_H);
     sign.on('pointertap', () => {
-      if (!this.isDragging) this.onDistrictDig?.();
+      if (!this.cam.isDragging) this.onDistrictDig?.();
     });
     this.districtSignHolder.addChild(sign);
   }
@@ -409,7 +339,7 @@ export class BunkerRenderer {
     b.hitArea = new Rectangle(-16, -16, 32, 34);
     b.on('pointertap', (e) => {
       e.stopPropagation();
-      if (!this.isDragging) this.onBubbleTap?.(buildingId);
+      if (!this.cam.isDragging) this.onBubbleTap?.(buildingId);
     });
     (b as Container & { born: number }).born = this.time;
     this.labelLayer.addChild(b);
@@ -484,7 +414,7 @@ export class BunkerRenderer {
     this.app.stage.addChild(this.worldContainer);
     this.worldContainer.filters = [this.grade];
     this.surfaceHolder.addChild(this.surface.container);
-    this.projectSites.onTap = id => { if (!this.isDragging) this.onProjectClick?.(id); };
+    this.projectSites.onTap = id => { if (!this.cam.isDragging) this.onProjectClick?.(id); };
     this.bayHolder.eventMode = 'none';
     PEOPLE_STYLE.painted = this.gfx2;
     if (this.gfx2) for (const k of KIT_KEYS) ArtLibrary.get(k);
@@ -498,14 +428,14 @@ export class BunkerRenderer {
       this.artLastAt = now;
     });
     this.setupRenderGroups(); // [perf]
-    this.setupCamera();
+    this.cam.setup();
     setPopupBlocker((x, y) => this.inIncident(x, y)); // [camera]
-    this.fitToScreen();
+    this.cam.fitToScreen();
     // gfx-p0 light: the composite takes over the era grade and reads the era/night for vignette and night lighting.
     this.postfx = new PostFX(this.app, this.worldContainer, this.grade, () => ({ era: this.surfaceEra, night: this.nightNow, target: this.frameTarget }));
     window.addEventListener('resize', () => {
       this.app.renderer.resize(window.innerWidth, window.innerHeight);
-      this.fitToScreen();
+      this.cam.fitToScreen();
     });
   }
 
@@ -534,422 +464,9 @@ export class BunkerRenderer {
     return floorTop(this.floors + 1) + 20;
   }
 
-  private fitToScreen(): void {
-    const { width } = this.app.screen;
-    const contentW = BUILDING_W + SIDE_MARGIN * 2;
-    this.baseZoom = Math.max(0.35, Math.min(1.6, (width - 8) / contentW));
-    this.zoom = this.baseZoom;
-    this.camX = BUILDING_W / 2;
-    const usable = this.app.screen.height - HUD_TOP - HUD_BOTTOM;
-    this.camY = VIEW_TOP + usable / 2 / this.zoom;
-    this.stopCamera();
-    this.clampCamera();
-    this.updateTransform();
-  }
-
-  // ───────────────────────────── [camera] input ─────────────────────────────
-  // One finger drags 1:1 with a rubber band past the edges and glides on release; two fingers pinch around the
-  // point between them (and pan); the wheel zooms around the cursor; a double tap frames a room. Everything is
-  // stepped by time in stepCamera(), so it feels the same at 30, 60 and 120 Hz.
-
-  private setupCamera(): void {
-    const canvas = this.app.canvas;
-    canvas.addEventListener('pointerdown', (e: PointerEvent) => {
-      // A primary pointer starts a fresh gesture: forget any finger whose release we never saw.
-      if (e.isPrimary) {
-        this.pointers.clear();
-        this.pinch = null;
-      }
-      this.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
-      // A touch catches a gliding camera; that touch only stops it (no room tap).
-      // (Not when this touch may be the second half of a double tap.)
-      const pendingTap = performance.now() - this.lastTap.t < DOUBLE_TAP_MS;
-      const moving = !pendingTap && (Math.hypot(this.camVX, this.camVY) * this.zoom > 140 || this.focusTarget !== null);
-      this.stopCamera();
-      if (this.pointers.size === 1) {
-        this.isDragging = moving;
-        this.downAt = e.timeStamp;
-        this.beginPan(e.clientX, e.clientY, e.timeStamp);
-      } else if (this.pointers.size === 2) this.beginPinch();
-    });
-    // Moves and releases are followed on the window, so a finger sliding over the HUD keeps dragging.
-    window.addEventListener('pointermove', (e: PointerEvent) => {
-      if (this.drag) {
-        if (e.pointerId !== this.drag.pointerId) return;
-        const r = canvas.getBoundingClientRect();
-        this.movePersonTo(e.clientX - r.left, e.clientY - r.top);
-        return;
-      }
-      const p = this.pointers.get(e.pointerId);
-      if (!p) return;
-      p.x = e.clientX;
-      p.y = e.clientY;
-      if (this.pinch) {
-        this.movePinch();
-        return;
-      }
-      if (!this.pointerDown) return;
-      const dx = e.clientX - this.dragStartX;
-      const dy = e.clientY - this.dragStartY;
-      this.pushSample(e.timeStamp, e.clientX, e.clientY);
-      if (!this.isDragging && Math.hypot(dx, dy) > DRAG_THRESHOLD) this.isDragging = true;
-      if (!this.isDragging) return;
-      this.camBounds(this.zoom);
-      const b = this.bnd;
-      this.camX = rubber(this.camStartX - dx / this.zoom, b.x0, b.x1, this.viewW());
-      this.camY = rubber(this.camStartY - dy / this.zoom, b.y0, b.y1, this.viewH());
-      this.updateTransform();
-    });
-    const end = (e: PointerEvent) => {
-      const known = this.pointers.delete(e.pointerId);
-      window.clearTimeout(this.pressTimer);
-      if (this.drag && (e.pointerId === this.drag.pointerId || !this.pointers.size)) {
-        const r = canvas.getBoundingClientRect();
-        this.endDrag(e.clientX - r.left, e.clientY - r.top);
-      }
-      if (!known) return;
-      if (this.pinch) {
-        if (this.pointers.size < 2) {
-          this.pinch = null;
-          // The finger left behind carries on as a one-finger drag from where the camera is.
-          for (const p of this.pointers.values()) this.beginPan(p.x, p.y, e.timeStamp);
-        }
-        return;
-      }
-      if (this.pointers.size) return;
-      if (this.pointerDown && this.isDragging) this.fling(e.timeStamp);
-      else if (this.pointerDown && e.type === 'pointerup' && e.timeStamp - this.downAt < 300) this.tapAt(e.clientX, e.clientY, true);
-      this.pointerDown = false;
-      // Keep isDragging until PixiJS has dispatched pointertap for this release.
-      setTimeout(() => { this.isDragging = false; }, 0);
-    };
-    window.addEventListener('pointerup', end);
-    window.addEventListener('pointercancel', end);
-    window.addEventListener('blur', () => {
-      this.pointers.clear();
-      this.pinch = null;
-      this.pointerDown = false;
-      this.isDragging = false;
-    });
-    canvas.addEventListener('wheel', (e: WheelEvent) => {
-      e.preventDefault();
-      const dy = e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY;
-      const from = this.wheelZoom ?? this.zoom;
-      this.focusTarget = null;
-      this.camVX = this.camVY = 0;
-      this.wheelZoom = this.clampZoom(from * Math.exp(-Math.max(-300, Math.min(300, dy)) * 0.0016));
-      this.zoomAnchorX = e.clientX;
-      this.zoomAnchorY = e.clientY;
-    }, { passive: false });
-    // A double tap can land on the backdrop of the sheet the first tap opened: frame the room, keep the sheet.
-    const isBackdrop = (t: EventTarget | null) => t instanceof HTMLElement && t.classList.contains('sheet-overlay');
-    let backdropDown = 0;
-    window.addEventListener('pointerdown', (e) => { if (isBackdrop(e.target)) backdropDown = e.timeStamp; }, true);
-    window.addEventListener('pointerup', (e) => {
-      if (!isBackdrop(e.target) || e.timeStamp - backdropDown > 300) return;
-      if (this.tapAt(e.clientX, e.clientY, false)) this.swallowClickUntil = performance.now() + 450;
-    }, true);
-    window.addEventListener('click', (e) => {
-      if (performance.now() > this.swallowClickUntil || !isBackdrop(e.target)) return;
-      this.swallowClickUntil = 0;
-      e.stopPropagation();
-      e.preventDefault();
-    }, true);
-  }
-
-  private beginPan(x: number, y: number, t: number): void {
-    this.pointerDown = true;
-    this.dragStartX = x;
-    this.dragStartY = y;
-    // Start from the "unstretched" position, so grabbing the camera inside the rubber band does not jump.
-    this.camBounds(this.zoom);
-    const b = this.bnd;
-    this.camStartX = unrubber(this.camX, b.x0, b.x1, this.viewW());
-    this.camStartY = unrubber(this.camY, b.y0, b.y1, this.viewH());
-    this.sampleN = 0;
-    this.pushSample(t, x, y);
-  }
-
-  private beginPinch(): void {
-    let i = 0, ax = 0, ay = 0, bx = 0, by = 0;
-    for (const p of this.pointers.values()) {
-      if (i === 0) { ax = p.x; ay = p.y; } else if (i === 1) { bx = p.x; by = p.y; }
-      i++;
-    }
-    const mx = (ax + bx) / 2, my = (ay + by) / 2;
-    const { width } = this.app.screen;
-    this.pinch = {
-      d0: Math.max(24, Math.hypot(ax - bx, ay - by)), z0: this.zoom,
-      wx: this.camX + (mx - width / 2) / this.zoom, wy: this.camY + (my - this.viewCY()) / this.zoom,
-    };
-    this.isDragging = true;
-    this.pointerDown = true;
-  }
-
-  /** Pinch: the world point under the fingers stays under them while they spread and move. */
-  private movePinch(): void {
-    const p = this.pinch!;
-    let i = 0, ax = 0, ay = 0, bx = 0, by = 0;
-    for (const q of this.pointers.values()) {
-      if (i === 0) { ax = q.x; ay = q.y; } else if (i === 1) { bx = q.x; by = q.y; }
-      i++;
-    }
-    const mx = (ax + bx) / 2, my = (ay + by) / 2;
-    const z = this.softZoom(p.z0 * Math.hypot(ax - bx, ay - by) / p.d0);
-    this.zoom = z;
-    this.camBounds(z);
-    const b = this.bnd;
-    const { width } = this.app.screen;
-    this.camX = rubber(p.wx - (mx - width / 2) / z, b.x0, b.x1, this.viewW());
-    this.camY = rubber(p.wy - (my - this.viewCY()) / z, b.y0, b.y1, this.viewH());
-    this.zoomAnchorX = mx;
-    this.zoomAnchorY = my;
-    this.updateTransform();
-  }
-
-  private pushSample(t: number, x: number, y: number): void {
-    const i = (this.sampleN % 8) * 3;
-    this.samples[i] = t;
-    this.samples[i + 1] = x;
-    this.samples[i + 2] = y;
-    this.sampleN++;
-  }
-
-  /** Release: the finger's speed over its last ~90 ms becomes the glide. A finger that stopped first does not fling. */
-  private fling(t: number): void {
-    const n = this.sampleN;
-    if (n < 2) return;
-    const s = this.samples;
-    const last = ((n - 1) % 8) * 3;
-    if (t - s[last] > 60) return;
-    let first = last;
-    for (let k = 2; k <= Math.min(8, n); k++) {
-      const j = ((n - k) % 8) * 3;
-      if (s[last] - s[j] > 90) break;
-      first = j;
-    }
-    const dt = (s[last] - s[first]) / 1000;
-    if (dt < 0.008) return;
-    let vx = (s[last + 1] - s[first + 1]) / dt;
-    let vy = (s[last + 2] - s[first + 2]) / dt;
-    const sp = Math.hypot(vx, vy);
-    if (sp < 60) return;
-    if (sp > 5000) {
-      vx *= 5000 / sp;
-      vy *= 5000 / sp;
-    }
-    this.camVX = -vx / this.zoom;
-    this.camVY = -vy / this.zoom;
-  }
-
-  /** Records a tap; true when it completes a double tap (which then frames what was tapped). Only canvas taps start one. */
-  private tapAt(x: number, y: number, canStart: boolean): boolean {
-    const now = performance.now();
-    const t = this.lastTap;
-    if (now - t.t < DOUBLE_TAP_MS && Math.hypot(x - t.x, y - t.y) < 36) {
-      t.t = 0;
-      this.onDoubleTap(x, y);
-      return true;
-    }
-    t.t = canStart ? now : 0;
-    t.x = x;
-    t.y = y;
-    return false;
-  }
-
-  /** Double tap: frame the room (or ruin) under the finger above any open sheet; again to zoom back out. Empty space zooms in. */
-  private onDoubleTap(sx: number, sy: number): void {
-    const { width, height } = this.app.screen;
-    const id = this.targetAt(sx, sy);
-    const room = id ? this.views.get(id) : undefined;
-    const ruin = id ? this.ruinViews.get(id) : undefined;
-    const rect = room ? { x: room.root.x, y: room.root.y, w: room.width, h: room.height }
-      : ruin ? { x: ruin.root.x, y: ruin.root.y, w: ruin.width, h: ROOM_H } : null;
-    const inset = this.sheetInset();
-    const wx = this.camX + (sx - width / 2) / this.zoom;
-    const wy = this.camY + (sy - this.viewCY()) / this.zoom;
-    if (rect) {
-      const visH = height - HUD_TOP - HUD_BOTTOM - inset;
-      const z = this.clampZoom(Math.min(width * 0.9 / rect.w, visH * 0.82 / rect.h, MAX_ZOOM));
-      const cx = rect.x + rect.w / 2, cy = rect.y + rect.h / 2;
-      // Already framed: the second double tap goes back to the overview.
-      const framed = this.framedId === id && Math.abs(this.zoom / z - 1) < 0.08;
-      this.framedId = framed ? null : id;
-      this.bottomInset = inset;
-      if (framed) this.focusTo(wx - (sx - width / 2) / this.baseZoom, wy - (sy - this.viewCY()) / this.baseZoom, this.baseZoom);
-      // The visible middle sits inset/2 px above the view centre.
-      else this.focusTo(cx, cy + inset / 2 / z, z);
-    } else {
-      const z = this.zoom > this.baseZoom * 2.2 ? this.baseZoom : this.clampZoom(this.zoom * 1.8);
-      this.focusTo(wx - (sx - width / 2) / z, wy - (sy - this.viewCY()) / z, z);
-    }
-  }
-
-  /** Screen px of an open bottom sheet that reach above the nav bar. */
-  private sheetInset(): number {
-    const s = document.querySelector('.sheet-overlay.open .sheet') as HTMLElement | null;
-    return s ? Math.max(0, Math.min(this.app.screen.height * 0.7, s.offsetHeight - HUD_BOTTOM)) : 0;
-  }
-
-  /** After a room is selected: if its sheet (or the screen edge) hides it, glide just enough to show it. */
-  private keepInSight(id: string): void {
-    const v = this.views.get(id);
-    if (!v || this.selectedId !== id || this.pointers.size || this.focusTarget) return;
-    const { width, height } = this.app.screen;
-    const inset = this.sheetInset();
-    const z = this.zoom, cy = this.viewCY();
-    const top = HUD_TOP + 10, bottom = height - HUD_BOTTOM - inset - 10;
-    const rTop = cy + (v.root.y - this.camY) * z, rBot = cy + (v.root.y + v.height - this.camY) * z;
-    const rL = width / 2 + (v.root.x - this.camX) * z, rR = width / 2 + (v.root.x + v.width - this.camX) * z;
-    let sy = 0, sx = 0;
-    if (rBot - rTop > bottom - top) sy = (rTop + rBot) / 2 - (top + bottom) / 2;
-    else if (rBot > bottom) sy = rBot - bottom;
-    else if (rTop < top) sy = rTop - top;
-    if (rR - rL > width - 20) sx = (rL + rR) / 2 - width / 2;
-    else if (rR > width - 10) sx = rR - (width - 10);
-    else if (rL < 10) sx = rL - 10;
-    if (Math.abs(sx) < 2 && Math.abs(sy) < 2) return;
-    this.bottomInset = Math.max(this.bottomInset, inset);
-    this.focusTo(this.camX + sx / z, this.camY + sy / z, z);
-  }
-
-  // ───────────────────────────── [camera] physics ─────────────────────────────
-
-  private stopCamera(): void {
-    this.camVX = this.camVY = this.zoomV = 0;
-    this.focusTarget = null;
-    this.wheelZoom = null;
-  }
-
-  private viewW(): number {
-    return this.app.screen.width / this.zoom;
-  }
-
-  private viewH(): number {
-    return (this.app.screen.height - HUD_TOP - HUD_BOTTOM) / this.zoom;
-  }
-
-  /** Screen y the camera centre maps to (the middle between the HUD bars). */
-  private viewCY(): number {
-    return HUD_TOP + (this.app.screen.height - HUD_TOP - HUD_BOTTOM) / 2;
-  }
-
-  /** Where the camera centre may rest at zoom z (lo === hi on an axis when the content fits). Writes this.bnd. */
-  private camBounds(z: number): void {
-    const { width, height } = this.app.screen;
-    const halfW = width / 2 / z;
-    const halfH = (height - HUD_TOP - HUD_BOTTOM) / 2 / z;
-    const b = this.bnd;
-    const minX = -SIDE_MARGIN, maxX = this.extentR + SIDE_MARGIN;
-    if (maxX - minX <= halfW * 2) b.x0 = b.x1 = (minX + maxX) / 2;
-    else { b.x0 = minX + halfW; b.x1 = maxX - halfW; }
-    // An open sheet lets the camera go lower, so the deepest rooms can sit above it.
-    // Tall project buildings on the surface let the camera rise to their tops.
-    const minY = Math.min(VIEW_TOP, this.projectSites.top) - 60, maxY = this.contentBottom() + this.bottomInset / z;
-    if (maxY - minY <= halfH * 2) b.y0 = b.y1 = minY + halfH;
-    else { b.y0 = minY + halfH; b.y1 = maxY - halfH; }
-  }
-
-  private clampZoom(z: number): number {
-    return Math.max(this.baseZoom * 0.5, Math.min(MAX_ZOOM, z));
-  }
-
-  /** Pinching past the zoom limits gives way with resistance, then springs back on release. */
-  private softZoom(z: number): number {
-    const lo = this.baseZoom * 0.5;
-    if (z > MAX_ZOOM) return MAX_ZOOM * Math.exp(Math.log(z / MAX_ZOOM) * 0.3);
-    if (z < lo) return lo * Math.exp(Math.log(z / lo) * 0.3);
-    return z;
-  }
-
-  private clampCamera(): void {
-    this.camBounds(this.zoom);
-    const b = this.bnd;
-    this.camX = Math.max(b.x0, Math.min(b.x1, this.camX));
-    this.camY = Math.max(b.y0, Math.min(b.y1, this.camY));
-  }
-
-  /** Zoom to z keeping the world point under the screen point (ax, ay) where it is. */
-  private zoomAround(z: number, ax: number, ay: number): void {
-    const { width } = this.app.screen;
-    const cy = this.viewCY();
-    const wx = this.camX + (ax - width / 2) / this.zoom;
-    const wy = this.camY + (ay - cy) / this.zoom;
-    this.zoom = z;
-    this.camX = wx - (ax - width / 2) / z;
-    this.camY = wy - (ay - cy) / z;
-  }
-
-  /** Glide (critically damped spring) to a camera centre and zoom; the target is kept inside the bounds. */
-  private focusTo(x: number, y: number, z: number): void {
-    z = this.clampZoom(z);
-    this.camBounds(z);
-    const b = this.bnd;
-    const f = this.focusTarget ?? { x: 0, y: 0, z: 0 };
-    f.x = Math.max(b.x0, Math.min(b.x1, x));
-    f.y = Math.max(b.y0, Math.min(b.y1, y));
-    f.z = z;
-    this.focusTarget = f;
-    this.wheelZoom = null;
-  }
-
-  /** One time step of the camera: focus glide, wheel zoom, zoom-limit spring, coasting, edge springs, shake. */
-  private stepCamera(dt: number): void {
-    if (this.trauma > 0) this.trauma = Math.max(0, this.trauma - this.traumaDecay * dt);
-    if (this.punchT < 1) this.punchT += dt;
-    // While a sheet lets the camera rest lower, check now and then whether it closed (then glide back).
-    if (this.bottomInset > 0 && (this.insetCheck += dt) > 0.25) {
-      this.insetCheck = 0;
-      if (!document.querySelector('.sheet-overlay.open')) this.bottomInset = 0;
-    }
-    if (this.pointers.size > 0 && (this.isDragging || this.pinch)) {
-      // The fingers own the camera.
-    } else if (this.focusTarget) {
-      const f = this.focusTarget;
-      const lz = crit(Math.log(this.zoom), this.zoomV, Math.log(f.z), FOCUS_SPRING, dt);
-      this.zoom = Math.exp(lz);
-      this.zoomV = SPRING_V;
-      this.camX = crit(this.camX, this.camVX, f.x, FOCUS_SPRING, dt);
-      this.camVX = SPRING_V;
-      this.camY = crit(this.camY, this.camVY, f.y, FOCUS_SPRING, dt);
-      this.camVY = SPRING_V;
-      if (Math.abs(this.camX - f.x) * this.zoom < 0.3 && Math.abs(this.camY - f.y) * this.zoom < 0.3 && Math.abs(lz - Math.log(f.z)) < 0.0005) {
-        this.camX = f.x;
-        this.camY = f.y;
-        this.zoom = f.z;
-        this.stopCamera();
-      }
-    } else {
-      if (this.wheelZoom !== null) {
-        const target = Math.log(this.wheelZoom), lz = Math.log(this.zoom);
-        const next = Math.abs(target - lz) < 0.0005 ? target : lz + (target - lz) * (1 - Math.exp(-dt * 16));
-        this.zoomAround(Math.exp(next), this.zoomAnchorX, this.zoomAnchorY);
-        if (next === target) this.wheelZoom = null;
-      }
-      // Past the zoom limits (after a pinch): spring back around the last pinch point.
-      const zc = this.clampZoom(this.zoom);
-      if (zc !== this.zoom || this.zoomV !== 0) {
-        const lz = crit(Math.log(this.zoom), this.zoomV, Math.log(zc), ZOOM_SPRING, dt);
-        this.zoomV = SPRING_V;
-        const settled = Math.abs(lz - Math.log(zc)) < 0.0005 && Math.abs(this.zoomV) < 0.01;
-        this.zoomAround(settled ? zc : Math.exp(lz), this.zoomAnchorX, this.zoomAnchorY);
-        if (settled) this.zoomV = 0;
-      }
-      // Pan: glide with friction inside the bounds; outside them a spring pulls back (rubber band).
-      this.camBounds(this.zoom);
-      const b = this.bnd;
-      this.camX = this.axisStep(this.camX, this.camVX, b.x0, b.x1, dt);
-      this.camVX = SPRING_V;
-      this.camY = this.axisStep(this.camY, this.camVY, b.y0, b.y1, dt);
-      this.camVY = SPRING_V;
-    }
-    this.updateTransform();
-  }
-
   /** [perf] The camera (or a carried person) is moving right now: the engine draws at its motion rate (60) while this holds. */
   get cameraMoving(): boolean {
-    return this.drag !== null || (this.pointers.size > 0 && (this.isDragging || this.pinch !== null)) || this.focusTarget !== null
-      || this.camVX !== 0 || this.camVY !== 0 || this.zoomV !== 0 || this.wheelZoom !== null || this.trauma > 0 || this.punchT < 1;
+    return this.cam.moving;
   }
 
   /** [perf] Short animations on the picture (bursts, floating icons, a crisis in a room) that would stutter at the idle rate. */
@@ -957,78 +474,28 @@ export class BunkerRenderer {
     return this.bursts.length > 0 || this.floaters.length > 0 || this.blockN > 0;
   }
 
-  /** One axis of the free camera; the new velocity is left in SPRING_V. */
-  private axisStep(x: number, v: number, lo: number, hi: number, dt: number): number {
-    if (x < lo || x > hi) {
-      const t = x < lo ? lo : hi;
-      const nx = crit(x, v, t, EDGE_SPRING, dt);
-      if (Math.abs(nx - t) * this.zoom < 0.2 && Math.abs(SPRING_V) * this.zoom < 4) {
-        SPRING_V = 0;
-        return t;
-      }
-      return nx;
-    }
-    if (v === 0) {
-      SPRING_V = 0;
-      return x;
-    }
-    const e = Math.exp(-FRICTION * dt);
-    const nx = x + (v * (1 - e)) / FRICTION;
-    SPRING_V = Math.abs(v * e) * this.zoom < 8 ? 0 : v * e;
-    return nx;
-  }
-
-  private updateTransform(): void {
-    const { width } = this.app.screen;
-    const cy = this.viewCY();
-    let ox = 0, oy = 0, zk = 1;
-    if (this.trauma > 0) {
-      // Trauma² × smooth noise: big hits read big, the tail fades softly instead of buzzing.
-      const a = SHAKE_PX * this.trauma * this.trauma * (this.calm ? 0.3 : 1);
-      const t = this.time * 26;
-      ox = a * (Math.sin(t) * 0.5 + Math.sin(t * 2.13 + 1.7) * 0.3 + Math.sin(t * 4.37 + 4.1) * 0.2);
-      oy = a * (Math.sin(t * 1.11 + 3.3) * 0.5 + Math.sin(t * 2.41 + 0.6) * 0.3 + Math.sin(t * 3.97 + 2.2) * 0.2);
-    }
-    if (this.punchT < 0.5) {
-      const e = punchEnvelope(this.punchT);
-      zk += this.punchAmt * e;
-      ox += this.punchDX * e;
-      oy += this.punchDY * e;
-    }
-    // The punch zooms around the view centre.
-    const z = this.zoom * zk;
-    this.worldContainer.scale.set(z);
-    this.worldContainer.x = width / 2 - this.camX * z + ox;
-    this.worldContainer.y = cy - this.camY * z + oy;
-  }
-
   /** Dev tools: put the camera at a world point with a zoom relative to the fit-to-screen zoom. */
   devCamera(x: number, y: number, zoomRel: number): void {
-    this.stopCamera();
-    this.zoom = this.clampZoom(this.baseZoom * zoomRel);
-    this.camX = x;
-    this.camY = y;
-    this.clampCamera();
-    this.updateTransform();
+    this.cam.devCamera(x, y, zoomRel);
   }
 
   /** Glides a floor into view (used when placing a room and after digging). */
   focusFloor(floor: number): void {
-    this.focusTo(this.camX, floorTop(floor) + ROOM_H / 2, this.zoom);
+    this.cam.focusFloor(floor);
   }
 
   /** Which room soundscapes should be audible, from the rooms currently on screen. */
   getAmbienceMix(state: GameState): AmbienceMix[] {
     const { width, height } = this.app.screen;
-    const closeness = Math.min(1, 0.35 + 0.65 * ((this.zoom - this.baseZoom) / Math.max(0.01, this.baseZoom * 1.5)));
+    const closeness = Math.min(1, 0.35 + 0.65 * ((this.cam.zoom - this.cam.baseZoom) / Math.max(0.01, this.cam.baseZoom * 1.5)));
     const acc = new Map<AmbienceKey, { level: number; panSum: number; w: number }>();
     for (const b of state.buildings) {
       if (b.isConstructing && b.level === 1) continue;
       const key = AMBIENCE_FOR[b.type];
       if (!key) continue;
       const c = this.roomCenter(b);
-      const sx = this.worldContainer.x + c.x * this.zoom;
-      const sy = this.worldContainer.y + (c.y + ROOM_H / 3) * this.zoom;
+      const sx = this.worldContainer.x + c.x * this.cam.zoom;
+      const sy = this.worldContainer.y + (c.y + ROOM_H / 3) * this.cam.zoom;
       if (sx < -80 || sx > width + 80 || sy < -80 || sy > height + 80) continue;
       const dx = (sx - width / 2) / (width / 2);
       const dy = (sy - height / 2) / (height / 2);
@@ -1065,50 +532,12 @@ export class BunkerRenderer {
       : buildShaft(this.floors, () => this.onElevator?.());
     this.shaftHolder.addChild(this.shaft.container);
     this.dust.setFloors(this.floors);
-    this.slotLayer.removeChildren().forEach(c => c.destroy());
-    // [perf] The empty slots are one tappable area that works out which slot was hit, not 12 objects per floor (288 at 24 floors).
-    const floors = this.floors;
-    const pad = new Container();
-    const slotAt = (px: number, py: number): Position | null => {
-      const s = Math.floor((px - slotX(0)) / SLOT_W);
-      const f = Math.floor((py - floorTop(0)) / FLOOR_H);
-      if (s < 0 || s >= SLOTS_PER_FLOOR || f < 0 || f >= floors || py - floorTop(f) >= ROOM_H) return null;
-      return { x: s, y: 0, floor: f };
-    };
-    pad.hitArea = { contains: (px: number, py: number) => slotAt(px, py) !== null };
-    pad.eventMode = 'static';
-    pad.cursor = 'pointer';
-    pad.on('pointertap', e => {
-      if (this.isDragging) return;
-      const p = pad.toLocal(e.global);
-      const pos = slotAt(p.x, p.y);
-      if (pos) this.onTileClick?.(pos);
-    });
-    this.slotLayer.addChild(pad);
+    this.placement.rebuildPad(this.floors);
     this.utilitiesSig = '';
     this.digSig = '';
-    this.collectStructureCullables();
+    this.roomViews.collectStructureCullables(this.undergroundHolder);
   }
 
-  /**
-   * [P6] With up to 24 floors most of the structure is off screen: every part of the rock, casing and the empty-slot tiles
-   * gets its vertical extent measured once here, and cullRooms() hides what the camera cannot see.
-   */
-  private structureCull: { obj: Container; y0: number; y1: number }[] = [];
-
-  private collectStructureCullables(): void {
-    const out: { obj: Container; y0: number; y1: number }[] = [];
-    const addChildren = (root: Container | undefined) => {
-      if (!root) return;
-      for (const c of root.children) {
-        const b = c.getLocalBounds();
-        if (!isFinite(b.minY) || !isFinite(b.maxY) || b.maxY - b.minY > 3 * FLOOR_H) continue; // tall pieces stay
-        out.push({ obj: c, y0: root.y + c.y + b.minY, y1: root.y + c.y + b.maxY });
-      }
-    };
-    addChildren(this.undergroundHolder.children[0] as Container | undefined);
-    this.structureCull = out;
-  }
 
   private structureSig(state: GameState): string {
     void state;
@@ -1124,33 +553,20 @@ export class BunkerRenderer {
     if (!available) return;
     const sign = buildDigSign(this.floors, text, cost, rock);
     sign.on('pointertap', () => {
-      if (!this.isDragging) this.onDigClick?.();
+      if (!this.cam.isDragging) this.onDigClick?.();
     });
     this.digHolder.addChild(sign);
   }
 
   setPlacementHighlight(isValid: ((pos: Position) => boolean) | null, levels = 1): void {
-    const g = this.highlightLayer;
-    g.clear();
-    if (!isValid) return;
-    const H = levels * ROOM_H + (levels - 1) * SLAB;
-    for (let f = 0; f < this.floors; f++) {
-      for (let s = 0; s < SLOTS_PER_FLOOR; s++) {
-        if (!isValid({ x: s, y: 0, floor: f })) continue;
-        const x = slotX(s), y = floorTop(f);
-        g.rect(x + 2, y + 2, SLOT_W - 4, H - 4).fill({ color: 0x44ff88, alpha: 0.18 });
-        g.rect(x + 2, y + 2, SLOT_W - 4, H - 4).stroke({ color: 0x7affb0, alpha: 0.8, width: 1.5 });
-        g.moveTo(x + SLOT_W / 2 - 6, y + ROOM_H / 2).lineTo(x + SLOT_W / 2 + 6, y + ROOM_H / 2).stroke({ color: 0x7affb0, width: 2 });
-        g.moveTo(x + SLOT_W / 2, y + ROOM_H / 2 - 6).lineTo(x + SLOT_W / 2, y + ROOM_H / 2 + 6).stroke({ color: 0x7affb0, width: 2 });
-      }
-    }
+    this.placement.setHighlight(isValid, levels, this.floors);
   }
 
   setSelected(buildingId: string | null): void {
     this.selectedId = buildingId;
     for (const [id, v] of this.views) v.outline.visible = id === buildingId;
     // [camera] The sheet that opens for the room must not hide it: glide it into the space above the sheet.
-    if (buildingId) window.setTimeout(() => this.keepInSight(buildingId), 60);
+    if (buildingId) window.setTimeout(() => this.cam.keepInSight(buildingId), 60);
   }
 
   resetScene(): void {
@@ -1167,240 +583,12 @@ export class BunkerRenderer {
     for (const p of this.people.values()) p.container.destroy({ children: true });
     this.people.clear();
     this.selectedId = null;
-    this.highlightLayer.clear();
+    this.placement.clearHighlight();
     this.floors = 0;
   }
 
-  private isOpenTo(state: GameState, b: BuildingInstance, side: -1 | 1): boolean {
-    if (b.isConstructing && b.level === 1) return false;
-    const w = roomSlots(b.type);
-    return state.buildings.some(o => o.id !== b.id && o.type === b.type && o.level === b.level
-      && o.position.floor === b.position.floor && !(o.isConstructing && o.level === 1)
-      && (side === 1 ? o.position.x === b.position.x + w : o.position.x + roomSlots(o.type) === b.position.x));
-  }
 
-  /** Position of a room inside its compound run (0 = leftmost); odd ones are mirrored for variety. */
-  private compoundIndex(state: GameState, b: BuildingInstance): number {
-    let i = 0;
-    let cur: BuildingInstance | undefined = b;
-    while (cur && this.isOpenTo(state, cur, -1) && i < 12) {
-      const c: BuildingInstance = cur;
-      cur = state.buildings.find(o => o.type === c.type && o.position.floor === c.position.floor
-        && o.position.x + roomSlots(o.type) === c.position.x);
-      i++;
-    }
-    return i;
-  }
 
-  private renderRooms(state: GameState): void {
-    const roomsChanged = LAYOUT.rooms !== this.roomsH; // [perf]
-    this.roomsH = LAYOUT.rooms;
-    const gen = ++this.roomGen;
-    const now = performance.now();
-    this.buildsLeft = 3; // looks built per picture for rooms nobody is looking at yet (the ones about to scroll in)
-    for (const b of state.buildings) {
-      const def = getDef(b.type);
-      if (!def) continue;
-      let view = this.views.get(b.id);
-      if (!view) {
-        view = this.createView(b);
-        this.views.set(b.id, view);
-        this.roomLayer.addChild(view.root);
-        this.labelLayer.addChild(view.label);
-      }
-      view.gen = gen;
-      const isNew = b.isConstructing && b.level === 1;
-      // [perf] What a room's look depends on (type, place, level, who is next to it) is one number for the whole bunker (hashLayout):
-      // the neighbour search and the signature string run only when it changed, or when the room has no look yet / a painting arrived.
-      // Rooms far from the camera (more than a screen away) are not built, and one that has been far away for a while gives its look back
-      // (objects and, once nothing uses it, its painting): at 24 floors a close view needs a fraction of the rooms and paintings.
-      const zone = this.inZone(view);
-      if (zone) view.outSince = 0;
-      else if (!view.outSince) view.outSince = now;
-      else if (view.visual && !view.oldVisual && now - view.outSince > PARK_AFTER_MS) {
-        view.visual.container.destroy({ children: true });
-        view.visual = null;
-        view.visualSig = '';
-        view.layoutH = undefined;
-      }
-      if (zone && (view.layoutH !== LAYOUT.rooms || !view.visualSig) && (view.culled === false || view.culled === undefined || this.buildsLeft > 0)) {
-      const openL = this.isOpenTo(state, b, -1);
-      const openR = this.isOpenTo(state, b, 1);
-      // The look follows the finished level, so an upgrade reveals the new painting when it completes.
-      const artKey = isNew ? buildingArtKey(b.type, 0) : buildingArtKey(b.type, roomTier(effectiveLevel(b)));
-      const texture = artKey ? ArtLibrary.get(artKey) : null;
-      // A painting on its way (it was released, or is new): keep what the room shows instead of drawing a stand-in; a room that has
-      // shown nothing yet gets the drawn stand-in after 0.7 s (a slow connection must not leave a new room empty).
-      const waiting = !!artKey && !texture && !ArtLibrary.hasFailed(artKey) && !(!view.visual && view.waitSince !== undefined && now - view.waitSince > 700);
-      if (waiting) {
-        if (view.waitSince === undefined) view.waitSince = now;
-        view.layoutH = undefined;
-      } else {
-      view.waitSince = undefined;
-      view.layoutH = LAYOUT.rooms;
-      if (view.culled) this.buildsLeft--;
-      const mirror = texture ? this.compoundIndex(state, b) % 2 === 1 : false;
-      const visualSig = `${b.type}|${isNew}|${openL}|${openR}|${texture ? artKey : 'code'}|${mirror}`;
-      if (view.visualSig !== visualSig) {
-        const prevKey = view.visualSig.split('|')[4];
-        const tierChange = !!view.visual && !isNew && view.visualSig.split('|')[1] === 'false'
-          && prevKey !== 'code' && !!artKey && prevKey !== artKey;
-        const finishedBuild = !!view.visual && view.visualSig.split('|')[1] === 'true' && !isNew;
-        view.visualSig = visualSig;
-        // Keep the old look on top and fade it away, so changes read as a transformation.
-        if (view.oldVisual) view.oldVisual.destroy({ children: true });
-        view.oldVisual = view.visual && (tierChange || finishedBuild) ? view.visual.container : null;
-        if (!view.oldVisual) view.visual?.container.destroy({ children: true });
-        view.fade = 0;
-        const rnd = seeded(hashString(b.id));
-        view.visual = isNew
-          ? texture ? buildPaintedConstruction(texture, view.width, view.height) : buildConstructionVisual(b.type, view.width)
-          : texture && artKey
-            ? buildPaintedRoom(texture, artEntry(artKey)!, view.width, openL, openR, mirror, rnd, view.height, this.gfx2 ? this.roomGains(b, artKey) : undefined, b.id /* G4 lighting: shared flicker key */)
-            : buildRoomVisual(b.type, view.width, openL, openR, rnd);
-        view.visualHolder.removeChildren();
-        view.visualHolder.addChild(view.visual.container);
-        if (view.oldVisual) {
-          view.visualHolder.addChild(view.oldVisual);
-          this.burstAt(view.root.x + view.width / 2, view.root.y + view.height * 0.55, view.width);
-          if (this.onScreen(view.root.x + view.width / 2, view.root.y + view.height / 2)) this.punch(finishedBuild ? 1 : 0.7); // [camera]
-        }
-      }
-      }
-      }
-      const upgrading = b.isConstructing && b.level > 1;
-      if (upgrading && !view.scaffold) {
-        view.scaffold = buildScaffold(view.width);
-        view.root.addChildAt(view.scaffold.container, view.root.getChildIndex(view.people) + 1);
-      } else if (!upgrading && view.scaffold) {
-        view.scaffold.container.destroy({ children: true });
-        view.scaffold = null;
-      }
-      // [perf] The label's inputs packed into a number (no string per room per picture).
-      const lk = (b.level * 64 + b.assignedSurvivorIds.length) * 2 + (b.isConstructing ? 1 : 0);
-      const spec = b.specialization ?? null;
-      if (view.lk !== lk || view.lspec !== spec || view.lloc !== i18n.currentLocale) {
-        view.lk = lk;
-        view.lspec = spec;
-        view.lloc = i18n.currentLocale;
-        view.labelSig = 'drawn';
-        this.drawLabel(view, b);
-      }
-      // New look: a room keeps its sign to itself unless it needs you (no workers, building) or is selected.
-      if (this.gfx2) {
-        const staffed = (def.maxWorkers ?? 0) === 0 || b.assignedSurvivorIds.length > 0;
-        view.labelOn = b.id === this.selectedId || b.isConstructing || !staffed;
-      } else view.labelOn = true;
-      if (view.progress) {
-        const pct = b.constructionProgress / b.constructionTotal;
-        view.progress.clear();
-        view.progress.roundRect(0, 0, view.width - 30, 5, 2.5).fill({ color: 0x000000, alpha: 0.7 });
-        view.progress.roundRect(0, 0, Math.max(3, (view.width - 30) * pct), 5, 2.5).fill(0xffb547);
-      }
-    }
-    let right = Math.max(BUILDING_W, this.projectSites.right);
-    for (const v of this.views.values()) right = Math.max(right, v.root.x + v.width);
-    this.extentR = right;
-    if (this.views.size > state.buildings.length || roomsChanged) {
-      for (const [id, view] of this.views) {
-        if (view.gen === gen) continue;
-        for (const child of [...view.people.children]) view.people.removeChild(child);
-        view.root.destroy({ children: true });
-        view.label.destroy({ children: true });
-        this.views.delete(id);
-      }
-    }
-  }
-  /** [perf] Hash of the layout last drawn, and a per-picture stamp that marks the rooms still in the state (replaces a Set built every picture). */
-  private roomsH = -1;
-  private roomGen = 0;
-  private buildsLeft = 0;
-  private nextRoomZ = 0;
-
-  /** [perf] Is the room within a screen's reach of the camera (the window in which rooms are built and kept)? */
-  private inZone(v: RoomView): boolean {
-    const w = VIEW.x1 - VIEW.x0, h = VIEW.y1 - VIEW.y0;
-    const r = v.root;
-    return r.x < VIEW.x1 + w * 0.75 && r.x + v.width > VIEW.x0 - w * 0.75 && r.y < VIEW.y1 + h && r.y + v.height > VIEW.y0 - h;
-  }
-
-  private createView(b: BuildingInstance): RoomView {
-    const width = roomSlots(b.type) * SLOT_W;
-    const height = buildingH(b.type);
-    const root = new Container();
-    root.label = 'room';
-    root.isRenderGroup = true; // [perf] a room is its own render group: its particles never rebuild the rest
-    root.zIndex = this.nextRoomZ++; // draw order stays the order of creation when rooms are taken out of the scene and put back
-    root.position.set(buildingX(b), floorTop(b.position.floor));
-    const visualHolder = new Container();
-    const people = new Container();
-    people.sortableChildren = true;
-    // In a two-storey hall people walk on the lower level's floor.
-    people.y = height - ROOM_H;
-    const outline = new Graphics();
-    outline.rect(1, 1, width - 2, height - 2).stroke({ color: 0xffd47a, width: 2.5, alpha: 0.95 });
-    outline.visible = b.id === this.selectedId;
-    root.addChild(visualHolder, people, outline);
-    root.hitArea = { contains: (x: number, y: number) => x >= 0 && x <= width && y >= 0 && y <= height };
-    root.eventMode = 'static';
-    root.cursor = 'pointer';
-    root.on('pointertap', () => {
-      if (!this.isDragging) this.onBuildingClick?.(b.id);
-    });
-    const label = new Container();
-    label.position.set(buildingX(b) + width / 2, floorTop(b.position.floor) - SLAB / 2);
-    return {
-      root, visualHolder, visual: null, oldVisual: null, fade: 0, scaffold: null, people, outline, label, progress: null,
-      visualSig: '', labelSig: '', width, height, attached: true,
-      lane: { x0: DEPTH_X + 10, x1: width - DEPTH_X - 10 },
-    };
-  }
-
-  private drawLabel(view: RoomView, b: BuildingInstance): void {
-    const def = getDef(b.type)!;
-    view.label.removeChildren().forEach(c => c.destroy());
-    if (view.progress) {
-      view.progress.destroy();
-      view.progress = null;
-    }
-    const name = def.name[i18n.currentLocale] ?? def.name.en;
-    const stars = b.level > 1 ? ` ${'[[star]]'.repeat(b.level - 1)}` : '';
-    // A specialized room wears its role's emblem instead of the row of stars.
-    const spec = specOf(b);
-    const badge = spec ? ` [[crown]] ${spec.name[i18n.currentLocale]}` : stars;
-    const text = richLine(`${name}${badge}`, nameStyle, 8, i18n.isRTL, Math.min(window.devicePixelRatio, 2) * 2);
-    const textW = lineWidth(text);
-    const pipCount = def.maxWorkers;
-    const pipsW = pipCount > 0 ? pipCount * 7 + 6 : 0;
-    const width = textW + pipsW + 14;
-    const bg = new Graphics();
-    if (this.gfx2) {
-      // [gfx2 signage] A screwed-on steel tag with a soft drop shadow (signage.ts).
-      steelTag(bg, -width / 2, -7.5, width, 15);
-    } else {
-      bg.roundRect(-width / 2, -7.5, width, 15, 4).fill({ color: 0x14141e, alpha: 0.9 });
-      bg.roundRect(-width / 2, -7.5, width, 15, 4).stroke({ color: 0xd9a441, alpha: 0.5, width: 1 });
-    }
-    text.x = -pipsW / 2;
-    view.label.addChild(bg, text);
-    if (pipCount > 0) {
-      const pips = new Graphics();
-      const startX = text.x + textW / 2 + 8;
-      for (let i = 0; i < pipCount; i++) {
-        const filled = i < b.assignedSurvivorIds.length;
-        // [gfx2 signage] Worker pips as small indicator lamps.
-        if (this.gfx2) { tagLamp(pips, startX + i * 7, 0, filled); continue; }
-        pips.circle(startX + i * 7, 0, 2.4).fill(filled ? 0x4dff8f : 0x3a3a4a);
-        if (!filled) pips.circle(startX + i * 7, 0, 2.4).stroke({ color: 0xff6b6b, width: 0.8 });
-      }
-      view.label.addChild(pips);
-    }
-    if (b.isConstructing) {
-      view.progress = new Graphics();
-      view.progress.position.set(15, view.height - 14);
-      view.root.addChild(view.progress);
-    }
-  }
 
   /** Picking a survivor up: a short press on them lifts them off the floor. */
   private attachDrag(person: Person, survivorId: string): void {
@@ -1408,17 +596,17 @@ export class BunkerRenderer {
       window.clearTimeout(this.pressTimer);
       const pointerId = e.pointerId;
       this.pressTimer = window.setTimeout(() => {
-        if (this.isDragging) return;
+        if (this.cam.isDragging) return;
         this.drag = { person, survivorId, pointerId };
         person.setLifted(true);
         this.fxLayer.addChild(person.container);
         person.container.zIndex = 9999;
-        this.pointerDown = false;
+        this.cam.pointerDown = false;
         this.movePersonTo(e.global.x, e.global.y);
       }, 260);
     });
     person.container.on('pointerup', () => {
-      if (!this.drag && !this.isDragging) this.onPersonTap?.(survivorId);
+      if (!this.drag && !this.cam.isDragging) this.onPersonTap?.(survivorId);
       window.clearTimeout(this.pressTimer);
     });
     person.container.on('pointerupoutside', () => window.clearTimeout(this.pressTimer));
@@ -1642,16 +830,6 @@ export class BunkerRenderer {
     return c;
   }
 
-  /** Painting balance × depth fog × a small per-room variation, so neighbours never look copy-pasted. */
-  private roomGains(b: BuildingInstance, artKey: string): [number, number, number] {
-    const bal = ArtLibrary.balanceFor(artKey);
-    const depth = depthGains(floorTop(b.position.floor) + buildingH(b.type) / 2);
-    const h = hashString(b.id);
-    const v = 0.96 + ((h % 100) / 100) * 0.08;
-    const warm = (((h >>> 8) % 100) / 100 - 0.5) * 0.06;
-    return [bal[0] * depth[0] * v * (1 + warm), bal[1] * depth[1] * v, bal[2] * depth[2] * v * (1 - warm)].map(x => Math.min(1, x)) as [number, number, number];
-  }
-
   /** Every painted lamp of every finished room, in world space. */
   private worldLamps(state: GameState): WorldLamp[] {
     const lamps: WorldLamp[] = [];
@@ -1661,7 +839,7 @@ export class BunkerRenderer {
       const entry = key ? artEntry(key) : null;
       if (!entry) continue;
       const W = roomSlots(b.type) * SLOT_W, H = buildingH(b.type);
-      const mirror = this.compoundIndex(state, b) % 2 === 1;
+      const mirror = this.roomViews.compoundIndex(state, b) % 2 === 1;
       for (const l of ArtLibrary.lightsFor(entry)) {
         lamps.push({
           x: buildingX(b) + (mirror ? 1 - l.x : l.x) * W, y: floorTop(b.position.floor) + l.y * H, reach: W, color: l.color,
@@ -1789,33 +967,6 @@ export class BunkerRenderer {
     VIEW.y1 = (this.app.screen.height - wc.y) / s + margin;
   }
 
-  private cullRooms(): void {
-    const { x0, y0, x1, y1 } = VIEW;
-    for (const v of this.views.values()) {
-      const r = v.root;
-      const seen = r.x < x1 && r.x + v.width > x0 && r.y < y1 && r.y + v.height > y0;
-      // [perf] Under the opaque far-zoom city map nothing of the rooms is seen either: no animation, no people updates.
-      v.culled = !seen || this.mapCovers;
-      if (seen !== v.attached) { v.attached = seen; if (seen) this.roomLayer.addChild(r); else this.roomLayer.removeChild(r); } // [perf] a room out of view is not in the scene at all (155 render groups were walked every picture)
-      const shown = seen && !this.mapCovers;
-      if (v.visualHolder.visible !== shown) { v.visualHolder.visible = shown; v.people.visible = shown; }
-      // The name tag goes with its room (it used to be drawn for all 119 rooms: 43% of the draw calls).
-      const lv = !!v.labelOn && seen;
-      if (v.label.visible !== lv) v.label.visible = lv;
-    }
-    for (const v of this.ruinViews.values()) {
-      const r = v.root;
-      const seen = r.x < x1 && r.x + v.width > x0 && r.y < y1 && r.y + ROOM_H > y0;
-      v.culled = !seen || this.mapCovers;
-      if (seen !== v.attached) { v.attached = seen; if (seen) this.roomLayer.addChild(r); else this.roomLayer.removeChild(r); }
-      if (v.label.visible !== seen) v.label.visible = seen;
-    }
-    // [P6] The structure, by height only (it spans the whole width anyway).
-    for (const c of this.structureCull) {
-      const seen = c.y1 > y0 && c.y0 < y1;
-      if (c.obj.visible !== seen) c.obj.visible = seen;
-    }
-  }
 
   /** Numbers for crash records: how many textures the GPU holds and at what pixel density. */
   gpuStats(): { gpuTextures: number; res: number } {
@@ -1884,11 +1035,11 @@ export class BunkerRenderer {
     }
     hashLayout(state); // [perf] one cheap pass instead of strings joined from every building several times per picture
     if (state.currentFloors !== this.floors || this.structureGloom !== this.gloom || this.undergroundSig !== this.structureSig(state)) this.rebuildStructure(state);
-    this.stepCamera(dt); // [camera]
+    this.cam.stepCamera(dt); // [camera]
     this.updateView(); // [perf]
     this.frontBands?.update();
     this.updateLod(state, dt);
-    this.renderRooms(state);
+    this.roomViews.render(state);
     this.renderRuins(state);
     this.renderUtilities(state);
     this.renderPeople(state, dt);
@@ -1920,7 +1071,7 @@ export class BunkerRenderer {
     }
     this.atmo?.update(this.time, dt, power, this.worldContainer, this.app.screen, this.postfx?.quality ?? 'high'); // [gfx2 wear]
     setRoomFxQuality(this.postfx?.quality ?? 'high'); // gfx-p0 rooms: heat haze on high, fewer particles on low
-    this.cullRooms();
+    this.roomViews.cull();
     for (const [id, v] of this.views) {
       if (!v.culled && !this.lowSkip) {
         v.visual?.animate(this.time, power);
@@ -1958,7 +1109,7 @@ export class BunkerRenderer {
   }
 
   private updateLod(state: GameState, dt: number): void {
-    const r = this.zoom / this.baseZoom;
+    const r = this.cam.zoom / this.cam.baseZoom;
     const lod = r < (this.lod === 'far' ? 0.78 : 0.72) ? 'far' : r > (this.lod === 'close' ? 1.8 : 1.9) ? 'close' : 'mid';
     if (lod !== this.lod) this.onLodChange?.(lod);
     this.lod = lod;
@@ -2121,7 +1272,7 @@ export class BunkerRenderer {
     root.eventMode = 'static';
     root.cursor = 'pointer';
     root.on('pointertap', () => {
-      if (!this.isDragging) this.onRuinClick?.(r.id);
+      if (!this.cam.isDragging) this.onRuinClick?.(r.id);
     });
     const label = new Container();
     label.position.set(slotX(r.x) + width / 2, floorTop(r.floor) + ROOM_H * 0.3);
@@ -2191,8 +1342,7 @@ export class BunkerRenderer {
 
   /** Centers the camera on a world point and zooms in a little. */
   focusOn(x: number, y: number, zoomBoost = 1.5): void {
-    // [camera] A glide (critically damped spring), not a jump.
-    this.focusTo(x, y, Math.max(this.zoom, this.baseZoom * zoomBoost));
+    this.cam.focusOn(x, y, zoomBoost);
   }
 
   /** [camera] Keeps the incident rectangles for the popup blocker (no allocation once warmed up). */
@@ -2229,36 +1379,6 @@ export class BunkerRenderer {
   }
 }
 
-// [camera] Spring and rubber-band helpers (allocation-free: crit() leaves the new velocity in SPRING_V).
-let SPRING_V = 0;
-
-/** Exact step of a critically damped spring towards target (stable for any dt). */
-function crit(x: number, v: number, target: number, w: number, dt: number): number {
-  const x0 = x - target;
-  const e = Math.exp(-w * dt);
-  const c = v + w * x0;
-  SPRING_V = (v - w * c * dt) * e;
-  return target + (x0 + c * dt) * e;
-}
-
-/** iOS-style rubber band: past [lo, hi] the camera gives way less and less (dim = view size in world units). */
-function rubber(v: number, lo: number, hi: number, dim: number): number {
-  const off = (o: number) => (1 - 1 / ((o * 0.55) / dim + 1)) * dim;
-  return v < lo ? lo - off(lo - v) : v > hi ? hi + off(v - hi) : v;
-}
-
-/** The raw position that rubber() maps to v. */
-function unrubber(v: number, lo: number, hi: number, dim: number): number {
-  const inv = (y: number) => (dim / 0.55) * (1 / (1 - Math.min(0.95, y / dim)) - 1);
-  return v < lo ? lo - inv(lo - v) : v > hi ? hi + inv(v - hi) : v;
-}
-
-/** Zoom punch shape: 40 ms attack, then a damped wobble (a small undershoot) gone by ~0.4 s. */
-function punchEnvelope(t: number): number {
-  if (t < 0.04) return Math.sin((t / 0.04) * Math.PI / 2);
-  const u = t - 0.04;
-  return Math.exp(-u * 11) * Math.cos(u * 15);
-}
 
 /** 4×5 color matrix product (a after b). */
 function multiply(a: number[], b: number[]): [number, number, number, number, number, number, number, number, number, number, number, number, number, number, number, number, number, number, number, number] {
