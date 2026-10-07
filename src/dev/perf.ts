@@ -270,7 +270,8 @@ export function installPerf(renderer: BunkerRenderer, engine: Any, audio?: Any):
  * (layout.ext = {w: 8, e: 22}) with rooms on both sides of the shaft (about 160 rooms in all); the other floors are the standard ones.
  */
 function buildFixture(E: Any, floors: number, people: number): { buildings: number; people: number } {
-  const wide = new URLSearchParams(location.search).get('perfFixture') === 'wide';
+  const fixtureName = new URLSearchParams(location.search).get('perfFixture') ?? ''; // plan4:ST-18 'wide-walk' = the wide fixture plus walkers going all the time
+  const wide = fixtureName.startsWith('wide');
   // Wide floors: three rooms west of the shaft (slots -8..-1, one bay left against the shaft) and six east of it (slots 0..15, bays out to the end at 22).
   const WIDE_FLOORS = (f: number) => wide && f >= 1 && f <= 12;
   const westPat = [3, 2, 2];
@@ -314,5 +315,23 @@ function buildFixture(E: Any, floors: number, people: number): { buildings: numb
     if (i % 11 === 0) s.child = true;
     E.populationSystem.addSurvivor(sm, s);
   }
+  if (fixtureName.endsWith('-walk')) driveWalkers(E); // plan4:ST-18
   return { buildings: blds.length, people: sm.state.survivors.length };
+}
+
+/**
+ * [plan4:ST-18] The `walkers` scene (`?perfFixture=wide-walk`, scenario f24w-walk-close-medium): every 2 s a dozen working survivors on floors 11-12 are sent to
+ * another room of the same two floors (the close camera's view), so about a dozen walk at once, through the lift and along the floors.
+ * Only the survivors' assignment changes; nothing is saved.
+ */
+function driveWalkers(E: Any): void {
+  let seed = 11;
+  const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  window.setInterval(() => {
+    const st = E.stateManager.state;
+    const rooms = st.buildings.filter((b: Any) => b.position.floor >= 11 && b.position.floor <= 12 && !b.isConstructing);
+    if (!rooms.length) return;
+    const crew = st.survivors.filter((s: Any) => s.assignedBuildingId && rooms.some((b: Any) => b.id === s.assignedBuildingId)).slice(0, 14);
+    for (const s of crew) s.assignedBuildingId = rooms[Math.floor(rnd() * rooms.length)].id;
+  }, 2000);
 }

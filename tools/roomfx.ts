@@ -5,11 +5,12 @@
  */
 import { Application, Container, Text } from 'pixi.js';
 import { ArtLibrary } from '../src/art/ArtLibrary';
-import { HALL_KEYS, PAINTED_TYPES, artEntry } from '../src/art/registry';
+import { HALL_KEYS, PAINTED_TYPES, artEntry, composedKey } from '../src/art/registry';
+import { composedMeta, composedTypes } from '../src/rendering/roomComposer';
 import { roomSlots } from '../src/data/buildingDefs';
 import { buildPaintedRoom, setRoomFxQuality, type RoomFxQuality } from '../src/rendering/paintedRoom';
 import { ROOM_H, SLAB, SLOT_W } from '../src/rendering/layout';
-import type { RoomVisual } from '../src/rendering/roomArt';
+import { buildRoomVisual, type RoomVisual } from '../src/rendering/roomArt';
 import { seeded } from '../src/rendering/draw';
 
 const q = new URLSearchParams(location.search);
@@ -25,11 +26,26 @@ async function main(): Promise<void> {
   document.body.appendChild(app.canvas);
   await Promise.all([ArtLibrary.loadMeta(), ArtLibrary.loadBalance()]);
   const keys: { key: string; W: number; H: number }[] = [];
-  for (const t of PAINTED_TYPES) {
+  // [plan4:BL-6] composed rooms (drawn in code) are listed after the painted ones; `?type=` filters both, `?tier=1` shows one tier.
+  const tiers = q.has('tier') ? [Number(q.get('tier'))] : [0, 1, 2];
+  for (const t of [...PAINTED_TYPES as string[], ...composedTypes().filter(c => !(PAINTED_TYPES as string[]).includes(c))]) {
     if (only && !only.includes(t)) continue;
-    for (const tier of [0, 1, 2]) keys.push({ key: `rooms/${t}-${tier}`, W: roomSlots(t) * SLOT_W, H: ROOM_H });
+    for (const tier of tiers) keys.push({ key: `rooms/${t}-${tier}`, W: (composedKey(`rooms/${t}-${tier}`)?.slots ?? roomSlots(t as never)) * SLOT_W, H: ROOM_H });
   }
   if (!only || only.includes('halls')) for (const h of HALL_KEYS) keys.push({ key: `halls/${h}`, W: 3 * SLOT_W, H: 2 * ROOM_H + SLAB });
+  // [plan4:BL-6] bake time of every composed room (ms, first request), and the lights / effects / spots / set data of each, for the brief and the perf table.
+  const bake: [string, number][] = [];
+  const metas: Record<string, unknown> = {};
+  for (const k of keys) {
+    const ck = composedKey(k.key);
+    if (ck?.painted !== false) continue;
+    const t0 = performance.now();
+    ArtLibrary.get(k.key);
+    bake.push([k.key, +(performance.now() - t0).toFixed(1)]);
+    metas[k.key] = composedMeta(ck.type, ck.tier, ck.slots);
+  }
+  (window as unknown as { __bake: [string, number][]; __meta: Record<string, unknown> }).__bake = bake;
+  (window as unknown as { __meta: Record<string, unknown> }).__meta = metas;
   await ArtLibrary.preload(keys.map(k => k.key));
   const world = new Container();
   world.scale.set(zoom);
@@ -37,7 +53,19 @@ async function main(): Promise<void> {
   const visuals: RoomVisual[] = [];
   let x = 4, y = 4, rowH = 0;
   const maxW = window.innerWidth / zoom;
-  for (const k of keys) {
+  // [plan4:BL-6] ?code=type,type: the live-drawn stand-in look (buildRoomVisual), to compare against the composed one.
+  const codeTypes = q.get('code')?.split(',') ?? [];
+  for (const t of codeTypes) {
+    const W = roomSlots(t as never) * SLOT_W;
+    if (x + W > maxW && x > 4) { x = 4; y += ROOM_H + 12; }
+    const v = buildRoomVisual(t as never, W, false, false, seeded(7));
+    v.container.position.set(x, y);
+    world.addChild(v.container);
+    visuals.push(v);
+    x += W + 6;
+    rowH = ROOM_H;
+  }
+  for (const k of codeTypes.length ? [] : keys) {
     const tex = ArtLibrary.get(k.key);
     const entry = artEntry(k.key);
     if (!tex || !entry) continue;
@@ -55,6 +83,8 @@ async function main(): Promise<void> {
     x += k.W + 6;
     rowH = Math.max(rowH, k.H);
   }
+  // [plan4:BL-6] measured brightness of every shown picture (composed rooms report their own), for the style gate.
+  (window as unknown as { __lums: [string, number | null][] }).__lums = keys.map(k => [k.key, ArtLibrary.lumOf(k.key)]);
   (window as unknown as { __ready: boolean }).__ready = true;
   const log = document.getElementById('log')!;
   let t = 0, cost = 0, n = 0;

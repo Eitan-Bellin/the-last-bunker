@@ -12,7 +12,7 @@ export interface Palette {
   light: number;
 }
 
-export const PALETTES: Record<BuildingType, Palette> = {
+export const PALETTES: Record<BuildingType, Palette> & Record<string, Palette> = {
   quarters: { wall: 0x5a6b7e, floor: 0x7a5c40, accent: 0xd9a441, light: 0xffd9a0 },
   generator: { wall: 0x4c525c, floor: 0x3b4048, accent: 0xffc531, light: 0xffe08a },
   farm: { wall: 0x4e6a4a, floor: 0x5c4630, accent: 0xd86bff, light: 0xf0a0ff },
@@ -43,6 +43,20 @@ export const PALETTES: Record<BuildingType, Palette> = {
   mushroomFarm: { wall: 0x3a3a48, floor: 0x2e2e38, accent: 0xc8a0ff, light: 0xb8a0e8 },
   gatePost: { wall: 0x4c4c44, floor: 0x36362f, accent: 0xff7a3a, light: 0xffd8a0 },
   barracks: { wall: 0x4e5a46, floor: 0x3c4034, accent: 0xb0b060, light: 0xffe8b0 },
+  // [plan4:BL-7] wave 2 types (Rooms-Data adds them to BuildingType): palettes of the live-drawn stand-in, matching their composed specs (roomSpecsB.ts).
+  // The type is `& Record<string, Palette>` so these keys compile before the types exist; the merger drops any duplicate a parallel branch added.
+  quarantineWard: { wall: 0x62706c, floor: 0x585a54, accent: 0xe0705a, light: 0xffe6cc },
+  solarArray: { wall: 0x4a5a6a, floor: 0x4a443c, accent: 0xffd070, light: 0xffe0a8 },
+  windTurbine: { wall: 0x4a5a6a, floor: 0x4a443c, accent: 0xffffff, light: 0xffe0a8 },
+  watchtower: { wall: 0x4a5a6a, floor: 0x4a443c, accent: 0xffb060, light: 0xffe0a8 },
+  garage: { wall: 0x5a5648, floor: 0x4a443c, accent: 0xe8943a, light: 0xffc890 },
+  decon: { wall: 0x4c6058, floor: 0x465350, accent: 0x6ac890, light: 0xdcffe8 },
+  aquaculture: { wall: 0x3e5660, floor: 0x3c4a4e, accent: 0x5ad8ff, light: 0xc0ecff },
+  market: { wall: 0x68584a, floor: 0x54483c, accent: 0xd8a850, light: 0xffd9a0 },
+  nursery: { wall: 0x8a7660, floor: 0x6c5844, accent: 0xe8c8a0, light: 0xffe6c0 },
+  school: { wall: 0x625a4c, floor: 0x4c4238, accent: 0xe8e0c0, light: 0xffe6b0 },
+  bathhouse: { wall: 0x748480, floor: 0x586460, accent: 0x6ad0d8, light: 0xe8fff0 },
+  memorialHall: { wall: 0x4e4850, floor: 0x3e3a3e, accent: 0xe8a850, light: 0xffc880 },
 };
 
 interface Ctx {

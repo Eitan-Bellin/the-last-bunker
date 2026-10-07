@@ -4,6 +4,7 @@ import { FLOOR_H, GALLERY_H, ROOM_H, SHAFT_W, floorAfterTravel, floorTop, galler
 import { seeded } from './draw';
 import { depthGains, kitState, softTexture, type KitState } from './structure';
 import type { Animated } from './world';
+import { GFX } from './gfxFeatures';
 
 /**
  * Graphics overhaul (G3, shaft): an industrial cage lift instead of the flat code-drawn shaft.
@@ -37,6 +38,32 @@ const HEADER_H = 6;
 const FLOOR_LIP = ROOM_H - 3;
 const GATE_X0 = RAIL_W + 3;
 const GATE_X1 = SHAFT_W - RAIL_W - 3;
+
+// [plan4:ST-18] The lift as a service for walkers: a small ticket queue the car works through, and up to four riders drawn in the cabin.
+// Behind the `walkers` feature flag: with it off the car does its old random trips and nobody rides.
+export interface LiftApi {
+  /** The car is serving walkers right now (feature on and power). */
+  ready(): boolean;
+  /** Asks for a ride between two floors. Returns a ticket (> 0), or 0 when the queue is full. */
+  request(from: number, to: number): number;
+  /** The car stands at the ticket's floor with its doors open and room (the same destination as those already aboard). */
+  canBoard(ticket: number): boolean;
+  /** Steps into the cabin: a rider figure appears (colours of shirt, skin and trousers). */
+  board(ticket: number, shirt: number, skin: number, pants: number): void;
+  /** The car has opened at the ticket's destination. */
+  arrived(ticket: number): boolean;
+  /** Steps out or gives up: frees the ticket and the seat. */
+  release(ticket: number): void;
+}
+
+export type ShaftAnimated = Animated & { lift: LiftApi };
+
+const SEATS = 4;
+const TICKETS = 8;
+/** How long the car holds its doors open after the last rider boarded before it leaves. */
+const BOARD_DWELL = 1;
+/** Seconds between the car's idle display trips while walkers are on (the old code made one every 2-6 s). */
+const DISPLAY_TRIP_S = 90;
 
 const STYLE: Record<KitState, { wall: number; steel: number; gate: number; cable: number; car: number; grime: number; speed: number; flicker: number }> = {
   R: { wall: 0x4c4a48, steel: 0x8a7a68, gate: 0x6a4e38, cable: 0x5a5650, car: 0xb4a48e, grime: 1, speed: 0.6, flicker: 0.35 },
@@ -91,7 +118,7 @@ function gateLeaf(w: number, h: number, steel: number): Graphics {
   return g;
 }
 
-export function buildShaft2(floors: number, era: number, onArrive?: () => void, westFloors: readonly boolean[] = []): Animated {
+export function buildShaft2(floors: number, era: number, onArrive?: () => void, westFloors: readonly boolean[] = []): ShaftAnimated {
   const st = kitState(era);
   const S = STYLE[st];
   const root = new Container();
@@ -295,6 +322,29 @@ export function buildShaft2(floors: number, era: number, onArrive?: () => void, 
     shoes.rect(CAR_W - 1, sy, 4, 5).fill(0x1a1a18);
   }
   car.addChild(shoes);
+  // [plan4:ST-18] Riders: four seats, each a body and a head (white shapes tinted with the walker's colours), invisible until someone boards.
+  // Shown and hidden by alpha, so boarding never rebuilds the shaft's render group.
+  const seatBody: Graphics[] = [];
+  const seatHead: Graphics[] = [];
+  const seatLegs: Graphics[] = [];
+  for (let i = 0; i < SEATS; i++) {
+    const sx = 9 + i * 10.4, sy = CAR_H - 8 - (i & 1);
+    const legs = new Graphics();
+    legs.rect(-3.6, -20, 3.4, 20).fill(0xffffff);
+    legs.rect(0.2, -20, 3.4, 20).fill(0xffffff);
+    const body = new Graphics();
+    body.roundRect(-5, -37, 10, 18, 3).fill(0xffffff);
+    const head = new Graphics();
+    head.circle(0, -42, 4.3).fill(0xffffff);
+    for (const g of [legs, body, head]) {
+      g.position.set(sx, sy);
+      g.alpha = 0;
+      car.addChild(g);
+    }
+    seatLegs.push(legs);
+    seatBody.push(body);
+    seatHead.push(head);
+  }
   car.x = CAR_X;
   const core = new Sprite(glow);
   core.anchor.set(0.5);
@@ -450,6 +500,82 @@ export function buildShaft2(floors: number, era: number, onArrive?: () => void, 
   car.y = yFor(0);
   let prevY = car.y;
 
+  // [plan4:ST-18] --- Lift service: tickets, boarding, delivery ---
+  const tState = new Uint8Array(TICKETS); // 0 free, 1 waiting, 2 aboard, 3 delivered
+  const tFrom = new Int16Array(TICKETS);
+  const tTo = new Int16Array(TICKETS);
+  const tSeat = new Int8Array(TICKETS).fill(-1);
+  const tSeq = new Float64Array(TICKETS);
+  const tDoneAt = new Float64Array(TICKETS);
+  let seq = 0, nAboard = 0, tripTo = -1, dwell = 0, displayWait = 8, lastPower = 1, clock = 0, tickets = 0;
+  const showSeat = (seat: number, on: boolean) => {
+    seatLegs[seat].alpha = seatBody[seat].alpha = seatHead[seat].alpha = on ? 1 : 0;
+  };
+  const clearTickets = () => {
+    for (let i = 0; i < TICKETS; i++) tState[i] = 0;
+    for (let i = 0; i < SEATS; i++) showSeat(i, false);
+    nAboard = 0; tripTo = -1; tickets = 0;
+  };
+  const lift: LiftApi = {
+    ready: () => GFX.walkers && lastPower > 0.3,
+    request: (from, to) => {
+      for (let i = 0; i < TICKETS; i++) {
+        if (tState[i] !== 0) continue;
+        tState[i] = 1; tFrom[i] = from; tTo[i] = to; tSeat[i] = -1; tSeq[i] = ++seq; tickets++;
+        return i + 1;
+      }
+      return 0;
+    },
+    canBoard: t => {
+      const i = t - 1;
+      return i >= 0 && tState[i] === 1 && mode === 'idle' && open >= 1 && cur === tFrom[i] && lastPower > 0.3 && nAboard < SEATS && (nAboard === 0 || tripTo === tTo[i]);
+    },
+    board: (t, shirt, skin, pants) => {
+      const i = t - 1;
+      let seat = 0;
+      const taken = (k: number) => { for (let j = 0; j < TICKETS; j++) if (tState[j] === 2 && tSeat[j] === k) return true; return false; };
+      while (seat < SEATS && taken(seat)) seat++;
+      if (i < 0 || tState[i] !== 1 || seat >= SEATS) return;
+      tState[i] = 2; tSeat[i] = seat; nAboard++; tripTo = tTo[i]; dwell = 0;
+      seatLegs[seat].tint = pants;
+      seatBody[seat].tint = shirt;
+      seatHead[seat].tint = skin;
+      showSeat(seat, true);
+    },
+    arrived: t => t >= 1 && tState[t - 1] === 3,
+    release: t => {
+      const i = t - 1;
+      if (i < 0 || i >= TICKETS || tState[i] === 0) return;
+      if (tState[i] === 2) { nAboard--; if (nAboard <= 0) { nAboard = 0; tripTo = -1; } }
+      if (tSeat[i] >= 0) showSeat(tSeat[i], false);
+      tState[i] = 0; tSeat[i] = -1; tickets--;
+    },
+  };
+
+  /** The car's idle decision when walkers are on: carry riders, fetch the oldest waiting one, or (rarely) make a display trip. */
+  const serve = (dt: number): void => {
+    if (lastPower <= 0.3) return;
+    for (let i = 0; i < TICKETS; i++) if (tState[i] === 3 && clock - tDoneAt[i] > 3) lift.release(i + 1); // a rider nobody collected
+    if (nAboard > 0) {
+      dwell += dt;
+      if (dwell >= BOARD_DWELL && tripTo >= 0 && tripTo !== cur) { to = tripTo; mode = 'closing'; }
+      return;
+    }
+    let w = -1;
+    for (let i = 0; i < TICKETS; i++) if (tState[i] === 1 && (w < 0 || tSeq[i] < tSeq[w])) w = i;
+    if (w >= 0) {
+      // The car waits here with its doors open when the rider is on this floor (walkers give up after a while, see Walkers).
+      if (tFrom[w] !== cur) { to = tFrom[w]; mode = 'closing'; }
+      return;
+    }
+    displayWait -= dt;
+    if (displayWait <= 0) {
+      displayWait = DISPLAY_TRIP_S;
+      to = Math.floor(Math.random() * floors);
+      if (to !== cur) mode = 'closing';
+    }
+  };
+
   const setLeaves = (f: number, k: number) => {
     const s = 1 - 0.82 * k;
     leaves[f].l.scale.x = s;
@@ -483,15 +609,22 @@ export function buildShaft2(floors: number, era: number, onArrive?: () => void, 
 
   return {
     container: root,
+    lift,
     animate: (t, power) => {
       const dt = lastT ? Math.max(0, Math.min(0.1, t - lastT)) : 0;
       lastT = t;
+      lastPower = power;
+      clock = t;
+      if (!GFX.walkers && tickets > 0) clearTickets(); // [plan4:ST-18] flag switched off while riders were booked: back to the old behaviour
       if (mode === 'idle') {
-        wait -= dt;
-        if (wait <= 0 && power > 0.3) {
-          to = Math.floor(Math.random() * floors);
-          wait = 2 + Math.random() * 4;
-          if (to !== cur) mode = 'closing';
+        if (GFX.walkers) serve(dt); // [plan4:ST-18] walkers' lift service replaces the random trips
+        else {
+          wait -= dt;
+          if (wait <= 0 && power > 0.3) {
+            to = Math.floor(Math.random() * floors);
+            wait = 2 + Math.random() * 4;
+            if (to !== cur) mode = 'closing';
+          }
         }
       } else if (mode === 'closing') {
         open = Math.max(0, open - dt / DOOR_T);
@@ -509,7 +642,14 @@ export function buildShaft2(floors: number, era: number, onArrive?: () => void, 
       } else {
         open = Math.min(1, open + dt / DOOR_T);
         setLeaves(cur, open);
-        if (open >= 1) mode = 'idle';
+        if (open >= 1) {
+          mode = 'idle';
+          // [plan4:ST-18] Whoever rode to this floor has arrived (their walker steps out of the cabin on its next update).
+          for (let i = 0; i < TICKETS; i++) {
+            if (tState[i] === 2 && tTo[i] === cur) { tState[i] = 3; tDoneAt[i] = t; nAboard--; }
+          }
+          if (nAboard <= 0) { nAboard = 0; tripTo = -1; }
+        }
       }
 
       const v = dt > 0 ? (car.y - prevY) / dt : 0;

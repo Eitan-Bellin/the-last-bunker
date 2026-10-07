@@ -13,6 +13,7 @@ import type { ObjectiveAction } from '../../systems/ObjectiveSystem';
 import { resourceDef } from '../../data/resources';
 import { getScenario, homeShare, type HomeSite } from '../../data/scenarios';
 import { wingSummary } from '../../data/wings';
+import { fillSafetyCard } from './SafetyCard'; // plan4:ST-14/15
 
 /** Sets a line of text that may hold icon tokens ([[food]]), only when it changed (the panel refreshes four times a second). */
 function setLine(node: HTMLElement | null, text: string): void {
@@ -69,6 +70,8 @@ export class EraPanel {
   private pctLabel: HTMLElement | null = null;
   /** [plan4:ST-5] The wing width line (west/east reach and the running wing dig's time left). */
   private wingLine: HTMLElement | null = null;
+  /** [plan4:ST-14/15] The Safety card's box (fire code, shut doors, emergency door button). */
+  private safetyBox: HTMLElement | null = null;
 
   show(state: GameState): void {
     this.signature = '';
@@ -146,6 +149,7 @@ export class EraPanel {
     }
     if (this.pctLabel) this.pctLabel.textContent = `${Math.floor(Math.min(0.99, actFraction(engine, state, act)) * 100)}%`;
     this.refreshWings(state);
+    fillSafetyCard(this.safetyBox, engine, state); // plan4:ST-14/15
     this.refreshForecast(state);
     this.refreshEndings(state);
   }
@@ -392,6 +396,7 @@ export class EraPanel {
     this.endingBars = [];
     if (act && this.engine && state) {
       root.appendChild(this.renderNow());
+      this.safetyBox = el('div', 'safety-box'); root.appendChild(this.safetyBox); // plan4:ST-14/15
       root.appendChild(this.renderAct(act));
       root.appendChild(button(`[[build]] ${i18n.t('proj.open')}`, 'btn-primary', () => this.onOpenProjects?.())); // [LateGame B1]
       root.appendChild(this.renderForecast());
