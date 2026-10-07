@@ -1,5 +1,4 @@
-import en from './en.json';
-import he from './he.json';
+import { EAGER_LOCALES } from './locales';
 
 export type Locale = 'en' | 'he';
 
@@ -26,7 +25,8 @@ export function resolveGender(text: string, g: Gender): string {
 
 const LOCALE_KEY = 'lastbunker_lang';
 
-const strings: Record<Locale, Record<string, string>> = { en, he };
+/** Filled at once in dev and in the sim; in the production build `main.ts` hands the tables over with `provide()` (see locales.ts). */
+const strings: Record<Locale, Record<string, string>> = EAGER_LOCALES ?? { en: {}, he: {} };
 
 export class I18nManager {
   private locale: Locale = 'en';
@@ -45,14 +45,32 @@ export class I18nManager {
     document.documentElement.lang = locale;
   }
 
-  loadStoredLocale(fallback: Locale): void {
+  /** The language the player picked (or `fallback`); reads storage only. */
+  storedLocale(fallback: Locale): Locale {
     let stored: string | null = null;
     try {
       stored = localStorage.getItem(LOCALE_KEY);
     } catch {
       stored = null;
     }
-    this.setLocale(stored === 'en' || stored === 'he' ? stored : fallback);
+    return stored === 'en' || stored === 'he' ? stored : fallback;
+  }
+
+  loadStoredLocale(fallback: Locale): void {
+    let locale = this.storedLocale(fallback);
+    const other: Locale = locale === 'he' ? 'en' : 'he';
+    if (!this.isLoaded(locale) && this.isLoaded(other)) locale = other; // the chosen language could not be fetched (offline): never show raw keys
+    this.setLocale(locale);
+  }
+
+  /** True when the strings of `locale` are in memory (always, unless the build loads them on demand). */
+  isLoaded(locale: Locale): boolean {
+    return Object.keys(strings[locale]).length > 0;
+  }
+
+  /** Hands over a string table that was fetched on demand (production build only). */
+  provide(locale: Locale, table: Record<string, string>): void {
+    strings[locale] = table;
   }
 
   storeLocale(locale: Locale): void {

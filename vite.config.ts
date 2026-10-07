@@ -73,10 +73,42 @@ function artPipeline(): Plugin {
   };
 }
 
-export default defineConfig({
+/**
+ * Plan 4 wave 3 (perf): Pixi's renderer picker loads the WebGL, WebGPU and Canvas renderers through three dynamic imports, and
+ * because all of pixi.js is forced into one chunk (below) the two the game never runs were shipped anyway: about 66 KB minified,
+ * 20 KB gzipped. The game is WebGL-only (its filters are GLSL, `postfx.ts` says WebGPU is "not used today"), so in production
+ * builds those two modules become stubs that throw when chosen; a device with no WebGL then gets the same "could not start" screen
+ * it got before (Pixi's Canvas renderer is experimental and the game's filters are GLSL). Dev server and tools keep the full library.
+ */
+function pixiWebglOnly(): Plugin {
+  const STUBS: Record<string, string> = {
+    './gpu/WebGPURenderer.mjs': 'WebGPURenderer',
+    './canvas/CanvasRenderer.mjs': 'CanvasRenderer',
+  };
+  const ID = '\0pixi-renderer-stub:';
+  return {
+    name: 'pixi-webgl-only',
+    apply: 'build',
+    enforce: 'pre',
+    resolveId(source, importer) {
+      const cls = STUBS[source];
+      if (cls && importer && importer.replace(/\\/g, '/').includes('/pixi.js/lib/rendering/renderers/autoDetectRenderer')) return ID + cls;
+      return null;
+    },
+    load(id) {
+      if (!id.startsWith(ID)) return null;
+      const cls = id.slice(ID.length);
+      return `export class ${cls} { async init() { throw new Error('The ${cls} is not part of this build (WebGL only).'); } }`;
+    },
+  };
+}
+
+export default defineConfig(({ command }) => ({
   // Relative asset paths so the build works from any host or sub-folder (and as an installed PWA).
   base: './',
-  plugins: [artPipeline()],
+  plugins: [artPipeline(), pixiWebglOnly()],
+  // Production only: the string tables load as their own chunks (src/i18n/locales.ts). Dev and the Node test bundles keep them linked in.
+  define: command === 'build' ? { __LAZY_LOCALES__: 'true' } : {},
   build: {
     target: 'es2020',
     chunkSizeWarningLimit: 1200,
@@ -86,4 +118,4 @@ export default defineConfig({
       },
     },
   },
-});
+}));

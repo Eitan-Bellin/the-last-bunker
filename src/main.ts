@@ -1,10 +1,11 @@
 import { GameApp } from './app';
 import { logCrash } from './core/crashGuard';
 import { SaveManager } from './core/SaveManager';
-import { i18n } from './i18n/I18nManager';
+import { i18n, type Locale } from './i18n/I18nManager';
 import { applyTextSize } from './ui/textSize';
 import { hideSplash } from './ui/splash';
 import { installMaterials } from './ui/materials';
+import { prefetchLazyChunks, whenIdle } from './utils/lazy';
 
 applyTextSize();
 
@@ -56,10 +57,45 @@ async function chooseDefaultLanguage(): Promise<void> {
   }
 }
 
+/** The two string tables are separate chunks in the production build (plan 4 wave 3, see i18n/locales.ts); in dev they are already linked in. */
+const LOCALE_CHUNKS: Record<Locale, () => Promise<{ default: Record<string, string> }>> = {
+  en: () => import('./i18n/en.json'),
+  he: () => import('./i18n/he.json'),
+};
+
+async function fetchLocale(locale: Locale): Promise<boolean> {
+  if (i18n.isLoaded(locale)) return true;
+  try {
+    i18n.provide(locale, (await LOCALE_CHUNKS[locale]()).default);
+    return true;
+  } catch (err) {
+    console.warn('language file did not load', locale, err);
+    return false;
+  }
+}
+
+/**
+ * The player's language is needed before the first screen is built, so it is awaited here. If it cannot be fetched (offline on a
+ * first visit to a language that was never cached) the other language is used for this session instead of showing raw keys.
+ * The language that is not in use is fetched later, when the page is idle: it is the fallback for a missing key, and having it in the
+ * service worker's cache keeps the language switch (which reloads the page) working offline.
+ */
+async function loadLanguages(): Promise<void> {
+  const want = i18n.storedLocale('he');
+  if (!(await fetchLocale(want))) await fetchLocale(want === 'he' ? 'en' : 'he'); // GameApp then takes whichever table is there
+}
+
+function prefetchOtherLanguage(): void {
+  whenIdle(() => { void fetchLocale(i18n.storedLocale('he') === 'he' ? 'en' : 'he'); });
+}
+
 async function boot(): Promise<void> {
   await chooseDefaultLanguage();
+  await loadLanguages();
   installMaterials(); // plan 2026-10 M7: the worn-steel texture of the HUD plates
   await new GameApp().start();
+  prefetchOtherLanguage();
+  prefetchLazyChunks();
 }
 
 boot().catch(failed);
