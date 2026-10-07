@@ -38,6 +38,8 @@ export const ROOM_ACTIVITY: Partial<Record<BuildingType, Activity>> = {
   generator: 'wrench', reactor: 'wrench', waterPump: 'wrench', waterPurifier: 'wrench',
   canteen: 'stir', laboratory: 'type', radioTower: 'type', trainingRoom: 'lift', storage: 'carry', medbay: 'tend',
   cave: 'dig', lake: 'water', metro: 'carry', atrium: 'tend', reactorHall: 'type',
+  // [plan4:BL-9..14,19,33] existing clips only: reading = inspect, guards stand watch (idle)
+  library: 'inspect', recycler: 'hammer', mushroomFarm: 'tend', commons: 'idle', gatePost: 'idle', barracks: 'idle',
 };
 
 type Hat = 'straw' | 'hard' | 'chef' | 'cap' | 'helmet' | 'headset' | 'hazmat' | null;
@@ -79,6 +81,13 @@ const JOB_OUTFIT: Partial<Record<BuildingType | 'ruin', Outfit>> = {
   metro: { top: 0x5a4a3a, bottom: 0x2a2a2a, hat: 'helmet', tool: 'box' },
   atrium: { top: 0x667e50, bottom: 0x4a5a3a, hat: 'straw', tool: 'can' },
   reactorHall: { top: 0xb8a64e, bottom: 0xa08e44, hat: 'hazmat', tool: 'clipboard', goggles: true },
+  // [plan4:BL-9..14,19,33] (batteryBank and condenser have no crew)
+  commons: { top: 0x9a8450, bottom: 0x3a3a42, hat: null, tool: null },
+  library: { top: 0x6c5c74, bottom: 0x2e3a4e, hat: null, tool: 'clipboard', goggles: true },
+  recycler: { top: 0x7a7a5a, bottom: 0x3a3328, hat: 'hard', tool: 'hammer', apron: 0x4a4a3a, goggles: true },
+  mushroomFarm: { top: 0x7a6a74, bottom: 0x3a3328, hat: 'cap', tool: 'can' },
+  gatePost: { top: 0x5a5a3a, bottom: 0x3a3a2a, hat: 'helmet', tool: null },
+  barracks: { top: 0x5a6a4a, bottom: 0x3a3a2a, hat: 'helmet', tool: null },
 };
 
 export type Mood = 'happy' | 'neutral' | 'sad';

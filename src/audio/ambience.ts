@@ -26,6 +26,15 @@ export const AMBIENCE_FOR: Partial<Record<BuildingType, AmbienceKey>> = {
   metro: 'air',
   atrium: 'air',
   reactorHall: 'reactor',
+  // [plan4:BL-9..14,19,33]
+  batteryBank: 'machine',
+  commons: 'kitchen',
+  library: 'air',
+  recycler: 'workshop',
+  condenser: 'water',
+  mushroomFarm: 'air',
+  gatePost: 'base',
+  barracks: 'base',
 };
 
 function loopNoise(ctx: OfflineAudioContext, dest: AudioNode, color: 'white' | 'pink' | 'brown', type: BiquadFilterType, freq: number, q: number, level: number, seed: number): void {

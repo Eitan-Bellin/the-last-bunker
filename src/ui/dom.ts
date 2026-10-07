@@ -48,6 +48,15 @@ export const BUILDING_ICONS: Record<string, string> = {
   trainingRoom: tok('trainingRoom'),
   armory: tok('armory'),
   reactor: tok('reactor'),
+  // [plan4:BL-9..14,19,33] the first eight new rooms
+  batteryBank: tok('batteryBank'),
+  commons: tok('commons'),
+  library: tok('library'),
+  recycler: tok('recycler'),
+  condenser: tok('condenser'),
+  mushroomFarm: tok('mushroomFarm'),
+  gatePost: tok('gatePost'),
+  barracks: tok('barracks'),
 };
 
 const TOKEN = /\[\[([a-zA-Z0-9]+)\]\]/g;

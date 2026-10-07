@@ -54,7 +54,16 @@ export type BuildingType =
   | 'lake'
   | 'metro'
   | 'atrium'
-  | 'reactorHall';
+  | 'reactorHall'
+  // [plan4:BL-9..14,19,33] first eight new rooms
+  | 'batteryBank'
+  | 'commons'
+  | 'library'
+  | 'recycler'
+  | 'condenser'
+  | 'mushroomFarm'
+  | 'gatePost'
+  | 'barracks';
 
 export interface BuildingInstance {
   id: string;

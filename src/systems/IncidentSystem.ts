@@ -4,7 +4,7 @@ import type { SeededRandom } from '../core/Random';
 import type { ResourceSystem } from './ResourceSystem';
 import { bus } from '../core/EventBus';
 import { roomSlots } from '../data/buildingDefs';
-import { INCIDENTS, INCIDENT_KINDS, DISASTERS, disasterCost, quickFixCost } from '../data/incidents';
+import { INCIDENTS, INCIDENT_KINDS, DISASTERS, disasterCost, quickFixCost, breachGuardMult } from '../data/incidents';
 import { specOf } from '../data/specializations';
 import { isHall, isDistrict, roomSlots as slotsOf, effectiveLevel } from '../data/buildingDefs';
 import { RUIN_KINDS } from '../data/ruins';
@@ -97,7 +97,8 @@ export class IncidentSystem {
       const base = def.rooms[b.type];
       if (!base) continue;
       const hygiene = kind === 'roaches' ? hygieneMult(state) : 1; // [plan4:BL-8] bathhouses keep the roaches away
-      out.push({ b, w: base * (specOf(b)?.risk ?? 1) * wearRisk(b) * hygiene }); // [Danger C3] worn rooms break more often
+      const gate = kind === 'breach' ? breachGuardMult(state) : 1; // [plan4:BL-19] a gate post halves the odds of a breach
+      out.push({ b, w: base * (specOf(b)?.risk ?? 1) * wearRisk(b) * hygiene * gate }); // [Danger C3] worn rooms break more often
     }
     return out;
   }

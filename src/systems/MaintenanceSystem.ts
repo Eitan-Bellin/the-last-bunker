@@ -15,7 +15,7 @@ export const WEAR_FROM_LEVEL = 3;
 const WEAR_PER_HOUR = 1;
 const HOT_WEAR_PER_HOUR = 2;
 /** [plan4:BL-8] Fuel plants run hot (generator, reactors); other rooms that wear double are listed here (batteries, recyclers... join in later). */
-const HOT_ROOMS: BuildingType[] = [];
+const HOT_ROOMS: BuildingType[] = ['batteryBank', 'recycler']; // [plan4:BL-9,12]
 const isHot = (type: BuildingType) => (isPowerPlant(type) && !getDef(type)?.shape) || HOT_ROOMS.includes(type);
 /** Wear is written back to the state in chunks (it changes slowly; no need to touch the state every tick). */
 const FLUSH_SECONDS = 20;

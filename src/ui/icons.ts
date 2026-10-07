@@ -247,6 +247,27 @@ export const ICON_SVG = {
   arrowLeft: '<path d="M10.5 4.5 3 12l7.5 7.5 1.7-1.7-4.6-4.6H21v-2.4H7.6l4.6-4.6z"/>',
   arrowRight: '<path d="M13.5 4.5 21 12l-7.5 7.5-1.7-1.7 4.6-4.6H3v-2.4h13.4l-4.6-4.6z"/>',
   hand: '<path d="M9 11V4.2a1.6 1.6 0 0 1 3.2 0V10h.4V3.2a1.6 1.6 0 0 1 3.2 0V10h.4V5a1.6 1.6 0 0 1 3.2 0v9.2c0 4.3-3 7.8-7.4 7.8-2.6 0-4.4-1.2-5.8-3.3L3 13.2a1.7 1.7 0 0 1 2.6-2.1L9 14.3z"/>',
+  // [plan4:BL-9..14,19,33] the first eight new rooms
+  batteryBank: '<rect x="2" y="7" width="18" height="12" rx="1.6" opacity=".6"/><rect x="20" y="10.4" width="2.2" height="5.2" rx=".8"/>'
+    + '<rect x="4" y="9" width="3.6" height="8" rx=".6"/><rect x="9" y="9" width="3.6" height="8" rx=".6"/>'
+    + '<path d="M16.2 9.2h1.8l-1.1 3.3h1.8l-3.4 4.8.9-4h-1.5z" ' + CUT + '/>',
+  commons: '<path d="M3.5 11.5a3.2 3.2 0 0 1 3.2-3.2h10.6a3.2 3.2 0 0 1 3.2 3.2v2.4h-17z" opacity=".6"/><rect x="2" y="12.6" width="20" height="5.4" rx="1.8"/>'
+    + '<rect x="4" y="17.6" width="2.2" height="3" rx=".6"/><rect x="17.8" y="17.6" width="2.2" height="3" rx=".6"/>'
+    + '<path d="M12 4.2c1.3-1.5 3.6-.3 2.6 1.5L12 8.2 9.4 5.7c-1-1.8 1.3-3 2.6-1.5z"/>',
+  library: '<rect x="3" y="3.5" width="4.6" height="17" rx=".9"/><rect x="8.6" y="5.6" width="4.6" height="14.9" rx=".9" opacity=".6"/>'
+    + '<path d="M14.6 6.6 18.8 5.5l3.5 13.6-4.2 1.1z"/><path d="M4.4 7.4h1.8M4.4 16.4h1.8M9.9 9.2h1.8" stroke="#000" stroke-opacity=".5" stroke-width="1.3"/>',
+  recycler: '<path d="M5 12A7 7 0 0 1 15.5 5.94" ' + S + ' stroke-width="2.2"/><path d="M16.9 3.5 18.44 7.64 14.1 8.4Z"/>'
+    + '<path d="M19 12A7 7 0 0 1 8.5 18.06" ' + S + ' stroke-width="2.2" opacity=".6"/><path d="M7.1 20.5 5.56 16.36 9.9 15.6Z" opacity=".6"/>'
+    + '<circle cx="12" cy="12" r="2"/>',
+  condenser: '<rect x="3" y="3" width="18" height="11.4" rx="1.8" opacity=".6"/><path d="M5.6 6.4h12.8M5.6 9h12.8M5.6 11.6h12.8" stroke="#000" stroke-opacity=".5" stroke-width="1.5"/>'
+    + '<path d="M12 21.6c-2 0-3.3-1.3-3.3-3 0-1.7 3.3-4.6 3.3-4.6s3.3 2.9 3.3 4.6c0 1.7-1.3 3-3.3 3z"/>',
+  mushroomFarm: '<path d="M2.4 12.6a9.6 8.2 0 0 1 19.2 0z"/><path d="M9.4 12.6h5.2l-.6 7.2a1 1 0 0 1-1 .9h-2a1 1 0 0 1-1-.9z" opacity=".6"/>'
+    + '<circle cx="7.6" cy="9.6" r="1.3" ' + CUT + '/><circle cx="13.6" cy="7.4" r="1.7" ' + CUT + '/><circle cx="17.6" cy="10.2" r="1" ' + CUT + '/>',
+  gatePost: '<path d="M12 2.4l8 2.7v6.1c0 5-3.4 8.7-8 10.4-4.6-1.7-8-5.4-8-10.4V5.1z"/>'
+    + '<path d="M8.6 8.4v8M12 7.4v9.4M15.4 8.4v8M7.6 11.4h8.8" stroke="#000" stroke-opacity=".5" stroke-width="1.5" fill="none"/>',
+  barracks: '<rect x="3" y="3" width="2" height="18" rx=".5"/><rect x="19" y="3" width="2" height="18" rx=".5"/>'
+    + '<rect x="3" y="8.4" width="18" height="2.6" rx=".8" opacity=".6"/><rect x="3" y="16" width="18" height="2.6" rx=".8" opacity=".6"/>'
+    + '<rect x="5.6" y="5.6" width="5.2" height="2.6" rx="1.1"/><rect x="5.6" y="13.2" width="5.2" height="2.6" rx="1.1"/>',
 } as const;
 
 export type IconName = keyof typeof ICON_SVG;

@@ -58,6 +58,11 @@ const BUILDING_ZONE: Partial<Record<BuildingType, ZoneId>> = {
   workshop: 'engineering',
   laboratory: 'engineering',
   reactor: 'engineering',
+  // [plan4:BL-9..14,19,33] new rooms: their zone (batteryBank and condenser stand on any level; mushroomFarm and gatePost use `place`)
+  commons: 'living',
+  barracks: 'living',
+  library: 'engineering',
+  recycler: 'engineering',
 };
 
 /**
