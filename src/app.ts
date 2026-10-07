@@ -53,11 +53,15 @@ import { StoryDialog } from './ui/components/StoryDialog';
 import { DISASTERS } from './data/incidents';
 import { Notifier, type NotifyItem } from './ui/notifications';
 import { arrivalGap, type RaidResult } from './systems/EventSystem';
+import { DialogQueue, type DialogSource } from './ui/dialogQueue'; // [plan4:UX-10]
+import { getChapter } from './data/story';
+import { districtDef } from './data/districts';
 import './style.css';
 import './styles/story.css';
 import './styles/bunker-os.css';
 import './styles/depth.css';
 import './styles/command.css';
+import './styles/checkin.css'; // [plan4:Gameplay] dialog queue card, gesture tips, check-in screen
 import './styles/touch.css'; // [plan4:UX-5] last again (its header says so): its 44px targets must beat the older sheet-help sizes in command.css
 import { FeedbackController } from './ui/controllers/feedback';
 import { InboxController } from './ui/controllers/inbox';
@@ -136,6 +140,16 @@ export class GameApp {
   private lastProductionPopup = 0;
   private lastBubbleCheck = 0;
   welcomeOpen = false;
+  /** [plan4:UX-10] A welcome-back report waiting for the gate (the report, or null for people only at the door). */
+  pendingWelcome: { report: OfflineReport | null } | null = null;
+  /** [plan4:UX-10] Every auto-opening dialog is a source in this queue; dialogGate decides when one may land. */
+  dialogs!: DialogQueue;
+  private lastDialogCheck = 0;
+  /** [plan4:UX-10] Pointers that are down right now (id -> last event time) and the time of the last touch gesture. */
+  private pointersDown = new Map<number, number>();
+  private lastGestureAt = -Infinity;
+  /** [plan4:UX-10] A ceremony (GP-2) holds every dialog back until this time (performance.now() ms). */
+  ceremonyUntil = 0;
   private shortages = new Set<ResourceType>();
   private lowWarned = new Set<ResourceType>();
   private hurtWarned = new Set<string>();
@@ -218,6 +232,7 @@ export class GameApp {
     this.resourceSheet = new ResourceSheet(this.engine);
     this.modal = new Modal();
     this.toasts = new Toasts();
+    this.dialogs = new DialogQueue(this.dialogSources(), this.modal, c => this.dialogGate(c), () => this.engine.stateManager.state?.stats.totalPlayTime ?? 0);
   }
 
   async start(): Promise<void> {
@@ -245,6 +260,8 @@ export class GameApp {
       (window as unknown as Record<string, unknown>).__engine = this.engine;
       (window as unknown as Record<string, unknown>).__renderer = this.renderer;
       (window as unknown as Record<string, unknown>).__audio = this.audio;
+      (window as unknown as Record<string, unknown>).__app = this; // [plan4:UX-10] tests poke dialogGate / the dialog queue
+
     }
     // [perf] ?perf shows the overlay, ?debug/?perf expose __perf2() and __perfFixture(); nothing loads otherwise.
     { const q = new URLSearchParams(location.search); if (import.meta.env.DEV || q.has('perf') || q.has('debug')) void import('./dev/perf').then(m => m.installPerf(this.renderer, this.engine, this.audio)); }
@@ -264,7 +281,8 @@ export class GameApp {
     if (guard.liteJustEnabled) this.toasts.show(`[[sparkle]] ${i18n.t('toast.liteMode')}`, 'info');
     if (!this.state.storyFlags.includes('intro:done')) this.story.playIntroSequence();
     // Back from a break, or people still waiting at the door from last time: the welcome screen comes first.
-    else if (this.engine.offlineReport || (this.state.doorWaiting?.length ?? 0) > 0) this.welcome.showWelcome(this.engine.offlineReport);
+    // [plan4:UX-10] It waits in the dialog queue (top priority), so a gesture or a placement that is already under way is not interrupted.
+    else if (this.engine.offlineReport || (this.state.doorWaiting?.length ?? 0) > 0) this.pendingWelcome = { report: this.engine.offlineReport };
     this.setupNotifications();
   }
 
@@ -446,25 +464,123 @@ export class GameApp {
       this.world.spawnBubbles();
     }
     this.renderer.setNight(timeOfDay(state.stats.totalPlayTime).night);
-    if (!this.modal.isVisible && !this.welcomeOpen && !this.introPlaying && !this.storyOpen && !this.loreReader.isVisible && !this.storyDialog.isVisible) {
-      const asking = this.engine.explorationSystem.waitingMission();
-      // People who gathered at the door during a short absence get their answer first, too.
-      if ((state.doorWaiting?.length ?? 0) > 0) this.welcome.showWelcome(null);
-      else if ((state.danger?.memorialQueue?.length ?? 0) > 0) this.danger.showMemorial(); // [Danger C5]
-      else if (this.raidResult) { const r = this.raidResult; this.raidResult = null; this.danger.showRaidResult(r); } // [Danger C1]
-      else if (this.dangerPrompt) { this.dangerPrompt = false; if (this.danger.dangerBanner()) this.danger.showDanger(); } // [Danger C1/C2]
-      // [Long game] After the first era these wait in the Decision Inbox; emergencies and the story still open by themselves.
-      else if (this.inbox.autoOpenEvent(state)) this.events.showEvent();
-      else if (asking && !this.inbox.defers(state)) this.events.showMissionChoice(asking);
-      else if (state.missionReports.length > 0 && !this.inbox.defers(state)) this.events.showMissionReport(state.missionReports[0]);
-      else if (this.pendingChapter && !document.querySelector('.era-banner')) this.story.playChapter(this.pendingChapter);
-      else if (!document.querySelector('.era-banner')) this.systems.update(state);
+    // [plan4:UX-10] One dialog at a time, never into a gesture: the sources and their priorities are in dialogSources().
+    if (!this.modal.isVisible && !this.welcomeOpen && !this.introPlaying && !this.storyOpen && !this.loreReader.isVisible && !this.storyDialog.isVisible
+      && now - this.lastDialogCheck > 100) {
+      this.lastDialogCheck = now;
+      this.dialogs.update(now);
     }
     this.checkShortages();
-    if (this.districtFoundQueue.length && !this.modal.isVisible && !this.welcomeOpen && !this.introPlaying && !this.storyOpen && !this.storyDialog.isVisible) {
-      this.dig.showDistrictFound(this.districtFoundQueue.shift()!);
-    }
-    this.lore.flushLoreQueue();
+  }
+
+  /**
+   * [plan4:UX-10] May an auto-opening dialog land right now? Not while a building is being placed, a finger is down (a camera drag,
+   * a pinch, a carried survivor), a gesture ended less than 1.2 s ago, a ceremony is playing, or (for anything that is not an
+   * emergency) a sheet is open under the player's hands. A sheet left open and untouched for 20 s no longer holds the dialogs back.
+   */
+  dialogGate(critical = false): boolean {
+    const now = performance.now();
+    if (this.placementMode) return false;
+    for (const [id, t] of this.pointersDown) if (now - t > 12000) this.pointersDown.delete(id); // a lost pointerup must not block forever
+    if (this.pointersDown.size > 0) return false;
+    if (now - this.lastGestureAt < 1200) return false;
+    if (this.ceremonyActive(now)) return false;
+    if (!critical && this.anyPanelOpen() && now - this.lastGestureAt < 20000) return false;
+    return true;
+  }
+
+  /** [plan4:UX-10] A ceremony is on screen: a timed one (ceremonyUntil, set by GP-2), or a full-screen era/act banner. */
+  ceremonyActive(now = performance.now()): boolean {
+    return now < this.ceremonyUntil || !!document.querySelector('.era-banner, .ceremony');
+  }
+
+  /** [plan4:UX-10] Keeps dialogs out of gestures; installed once. */
+  private watchGestures(): void {
+    const stamp = () => { this.lastGestureAt = performance.now(); };
+    document.addEventListener('pointerdown', e => { this.pointersDown.set(e.pointerId, performance.now()); stamp(); }, { capture: true, passive: true });
+    document.addEventListener('pointermove', e => { if (this.pointersDown.has(e.pointerId)) { this.pointersDown.set(e.pointerId, performance.now()); stamp(); } }, { capture: true, passive: true });
+    const up = (e: PointerEvent) => { this.pointersDown.delete(e.pointerId); stamp(); };
+    window.addEventListener('pointerup', up, { capture: true, passive: true });
+    window.addEventListener('pointercancel', up, { capture: true, passive: true });
+    window.addEventListener('blur', () => this.pointersDown.clear());
+    document.addEventListener('wheel', stamp, { capture: true, passive: true });
+    document.addEventListener('keydown', stamp, { capture: true, passive: true });
+  }
+
+  /** [plan4:UX-10] Every dialog that opens by itself, in the order of the old fixed chain (higher priority = first). */
+  private dialogSources(): DialogSource[] {
+    const st = () => this.state;
+    const memorialN = () => st().danger?.memorialQueue?.length ?? 0;
+    const asking = () => this.engine.explorationSystem.waitingMission();
+    // [Long game] After the first era events, questions and reports wait in the Decision Inbox; emergencies and the story still open by themselves.
+    return [
+      {
+        id: 'welcome', priority: 100, snoozeMs: 60_000, critical: true, icon: '[[door]]',
+        ready: () => !!this.pendingWelcome || (st().doorWaiting?.length ?? 0) > 0,
+        open: () => { const p = this.pendingWelcome; this.pendingWelcome = null; this.welcome.showWelcome(p ? p.report : null); },
+        label: () => i18n.t('welcome.title'),
+      },
+      {
+        id: 'memorial', priority: 90, snoozeMs: 60_000, critical: true, icon: '[[heart]]',
+        ready: () => memorialN() > 0,
+        open: () => this.danger.showMemorial(), // [Danger C5]
+        label: () => i18n.t('dq.memorial'),
+      },
+      {
+        id: 'raidResult', priority: 80, snoozeMs: 60_000, critical: true, icon: '[[warning]]',
+        ready: () => !!this.raidResult,
+        open: () => { const r = this.raidResult!; this.raidResult = null; this.danger.showRaidResult(r); }, // [Danger C1]
+        label: () => i18n.t('dq.raidResult'),
+      },
+      {
+        id: 'danger', priority: 70, snoozeMs: 30_000, critical: true, icon: '[[warning]]',
+        ready: () => this.dangerPrompt,
+        open: () => { this.dangerPrompt = false; if (this.danger.dangerBanner()) this.danger.showDanger(); }, // [Danger C1/C2]
+        label: () => i18n.t('dq.danger'),
+      },
+      {
+        id: 'event', priority: 60, snoozeMs: 120_000, icon: '[[inbox]]',
+        ready: () => this.inbox.autoOpenEvent(st()),
+        open: () => this.events.showEvent(),
+        label: () => { const ev = st().activeEvent; return ev ? i18n.t(`event.${ev.id}.title`, this.events.eventParams(ev.data)) : ''; },
+      },
+      {
+        id: 'missionChoice', priority: 50, snoozeMs: 180_000, icon: '[[radioTower]]',
+        ready: () => !!asking() && !this.inbox.defers(st()),
+        open: () => { const m = asking(); if (m) this.events.showMissionChoice(m); },
+        label: () => i18n.t('inbox.missionAsks'),
+      },
+      {
+        id: 'missionReport', priority: 40, snoozeMs: 180_000, icon: '[[map]]',
+        ready: () => st().missionReports.length > 0 && !this.inbox.defers(st()),
+        open: () => this.events.showMissionReport(st().missionReports[0]),
+        label: () => i18n.t(st().missionReports[0]?.success ? 'inbox.reportOk' : 'inbox.reportBad'),
+      },
+      {
+        id: 'chapter', priority: 30, snoozeMs: 240_000, icon: '[[books]]',
+        ready: () => !!this.pendingChapter,
+        open: () => this.story.playChapter(this.pendingChapter!),
+        label: () => { const c = this.pendingChapter ? getChapter(this.pendingChapter) : undefined; return c ? c.title[i18n.currentLocale] : i18n.t('dq.chapter'); },
+      },
+      {
+        id: 'system', priority: 20, snoozeMs: 300_000, icon: '[[sparkle]]',
+        ready: () => this.systems.hasDue(st()),
+        open: () => this.systems.update(st()),
+        label: () => this.systems.dueTitle(st()),
+      },
+      {
+        id: 'lore', priority: 15, snoozeMs: 300_000, icon: '[[note]]',
+        ready: () => this.lore.hasQueued,
+        open: () => this.lore.flushLoreQueue(),
+        label: () => i18n.t('journal.found'),
+      },
+      {
+        id: 'district', priority: 10, snoozeMs: 300_000, icon: '[[pick]]',
+        ready: () => this.districtFoundQueue.length > 0,
+        open: () => this.dig.showDistrictFound(this.districtFoundQueue.shift()!),
+        label: () => { const d = districtDef(this.districtFoundQueue[0] ?? ''); return d ? i18n.t('district.found', { name: d.name[i18n.currentLocale] }) : ''; },
+      },
+    ];
   }
 
   /** [LateGame B1] What stands on each project's lot: started or finished projects, and the active one even before its first stage. */
@@ -856,6 +972,7 @@ export class GameApp {
 
     this.feedback.install();
     this.inbox.install();
+    this.watchGestures(); // [plan4:UX-10]
 
     bus.on('state:loaded', () => {
       this.closeSheets();
@@ -866,7 +983,7 @@ export class GameApp {
 
     bus.on('offline:processed', (report: unknown) => {
       if (this.engine.offlineReport === report) return;
-      this.welcome.showWelcome(report as OfflineReport);
+      this.pendingWelcome = { report: report as OfflineReport }; // [plan4:UX-10] through the gate, like every auto dialog
     });
 
     // Any touch, drag, wheel or key counts: the picture draws at full speed while the player is handling the bunker.

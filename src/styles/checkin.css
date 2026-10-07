@@ -1,0 +1,7 @@
+/* [plan4:Gameplay] The dialog queue's "N waiting" card (UX-10), gesture tips (UX-11) and the check-in screen (GP-3, UX-19).
+   Every font goes through --fs so Text size XL works; buttons keep var(--tap) height; nothing here is wider than the dialog. */
+
+/* ---------- UX-10: the folded "N things are waiting" card ---------- */
+.dq-list { list-style: none; text-align: start; margin: 0 0 12px; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.dq-list li { font-size: calc(14px * var(--fs, 1)); line-height: 1.4; padding: 8px 10px; border-radius: 8px; background: rgba(0, 0, 0, 0.28); }
+.dq-list li.dq-more { background: none; color: var(--text-secondary); text-align: center; padding: 2px; }
