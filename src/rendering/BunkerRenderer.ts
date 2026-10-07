@@ -26,6 +26,7 @@ import { ArtLibrary } from '../art/ArtLibrary';
 import { artEntry, buildingArtKey, roomTier, ruinArtKey } from '../art/registry';
 import { buildCityMap, type CityMap } from './cityMap';
 import { updateLabelScale } from './LabelScale'; // [plan4:ST-12]
+import { SlopArea, hitState } from './HitSlop'; // [plan4:ST-12]
 import { PostFX, startQuality, targetResolution } from './postfx';
 import { isLiteMode, logCrash } from '../core/crashGuard';
 import { isTouchDevice } from '../utils/device';
@@ -340,7 +341,7 @@ export class BunkerRenderer {
     b.position.set(v.root.x + v.width / 2, v.root.y + 26);
     b.eventMode = 'static';
     b.cursor = 'pointer';
-    b.hitArea = new Rectangle(-16, -16, 32, 34);
+    b.hitArea = new SlopArea(-16, -16, 32, 34, b); // [plan4:ST-12 #4] >= 44 screen px
     b.on('pointertap', (e) => {
       e.stopPropagation();
       if (!this.cam.isDragging) this.onBubbleTap?.(buildingId);
@@ -1046,6 +1047,7 @@ export class BunkerRenderer {
     this.updateSpan(state);
     if (state.currentFloors !== this.floors || this.structureGloom !== this.gloom || this.undergroundSig !== this.structureSig(state)) this.rebuildStructure(state);
     this.cam.stepCamera(dt); // [camera]
+    hitState.zoom = this.cam.zoom;
     if (updateLabelScale(this.cam.zoom, now)) this.roomViews.applyLabelScale(); // [plan4:ST-12] tags keep a readable screen size
     this.updateView(); // [perf]
     this.frontBands?.update();
