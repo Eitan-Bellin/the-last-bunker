@@ -215,14 +215,14 @@ export class SaveController {
 
   /** Playing without saving (the player chose it): a reminder every few minutes, so it is never forgotten. */
   unsavedReminder(): void {
-    this.app.toasts.show(`[[warning]] ${i18n.t('save.problem.unsaved')}`, 'bad');
+    this.app.toasts.show(`[[warning]] ${i18n.t('save.problem.unsaved')}`, 'critical');
     window.setInterval(() => {
-      if (this.app.engine.saveBlocked && !document.hidden) this.app.toasts.show(`[[warning]] ${i18n.t('save.problem.unsaved')}`, 'bad');
+      if (this.app.engine.saveBlocked && !document.hidden) this.app.toasts.show(`[[warning]] ${i18n.t('save.problem.unsaved')}`, 'critical');
     }, 5 * 60_000);
   }
 
   watchSaving(): void {
-    bus.on('save:failed', () => this.app.toasts.show(`[[warning]] ${i18n.t('save.failed')}`, 'bad'));
+    bus.on('save:failed', () => this.app.toasts.show(`[[warning]] ${i18n.t('save.failed')}`, 'critical'));
     bus.on('save:recovered', () => this.app.toasts.show(`[[save]] ${i18n.t('save.recoveredOk')}`, 'good'));
     bus.on('save:superseded', () => this.showSuperseded());
   }

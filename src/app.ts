@@ -57,8 +57,8 @@ import './style.css';
 import './styles/story.css';
 import './styles/bunker-os.css';
 import './styles/depth.css';
-import './styles/touch.css';
 import './styles/command.css';
+import './styles/touch.css'; // [plan4:UX-5] last again (its header says so): its 44px targets must beat the older sheet-help sizes in command.css
 import { FeedbackController } from './ui/controllers/feedback';
 import { InboxController } from './ui/controllers/inbox';
 import { SaveController } from './ui/controllers/saves';

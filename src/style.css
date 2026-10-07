@@ -202,7 +202,9 @@ button {
   padding-bottom: max(6px, env(safe-area-inset-bottom));
   border-top: 1px solid var(--border);
   /* [perf] no backdrop-filter: a blur over the live canvas is a GPU pass every picture (96% opaque anyway) */
-  z-index: 15;
+  /* [plan4:UX-8] 22: above the bottom sheets (20), so the nav stays visible and tappable with a sheet open; below the surface map (25),
+     toasts (30) and dialogs (40). HUD.ts puts the console on <body> so this z-index competes with the sheets at all. */
+  z-index: 22;
 }
 
 .nav-btn {
@@ -311,11 +313,15 @@ body.placement-mode #game-canvas { cursor: crosshair; }
 .sheet {
   background: var(--bg-panel);
   border-radius: 18px 18px 0 0;
-  padding: 8px 16px 16px;
-  padding-bottom: max(16px, env(safe-area-inset-bottom));
+  /* [plan4:UX-6] side padding clears the notch / rounded corners in landscape */
+  padding: 8px max(16px, env(safe-area-inset-right)) 16px max(16px, env(safe-area-inset-left));
   width: 100%;
   max-width: 520px;
   max-height: 72vh;
+  /* [plan4:UX-8] The nav console stays visible above the sheet's bottom edge, so the content must end above it (--nav-h is measured by
+     HUD.ts and already includes the home-bar safe area). With the keyboard up (--kb-inset, viewportUi.ts) the sheet is lifted by the
+     overlay's padding and the nav no longer needs room. */
+  padding-bottom: calc(max(0px, var(--nav-h, 72px) - var(--kb-inset, 0px)) + 12px);
   overflow-y: auto;
   overscroll-behavior: contain;
   touch-action: pan-y;
@@ -325,6 +331,12 @@ body.placement-mode #game-canvas { cursor: crosshair; }
   transition: transform 0.28s cubic-bezier(0.2, 0.9, 0.3, 1);
 }
 .sheet-overlay.open .sheet { transform: translateY(0); }
+/* [plan4:UX-7] dvh follows the browser bars (100vh on iOS Safari is the tallest state, so a 72vh sheet could reach under the toolbar). */
+@supports (height: 100dvh) {
+  .sheet { max-height: min(78dvh, calc(100dvh - var(--kb-inset, 0px) - 16px)); }
+}
+/* [plan4:UX-7] The keyboard lifts the sheet (iOS keeps the layout viewport full height). */
+.sheet-overlay { padding-bottom: var(--kb-inset, 0px); }
 
 .sheet-handle {
   width: 40px;
@@ -505,7 +517,8 @@ body.placement-mode #game-canvas { cursor: crosshair; }
 
 .toast-stack {
   position: fixed;
-  top: calc(max(8px, env(safe-area-inset-top)) + 160px);
+  /* [plan4:UX-5] just under the measured status row (HUD.ts publishes --hud-top-h); 150px until the first measurement */
+  top: calc(var(--hud-top-h, 150px) + 6px);
   inset-inline: 0;
   display: flex;
   flex-direction: column;
@@ -527,9 +540,14 @@ body.placement-mode #game-canvas { cursor: crosshair; }
   transform: translateY(-8px);
   transition: opacity 0.25s, transform 0.25s;
 }
-.toast.in { opacity: 1; transform: translateY(0); }
 .toast.good { border-color: rgba(77, 255, 143, 0.6); }
-.toast.bad { border-color: rgba(255, 85, 85, 0.7); }
+.toast.bad, .toast.critical { border-color: rgba(255, 85, 85, 0.7); }
+.toast.critical { border-width: 2px; }
+/* [plan4:UX-9] The player can swipe a toast away (Toast.ts moves it with --dx); the counter shows merged repeats ("x3"). */
+.toast { pointer-events: auto; touch-action: none; transform: translate(var(--dx, 0px), -8px); }
+.toast.in { opacity: 1; transform: translate(var(--dx, 0px), 0); }
+.toast.dragging { transition: none; }
+.toast-count { margin-inline-start: 8px; font-weight: 700; font-variant-numeric: tabular-nums; opacity: 0.85; unicode-bidi: isolate; }
 
 ::-webkit-scrollbar { width: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
@@ -580,7 +598,8 @@ body.placement-mode #game-canvas { cursor: crosshair; }
   background: radial-gradient(ellipse at 50% 40%, #2a2418 0%, #14110c 60%, #0a0907 100%);
   display: flex;
   flex-direction: column;
-  padding: max(10px, env(safe-area-inset-top)) 10px max(10px, env(safe-area-inset-bottom));
+  /* [plan4:UX-6] all four sides: in landscape the notch is on the left or right */
+  padding: max(10px, env(safe-area-inset-top)) max(10px, env(safe-area-inset-right)) max(10px, env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left));
   gap: 8px;
   opacity: 0;
   pointer-events: none;
@@ -592,6 +611,7 @@ body.placement-mode #game-canvas { cursor: crosshair; }
 .surface-header .sheet-title { margin: 0; }
 .surface-close { position: absolute; inset-inline-end: 0; font-size: calc(16px * var(--fs, 1)); }
 .surface-missions { display: flex; flex-direction: column; gap: 6px; max-height: 22vh; overflow-y: auto; }
+@supports (height: 100dvh) { .surface-missions { max-height: 22dvh; } .surface-card { max-height: 42dvh; } }
 .mission-row { background: rgba(0, 0, 0, 0.35); border: 1px solid var(--border); border-radius: var(--radius); padding: 6px 10px; display: flex; flex-direction: column; gap: 4px; }
 .mission-name { font-size: calc(12px * var(--fs, 1)); font-weight: 600; }
 .surface-map { flex: 1; min-height: 0; overflow: auto; display: flex; align-items: safe center; justify-content: safe center; touch-action: pan-x pan-y; }
@@ -600,7 +620,8 @@ body.placement-mode #game-canvas { cursor: crosshair; }
 .surface-map svg { position: relative; display: block; width: 100%; height: 100%; }
 .surface-map .hex { cursor: pointer; }
 .surface-map .hex polygon { transition: filter 0.15s; }
-.surface-map .hex:hover polygon { stroke: rgba(255, 255, 255, 0.55); stroke-width: 1.5; }
+/* [plan4:UX-7] hover only where there is a real hover: on a phone a tap left the last hex highlighted (sticky :hover). */
+@media (hover: hover) { .surface-map .hex:hover polygon { stroke: rgba(255, 255, 255, 0.55); stroke-width: 1.5; } }
 .surface-map .hex.fog { cursor: default; }
 .hex-icon { font-size: calc(13px * var(--fs, 1)); pointer-events: none; }
 .hex-q { font-size: calc(11px * var(--fs, 1)); font-weight: 700; fill: rgba(255, 255, 255, 0.55); pointer-events: none; }

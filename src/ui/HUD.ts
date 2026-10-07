@@ -6,6 +6,9 @@ import { timeOfDay } from '../data/dayCycle';
 import { i18n } from '../i18n/I18nManager';
 import { RESOURCE_ICONS, el, setRich } from './dom';
 import { bedsBuilt } from '../systems/BuildingSystem';
+import { subscribeA11y, getA11y } from '../utils/a11y';
+import { setHudInsets } from '../utils/hudInsets';
+import { initViewportUi } from './viewportUi';
 
 /** [Long game] Components and alloys join the row from their Act on (the row then has four columns). */
 const VISIBLE_RESOURCES: ResourceType[] = ['food', 'water', 'power', 'materials', 'medicine', 'knowledge', 'scrap', 'components', 'alloys', 'data', 'influence', 'seedCores'];
@@ -66,6 +69,47 @@ export class HUD {
     this.createTopBar();
     this.createBanners();
     this.createBottomNav();
+    this.watchLayout();
+    initViewportUi();
+  }
+
+  private resizeObs: ResizeObserver | null = null;
+  private unsubA11y: (() => void) | null = null;
+  private nav!: HTMLElement;
+
+  /**
+   * [plan4:UX-5] Measures the real HUD bands (they change with the text size, the banners and the safe areas) and publishes them
+   * (utils/hudInsets.ts: `window.__hudInsets`, --hud-top-h, --nav-h). From a text size of 1.25 the resource row becomes 2x2: that is
+   * a class on the bar, because a stylesheet cannot compare a custom property's number in a media query.
+   */
+  private watchLayout(): void {
+    const sync = (): void => {
+      this.topBar.classList.toggle('fs-big', getA11y().textScale >= 1.25);
+    };
+    sync();
+    this.unsubA11y = subscribeA11y(sync);
+    const measure = (): void => {
+      const vh = window.innerHeight;
+      // The compact landscape layout (touch.css) turns the status row and the nav into full-height side columns: they take
+      // nothing from the top or bottom band then (the camera's side bands are a later concern), so the heights are 0.
+      const isColumn = (r: DOMRect): boolean => r.height > vh * 0.8;
+      const topRect = this.topBar.getBoundingClientRect();
+      let top = isColumn(topRect) ? 0 : topRect.bottom;
+      for (const b of [this.powerBanner, this.incidentBanner, this.placementBanner]) {
+        if (b.style.display !== 'none') top = Math.max(top, b.getBoundingClientRect().bottom);
+      }
+      const navRect = this.nav.getBoundingClientRect();
+      const bottom = isColumn(navRect) ? 0 : vh - navRect.top;
+      const objRect = this.objectiveEl.getBoundingClientRect();
+      // The strip sits just above the nav console (or at the bottom edge in landscape): what it adds is the gap from its top to the band.
+      const objective = this.objectiveEl.style.display === 'none' ? 0 : Math.max(0, vh - bottom - objRect.top);
+      setHudInsets({ top, bottom, objective });
+    };
+    if (typeof ResizeObserver === 'undefined') { measure(); return; }
+    this.resizeObs = new ResizeObserver(measure);
+    for (const n of [this.topBar, this.nav, this.objectiveEl, this.powerBanner, this.incidentBanner, this.placementBanner]) this.resizeObs.observe(n);
+    window.addEventListener('resize', measure);
+    measure();
   }
 
   private createTopBar(): void {
@@ -108,7 +152,7 @@ export class HUD {
     topBar.appendChild(this.moreBtn);
 
     const infoRow = el('div', 'info-row');
-    const pop = el('div', 'info-item');
+    const pop = el('div', 'info-item info-tap');
     this.popValue = el('span', 'info-value', '0/0');
     this.arrivalValue = el('span', 'info-arrival');
     this.arrivalValue.dir = 'ltr';
@@ -271,6 +315,7 @@ export class HUD {
 
   private createBottomNav(): void {
     const nav = el('div', 'hud-bottom');
+    this.nav = nav;
     const buttons: { key: NavKey; icon: string }[] = [
       { key: 'build', icon: '[[build]]' },
       { key: 'people', icon: '[[people]]' },
@@ -304,7 +349,9 @@ export class HUD {
       this.onMenu?.();
     });
     nav.appendChild(menu);
-    this.container.appendChild(nav);
+    // [plan4:UX-8] The console lives on <body>, not inside #hud: #hud is its own stacking context (z 10), under the sheets (z 20),
+    // and the nav has to stay visible and tappable above an open sheet so a tab swaps the panel without closing it first.
+    document.body.appendChild(nav);
   }
 
   private incidentBanner!: HTMLButtonElement;
@@ -458,6 +505,9 @@ export class HUD {
   }
 
   destroy(): void {
+    this.resizeObs?.disconnect();
+    this.unsubA11y?.();
+    this.nav.remove();
     this.container.remove();
   }
 }

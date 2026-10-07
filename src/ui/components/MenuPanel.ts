@@ -313,8 +313,9 @@ export class MenuPanel {
   /**
    * [plan4:AC-1] The accessibility tab. Every control writes through utils/a11y.ts (the single source), which applies it to the page.
    * Still to come, and therefore not shown yet (each needs its own implementation before a switch for it is honest):
-   * flash budget (flash), contrast (contrast), colour-blind modes (colorMode), one-hand mode (oneHand), large touch targets
-   * (largeTargets), popup density (popups), sound captions (captions), screen-reader announcements (announce), power saver (powerSaver).
+   * flash budget (flash), contrast (contrast), colour-blind modes (colorMode), popup density (popups), sound captions (captions),
+   * screen-reader announcements (announce), power saver (powerSaver). [plan4:AC-12] One-hand mode and large touch targets are live
+   * (styles/touch.css keys off data-onehand / data-large on <html>).
    */
   private renderA11y(): HTMLElement {
     const box = el('div', 'bp');
@@ -354,8 +355,19 @@ export class MenuPanel {
       }));
     const motionRow = cycleRow('[[sparkle]]', 'a11y.motion', ['auto', 'reduced', 'full'] as const, a.motion, 'a11y.motion', v => setA11y({ motion: v }));
 
+    // [plan4:AC-12] One-hand mode: which thumb; large targets: every touch target at least 52 px.
+    const oneHandRow = cycleRow('[[hand]]', 'a11y.oneHand', ['off', 'right', 'left'] as const, a.oneHand, 'a11y.oneHand', v => setA11y({ oneHand: v }));
+    const largeRow = el('div', 'bp-row');
+    largeRow.append(el('span', '', `[[hand]] ${i18n.t('a11y.largeTargets')}`),
+      button(i18n.t(a.largeTargets ? 'settings.on' : 'settings.off'), 'btn-small', () => {
+        uiSound('switch');
+        setA11y({ largeTargets: !a.largeTargets });
+        redraw();
+      }));
+
     card.append(hapticsRow, el('div', 'bp-hint', i18n.t('a11y.hapticsHint')), silentRow, el('div', 'bp-hint', i18n.t('a11y.playInSilentHint')),
-      textRow, motionRow, el('div', 'bp-hint', i18n.t('a11y.motionHint')));
+      textRow, motionRow, el('div', 'bp-hint', i18n.t('a11y.motionHint')),
+      oneHandRow, el('div', 'bp-hint', i18n.t('a11y.oneHandHint')), largeRow, el('div', 'bp-hint', i18n.t('a11y.largeTargetsHint')));
     box.appendChild(card);
     return box;
   }
