@@ -17,6 +17,15 @@ export const PAINT_RIGHT = BUILDING_W + 260;
 export const SURFACE_EAST = 1500;
 export const WORLD_RIGHT = PAINT_RIGHT + SURFACE_EAST;
 export const SKY_TOP = -300;
+
+/**
+ * [plan4:ST-4] The world's west edge for a bunker whose widest west wing is `maxW` slots: the classic WORLD_LEFT, or 260 units beyond the wing's
+ * outer wall. The rock, the topsoil, the ground line and the surface's dark edge all start here, so a wing never ends against empty sky.
+ * (The east side needs no such help: the surface already runs 1500 units past the bunker for the project lots, wider than the 22-slot cap.)
+ */
+export function worldLeft(maxW: number): number {
+  return Math.min(WORLD_LEFT, slotX(-maxW) - 260);
+}
 const ENTRANCE_H = 52;
 
 const signStyle = new TextStyle({ fontFamily: 'Rubik, sans-serif', fontSize: 11, fontWeight: '700', fill: 0xf2e6c8 });
@@ -30,11 +39,11 @@ export interface Animated {
  * Everything above ground: the era's painted panorama (or a drawn skyline while it loads),
  * rubble and the bunker's entrance block.
  */
-export function buildSurface(backdrop: Texture | null = null, rayTexture: Texture | null = null, rayColor = 0xffe2b8): Animated {
+export function buildSurface(backdrop: Texture | null = null, rayTexture: Texture | null = null, rayColor = 0xffe2b8, left = WORLD_LEFT): Animated {
   const root = new Container();
   const g = new Graphics();
   const rnd = seeded(77);
-  const w = WORLD_RIGHT - WORLD_LEFT;
+  const w = WORLD_RIGHT - left; // [plan4:ST-4]
   // Volumetric light: slow sun shafts falling through the haze over the ruins.
   const rays = new Container();
   rays.blendMode = 'add';
@@ -63,9 +72,9 @@ export function buildSurface(backdrop: Texture | null = null, rayTexture: Textur
     const scale = (PAINT_RIGHT - WORLD_LEFT + 40) / backdrop.width;
     painted.scale.set(scale);
     painted.position.set(WORLD_LEFT - 20, -backdrop.height * scale * 0.84);
-    g.rect(WORLD_LEFT, SKY_TOP - 400, w, painted.y - SKY_TOP + 404).fill(0x0c0b10);
+    g.rect(left, SKY_TOP - 400, w, painted.y - SKY_TOP + 404).fill(0x0c0b10);
   } else {
-    g.rect(WORLD_LEFT, SKY_TOP, w, -SKY_TOP).fill(vGradient([[0, 0x14101e], [0.55, 0x3a2430], [0.85, 0x7a4a2e], [1, 0x9a6a3a]]));
+    g.rect(left, SKY_TOP, w, -SKY_TOP).fill(vGradient([[0, 0x14101e], [0.55, 0x3a2430], [0.85, 0x7a4a2e], [1, 0x9a6a3a]]));
     softGlow(sun, BUILDING_W * 0.78, -150, 170, 120, 0xff8a4a, 0.35);
     sun.circle(BUILDING_W * 0.78, -150, 26).fill({ color: 0xffb070, alpha: 0.55 });
     sun.blendMode = 'add';
@@ -73,7 +82,7 @@ export function buildSurface(backdrop: Texture | null = null, rayTexture: Textur
 
   // Two layers of ruined skyline (only while the painted panorama is missing).
   for (const [layer, base, color] of (backdrop ? [] : [[0, -110, 0x2a1e24], [1, -60, 0x1c1418]]) as [number, number, number][]) {
-    let x = WORLD_LEFT;
+    let x = left;
     while (x < WORLD_RIGHT) {
       const bw = 26 + rnd() * 50;
       const bh = (layer ? 30 : 60) + rnd() * (layer ? 50 : 90);
@@ -91,9 +100,9 @@ export function buildSurface(backdrop: Texture | null = null, rayTexture: Textur
     }
   }
   // Ground line with rubble, a dead tree and a wrecked car.
-  g.rect(WORLD_LEFT, -8, w, 10).fill(0x4a3a2a);
+  g.rect(left, -8, w, 10).fill(0x4a3a2a);
   for (let i = 0; i < 70; i++) {
-    const x = WORLD_LEFT + rnd() * w, s = 2 + rnd() * 6;
+    const x = left + rnd() * w, s = 2 + rnd() * 6;
     g.poly([x, -6, x + s, -6 - s * 0.7, x + s * 2, -6]).fill(shade(0x6a5a48, 0.7 + rnd() * 0.5));
   }
   const tx = BUILDING_W - 60;
@@ -152,7 +161,7 @@ export function buildSurface(backdrop: Texture | null = null, rayTexture: Textur
  */
 export function buildUnderground(
   floors: number, locale: string, gloom = 0.3, rock: Texture | null = null, districts: number[] = [], casing: Container | null = null,
-  exts: readonly Ext[] = [],
+  exts: readonly Ext[] = [], districtXs: readonly number[] = [],
 ): Container {
   const root = new Container();
   const g = new Graphics();
@@ -160,7 +169,7 @@ export function buildUnderground(
   const bottom = floorTop(floors) + 170;
   // [plan4:ST-4] The rock reaches further west only when a wing needs it (the plain bunker keeps the classic world edge).
   const maxW = exts.reduce((m, x) => Math.max(m, x.w), 0), maxE = exts.reduce((m, x) => Math.max(m, x.e), BASE_EAST);
-  const WORLD_LEFT_U = Math.min(WORLD_LEFT, slotX(-maxW) - 260);
+  const WORLD_LEFT_U = worldLeft(maxW);
   const extOf = (f: number): Ext => exts[f] ?? { w: 0, e: BASE_EAST };
   const w = WORLD_RIGHT - WORLD_LEFT_U;
   // gfx-p0 light: the rock layers sit behind the casing (they used to darken it too), and the earth carries on
@@ -226,21 +235,24 @@ export function buildUnderground(
   }
 
   // Tunnels through the east casing into each district, with the dug-out hollow around the cavern.
-  for (const f of districts) {
+  for (let di = 0; di < districts.length; di++) {
+    const f = districts[di];
+    // [plan4:ST-4] The cut-out follows the district's own x (geom buildingX; the classic DISTRICT_X until the Architect moves it) and starts at the floor's own east wall.
+    const dX = districtXs[di] ?? DISTRICT_X, tx0 = slotX(extOf(f).e);
     const top = floorTop(f);
     const dw = 4 * SLOT_W;
     const hollow: number[] = [];
     for (let i = 0; i <= 12; i++) {
       const a = (i / 12) * Math.PI * 2;
-      hollow.push(DISTRICT_X + dw / 2 + Math.cos(a) * (dw / 2 + 10 + rnd() * 6), top + ROOM_H / 2 + Math.sin(a) * (ROOM_H / 2 + 8 + rnd() * 5));
+      hollow.push(dX + dw / 2 + Math.cos(a) * (dw / 2 + 10 + rnd() * 6), top + ROOM_H / 2 + Math.sin(a) * (ROOM_H / 2 + 8 + rnd() * 5));
     }
     g.poly(hollow).fill({ color: 0x0c0a08, alpha: 0.85 });
-    g.rect(BUILDING_W - 4, top + ROOM_H * 0.3, DISTRICT_X - BUILDING_W + 8, ROOM_H * 0.7).fill(0x100c0a);
-    for (const x of [BUILDING_W + 2, DISTRICT_X - 4]) {
+    g.rect(tx0 - 4, top + ROOM_H * 0.3, dX - tx0 + 8, ROOM_H * 0.7).fill(0x100c0a);
+    for (const x of [tx0 + 2, dX - 4]) {
       g.rect(x, top + ROOM_H * 0.3, 3, ROOM_H * 0.7).fill(0x5a4026);
     }
-    g.rect(BUILDING_W, top + ROOM_H * 0.3, DISTRICT_X - BUILDING_W + 2, 3).fill(0x5a4026);
-    g.circle((BUILDING_W + DISTRICT_X) / 2, top + ROOM_H * 0.36, 1.6).fill(0xffc070);
+    g.rect(tx0, top + ROOM_H * 0.3, dX - tx0 + 2, 3).fill(0x5a4026);
+    g.circle((tx0 + dX) / 2, top + ROOM_H * 0.36, 1.6).fill(0xffc070);
   }
 
   // Concrete casing around the whole bunker (the painted kit draws its own when given).
