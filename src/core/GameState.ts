@@ -105,6 +105,8 @@ export interface SurvivorState {
   /** [LateGame B3] Mastery: seconds of work in a role (rank 1-5 derives from it), and the specialization chosen at rank 5. */
   mxp?: number;
   spec?: string;
+  /** [plan4:X-3] Seconds of schooling a child has had (reserved; optional, absent in older saves). */
+  schoolTime?: number;
 }
 
 export interface ResearchNode {
@@ -336,6 +338,31 @@ export interface Ruin {
   cost?: Partial<Record<ResourceType, number>>;
 }
 
+/**
+ * [plan4:X-3] The bunker's shape beyond the vertical shaft. Additive since save v7; every part defaults to "nothing built".
+ *  ext         per-floor side wings, keyed by floor index as a string: w = slots dug west of the shaft, e = slots east of it
+ *  doors       bulkhead state by door id
+ *  infra       corridors, stairs, ventilation shafts and similar: kind, floor, x slot (floors = how many floors it spans)
+ *  surfaceOpen the gate-house row above ground is open
+ */
+export interface LayoutState {
+  v: 1;
+  ext: Record<string, { w: number; e: number }>;
+  doors: Record<string, 'open' | 'closed' | 'sealed'>;
+  infra: Array<{ id: string; kind: string; floor: number; x: number; floors?: number }>;
+  surfaceOpen: boolean;
+}
+
+export function createLayout(): LayoutState {
+  return { v: 1, ext: {}, doors: {}, infra: [], surfaceOpen: false };
+}
+
+/** [plan4:X-3] How far a floor reaches: the saved wing sizes, or no west wing and the classic 12 slots east. */
+export function floorExtent(state: Pick<GameState, 'layout'>, floor: number): { w: number; e: number } {
+  const x = state.layout?.ext?.[String(floor)];
+  return x ? { w: x.w, e: x.e } : { w: 0, e: 12 };
+}
+
 export interface GameState {
   version: number;
   timestamp: number;
@@ -362,6 +389,8 @@ export interface GameState {
   achievements: string[];
   storyFlags: string[];
   currentFloors: number;
+  /** [plan4:X-3] Side wings, doors, infrastructure and the surface row (save v7; see LayoutState). */
+  layout: LayoutState;
   maxPopulation: number;
   /** [reserved: saved, not used yet] */
   tensionValue: number;
@@ -441,8 +470,11 @@ export function createLateGame(): LateGameState {
   };
 }
 
-/** v6: the Chronicle (longGame.chronicle) and the standing orders added by the balance plan; a v5 save is kept once as lastbunker_auto_v5 before it migrates. */
-export const SAVE_VERSION = 6;
+/**
+ * v7 (plan 4): additive `layout` (side wings, doors, infrastructure, surface row); a v6 save is kept once as lastbunker_auto_v6 before it migrates.
+ * v6: the Chronicle (longGame.chronicle) and the standing orders added by the balance plan; a v5 save is kept once as lastbunker_auto_v5 before it migrates.
+ */
+export const SAVE_VERSION = 7;
 
 export function migrateState(saved: GameState): GameState {
   const fresh = createInitialState();
@@ -451,6 +483,8 @@ export function migrateState(saved: GameState): GameState {
   merged.resources = { ...fresh.resources, ...saved.resources };
   merged.version = fresh.version;
   merged.currentFloors = Math.max(saved.currentFloors ?? 1, fresh.currentFloors);
+  // [plan4:X-3] v7: no wings, doors or infrastructure yet; a partial layout keeps what it has.
+  merged.layout = { ...createLayout(), ...(saved.layout ?? {}), v: 1 };
   if ((saved.version ?? 1) < 4) {
     // Bunkers from before the restoration update were never ruined and have already been "entered".
     merged.ruins = [];
@@ -543,6 +577,7 @@ export function createInitialState(): GameState {
     achievements: [],
     storyFlags: [],
     currentFloors: 3,
+    layout: createLayout(),
     maxPopulation: 0,
     tensionValue: 0,
     lastEventTime: now,
