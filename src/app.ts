@@ -250,7 +250,7 @@ export class GameApp {
       showTipsAgain: () => { this.tips.reset(); this.toasts.show(`[[hand]] ${i18n.t('settings.tipsReset')}`, 'good'); }, // [plan4:UX-11]
       replayIntro: () => { this.closeSheets(); this.story.replayIntro(); },
       redeemCoupon: (code: string) => { // the coupon sheet: pick how much to skip or add
-        if (!couponValid(code)) return false;
+        if (!couponValid(code) || !new URLSearchParams(location.search).has('debug')) return false; // [plan4:GP-12] the code only works on a ?debug page
         this.closeSheets();
         this.couponPanel.show();
         return true;

@@ -256,28 +256,8 @@ export class MenuPanel {
     general.append(lang, sound, music, fx, gfx, gfxHint, bright, textSize, notify, notifyHint, diag);
     box.appendChild(general);
 
-    const coupon = el('div', 'bp-card');
-    coupon.appendChild(el('div', 'bp-section-title', `[[gift]] ${i18n.t('coupon.code')}`));
-    const codeRow = el('div', 'btn-row');
-    const code = el('input', 'coupon-code');
-    code.type = 'text';
-    code.autocomplete = 'off';
-    code.spellcheck = false;
-    code.placeholder = i18n.t('coupon.placeholder');
-    code.setAttribute('aria-label', i18n.t('coupon.code'));
-    const redeem = () => {
-      if (!code.value.trim()) return;
-      if (this.actions.redeemCoupon(code.value)) code.value = '';
-      else {
-        uiSound('cancel');
-        code.classList.add('bad');
-        setTimeout(() => code.classList.remove('bad'), 900);
-      }
-    };
-    code.addEventListener('keydown', e => { if (e.key === 'Enter') redeem(); });
-    codeRow.append(code, button(i18n.t('coupon.redeem'), 'btn-small', redeem));
-    coupon.appendChild(codeRow);
-    box.appendChild(coupon);
+    const coupon = this.renderCouponBlock(); // [plan4:GP-12] only with ?debug
+    if (coupon) box.appendChild(coupon);
 
     const saves = el('div', 'bp-card');
     saves.appendChild(el('div', 'bp-section-title', `[[save]] ${i18n.t('settings.save')}`));
@@ -332,6 +312,36 @@ export class MenuPanel {
     danger.appendChild(button(`[[warning]] ${i18n.t('settings.newGame')}`, 'btn-ghost danger-btn', () => this.actions.newGame()));
     box.appendChild(danger);
     return box;
+  }
+
+  /**
+   * [plan4:GP-12] The coupon code entry is a developer/tester tool: it is shown only on a page opened with ?debug (the code is BUNKER17;
+   * the sheet it opens is unchanged). Players never see it; app.ts also refuses the code without ?debug.
+   */
+  private renderCouponBlock(): HTMLElement | null {
+    if (!new URLSearchParams(location.search).has('debug')) return null;
+    const coupon = el('div', 'bp-card');
+    coupon.appendChild(el('div', 'bp-section-title', `[[gift]] ${i18n.t('coupon.code')}`));
+    const codeRow = el('div', 'btn-row');
+    const code = el('input', 'coupon-code');
+    code.type = 'text';
+    code.autocomplete = 'off';
+    code.spellcheck = false;
+    code.placeholder = i18n.t('coupon.placeholder');
+    code.setAttribute('aria-label', i18n.t('coupon.code'));
+    const redeem = () => {
+      if (!code.value.trim()) return;
+      if (this.actions.redeemCoupon(code.value)) code.value = '';
+      else {
+        uiSound('cancel');
+        code.classList.add('bad');
+        setTimeout(() => code.classList.remove('bad'), 900);
+      }
+    };
+    code.addEventListener('keydown', e => { if (e.key === 'Enter') redeem(); });
+    codeRow.append(code, button(i18n.t('coupon.redeem'), 'btn-small', redeem));
+    coupon.appendChild(codeRow);
+    return coupon;
   }
 
   /**
