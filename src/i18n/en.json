@@ -406,6 +406,7 @@
   "build.rec.food": "Food is short",
   "build.rec.beds": "Almost out of beds",
   "build.rec.morale": "Spirits are low",
+  "build.rec.kids": "Children need a place",
   "build.unlocksWith": "Unlocked by research: {name}",
   "build.unlocksWithAct": "Unlocked by research: {name} (from Act {n})",
   "build.needsFlag": "Opens after a story event",

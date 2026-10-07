@@ -22,7 +22,7 @@ export function recommendedRooms(state: GameState, canBuild: (type: BuildingType
       out.push({ type, why });
     }
   };
-  if ((state.powerRatio ?? 1) < 0.99 || net(state, 'power') < 0.5) add('build.rec.power', ['generator', 'reactor']);
+  if ((state.powerRatio ?? 1) < 0.99 || net(state, 'power') < 0.5) add('build.rec.power', ['generator', 'reactor', 'solarArray', 'windTurbine']); // [plan4:BL-16/17] roof power after the fuel plants
   const p = state.resources.power;
   if (p && p.cap > 0 && p.amount < p.cap * 0.25 && net(state, 'power') >= 0.5) add('build.rec.battery', ['batteryBank']);
   if (net(state, 'water') < 0.2) add('build.rec.water', ['waterPump', 'condenser', 'waterPurifier']);
@@ -32,5 +32,8 @@ export function recommendedRooms(state: GameState, canBuild: (type: BuildingType
     const mood = state.survivors.reduce((s, x) => s + x.happiness, 0) / state.survivors.length;
     if (mood < 55) add('build.rec.morale', ['commons', 'canteen']);
   }
+  // [plan4:BL-26/30] Children need a place of their own: a nursery first, then a school.
+  if (state.survivors.some(x => x.child) && !state.buildings.some(b => b.type === 'nursery')) add('build.rec.kids', ['nursery']);
+  else if (state.survivors.filter(x => x.child).length >= 3 && !state.buildings.some(b => b.type === 'school')) add('build.rec.kids', ['school']);
   return out;
 }

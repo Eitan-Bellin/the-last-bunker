@@ -406,6 +406,7 @@
   "build.rec.food": "האוכל חסר",
   "build.rec.beds": "כמעט נגמרו המיטות",
   "build.rec.morale": "הרוח נמוכה",
+  "build.rec.kids": "לילדים אין מקום משלהם",
   "build.unlocksWith": "נפתח במחקר: {name}",
   "build.unlocksWithAct": "נפתח במחקר: {name} (ממערכה {n})",
   "build.needsFlag": "נפתח אחרי אירוע בסיפור",
