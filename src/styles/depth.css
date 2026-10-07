@@ -241,3 +241,15 @@
 .exp-time { color: var(--text-secondary); font-family: monospace; direction: ltr; }
 .exp-entry.event .exp-text { color: #ffd27a; }
 .exp-entry.choice .exp-text { color: var(--phosphor); }
+
+/* ---------- [plan4:ST-8] District choice cards ---------- */
+.district-choice { display: flex; flex-direction: column; gap: 8px; text-align: start; }
+.district-card {
+  display: flex; flex-direction: column; gap: 4px; align-items: flex-start; text-align: start; width: 100%;
+  min-height: 44px; padding: 10px 12px; border-radius: 8px; cursor: pointer;
+  background: var(--bg-card-hi); color: var(--text-primary); border: 2px solid var(--border, transparent); font: inherit;
+}
+.district-card.selected { border-color: var(--amber); }
+.district-card-name { font-weight: 700; font-size: calc(14px * var(--fs, 1)); }
+.district-card-floor { font-size: calc(11px * var(--fs, 1)); color: var(--text-secondary); }
+.district-card-find { font-size: calc(12px * var(--fs, 1)); line-height: 1.4; color: var(--text-secondary); }

@@ -1,7 +1,7 @@
 import { i18n } from '../../i18n/I18nManager';
 import { RESOURCE_ICONS, costRow, el } from '../../ui/dom';
 import { floorExtent, type ResourceType } from '../../core/GameState';
-import { districtDef, nextDistrict } from '../../data/districts';
+import { availableDistricts, districtDef, nextDistrict, type DistrictDef, type DistrictKind } from '../../data/districts';
 import { maxEast, maxWest, wingOptions } from '../../data/wings';
 import type { GameApp } from '../../app';
 
@@ -32,7 +32,8 @@ export class DigController {
     const next = nextDistrict(state);
     this.app.renderer.setDistrictSign(next ? {
       floor: next.floor,
-      text: i18n.t('district.dig', { name: next.name[i18n.currentLocale] }),
+      slot: floorExtent(state, next.floor).e, // [plan4:ST-8]
+      text: availableDistricts(state).length > 1 ? i18n.t('district.digMany', { n: availableDistricts(state).length }) : i18n.t('district.dig', { name: next.name[i18n.currentLocale] }),
       cost: (Object.entries(next.cost) as [ResourceType, number][]).map(([r, v]) => `${RESOURCE_ICONS[r] ?? ''} ${v}`).join('   '),
     } : null);
   }
@@ -141,33 +142,59 @@ export class DigController {
     });
   }
 
-  /** Tunnel sideways into the next natural cavern. */
-  confirmDistrictDig(): void {
+  /**
+   * Tunnel sideways into a natural cavern. [plan4:ST-8] One kind on offer opens the old single dialog; several (the new districts) open a small
+   * card list to choose from, and the price of the chosen card is on the button.
+   */
+  confirmDistrictDig(picked?: DistrictKind): void {
     const state = this.app.state;
-    const next = nextDistrict(state);
-    if (!next) return;
-    const affordable = this.app.engine.resourceSystem.canAfford(state, next.cost as Record<string, number>);
+    const options = availableDistricts(state);
+    if (options.length === 0) return;
+    const locale = i18n.currentLocale;
+    const chosen = options.find(d => d.kind === picked) ?? options[0];
+    const dig = (d: DistrictDef) => {
+      this.app.modal.hide();
+      if (!this.app.engine.resourceSystem.spend(this.app.engine.stateManager, d.cost as Record<string, number>)) return;
+      const b = this.app.engine.buildingSystem.digDistrict(this.app.engine.stateManager, d.kind);
+      this.app.engine.requestSave();
+      this.app.audio.play('drill');
+      if (b) {
+        const c = this.app.renderer.roomCenter(b);
+        this.app.renderer.focusOn(c.x, c.y + 26, 1.3);
+      }
+    };
+    let body: string | HTMLElement = i18n.t('district.body', { floor: chosen.floor + 1 });
+    if (options.length > 1) {
+      const list = el('div', 'district-choice');
+      list.setAttribute('role', 'radiogroup');
+      list.setAttribute('aria-label', i18n.t('district.choose'));
+      for (const d of options) {
+        const card = el('button', `district-card${d === chosen ? ' selected' : ''}`);
+        card.type = 'button';
+        card.setAttribute('role', 'radio');
+        card.setAttribute('aria-checked', d === chosen ? 'true' : 'false');
+        card.append(
+          el('span', 'district-card-name', `[[${d.icon}]] ${d.name[locale]}`),
+          el('span', 'district-card-floor', i18n.t('district.cardFloor', { floor: d.floor + 1 })),
+          el('span', 'district-card-find', d.find[locale]),
+          costRow(state, d.cost as Record<string, number>),
+        );
+        card.addEventListener('click', () => this.confirmDistrictDig(d.kind));
+        list.appendChild(card);
+      }
+      body = list;
+    }
     this.app.modal.show({
       icon: '[[pick]]',
       title: i18n.t('district.title'),
-      body: i18n.t('district.body', { floor: next.floor + 1 }),
+      body,
       actions: [
         {
-          label: i18n.t('district.yes'),
+          label: options.length > 1 ? i18n.t('district.yesNamed', { name: chosen.name[locale] }) : i18n.t('district.yes'),
           className: 'btn-primary',
-          disabled: !affordable,
-          detail: costRow(state, next.cost as Record<string, number>),
-          onClick: () => {
-            this.app.modal.hide();
-            if (!this.app.engine.resourceSystem.spend(this.app.engine.stateManager, next.cost as Record<string, number>)) return;
-            const b = this.app.engine.buildingSystem.digDistrict(this.app.engine.stateManager, next.kind);
-            this.app.engine.requestSave();
-            this.app.audio.play('drill');
-            if (b) {
-              const c = this.app.renderer.roomCenter(b);
-              this.app.renderer.focusOn(c.x, c.y + 26, 1.3);
-            }
-          },
+          disabled: !this.app.engine.resourceSystem.canAfford(state, chosen.cost as Record<string, number>),
+          detail: costRow(state, chosen.cost as Record<string, number>),
+          onClick: () => dig(chosen),
         },
         { label: i18n.t('placement.cancel'), className: 'btn-secondary', onClick: () => this.app.modal.hide() },
       ],

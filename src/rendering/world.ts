@@ -2,7 +2,7 @@ import { Container, Graphics, Rectangle, Sprite, Text, TextStyle, Texture, Tilin
 import type { BuildingInstance } from '../core/GameState';
 import { getDef, isDistrict, isHall, roomSlots } from '../data/buildingDefs';
 import { needsWater, zoneForFloor } from '../data/zones';
-import { BASE_EAST, BUILDING_W, DEPTH_TOP, DEPTH_X, DISTRICT_X, ROOMS_W, ROOMS_X, ROOM_H, SHAFT_GAP, SHAFT_W, SLAB, SLOT_W, TOPSOIL, floorTop, slotX, type Ext } from './layout';
+import { BASE_EAST, BUILDING_W, DEPTH_TOP, DEPTH_X, ROOMS_W, ROOMS_X, ROOM_H, SHAFT_GAP, SHAFT_W, SLAB, SLOT_W, TOPSOIL, districtXAt, floorTop, slotX, type Ext } from './layout';
 import { block, hGradient, seeded, shade, softGlow, vGradient } from './draw';
 import { lineWidth, richLine } from './richText';
 import { steelTag } from './signage';
@@ -150,7 +150,7 @@ export function buildSurface(backdrop: Texture | null = null, rayTexture: Textur
  */
 export function buildUnderground(
   floors: number, locale: string, gloom = 0.3, rock: Texture | null = null, districts: number[] = [], casing: Container | null = null,
-  exts: readonly Ext[] = [],
+  exts: readonly Ext[] = [], districtSlot: Readonly<Record<number, number>> = {},
 ): Container {
   const root = new Container();
   const g = new Graphics();
@@ -222,18 +222,20 @@ export function buildUnderground(
   for (const f of districts) {
     const top = floorTop(f);
     const dw = 4 * SLOT_W;
+    // [plan4:ST-8] The tunnel runs from the end of the floor (its east casing) to the cavern, which sits wherever the district's own position says.
+    const wallX = slotX(districtSlot[f] ?? BASE_EAST), dx = districtXAt(districtSlot[f] ?? BASE_EAST);
     const hollow: number[] = [];
     for (let i = 0; i <= 12; i++) {
       const a = (i / 12) * Math.PI * 2;
-      hollow.push(DISTRICT_X + dw / 2 + Math.cos(a) * (dw / 2 + 10 + rnd() * 6), top + ROOM_H / 2 + Math.sin(a) * (ROOM_H / 2 + 8 + rnd() * 5));
+      hollow.push(dx + dw / 2 + Math.cos(a) * (dw / 2 + 10 + rnd() * 6), top + ROOM_H / 2 + Math.sin(a) * (ROOM_H / 2 + 8 + rnd() * 5));
     }
     g.poly(hollow).fill({ color: 0x0c0a08, alpha: 0.85 });
-    g.rect(BUILDING_W - 4, top + ROOM_H * 0.3, DISTRICT_X - BUILDING_W + 8, ROOM_H * 0.7).fill(0x100c0a);
-    for (const x of [BUILDING_W + 2, DISTRICT_X - 4]) {
+    g.rect(wallX - 4, top + ROOM_H * 0.3, dx - wallX + 8, ROOM_H * 0.7).fill(0x100c0a);
+    for (const x of [wallX + 2, dx - 4]) {
       g.rect(x, top + ROOM_H * 0.3, 3, ROOM_H * 0.7).fill(0x5a4026);
     }
-    g.rect(BUILDING_W, top + ROOM_H * 0.3, DISTRICT_X - BUILDING_W + 2, 3).fill(0x5a4026);
-    g.circle((BUILDING_W + DISTRICT_X) / 2, top + ROOM_H * 0.36, 1.6).fill(0xffc070);
+    g.rect(wallX, top + ROOM_H * 0.3, dx - wallX + 2, 3).fill(0x5a4026);
+    g.circle((wallX + dx) / 2, top + ROOM_H * 0.36, 1.6).fill(0xffc070);
   }
 
   // Concrete casing around the whole bunker (the painted kit draws its own when given).

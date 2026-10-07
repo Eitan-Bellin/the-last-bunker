@@ -149,11 +149,17 @@ export function galleryExt(exts: readonly Ext[], g: number): Ext {
 
 /** Districts open beyond the east wall, past a short tunnel through the casing. */
 export const DISTRICT_GAP = 18;
+/** [plan4:ST-8] Where a district opens on a bunker without wings (position.x = BASE_EAST, which is what every older save holds): the legacy default. */
 export const DISTRICT_X = BUILDING_W + DISTRICT_GAP;
 
-/** Left edge of a room in world space (districts live outside the slot grid). */
+/** [plan4:ST-8] Left edge of a district cavern: the end of its floor (slot `slotAt`, = the floor's east extent) plus the tunnel. */
+export function districtXAt(slotAt: number): number {
+  return slotX(slotAt) + DISTRICT_GAP;
+}
+
+/** Left edge of a room in world space (a district sits past the last slot of its floor and follows its own position.x, so a wing pushes it out). */
 export function buildingX(b: { type: BuildingType; position: { x: number } }): number {
-  return isDistrict(b.type) ? DISTRICT_X : slotX(b.position.x);
+  return isDistrict(b.type) ? districtXAt(b.position.x) : slotX(b.position.x);
 }
 
 /** Height of a room: two-storey halls swallow the slab between their levels. */

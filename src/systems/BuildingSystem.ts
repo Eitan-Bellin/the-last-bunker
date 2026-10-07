@@ -7,16 +7,16 @@ import { actOf, levelCapFor } from '../data/acts';
 import { TUNING } from '../data/tuning';
 import { scenarioOf } from '../data/scenarios';
 import { actPrice, digHours, floorAct, levelAct, payableHours, upgradeHours } from '../data/pricing';
-import { districtDef, nextDistrict } from '../data/districts';
+import { availableDistricts, districtDef } from '../data/districts';
 import { WING_STEP, floorDigging, freeDigSlot, wingBlock, wingCost, wingCrew, wingOptions, wingSeconds, type WingOption } from '../data/wings';
 import type { DigState } from '../core/state/longGame';
-import { BASE_FLOORS, MAX_FLOORS, allowedFloors } from '../data/zones';
+import { BASE_FLOORS, MAX_FLOORS, allowedFloors, crossesGallery } from '../data/zones';
 import { RETOOL_PRICE_MULT, RETOOL_SECONDS, SPEC_COST, specTotal, specsFor } from '../data/specializations';
 
 /** Slots east of the shaft on a floor without a wing. [plan4:X-2] Placement reads floorExtent(state, floor); this stays exported for tools. */
 export const SLOTS_PER_FLOOR = BASE_EAST;
 
-/** Why a room cannot be placed at a spot; null = it can. 'floor' = no such floor / not placeable on the grid, 'bounds' = outside the floor's extent, 'zone' = wrong zone for the type. */
+/** Why a room cannot be placed at a spot; null = it can. 'floor' = no such floor / not placeable on the grid / a hall across a service gallery, 'bounds' = outside the floor's extent, 'zone' = wrong zone for the type. */
 export type PlaceBlock = 'floor' | 'bounds' | 'zone' | 'ruin' | 'overlap'
   // [plan4:BL-1] surface = a surface-row room off the (open) surface row, adjacency = needs a neighbour of a given type, locked = its story flag is not set, copies = the type's limit is reached
   | 'surface' | 'adjacency' | 'locked' | 'copies';
@@ -166,6 +166,7 @@ export class BuildingSystem {
     } else if (pos.floor < 0 || pos.floor + levels > state.currentFloors) return 'floor';
     if (place?.needsFlag && !state.storyFlags.includes(place.needsFlag)) return 'locked';
     if (def.maxCopies !== undefined && state.buildings.filter(b => b.type === type).length >= def.maxCopies) return 'copies';
+    if (levels > 1 && crossesGallery(pos.floor, levels)) return 'floor'; // [plan4:ST-1] "needs a floor pair without a service gallery" (placement.hallGallery)
     const allowed = allowedFloors(type, state.currentFloors);
     for (let f = pos.floor; f < pos.floor + levels; f++) if (!allowed.includes(f)) return 'zone';
     const w = roomSlots(type);
@@ -195,13 +196,13 @@ export class BuildingSystem {
 
   /** Tunnels sideways out of the east wall into the next natural cavern. */
   canDigDistrict(state: GameState): boolean {
-    return !!nextDistrict(state);
+    return availableDistricts(state).length > 0;
   }
 
   digDistrict(sm: StateManager, kind: string): BuildingInstance | null {
     const d = districtDef(kind);
     const def = getDef(kind as BuildingType);
-    if (!d || !def || nextDistrict(sm.state)?.kind !== kind) return null;
+    if (!d || !def || !availableDistricts(sm.state).some(x => x.kind === kind)) return null;
     const building: BuildingInstance = {
       id: `b_${nextBuildingId++}`,
       type: kind as BuildingType,
@@ -447,7 +448,7 @@ export class BuildingSystem {
     const layout = state.layout ?? createLayout();
     sm.applyDelta({ path: 'layout', value: { ...layout, ext: { ...layout.ext, [String(floor)]: next } } });
     if (side === 'e' && state.buildings.some(b => isDistrict(b.type) && b.position.floor === floor)) {
-      // [plan4:ST-8] The district keeps its place beyond the casing. (The renderer still draws it at DISTRICT_X until it reads position.x.)
+      // [plan4:ST-8] The district keeps its place beyond the casing. (The renderer draws it at its own position.x: rendering/geom.ts districtXAt.)
       sm.applyDelta({ path: 'buildings', value: sm.state.buildings.map(b => (isDistrict(b.type) && b.position.floor === floor ? { ...b, position: { ...b.position, x: b.position.x + WING_STEP } } : b)) });
     }
     bus.emit('wing:dug', floor, side);

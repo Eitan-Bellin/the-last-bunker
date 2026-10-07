@@ -7,7 +7,11 @@ import { cargoMult, earlyWarningLead, evacuationMult, expeditionTeamsBonus, hygi
 import { PopulationSystem, moraleBreakdown } from '../../src/systems/PopulationSystem';
 import { StateManager } from '../../src/core/StateManager';
 import { SeededRandom } from '../../src/core/Random';
-import { allowedFloors } from '../../src/data/zones';
+import { allowedFloors, crossesGallery } from '../../src/data/zones';
+import { DISTRICTS, availableDistricts, nextDistrict } from '../../src/data/districts';
+import { DISTRICT_KEYS } from '../../src/art/registry';
+import { DISTRICT_GAP, DISTRICT_X, FLOOR_H, GALLERY_MAX, SLOT_W, buildingX, floorTop, slotX } from '../../src/rendering/geom';
+import { GFX } from '../../src/rendering/gfxFeatures';
 import { ALL_RESOURCES, RESOURCES } from '../../src/data/resources';
 import type { BuildingType, GameState, ResourceType } from '../../src/core/GameState';
 import { createInitialState, floorExtent, migrateState } from '../../src/core/GameState';
@@ -446,6 +450,74 @@ export function effectHookProblems(): string[] {
     }
   } finally {
     delete defs[probe];
+  }
+  return problems;
+}
+
+/**
+ * [plan4:ST-8] Districts: every DISTRICT_KINDS type has a DISTRICTS entry, a building definition, a painting key and a sound floor rule (one district
+ * per floor, a level that exists in a normal game); the renderer's buildingX follows position.x (an older save with x = 12 lands on DISTRICT_X);
+ * the choice list keeps the classic order; and [plan4:ST-1] no hall of any given game straddles a service gallery (crossesGallery agrees with geom.ts).
+ */
+export function districtAndGalleryProblems(games: { name: string; json: string | null }[]): string[] {
+  const problems: string[] = [];
+  const fail = (m: string) => { if (problems.length < 14) problems.push(`districts: ${m}`); };
+  const kinds = DISTRICTS.map(d => d.kind as string);
+  for (const t of DISTRICT_KINDS) if (!kinds.includes(t)) fail(`${t} is in DISTRICT_KINDS but has no DISTRICTS entry`);
+  const floors = new Set<number>();
+  for (const d of DISTRICTS) {
+    if (!(DISTRICT_KINDS as string[]).includes(d.kind)) fail(`${d.kind} is in DISTRICTS but not in DISTRICT_KINDS`);
+    if (!BUILDING_DEFS[d.kind as BuildingType]) fail(`${d.kind} has no entry in buildings.json`);
+    if (!(DISTRICT_KEYS as readonly string[]).includes(d.kind)) fail(`${d.kind} has no painting key in DISTRICT_KEYS (art/registry.ts)`);
+    if (!Number.isInteger(d.floor) || d.floor < 1 || d.floor > 22) fail(`${d.kind}: floor rule ${d.floor} is not a level a tunnel can open on (1..22)`);
+    if (floors.has(d.floor)) fail(`${d.kind}: floor ${d.floor} already holds another district (one per floor)`);
+    floors.add(d.floor);
+    if (d.after && !kinds.includes(d.after)) fail(`${d.kind}: after ${d.after} is not a district`);
+    if (!d.name.he || !d.name.en || !d.find.he || !d.find.en) fail(`${d.kind}: name/find missing in he or en`);
+    if (!Object.keys(d.cost).length || Object.keys(d.cost).some(r => !ALL_RESOURCES.includes(r as ResourceType))) fail(`${d.kind}: cost is empty or names an unknown resource`);
+  }
+  // buildingX of a district follows its own position.x; x = 12 (every older save) is where it always stood.
+  const at = (type: BuildingType, x: number) => buildingX({ type, position: { x } });
+  if (at('cave', 12) !== DISTRICT_X || at('metro', 12) !== DISTRICT_X) fail('a district at x = 12 is not at DISTRICT_X');
+  if (at('lake', 14) !== DISTRICT_X + 2 * SLOT_W) fail('a district pushed to x = 14 did not move by two slots');
+  if (at('lake', 12) !== slotX(12) + DISTRICT_GAP) fail('district x is not the end of the floor plus the tunnel');
+  if (at('quarters', 5) !== slotX(5)) fail('a normal room moved');
+  // The choice list: the classic three come one at a time, in the old order.
+  const g = createInitialState();
+  g.storyFlags = [...g.storyFlags, 'districts:unlocked'];
+  g.currentFloors = 6;
+  const order: string[] = [];
+  for (let i = 0; i < 6; i++) {
+    const av = availableDistricts(g);
+    if (av.length && nextDistrict(g)?.kind !== av[0].kind) fail('nextDistrict is not the first available district');
+    if (!av.length) break;
+    order.push(av[0].kind);
+    g.buildings = [...g.buildings, { id: `d${i}`, type: av[0].kind as BuildingType, level: 1, position: { x: 12, y: 0, floor: av[0].floor }, assignedSurvivorIds: [], constructionProgress: 0, constructionTotal: 1, isConstructing: false, specialization: null }];
+  }
+  if (order.slice(0, 3).join() !== 'cave,lake,metro') fail(`the classic districts come in the order ${order.join()}`);
+  // Halls and galleries.
+  if (GFX.galleries) {
+    for (let f = 0; f < 23; f++) {
+      const stretched = floorTop(f + 1) - floorTop(f) !== FLOOR_H;
+      if (stretched !== crossesGallery(f, 2)) fail(`crossesGallery(${f}, 2) disagrees with geom.ts (gallery ${stretched ? 'is' : 'is not'} between B${f + 1} and B${f + 2})`);
+    }
+    if (GALLERY_MAX !== 5) fail('GALLERY_MAX changed: update GALLERY_ABOVE_FLOORS in data/zones.ts');
+  }
+  for (const t of ['atrium', 'reactorHall'] as BuildingType[]) {
+    for (let f = 0; f < 24; f++) {
+      if (allowedFloors(t, 24).includes(f) && crossesGallery(f, roomFloors(t))) fail(`${t} is allowed on floor ${f}, across a service gallery`);
+    }
+  }
+  for (const game of games) {
+    if (!game.json) continue;
+    const st = migrateState(JSON.parse(game.json) as GameState);
+    for (const b of st.buildings) {
+      if (roomFloors(b.type) > 1 && crossesGallery(b.position.floor, roomFloors(b.type))) fail(`${game.name}: ${b.type} on floor ${b.position.floor} straddles a service gallery (the saved game would draw it 34 short)`);
+      if (isDistrict(b.type)) {
+        const e = floorExtent(st, b.position.floor).e;
+        if (b.position.x !== e) fail(`${game.name}: ${b.type} stands at x = ${b.position.x} but its floor ends at ${e}`);
+      }
+    }
   }
   return problems;
 }

@@ -638,8 +638,8 @@
       "he": "האטריום"
     },
     "description": {
-      "en": "A two-storey garden with a living tree under a sun lamp. The heart of the colony.",
-      "he": "גן בגובה שתי קומות עם עץ חי תחת מנורת שמש. הלב של המושבה."
+      "en": "A two-storey garden with a living tree under a sun lamp. The heart of the colony. Needs two floors with no service gallery between them.",
+      "he": "גן בגובה שתי קומות עם עץ חי תחת מנורת שמש. הלב של המושבה. דורש זוג קומות בלי קומת שירות ביניהן."
     },
     "tier": 4,
     "size": {
@@ -677,8 +677,8 @@
       "he": "אולם הכור"
     },
     "description": {
-      "en": "A fusion core two storeys tall. Enough light for a city, if it is kept cool.",
-      "he": "ליבת היתוך בגובה שתי קומות. מספיק אור לעיר שלמה, אם שומרים עליה קרה."
+      "en": "A fusion core two storeys tall. Enough light for a city, if it is kept cool. Needs two floors with no service gallery between them.",
+      "he": "ליבת היתוך בגובה שתי קומות. מספיק אור לעיר שלמה, אם שומרים עליה קרה. דורש זוג קומות בלי קומת שירות ביניהן."
     },
     "tier": 5,
     "size": {

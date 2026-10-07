@@ -1,7 +1,7 @@
 import { Rectangle } from 'pixi.js';
 import type { BunkerRenderer } from '../rendering/BunkerRenderer';
 import type { GameState } from '../core/GameState';
-import { BUILDING_W, DISTRICT_X, ROOM_H, ROOMS_X, SHAFT_W, SLOT_W, floorTop } from '../rendering/layout';
+import { BUILDING_W, ROOM_H, ROOMS_X, SHAFT_W, SLOT_W, buildingX, floorTop } from '../rendering/layout';
 
 interface Cam {
   id: string;
@@ -23,7 +23,7 @@ const CAMS: Cam[] = [
   {
     id: 'cam5-district', at: s => {
       const d = s.buildings.find(b => b.type === 'cave' || b.type === 'lake' || b.type === 'metro');
-      return d ? { x: DISTRICT_X - 20, y: floorTop(d.position.floor) + ROOM_H / 2, z: 1.9 } : null;
+      return d ? { x: buildingX(d) - 20, y: floorTop(d.position.floor) + ROOM_H / 2, z: 1.9 } : null;
     },
   },
   { id: 'cam6-deep', at: s => ({ x: ROOMS_X + SLOT_W * 6, y: floorTop(Math.max(0, s.currentFloors - 2)) + ROOM_H / 2, z: 2 }) },

@@ -38,7 +38,7 @@ export function hashLayout(state: GameState): void {
     const where = (b.position.floor + 8) * 128 + (b.position.x + 32); // [plan4:X-2] offsets keep negative floors and west slots (< 0) from colliding
     hr = mix(mix(mix(mix(hr, sh(b.id)), sh(b.type)), where), (b.level << 2) | (fresh << 1) | (b.isConstructing ? 1 : 0));
     hu = mix(mix(mix(mix(hu, sh(b.id)), sh(b.type)), where), (b.level << 1) | fresh);
-    if (isDistrict(b.type)) hd = mix(hd, b.position.floor);
+    if (isDistrict(b.type)) hd = mix(mix(hd, b.position.floor), b.position.x + 64); // [plan4:ST-8] a wing pushes the tunnel
   }
   for (const r of state.ruins) hu = mix(mix(mix(hu, sh(r.id)), r.x), r.floor);
   // [plan4:ST-4] How far each floor reaches (layout.ext) shapes the structure, the shaft and the map: one more number, no allocation (for..in).

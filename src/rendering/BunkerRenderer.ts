@@ -7,7 +7,7 @@ import type { EraDef } from '../data/eras';
 import type { BuildingInstance, GameState, Position, Ruin, SurvivorState } from '../core/GameState';
 import { effectiveLevel, isDistrict, roomFloors, roomSlots } from '../data/buildingDefs';
 import { i18n } from '../i18n/I18nManager';
-import { BUILDING_W, DISTRICT_X, FLOOR_H, ROOM_H, SHAFT_GAP, SLOT_W, TOPSOIL, buildingH, buildingX, extentsFor, floorExtent, floorIndexAt, floorTop, slotX, ROOMS_X, type Ext } from './layout';
+import { BASE_EAST, BUILDING_W, districtXAt, FLOOR_H, ROOM_H, SHAFT_GAP, SLOT_W, TOPSOIL, buildingH, buildingX, extentsFor, floorExtent, floorIndexAt, floorTop, slotX, ROOMS_X, type Ext } from './layout';
 import { hashString, seeded } from './draw';
 import { PEOPLE_STYLE, Person, ROOM_ACTIVITY, type Activity, type Lane } from './people';
 import { crowdFor, restCountFor, settleCrowds } from './workSpots'; // gfx-p0 people
@@ -260,42 +260,43 @@ export class BunkerRenderer {
   }
 
   /** The dashed outline beyond the east wall inviting the next sideways tunnel. */
-  setDistrictSign(info: { floor: number; text: string; cost: string } | null): void {
-    const sig = info ? `${info.floor}|${info.text}|${info.cost}` : '';
+  setDistrictSign(info: { floor: number; text: string; cost: string; /** [plan4:ST-8] The slot the tunnel starts from: the east end of that floor (a wing moves it). */ slot?: number } | null): void {
+    const sig = info ? `${info.floor}|${info.slot ?? ''}|${info.text}|${info.cost}` : '';
     if (sig === this.districtSig) return;
     this.districtSig = sig;
     this.districtSignHolder.removeChildren().forEach(c => c.destroy({ children: true }));
     if (!info) return;
     const top = floorTop(info.floor);
+    const wallX = slotX(info.slot ?? BASE_EAST), DX = districtXAt(info.slot ?? BASE_EAST);
     const w = 4 * SLOT_W;
     const g = new Graphics();
     // [gfx2 signage] Miners' spray marks on the rock instead of a dashed UI box (see signage.ts).
-    if (this.gfx2) sprayOutline(g, DISTRICT_X + 6, top + 8, w - 12, ROOM_H - 16, seeded(77 + info.floor));
+    if (this.gfx2) sprayOutline(g, DX + 6, top + 8, w - 12, ROOM_H - 16, seeded(77 + info.floor));
     else {
-      for (let x = DISTRICT_X; x < DISTRICT_X + w; x += 14) {
+      for (let x = DX; x < DX + w; x += 14) {
         g.rect(x, top + 4, 8, 2).fill({ color: 0xd9a441, alpha: 0.75 });
         g.rect(x, top + ROOM_H - 6, 8, 2).fill({ color: 0xd9a441, alpha: 0.75 });
       }
       for (let y = top + 4; y < top + ROOM_H - 4; y += 14) {
-        g.rect(DISTRICT_X, y, 2, 8).fill({ color: 0xd9a441, alpha: 0.75 });
-        g.rect(DISTRICT_X + w - 2, y, 2, 8).fill({ color: 0xd9a441, alpha: 0.75 });
+        g.rect(DX, y, 2, 8).fill({ color: 0xd9a441, alpha: 0.75 });
+        g.rect(DX + w - 2, y, 2, 8).fill({ color: 0xd9a441, alpha: 0.75 });
       }
-      g.rect(DISTRICT_X + 2, top + 6, w - 4, ROOM_H - 12).fill({ color: 0x000000, alpha: 0.35 });
+      g.rect(DX + 2, top + 6, w - 4, ROOM_H - 12).fill({ color: 0x000000, alpha: 0.35 });
     }
     // A crack in the casing hints at the hollow beyond.
-    g.moveTo(BUILDING_W + 4, top + 20).lineTo(BUILDING_W + 9, top + 40).lineTo(BUILDING_W + 5, top + 58).lineTo(BUILDING_W + 11, top + 80)
+    g.moveTo(wallX + 4, top + 20).lineTo(wallX + 9, top + 40).lineTo(wallX + 5, top + 58).lineTo(wallX + 11, top + 80)
       .stroke({ color: 0x0a0806, width: 2 });
     const label = richLine(`[[pick]] ${info.text}`, { fontFamily: 'Rubik, sans-serif', fontSize: 11, fontWeight: '700', fill: 0xf2e6c8 }, 12, true, 4);
-    label.position.set(DISTRICT_X + w / 2, top + ROOM_H / 2 - 9);
+    label.position.set(DX + w / 2, top + ROOM_H / 2 - 9);
     const cost = richLine(info.cost, { fontFamily: 'Rubik, sans-serif', fontSize: 11, fontWeight: '700', fill: 0xffd447 }, 12, false, 4);
-    cost.position.set(DISTRICT_X + w / 2, top + ROOM_H / 2 + 11);
+    cost.position.set(DX + w / 2, top + ROOM_H / 2 + 11);
     const sign = new Container();
     sign.addChild(g);
     if (this.gfx2) {
       // [gfx2 signage] Bolted steel sign, same look as the room tags and the dig sign.
       const pw = Math.min(w - 8, Math.max(lineWidth(label), lineWidth(cost)) + 26);
       const plate = new Graphics();
-      steelTag(plate, DISTRICT_X + (w - pw) / 2, top + ROOM_H / 2 - 24, pw, 46, { rivets: 4, stripe: true });
+      steelTag(plate, DX + (w - pw) / 2, top + ROOM_H / 2 - 24, pw, 46, { rivets: 4, stripe: true });
       sign.addChild(plate);
       label.y += 3;
       cost.y += 2;
@@ -303,7 +304,7 @@ export class BunkerRenderer {
     sign.addChild(label, cost);
     sign.eventMode = 'static';
     sign.cursor = 'pointer';
-    sign.hitArea = new Rectangle(DISTRICT_X, top, w, ROOM_H);
+    sign.hitArea = new Rectangle(DX, top, w, ROOM_H);
     sign.on('pointertap', () => {
       if (!this.cam.isDragging) this.onDistrictDig?.();
     });
@@ -576,9 +577,12 @@ export class BunkerRenderer {
     this.extentWingR = slotX(exts.reduce((m, x) => Math.max(m, x.e), 12));
     this.extentR = Math.max(BUILDING_W, this.extentWingR, this.projectSites.right);
     this.undergroundHolder.removeChildren().forEach(c => c.destroy({ children: true }));
-    const districts = state.buildings.filter(b => isDistrict(b.type)).map(b => b.position.floor);
+    const districtList = state.buildings.filter(b => isDistrict(b.type));
+    const districts = districtList.map(b => b.position.floor);
+    const districtSlot: Record<number, number> = {};
+    for (const b of districtList) districtSlot[b.position.floor] = b.position.x; // [plan4:ST-8]
     const casing = this.gfx2 && kitReady() ? buildCasing(this.floors, kitState(this.surfaceEra), exts) : null;
-    this.undergroundHolder.addChild(buildUnderground(this.floors, i18n.currentLocale, this.gloom, ArtLibrary.get('backdrops/rock'), districts, casing, exts));
+    this.undergroundHolder.addChild(buildUnderground(this.floors, i18n.currentLocale, this.gloom, ArtLibrary.get('backdrops/rock'), districts, casing, exts, districtSlot));
     this.undergroundSig = this.structureSig(state);
     this.structureGloom = this.gloom;
     this.shaftHolder.removeChildren().forEach(c => c.destroy({ children: true }));
