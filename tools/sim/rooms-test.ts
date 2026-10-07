@@ -14,6 +14,9 @@ import { availableDistricts, DISTRICTS } from '../../src/data/districts'; // pla
 import { IncidentSystem } from '../../src/systems/IncidentSystem'; // plan4:BL-24
 import { SeededRandom } from '../../src/core/Random'; // plan4:BL-24
 import { allowedFloors } from '../../src/data/zones'; // plan4:BL-34..38
+import { AMBIENCE_FOR } from '../../src/audio/ambience'; // plan4:BL-13
+import heStrings from '../../src/i18n/he.json'; // plan4:BL-13
+import enStrings from '../../src/i18n/en.json'; // plan4:BL-13
 import { CHAIN_INPUTS } from '../../src/data/chains'; // plan4:BL-34..38
 import { DISTRICT_ART_ALIAS, buildingArtKey } from '../../src/art/registry'; // plan4:BL-24,25
 import { timeOfDay, windAt } from '../../src/data/dayCycle';
@@ -89,6 +92,22 @@ export function roomsChecks(games: { name: string; json: string }[]): { problems
     // Most blueprints a day from a fully staffed level-5 vault: the plan's ceiling is 14 including the shop.
     if (rate(5) * 86400 > 14) fail(`oldVault level 5 makes ${(rate(5) * 86400).toFixed(1)} blueprints a day, above the plan's 14`);
   }
+
+  // ---- [plan4:BL-13] the connection checklist (02-new-buildings.md section 13) for every room of waves 1-3 ----
+  const CLASSIC = ['quarters', 'generator', 'farm', 'waterPump', 'workshop', 'medbay', 'canteen', 'laboratory', 'radioTower', 'hydroponics', 'waterPurifier', 'trainingRoom', 'armory', 'reactor', 'storage', 'elevator', 'cave', 'lake', 'metro', 'atrium', 'reactorHall'];
+  const checklist = [...BUILDABLE_TYPES, ...DISTRICT_KINDS].filter(t => !CLASSIC.includes(t));
+  for (const t of checklist) {
+    const def = getDef(t);
+    if (!def) { fail(`${t}: in the room lists but has no definition`); continue; }
+    if (!(t in ICON_SVG)) fail(`${t}: no icon (ui/icons.ts)`);
+    if (!BUILDING_ICONS[t]) fail(`${t}: no BUILDING_ICONS entry (ui/dom.ts)`);
+    if (!AMBIENCE_FOR[t]) fail(`${t}: no ambience (audio/ambience.ts)`);
+    if (!unlockingResearch(t) && !def.place?.needsFlag) fail(`${t}: nothing unlocks it (no research node, no story flag)`);
+    if (def.maxWorkers > 0) {
+      for (const [lang, strings] of [['he', heStrings], ['en', enStrings]] as [string, Record<string, string>][]) if (!strings[`memorial.line.${t}`]) fail(`${t}: no memorial line in ${lang} (crew can be remembered)`);
+    }
+  }
+  notes.push(`checklist: ${checklist.length} rooms of waves 1-3 have icon, ambience, unlocking node/flag and memorial lines`);
 
   for (const g of games) {
     const base = migrateState(JSON.parse(g.json) as GameState);

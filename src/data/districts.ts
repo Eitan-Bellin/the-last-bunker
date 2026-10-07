@@ -7,8 +7,8 @@ import type { IconName } from '../ui/icons';
  *
  * [plan4:ST-8] Data-driven: the sign, the choice card (ui/controllers/dig.ts) and the sim bot all read `availableDistricts`.
  * To add a district kind (BL-24 geothermal, BL-25 oldVault) it is enough to: add an entry to DISTRICTS (floor = the level index it opens on,
- * `needsFlag` / `minAct` for its gate, no `after` so it is offered next to the others), add its definition to data/buildings.json, add the type to
- * `BuildingType` (core/GameState.ts), to `DISTRICT_KINDS` (data/buildingDefs.ts) and its painting key to `DISTRICT_KEYS` (art/registry.ts).
+ * `needsFlag` / `minAct` / `needsResearch` for its gate, no `after` so it is offered next to the others), add its definition to data/buildings.json, add the type to
+ * `BuildingType` (core/GameState.ts), to `DISTRICT_KINDS` (data/buildingDefs.ts) and its painting key to `DISTRICT_KEYS` (art/registry.ts; or, until it is painted, `DISTRICT_ART_ALIAS` borrows another cavern: geothermal and oldVault do).
  * `tools/sim/lint.ts` fails if any of these lists disagree.
  */
 export type DistrictKind = 'cave' | 'lake' | 'metro' | 'geothermal' | 'oldVault'; // [plan4:BL-24,25] the two Act districts
