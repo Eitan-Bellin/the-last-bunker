@@ -21,6 +21,7 @@ import { Dust, buildDigSign, buildShaft, buildSurface, buildUnderground, buildUt
 import { LAYOUT, VIEW, bandize, hashLayout } from './perfFx'; // [perf]
 import { buildShaft2 } from './shaft';
 import { buildGalleries } from './gallery'; // [plan4:ST-1]
+import { InfraLayer } from './infra'; // plan4:ST-14
 import { buildSurface2, mountSurface2, surface2Sig } from './surface2'; // [gfx2 surface]
 import { roomFlicker, setRoomFxQuality } from './paintedRoom'; // gfx-p0 rooms: quality
 import { lineWidth, richLine } from './richText';
@@ -90,6 +91,7 @@ export class BunkerRenderer {
   /** [gfx2 wear] Story-telling decals and the living atmosphere (decals.ts, atmosphere.ts). */
   private decals: DecalLayer | null = null;
   private atmo: Atmosphere | null = null;
+  private infra: InfraLayer | null = null; // plan4:ST-14 bulkheads, stairwells, vent stacks, feed lines
   /** Each room's light colour, used to tint the people inside it. */
   private roomLight = new Map<string, number>();
   private dust = new Dust();
@@ -997,6 +999,7 @@ export class BunkerRenderer {
   }
 
   private renderUtilities(state: GameState): void {
+    this.infra?.sync(state); // plan4:ST-14 the doors' states and the set of infra items are read every picture
     const painted = this.gfx2 && kitReady();
     // [perf] The structure follows the rooms (place, level, new), the ruins, the era's darkness and the plaque's names; LAYOUT.util is
     // one number for the first three (hashLayout), so a picture where nothing changed builds one short string, not a 4 KB one.
@@ -1012,6 +1015,7 @@ export class BunkerRenderer {
     if (!painted) this.frontChunks.clear();
     this.decals = null; // [gfx2 wear]
     this.atmo = null; // [gfx2 wear]
+    this.infra = null; // plan4:ST-14 (destroyed with the holder's children)
     if (painted) {
       const exts = this.extsFor(state); // [plan4:ST-4]
       const grid = occupancy(state.buildings, state.ruins, this.floors, exts);
@@ -1037,6 +1041,9 @@ export class BunkerRenderer {
       this.utilitiesHolder.addChild(this.group(this.decals.container, 'decals'));
       this.atmo = buildAtmosphere(state.buildings, this.floors, wearEra, lamps, this.decals.sources, exts);
       this.utilitiesHolder.addChild(this.group(this.atmo.container, 'atmosphere'));
+      this.infra = new InfraLayer(); // plan4:ST-14
+      this.infra.set(state, { floors: this.floors, exts, st: kitState(this.surfaceEra), ambient: structureAmbient(this.surfaceEra) }); // plan4:ST-14
+      this.utilitiesHolder.addChild(this.group(this.infra.container, 'infra')); // plan4:ST-14
       // A room's light colour: its lamps' colours, weighted by strength.
       this.roomLight.clear();
       for (const l of lamps) {
@@ -1305,6 +1312,7 @@ export class BunkerRenderer {
     if (!this.lowSkip) {
       this.front?.animate(this.time, power);
       this.galleries?.animate(this.time, power);
+      this.infra?.animate(this.time, power); // plan4:ST-14
       if (!lowQ) this.decals?.animate(this.time, power); // [gfx2 wear]
     }
     this.atmo?.update(this.time, dt, power, this.worldContainer, this.app.screen, this.postfx?.quality ?? 'high'); // [gfx2 wear]

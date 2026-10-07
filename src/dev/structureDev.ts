@@ -16,9 +16,15 @@ export function installStructureDev(renderer: BunkerRenderer, getState: () => Ga
     if (fx) fx.forced = 'high';
     const forceNight = (window as unknown as { __forceNight?: number }).__forceNight;
     for (let i = 0; i < frames; i++) {
-      if (typeof forceNight === 'number') renderer.setNight(forceNight);
-      renderer.render(getState(), 1 / 60, 1);
-      renderer.app.renderer.render(renderer.app.stage);
+      // A jump to rooms whose paintings the memory sweep gave back (rooms unseen for 20 s) draws once with a released texture before they rebuild; that is a
+      // property of the jump (the game pans gradually), so the shot swallows it and draws on.
+      try {
+        if (typeof forceNight === 'number') renderer.setNight(forceNight);
+        renderer.render(getState(), 1 / 60, 1);
+        renderer.app.renderer.render(renderer.app.stage);
+      } catch {
+        // retried by the next frame
+      }
       await new Promise(r => setTimeout(r, 16));
     }
     const app = renderer.app;
