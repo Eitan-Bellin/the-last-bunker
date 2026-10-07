@@ -42,7 +42,7 @@ async function runScenario(port, name, sc) {
   try {
     await phoneSetup(c, { quality: sc.quality, throttle: 1, dpr });
     await c.send('HeapProfiler.enable');
-    await c.send('Page.navigate', { url: `http://127.0.0.1:${port}/?debug${arg("query", "")}` });
+    await c.send('Page.navigate', { url: `http://127.0.0.1:${port}/?debug${sc.fixture ? `&perfFixture=${sc.fixture}` : ''}${arg("query", "")}` });
     if (!await waitFor(c, '!!(window.__engine && window.__renderer && window.__renderer.postfx && window.__perf2)')) throw new Error('game did not start');
     await sleep(1500);
     await c.evalJs(`window.__perfFixture(${sc.floors}, ${sc.people})`);
@@ -186,6 +186,7 @@ const LIMITS = { maxDrawCalls: 'drawCalls', maxRenderables: 'renderablesDrawn', 
 const { port, close } = await serve(dist);
 const results = { dist, throttle, dpr, bundle: bundleStats(), scenarios: {} };
 const failures = [];
+const pendingNotes = [];
 try {
   for (const [name, sc] of Object.entries(budget.scenarios)) {
     if (only && !only.includes(name)) continue;
@@ -211,11 +212,13 @@ try {
       + `${rep.fps} fps  frame ${rep.frameMsMed}/${rep.frameMsP95} ms  busy ${rep.busyPct}%  long ${rep.longTasks}  rss ${rep.mem ? `${rep.mem.renderer}/${rep.mem.gpu}` : '-'} MB  errors ${rep.consoleErrors}`);
     if (arg('verbose', false)) console.log('   biggest: ' + (rep.biggest || []).join('  ') + '\n   overdraw ' + rep.overdraw + 'x  by group: ' + rep.overdrawBy.join('  ') + '   cal ' + rep.calMs + ' ms');
     if (arg('verbose', false)) console.log('   groups: ' + (rep.groups || []).map(g => `${g.label}(${g.objects}) ${g.changedPct}%`).join('  ') + `   groupsTotal ${rep.renderGroups}`);
-    if (rep.consoleErrors) failures.push(`${name}: ${rep.consoleErrors} console errors`);
+    // "pending": true = measured and reported, never gating (the f24w-* scenarios until wide layouts exist, plan 4 X-4).
+    const into = sc.pending ? pendingNotes : failures;
+    if (rep.consoleErrors) into.push(`${name}: ${rep.consoleErrors} console errors`);
     for (const [limit, field] of Object.entries(LIMITS)) {
       const max = sc[limit];
       if (max === undefined || throttle > 1) continue;
-      if (rep[field] > max * 1.1 + (max === 0 ? 0.5 : 0)) failures.push(`${name}: ${field} ${rep[field]} > ${max} (+10%)`);
+      if (rep[field] > max * 1.1 + (max === 0 ? 0.5 : 0)) into.push(`${name}: ${field} ${rep[field]} > ${max} (+10%)`);
     }
   }
   const g = budget.global || {};
@@ -224,5 +227,6 @@ try {
 
 if (outFile) { fs.mkdirSync(path.dirname(outFile), { recursive: true }); fs.writeFileSync(outFile, JSON.stringify(results, null, 1)); }
 console.log(`bundle: js ${results.bundle.jsGzKB} KB gz, css ${results.bundle.cssGzKB} KB gz`);
+if (pendingNotes.length) console.log('\nPENDING (reported, not gating):\n  ' + pendingNotes.join('\n  '));
 if (failures.length) { console.log('\nOVER BUDGET:\n  ' + failures.join('\n  ')); if (check) process.exit(1); } else console.log('\nwithin budget');
 process.exit(0);

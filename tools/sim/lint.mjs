@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 // Data lint for CI: English and Hebrew have the same keys and the same {placeholders}; research is a sound DAG;
 // every cost names a real resource (tools/sim/lint.ts). Exit 1 on any problem.
-import { readFileSync, rmSync } from 'node:fs';
-import { join, resolve, dirname } from 'node:path';
+import { readFileSync, readdirSync, rmSync, statSync } from 'node:fs';
+import { join, resolve, dirname, relative, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { bundleSim } from './bundle.mjs';
 import './node-globals.mjs';
@@ -34,6 +34,16 @@ const { file } = await bundleSim({ tag: 'lint', entry: join(HERE, 'lint.ts') });
 const mod = await import(pathToFileURL(file).href);
 problems.push(...mod.lintData(i18n));
 try { rmSync(file); } catch { /* cache file */ }
+
+// [plan4:QA-3] Non-failing: legacy floor geometry outside rendering/geom.ts (a later wave turns this into a gate).
+const srcFiles = [];
+const walkSrc = d => { for (const f of readdirSync(d)) { const p = join(d, f); if (statSync(p).isDirectory()) walkSrc(p); else if (f.endsWith('.ts')) srcFiles.push({ rel: relative(join(ROOT, 'src'), p).split(sep).join('/'), text: readFileSync(p, 'utf8') }); } };
+walkSrc(join(ROOT, 'src'));
+const legacy = mod.legacyGeometryWarnings(srcFiles);
+if (legacy.length) {
+  console.log(`lint warning: ${legacy.length} legacy floor-geometry use(s) outside rendering/geom.ts (/ FLOOR_H: ${legacy.filter(l => l.includes('FLOOR_H')).length}, SLOTS_PER_FLOOR: ${legacy.filter(l => l.includes('SLOTS_PER_FLOOR')).length})`);
+  if (process.argv.includes('--verbose')) console.log(' - ' + legacy.join('\n - '));
+}
 
 if (problems.length) {
   console.error(`lint: ${problems.length} problem(s)\n - ${problems.join('\n - ')}`);

@@ -75,6 +75,23 @@ export function installCamShots(renderer: BunkerRenderer, getState: () => GameSt
     }
     return saved;
   };
+  /**
+   * [plan4:X-5] For tools/compare/run.mjs: the ids of the fixed views, and one view as a base64 PNG (no upload to the dev server), at the given
+   * pixel density (default: the screen's). Resolves null when the bunker lacks the subject of that view.
+   */
+  w.__camIds = CAMS.map(c => c.id);
+  w.__camPng = async (id: string, resolution = window.devicePixelRatio || 1, settleFrames = 20) => {
+    const cam = CAMS.find(c => c.id.startsWith(id));
+    const at = cam?.at(getState());
+    if (!cam || !at) return null;
+    renderer.devCamera(at.x, at.y, at.z);
+    await frames(settleFrames);
+    const app = renderer.app;
+    const canvas = app.renderer.extract.canvas({
+      target: app.stage, resolution, frame: new Rectangle(0, 0, app.screen.width, app.screen.height),
+    }) as HTMLCanvasElement;
+    return { id: cam.id, w: canvas.width, h: canvas.height, png: canvas.toDataURL('image/png').split(',')[1] };
+  };
   /** One extra view at any world point, saved next to the fixed six. */
   w.__shotAt = async (x: number, y: number, z: number, name: string, tag = 'before') => {
     renderer.devCamera(x, y, z);

@@ -263,8 +263,16 @@ export function installPerf(renderer: BunkerRenderer, engine: Any, audio?: Any):
   }
 }
 
-/** A bunker of N full floors with M people, built through the game's own state (never saved: use a fresh profile or ?slot). */
+/**
+ * A bunker of N full floors with M people, built through the game's own state (never saved: use a fresh profile or ?slot).
+ *
+ * [plan4:X-4] `?perfFixture=wide` is the hook for the wide-floor scenarios (f24w-*: 24 floors, west wing 8, east wing 22, 160 rooms).
+ * Until the layout extents exist (plan 4, wave 1) it builds the standard fixture, so the f24w-* scenarios measure the same bunker as
+ * f24-* and cannot be told apart from them. When wide floors land, branch on `wide` below to place rooms beyond today's slot range.
+ */
 function buildFixture(E: Any, floors: number, people: number): { buildings: number; people: number } {
+  const wide = new URLSearchParams(location.search).get('perfFixture') === 'wide';
+  void wide; // reserved: see above
   const sm = E.stateManager;
   const t2 = ['generator', 'workshop', 'canteen', 'laboratory', 'waterPurifier', 'trainingRoom', 'waterPump', 'medbay', 'radioTower', 'armory'];
   const t3 = ['quarters', 'farm', 'hydroponics', 'reactor', 'storage'];
