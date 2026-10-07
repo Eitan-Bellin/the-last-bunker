@@ -15,6 +15,7 @@ import { lineWidth, richLine } from './richText';
 import { steelTag, tagLamp } from './signage';
 import { depthGains } from './structure';
 import type { RuinVisual } from './ruinArt';
+import { labelState } from './LabelScale'; // [plan4:ST-12]
 
 // [plan4 X-1] Split out of BunkerRenderer.ts with no change in behaviour: the room views (build queue, look rebuilds, name tags),
 // the "in zone" / parking logic and the per-picture culling of rooms, ruins and the structure.
@@ -33,6 +34,9 @@ export interface RoomView {
   people: Container;
   outline: Graphics;
   label: Container;
+  /** [plan4:ST-12] The tag's two looks: name + stars + lamps (full), colour chip + lamps (icon-only); LabelScale picks one by zoom. */
+  labelFull?: Container;
+  labelMini?: Container;
   progress: Graphics | null;
   visualSig: string;
   labelSig: string;
@@ -309,7 +313,8 @@ export class RoomViews {
       bg.roundRect(-width / 2, -7.5, width, 15, 4).stroke({ color: 0xd9a441, alpha: 0.5, width: 1 });
     }
     text.x = -pipsW / 2;
-    view.label.addChild(bg, text);
+    const full = new Container();
+    full.addChild(bg, text);
     if (pipCount > 0) {
       const pips = new Graphics();
       const startX = text.x + textW / 2 + 8;
@@ -320,13 +325,53 @@ export class RoomViews {
         pips.circle(startX + i * 7, 0, 2.4).fill(filled ? 0x4dff8f : 0x3a3a4a);
         if (!filled) pips.circle(startX + i * 7, 0, 2.4).stroke({ color: 0xff6b6b, width: 0.8 });
       }
-      view.label.addChild(pips);
+      full.addChild(pips);
     }
+    // [plan4:ST-12] Icon-only look for a far camera: the room's colour chip and the worker lamps, no text.
+    const mini = new Container();
+    const miniW = 18 + pipsW;
+    const mbg = new Graphics();
+    if (gfx2) steelTag(mbg, -miniW / 2, -7.5, miniW, 15);
+    else {
+      mbg.roundRect(-miniW / 2, -7.5, miniW, 15, 4).fill({ color: 0x14141e, alpha: 0.9 });
+      mbg.roundRect(-miniW / 2, -7.5, miniW, 15, 4).stroke({ color: 0xd9a441, alpha: 0.5, width: 1 });
+    }
+    const chip = new Graphics();
+    chip.roundRect(-miniW / 2 + 3.5, -4.5, 9, 9, 2.5).fill(def.color).stroke({ color: 0x000000, alpha: 0.55, width: 1 });
+    mini.addChild(mbg, chip);
+    if (pipCount > 0) {
+      const mp = new Graphics();
+      const x0 = -miniW / 2 + 18;
+      for (let i = 0; i < pipCount; i++) {
+        const filled = i < b.assignedSurvivorIds.length;
+        if (gfx2) { tagLamp(mp, x0 + i * 7, 0, filled); continue; }
+        mp.circle(x0 + i * 7, 0, 2.4).fill(filled ? 0x4dff8f : 0x3a3a4a);
+        if (!filled) mp.circle(x0 + i * 7, 0, 2.4).stroke({ color: 0xff6b6b, width: 0.8 });
+      }
+      mini.addChild(mp);
+    }
+    view.label.addChild(full, mini);
+    view.labelFull = full;
+    view.labelMini = mini;
+    this.styleLabel(view);
     if (b.isConstructing) {
       view.progress = new Graphics();
       view.progress.position.set(15, view.height - 14);
       view.root.addChild(view.progress);
     }
+  }
+
+  /** [plan4:ST-12] Puts the shared screen-space size and look (LabelScale) on one tag. */
+  private styleLabel(v: RoomView): void {
+    v.label.scale.set(labelState.k);
+    const icon = labelState.mode !== 'full';
+    if (v.labelFull) v.labelFull.visible = !icon;
+    if (v.labelMini) v.labelMini.visible = icon;
+  }
+
+  /** [plan4:ST-12] The zoom changed (LabelScale, at most 10 Hz): every tag follows. */
+  applyLabelScale(): void {
+    for (const v of this.views.values()) this.styleLabel(v);
   }
 
   /** Painting balance × depth fog × a small per-room variation, so neighbours never look copy-pasted. */
@@ -391,7 +436,7 @@ export class RoomViews {
       const shown = seen && !mapCovers;
       if (v.visualHolder.visible !== shown) { v.visualHolder.visible = shown; v.people.visible = shown; }
       // The name tag goes with its room (it used to be drawn for all 119 rooms: 43% of the draw calls).
-      const lv = !!v.labelOn && seen;
+      const lv = !!v.labelOn && seen && labelState.mode !== 'hidden';
       if (v.label.visible !== lv) v.label.visible = lv;
     }
     for (const v of this.ruinViews.values()) {

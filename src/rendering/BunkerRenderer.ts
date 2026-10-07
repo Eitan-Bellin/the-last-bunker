@@ -1,5 +1,5 @@
 import { Application, ColorMatrixFilter, Container, Graphics, Rectangle, Text } from 'pixi.js';
-import { CameraController, HUD_BOTTOM, HUD_TOP } from './CameraController'; // [plan4 X-1]
+import { CameraController, FAR_ZOOM, hudBottom, hudTop } from './CameraController'; // [plan4 X-1]
 import { PlacementController } from './PlacementController'; // [plan4 X-1]
 import { RoomViews, type RoomView, type RuinView } from './RoomViews'; // [plan4 X-1]
 import type { IconName } from '../ui/icons';
@@ -7,7 +7,7 @@ import type { EraDef } from '../data/eras';
 import type { BuildingInstance, GameState, Position, Ruin, SurvivorState } from '../core/GameState';
 import { effectiveLevel, isDistrict, roomFloors, roomSlots } from '../data/buildingDefs';
 import { i18n } from '../i18n/I18nManager';
-import { BUILDING_W, DISTRICT_X, FLOOR_H, ROOM_H, SLOT_W, TOPSOIL, buildingH, buildingX, floorExtent, floorTop, slotX } from './layout';
+import { BUILDING_W, DISTRICT_X, FLOOR_H, ROOM_H, SHAFT_GAP, SLOT_W, TOPSOIL, buildingH, buildingX, floorExtent, floorTop, slotX } from './layout';
 import { hashString, seeded } from './draw';
 import { PEOPLE_STYLE, Person, ROOM_ACTIVITY, type Activity, type Lane } from './people';
 import { crowdFor, restCountFor, settleCrowds } from './workSpots'; // gfx-p0 people
@@ -25,6 +25,8 @@ import { lineWidth, richLine } from './richText';
 import { ArtLibrary } from '../art/ArtLibrary';
 import { artEntry, buildingArtKey, roomTier, ruinArtKey } from '../art/registry';
 import { buildCityMap, type CityMap } from './cityMap';
+import { updateLabelScale } from './LabelScale'; // [plan4:ST-12]
+import { SlopArea, hitState } from './HitSlop'; // [plan4:ST-12]
 import { PostFX, startQuality, targetResolution } from './postfx';
 import { isLiteMode, logCrash } from '../core/crashGuard';
 import { isTouchDevice } from '../utils/device';
@@ -142,6 +144,7 @@ export class BunkerRenderer {
       get worldContainer() { return r.worldContainer; },
       contentBottom: () => r.contentBottom(),
       extentR: () => r.extentR,
+      floorSpan: () => r.span,
       projectTop: () => r.projectSites.top,
       time: () => r.time,
       selectedId: () => r.selectedId,
@@ -198,7 +201,7 @@ export class BunkerRenderer {
   private onScreen(x: number, y: number): boolean {
     const sx = this.worldContainer.x + x * this.worldContainer.scale.x;
     const sy = this.worldContainer.y + y * this.worldContainer.scale.y;
-    return sx > 0 && sx < this.app.screen.width && sy > HUD_TOP * 0.5 && sy < this.app.screen.height - HUD_BOTTOM * 0.5;
+    return sx > 0 && sx < this.app.screen.width && sy > hudTop() * 0.5 && sy < this.app.screen.height - hudBottom() * 0.5;
   }
 
   /** World rectangle of a room (for effects and focusing). */
@@ -212,6 +215,8 @@ export class BunkerRenderer {
   private cityMap: CityMap | null = null;
   private cityMapSig = '';
   private extentR = BUILDING_W;
+  /** [plan4:ST-12] Widest floor in world x (west wing reach, east reach): what the floor-overview zoom fits. */
+  private span = { l: 0, r: BUILDING_W };
   private districtSignHolder = new Container();
   private districtSig = '';
   private undergroundSig = '';
@@ -336,7 +341,7 @@ export class BunkerRenderer {
     b.position.set(v.root.x + v.width / 2, v.root.y + 26);
     b.eventMode = 'static';
     b.cursor = 'pointer';
-    b.hitArea = new Rectangle(-16, -16, 32, 34);
+    b.hitArea = new SlopArea(-16, -16, 32, 34, b); // [plan4:ST-12 #4] >= 44 screen px
     b.on('pointertap', (e) => {
       e.stopPropagation();
       if (!this.cam.isDragging) this.onBubbleTap?.(buildingId);
@@ -435,7 +440,7 @@ export class BunkerRenderer {
     this.postfx = new PostFX(this.app, this.worldContainer, this.grade, () => ({ era: this.surfaceEra, night: this.nightNow, target: this.frameTarget }));
     window.addEventListener('resize', () => {
       this.app.renderer.resize(window.innerWidth, window.innerHeight);
-      this.cam.fitToScreen();
+      this.cam.onResize(); // [plan4:ST-12] keeps zoom and centre for small changes (Safari's address bar)
     });
   }
 
@@ -462,6 +467,21 @@ export class BunkerRenderer {
 
   private contentBottom(): number {
     return floorTop(this.floors + 1) + 20;
+  }
+
+  /** [plan4:ST-12] Camera facade for the depth ruler and the section chips (src/ui/components/DepthRuler.ts). */
+  get camera(): CameraController {
+    return this.cam;
+  }
+
+  /** [plan4:ST-12] Widest floor reach in world x (west wing end, east end). */
+  get floorSpan(): Readonly<{ l: number; r: number }> {
+    return this.span;
+  }
+
+  /** [plan4:ST-12] Current camera zoom (world px to screen px), for screen-space text and the depth ruler. */
+  get cameraZoom(): number {
+    return this.cam.zoom;
   }
 
   /** [perf] The camera (or a carried person) is moving right now: the engine draws at its motion rate (60) while this holds. */
@@ -1034,8 +1054,11 @@ export class BunkerRenderer {
       if (now - this.lastSweep > 5000) this.sweepArt(now);
     }
     hashLayout(state); // [perf] one cheap pass instead of strings joined from every building several times per picture
+    this.updateSpan(state);
     if (state.currentFloors !== this.floors || this.structureGloom !== this.gloom || this.undergroundSig !== this.structureSig(state)) this.rebuildStructure(state);
     this.cam.stepCamera(dt); // [camera]
+    hitState.zoom = this.cam.zoom;
+    if (updateLabelScale(this.cam.zoom, now)) this.roomViews.applyLabelScale(); // [plan4:ST-12] tags keep a readable screen size
     this.updateView(); // [perf]
     this.frontBands?.update();
     this.updateLod(state, dt);
@@ -1108,9 +1131,20 @@ export class BunkerRenderer {
     this.postfx?.update(now);
   }
 
+  /** [plan4:ST-12] Widest floor reach from the side wings (state.layout.ext); no allocation (this runs every picture). */
+  private updateSpan(state: GameState): void {
+    let w = 0, e = floorExtent(state, -1 /* a floor with no entry: the default extent */).e;
+    const ext = state.layout?.ext;
+    if (ext) for (const k in ext) { const x = ext[k]; if (x.w > w) w = x.w; if (x.e > e) e = x.e; }
+    const l = w > 0 ? -SHAFT_GAP - w * SLOT_W : 0;
+    const r = ROOMS_X + e * SLOT_W;
+    if (l !== this.span.l || r !== this.span.r) { this.span.l = l; this.span.r = r; }
+  }
+
   private updateLod(state: GameState, dt: number): void {
-    const r = this.cam.zoom / this.cam.baseZoom;
-    const lod = r < (this.lod === 'far' ? 0.78 : 0.72) ? 'far' : r > (this.lod === 'close' ? 1.8 : 1.9) ? 'close' : 'mid';
+    // [plan4:ST-12] Absolute thresholds: the far city map under 0.42 (it used to be relative to the fit zoom, which moved with the screen width).
+    const z = this.cam.zoom;
+    const lod = z < (this.lod === 'far' ? FAR_ZOOM * 1.07 : FAR_ZOOM) ? 'far' : z > (this.lod === 'close' ? 1.1 : 1.2) ? 'close' : 'mid';
     if (lod !== this.lod) this.onLodChange?.(lod);
     this.lod = lod;
     const sig = lod === 'far' ? `${this.floors}|${LAYOUT.util}|${i18n.currentLocale}` : ''; // [perf] only needed while the map is up

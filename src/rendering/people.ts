@@ -1,4 +1,4 @@
-import { Container, Graphics, Rectangle, Sprite, Text, Texture } from 'pixi.js';
+import { Container, Graphics, Sprite, Text, Texture } from 'pixi.js';
 import type { BuildingType, SurvivorState } from '../core/GameState';
 import { portraitFor, type PortraitDef } from '../data/portraits';
 import { hashString, shade } from './draw';
@@ -6,6 +6,7 @@ import { ROOM_H } from './layout';
 import type { Crowd, CrowdMember, Rest, Spot } from './workSpots';
 import { Body3D, PEOPLE3D, UNITS_PER_M, bodyData, hasSetPoses, ppm, requestSetPoses, type Anim3, type BodyKind } from './people3d';
 import { GFX } from './gfxFeatures';
+import { SlopArea } from './HitSlop'; // [plan4:ST-12]
 
 const SPEED = 24;
 const FLOOR_FRONT = ROOM_H - 3;
@@ -190,6 +191,7 @@ export class Person implements CrowdMember {
   readonly id: string;
 
   private figure = new Container();
+  private hit!: SlopArea;
   private shadow = new Graphics();
   private contact: Sprite | null = null;
   private cast: Sprite | null = null;
@@ -390,7 +392,9 @@ export class Person implements CrowdMember {
     }
     this.container.eventMode = 'static';
     this.container.cursor = 'grab';
-    this.container.hitArea = PEOPLE_STYLE.painted ? new Rectangle(-10, -this.height() - 2, 20, this.height() + 4) : new Rectangle(-9, -48, 18, 50);
+    // [plan4:ST-12 #4] A SlopArea: at least 44 screen px each way whatever the zoom (HitSlop.ts); the drawn rectangle is what `set` receives.
+    this.hit = PEOPLE_STYLE.painted ? new SlopArea(-10, -this.height() - 2, 20, this.height() + 4, this.container) : new SlopArea(-9, -48, 18, 50, this.container);
+    this.container.hitArea = this.hit;
     this.container.once('destroyed', () => this.crowd?.leave(this));
     this.dress(null);
   }
@@ -646,7 +650,7 @@ export class Person implements CrowdMember {
     for (const c of [this.thighB, this.upperB, this.torso, this.thighF, this.upperF]) c.visible = false;
     this.figure.addChild(this.b3.container);
     const h = this.height();
-    this.container.hitArea = new Rectangle(-10, -h - 2, 20, h + 4);
+    this.hit.set(-10, -h - 2, 20, h + 4);
     this.tagBaseY = -h - 6;
     this.dress3();
   }
@@ -901,9 +905,10 @@ export class Person implements CrowdMember {
       if (hit !== this.restHit) {
         this.restHit = hit;
         const h = this.height();
-        this.container.hitArea = hit
-          ? (this.rest.kind === 'sleep' ? new Rectangle(-26, -14, 52, 18) : new Rectangle(-10, -h * 0.72 - 2, 20, h * 0.72 + 4))
-          : new Rectangle(-10, -h - 2, 20, h + 4);
+        if (hit) {
+          if (this.rest.kind === 'sleep') this.hit.set(-26, -14, 52, 18);
+          else this.hit.set(-10, -h * 0.72 - 2, 20, h * 0.72 + 4);
+        } else this.hit.set(-10, -h - 2, 20, h + 4);
       }
     }
     this.container.position.set(this.x, y);

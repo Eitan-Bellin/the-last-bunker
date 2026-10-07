@@ -1038,5 +1038,8 @@
   "proj.design": "Choose a design (until the first stage is done):",
   "proj.designLocked": "Design (fixed once the first stage is built):",
   "proj.designA": "The original design",
-  "guide.projStartDesign": "Start the {name} project (Projects): you choose one of two designs"
+  "guide.projStartDesign": "Start the {name} project (Projects): you choose one of two designs",
+  "ruler.west": "West wing",
+  "ruler.core": "Core",
+  "ruler.east": "East wing"
 }

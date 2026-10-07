@@ -17,6 +17,7 @@ import { MenuPanel } from './ui/components/MenuPanel';
 import { Modal } from './ui/components/Modal';
 import { Toasts } from './ui/components/Toast';
 import { NumberPopupManager } from './ui/components/NumberPopup';
+import { DepthRuler } from './ui/components/DepthRuler'; // [plan4:ST-12]
 import { AudioEngine } from './audio/AudioEngine';
 import { setUiSound } from './audio/uiSound';
 import { timeOfDay } from './ui/HUD';
@@ -118,6 +119,7 @@ export class GameApp {
   toasts: Toasts;
   audio: AudioEngine;
   popups!: NumberPopupManager;
+  ruler!: DepthRuler;
   private ruinPanel: RuinPanel;
   journal = new JournalPanel();
   loreReader = new LoreReader();
@@ -256,6 +258,7 @@ export class GameApp {
     await Promise.all([ArtLibrary.preload([...new Set([...keys, 'backdrops/rock'])]), ArtLibrary.loadMeta(), ArtLibrary.loadBalance()]).catch(() => undefined);
 
     this.popups = new NumberPopupManager(this.renderer.worldContainer);
+    this.ruler = new DepthRuler(this.renderer); // [plan4:ST-12 #5]
     this.setupEventHandlers();
 
     this.engine.onRender = (dt, alpha) => this.frame(dt, alpha);
@@ -429,7 +432,7 @@ export class GameApp {
     if (this.renderer.cameraMoving) this.engine.noteCameraMotion();
     this.engine.fxBusy = this.renderer.fxActive || this.popups.anyIn(VIEW.x0, VIEW.y0, VIEW.x1, VIEW.y1);
     try { this.renderer.render(state, dt, alpha); } catch (err) { logCrash('render', err); throw err; }
-    this.guarded('hud', () => { this.hud.update(state); this.popups.update(); });
+    this.guarded('hud', () => { this.hud.update(state); this.popups.zoom = this.renderer.cameraZoom; this.popups.update(); this.ruler.update(state); });
     this.guarded('ui', () => this.frameUi(state));
   }
 

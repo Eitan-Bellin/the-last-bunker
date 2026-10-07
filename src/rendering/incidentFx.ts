@@ -9,6 +9,7 @@ import { puffTexture } from './atmosphere';
 import { Person } from './people';
 import { roomFlicker } from './paintedRoom';
 import { crisisLight } from './crisisLight';
+import { SlopArea } from './HitSlop'; // [plan4:ST-12]
 
 export interface RoomRect {
   x: number;
@@ -333,7 +334,7 @@ export class IncidentLayer {
     badge.addChild(halo, disc, ring, ic);
     badge.eventMode = 'static';
     badge.cursor = 'pointer';
-    badge.hitArea = new Rectangle(-22, -22, 44, 44);
+    badge.hitArea = new SlopArea(-22, -22, 44, 44, null, 48); // [plan4:ST-12 #4] max(44, 48 / zoom)
     badge.on('pointertap', (e) => {
       e.stopPropagation();
       this.onTap?.(inc.id, e.global.x, e.global.y);
