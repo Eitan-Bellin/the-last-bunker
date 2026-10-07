@@ -14,7 +14,7 @@ import { BASE_FLOORS, MAX_FLOORS, allowedFloors, crossesGallery } from '../data/
 import { RETOOL_PRICE_MULT, RETOOL_SECONDS, SPEC_COST, specTotal, specsFor } from '../data/specializations';
 import { RELOCATE_SECONDS, relocateBlock, relocateCost, stateWithout } from './relocate'; // [plan4:ST-19]
 import { isInfra } from '../data/buildingDefs'; // plan4:ST-14
-import { infraOccupies } from './doors'; // plan4:ST-15
+import { infraOccupies, pruneOrphanDoors } from './doors'; // plan4:ST-15, plan4:polish
 
 /** Slots east of the shaft on a floor without a wing. [plan4:X-2] Placement reads floorExtent(state, floor); this stays exported for tools. */
 export const SLOTS_PER_FLOOR = BASE_EAST;
@@ -394,6 +394,7 @@ export class BuildingSystem {
       path: 'survivors',
       value: sm.state.survivors.map(x => (x.assignedBuildingId === buildingId ? { ...x, assignedBuildingId: null } : x)),
     });
+    pruneOrphanDoors(sm); // [plan4:polish] its bulkhead doors go with it
     this.recalculateMaxPopulation(sm);
     bus.emit('building:demolished', buildingId);
     return true;
@@ -538,6 +539,7 @@ export class BuildingSystem {
       path: 'buildings',
       value: sm.state.buildings.map(x => (x.id === buildingId ? { ...x, position: { x: pos.x, y: 0, floor: pos.floor }, ...(until === undefined ? {} : { retoolUntil: until }) } : x)),
     });
+    pruneOrphanDoors(sm); // [plan4:polish] doors at its old and new spot that no longer stand between rooms
     bus.emit('building:relocated', buildingId);
     return true;
   }
