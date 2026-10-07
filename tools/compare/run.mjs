@@ -22,6 +22,7 @@
 //   --sizes <list>      CSS-pixel device sizes (default 375x667,375x812,390x844,430x932).
 //   --dpr <n>           device pixel ratio (default 2; plan 4 asks for 3 on the final protocol: pass --dpr 3).
 //   --cams <list>       view-id prefixes (default: all of __camIds, i.e. cam1..cam6; a view the bunker lacks is skipped and reported).
+//   --eval <js>         JavaScript run in the page after the game is frozen and before the shots (state tweaks such as a pushed district).
 //   --lang en|he        language (default en).     --quality low|medium|high   starting quality (the shot itself pins high, like __compare).
 //   --text <n>          not supported yet (reserved for the text-size axis of QA-2).
 //   --frames <n>        frames rendered by hand before each shot (default 20).
@@ -241,6 +242,8 @@ async function shootSource(origin, source, size, tag) {
     // Freeze the world: the game loop stops, so only the shot's own hand-stepped frames advance animation.
     await c.evalJs('__engine.paused = true; __engine.running = false; true', false);
     await sleep(500);
+    // --eval <js>: runs in the page once the game is frozen, before the shots (e.g. to set up a wing with __setExt).
+    if (flags.eval && flags.eval !== true) { await c.evalJs(String(flags.eval)); await sleep(400); }
     const ids = flags.cams ? String(flags.cams).split(',') : await c.evalJs('window.__camIds');
     const skipped = [];
     let n = 0;

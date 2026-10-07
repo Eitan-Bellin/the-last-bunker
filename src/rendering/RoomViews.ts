@@ -143,6 +143,14 @@ export class RoomViews {
         this.labelLayer.addChild(view.label);
       }
       view.gen = gen;
+      if (roomsChanged) {
+        // [plan4:ST-8] A district pushed out by an east wing keeps its view: only the place moves (people ride along inside the root).
+        const bx = buildingX(b), by = floorTop(b.position.floor);
+        if (view.root.x !== bx || view.root.y !== by) {
+          view.root.position.set(bx, by);
+          view.label.position.set(bx + view.width / 2, by - SLAB / 2);
+        }
+      }
       const isNew = b.isConstructing && b.level === 1;
       // [perf] What a room's look depends on (type, place, level, who is next to it) is one number for the whole bunker (hashLayout):
       // the neighbour search and the signature string run only when it changed, or when the room has no look yet / a painting arrived.
