@@ -80,6 +80,17 @@ export class EraPanel {
     this.sheet.hide();
   }
 
+  /** [plan4:ST-9] Scrolls the wing line into view and lets it glow for a moment (the "what's new" card's "Show me"). */
+  revealWings(): void {
+    const line = this.wingLine;
+    if (!line) return;
+    requestAnimationFrame(() => {
+      line.scrollIntoView({ block: 'center', behavior: 'auto' });
+      line.classList.add('wing-hl');
+      setTimeout(() => line.classList.remove('wing-hl'), 3200);
+    });
+  }
+
   get isVisible(): boolean {
     return this.sheet.isVisible;
   }

@@ -521,6 +521,8 @@ export function migrateState(saved: GameState): GameState {
   merged.currentFloors = Math.max(saved.currentFloors ?? 1, fresh.currentFloors);
   // [plan4:X-3] v7: no wings, doors or infrastructure yet; a partial layout keeps what it has.
   merged.layout = { ...createLayout(), ...(saved.layout ?? {}), v: 1 };
+  // [plan4:ST-9] A save from before v7 is owed the one-time "the bunker can grow sideways" card (ui/controllers/whatsnew.ts shows it after the first half hour, Act II+).
+  if ((saved.version ?? 1) < 7 && !(merged.storyFlags ?? []).includes('whatsnew:v7')) merged.storyFlags = [...(merged.storyFlags ?? []), 'whatsnew:v7'];
   if ((saved.version ?? 1) < 4) {
     // Bunkers from before the restoration update were never ruined and have already been "entered".
     merged.ruins = [];

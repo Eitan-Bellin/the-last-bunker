@@ -109,6 +109,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px
 /* [Long game] Act card and Foreman orders */
 .act-card .act-name { font-weight: 700; font-size: 1.1em; }
 .act-limits { font-size: 0.85em; opacity: 0.8; margin: 4px 0 8px; }
+.act-limits.wing-hl { opacity: 1; outline: 2px solid var(--amber); outline-offset: 3px; border-radius: 4px; } /* [plan4:ST-9] */
 .foreman { margin-top: 12px; }
 .foreman-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 6px 0; }
 .foreman-text { flex: 1; min-width: 0; }

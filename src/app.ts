@@ -77,6 +77,7 @@ import { DangerController } from './ui/controllers/danger';
 import { EventController } from './ui/controllers/events';
 import { StoryController } from './ui/controllers/story';
 import { SystemsController } from './ui/controllers/systems';
+import { WhatsNewController } from './ui/controllers/whatsnew'; // [plan4:ST-9]
 import { WelcomeController } from './ui/controllers/welcome';
 import { TipsController } from './ui/controllers/tips'; // [plan4:UX-11]
 import { PRODUCTION_POPUP_MS, WorldController } from './ui/controllers/world';
@@ -110,6 +111,8 @@ export class GameApp {
   readonly world = new WorldController(this);
   /** [Q7] "A new system" cards. */
   readonly systems = new SystemsController(this);
+  /** [plan4:ST-9] The one-time "the bunker can grow sideways" card for saves from v6. */
+  readonly whatsNew = new WhatsNewController(this);
   engine: GameEngine;
   renderer: BunkerRenderer;
   hud: HUD;
@@ -608,6 +611,12 @@ export class GameApp {
         label: () => i18n.t('journal.found'),
       },
       {
+        id: 'whatsNew', priority: 5, snoozeMs: 600_000, icon: '[[build]]', // [plan4:ST-9] last in line: every other dialog goes first
+        ready: () => this.whatsNew.hasDue(st()),
+        open: () => this.whatsNew.open(st()),
+        label: () => this.whatsNew.label(),
+      },
+      {
         id: 'district', priority: 10, snoozeMs: 300_000, icon: '[[pick]]',
         ready: () => this.districtFoundQueue.length > 0,
         open: () => this.dig.showDistrictFound(this.districtFoundQueue.shift()!),
@@ -692,6 +701,13 @@ export class GameApp {
   private onObjectiveTap(): void {
     this.audio.play('click');
     this.runAction(this.engine.objectiveSystem.current(this.state).action);
+  }
+
+  /** [plan4:ST-9] Opens the Command panel and draws the eye to its wing line. */
+  showWingLine(): void {
+    this.closeSheets();
+    this.eraPanel.show(this.state);
+    this.eraPanel.revealWings();
   }
 
   /** [Q2] Takes the player to where an objective or a guide step is dealt with. */

@@ -495,6 +495,13 @@ export function districtAndGalleryProblems(games: { name: string; json: string |
     g.buildings = [...g.buildings, { id: `d${i}`, type: av[0].kind as BuildingType, level: 1, position: { x: 12, y: 0, floor: av[0].floor }, assignedSurvivorIds: [], constructionProgress: 0, constructionTotal: 1, isConstructing: false, specialization: null }];
   }
   if (order.slice(0, 3).join() !== 'cave,lake,metro') fail(`the classic districts come in the order ${order.join()}`);
+  // [plan4:ST-9] The "what's new" card is owed to a save from v6 only (once; shown by ui/controllers/whatsnew.ts), never to a new game or a v7 save.
+  const fresh = createInitialState();
+  if (fresh.storyFlags.includes('whatsnew:v7') || fresh.storyFlags.includes('whatsnew:wings')) fail('a new game owes or has seen the what\'s-new card');
+  if (!migrateState({ ...fresh, version: 6 } as GameState).storyFlags.includes('whatsnew:v7')) fail('migrateState does not owe the what\'s-new card to a v6 save');
+  if (migrateState({ ...fresh, version: 7 } as GameState).storyFlags.includes('whatsnew:v7')) fail('migrateState owes the what\'s-new card to a v7 save');
+  const owed = migrateState({ ...fresh, version: 6, storyFlags: [...fresh.storyFlags, 'whatsnew:v7', 'whatsnew:wings'] } as GameState).storyFlags;
+  if (owed.filter(f => f === 'whatsnew:v7').length !== 1 || !owed.includes('whatsnew:wings')) fail('a second migration duplicated or dropped the what\'s-new flags');
   // Halls and galleries.
   if (GFX.galleries) {
     for (let f = 0; f < 23; f++) {
