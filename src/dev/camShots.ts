@@ -30,6 +30,7 @@ const CAMS: Cam[] = [
   { id: 'cam6-deep', at: s => ({ x: ROOMS_X + SLOT_W * 6, y: floorTop(Math.max(0, s.currentFloors - 2)) + ROOM_H / 2, z: 2 }) },
   // [plan4:ST-16] the surface (gate-house) row, once it is open (or its ruin before: null there, the entrance view cam3 shows it)
   { id: 'cam7-surface', at: s => ({ x: s.layout?.surfaceOpen ? (ROW_X0 + ROW_X1) / 2 : -200, y: -60, z: s.layout?.surfaceOpen ? 1.05 : 1.8 }) },
+  { id: 'cam8-surface-close', at: s => (s.layout?.surfaceOpen ? { x: ROW_X0 + (ROW_X1 - ROW_X0) * 0.62, y: -55, z: 2.4 } : null) }, // plan4:ST-16 two rooms of the row up close
 ];
 
 /** Steps the renderer by hand, so shots work even in a background tab where requestAnimationFrame sleeps. */

@@ -195,7 +195,7 @@ function windLook(W: number, rnd: () => number): Look {
     const omega = e.calm ? 0 : 0.35 + 3.4 * e.gust;
     spin += omega * e.dt;
     rotor.rotation = spin;
-    disc.alpha = clamp01((omega - 1.6) / 2.4) * 0.1;
+    disc.alpha = clamp01((omega - 2.2) / 1.6) * 0.06;
     lamp.alpha = Math.sin(e.t * 2.6) > 0.55 ? 0.35 + 0.65 * e.dark : 0.06;
   };
   return { body, glows, animate };
@@ -253,7 +253,7 @@ function towerLook(W: number, rnd: () => number): Look {
   const ph = rnd() * 6;
   const animate: Animator = e => {
     const sweep = e.calm ? 0 : Math.sin(e.t * 0.5 + ph);
-    beam.rotation = Math.PI * (0.62 + 0.13 * sweep); // west and down: toward the yard in front of the row
+    beam.rotation = Math.PI * (0.9 + 0.05 * sweep); // west and a little down (angles run clockwise from east): across the yard, not into the ground
     beam.alpha = 0.34 * e.dark * clamp01(e.power);
     warm.alpha = 0.55 * e.dark * clamp01(e.power);
     warm2.alpha = 0.8 * e.dark * clamp01(e.power) + 0.08;
@@ -496,6 +496,11 @@ export function buildYardApron(): Container {
   for (let x = slotX(-11); x <= ROW_X1; x += SLOT_W) g.rect(x - 0.5, -3, 1, 4).fill({ color: 0x24221e, alpha: 0.5 });
   const rnd = seeded(1616);
   for (let i = 0; i < 9; i++) g.rect(x0 + rnd() * (x1 - x0), 1 + rnd() * 6, 1.1, 3 + rnd() * 4).fill({ color: 0x6a3a1e, alpha: 0.3 });
+  // Surveyor's stakes with orange tape at the row's slot lines (every second one): the yard is ready to be built on; rooms stand in front of them.
+  for (let x = slotX(-11); x <= ROW_X1; x += SLOT_W * 2) {
+    g.rect(x - 0.7, -17, 1.4, 14).fill(0x5a4a34);
+    g.poly([x - 0.7, -17, x + 5.6, -15.4, x + 4.4, -12.6, x - 0.7, -13.6]).fill({ color: 0xff7a2a, alpha: 0.9 });
+  }
   // Steps at the west end.
   for (let i = 0; i < 3; i++) g.rect(x0 - 5 - (2 - i) * 4, -3.4 + (i + 1) * 2.4, 5 + (2 - i) * 4, 2.4).fill(shade(0x8a857a, 0.78 - i * 0.07));
   // A path of poured concrete from the apron to the hill, ending at the entrance.
@@ -506,34 +511,66 @@ export function buildYardApron(): Container {
   return c;
 }
 
-/** The old gate house before the yard is cleared: a broken concrete shell, rubble and a hazard tape across it. World coordinates; stands behind the grass. */
+/** The old gate house before the yard is cleared: a broken concrete shell with soot, moss and rebar, rubble heaped against it. World coordinates; stands behind the grass. */
 export function buildGateHouseRuin(): Container {
   const c = new Container();
   const g = new Graphics();
   const rnd = seeded(4242);
-  const x0 = -248, x1 = -156;
-  // Back wall: broken top, two window holes, stains.
-  const top: number[] = [];
-  for (let i = 0; i <= 10; i++) top.push(x0 + ((x1 - x0) * i) / 10, -(34 + rnd() * 26 + (i > 6 ? 12 : 0)));
-  g.poly([x0, -2, ...top, x1, -2]).fill(vGradient([[0, 0x6e6a62], [0.7, 0x4e4a44], [1, 0x34322e]]));
-  g.rect(x0 + 14, -46, 15, 12).fill(0x14120f);
-  g.rect(x0 + 52, -40, 13, 11).fill(0x14120f);
-  g.rect(x0 + 52, -29, 13, 1.4).fill({ color: 0x8a857a, alpha: 0.6 });
-  for (let i = 0; i < 5; i++) g.rect(x0 + 6 + rnd() * (x1 - x0 - 12), -50 + rnd() * 30, 1.2, 8 + rnd() * 14).fill({ color: 0x6a3a1e, alpha: 0.26 });
-  // A slab that came down at an angle, and rebar sticking out of everything.
-  g.poly([x0 + 40, -30, x0 + 86, -8, x0 + 82, -2, x0 + 36, -24]).fill(vGradient([[0, 0x8a857a], [1, 0x4a4640]]));
-  for (const [rx, ry, len, ang] of [[x0 + 8, -52, 14, -0.5], [x0 + 70, -62, 17, 0.35], [x0 + 88, -44, 11, 0.8], [x0 + 38, -33, 12, -0.9]] as [number, number, number, number][]) {
-    g.moveTo(rx, ry).lineTo(rx + Math.sin(ang) * len, ry - Math.cos(ang) * len).stroke({ color: 0x7a4a2a, width: 1.3, alpha: 0.95 });
+  const x0 = -254, x1 = -150, W = x1 - x0;
+  // The wall's broken skyline: a tall corner column on the left, a stepped collapse in the middle, a low stump on the right.
+  const top: [number, number][] = [];
+  const heights = [66, 66, 58, 46, 52, 38, 44, 30, 36, 24, 20];
+  heights.forEach((h, i) => top.push([x0 + (W * i) / (heights.length - 1), -(h + (rnd() - 0.5) * 7)]));
+  g.poly([x0, -2, ...top.flat(), x1, -2]).fill(vGradient([[0, 0x6a655c], [0.55, 0x4c483f], [1, 0x2c2924]]));
+  // Shadowed side of the corner column and the fallen edge: a darker band along the broken top.
+  g.poly([x0, -2, x0, -66, x0 + 9, -66, x0 + 9, -2]).fill({ color: 0x000000, alpha: 0.22 });
+  // Courses of poured concrete: faint horizontal seams.
+  for (let y = -12; y > -62; y -= 13) g.rect(x0, y, W * 0.78, 1.1).fill({ color: 0x1c1a16, alpha: 0.32 });
+  // Two window holes (one frame still standing) with soot licking up from them.
+  for (const [wx, wy, ww, wh] of [[x0 + 16, -50, 15, 13], [x0 + 52, -38, 14, 12]] as [number, number, number, number][]) {
+    g.rect(wx - 2, wy - 11, ww + 4, 11).fill(vGradient([[0, 0x000000, 0], [1, 0x000000, 0.4]])); // soot above the opening, inside the wall
+    g.rect(wx, wy, ww, wh).fill(vGradient([[0, 0x0a0908], [1, 0x1c1a16]]));
+    g.rect(wx - 1.5, wy - 1.5, ww + 3, 1.6).fill({ color: 0x8a857a, alpha: 0.5 });
   }
+  g.rect(x0 + 52 + 6.5, -38, 1.2, 12).fill(0x4a463e);
+  // A slab that came down at an angle across the opening, and cracks.
+  g.poly([x0 + 40, -34, x0 + 88, -9, x0 + 84, -2, x0 + 36, -27]).fill(vGradient([[0, 0x8a857a], [1, 0x403c36]]));
+  g.poly([x0 + 40, -34, x0 + 88, -9, x0 + 87, -11, x0 + 41, -35.5]).fill({ color: 0xe0d8c8, alpha: 0.22 });
+  for (const pts of [[x0 + 28, -64, x0 + 32, -50, x0 + 27, -40], [x0 + 70, -44, x0 + 74, -30, x0 + 70, -20], [x0 + 6, -30, x0 + 12, -20, x0 + 8, -8]]) {
+    g.moveTo(pts[0], pts[1]).lineTo(pts[2], pts[3]).lineTo(pts[4], pts[5]).stroke({ color: 0x14120f, width: 1.1, alpha: 0.5 });
+  }
+  // Rebar: bent, rusty, sticking out of every break.
+  for (const [rx, ry, len, ang] of [[x0 + 6, -66, 15, -0.5], [x0 + 70, -50, 18, 0.35], [x0 + 92, -30, 12, 0.8], [x0 + 38, -34, 13, -0.9], [x1 - 6, -24, 11, 0.5]] as [number, number, number, number][]) {
+    g.moveTo(rx, ry).lineTo(rx + Math.sin(ang) * len, ry - Math.cos(ang) * len).stroke({ color: 0x7a4a2a, width: 1.4, alpha: 0.95 });
+  }
+  // Moss and weeds on the broken top and in the cracks.
+  g.poly(top.flat(), false).stroke({ color: 0x9a9486, width: 1.5, alpha: 0.55 }); // the sun on the broken edge
+  for (let i = 0; i < 11; i++) {
+    const [mx, my] = top[i];
+    g.ellipse(mx + (rnd() - 0.5) * 5, my + 2.4, 2.2 + rnd() * 2, 1 + rnd() * 0.6).fill({ color: i % 3 ? 0x465a2c : 0x5a6a34, alpha: 0.7 });
+  }
+  // Rust and damp streaks running down the face.
+  for (let i = 0; i < 6; i++) g.rect(x0 + 6 + rnd() * (W - 12), -52 + rnd() * 28, 1.4, 8 + rnd() * 16).fill({ color: i % 2 ? 0x6a3a1e : 0x1e2a1a, alpha: 0.3 });
   c.addChild(g);
   const heap = ArtLibrary.get('kit/prop-5');
   if (heap) {
-    for (const [x, h, flip] of [[x0 + 18, 26, false], [x0 + 62, 32, true], [x1 - 4, 20, false], [x0 - 6, 18, true]] as [number, number, boolean][]) {
+    for (const [x, h, flip] of [[x0 + 20, 30, false], [x0 + 64, 38, true], [x1 - 2, 24, false], [x0 - 8, 20, true], [x0 + 92, 22, true]] as [number, number, boolean][]) {
       const s = new Sprite(heap);
       s.anchor.set(0.5, 0.95);
       const k = h / heap.height;
       s.scale.set(flip ? -k : k, k);
       s.position.set(x, 0);
+      c.addChild(s);
+    }
+  }
+  const weeds = ArtLibrary.get('kit/prop-7');
+  if (weeds) {
+    for (const [x, h, flip] of [[x0 + 34, 20, false], [x0 + 80, 17, true], [x1 + 4, 15, false]] as [number, number, boolean][]) {
+      const s = new Sprite(weeds);
+      s.anchor.set(0.5, 0.92);
+      const k = h / weeds.height;
+      s.scale.set(flip ? -k : k, k);
+      s.position.set(x, 1);
       c.addChild(s);
     }
   }

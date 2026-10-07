@@ -607,7 +607,7 @@ export class BunkerRenderer {
     const exts = this.extsFor(state);
     this.exts = exts;
     this.extentL = exts.reduce((m, x) => Math.max(m, x.w), 0) > 0 ? slotX(-exts.reduce((m, x) => Math.max(m, x.w), 0)) - 14 : 0;
-    if (this.rowOpen) this.extentL = Math.min(this.extentL, ROW_X0 - 14); // plan4:ST-16 the camera may pan to the row's west end
+    this.extentL = Math.min(this.extentL, this.rowOpen ? ROW_X0 - 14 : -280); // plan4:ST-16 the camera may pan to the row's west end, or (closed) to the ruin of the old gate house
     this.extentWingR = slotX(exts.reduce((m, x) => Math.max(m, x.e), 12));
     this.extentR = Math.max(BUILDING_W, this.extentWingR, this.projectSites.right);
     // [plan4:ST-4] A west wing past the classic edge: the sky, ground and dark edge of the surface move out with the rock (rebuilt once per two-slot step).
