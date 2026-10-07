@@ -11,6 +11,9 @@
  *
  * Only paintings listed here give people anything to use; every other room keeps its work spots (workSpots.ts).
  */
+import { composedKey } from '../art/registry'; // [plan4:BL-6]
+import { composedMeta, composedTypes } from './roomComposer'; // [plan4:BL-6]
+
 export interface BedDef { x: number; y: number; head: -1 | 1 }
 export interface SeatDef { x: number; y: number; face: 1 | -1; kind: 'sit' | 'eat' }
 export interface RoomSetDef {
@@ -45,3 +48,20 @@ export const ROOM_SET: Record<string, RoomSetDef> = {
   'rooms/canteen-0': { seats: [{ x: 0.33, y: 0.755, face: 1, kind: 'eat' }, { x: 0.83, y: 0.755, face: -1, kind: 'eat' }] },
   'rooms/canteen-1': { seats: [{ x: 0.17, y: 0.745, face: 1, kind: 'eat' }, { x: 0.9, y: 0.745, face: -1, kind: 'eat' }] },
 };
+
+// ---- [plan4:BL-6] composed rooms: beds, seats and work spots come from the room's own spec (dry pass), under the same keys as paintings ----
+
+/** Work spots of the composed rooms in workSpots.ts' own format (`[x, face, activity?, depth?]`); spread into its ROOMS table. */
+export const COMPOSED_SPOTS: Record<string, { spots: readonly (readonly [number, 1 | -1, string?, number?])[] }> = {};
+
+for (const type of composedTypes()) {
+  for (const tier of [0, 1, 2] as const) {
+    const key = `rooms/${type}-${tier}`;
+    const ck = composedKey(key);
+    if (!ck || ck.painted) continue; // a painted room has its own hand-placed data
+    const m = composedMeta(type, tier, ck.slots);
+    if (!m) continue;
+    if (m.beds.length || m.seats.length) ROOM_SET[key] = { beds: m.beds, seats: m.seats };
+    if (m.spots.length) COMPOSED_SPOTS[key] = { spots: m.spots };
+  }
+}

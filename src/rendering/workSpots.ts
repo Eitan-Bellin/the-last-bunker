@@ -3,7 +3,7 @@ import { ArtLibrary } from '../art/ArtLibrary';
 import { artEntry } from '../art/registry';
 import type { Activity, Lane } from './people';
 import { lightProfile, sampleProfile, type LightProfile } from './lightStrip';
-import { ROOM_SET } from './roomSet';
+import { COMPOSED_SPOTS, ROOM_SET } from './roomSet'; // plan4:BL-6
 
 /**
  * gfx-p0 people: where survivors stand to work in each painting, so the chef stirs the pot on the stove,
@@ -42,6 +42,7 @@ const PURIFIER: RoomDef = { spots: [[0.14, 1, 'wrench'], [0.47, 1, 'wrench'], [0
 const WORKSHOP: RoomDef = { spots: [[0.16, 1, 'hammer'], [0.5, 1, 'wrench'], [0.76, 1, 'wrench']] };
 
 const ROOMS: Record<string, RoomDef> = {
+  ...(COMPOSED_SPOTS as Record<string, RoomDef>), // plan4:BL-6 work spots of the composed rooms (roomSet.ts)
   'rooms/armory-0': ARMORY, 'rooms/armory-1': ARMORY,
   'rooms/armory-2': { spots: [[0.17, 1, 'hammer'], [0.58, 1, 'type'], [0.93, -1, 'type']] },
   'rooms/canteen-0': CANTEEN_OLD, 'rooms/canteen-1': CANTEEN_OLD,
