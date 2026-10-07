@@ -12,6 +12,7 @@ import type { BackupInfo, BackupKind } from '../../core/SaveManager';
 import { getA11y, setA11y } from '../../utils/a11y';
 import { haptic } from '../../utils/haptics';
 import { enhanceTabs } from '../a11yDom';
+import { isIosBrowserTab } from '../../utils/platform'; // [plan4:UX-15]
 
 export type MenuTab = 'settings' | 'a11y' | 'stats' | 'achievements' | 'genesis';
 
@@ -250,6 +251,13 @@ export class MenuPanel {
         this.refresh(this.engine.stateManager.state);
       }));
     const notifyHint = el('div', 'bp-hint', i18n.t('settings.notifyWebHint'));
+    // [plan4:UX-15] Safari in a tab on an iPhone cannot keep this promise (the page is suspended in seconds): no switch, an honest line instead.
+    // Android, desktop and the home-screen app keep the switch as it was.
+    const iosTab = isIosBrowserTab();
+    if (iosTab) {
+      notify.replaceChildren(el('span', '', `[[bell]] ${i18n.t('settings.notifications')}`), el('span', 'bp-value', i18n.t('settings.notifyUnsupported')));
+      notifyHint.textContent = i18n.t('settings.notifyIosHint');
+    }
     const diag = el('div', 'bp-row');
     diag.append(el('span', '', `[[chart]] ${i18n.t('settings.diagnostics')}`),
       button(i18n.t('settings.diagnosticsCopy'), 'btn-small', () => { uiSound('switch'); this.actions.copyDiagnostics(); }));
