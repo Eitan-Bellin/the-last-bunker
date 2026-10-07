@@ -2,7 +2,7 @@ import { Container, Graphics, Sprite, Texture } from 'pixi.js';
 import type { BuildingInstance } from '../core/GameState';
 import { isHall, roomSlots } from '../data/buildingDefs';
 import { glowTexture, moteTexture } from '../art/ArtLibrary';
-import { ROOMS_W, ROOMS_X, ROOM_H, SLOT_W, floorAtY, floorTop, slotX } from './layout';
+import { BASE_EAST, ROOMS_X, ROOM_H, SHAFT_GAP, SLOT_W, floorAtY, floorTop, slotX } from './layout';
 import { hashString, seeded } from './draw';
 import type { WorldLamp } from './structure';
 import type { DecalSources } from './decals';
@@ -116,11 +116,27 @@ export function buildAtmosphere(buildings: BuildingInstance[], floors: number, e
       n -= 1;
       if (fr() > chance) continue;
       // Joints sit where pipe sections meet: half-slot marks along the run.
-      const x = ROOMS_X + SLOT_W / 4 + Math.floor(fr() * (2 * ROOMS_W / SLOT_W - 1)) * (SLOT_W / 2);
+      const x = ROOMS_X + SLOT_W / 4 + Math.floor(fr() * (2 * (exts[f]?.e ?? BASE_EAST) - 1)) * (SLOT_W / 2);
       if (halls.some(([a, b]) => x > a - 4 && x < b + 4)) continue;
       const y = floorTop(f) + 6;
       valve(fixtures, x, y, fr);
       ems.push({ kind: 'steam', x: x + 2.5, y: y - 1, next: fr() * 6, until: 0, w: fr() < 0.5 ? -1 : 1, floorY: 0, color: 0xd6dadb, alive: 0 });
+    }
+    // [plan4:ST-4] A west wing has its own valves on its bundle (own random stream: the east side stays as it was).
+    const ew = exts[f]?.w ?? 0;
+    if (ew > 0) {
+      const wr = seeded(hashString(`steam-w:${f}`));
+      let m = perFloor;
+      while (m > 0) {
+        const chance = Math.min(1, m);
+        m -= 1;
+        if (wr() > chance) continue;
+        const x = -SHAFT_GAP - SLOT_W / 4 - Math.floor(wr() * (2 * ew - 1)) * (SLOT_W / 2);
+        if (halls.some(([a, b]) => x > a - 4 && x < b + 4)) continue;
+        const y = floorTop(f) + 6;
+        valve(fixtures, x, y, wr);
+        ems.push({ kind: 'steam', x: x + 2.5, y: y - 1, next: wr() * 6, until: 0, w: wr() < 0.5 ? -1 : 1, floorY: 0, color: 0xd6dadb, alive: 0 });
+      }
     }
   }
 

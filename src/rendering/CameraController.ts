@@ -28,6 +28,8 @@ export interface CameraHost {
   contentBottom(): number;
   /** Right edge of everything built (rooms and project lots). */
   extentR(): number;
+  /** [plan4:ST-4] Left edge of everything built: 0 until a floor has a west wing, then the outer face of the widest wing. */
+  extentL?(): number;
   /** World y of the top of the tallest project building on the surface. */
   projectTop(): number;
   /** Scene clock in seconds (drives the shake noise). */
@@ -429,7 +431,7 @@ export class CameraController {
     const halfW = width / 2 / z;
     const halfH = (height - HUD_TOP - HUD_BOTTOM) / 2 / z;
     const b = this.bnd;
-    const minX = -SIDE_MARGIN, maxX = this.host.extentR() + SIDE_MARGIN;
+    const minX = Math.min(0, this.host.extentL?.() ?? 0) - SIDE_MARGIN, maxX = this.host.extentR() + SIDE_MARGIN;
     if (maxX - minX <= halfW * 2) b.x0 = b.x1 = (minX + maxX) / 2;
     else { b.x0 = minX + halfW; b.x1 = maxX - halfW; }
     // An open sheet lets the camera go lower, so the deepest rooms can sit above it.

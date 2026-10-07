@@ -91,7 +91,7 @@ function gateLeaf(w: number, h: number, steel: number): Graphics {
   return g;
 }
 
-export function buildShaft2(floors: number, era: number, onArrive?: () => void): Animated {
+export function buildShaft2(floors: number, era: number, onArrive?: () => void, westFloors: readonly boolean[] = []): Animated {
   const st = kitState(era);
   const S = STYLE[st];
   const root = new Container();
@@ -381,6 +381,24 @@ export function buildShaft2(floors: number, era: number, onArrive?: () => void):
     landings.addChild(dot);
     lampGlows.addChild(halo);
     lamps.push({ dot, halo });
+    // [plan4:ST-4] A floor with a west wing has a second landing door: a steel doorframe in the shaft's west wall, the leaf ajar on a lit passage,
+    // a lamp over it. (The east side is the lattice gate's own opening.)
+    if (westFloors[f]) {
+      const wy = top + HEADER_Y, wh = FLOOR_LIP - HEADER_Y;
+      // The doorframe itself stands in the structure layer (structure.ts, over the room's edge); here the shaft's side of it: a threshold and the lamp.
+      const wg = new Graphics();
+      wg.rect(1, wy + wh - 2, 5, 2).fill(0x2a2b28);
+      wg.rect(1, wy + 6, 0.8, wh - 8).fill({ color: 0xffc070, alpha: 0.35 });
+      landings.addChild(wg);
+      const wh2 = new Sprite(glow);
+      wh2.anchor.set(0.5);
+      wh2.tint = 0xffb868;
+      wh2.width = 26;
+      wh2.height = 34;
+      wh2.alpha = 0.4;
+      wh2.position.set(-1, wy + wh * 0.62);
+      lampGlows.addChild(wh2);
+    }
   }
 
   // ---------- Pulley housing at the head of the shaft ----------
