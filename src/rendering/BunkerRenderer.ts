@@ -21,6 +21,8 @@ import { Dust, buildDigSign, buildShaft, buildSurface, buildUnderground, buildUt
 import { LAYOUT, VIEW, bandize, hashLayout } from './perfFx'; // [perf]
 import { buildShaft2, type ShaftAnimated } from './shaft';
 import { Walkers } from './walkers'; // plan4:ST-18
+import { setDoorBlocked } from './routes'; // plan4:ST-18
+import { isPassable } from '../systems/doors'; // plan4:ST-14
 import { buildGalleries } from './gallery'; // [plan4:ST-1]
 import { buildSurface2, mountSurface2, surface2Sig } from './surface2'; // [gfx2 surface]
 import { roomFlicker, setRoomFxQuality } from './paintedRoom'; // gfx-p0 rooms: quality
@@ -868,7 +870,12 @@ export class BunkerRenderer {
     this.onPersonDrop?.(d.survivorId, overHud ? null : this.targetAt(sx, sy - BunkerRenderer.LIFT_PX));
   }
 
+  /** [plan4:ST-14/18] Latest state for the walkers' door check (one closure for the renderer's life: no allocation per frame). */
+  private doorState: GameState | null = null;
+  private readonly doorBlockedFn = (f: number, a: number, b: number): boolean => !!this.doorState && !isPassable(this.doorState, f, a, b);
+
   private renderPeople(state: GameState, dt: number): void {
+    this.doorState = state; setDoorBlocked(this.doorBlockedFn); // plan4:ST-14/18 closed or sealed bulkheads stop walkers
     this.walkers.update(dt, this.time, this.cam.zoom); // plan4:ST-18 (before the placement below, so a finished walk is placed this picture)
     const quarters = state.buildings.filter(b => b.type === 'quarters' && !(b.isConstructing && b.level === 1));
     const seen = new Set<string>();
