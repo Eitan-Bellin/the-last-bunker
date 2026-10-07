@@ -10,6 +10,7 @@
     "f24-idle-medium":     { "floors": 24, "people": 60, "camera": "overview", "quality": "medium", "mode": "idle", "maxDrawCalls": 720, "maxRenderables": 7100, "maxStructureChangedPct": 5, "maxAllocKBPerFrame": 1300, "maxGpuTextureMB": 280, "maxBusyPct": 12 },
     "f24w-overview-medium": { "floors": 24, "people": 60, "camera": "overview", "quality": "medium", "fixture": "wide", "pending": true, "maxDrawCalls": 730, "maxRenderables": 7100, "maxStructureChangedPct": 5, "maxAllocKBPerFrame": 600, "maxGpuTextureMB": 280 },
     "f24w-close-medium":    { "floors": 24, "people": 60, "camera": "close",    "quality": "medium", "fixture": "wide", "pending": true, "maxDrawCalls": 440, "maxRenderables": 4400, "maxStructureChangedPct": 5, "maxAllocKBPerFrame": 430, "maxGpuTextureMB": 280 },
+    "f24w-walk-close-medium": { "floors": 24, "people": 60, "camera": "close", "quality": "medium", "fixture": "wide-walk", "pending": true, "maxDrawCalls": 450, "maxRenderables": 4450, "maxStructureChangedPct": 5, "maxAllocKBPerFrame": 450, "maxGpuTextureMB": 280 },
     "f24w-far-medium":      { "floors": 24, "people": 60, "camera": "far",      "quality": "medium", "fixture": "wide", "pending": true, "maxDrawCalls": 220, "maxRenderables": 800,  "maxStructureChangedPct": 5, "maxAllocKBPerFrame": 2000, "maxGpuTextureMB": 290 },
     "audio-start":         { "kind": "audio", "maxReadyMs": 25000, "maxLongTaskMs": 2500, "maxLongTaskMax": 700, "maxPeakGainMB": 650 },
     "offline-24h":         { "kind": "offline", "floors": 24, "people": 60, "hours": 24, "maxLongestMs": 150 }
