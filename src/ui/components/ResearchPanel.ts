@@ -4,6 +4,7 @@ import { i18n } from '../../i18n/I18nManager';
 import { BRANCHES, REFINEMENTS, RESEARCH, type ResearchBranch, type ResearchDef } from '../../data/research';
 import { refinementLevel } from '../../systems/ResearchSystem';
 import { Sheet } from './Sheet';
+import { enhanceTabs } from '../a11yDom';
 import { bar, button, costRow, el, setBar, setRich } from '../dom';
 import { uiSound } from '../../audio/uiSound';
 import { genesisRequirements } from './MenuPanel';
@@ -111,6 +112,7 @@ export class ResearchPanel {
       });
       tabs.appendChild(t);
     }
+    enhanceTabs(tabs, i18n.t('research.title'));
     root.appendChild(tabs);
 
     const list = el('div', 'research-list');

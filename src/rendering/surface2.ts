@@ -1,6 +1,7 @@
 import { Container, Graphics, MeshSimple, Sprite, Text, Texture, TilingSprite } from 'pixi.js';
 import { ArtLibrary, glowTexture, moteTexture } from '../art/ArtLibrary';
 import { bus } from '../core/EventBus';
+import { flashOk, reducedMotion } from '../utils/a11y';
 import { viewport } from '../utils/viewport'; // [perf] window size without forcing layout
 import { BUILDING_W, SHAFT_W } from './layout';
 import { GFX } from './gfxFeatures';
@@ -813,8 +814,10 @@ export function buildSurface2(
     animate: (t, power) => {
       // A replaced surface can still get one call after it was destroyed (the sprites are gone by then).
       if (root.destroyed) return;
-      const dt = lastT < 0 ? 0 : Math.min(0.1, Math.max(0, t - lastT));
+      const calm = reducedMotion(); // [plan4:AC-2] reduced motion: no drift, parallax, wind, birds or weather: the picture holds still (the clock tint still follows the day)
+      const dt = calm || lastT < 0 ? 0 : Math.min(0.1, Math.max(0, t - lastT));
       lastT = t;
+      if (calm) t = 0;
       const budget = BUDGET[quality];
 
       // Camera: the visible world rectangle, read from the world container's transform.
@@ -828,7 +831,7 @@ export function buildSurface2(
       }
       const surfaceShown = view.y0 < 60;
       // Parallax: the panorama follows the camera a little, so it reads as far away.
-      const cx = (view.x0 + view.x1) / 2, cy = (view.y0 + view.y1) / 2;
+      const cx = calm ? BUILDING_W / 2 : (view.x0 + view.x1) / 2, cy = calm ? PAR_REF_Y : (view.y0 + view.y1) / 2;
       const ox0 = Math.max(-30, Math.min(30, (cx - BUILDING_W / 2) * PAR_X));
       const oy0 = Math.max(-18, Math.min(42, (cy - PAR_REF_Y) * PAR_Y));
       // Two layers (plan 2026-10 Q7): the sky and its clouds follow the camera twice as much as the landscape does, so the
@@ -901,10 +904,10 @@ export function buildSurface2(
       mist.alpha = haze.alpha * 0.75;
       mist.visible = quality !== 'low';
 
-      // Lightning in heavy rain (not in the ash era): a double flicker behind the skyline.
+      // Lightning in heavy rain (not in the ash era): one soft flash behind the skyline. [plan4:AC-5] Single stroke, lower alpha, flash budget.
       flashAge += dt;
-      if (era >= 1 && rain > 0.7 && lr() < dt / (dev === 'storm' ? 5 : 28)) flashAge = 0;
-      flash.alpha = flashAge < 0.7 ? 0.42 * Math.exp(-flashAge * 10) + (flashAge > 0.16 ? 0.3 * Math.exp(-(flashAge - 0.16) * 7) : 0) : 0;
+      if (era >= 1 && rain > 0.7 && lr() < dt / (dev === 'storm' ? 5 : 28) && flashOk('lightning')) flashAge = 0;
+      flash.alpha = flashAge < 0.7 ? 0.28 * Math.exp(-flashAge * 10) : 0;
       flash.visible = flash.alpha > 0.003;
 
       const dark = Math.min(1, Math.max(0, (night - 0.25) / 0.5));
@@ -928,8 +931,8 @@ export function buildSurface2(
         const smokeCap = quality === 'low' ? 0.5 : 1;
         for (const s of farSmoke) s.update(dt, wind, 99, smokeCap * (1 - 0.6 * rain));
         vent?.update(dt, wind, 99, smokeCap * (0.6 + 0.4 * on));
-        birds?.update(t, dt, night, rain);
-        weather.update(dt, t, view, wind, rain, ash, budget, 1 - 0.55 * dark, era === 0);
+        birds?.update(t, dt, calm ? 1 : night, rain); // [plan4:AC-2] night = no flocks
+        weather.update(dt, t, view, wind, calm ? 0 : rain, calm ? 0 : ash, budget, 1 - 0.55 * dark, era === 0);
       }
       weatherLayer.visible = surfaceShown;
 

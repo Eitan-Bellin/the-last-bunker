@@ -6,6 +6,7 @@ import { childCapacityOf } from '../../data/roomEffects'; // [plan4:BL-4]
 import { MORALE_KINDS, STAT_KEYS, xpForNextLevel } from '../../systems/PopulationSystem';
 import { Sheet } from './Sheet';
 import { genderOf, portraitFor, portraitUrl } from '../../data/portraits';
+import { enhanceTabs } from '../a11yDom';
 import { BUILDING_ICONS, STAT_ICONS, bar, button, el, localizedTrait, setBar } from '../dom';
 import { uiSound } from '../../audio/uiSound';
 import { MAX_RANK, SPECS, rankOf, rankProgress, trainingCost } from '../../data/mastery'; // [LateGame B3]
@@ -83,6 +84,7 @@ export class PeoplePanel {
         this.refresh(this.engine.stateManager.state);
       }));
     }
+    enhanceTabs(tabs, i18n.t('people.title'));
     if (this.mode === 'tree') {
       this.sheet.body.replaceChildren(tabs, this.renderTree(state));
       return;

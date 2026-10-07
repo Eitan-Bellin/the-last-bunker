@@ -2,6 +2,8 @@ import { ENDINGS } from '../../data/endings';
 import { SEASONS, nextSeason, seasonAt } from '../../data/seasons';
 import { ACTS } from '../../data/acts';
 import { haptic } from '../../utils/haptics';
+import { statusTint } from '../../utils/a11y';
+import { announce } from '../a11yDom';
 import { getProject } from '../../data/projects';
 import { getPartner } from '../../data/trade';
 import { WEEKLY_CREDITS } from '../../data/challenges';
@@ -53,7 +55,7 @@ export class FeedbackController {
         setTimeout(() => this.app.audio.play('hiss', { volume: 0.6 }), 260);
       }
       const c = this.app.renderer.roomCenter(b);
-      this.app.popups.spawn(c.x, c.y, '[[check]]', 0x44ff88);
+      this.app.popups.spawn(c.x, c.y, '[[check]]', statusTint('ok'));
     });
 
     bus.on('survivor:levelup', (s: unknown, stat: unknown) => {
@@ -110,6 +112,9 @@ export class FeedbackController {
       this.app.renderer.shake(inc.kind === 'breach' ? 6 : 4, 0.5);
       haptic('warning');
       this.app.toasts.show(`[[${def.icon}]] ${i18n.t('incident.started', { name: def.name[i18n.currentLocale], room: this.app.roomName(inc.buildingId) })}`, 'bad');
+      // [plan4:AC-11] Said to a screen reader as an alert, with the floor (when the player turned announcements on).
+      const floor = this.app.state.buildings.find(b => b.id === inc.buildingId)?.position.floor ?? 0;
+      announce(i18n.t('announce.incident', { name: def.name[i18n.currentLocale], floor: floor + 1 }), 'assertive');
     });
     bus.on('incident:burnout', (i: unknown) => {
       const inc = i as Incident;
@@ -129,7 +134,7 @@ export class FeedbackController {
       const rect = this.app.renderer.roomRect(incident.buildingId);
       if (rect) {
         this.app.renderer.floatIcons(rect.x + rect.w / 2, rect.y + 40, 'star', 5, '#ffd27a');
-        this.app.popups.spawn(rect.x + rect.w / 2, rect.y + 30, `[[check]] ${def.name[i18n.currentLocale]}`, 0x7affb0);
+        this.app.popups.spawn(rect.x + rect.w / 2, rect.y + 30, `[[check]] ${def.name[i18n.currentLocale]}`, statusTint('ok'));
       }
       this.app.toasts.show(`[[check]] ${i18n.t(quick ? 'incident.fixedQuick' : 'incident.fixed', { name: def.name[i18n.currentLocale] })}`, 'good');
       this.app.engine.requestSave();

@@ -61,6 +61,13 @@ export function reducedMotion(): boolean {
   }
 }
 
+/** [plan4:AC-2] With reduced motion a camera glide becomes a quick cut this long (ms); read it with `snapCamera()`. */
+export const SNAP_MS = 120;
+/** True when camera glides (focus on a room, zoom to an alert, recentre) should be cuts of `SNAP_MS` instead of eased travel. */
+export function snapCamera(): boolean {
+  return reducedMotion();
+}
+
 /** Puts the settings on <html>: the stylesheets key off these attributes and --fs, nothing else. */
 function apply(): void {
   const root = document.documentElement;
@@ -145,4 +152,59 @@ export function subscribeA11y(fn: Listener): () => void {
   initA11y();
   listeners.add(fn);
   return () => { listeners.delete(fn); };
+}
+
+// ---------------------------------------------------------------------------------------------------------------------------------
+// [plan4:AC-5] Flash budget (photosensitivity): the whole game may flash at most 3 times a second, whatever the effects do.
+// ---------------------------------------------------------------------------------------------------------------------------------
+/** Start times (s) of the last three granted flashes: a ring, so asking costs no allocation. */
+const flashRing = new Float64Array(3).fill(-1e9);
+let flashHead = 0;
+/** For the debug/QA tool: how many flashes were granted and how many refused since the page started. */
+export const flashStats = { granted: 0, denied: 0 };
+
+/** The player asked for no flashes at all: every effect shows a steady tint (and its icon) instead. */
+export function flashSafe(): boolean {
+  return current.flash === 'safe';
+}
+
+/**
+ * Asks to start a flash (a lightning stroke, an electric arc, a beacon beat). Returns true at most 3 times in any second across all
+ * effects, and never in `flash: 'safe'`. `now` is in seconds and defaults to the wall clock; a test passes its virtual clock (or sets `window.__flashNow`).
+ */
+export function flashOk(_id: string, now: number = (globalThis as { __flashNow?: number }).__flashNow ?? performance.now() / 1000): boolean {
+  if (current.flash === 'safe') { flashStats.denied++; return false; }
+  // The oldest of the last three starts must be a second old or more.
+  if (now - flashRing[flashHead] < 1) { flashStats.denied++; return false; }
+  flashRing[flashHead] = now;
+  flashHead = (flashHead + 1) % 3;
+  flashStats.granted++;
+  return true;
+}
+
+// ---------------------------------------------------------------------------------------------------------------------------------
+// [plan4:AC-6] Status colours (good / warning / bad / info) per colour-vision mode. One table for the canvas (statusTint) and the
+// stylesheets (--ok --warn --bad --info in a11y.css carry the same values): no hex for "good" or "bad" lives anywhere else.
+// Colour is never the only signal: AC-7 adds an icon or a pattern next to every state.
+// ---------------------------------------------------------------------------------------------------------------------------------
+export type StatusKind = 'ok' | 'warn' | 'bad' | 'info';
+type ColorMode = A11ySettings['colorMode'];
+
+const STATUS: Record<ColorMode, Record<StatusKind, number>> = {
+  none: { ok: 0x7dff9e, warn: 0xffb547, bad: 0xff5555, info: 0x6fc3ff },
+  // Red-green deficiencies: blue / yellow / dark magenta separate on the blue-yellow axis they still see.
+  deuter: { ok: 0x4aa3ff, warn: 0xffc83d, bad: 0xe0457b, info: 0x8fe0ff },
+  protan: { ok: 0x4aa3ff, warn: 0xffc83d, bad: 0xe0457b, info: 0x8fe0ff },
+  // Blue-yellow deficiency: teal / salmon / red / lilac separate on the red-green axis.
+  tritan: { ok: 0x3ed0a8, warn: 0xff9f6b, bad: 0xff3d5a, info: 0xc7a6ff },
+};
+
+/** The colour (0xRRGGBB) of a state for Pixi tints and fills, in the player's colour mode. */
+export function statusTint(kind: StatusKind): number {
+  return STATUS[current.colorMode][kind];
+}
+
+/** The same colour as a CSS string, for the few DOM places that cannot use the --ok/--warn/--bad/--info tokens. */
+export function statusCss(kind: StatusKind): string {
+  return `#${statusTint(kind).toString(16).padStart(6, '0')}`;
 }

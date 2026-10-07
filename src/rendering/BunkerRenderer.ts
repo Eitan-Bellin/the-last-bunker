@@ -30,6 +30,7 @@ import { SlopArea, hitState } from './HitSlop'; // [plan4:ST-12]
 import { PostFX, startQuality, targetResolution } from './postfx';
 import { isLiteMode, logCrash } from '../core/crashGuard';
 import { isTouchDevice } from '../utils/device';
+import { statusTint } from '../utils/a11y';
 import { coneTexture } from '../art/ArtLibrary';
 import { buildRuinVisual } from './ruinArt';
 import { iconSprite } from './richText';
@@ -1320,7 +1321,7 @@ export class BunkerRenderer {
     view.bar = null;
     const icon = blocked ? 'lock' : r.started ? (workers > 0 ? 'pick' : 'worker') : r.kind === 'wreck' ? 'workshop' : 'broom';
     const ring = new Graphics();
-    const color = blocked ? 0x8aa0b8 : r.started && workers === 0 ? 0xff6b6b : 0xffc547;
+    const color = blocked ? 0x8aa0b8 : r.started && workers === 0 ? statusTint('bad') : statusTint('warn');
     ring.circle(0, 0, 11).fill({ color: 0x14141e, alpha: 0.85 }).stroke({ color, width: 1.6, alpha: 0.9 });
     const glow = new Sprite(glowTexture());
     glow.anchor.set(0.5);

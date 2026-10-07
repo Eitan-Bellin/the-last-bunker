@@ -2,10 +2,15 @@ import { el, setRich } from '../dom';
 import { haptic } from '../../utils/haptics';
 import { uiSound } from '../../audio/uiSound';
 import { i18n } from '../../i18n/I18nManager';
+import { setInert, trapTab } from '../a11yDom';
 
 /** Open sheets, newest last: Escape closes the top one. */
 const openSheets: Sheet[] = [];
 let escBound = false;
+/** [plan4:AC-8] How many sheets are open: while any is, the HUD and the canvas behind are inert (out of the tab order and the screen reader). */
+let openCount = 0;
+let titleSeq = 0;
+const behind = (): Element[] => [document.getElementById('hud'), document.getElementById('game-canvas')].filter((n): n is HTMLElement => !!n);
 
 /** How far (px) or how fast (px/ms) a pull-down must go to dismiss the sheet. */
 const DISMISS_PX = 90;
@@ -22,6 +27,8 @@ export class Sheet {
   private titleEl: HTMLHeadingElement;
   private open = false;
   private helpBtn: HTMLButtonElement;
+  /** [plan4:AC-8] What had the focus when the sheet opened: it gets it back on close. */
+  private opener: HTMLElement | null = null;
 
   onClose: (() => void) | null = null;
   /** [Q6] Opens the Bunker Book at a topic; set once by the app. */
@@ -34,6 +41,8 @@ export class Sheet {
     });
 
     this.panel = el('div', `sheet ${extraClass}`);
+    this.panel.setAttribute('role', 'dialog');
+    this.panel.setAttribute('aria-modal', 'true');
     const close = el('button', 'sheet-close', '[[close]]');
     close.setAttribute('aria-label', i18n.t('journal.close'));
     close.addEventListener('click', (e) => {
@@ -53,6 +62,12 @@ export class Sheet {
     });
     const handle = el('div', 'sheet-handle');
     this.titleEl = el('h2', 'sheet-title');
+    // [plan4:AC-8] The dialog is named by its title; the title takes the focus on open (tabindex -1: reachable by script, not by Tab).
+    this.titleEl.id = `sheet-title-${++titleSeq}`;
+    this.titleEl.tabIndex = -1;
+    this.panel.setAttribute('aria-labelledby', this.titleEl.id);
+    // Tab stays in the sheet and the navigation console that is always visible below it.
+    this.overlay.addEventListener('keydown', (e) => trapTab(e, [this.panel, ...[document.querySelector('.hud-bottom')].filter((n): n is Element => !!n)]));
     this.body = el('div', 'sheet-body');
     this.panel.append(close, this.helpBtn, handle, this.titleEl, this.body);
     this.overlay.appendChild(this.panel);
@@ -175,6 +190,7 @@ export class Sheet {
 
   show(): void {
     if (!this.open) {
+      this.opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
       uiSound('open', 0.7, 150);
       // [Q6] The newest sheet is the top sheet (the Bunker Book opens over the sheet it was asked from), but always below dialogs.
       const modal = document.querySelector('.modal-overlay');
@@ -183,10 +199,16 @@ export class Sheet {
     }
     this.open = true;
     this.panel.style.transform = '';
+    const wasOpen = openSheets.includes(this);
     this.overlay.classList.add('open');
     const i = openSheets.indexOf(this);
     if (i >= 0) openSheets.splice(i, 1);
     openSheets.push(this);
+    if (!wasOpen) {
+      if (openCount++ === 0) for (const n of behind()) setInert(n, true);
+      // The title takes the focus so a screen reader starts at the top of the panel (a repeated show() leaves it where the player is).
+      this.titleEl.focus({ preventScroll: true });
+    }
   }
 
   hide(): void {
@@ -195,6 +217,14 @@ export class Sheet {
     this.overlay.classList.remove('open');
     const i = openSheets.indexOf(this);
     if (i >= 0) openSheets.splice(i, 1);
+    if (--openCount <= 0) {
+      openCount = 0;
+      for (const n of behind()) setInert(n, false);
+    }
+    const back = this.opener;
+    this.opener = null;
+    // Focus returns to what opened the sheet (when that is still on the page and the player is not inside another sheet now).
+    if (back && back.isConnected && !openSheets.length) back.focus({ preventScroll: true });
     this.onClose?.();
   }
 

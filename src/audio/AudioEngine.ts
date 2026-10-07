@@ -95,6 +95,8 @@ export class AudioEngine {
   private expeditionGain: GainNode | null = null;
   private expedition = false;
   private lastPlayed = new Map<Sfx, number>();
+  /** [plan4:AC-9] Told of every cue asked for, even with the sound off: the app turns the important ones into on-screen captions. */
+  onCue: ((name: Sfx) => void) | null = null;
   private seedCounter = 1000;
   // [perf] Synthesis is a queue of small jobs, run one at a time in idle moments, most urgent first (see enqueue).
   private jobs: { id: string; prio: number; run: () => Promise<void> }[] = [];
@@ -641,6 +643,7 @@ export class AudioEngine {
   }
 
   play(name: Sfx, opts: { pan?: number; volume?: number } = {}): void {
+    this.onCue?.(name);
     if (!this.enabled || !this.ctx || this.ctx.state !== 'running') return;
     const buffer = this.sfx.get(name);
     if (!buffer) {

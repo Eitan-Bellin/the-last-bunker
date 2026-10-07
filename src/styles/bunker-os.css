@@ -67,8 +67,8 @@
   box-shadow: 0 0 6px rgba(255, 181, 71, 0.6);
 }
 .resource-fill-bar.full { background: repeating-linear-gradient(90deg, #ffe27a 0 5px, transparent 5px 6px); }
-.resource-fill-bar.low { background: repeating-linear-gradient(90deg, #ff5a4a 0 5px, transparent 5px 6px); box-shadow: 0 0 6px rgba(255, 80, 60, 0.7); }
-.resource-item.empty { border-color: #ff5a4a; }
+.resource-fill-bar.low { background: repeating-linear-gradient(90deg, var(--bad, #ff5a4a) 0 5px, transparent 5px 6px); box-shadow: 0 0 6px rgba(255, 80, 60, 0.7); }
+.resource-item.empty { border-color: var(--bad, #ff5a4a); }
 
 .info-row { gap: 12px; }
 .info-item {
@@ -80,7 +80,7 @@
 .info-label { color: #b8ad96; }
 .info-arrival { margin-inline-start: 5px; color: #ffb547; font-variant-numeric: tabular-nums; font-size: 0.92em; }
 .info-arrival:empty { display: none; }
-.info-arrival.negative { color: #ff6a5a; animation: arrival-pulse 1.2s ease-in-out infinite; }
+.info-arrival.negative { color: var(--bad, #ff6a5a); animation: arrival-pulse 1.2s ease-in-out infinite; }
 @keyframes arrival-pulse { 50% { opacity: 0.45; } }
 
 .lang-btn {
@@ -221,7 +221,7 @@
 }
 .bp-section-title, .research-name, .build-item-name, .person-name, .ach-name { color: var(--phosphor); }
 .bp-hint, .build-item-desc, .build-meta { color: var(--text-secondary); }
-.bp-value.positive, .cost-chip.affordable, .positive-text, .gain-chip.positive { color: #7dff9e; }
+.bp-value.positive, .cost-chip.affordable, .positive-text, .gain-chip.positive { color: var(--ok, #7dff9e); }
 .cost-chip { background: rgba(0, 0, 0, 0.45); border: 1px solid rgba(110, 255, 160, 0.12); border-radius: 3px; }
 .zone-chip { background: rgba(110, 255, 160, 0.1); }
 
@@ -354,7 +354,7 @@
   text-shadow: 0 0 6px rgba(110, 255, 160, 0.4);
   font-weight: 600;
 }
-.toast.good { border-color: rgba(125, 255, 158, 0.7); }
+.toast.good { border-color: var(--ok, #7dff9e); }
 .toast.bad { border-color: rgba(255, 90, 74, 0.8); color: #ffb3a8; text-shadow: 0 0 6px rgba(255, 90, 74, 0.4); }
 
 /* ---------- Surface map as a radar screen ---------- */

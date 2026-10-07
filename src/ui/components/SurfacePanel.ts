@@ -54,6 +54,11 @@ export class SurfacePanel {
     this.overlay = el('div', 'surface-overlay');
     const header = el('div', 'surface-header');
     header.append(el('h2', 'sheet-title', `[[surface]] ${i18n.t('surface.title')}`), button('[[close]]', 'btn-small btn-ghost surface-close', () => this.hide()));
+    // [plan4:AC-8] A dialog with a name; its close button has one too.
+    this.overlay.setAttribute('role', 'dialog');
+    this.overlay.setAttribute('aria-modal', 'true');
+    this.overlay.setAttribute('aria-label', i18n.t('surface.title'));
+    header.querySelector('.surface-close')?.setAttribute('aria-label', i18n.t('journal.close'));
     this.missionsBox = el('div', 'surface-missions');
     this.mapBox = el('div', 'surface-map');
     this.card = el('div', 'surface-card');
