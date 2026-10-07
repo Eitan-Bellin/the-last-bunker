@@ -43,6 +43,10 @@ export const PALETTES: Record<BuildingType, Palette> = {
   mushroomFarm: { wall: 0x3a3a48, floor: 0x2e2e38, accent: 0xc8a0ff, light: 0xb8a0e8 },
   gatePost: { wall: 0x4c4c44, floor: 0x36362f, accent: 0xff7a3a, light: 0xffd8a0 },
   barracks: { wall: 0x4e5a46, floor: 0x3c4034, accent: 0xb0b060, light: 0xffe8b0 },
+  // [plan4:ST-16] the surface row's rooms are drawn by surfaceRow.ts (outdoors); these only satisfy the table
+  solarArray: { wall: 0x4a5a70, floor: 0x3a3f4a, accent: 0xffd86a, light: 0xffe8b0 },
+  windTurbine: { wall: 0x5a6a78, floor: 0x3a3f4a, accent: 0xb8e0ff, light: 0xe0f0ff },
+  watchtower: { wall: 0x5a5a4a, floor: 0x3a3a30, accent: 0xff9a4a, light: 0xffd8a0 },
 };
 
 interface Ctx {

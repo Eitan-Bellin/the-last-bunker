@@ -58,6 +58,10 @@ export const BUILDING_ICONS: Record<string, string> = {
   gatePost: tok('gatePost'),
   barracks: tok('barracks'),
 };
+// [plan4:ST-16] stand-in icons for the surface row's rooms until Rooms-Data's own arrive (??= keeps theirs)
+BUILDING_ICONS.solarArray ??= tok('sun');
+BUILDING_ICONS.windTurbine ??= tok('wave');
+BUILDING_ICONS.watchtower ??= tok('eye');
 
 const TOKEN = /\[\[([a-zA-Z0-9]+)\]\]/g;
 

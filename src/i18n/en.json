@@ -173,6 +173,7 @@
   "morale.channel.culture": "Culture",
   "morale.sourceRow": "{name} ×{n}",
   "toast.buildingComplete": "{name} is ready!",
+  "toast.surfaceOpen": "The old gate-house yard is cleared. You can build on the surface: solar panels, wind and a watchtower.",
   "toast.levelUp": "{name} reached level {level}! (+1 {stat})",
   "toast.died": "{name} has died. The bunker mourns.",
   "toast.notEnough": "Not enough resources",

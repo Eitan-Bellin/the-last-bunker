@@ -10,7 +10,7 @@ import { SeededRandom } from '../../src/core/Random';
 import { allowedFloors, crossesGallery } from '../../src/data/zones';
 import { DISTRICTS, availableDistricts, nextDistrict } from '../../src/data/districts';
 import { DISTRICT_KEYS } from '../../src/art/registry';
-import { DISTRICT_GAP, DISTRICT_X, FLOOR_H, GALLERY_MAX, SLOT_W, buildingX, floorTop, slotX } from '../../src/rendering/geom';
+import { DISTRICT_GAP, DISTRICT_X, FLOOR_H, GALLERY_MAX, ROOM_H, SLOT_W, buildingX, floorTop, slotX } from '../../src/rendering/geom';
 import { GFX } from '../../src/rendering/gfxFeatures';
 import { ALL_RESOURCES, RESOURCES } from '../../src/data/resources';
 import type { BuildingType, GameState, ResourceType } from '../../src/core/GameState';
@@ -278,7 +278,7 @@ export function placementTruthTable(games: { name: string; json: string | null }
   for (const { name, state } of states) {
     for (const type of Object.keys(BUILDING_DEFS) as BuildingType[]) {
       // [plan4:BL-1] Rooms with placement rules (surface row, adjacency, flag, copies) are checked by effectHookProblems, not against the pre-X-2 rule.
-      if (BUILDING_DEFS[type].place?.floors === 'surface' || BUILDING_DEFS[type].place?.adjacentTo || BUILDING_DEFS[type].place?.needsFlag || BUILDING_DEFS[type].maxCopies !== undefined) continue;
+      if (BUILDING_DEFS[type].place?.floors === 'surface' || BUILDING_DEFS[type].place?.floors === 'entranceOrSurface' || BUILDING_DEFS[type].place?.adjacentTo || BUILDING_DEFS[type].place?.needsFlag || BUILDING_DEFS[type].maxCopies !== undefined) continue;
       for (let floor = -1; floor <= state.currentFloors + 1; floor++) {
         for (let x = -3; x <= SLOTS_PER_FLOOR + 2; x++) {
           const pos = { x, y: 0, floor };
@@ -315,7 +315,7 @@ export function legacyGeometryWarnings(files: { rel: string; text: string }[]): 
   return hits;
 }
 
-const PLACE_FLOORS = ['surface', 'entrance', 'deep', 'zone'];
+const PLACE_FLOORS = ['surface', 'entranceOrSurface', 'entrance', 'deep', 'zone'];
 const MORALE_KINDS = ['base', 'comfort', 'culture'];
 const ENTRY_EFFECTS = ['childCapacity', 'childGrowth', 'quarantine', 'earlyWarning', 'cargo', 'returnSafety', 'hygiene', 'mourning', 'ventilation'];
 
@@ -524,6 +524,69 @@ export function districtAndGalleryProblems(games: { name: string; json: string |
         const e = floorExtent(st, b.position.floor).e;
         if (b.position.x !== e) fail(`${game.name}: ${b.type} stands at x = ${b.position.x} but its floor ends at ${e}`);
       }
+    }
+  }
+  return problems;
+}
+
+/**
+ * [plan4:ST-16] The surface (gate-house) row, floor -1: its geometry (a floor line on the ground, slots -11..-4), the placement truth table for every
+ * type that may stand there (closed: 'surface'; open: bounds exactly -11 <= x and x + width <= -3; copies and overlap still apply), that no other
+ * type can use floor -1, that the row opens by itself at Act II, and that a saved game's floor -1 rooms are all legal.
+ */
+export function surfaceRowChecks(games: { name: string; json: string | null }[]): string[] {
+  const problems: string[] = [];
+  const fail = (m: string) => { if (problems.length < 14) problems.push(`surface: ${m}`); };
+  const bs = new BuildingSystem();
+  if (floorTop(-1) + ROOM_H !== 0) fail(`the row's floor line is at y=${floorTop(-1) + ROOM_H}, not on the ground (0)`);
+  const ext = floorExtent({ layout: createInitialState().layout }, -1);
+  if (ext.w !== 11 || ext.e !== -3) fail(`floorExtent(-1) is ${JSON.stringify(ext)}, expected {w:11,e:-3} (slots -11..-4)`);
+  const state = createInitialState();
+  state.currentFloors = 8;
+  state.ruins = []; state.buildings = [];
+  const types = (Object.keys(BUILDING_DEFS) as BuildingType[]).filter(t => !isDistrict(t));
+  const surfaceTypes = types.filter(t => ['surface', 'entranceOrSurface'].includes(BUILDING_DEFS[t].place?.floors ?? ''));
+  for (const t of ['solarArray', 'windTurbine', 'watchtower', 'gatePost'] as BuildingType[]) if (!surfaceTypes.includes(t)) fail(`${t} must be placeable on the surface row (place.floors surface / entranceOrSurface)`);
+  for (const t of types) {
+    const on = surfaceTypes.includes(t);
+    if (allowedFloors(t, state.currentFloors).includes(-1) !== on) fail(`${t}: allowedFloors ${on ? 'lacks' : 'has'} floor -1`);
+    if (!on) {
+      if (bs.placeBlock(t, { x: -5, y: 0, floor: -1 }, { ...state, layout: { ...state.layout, surfaceOpen: true } }) === null) fail(`${t} may not stand on the surface row but placeBlock accepts it`);
+      continue;
+    }
+    const w = roomSlots(t);
+    if (bs.placeBlock(t, { x: -5, y: 0, floor: -1 }, state) !== 'surface') fail(`${t} on the closed row: expected the reason 'surface'`);
+    const open = { ...state, layout: { ...state.layout, surfaceOpen: true }, storyFlags: [...state.storyFlags, ...(BUILDING_DEFS[t].place?.needsFlag ? [BUILDING_DEFS[t].place!.needsFlag!] : [])] } as GameState;
+    for (let x = -14; x <= 2; x++) {
+      const ok = x >= -11 && x + w <= -3;
+      const why = bs.placeBlock(t, { x, y: 0, floor: -1 }, open);
+      if (ok && why !== null) fail(`${t} at slot ${x} on the open row: refused (${why})`);
+      if (!ok && why !== 'bounds') fail(`${t} at slot ${x} on the open row: ${why ?? 'accepted'} (expected bounds)`);
+    }
+    // Two rooms may not share a slot; the second keeps the reason 'overlap'.
+    const probe = { id: 'sf_1', type: t, level: 1, position: { x: -11, y: 0, floor: -1 }, assignedSurvivorIds: [], constructionProgress: 0, constructionTotal: 1, isConstructing: false, specialization: null };
+    const taken = { ...open, buildings: [probe] } as GameState;
+    if (bs.placeBlock(t, { x: -11, y: 0, floor: -1 }, taken) === null) fail(`${t}: a second room on the same surface slots was accepted`);
+    if (BUILDING_DEFS[t].place?.floors === 'entranceOrSurface' && !allowedFloors(t, state.currentFloors).includes(0)) fail(`${t}: entranceOrSurface but floor 0 is not allowed`);
+  }
+  // The row opens at Act II by itself (older saves past it, too) and not before.
+  for (const act of [1, 2, 4]) {
+    const st = createInitialState();
+    st.longGame.meta.act = act;
+    const sm = new StateManager();
+    sm.loadState(st);
+    bs.update(sm, 0.1);
+    if (sm.state.layout.surfaceOpen !== (act >= 2)) fail(`at Act ${act} the surface row is ${sm.state.layout.surfaceOpen ? 'open' : 'closed'}`);
+  }
+  for (const g of games) {
+    if (!g.json) continue;
+    const st = migrateState(JSON.parse(g.json) as GameState);
+    const open = { ...st, layout: { ...st.layout, surfaceOpen: true } } as GameState;
+    for (const b of st.buildings) {
+      if (b.position.floor !== -1) continue;
+      const rest = { ...open, buildings: open.buildings.filter(x => x.id !== b.id) } as GameState;
+      const why = bs.placeBlock(b.type, b.position, rest);
+      if (why !== null && why !== 'copies' && why !== 'locked') fail(`${g.name}: ${b.type} stands on the surface row at slot ${b.position.x} where placeBlock says ${why}`);
     }
   }
   return problems;

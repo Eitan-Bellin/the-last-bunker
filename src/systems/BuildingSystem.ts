@@ -1,5 +1,5 @@
 import { hasFeature } from './ResearchSystem';
-import { BASE_EAST, createLayout, floorExtent, type GameState, type BuildingType, type BuildingInstance, type Position } from '../core/GameState';
+import { BASE_EAST, SURFACE_FLOOR, createLayout, floorExtent, type GameState, type BuildingType, type BuildingInstance, type Position } from '../core/GameState';
 import type { StateManager } from '../core/StateManager';
 import { bus } from '../core/EventBus';
 import { getDef, effectiveLevel, isDistrict, roomFloors, roomSlots, specLevel, touching, actMult, type BuildingDef } from '../data/buildingDefs';
@@ -50,6 +50,12 @@ export class BuildingSystem {
     const state = sm.state;
     this.artisan = !!state.prestige.upgrades['ksArtisan'];
     let changed = false;
+    // [plan4:ST-16] The gate-house yard is cleared for building when Act II begins; an older save already past it opens on its first tick
+    // (migrateState leaves surfaceOpen false on purpose, so the migration test stays strict).
+    if (state.layout && !state.layout.surfaceOpen && (state.longGame?.meta.act ?? 1) >= 2) {
+      sm.applyDelta({ path: 'layout.surfaceOpen', value: true });
+      bus.emit('surface:open');
+    }
 
     for (let i = 0; i < state.buildings.length; i++) {
       const building = state.buildings[i];
@@ -162,8 +168,9 @@ export class BuildingSystem {
     const levels = roomFloors(type);
     const place = def.place;
     // [plan4:BL-1] Surface rooms stand on the gate-house row (floor -1) once it is open; nobody else may use floor -1.
-    if (place?.floors === 'surface') {
-      if (pos.floor !== -1 || !state.layout?.surfaceOpen) return 'surface';
+    // [plan4:ST-16] 'entranceOrSurface' (the gate post) may stand on floor 0 as well; on the row it needs the row open.
+    if (place?.floors === 'surface' || (place?.floors === 'entranceOrSurface' && pos.floor === SURFACE_FLOOR)) {
+      if (pos.floor !== SURFACE_FLOOR || !state.layout?.surfaceOpen) return 'surface';
     } else if (pos.floor < 0 || pos.floor + levels > state.currentFloors) return 'floor';
     if (place?.needsFlag && !state.storyFlags.includes(place.needsFlag)) return 'locked';
     if (def.maxCopies !== undefined && state.buildings.filter(b => b.type === type).length >= def.maxCopies) return 'copies';

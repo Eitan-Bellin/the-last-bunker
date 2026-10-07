@@ -44,6 +44,8 @@ try { saves = readdirSync(savesDir).filter(f => f.endsWith('.json')).sort().map(
 problems.push(...mod.placementTruthTable(saves));
 // [plan4:ST-8 / ST-1] District data and position rules; no saved hall straddles a service gallery.
 problems.push(...mod.districtAndGalleryProblems(saves));
+// [plan4:ST-16] The surface (gate-house) row: geometry, placement table, opening at Act II.
+problems.push(...mod.surfaceRowChecks(saves));
 
 // [plan4:X-2] Reverse floor lookups outside rendering/geom.ts fail the lint; a fixed slot count (SLOTS_PER_FLOOR) is a warning.
 const srcFiles = [];

@@ -78,6 +78,7 @@ export function allowedFloors(type: BuildingType, totalFloors: number = BASE_FLO
   let floors: number[];
   if (place?.floors === 'surface') floors = [-1];
   else if (place?.floors === 'entrance') floors = [0];
+  else if (place?.floors === 'entranceOrSurface') floors = [0, -1]; // [plan4:ST-16] a gate post stands by the door, or on the surface row once it is open
   else if (place?.floors === 'deep') floors = deep;
   else if (type === 'reactorHall') floors = deep;
   else {

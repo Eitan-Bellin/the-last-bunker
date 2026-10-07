@@ -43,8 +43,12 @@ export function galleriesBefore(floor: number): number {
   return GFX.galleries && floor >= GALLERY_EVERY ? Math.min(GALLERY_MAX, ((floor - GALLERY_EVERY) >> 2) + 1) : 0;
 }
 
+/** [plan4:ST-16] Top of the surface (gate-house) row, floor -1: its floor line sits on the ground (y = 0). The formula below would give -46, half sunk into the soil. */
+export const SURFACE_TOP = -ROOM_H;
+
 /** Y of the top of a floor (its ceiling line). */
 export function floorTop(floor: number): number {
+  if (floor < 0) return SURFACE_TOP; // [plan4:ST-16]
   return TOPSOIL + floor * FLOOR_H + galleriesBefore(floor) * GALLERY_H;
 }
 

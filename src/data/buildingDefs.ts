@@ -1,6 +1,7 @@
 import raw from './buildings.json';
 import { masteryMultiplier } from './mastery'; // [LateGame B3]
 import { timeOfDay, windAt } from './dayCycle';
+import { SURFACE_TYPES, withSurfaceFallbacks } from './surfaceDefs'; // [plan4:ST-16]
 import type { BuildingInstance, BuildingType, GameState, SurvivorStats } from '../core/GameState';
 
 export interface ProductionEntry {
@@ -10,8 +11,8 @@ export interface ProductionEntry {
 
 /** [plan4:BL-1] Where a room may stand. Every field is optional; no `place` = the old rules (own zone plus deep levels). */
 export interface PlaceRules {
-  /** surface = the gate-house row above ground (floor -1), entrance = floor 0, deep = levels dug past the founding three, zone = the type's own zone (the old default, spelled out). */
-  floors?: 'surface' | 'entrance' | 'deep' | 'zone';
+  /** surface = the gate-house row above ground (floor -1), entrance = floor 0, deep = levels dug past the founding three, zone = the type's own zone (the old default, spelled out). [plan4:ST-16] entranceOrSurface = floor 0 or the surface row. */
+  floors?: 'surface' | 'entrance' | 'entranceOrSurface' | 'deep' | 'zone';
   /** The room must touch (same floor, edge to edge) a room of this type; a lake district for the fish ponds. */
   adjacentTo?: BuildingType;
   /** A story flag (state.storyFlags) that must be set: the room opens by an event, not (or not only) by research. */
@@ -88,7 +89,7 @@ export interface BuildingDef {
   color: string;
 }
 
-export const BUILDING_DEFS = raw as unknown as Record<BuildingType, BuildingDef>;
+export const BUILDING_DEFS = withSurfaceFallbacks(raw as unknown as Record<BuildingType, BuildingDef>); // [plan4:ST-16] guarded: only adds a surface type buildings.json lacks
 
 export const BUILDABLE_TYPES: BuildingType[] = [
   'quarters', 'canteen', 'medbay', 'radioTower', 'trainingRoom', 'armory',
@@ -98,6 +99,8 @@ export const BUILDABLE_TYPES: BuildingType[] = [
   // [plan4:BL-9..14,19,33] first eight new rooms
   'batteryBank', 'commons', 'library', 'recycler', 'condenser', 'mushroomFarm', 'gatePost', 'barracks',
 ];
+// [plan4:ST-16] the surface row's rooms (a no-op for those a merge already listed above)
+for (const t of SURFACE_TYPES) if (!BUILDABLE_TYPES.includes(t)) BUILDABLE_TYPES.push(t);
 
 /** Natural caverns reached by tunnelling sideways (not built from the menu). */
 export const DISTRICT_KINDS: BuildingType[] = ['cave', 'lake', 'metro'];

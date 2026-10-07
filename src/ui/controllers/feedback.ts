@@ -58,6 +58,8 @@ export class FeedbackController {
       this.app.popups.spawn(c.x, c.y, '[[check]]', statusTint('ok'));
     });
 
+    bus.on('surface:open', () => { this.app.toasts.show(`[[sun]] ${i18n.t('toast.surfaceOpen')}`, 'good'); haptic('success'); }); // [plan4:ST-16] the gate-house yard is cleared
+
     bus.on('survivor:levelup', (s: unknown, stat: unknown) => {
       const survivor = s as SurvivorState;
       this.app.audio.play('levelup');
