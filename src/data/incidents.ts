@@ -1,6 +1,6 @@
 import type { BuildingInstance, BuildingType, DisasterKind, GameState, IncidentKind, ResourceType, SurvivorStats } from '../core/GameState';
 import type { IconName } from '../ui/icons';
-import { BUILDING_DEFS, isPowerPlant } from './buildingDefs';
+import { BUILDING_DEFS, effectiveLevel, isPowerPlant } from './buildingDefs';
 
 /** In-room crises (Sprint 6). Each kind has the rooms it strikes, the skill that fights it and what it costs while it burns. */
 export interface IncidentDef {
@@ -39,7 +39,8 @@ function blackoutRooms(): Partial<Record<BuildingType, number>> {
 export const INCIDENTS: Record<IncidentKind, IncidentDef> = {
   fire: {
     kind: 'fire', icon: 'fire', color: 0xff7a2a, stat: 'endurance',
-    rooms: { generator: 3, reactor: 2, reactorHall: 2, workshop: 2, canteen: 2, laboratory: 1.5, armory: 1, storage: 1, metro: 0.5 },
+    rooms: { generator: 3, reactor: 2, reactorHall: 2, workshop: 2, canteen: 2, laboratory: 1.5, armory: 1, storage: 1, metro: 0.5,
+      batteryBank: 2.5, recycler: 1.5, commons: 0.5, library: 1, condenser: 0.5 }, // [plan4:BL-9..13] batteries burn, the recycler runs hot
     quickFix: { water: 25 }, harm: 0.35,
     name: { he: 'שריפה', en: 'Fire' },
     desc: { he: 'להבות אוכלות את החדר. היא תתפשט לחדר הסמוך אם לא תכבו אותה.', en: 'Flames are eating the room. It will spread next door if nobody puts it out.' },
@@ -48,7 +49,8 @@ export const INCIDENTS: Record<IncidentKind, IncidentDef> = {
   },
   flood: {
     kind: 'flood', icon: 'wave', color: 0x4aa8ff, stat: 'strength',
-    rooms: { waterPump: 3, waterPurifier: 2, hydroponics: 2, farm: 1.5, medbay: 1, quarters: 1, lake: 1, atrium: 0.5 },
+    rooms: { waterPump: 3, waterPurifier: 2, hydroponics: 2, farm: 1.5, medbay: 1, quarters: 1, lake: 1, atrium: 0.5,
+      condenser: 1.5, mushroomFarm: 1 }, // [plan4:BL-13,14] wet rooms
     quickFix: { materials: 20 }, drain: { water: 0.6, materials: 0.15 },
     name: { he: 'הצפה', en: 'Flood' },
     desc: { he: 'צינור התפוצץ והמים עולים. כל רגע הולכים לאיבוד מים.', en: 'A main burst and the water is rising. Every second wastes water.' },
@@ -66,7 +68,8 @@ export const INCIDENTS: Record<IncidentKind, IncidentDef> = {
   },
   roaches: {
     kind: 'roaches', icon: 'bug', color: 0xb08a4a, stat: 'agility',
-    rooms: { farm: 3, hydroponics: 2, canteen: 2, storage: 2, quarters: 1, cave: 1, atrium: 1 },
+    rooms: { farm: 3, hydroponics: 2, canteen: 2, storage: 2, quarters: 1, cave: 1, atrium: 1,
+      mushroomFarm: 3, library: 0.5 }, // [plan4:BL-14,11] the damp farm breeds them, the books feed them
     quickFix: { medicine: 4 }, drain: { food: 0.5 },
     name: { he: 'מכת ג׳וקים', en: 'Roach Swarm' },
     desc: { he: 'ג׳וקים מוטנטיים פשטו על המזון. הם אוכלים מהר.', en: 'Mutant roaches swarmed the food. They eat fast.' },
@@ -83,6 +86,17 @@ export const INCIDENTS: Record<IncidentKind, IncidentDef> = {
     fixLabel: { he: 'שוחד בגרוטאות', en: 'Bribe with scrap' },
   },
 };
+
+/**
+ * [plan4:BL-19] A working gate post makes the door harder to get through: the weight of a raider breach is halved
+ * (it does not stack, a second post only adds defense).
+ */
+export function breachGuardMult(state: GameState): number {
+  for (const b of state.buildings) {
+    if (b.type === 'gatePost' && effectiveLevel(b) > 0 && !incidentBlocks(state, b)) return 0.5;
+  }
+  return 1;
+}
 
 export const INCIDENT_KINDS = Object.keys(INCIDENTS) as IncidentKind[];
 

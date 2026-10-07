@@ -25,6 +25,8 @@ export const CHAIN_INPUTS: Partial<Record<BuildingType, ChainInput[]>> = {
   // M1: a lighter scrap draw; scrap is the late-game currency (digs, reactor, districts), not just fuel.
   workshop: [{ resource: 'scrap', base: 0.03, perLevel: 0.15, boost: true }],
   laboratory: [{ resource: 'scrap', base: 0.02, perLevel: 0.3, boost: true }],
+  // [plan4:BL-12] The recycler chews through materials to make scrap; without them it crawls.
+  recycler: [{ resource: 'materials', base: 0.12, perLevel: 0.3 }],
 };
 
 export const STARVED_FACTOR = 0.35;

@@ -594,6 +594,22 @@ export async function runSim(o: SimOptions): Promise<SimResult> {
     return null;
   };
 
+  /** [plan4] The rooms of the redesign's first wave: the bot builds them last and upgrades them last (core rooms carry the Act goals). */
+  const NEW_ROOMS: BuildingType[] = ['batteryBank', 'commons', 'library', 'recycler', 'condenser', 'mushroomFarm', 'gatePost', 'barracks'];
+  const hallsStillFit = (type: BuildingType, pos: { x: number; y: number; floor: number }) => {
+    const s = state();
+    const fake = { id: 'b_fake', type, level: 1, position: pos, assignedSurvivorIds: [], constructionProgress: 0, constructionTotal: 1, isConstructing: true, specialization: null };
+    const after = { ...s, buildings: [...s.buildings, fake] } as GameState;
+    // A hall is two levels tall: it often has no spot until the next floor is dug, so judge it with that floor counted in (when the Act lets it come).
+    const block = e.buildingSystem.digBlock(s);
+    const extra = block === 'act' || block === 'max' ? 0 : 1;
+    for (const hall of ['atrium', 'reactorHall'] as BuildingType[]) {
+      if (!isBuildingUnlocked(s, hall) || s.buildings.some(b => b.type === hall)) continue;
+      const spot = (st: GameState) => { const g = { ...st, currentFloors: st.currentFloors + extra } as GameState; return allowedFloors(hall, g.currentFloors).some(f => !!e.buildingSystem.findFreeSpot(hall, f, g)); };
+      if (spot(s) && !spot(after)) return false;
+    }
+    return true;
+  };
   let noSpaceFor: BuildingType | null = null;
   /** [plan4:ST-3] Rooms standing when the last wing step was started: the next step waits until something was built in the room it made. */
   let roomsAtLastWing = -1;
@@ -611,16 +627,36 @@ export async function runSim(o: SimOptions): Promise<SimResult> {
     const capBlocked = Object.entries(dig).some(([r, v]) => v > (s.resources[r as ResourceType]?.cap ?? Infinity));
     if (capBlocked) want.push('storage');
     want.push('workshop', 'laboratory', 'canteen', 'storage', 'radioTower', 'medbay', 'hydroponics', 'waterPurifier', 'armory', 'trainingRoom', 'reactor', 'atrium', 'reactorHall');
+    // [plan4:BL-9..14,19,33] The first eight new rooms come last (core rooms first), and only once their research is done AND their Act has come:
+    // isBuildingUnlocked covers the research; the copy limit is the smaller of the bot's own and the room's maxCopies (placeBlock enforces maxCopies too).
+    const act = (s as unknown as { longGame?: { meta: { act: number } } }).longGame?.meta.act ?? 1;
+    const pop = s.survivors.length;
+    const newRoomLimit: Partial<Record<BuildingType, number>> = {};
+    const wantNew = (type: BuildingType, fromAct: number, limit: number, when = true) => {
+      if (act < fromAct || !when) return;
+      newRoomLimit[type] = limit;
+      want.push(type);
+    };
+    wantNew('commons', 2, 1);
+    wantNew('mushroomFarm', 2, act >= 4 ? 3 : 2, net('food') < 2 || act >= 3);
+    wantNew('condenser', 2, act >= 4 ? 2 : 1, net('water') < 1.5 || act >= 3);
+    wantNew('batteryBank', 2, act >= 4 ? 2 : 1);
+    wantNew('library', 2, act >= 4 ? 2 : 1);
+    wantNew('gatePost', 2, act >= 4 ? 2 : 1);
+    wantNew('recycler', 3, 1, s.resources.scrap.amount < s.resources.scrap.cap * 0.6);
+    wantNew('barracks', 3, act >= 5 ? 2 : 1, pop >= s.maxPopulation - 3);
     noSpaceFor = null;
     for (const type of want) {
       if (!BUILDABLE_TYPES.includes(type) || !isBuildingUnlocked(s, type)) continue;
       const count = s.buildings.filter(b => b.type === type).length;
-      const limit = type === 'quarters' ? 8 : CORE.includes(type) ? 4 : isHall(type) ? 1 : 2;
-      if (count >= limit) continue;
+      const limit = newRoomLimit[type] ?? (type === 'quarters' ? 8 : CORE.includes(type) ? 4 : isHall(type) ? 1 : 2);
+      if (count >= Math.min(limit, getDef(type)?.maxCopies ?? Infinity)) continue;
       const cost = e.buildingSystem.getBuildCost(type, s);
       if (!e.resourceSystem.canAfford(s, cost)) continue;
       const pos = findSpot(type);
-      if (!pos) { noSpaceFor = noSpaceFor ?? type; continue; }
+      if (!pos) { if (!NEW_ROOMS.includes(type)) noSpaceFor = noSpaceFor ?? type; continue; } // [plan4] a new room with no fitting spot (no deep floor yet) must not trigger digging
+      // [plan4] A new room never takes the last spot a hall (atrium, reactor hall: blueprint-gated, built when the blueprints come) could still use.
+      if (NEW_ROOMS.includes(type) && !hallsStillFit(type, pos)) continue;
       e.resourceSystem.spend(sm, cost);
       if (e.buildingSystem.placeBuilding(type, pos, sm)) { mark(`built ${type}`); acted('build'); }
       break;
@@ -638,7 +674,7 @@ export async function runSim(o: SimOptions): Promise<SimResult> {
       if (st) { e.resourceSystem.spend(sm, e.buildingSystem.getUpgradeCost(st)); e.buildingSystem.upgradeBuilding(st.id, sm); acted('upgrade'); return; }
     }
     if (s.resources.materials.amount > s.resources.materials.cap * 0.7) {
-      const up = [...s.buildings].filter(canUp).sort((a, b) => a.level - b.level)[0];
+      const up = [...s.buildings].filter(canUp).sort((a, b) => Number(NEW_ROOMS.includes(a.type)) - Number(NEW_ROOMS.includes(b.type)) || a.level - b.level)[0]; // [plan4] new rooms last
       if (up) { e.resourceSystem.spend(sm, e.buildingSystem.getUpgradeCost(up)); e.buildingSystem.upgradeBuilding(up.id, sm); acted('upgrade'); mark('first upgrade'); }
     }
   };

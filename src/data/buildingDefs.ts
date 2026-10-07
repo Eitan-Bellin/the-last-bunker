@@ -95,6 +95,8 @@ export const BUILDABLE_TYPES: BuildingType[] = [
   'farm', 'waterPump', 'hydroponics', 'waterPurifier',
   'generator', 'workshop', 'laboratory', 'reactor',
   'storage', 'atrium', 'reactorHall',
+  // [plan4:BL-9..14,19,33] first eight new rooms
+  'batteryBank', 'commons', 'library', 'recycler', 'condenser', 'mushroomFarm', 'gatePost', 'barracks',
 ];
 
 /** Natural caverns reached by tunnelling sideways (not built from the menu). */
@@ -201,8 +203,16 @@ export interface SynergyRule {
   effect: 'morale' | 'knowledge' | 'hygiene' | 'childGrowth' | 'childCapacity' | 'inputMult' | 'powerLoss' | 'output' | 'cargo' | 'healMult';
   value: number;
 }
-/** Filled by the Rooms-Data agent as the rooms of each pair arrive; empty = no neighbour bonus anywhere. */
-export const SYNERGIES: SynergyRule[] = [];
+/** Filled by the Rooms-Data agent as the rooms of each pair arrive. */
+export const SYNERGIES: SynergyRule[] = [
+  // [plan4:BL-9..14] neighbour pairs (02-new-buildings.md section 2.5) of the first eight rooms. Readers of each effect arrive with the systems that own it.
+  { a: 'canteen', b: 'commons', effect: 'morale', value: 0.05 },
+  { a: 'library', b: 'laboratory', effect: 'knowledge', value: 0.08 },
+  { a: 'recycler', b: 'workshop', effect: 'inputMult', value: 0.2 },
+  { a: 'batteryBank', b: 'generator', effect: 'powerLoss', value: 0.05 },
+  { a: 'batteryBank', b: 'reactor', effect: 'powerLoss', value: 0.05 },
+  { a: 'mushroomFarm', b: 'waterPump', effect: 'output', value: 0.1 },
+];
 /** Neighbours that count, and the most a room can gain in all. */
 export const SYNERGY_MAX_NEIGHBOURS = 3;
 export const SYNERGY_MAX_BONUS = 0.2;

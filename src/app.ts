@@ -66,6 +66,7 @@ import './styles/story.css';
 import './styles/bunker-os.css';
 import './styles/depth.css';
 import './styles/command.css';
+import './styles/buildmenu.css'; // [plan4:BL-39] before touch.css so its 44px rules still win
 import './styles/checkin.css'; // [plan4:Gameplay] dialog queue card, gesture tips, check-in screen
 import './styles/touch.css'; // [plan4:UX-5] last again (its header says so): its 44px targets must beat the older sheet-help sizes in command.css
 import './styles/placement.css'; // [plan4:ST-19] the confirm bar and the chips over the ghost room
@@ -972,6 +973,11 @@ export class GameApp {
       this.world.startPlacement(type);
     };
 
+    this.buildMenu.onOpenResearch = () => { // [plan4:BL-39] a locked room's "unlocked by" line opens the research panel
+      this.closeSheets();
+      this.researchPanel.show();
+    };
+
     this.researchPanel.onOpenGenesis = () => {
       this.closeSheets();
       this.menuPanel.show('genesis');
@@ -982,6 +988,7 @@ export class GameApp {
       this.researchPanel.show();
     };
 
+    this.buildingPanel.onMove = (id: string) => { this.world.beginRelocate(id); }; // [plan4:ST-19]
     this.buildingPanel.onUpgrade = (id: string) => {
       const b = this.state.buildings.find(x => x.id === id);
       if (!b) return;

@@ -19,6 +19,9 @@ const CATEGORY: Partial<Record<BuildingType, number>> = {
   armory: 0xff6a5a, trainingRoom: 0xff6a5a,
   workshop: 0xffa040, storage: 0xc8b08a,
   cave: 0x6affd0, lake: 0x6ad8ff, metro: 0xffc060,
+  // [plan4:BL-9..14,19,33]
+  batteryBank: 0xffd84a, commons: 0xffb070, library: 0x9a8cff, recycler: 0xffa040,
+  condenser: 0x4ab8ff, mushroomFarm: 0x7dff6a, gatePost: 0xff6a5a, barracks: 0xff6a5a,
 };
 
 /**

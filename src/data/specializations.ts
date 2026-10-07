@@ -207,6 +207,75 @@ export const SPECIALIZATIONS: SpecDef[] = [
     id: 'coldStore', type: 'storage', icon: 'water', caps: { food: 300, water: 300, medicine: 30 },
     name: { he: 'חדר קירור', en: 'Cold Store' }, desc: { he: '+300 אוכל ומים · +30 תרופות', en: '+300 food & water · +30 medicine' },
   },
+  // ---- [plan4:BL-9..14,19,33] roles of the first eight new rooms (2 each; SPEC_COST, at the room's specLevel) ----
+  {
+    id: 'deepCells', type: 'batteryBank', icon: 'battery', caps: { power: 300 },
+    name: { he: 'תאי עומק', en: 'Deep Cells' }, desc: { he: '+300 קיבולת חשמל', en: '+300 power storage' },
+  },
+  {
+    id: 'safeCells', type: 'batteryBank', icon: 'lock', risk: 0.5,
+    name: { he: 'תאים בטוחים', en: 'Safe Cells' }, desc: { he: 'חצי מסכנת השריפה', en: 'Half the fire risk' },
+  },
+  {
+    id: 'gameRoom', type: 'commons', icon: 'happy', morale: 3,
+    name: { he: 'חדר משחקים', en: 'Game Room' }, desc: { he: '+3 מורל', en: '+3 morale' },
+  },
+  {
+    id: 'stage', type: 'commons', icon: 'chat', act: 4, morale: 3,
+    name: { he: 'במה', en: 'Stage' }, desc: { he: '+3 מורל מהופעות ערב', en: '+3 morale from evening shows' },
+  },
+  {
+    id: 'archivists', type: 'library', icon: 'books', outputMult: 1.3,
+    name: { he: 'ארכיבאים', en: 'Archivists' }, desc: { he: '+30% ידע', en: '+30% knowledge' },
+  },
+  {
+    // The plan's xpMult is only read for training rooms today, so the circle also adds a trickle of knowledge.
+    id: 'readingCircle', type: 'library', icon: 'knowledge', xpMult: 1.2, extra: { knowledge: 0.015 },
+    name: { he: 'מעגל קריאה', en: 'Reading Circle' }, desc: { he: 'לומדים מהר יותר · +0.015 ידע', en: 'Learn faster · +0.015 knowledge' },
+  },
+  {
+    id: 'sorting', type: 'recycler', icon: 'recycle', outputMult: 1.25,
+    name: { he: 'מיון', en: 'Sorting Line' }, desc: { he: '+25% גרוטאות', en: '+25% scrap' },
+  },
+  {
+    id: 'smeltery', type: 'recycler', icon: 'materials', extra: { materials: 0.05 },
+    name: { he: 'כבשן התכה', en: 'Smeltery' }, desc: { he: '+0.05 חומרים לשנייה', en: '+0.05 materials per second' },
+  },
+  {
+    // The plan also asks for 30% more power draw; roles have no power field yet, so the trade-off is a leakier room.
+    id: 'desiccant', type: 'condenser', icon: 'water', outputMult: 1.25, risk: 1.5,
+    name: { he: 'חומר ייבוש', en: 'Desiccant' }, desc: { he: '+25% מים · יותר הצפות', en: '+25% water · more floods' },
+  },
+  {
+    // The plan's "draw x0.8" has no field yet: the recovery loop is a water tank and a tighter seal instead.
+    id: 'recovery', type: 'condenser', icon: 'wave', caps: { water: 200 }, risk: 0.5,
+    name: { he: 'מחזור עיבוי', en: 'Recovery Loop' }, desc: { he: '+200 קיבולת מים · פחות הצפות', en: '+200 water storage · fewer floods' },
+  },
+  {
+    id: 'shiitake', type: 'mushroomFarm', icon: 'clover', outputMult: 1.2,
+    name: { he: 'שיטאקי', en: 'Shiitake Beds' }, desc: { he: '+20% אוכל', en: '+20% food' },
+  },
+  {
+    id: 'medicinal', type: 'mushroomFarm', icon: 'medicine', extra: { medicine: 0.02 },
+    name: { he: 'פטריות מרפא', en: 'Medicinal Mushrooms' }, desc: { he: '+0.02 תרופות לשנייה', en: '+0.02 medicine per second' },
+  },
+  {
+    // recruitMult is only read for radio towers today, so the checkpoint also makes trips out safer.
+    id: 'checkpoint', type: 'gatePost', icon: 'flag', recruitMult: 1.1, expeditionChance: 0.03,
+    name: { he: 'נקודת ביקורת', en: 'Checkpoint' }, desc: { he: '+3% הצלחת משלחות · מקבלים נודדים בנוחות', en: '+3% expedition success · wanderers are let in with ease' },
+  },
+  {
+    id: 'killZone', type: 'gatePost', icon: 'target', defense: 8,
+    name: { he: 'שדה ירי', en: 'Kill Zone' }, desc: { he: '+8 הגנה', en: '+8 defense' },
+  },
+  {
+    id: 'drillYard', type: 'barracks', icon: 'strength', defense: 6,
+    name: { he: 'מגרש אימונים', en: 'Drill Yard' }, desc: { he: '+6 הגנה', en: '+6 defense' },
+  },
+  {
+    id: 'bunks', type: 'barracks', icon: 'quarters', population: 4,
+    name: { he: 'דרגשים נוספים', en: 'Extra Bunks' }, desc: { he: '+4 מקומות לינה', en: '+4 beds' },
+  },
 ];
 
 const BY_ID = new Map(SPECIALIZATIONS.map(s => [s.id, s]));
