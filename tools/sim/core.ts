@@ -567,6 +567,9 @@ export async function runSim(o: SimOptions): Promise<SimResult> {
     }
   };
 
+  /** [plan4:BL-15..32] Research nodes that only unlock a wave 2 room. */
+  const WAVE2_ROOMS = ['quarantineWard', 'solarArray', 'windTurbine', 'watchtower', 'garage', 'decon', 'aquaculture', 'market', 'nursery', 'school', 'bathhouse', 'memorialHall'];
+  const lateRoomNode = new Set(researchData.RESEARCH.filter(r => r.effects.some(x => x.type === 'unlock' && WAVE2_ROOMS.includes(x.building))).map(r => r.id));
   const startResearch = () => {
     const ids = [...researchData.RESEARCH.map(r => r.id)];
     const refinements = (researchData as unknown as Loose).REFINEMENTS as { id: string }[] | undefined;
@@ -584,8 +587,10 @@ export async function runSim(o: SimOptions): Promise<SimResult> {
     const onPath = (id: string) => { const f = all.find(r => r.id === id)?.fork; return !f || chosen.has(id); };
     // Main tree first (cheapest), endless refinements only when nothing else is open; fill the queue if there is one.
     for (let i = 0; i < 6; i++) {
+      // [plan4:BL-15..32] A wave 2 room's node is researched after the main tree (like a Refinement, but before one): the rooms are a choice, not the road to the next Act.
+      const rank = (id: string) => (refIds.has(id) ? 2 : lateRoomNode.has(id) ? 1 : 0);
       const next = ids.filter(id => onPath(id) && e.researchSystem.canStart(state(), id))
-        .sort((a, b) => Number(refIds.has(a)) - Number(refIds.has(b)) || costK(a) - costK(b))[0];
+        .sort((a, b) => rank(a) - rank(b) || costK(a) - costK(b))[0];
       if (!next) break;
       const hadActive = !!e.researchSystem.activeId(state());
       if (!e.researchSystem.start(sm, next)) break;
