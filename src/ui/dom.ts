@@ -1,5 +1,5 @@
 import type { GameState, ResourceType, SurvivorStats } from '../core/GameState';
-import { vibrate } from '../utils/haptics';
+import { haptic } from '../utils/haptics';
 import { i18n } from '../i18n/I18nManager';
 import { iconSvg, isIcon, tok, type IconName } from './icons';
 import { uiSound } from '../audio/uiSound';
@@ -132,10 +132,10 @@ export function button(label: string, className: string, onClick: () => void, di
   b.addEventListener('click', (e) => {
     e.stopPropagation();
     if (b.disabled) {
-      vibrate([10, 40, 10]);
+      haptic('error');
       return;
     }
-    vibrate(8);
+    haptic('tap');
     if (/\btab(-btn)?\b/.test(b.className)) uiSound('tab');
     onClick();
   });

@@ -213,7 +213,7 @@
 .story-cost { font-size: calc(11px * var(--fs, 1)); opacity: 0.8; }
 
 /* ---------- Story codex in the journal ---------- */
-.story-item.locked { opacity: 0.45; }
+.story-item.locked { filter: grayscale(0.7) brightness(0.8); }
 .char-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 10px; margin-top: 8px; }
 .char-card { display: flex; flex-direction: column; align-items: center; gap: 4px; text-align: center; }
 .char-face { width: 72px; height: 72px; border-radius: 50%; object-fit: cover; border: 2px solid var(--border); }
@@ -238,6 +238,6 @@
 .exp-log summary { cursor: pointer; color: var(--phosphor); font-size: calc(13px * var(--fs, 1)); }
 .exp-journal { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; border-inline-start: 2px solid var(--border); padding-inline-start: 10px; }
 .exp-entry { display: grid; grid-template-columns: auto auto 1fr; gap: 6px; align-items: start; font-size: calc(12px * var(--fs, 1)); color: var(--text-primary); }
-.exp-time { color: var(--text-dim); font-family: monospace; direction: ltr; }
+.exp-time { color: var(--text-secondary); font-family: monospace; direction: ltr; }
 .exp-entry.event .exp-text { color: #ffd27a; }
 .exp-entry.choice .exp-text { color: var(--phosphor); }

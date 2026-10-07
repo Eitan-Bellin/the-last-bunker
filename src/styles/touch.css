@@ -9,6 +9,13 @@
 .era-chip { min-height: 32px; display: inline-flex; align-items: center; }
 .btn-small { min-height: 34px; }
 
+/* [plan4:UX-4] The field classes below set their own small sizes; fields stay at 16px+ (no focus-zoom on iOS) and selectable. */
+input.coupon-code, input.coupon-amount, input.book-search, textarea.save-area {
+  font-size: max(16px, calc(13px * var(--fs, 1)));
+  -webkit-user-select: text;
+  user-select: text;
+}
+
 /* Keyboard focus: visible, but only for the keyboard. */
 button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
@@ -122,3 +129,58 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px
 
 /* Beds the Act's limit holds back (room panel) */
 .bp-note.warning { margin: 4px 0 6px; font-size: 0.85em; line-height: 1.35; color: var(--warning); }
+
+/* [plan4:AC-3] High contrast (Accessibility tab, data-contrast="high" on <html>, set by utils/a11y.ts): white text, 2px edges,
+   and no see-through plates, so text never sits on whatever the scene happens to show behind it. */
+:root[data-contrast="high"] {
+  --text-primary: #ffffff;
+  --text-secondary: #e0f7e8;
+  --text-dim: #c4e2cd;
+  --text-disabled: #b9c4be;
+  --border: rgba(170, 255, 195, 0.95);
+  --bg-card: #0f2418;
+  --bg-card-hi: #17361f;
+}
+:root[data-contrast="high"] .sheet,
+:root[data-contrast="high"] .modal { background: #050b07; }
+:root[data-contrast="high"] .hud-top { background: #060709; }
+:root[data-contrast="high"] .resource-item,
+:root[data-contrast="high"] .info-item,
+:root[data-contrast="high"] .toast { background: #1c1d20; }
+:root[data-contrast="high"] .btn,
+:root[data-contrast="high"] .tab,
+:root[data-contrast="high"] .bp-card,
+:root[data-contrast="high"] .modal,
+:root[data-contrast="high"] .resource-item,
+:root[data-contrast="high"] .info-item,
+:root[data-contrast="high"] .nav-btn { border-width: 2px; border-color: var(--border); }
+:root[data-contrast="high"] .btn-primary { color: #000; }
+:root[data-contrast="high"] .resource-value { color: #fff; }
+
+/* [plan4:UX-1] "Tap to enable sound": icon + text (never colour alone), a 44px target above the console. Hidden unless the audio context is blocked. */
+.sound-chip {
+  position: fixed;
+  inset-inline: 0;
+  margin-inline: auto;
+  width: max-content;
+  max-width: calc(100% - 32px);
+  bottom: calc(max(8px, env(safe-area-inset-bottom)) + 92px);
+  z-index: 35;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 8px 16px;
+  border-radius: 22px;
+  border: 1px solid var(--amber, #ffb547);
+  background: #1c1d20;
+  color: #ffe3b0;
+  font-size: calc(14px * var(--fs, 1));
+  font-weight: 600;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.6);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(6px);
+  transition: opacity 0.18s, transform 0.18s;
+}
+.sound-chip.show { opacity: 1; pointer-events: auto; transform: none; }

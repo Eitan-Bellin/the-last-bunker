@@ -46,6 +46,8 @@ import { genderOf, genderOfName } from './data/portraits';
 import { ensurePersistentStorage, getPersistStatus } from './core/SaveManager';
 import { claimOwnership, onSuperseded } from './core/singleInstance';
 import { currentTextSize, cycleTextSize } from './ui/textSize';
+import { getA11y, hydrateA11y, subscribeA11y } from './utils/a11y';
+import { setSoundChip } from './ui/soundChip';
 import { hideSplash } from './ui/splash';
 import { StoryDialog } from './ui/components/StoryDialog';
 import { DISASTERS } from './data/incidents';
@@ -148,6 +150,13 @@ export class GameApp {
     this.hud = new HUD();
     this.audio = new AudioEngine();
     setUiSound((name, volume) => this.audio.play(name, { volume }));
+    // [plan4:UX-1] "tap to enable sound" chip while the context is suspended/interrupted; [plan4:AC-1] audio and the save follow the a11y source.
+    this.audio.onBlockedChange = setSoundChip;
+    this.audio.setPlayInSilent(getA11y().playInSilent);
+    subscribeA11y(a => {
+      this.audio.setPlayInSilent(a.playInSilent);
+      if (this.engine.stateManager.state) this.state.settings.a11y = { ...a }; // mirrored into the save (device preference stays primary)
+    });
     this.buildMenu = new BuildMenu(this.engine.resourceSystem, this.engine.buildingSystem);
     this.buildingPanel = new BuildingPanel(this.engine);
     this.peoplePanel = new PeoplePanel(this.engine);
@@ -219,6 +228,8 @@ export class GameApp {
     const canvas = document.getElementById('game-canvas') as HTMLCanvasElement;
     await Promise.all([this.renderer.init(canvas), preloadIcons(SCENE_ICONS).catch(() => undefined)]);
     await this.engine.init();
+    hydrateA11y(this.state.settings?.a11y); // [plan4:AC-1] a device with no preference of its own takes the save's
+    this.state.settings.a11y = { ...getA11y() };
     // Decode the paintings of the rooms already built so the first frame shows art, not placeholders.
     // [perf] Only the rooms the first picture can show (the top of the bunker): the rest load when the camera comes near (renderRooms).
     const keys = this.state.buildings.filter(b => b.position.floor < 10).map(b => buildingArtKey(b.type, roomTier(b.level))).filter((k): k is string => !!k);

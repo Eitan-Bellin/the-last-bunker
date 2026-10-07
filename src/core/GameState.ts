@@ -179,12 +179,43 @@ export interface PrestigeState {
   storySeen?: string[];
 }
 
+/** [plan4:AC-1] Accessibility and comfort preferences. Read and applied only through utils/a11y.ts. */
+export interface A11ySettings {
+  /** auto = follow the system's reduced-motion setting. */
+  motion: 'auto' | 'reduced' | 'full';
+  /** safe = no flashes. */
+  flash: 'safe' | 'normal';
+  textScale: 1.0 | 1.1 | 1.25 | 1.4 | 1.6;
+  contrast: 'normal' | 'high';
+  colorMode: 'none' | 'deuter' | 'protan' | 'tritan';
+  haptics: 'off' | 'light' | 'strong';
+  oneHand: 'off' | 'right' | 'left';
+  largeTargets: boolean;
+  popups: 'all' | 'important' | 'off';
+  /** Visual captions for sounds. */
+  captions: boolean;
+  /** Screen-reader announcements. */
+  announce: boolean;
+  powerSaver: boolean;
+  /** iPhone: keep sound when the silent switch is on (audioSession 'playback' instead of 'ambient'). */
+  playInSilent: boolean;
+}
+
+export function defaultA11y(): A11ySettings {
+  return {
+    motion: 'auto', flash: 'normal', textScale: 1.1, contrast: 'normal', colorMode: 'none', haptics: 'light', oneHand: 'off',
+    largeTargets: false, popups: 'all', captions: false, announce: false, powerSaver: false, playInSilent: false,
+  };
+}
+
 export interface GameSettings {
   language: 'en' | 'he';
   musicVolume: number;
   sfxVolume: number;
   notificationsEnabled: boolean;
   autoSave: boolean;
+  /** [plan4:AC-1] Absent in older saves: migrateState fills it in. */
+  a11y: A11ySettings;
 }
 
 export interface GameStats {
@@ -448,6 +479,8 @@ export function migrateState(saved: GameState): GameState {
   const fresh = createInitialState();
   const merged = { ...fresh, ...saved } as GameState;
   merged.stats = { ...fresh.stats, ...saved.stats };
+  // [plan4:AC-1] settings: older saves have no a11y block (the shallow merge above would otherwise drop the defaults).
+  merged.settings = { ...fresh.settings, ...saved.settings, a11y: { ...fresh.settings.a11y, ...(saved.settings?.a11y ?? {}) } };
   merged.resources = { ...fresh.resources, ...saved.resources };
   merged.version = fresh.version;
   merged.currentFloors = Math.max(saved.currentFloors ?? 1, fresh.currentFloors);
@@ -530,6 +563,7 @@ export function createInitialState(): GameState {
       sfxVolume: 1.0,
       notificationsEnabled: true,
       autoSave: true,
+      a11y: defaultA11y(),
     },
     stats: {
       totalPlayTime: 0,
