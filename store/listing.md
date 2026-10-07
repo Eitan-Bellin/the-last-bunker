@@ -21,6 +21,7 @@ Restore the dead bunker room by room. Bring the generator back to life, drain th
 • Four eras, each with its own look and its own music — a soundtrack composed live that never repeats the same minute twice.
 • Plays offline. Your bunker keeps working while you are away.
 • Full Hebrew and English.
+• Accessible: four text sizes, colour-vision modes, high contrast, reduced motion, flash safety, sound captions, one-hand mode, zoom buttons and a list view of the bunker. (Not yet verified with VoiceOver; see the accessibility statement.)
 
 **Keywords:** survival, bunker, idle, base building, post-apocalyptic, colony, management, story, offline
 
@@ -47,6 +48,7 @@ Restore the dead bunker room by room. Bring the generator back to life, drain th
 • ארבעה עידנים, לכל אחד מראה ומוזיקה משלו — פסקול שמולחן בזמן אמת ולא חוזר על אותה דקה פעמיים.
 • עובד גם בלי אינטרנט. הבונקר ממשיך לעבוד גם כשאתם לא שם.
 • עברית ואנגלית מלאות.
+• נגיש: ארבעה גדלי טקסט, מצבי עיוורון צבעים, ניגודיות גבוהה, הפחתת תנועה, בטיחות הבזקים, כתוביות לצלילים, מצב יד אחת, כפתורי זום ותצוגת רשימה של הבונקר. (עדיין לא נבדק עם VoiceOver; ראו הצהרת נגישות.)
 
 **מילות מפתח:** הישרדות, בונקר, משחק סרק, בנייה, פוסט־אפוקליפטי, מושבה, ניהול, סיפור
 
