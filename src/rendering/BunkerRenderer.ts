@@ -37,7 +37,7 @@ import { SlopArea, hitState } from './HitSlop'; // [plan4:ST-12]
 import { PostFX, startQuality, targetResolution } from './postfx';
 import { isLiteMode, logCrash } from '../core/crashGuard';
 import { isTouchDevice } from '../utils/device';
-import { statusTint } from '../utils/a11y';
+import { statusTint, pressMs } from '../utils/a11y';
 import { coneTexture } from '../art/ArtLibrary';
 import { buildRuinVisual } from './ruinArt';
 import { iconSprite } from './richText';
@@ -811,7 +811,7 @@ export class BunkerRenderer {
         this.cam.pointerDown = false;
         this.movePersonTo(e.global.x, e.global.y);
         this.onPersonLift?.(survivorId); // [plan4:UX-20] haptic impact on the lift
-      }, 260);
+      }, pressMs(260)); // plan4:AC-13
     });
     person.container.on('pointerup', () => {
       if (!this.drag && !this.cam.isDragging) this.onPersonTap?.(survivorId);

@@ -1,7 +1,7 @@
 import { Container, TextStyle } from 'pixi.js';
 import { richLine } from '../../rendering/richText';
 import { popupScale } from '../../rendering/LabelScale'; // [plan4:ST-12]
-import { statusTint } from '../../utils/a11y';
+import { statusTint, popupWanted } from '../../utils/a11y';
 
 interface PopupInstance {
   line: Container;
@@ -78,6 +78,7 @@ export class NumberPopupManager {
 
   spawn(x: number, y: number, value: string, color: number = statusTint('ok')): void {
     if (blockedAt?.(x, y)) return;
+    if (!popupWanted(value)) return; // plan4:AC-1 popup density
     const spot = `${Math.round(x)}|${Math.round(y)}|${color}`;
     // Merge into a popup still being read at the same spot: "+6 [food]" + "+6 [food]" -> "+12 [food]".
     for (const p of this.active) {

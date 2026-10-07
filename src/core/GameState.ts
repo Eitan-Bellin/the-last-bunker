@@ -223,12 +223,16 @@ export interface A11ySettings {
   powerSaver: boolean;
   /** iPhone: keep sound when the silent switch is on (audioSession 'playback' instead of 'ambient'). */
   playInSilent: boolean;
+  /** [plan4:AC-13] relaxed = longer presses (500 ms instead of 260), a wider double-tap window and messages that stay twice as long. */
+  timing: 'normal' | 'relaxed';
+  /** [plan4:AC-13] Floating + / - / fit buttons for the camera, for anyone who cannot pinch. */
+  zoomButtons: boolean;
 }
 
 export function defaultA11y(): A11ySettings {
   return {
     motion: 'auto', flash: 'normal', textScale: 1.1, contrast: 'normal', colorMode: 'none', haptics: 'light', oneHand: 'off',
-    largeTargets: false, popups: 'all', captions: false, announce: false, powerSaver: false, playInSilent: false,
+    largeTargets: false, popups: 'all', captions: false, announce: false, powerSaver: false, playInSilent: false, timing: 'normal', zoomButtons: false,
   };
 }
 

@@ -1,6 +1,6 @@
 import type { Application, Container } from 'pixi.js';
 import { BUILDING_W, ROOM_H, SIDE_MARGIN, SLOT_W, floorTop } from './layout';
-import { reducedMotion } from '../utils/a11y';
+import { reducedMotion, relaxedMs } from '../utils/a11y';
 import { ROW_X0, ROW_X1 } from './surfaceRow'; // plan4:ST-16
 import { getHudInsets, subscribeHudInsets } from '../utils/hudInsets';
 
@@ -282,7 +282,7 @@ export class CameraController {
       this.cancelTour(); // a touch is the player taking the camera back
       // A touch catches a gliding camera; that touch only stops it (no room tap).
       // (Not when this touch may be the second half of a double tap.)
-      const pendingTap = performance.now() - this.lastTap.t < DOUBLE_TAP_MS;
+      const pendingTap = performance.now() - this.lastTap.t < relaxedMs(DOUBLE_TAP_MS); // plan4:AC-13
       const moving = !pendingTap && (Math.hypot(this.camVX, this.camVY) * this.zoom > 140 || this.focusTarget !== null);
       this.stopCamera();
       if (this.pointers.size === 1) {
@@ -480,7 +480,7 @@ export class CameraController {
   private tapAt(x: number, y: number, canStart: boolean): boolean {
     const now = performance.now();
     const t = this.lastTap;
-    if (now - t.t < DOUBLE_TAP_MS && Math.hypot(x - t.x, y - t.y) < 36) {
+    if (now - t.t < relaxedMs(DOUBLE_TAP_MS) && Math.hypot(x - t.x, y - t.y) < 36) { // plan4:AC-13
       t.t = 0;
       this.onDoubleTap(x, y);
       return true;

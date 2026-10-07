@@ -1,4 +1,5 @@
 import { el } from '../dom';
+import { relaxedMs } from '../../utils/a11y';
 import { uiSound } from '../../audio/uiSound';
 
 /**
@@ -104,7 +105,7 @@ export class Toasts {
 
   private arm(e: Entry): void {
     window.clearTimeout(e.timer);
-    e.timer = window.setTimeout(() => this.dismiss(e, true), DURATION_MS[e.kind]);
+    e.timer = window.setTimeout(() => this.dismiss(e, true), relaxedMs(DURATION_MS[e.kind])); // plan4:AC-13 relaxed timing: messages stay twice as long
   }
 
   /** Fades the toast out and lets the next waiting one in. `slide` is the direction of a swipe (px), 0 for a plain fade. */

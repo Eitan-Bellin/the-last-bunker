@@ -1,4 +1,5 @@
 import type { GameApp } from '../../app';
+import { ZoomButtons } from '../components/ZoomButtons'; // [plan4:AC-13] installed here: this is where the camera keys live
 
 /**
  * [plan4:AC-10] Keyboard shortcuts for desktop players and external keyboards on a tablet:
@@ -29,6 +30,7 @@ export class KeyboardShortcuts {
 
   install(): void {
     document.addEventListener('keydown', e => this.onKey(e));
+    new ZoomButtons(this.app).install();
   }
 
   private typing(e: KeyboardEvent): boolean {
