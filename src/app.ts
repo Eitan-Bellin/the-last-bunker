@@ -47,6 +47,9 @@ import { ensurePersistentStorage, getPersistStatus } from './core/SaveManager';
 import { claimOwnership, onSuperseded } from './core/singleInstance';
 import { currentTextSize, cycleTextSize } from './ui/textSize';
 import { getA11y, hydrateA11y, subscribeA11y } from './utils/a11y';
+import { showCaption } from './ui/a11yDom';
+import { StructurePanel } from './ui/components/StructurePanel'; // [plan4:AC-11]
+import { KeyboardShortcuts } from './ui/controllers/keyboard'; // [plan4:AC-10]
 import { setSoundChip } from './ui/soundChip';
 import { hideSplash } from './ui/splash';
 import { StoryDialog } from './ui/components/StoryDialog';
@@ -59,6 +62,7 @@ import './styles/bunker-os.css';
 import './styles/depth.css';
 import './styles/command.css';
 import './styles/touch.css'; // [plan4:UX-5] last again (its header says so): its 44px targets must beat the older sheet-help sizes in command.css
+import './styles/a11y.css'; // [plan4:AC-2] the accessibility layer, last of all: reduced motion, colour modes, focus rings
 import { FeedbackController } from './ui/controllers/feedback';
 import { InboxController } from './ui/controllers/inbox';
 import { SaveController } from './ui/controllers/saves';
@@ -105,6 +109,7 @@ export class GameApp {
   buildingPanel: BuildingPanel;
   private peoplePanel: PeoplePanel;
   private researchPanel: ResearchPanel;
+  private structurePanel!: StructurePanel; // [plan4:AC-11] the list view
   private surfacePanel: SurfacePanel;
   menuPanel: MenuPanel;
   modal: Modal;
@@ -161,11 +166,20 @@ export class GameApp {
     this.buildingPanel = new BuildingPanel(this.engine);
     this.peoplePanel = new PeoplePanel(this.engine);
     this.researchPanel = new ResearchPanel(this.engine);
+    this.structurePanel = new StructurePanel(() => this.state);
+    this.structurePanel.onOpenRoom = id => {
+      const room = this.renderer.roomRect(id);
+      this.closeSheets();
+      if (room) this.renderer.focusOn(room.x + room.w / 2, room.y + 50, 1.6);
+      this.renderer.setSelected(id);
+      this.buildingPanel.show(id);
+    };
     this.surfacePanel = new SurfacePanel(this.engine);
     this.projectsPanel = new ProjectsPanel(this.engine); // [LateGame B1]
     this.couponPanel = new CouponPanel(this.engine, (text, good) => this.toasts.show(text, good ? 'good' : 'bad'));
     this.menuPanel = new MenuPanel(this.engine, {
       toggleLanguage: () => void this.toggleLanguage(),
+      openStructure: () => this.toggleStructure(),
       toggleSound: () => this.audio.toggle(),
       isSoundOn: () => this.audio.isOn,
       newGame: () => this.saves.confirmNewGame(),
@@ -226,6 +240,15 @@ export class GameApp {
     onSuperseded(() => this.saves.showSuperseded());
     const guard = installCrashGuard(() => this.diagnostics());
     const canvas = document.getElementById('game-canvas') as HTMLCanvasElement;
+    // [plan4:AC-8] The picture is not readable by a screen reader: say what it is and where the list view is (key L, Accessibility tab).
+    canvas.setAttribute('role', 'application');
+    canvas.setAttribute('aria-label', i18n.t('a11y.canvas'));
+    canvas.setAttribute('aria-keyshortcuts', 'B P R L');
+    canvas.setAttribute('aria-description', i18n.t('a11y.keys'));
+    new KeyboardShortcuts(this).install();
+    // [plan4:AC-9] Captions for the sounds that carry information (only when the player turned them on).
+    const CAPTIONED = new Set(['warn', 'pulse', 'alarm', 'siren', 'door', 'thunder']);
+    this.audio.onCue = name => { if (CAPTIONED.has(name)) showCaption(i18n.t(`caption.${name}`)); };
     await Promise.all([this.renderer.init(canvas), preloadIcons(SCENE_ICONS).catch(() => undefined)]);
     await this.engine.init();
     hydrateA11y(this.state.settings?.a11y); // [plan4:AC-1] a device with no preference of its own takes the save's
@@ -405,7 +428,7 @@ export class GameApp {
     if (this.renderer.cameraMoving) this.engine.noteCameraMotion();
     this.engine.fxBusy = this.renderer.fxActive || this.popups.anyIn(VIEW.x0, VIEW.y0, VIEW.x1, VIEW.y1);
     try { this.renderer.render(state, dt, alpha); } catch (err) { logCrash('render', err); throw err; }
-    this.guarded('hud', () => { this.hud.update(state); this.popups.update(); });
+    this.guarded('hud', () => { this.hud.update(state); this.popups.update(); this.hud.setNavCurrent(this.buildMenu.isVisible ? 'build' : this.peoplePanel.isVisible ? 'people' : this.researchPanel.isVisible ? 'research' : this.surfacePanel.isVisible ? 'surface' : this.menuPanel.isVisible ? 'menu' : null); });
     this.guarded('ui', () => this.frameUi(state));
   }
 
@@ -425,6 +448,7 @@ export class GameApp {
       if (this.buildingPanel.isVisible) this.buildingPanel.refresh(state);
       if (this.peoplePanel.isVisible) this.peoplePanel.refresh(state);
       if (this.researchPanel.isVisible) this.researchPanel.refresh(state);
+      if (this.structurePanel.isVisible) this.structurePanel.refresh(state);
       if (this.surfacePanel.isVisible) this.surfacePanel.refresh(state);
       if (this.menuPanel.isVisible) this.menuPanel.refresh(state);
       if (this.ruinPanel.isVisible) this.ruinPanel.refresh(state);
@@ -638,12 +662,16 @@ export class GameApp {
       if (falling && res.amount > 0 && res.amount < res.cap * 0.1 && !this.lowWarned.has(r)) {
         this.lowWarned.add(r);
         this.audio.play('warn');
+        // [plan4:AC-9] The sound has a visual twin: a toast and a blink of the resource plate.
+        this.toasts.show(`[[warning]] ${i18n.t('shortage.low', { name: i18n.t(`resources.${r}`) })}`, 'bad');
+        this.hud.alertResource(r);
       } else if (res.amount > res.cap * 0.25) this.lowWarned.delete(r);
     }
     for (const s of state.survivors) {
       if (s.health < 30 && !this.hurtWarned.has(s.id)) {
         this.hurtWarned.add(s.id);
         this.audio.play('pulse');
+        this.toasts.show(`[[warning]] ${i18n.t('shortage.hurt', { name: s.name })}`, 'bad');
       } else if (s.health > 60) this.hurtWarned.delete(s.id);
     }
     const ok = (state.powerRatio ?? 1) >= 0.99;
@@ -934,11 +962,19 @@ export class GameApp {
     return this.engine.populationSystem.getLocalizedName({ name } as SurvivorState, i18n.currentLocale);
   }
 
+  /** [plan4:AC-11] The list view of the bunker (key L, and the Accessibility tab). */
+  toggleStructure(): void {
+    const wasOpen = this.structurePanel.isVisible;
+    this.closeSheets();
+    if (!wasOpen) this.structurePanel.show();
+  }
+
   closeSheets(): void {
     this.buildMenu.hide();
     this.buildingPanel.hide();
     this.peoplePanel.hide();
     this.researchPanel.hide();
+    this.structurePanel.hide();
     this.menuPanel.hide();
     this.ruinPanel.hide();
     this.journal.hide();

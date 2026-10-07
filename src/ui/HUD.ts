@@ -6,7 +6,7 @@ import { timeOfDay } from '../data/dayCycle';
 import { i18n } from '../i18n/I18nManager';
 import { RESOURCE_ICONS, el, setRich } from './dom';
 import { bedsBuilt } from '../systems/BuildingSystem';
-import { subscribeA11y, getA11y } from '../utils/a11y';
+import { subscribeA11y, getA11y, reducedMotion } from '../utils/a11y';
 import { setHudInsets } from '../utils/hudInsets';
 import { initViewportUi } from './viewportUi';
 
@@ -41,6 +41,7 @@ export class HUD {
   private arrivalValue!: HTMLElement;
   onPopulation?: () => void;
   private moraleValue!: HTMLElement;
+  private moraleIcon!: HTMLElement;
   private powerBanner!: HTMLElement;
   private placementBanner!: HTMLElement;
   private placementText!: HTMLElement;
@@ -54,11 +55,34 @@ export class HUD {
   private expanded = false;
   private narrow = window.matchMedia('(max-width: 520px)');
   private lastUpdate = performance.now();
+  /** [plan4:AC-8] The resource buttons' spoken labels are refreshed at most 4 times a second (a screen reader must not be flooded). */
+  private lastAria = 0;
 
   onNav: ((key: NavKey) => void) | null = null;
   onResourceTap: ((r: ResourceType) => void) | null = null;
   onMenu: (() => void) | null = null;
   private badges = new Map<NavKey, HTMLElement>();
+
+  /** [plan4:AC-9] The plate of a resource that just ran short blinks twice (not under reduced motion: the toast carries the warning then). */
+  alertResource(rt: ResourceType): void {
+    const root = this.resourceEls.get(rt)?.root;
+    if (!root || reducedMotion()) return;
+    root.classList.remove('alert-pulse');
+    void root.offsetWidth;
+    root.classList.add('alert-pulse');
+    window.setTimeout(() => root.classList.remove('alert-pulse'), 1200);
+  }
+
+  /** [plan4:AC-8] Marks the navigation button of the panel that is open (null: none). Cheap: touches the DOM only when it changes. */
+  setNavCurrent(key: NavKey | 'menu' | null): void {
+    if (this.navCurrent === key) return;
+    this.navCurrent = key;
+    for (const b of this.nav.querySelectorAll<HTMLElement>('.nav-btn')) {
+      const k = b.classList.contains('nav-menu') ? 'menu' : b.dataset.key;
+      if (k === key) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
+    }
+  }
+  private navCurrent: NavKey | 'menu' | null = null;
   onPlacementCancel: (() => void) | null = null;
 
   constructor() {
@@ -161,7 +185,8 @@ export class HUD {
 
     const morale = el('div', 'info-item');
     this.moraleValue = el('span', 'info-value', '50%');
-    morale.append(el('span', 'info-icon', '[[happy]]'), el('span', 'info-label', i18n.t('hud.morale')), this.moraleValue);
+    this.moraleIcon = el('span', 'info-icon', '[[happy]]');
+    morale.append(this.moraleIcon, el('span', 'info-label', i18n.t('hud.morale')), this.moraleValue);
 
     const journal = el('button', 'lang-btn journal-btn', '[[journal]]');
     journal.setAttribute('aria-label', i18n.t('journal.title'));
@@ -316,6 +341,9 @@ export class HUD {
   private createBottomNav(): void {
     const nav = el('div', 'hud-bottom');
     this.nav = nav;
+    // [plan4:AC-8] The console is a toolbar; the open panel's button says aria-current (setNavCurrent).
+    nav.setAttribute('role', 'toolbar');
+    nav.setAttribute('aria-label', i18n.t('a11y.nav'));
     const buttons: { key: NavKey; icon: string }[] = [
       { key: 'build', icon: '[[build]]' },
       { key: 'people', icon: '[[people]]' },
@@ -432,6 +460,8 @@ export class HUD {
     const nowMs = performance.now();
     const dtRoll = Math.min(0.1, (nowMs - this.lastUpdate) / 1000);
     this.lastUpdate = nowMs;
+    const ariaDue = nowMs - this.lastAria >= 250;
+    if (ariaDue) this.lastAria = nowMs;
     // Plan 2026-10 Q12: on a phone only the key four show, plus whatever needs attention; the pill expands the rest.
     const collapsible = this.narrow.matches;
     const compact = collapsible && !this.expanded;
@@ -451,6 +481,12 @@ export class HUD {
       els.fill.style.width = `${pct}%`;
       els.fill.className = `resource-fill-bar ${pct >= 99 ? 'full' : pct < 15 ? 'low' : ''}`;
       els.root.classList.toggle('empty', res.amount <= 0 && res.consumptionRate > 0);
+      if (ariaDue) {
+        // "Food: 124 of 150, +0.4 per second": the real value (not the rolling counter) and the net rate, in words.
+        const hasCap = res.cap > 0 && isFinite(res.cap);
+        const label = i18n.t(hasCap ? 'a11y.resLabel' : 'a11y.resLabelNoCap', { name: i18n.t(`resources.${rt}`), amount: i18n.formatCompact(res.amount), cap: hasCap ? i18n.formatCompact(res.cap) : '', rate: i18n.formatRate(net) });
+        if (els.root.getAttribute('aria-label') !== label) els.root.setAttribute('aria-label', label);
+      }
       const inAct = this.actShow.get(rt) !== false;
       const attention = (res.amount <= 0 && res.consumptionRate > 0) || (pct < 15 && net < -0.005 && res.cap > 0);
       const visible = inAct && (!compact || CORE_RESOURCES.has(rt) || attention);
@@ -485,6 +521,8 @@ export class HUD {
       ? Math.round(state.survivors.reduce((s, sv) => s + sv.happiness, 0) / state.survivors.length)
       : 50;
     this.setText(this.moraleValue, `${morale}%`);
+    // [plan4:AC-7] The mood is a face as well as a colour: happy / neutral / sad.
+    this.setText(this.moraleIcon, morale < 35 ? '[[sad]]' : morale > 70 ? '[[happy]]' : '[[neutral]]');
     this.moraleValue.className = `info-value ${morale < 35 ? 'negative' : morale > 70 ? 'positive' : ''}`;
 
     const ratio = state.powerRatio ?? 1;

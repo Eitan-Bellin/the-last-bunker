@@ -11,6 +11,7 @@ import { uiSound } from '../../audio/uiSound';
 import type { BackupInfo, BackupKind } from '../../core/SaveManager';
 import { getA11y, setA11y } from '../../utils/a11y';
 import { haptic } from '../../utils/haptics';
+import { enhanceTabs } from '../a11yDom';
 
 export type MenuTab = 'settings' | 'a11y' | 'stats' | 'achievements' | 'genesis';
 
@@ -55,6 +56,8 @@ export interface MenuActions {
   /** Music and effects volume, 0..1. */
   getLevels: () => { music: number; fx: number };
   setLevels: (music: number, fx: number) => void;
+  /** [plan4:AC-11] Opens the list view of the bunker. */
+  openStructure: () => void;
   /** Text size: current label and cycling to the next. */
   textSize: () => string;
   cycleTextSize: () => void;
@@ -139,13 +142,18 @@ export class MenuPanel {
         this.refresh(this.engine.stateManager.state);
       }));
     }
+    // [plan4:AC-8] ARIA tabs: tablist / tab / tabpanel, arrow keys.
+    const panel = el('div');
+    panel.id = 'menu-tabpanel';
+    enhanceTabs(tabs, i18n.t('menu.title'), panel);
     root.appendChild(tabs);
 
-    if (this.tab === 'settings') root.appendChild(this.renderSettings());
-    if (this.tab === 'a11y') root.appendChild(this.renderA11y());
-    if (this.tab === 'stats') root.appendChild(this.renderStats(state));
-    if (this.tab === 'achievements') root.appendChild(this.renderAchievements(state));
-    if (this.tab === 'genesis') root.appendChild(this.renderGenesis(state));
+    if (this.tab === 'settings') panel.appendChild(this.renderSettings());
+    if (this.tab === 'a11y') panel.appendChild(this.renderA11y());
+    if (this.tab === 'stats') panel.appendChild(this.renderStats(state));
+    if (this.tab === 'achievements') panel.appendChild(this.renderAchievements(state));
+    if (this.tab === 'genesis') panel.appendChild(this.renderGenesis(state));
+    root.appendChild(panel);
     this.sheet.body.replaceChildren(root);
   }
 
@@ -260,6 +268,7 @@ export class MenuPanel {
     saves.appendChild(el('div', 'bp-section-title', `[[save]] ${i18n.t('settings.save')}`));
     const area = el('textarea', 'save-area');
     area.placeholder = i18n.t('settings.pasteHere');
+    area.setAttribute('aria-label', i18n.t('settings.save')); // [plan4:AC-8]
     const row = el('div', 'btn-row');
     row.append(
       button(i18n.t('settings.export'), 'btn-small', async () => {
@@ -365,8 +374,31 @@ export class MenuPanel {
         redraw();
       }));
 
-    card.append(hapticsRow, el('div', 'bp-hint', i18n.t('a11y.hapticsHint')), silentRow, el('div', 'bp-hint', i18n.t('a11y.playInSilentHint')),
+    // [plan4:AC-5/AC-6] Flash budget switch and the three colour-vision modes.
+    const flashRow = cycleRow('[[sparkle]]', 'a11y.flash', ['normal', 'safe'] as const, a.flash, 'a11y.flash', v => setA11y({ flash: v }));
+    const colorRow = cycleRow('[[eye]]', 'a11y.color', ['none', 'deuter', 'protan', 'tritan'] as const, a.colorMode, 'a11y.color', v => setA11y({ colorMode: v }));
+
+    // [plan4:AC-9/AC-11] Captions for sounds, and announcements for a screen reader.
+    const toggleRow = (icon: string, key: string, on: boolean, set: (v: boolean) => void): HTMLElement => {
+      const row = el('div', 'bp-row');
+      row.append(el('span', '', `${icon} ${i18n.t(key)}`), button(i18n.t(on ? 'settings.on' : 'settings.off'), 'btn-small', () => {
+        uiSound('switch');
+        set(!on);
+        redraw();
+      }));
+      return row;
+    };
+    const captionsRow = toggleRow('[[note]]', 'a11y.captions', a.captions, v => setA11y({ captions: v }));
+    const announceRow = toggleRow('[[eye]]', 'a11y.announce', a.announce, v => setA11y({ announce: v }));
+    // [plan4:AC-11] The list view: the bunker as floors and rooms.
+    const listRow = el('div', 'bp-row');
+    listRow.append(el('span', '', `[[build]] ${i18n.t('structure.openList')}`),
+      button(i18n.t('structure.open'), 'btn-small', () => { uiSound('click'); this.actions.openStructure(); }));
+
+    card.append(listRow, el('div', 'bp-hint', i18n.t('structure.openListHint')), hapticsRow, el('div', 'bp-hint', i18n.t('a11y.hapticsHint')), silentRow, el('div', 'bp-hint', i18n.t('a11y.playInSilentHint')),
       textRow, motionRow, el('div', 'bp-hint', i18n.t('a11y.motionHint')),
+      flashRow, el('div', 'bp-hint', i18n.t('a11y.flashHint')), colorRow, el('div', 'bp-hint', i18n.t('a11y.colorHint')),
+      captionsRow, el('div', 'bp-hint', i18n.t('a11y.captionsHint')), announceRow, el('div', 'bp-hint', i18n.t('a11y.announceHint')),
       oneHandRow, el('div', 'bp-hint', i18n.t('a11y.oneHandHint')), largeRow, el('div', 'bp-hint', i18n.t('a11y.largeTargetsHint')));
     box.appendChild(card);
     return box;

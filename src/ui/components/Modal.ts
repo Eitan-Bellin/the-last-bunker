@@ -1,5 +1,6 @@
 import { el } from '../dom';
 import { uiSound } from '../../audio/uiSound';
+import { setInert, trapTab } from '../a11yDom';
 
 export interface ModalAction {
   label: string;
@@ -25,14 +26,19 @@ export class Modal {
   private dismiss: (() => void) | null = null;
   private scroll: HTMLDivElement | null = null;
   private shownTitle = '';
+  /** [plan4:AC-8] Page parts made inert while the dialog is up (and only those it made inert), and what had the focus before it. */
+  private inerted: Element[] = [];
+  private opener: HTMLElement | null = null;
 
   constructor() {
     this.overlay = el('div', 'modal-overlay');
     this.box = el('div', 'modal');
-    this.box.setAttribute('role', 'dialog');
+    // [plan4:AC-8] An alert dialog: it needs an answer (the backdrop does not dismiss it), so a screen reader reads it out at once.
+    this.box.setAttribute('role', 'alertdialog');
     this.box.setAttribute('aria-modal', 'true');
     this.overlay.appendChild(this.box);
     document.body.appendChild(this.overlay);
+    this.overlay.addEventListener('keydown', (e) => trapTab(e, [this.box]));
   }
 
   show(opts: ModalOptions): void {
@@ -51,7 +57,10 @@ export class Modal {
     title.id = 'modal-title';
     this.box.setAttribute('aria-labelledby', title.id);
     scroll.appendChild(title);
-    scroll.appendChild(typeof opts.body === 'string' ? el('p', 'modal-body', opts.body) : opts.body);
+    const bodyNode = typeof opts.body === 'string' ? el('p', 'modal-body', opts.body) : opts.body;
+    bodyNode.id = 'modal-body';
+    this.box.setAttribute('aria-describedby', bodyNode.id);
+    scroll.appendChild(bodyNode);
 
     const makeButton = (a: ModalAction): HTMLButtonElement => {
       const btn = el('button', `btn ${a.className ?? 'btn-primary'}`);
@@ -78,7 +87,16 @@ export class Modal {
     this.scroll = scroll;
     this.box.replaceChildren(scroll, actions);
     scroll.scrollTop = keepScroll;
-    if (!this.isVisible) uiSound('modalOpen', 0.8, 300);
+    if (!this.isVisible) {
+      uiSound('modalOpen', 0.8, 300);
+      this.opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      // Everything else on the page (the HUD, the canvas, the sheets) leaves the tab order and the screen reader while the dialog is up.
+      for (const n of [...document.body.children]) {
+        if (n === this.overlay || n.tagName === 'SCRIPT' || n.matches('.toast-stack, .sr-only, #splash') || (n as HTMLElement).inert || n.hasAttribute('aria-hidden')) continue;
+        setInert(n, true);
+        this.inerted.push(n);
+      }
+    }
     this.overlay.classList.add('open');
     // Keyboard and screen-reader users land on the first choice.
     this.box.querySelector<HTMLButtonElement>('.modal-actions button:not(:disabled)')?.focus({ preventScroll: true });
@@ -86,6 +104,11 @@ export class Modal {
 
   hide(): void {
     this.overlay.classList.remove('open');
+    for (const n of this.inerted) setInert(n, false);
+    this.inerted = [];
+    const back = this.opener;
+    this.opener = null;
+    if (back && back.isConnected) back.focus({ preventScroll: true });
     const done = this.dismiss;
     this.dismiss = null;
     done?.();

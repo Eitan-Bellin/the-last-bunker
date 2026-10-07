@@ -7,6 +7,7 @@ import { portraitFor, portraitUrl } from '../../data/portraits';
 import { INCIDENTS, DISASTERS, disasterCost } from '../../data/incidents';
 import { CEREMONY_COST } from '../../systems/DeathSystem';
 import { bunkerDefense, defenseParts, raidTribute, type RaidResult } from '../../systems/EventSystem';
+import { announce } from '../a11yDom';
 import type { GameApp } from '../../app';
 
 /** Raids, disasters, incidents in rooms, and the memorial. */
@@ -196,9 +197,17 @@ export class DangerController {
     });
   }
 
+  /** [plan4:AC-11] Which danger was last said to a screen reader (the banner text changes every second; the kind only when something new comes). */
+  private announcedDanger = '';
+
   updateIncidentBanner(): void {
     // [Danger] a raid warning or disaster countdown takes the banner (and its alarm) over a room crisis.
     const danger = this.dangerBanner();
+    if (!danger) this.announcedDanger = '';
+    else if (this.announcedDanger !== danger.kind) {
+      this.announcedDanger = danger.kind;
+      announce(danger.text.replace(/\[\[[a-z0-9]+\]\]\s*/gi, ''), 'assertive');
+    }
     if (danger) {
       this.app.hud.setIncident(danger.text, danger.kind);
       const t = performance.now();
