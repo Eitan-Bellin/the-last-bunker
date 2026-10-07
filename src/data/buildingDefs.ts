@@ -247,11 +247,36 @@ export function synergyOf(state: GameState, b: BuildingInstance): { total: numbe
   return { total: Math.min(SYNERGY_MAX_BONUS, capped.reduce((n, l) => n + l.value, 0)), links: capped };
 }
 
+/** Effects that are a count, not a share: the +20% ceiling does not apply to them (a school next to a nursery adds 2 child places). */
+const SYNERGY_COUNTS: SynergyRule['effect'][] = ['childCapacity'];
+
 /** One effect's share of a room's neighbour bonus (0 without a matching neighbour). */
 export function synergyBonus(state: GameState, b: BuildingInstance, effect: SynergyRule['effect']): number {
   if (SYNERGIES.length === 0) return 0;
   const { links } = synergyOf(state, b);
-  return Math.min(SYNERGY_MAX_BONUS, links.filter(l => l.effect === effect).reduce((n, l) => n + l.value, 0));
+  const sum = links.filter(l => l.effect === effect).reduce((n, l) => n + l.value, 0);
+  return SYNERGY_COUNTS.includes(effect) ? sum : Math.min(SYNERGY_MAX_BONUS, sum);
+}
+
+/**
+ * [plan4:BL-1] Every room's neighbour bonuses at once, by room id and effect, for the systems that read them every tick
+ * (ResourceSystem's production modifier): one pass instead of one synergyOf per room per resource. Rooms with no bonus are absent.
+ */
+export function synergyTable(state: GameState): Map<string, Partial<Record<SynergyRule['effect'], number>>> {
+  const out = new Map<string, Partial<Record<SynergyRule['effect'], number>>>();
+  if (SYNERGIES.length === 0 || state.buildings.length < 2) return out;
+  const wanted = new Set<string>();
+  for (const r of SYNERGIES) { wanted.add(r.a); wanted.add(r.b); }
+  for (const b of state.buildings) {
+    if (!wanted.has(b.type)) continue;
+    const { links } = synergyOf(state, b);
+    if (links.length === 0) continue;
+    const row: Partial<Record<SynergyRule['effect'], number>> = {};
+    for (const l of links) row[l.effect] = (row[l.effect] ?? 0) + l.value;
+    for (const k of Object.keys(row) as SynergyRule['effect'][]) if (!SYNERGY_COUNTS.includes(k)) row[k] = Math.min(SYNERGY_MAX_BONUS, row[k]!);
+    out.set(b.id, row);
+  }
+  return out;
 }
 
 /** [plan4:BL-4] Adults on a room's crew (children in a nursery or school hold places of their own and are not counted). */

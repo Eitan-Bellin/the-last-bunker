@@ -201,6 +201,11 @@ export function emergencyDoorTargets(state: GameState): { floor: number; x: numb
   return [...out.values()];
 }
 
+/** A fire, an epidemic or a raid is on: the time to shut doors (and, when it is over, to open them again). */
+export function troubleOn(state: GameState): boolean {
+  return fireBurning(state) || !!state.danger?.disasters?.some(d => d.kind === 'epidemic') || !!state.danger?.raid;
+}
+
 /** Whether there is anything to shut and a reason to (a fire, an epidemic, a raid on the way). */
 export function emergencyActive(state: GameState): boolean {
   return emergencyDoorTargets(state).length > 0;

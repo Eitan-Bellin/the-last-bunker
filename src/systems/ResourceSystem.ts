@@ -4,7 +4,7 @@ import { hasFeature } from './ResearchSystem';
 import { seasonEffects } from '../data/seasons';
 import type { BuildingInstance, GameState, ResourceType, ResourceState } from '../core/GameState';
 import type { StateManager, StateDelta } from '../core/StateManager';
-import { getDef, effectiveLevel, levelMultiplier, shapeFactor, workforceMultiplier } from '../data/buildingDefs';
+import { getDef, effectiveLevel, levelMultiplier, shapeFactor, synergyTable, workforceMultiplier } from '../data/buildingDefs';
 import { researchBuildingMult, researchCapBonus, researchResourceMult } from './ResearchSystem';
 import { chainFactor, chainInputs, inputFed, inputRate } from '../data/chains';
 import { incidentBlocks } from '../data/incidents';
@@ -67,6 +67,23 @@ registerModifier({
 });
 // [P5] Lean Years mutator.
 registerModifier({ id: 'mutators', mult: ({ state, resource }) => (resource === 'food' && hasMutator(state, 'leanYears') ? 0.85 : 1) });
+// [plan4:BL-1] Neighbour pairs (SYNERGIES, doc 02 section 2.5): 'output' lifts everything a room makes (mushroom farm by the pump), 'knowledge' only
+// knowledge (library by the laboratory), 'powerLoss' a power plant's output (generator by a battery bank loses less on the way).
+// The table is built once per update (prepare), not per room and resource.
+let synergyNow: ReturnType<typeof synergyTable> = new Map();
+registerModifier({
+  id: 'synergy',
+  prepare: state => { synergyNow = synergyTable(state); },
+  mult: ({ building, resource }) => {
+    const row = synergyNow.get(building.id);
+    if (!row) return 1;
+    return 1 + (row.output ?? 0) + (resource === 'knowledge' ? row.knowledge ?? 0 : 0) + (resource === 'power' ? row.powerLoss ?? 0 : 0);
+  },
+});
+/** [plan4:BL-1] The share of a chain input a room does not use because of a neighbour (recycler by the workshop: 20% less materials). */
+function inputSaving(b: BuildingInstance, resource: ResourceType): number {
+  return resource === 'materials' ? synergyNow.get(b.id)?.inputMult ?? 0 : 0;
+}
 // [Long game] A room that is changing its role produces nothing until the work is done.
 registerModifier({ id: 'retool', mult: ({ state, building }) => (retooling(state, building) ? 0 : 1) });
 
@@ -151,7 +168,7 @@ export class ResourceSystem {
     for (const b of state.buildings) {
       if (effectiveLevel(b) <= 0 || incidentBlocks(state, b)) continue;
       for (const input of chainInputs(b)) {
-        if (inputFed(state, input)) consumption[input.resource] = (consumption[input.resource] ?? 0) + inputRate(input, b);
+        if (inputFed(state, input)) consumption[input.resource] = (consumption[input.resource] ?? 0) + inputRate(input, b) * (1 - inputSaving(b, input.resource));
       }
       const spec = specOf(b);
       // [Long game] Tier-2 roles grow with the room's level, slow down when starved, and stop while the room retools.
@@ -251,7 +268,7 @@ export class ResourceSystem {
       add(src, b.type, v);
       if (v > 0 && (!top || v > top.v)) top = { b, v };
       if (!incidentBlocks(state, b)) for (const input of chainInputs(b)) {
-        if (input.resource === r && inputFed(state, input)) add(snk, b.type, inputRate(input, b));
+        if (input.resource === r && inputFed(state, input)) add(snk, b.type, inputRate(input, b) * (1 - inputSaving(b, input.resource)));
       }
     }
     if (r === 'food' || r === 'water') {

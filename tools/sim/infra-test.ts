@@ -1,6 +1,7 @@
-// [plan4:ST-14/ST-15] Node-level checks of the bulkhead doors, emergency stairwells and vent stacks (run by infra-test.mjs):
+// [plan4:ST-14/ST-15, BL-1] Node-level checks of the bulkhead doors, emergency stairwells and vent stacks (run by infra-test.mjs):
 // the doors.ts contract, building and operating doors, what a shut door does to fire, epidemic, raid defense, assignment and power,
-// the fire code, evacuation, ventilation, and the save round-trip of the layout.
+// the fire code, evacuation, ventilation, and the save round-trip of the layout; then the effects of the first eight new rooms and the
+// neighbour pairs (SYNERGIES) as the systems apply them.
 import { StateManager } from '../../src/core/StateManager';
 import { SeededRandom } from '../../src/core/Random';
 import { createInitialState, migrateState, type BuildingInstance, type GameState, type SurvivorState } from '../../src/core/GameState';
@@ -18,6 +19,7 @@ import { isBuildingUnlocked } from '../../src/systems/ResearchSystem';
 import { defenseParts } from '../../src/systems/EventSystem';
 import type { BuildingType } from '../../src/core/GameState';
 import { roomSlots } from '../../src/data/buildingDefs';
+import { moraleBreakdown } from '../../src/systems/PopulationSystem';
 
 const room = (id: string, type: BuildingType, x: number, floor: number): BuildingInstance => ({
   id, type, level: 1, position: { x, y: 0, floor }, assignedSurvivorIds: [], constructionProgress: 1, constructionTotal: 1, isConstructing: false, specialization: null,
@@ -259,7 +261,65 @@ export function infraChecks(games: { name: string; json: string }[]): { problems
     eq('stairwell level/floors survive', JSON.stringify(back.layout.infra), JSON.stringify((sm.state as GameState).layout.infra));
   }
 
-  // ---- 7. the sample saves: nothing breaks on real games ----
+  // ---- 7. the first eight new rooms, and the neighbour pairs, as the systems apply them ----
+  {
+    const rs = new ResourceSystem();
+    const withRooms = (rooms: BuildingInstance[]): GameState => {
+      const s = base();
+      s.currentFloors = 6;
+      s.buildings = rooms;
+      return s;
+    };
+    const out = (s: GameState, id: string, r: string): number => (rs.getBuildingOutput(s, s.buildings.find(b => b.id === id)!) as Record<string, number>)[r] ?? 0;
+    const lvl = (b: BuildingInstance, n: number): BuildingInstance => ({ ...b, level: n });
+
+    // battery bank: +150 power storage per level
+    {
+      const a = withRooms([]);
+      const b = withRooms([room('b_1', 'batteryBank', 1, 2)]);
+      const c = withRooms([lvl(room('b_1', 'batteryBank', 1, 2), 3)]);
+      const base0 = rs.computeCaps(a).power ?? 0;
+      near('battery bank adds 150 power cap at L1', (rs.computeCaps(b).power ?? 0) - base0, 150, 1);
+      near('battery bank adds 450 power cap at L3', (rs.computeCaps(c).power ?? 0) - base0, 450, 1);
+    }
+    // library: knowledge and knowledge storage; condenser: water with no crew; mushroom farm: food and medicine; recycler: scrap
+    {
+      const s = withRooms([room('b_1', 'library', 1, 2), room('b_2', 'condenser', 4, 2), room('b_3', 'mushroomFarm', 7, 3), room('b_4', 'recycler', 9, 2)]);
+      if (!(out(s, 'b_1', 'knowledge') > 0)) fail('library makes no knowledge');
+      if (!(out(s, 'b_2', 'water') > 0)) fail('condenser makes no water');
+      if (!(out(s, 'b_3', 'food') > 0 && out(s, 'b_3', 'medicine') > 0)) fail('mushroom farm makes no food or medicine');
+      if (!(out(s, 'b_4', 'scrap') > 0)) fail('recycler makes no scrap');
+      const plain = withRooms([]);
+      near('library adds 60 knowledge cap', (rs.computeCaps(s).knowledge ?? 0) - (rs.computeCaps(plain).knowledge ?? 0), 60, 1);
+    }
+    // commons / library morale channels (comfort and culture), gate post and barracks defense, barracks beds
+    {
+      const s = withRooms([room('b_1', 'commons', 1, 2), room('b_2', 'library', 4, 2), room('b_3', 'gatePost', 1, 0), room('b_4', 'barracks', 5, 0)]);
+      const mb = moraleBreakdown(s);
+      if (!(mb.channels.comfort.raw > 0)) fail('commons gives no comfort morale');
+      if (!(mb.channels.culture.raw > 0)) fail('library gives no culture morale');
+      const none = withRooms([]);
+      if (!(defenseParts(s).guards > defenseParts(none).guards)) fail('gate post and barracks add no defense');
+    }
+    // neighbour pairs: touching rooms get the bonus, rooms one slot apart do not
+    {
+      const pair = (a: BuildingType, b: BuildingType, touch: boolean): GameState => withRooms([room('b_1', a, 1, 2), room('b_2', b, 1 + roomSlots(a) + (touch ? 0 : 1), 2)]);
+      const ratio = (a: BuildingType, b: BuildingType, res: string, id: string): number => out(pair(a, b, true), id, res) / out(pair(a, b, false), id, res);
+      near('mushroom farm by a pump: food x1.1', ratio('mushroomFarm', 'waterPump', 'food', 'b_1'), 1.1, 0.001);
+      near('library by a laboratory: knowledge x1.08', ratio('library', 'laboratory', 'knowledge', 'b_1'), 1.08, 0.001);
+      near('laboratory by a library: knowledge x1.08', ratio('library', 'laboratory', 'knowledge', 'b_2'), 1.08, 0.001);
+      near('generator by a battery bank: power x1.05', ratio('generator', 'batteryBank', 'power', 'b_1'), 1.05, 0.001);
+      const mat = (touch: boolean): number => (rs.breakdown(pair('recycler', 'workshop', touch), 'materials').sinks.find(x => x.key === 'recycler')?.value ?? 0);
+      near('recycler by a workshop: 20% less materials', mat(true) / mat(false), 0.8, 0.001);
+      const mor = (touch: boolean): number => moraleBreakdown(pair('canteen', 'commons', touch)).sources.find(x => x.type === 'commons')?.value ?? 0;
+      near('commons by a canteen: +5% morale', mor(true) / mor(false), 1.05, 0.001);
+      // three neighbours at most, +20% ceiling: five pumps cannot give more than 20%
+      const crowd = withRooms([room('b_1', 'mushroomFarm', 6, 2), room('b_2', 'waterPump', 4, 2), room('b_3', 'waterPump', 8, 2)]);
+      near('two pumps: output x1.2 (the ceiling)', out(crowd, 'b_1', 'food') / out(pair('mushroomFarm', 'waterPump', false), 'b_1', 'food'), 1.2, 0.001);
+    }
+  }
+
+  // ---- 8. the sample saves: nothing breaks on real games ----
   for (const g of games) {
     const st = migrateState(JSON.parse(g.json) as GameState);
     const f = fireCodeFloors(st);
