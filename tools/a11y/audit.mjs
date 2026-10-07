@@ -71,7 +71,7 @@ const SCENES = [
   ...['build', 'people', 'research', 'surface'].map(k => ({
     name: `sheet-${k}`,
     run: async (c) => { await click(c, `document.querySelector('.nav-btn[data-key="${k}"]')`); await sleep(700); },
-    after: async (c) => { await click(c, `document.querySelector('.sheet-overlay.open .sheet-close, .sheet-overlay.open .surface-close')`); await sleep(450); },
+    after: async (c) => { await click(c, `document.querySelector('.sheet-overlay.open .sheet-close, .surface-overlay.open .surface-close')`); await sleep(450); },
   })),
   ...['settings', 'a11y', 'stats', 'achievements', 'genesis'].map((t, i) => ({
     name: `menu-${t}`,
@@ -79,7 +79,7 @@ const SCENES = [
       if (i === 0) { await click(c, `document.querySelector('.nav-btn.nav-menu')`); await sleep(700); }
       await click(c, `document.querySelectorAll('.sheet-overlay.open .tab-row .tab')[${i}]`); await sleep(400);
     },
-    after: i === 4 ? async (c) => { await click(c, `document.querySelector('.sheet-overlay.open .sheet-close, .sheet-overlay.open .surface-close')`); await sleep(450); } : undefined,
+    after: i === 4 ? async (c) => { await click(c, `document.querySelector('.sheet-overlay.open .sheet-close, .surface-overlay.open .surface-close')`); await sleep(450); } : undefined,
   })),
 ];
 
@@ -100,6 +100,7 @@ async function auditConfig(c, port, w, h, scale, raw) {
   const result = { w, h, scale, scenes: {} };
   const modalOpen = () => c.evalJs(`!!document.querySelector('.modal-overlay.open')`);
   for (let i = 0; i < 4 && await modalOpen(); i++) {
+    await sleep(800); // the dialog fades in (crt-on): measure it when it has settled
     const rep = await c.evalJs(inpage);
     result.scenes[`dialog-${i}`] = rep;
     if (shotsDir) await shot(c, `${w}x${h}-s${scale}-dialog-${i}`);

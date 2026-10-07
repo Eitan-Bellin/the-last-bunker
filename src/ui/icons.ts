@@ -131,6 +131,9 @@ export const ICON_SVG = {
     + '<path d="M7.6 14a4.8 4.8 0 0 0 8.8 0" stroke="#000" stroke-opacity=".5" stroke-width="1.7" fill="none" stroke-linecap="round"/>',
   sad: '<circle cx="12" cy="12" r="9.6"/><circle cx="8.8" cy="10" r="1.4" ' + CUT + '/><circle cx="15.2" cy="10" r="1.4" ' + CUT + '/>'
     + '<path d="M7.8 17a4.8 4.8 0 0 1 8.4 0" stroke="#000" stroke-opacity=".5" stroke-width="1.7" fill="none" stroke-linecap="round"/>',
+  // [plan4:AC-7] The middle of the three morale faces (happy / neutral / sad): a flat mouth.
+  neutral: '<circle cx="12" cy="12" r="9.6"/><circle cx="8.8" cy="10" r="1.4" ' + CUT + '/><circle cx="15.2" cy="10" r="1.4" ' + CUT + '/>'
+    + '<path d="M8 15.6h8" stroke="#000" stroke-opacity=".5" stroke-width="1.7" fill="none" stroke-linecap="round"/>',
   heart: '<path d="M12 21s-8.6-5.2-8.6-11.3A4.9 4.9 0 0 1 12 6.8a4.9 4.9 0 0 1 8.6 2.9C20.6 15.8 12 21 12 21z"/>',
   trophy: '<path d="M6.5 3h11v6.2a5.5 5.5 0 0 1-11 0z"/><path d="M6.5 5H3.2v2.2a4 4 0 0 0 3.6 4M17.5 5h3.3v2.2a4 4 0 0 1-3.6 4" ' + S + ' stroke-width="1.6"/>'
     + '<rect x="10.8" y="14.5" width="2.4" height="3.5" opacity=".6"/><rect x="7" y="18" width="10" height="3.2" rx=".8"/>',
@@ -276,7 +279,7 @@ export function tok(name: IconName): string {
 export const ICON_COLORS: Partial<Record<IconName, string>> = {
   food: '#e8a24a', water: '#4fb6ff', power: '#ffd23f', materials: '#c98a5a', medicine: '#ff6b6b',
   knowledge: '#b48cff', scrap: '#a7b0ba', blueprints: '#6fa8ff', isotope7: '#8dff5a', credits: '#f0c75e', star: '#ffd23f',
-  heart: '#ff5f6d', happy: '#ffd23f', sad: '#8aa0b8', check: '#5ee38a', close: '#ff6b6b', warning: '#ffb547',
+  heart: '#ff5f6d', happy: '#ffd23f', neutral: '#ffd23f', sad: '#8aa0b8', check: '#5ee38a', close: '#ff6b6b', warning: '#ffb547',
   pick: '#d9a441', skull: '#e0e0e0', strength: '#ff8a5a', intelligence: '#ffe27a', agility: '#7ae0ff',
   charisma: '#ff9ad5', endurance: '#9ad08a',
 };

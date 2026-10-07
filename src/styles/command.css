@@ -37,7 +37,7 @@
 /* Inbox cards: what a contract asks and pays, and which ones are safe to take. */
 .inbox-title { display: flex; flex-direction: column; gap: 2px; }
 .inbox-detail { font-size: 0.85em; opacity: 0.85; font-variant-numeric: tabular-nums; }
-.inbox-safe { font-size: 0.75em; color: #7affb0; }
+.inbox-safe { font-size: 0.75em; color: var(--ok, #7affb0); }
 .inbox-all { width: 100%; margin-bottom: 8px; }
 
 /* Weekly prizes: collectible badges. */

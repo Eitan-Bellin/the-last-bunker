@@ -1,0 +1,144 @@
+/* [plan4:AC-2..AC-11] Accessibility layer. The ONLY stylesheet of the accessibility work: it is imported last (app.ts), so it can state what
+   the older sheets must yield to without touching them. Everything keys off the <html> attributes that utils/a11y.ts maintains:
+   data-motion (reduced|full), data-contrast, data-color, data-onehand, data-large, and --fs. */
+
+/* ---- AC-6: status colours --------------------------------------------------------------------------------------------------------------
+   One set of tokens for good / warning / bad / info; the colour-vision modes swap the values (the same table lives in utils/a11y.ts for the
+   canvas: statusTint). The older --positive / --negative / --warning follow them in a colour mode, so every existing rule changes with them. */
+:root {
+  --ok: #7dff9e;
+  --warn: #ffb547;
+  --bad: #ff5555;
+  --info: #6fc3ff;
+}
+:root[data-color="deuter"], :root[data-color="protan"] {
+  --ok: #4aa3ff; --warn: #ffc83d; --bad: #e0457b; --info: #8fe0ff;
+}
+:root[data-color="tritan"] {
+  --ok: #3ed0a8; --warn: #ff9f6b; --bad: #ff3d5a; --info: #c7a6ff;
+}
+:root[data-color="deuter"], :root[data-color="protan"], :root[data-color="tritan"] {
+  --positive: var(--ok);
+  --negative: var(--bad);
+  --warning: var(--warn);
+}
+
+/* ---- AC-7: never colour alone ----------------------------------------------------------------------------------------------------------
+   Small mask icons (the same glyphs as the icon set), painted in the text colour, put a shape next to every good / bad / warning state. */
+:root {
+  --ic-check: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M9.4 16.4 4.6 11.6l-1.7 1.7 6.5 6.5L21.1 8.1l-1.7-1.7z'/%3E%3C/svg%3E");
+  --ic-cross: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M4.5 6.2 6.2 4.5 12 10.3l5.8-5.8 1.7 1.7-5.8 5.8 5.8 5.8-1.7 1.7-5.8-5.8-5.8 5.8-1.7-1.7 5.8-5.8z'/%3E%3C/svg%3E");
+  --ic-warn: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill-rule='evenodd' d='M12 2.3 22.6 20.7H1.4zM10.9 8.8h2.2v6h-2.2zm0 7.6h2.2v2.2h-2.2z'/%3E%3C/svg%3E");
+  --ic-dot: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='12' r='6.5'/%3E%3C/svg%3E");
+}
+.cost-chip.affordable::before, .cost-chip.expensive::before,
+.chain-row.ok .bp-value::before,
+.toast::before {
+  content: '';
+  display: inline-block;
+  width: 0.95em;
+  height: 0.95em;
+  margin-inline-end: 0.3em;
+  vertical-align: -0.14em;
+  background: var(--chip-c, currentColor);
+  -webkit-mask: var(--chip-i) center / contain no-repeat;
+  mask: var(--chip-i) center / contain no-repeat;
+}
+.cost-chip.affordable, .chain-row.ok .bp-value { --chip-i: var(--ic-check); --chip-c: var(--ok); }
+.cost-chip.expensive { --chip-i: var(--ic-cross); --chip-c: var(--bad); }
+/* Toasts: the border keeps its colour but also its line style (solid good, dashed bad, double critical) and the icon says the same. */
+.toast { --chip-i: var(--ic-dot); --chip-c: var(--info); }
+.toast.good { --chip-i: var(--ic-check); --chip-c: var(--ok); border-color: var(--ok); border-style: solid; }
+.toast.bad { --chip-i: var(--ic-warn); --chip-c: var(--warn); border-color: var(--warn); border-style: dashed; }
+.toast.critical { --chip-i: var(--ic-cross); --chip-c: var(--bad); border-color: var(--bad); border-style: double; border-width: 4px; }
+/* Resource bars: a normal level is dashed, full is solid, low is dotted; an empty store has a dashed frame (it used to be just red). */
+.resource-fill-bar.full { background: var(--warn); }
+.resource-fill-bar.low { background: repeating-linear-gradient(90deg, var(--bad) 0 2px, transparent 2px 6px); }
+.resource-item.empty { border-style: dashed; border-width: 2px; }
+.bar-track.danger .bar-fill { background: repeating-linear-gradient(90deg, var(--bad) 0 2px, transparent 2px 6px); }
+.bar-track.good .bar-fill { background: repeating-linear-gradient(90deg, var(--ok) 0 7px, transparent 7px 8px); }
+
+/* ---- AC-2: reduced motion --------------------------------------------------------------------------------------------------------------
+   One rule instead of editing 37 animations: every animation runs once in an instant (so a "both"-filled entrance still lands on its end
+   state and a looping pulse settles on its resting look), and every transition is a fade of at most 120 ms. */
+:root[data-motion="reduced"] *,
+:root[data-motion="reduced"] *::before,
+:root[data-motion="reduced"] *::after {
+  animation-duration: 0.01ms !important;
+  animation-delay: 0s !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.12s !important;
+  transition-delay: 0s !important;
+  scroll-behavior: auto !important;
+}
+/* A pulse is the only signal of some states: they keep a static mark that does not rely on the animation. */
+:root[data-motion="reduced"] .coupon-code.bad { border-style: dashed; }
+:root[data-motion="reduced"] .spotlight { box-shadow: 0 0 0 3px var(--accent); }
+
+/* ---- AC-10: keyboard focus ------------------------------------------------------------------------------------------------------------- */
+:root :focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+.sheet-title:focus, .modal-title:focus, [data-focus-target]:focus { outline: none; }
+/* The canvas is a focus target for keyboard users: a ring along its inside edge, not a box around the whole page. */
+canvas:focus-visible { outline-offset: -3px; }
+
+/* ---- AC-9: captions (a short line at the bottom for sounds) ---------------------------------------------------------------------------- */
+.a11y-caption {
+  position: fixed;
+  inset-inline: 0;
+  bottom: calc(var(--nav-h, 76px) + 10px);
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+  z-index: 31;
+}
+.a11y-caption > span {
+  max-width: min(92%, 420px);
+  background: rgba(8, 9, 10, 0.94);
+  color: #fff;
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  padding: 6px 12px;
+  font-size: calc(14px * var(--fs, 1));
+  font-weight: 700;
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+.a11y-caption.on > span { opacity: 1; }
+/* A resource that ran short blinks its plate once (not under reduced motion: the toast carries it then). */
+.resource-item.alert-pulse { animation: res-pulse 0.5s ease 2; }
+
+/* ---- AC-8: screen-reader-only text, the live region ------------------------------------------------------------------------------------ */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ---- AC-11: the list view ---------------------------------------------------------------------------------------------------------------- */
+.struct-floor { margin-bottom: 10px; }
+.struct-floor > h3 { font-size: calc(14px * var(--fs, 1)); color: var(--accent); margin: 8px 0 4px; }
+.struct-room {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 2px 8px;
+  align-items: center;
+  padding: 6px 8px;
+  margin-bottom: 4px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-card);
+  font-size: calc(13px * var(--fs, 1));
+}
+.struct-room .struct-meta { grid-column: 1 / -1; color: var(--text-secondary); font-size: calc(12px * var(--fs, 1)); }
+.struct-room.fault { border-style: dashed; border-color: var(--bad); }
+.struct-room.building { border-style: dotted; border-color: var(--warn); }
+.struct-empty { color: var(--text-secondary); padding: 6px 2px; }

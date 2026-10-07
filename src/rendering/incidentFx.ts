@@ -9,6 +9,7 @@ import { puffTexture } from './atmosphere';
 import { Person } from './people';
 import { roomFlicker } from './paintedRoom';
 import { crisisLight } from './crisisLight';
+import { flashOk, flashSafe } from '../utils/a11y';
 
 export interface RoomRect {
   x: number;
@@ -102,9 +103,10 @@ const BUDGET: Record<CrisisQuality, number> = { high: 260, medium: 160, low: 90 
 const RATE: Record<CrisisQuality, number> = { high: 1, medium: 0.65, low: 0.4 };
 const SEATS = [0.22, 0.5, 0.78];
 
-/** Candle-like noise in 0..1 from incommensurate sines. */
+/** Candle-like noise in 0..1 from incommensurate sines. [plan4:AC-5] No component above 2.4 Hz (15 rad/s): it was up to 3.8 Hz. */
 function wob(t: number, seed: number): number {
-  return 0.5 + 0.25 * Math.sin(t * 13.1 + seed) + 0.15 * Math.sin(t * 23.7 + seed * 2.3) + 0.1 * Math.sin(t * 5.3 + seed * 0.7);
+  if (flashSafe()) return 0.5; // [plan4:AC-5] "no flashes": a steady flame light
+  return 0.5 + 0.25 * Math.sin(t * 10.9 + seed) + 0.15 * Math.sin(t * 14.6 + seed * 2.3) + 0.1 * Math.sin(t * 5.3 + seed * 0.7);
 }
 
 /** Deterministic 0..1 hash of an integer (stutter patterns). */
@@ -858,7 +860,9 @@ export class IncidentLayer {
       const fx = x + w * 0.18, fy = y + H * 0.48;
       g.rect(fx - 5, fy - 7, 10, 13).fill(0x26282a).stroke({ color: 0x55585c, width: 0.8 });
       g.poly([fx + 5, fy - 7, fx + 9, fy - 5, fx + 9, fy + 8, fx + 5, fy + 6]).fill(0x34373a);
-      if (alive && Math.random() < dt * 4.5) {
+      // [plan4:AC-5] At most ~1.6 arcs a second, each gated by the global flash budget; 'safe' mode shows a steady dim glow instead.
+      const safeFx = flashSafe();
+      if (alive && !safeFx && Math.random() < dt * 1.6 && flashOk(`arc${inc.id}`)) {
         v.flash = 1;
         for (let i = 0; i < 6; i++) {
           this.emit('spark', fx, fy, (Math.random() - 0.5) * 120, -Math.random() * 80, 0.35 + Math.random() * 0.3, 1 + Math.random() * 0.5, Math.random() < 0.5 ? 0xd8e8ff : 0xfff0c0, null);
@@ -866,9 +870,9 @@ export class IncidentLayer {
       }
       v.flash = Math.max(0, v.flash - dt * 9);
       glow.position.set(fx, fy);
-      glow.width = glow.height = 30 + 130 * v.flash;
+      glow.width = glow.height = 30 + 80 * v.flash;
       glow.tint = 0xb8d0ff;
-      glow.alpha = (0.1 + 0.75 * v.flash) * dark;
+      glow.alpha = (safeFx ? 0.22 : 0.1 + 0.4 * v.flash) * dark;
       spill.alpha = 0;
       if (v.flash > 0.45) {
         g.moveTo(fx - 3, fy - 3);
@@ -918,7 +922,9 @@ export class IncidentLayer {
       const c = Math.cos(phi), s = Math.sin(phi);
       const bx = x + w / 2, by = y + 9;
       const L = Math.min(w * 0.62, 150) + 20;
-      const flash = Math.pow(Math.abs(s), 8);
+      // [plan4:AC-5] A smooth pulse (a plain sinusoid, 1.3 Hz) instead of a sharp beat; 'safe' mode holds a steady red.
+      const safeFx = flashSafe();
+      const flash = safeFx ? 0.4 : 0.15 + 0.85 * s * s;
       for (let i = 0; i < 2; i++) {
         const beam = extra[i];
         const hx = i === 0 ? c : -c;
@@ -927,13 +933,13 @@ export class IncidentLayer {
         beam.rotation = hx >= 0 ? -Math.PI / 2 + 0.34 : Math.PI / 2 - 0.34;
         beam.height = Math.abs(hx) * L;
         beam.width = 40 + 18 * Math.abs(hx);
-        beam.alpha = (0.2 + 0.5 * Math.max(0, toward)) * fade;
+        beam.alpha = (safeFx ? 0.4 : 0.2 + 0.5 * Math.max(0, toward)) * fade;
       }
       const spot = extra[2];
       spot.position.set(bx + (s < 0 ? c : -c) * L * 0.8, by + 30);
       spot.width = 54;
       spot.height = 64;
-      spot.alpha = 0.34 * Math.abs(s) * fade;
+      spot.alpha = (safeFx ? 0.2 : 0.34 * Math.abs(s)) * fade;
       const fl = extra[3];
       fl.position.set(bx, by);
       fl.width = fl.height = 40 + 40 * flash;

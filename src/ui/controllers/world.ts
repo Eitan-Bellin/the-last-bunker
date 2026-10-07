@@ -1,4 +1,5 @@
 import { haptic } from '../../utils/haptics';
+import { statusTint } from '../../utils/a11y';
 import { HUD } from '../../ui/HUD';
 import { i18n } from '../../i18n/I18nManager';
 import { getDef } from '../../data/buildingDefs';
@@ -54,7 +55,7 @@ export class WorldController {
 
   rejectAt(pos: Position): void {
     const c = this.app.renderer.slotCenter(pos);
-    this.app.popups.spawn(c.x, c.y, '[[close]]', 0xff4444);
+    this.app.popups.spawn(c.x, c.y, '[[close]]', statusTint('bad'));
     haptic('error'); // [plan4:UX-2] every invalid placement is rejected through here
   }
 

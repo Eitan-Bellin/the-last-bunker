@@ -11,7 +11,7 @@
     if (p && p !== document.body) { const pc = typeof p.className === 'string' ? p.className.trim().split(/\s+/)[0] : ''; if (pc) s = pc + ' > ' + s; }
     return s;
   };
-  const dead = (e) => !!e.closest('.sheet-overlay:not(.open), .modal-overlay:not(.open), [hidden], [inert]');
+  const dead = (e) => !!e.closest('.sheet-overlay:not(.open), .modal-overlay:not(.open), .surface-overlay:not(.open), [hidden], [inert]');
   const visible = (e) => {
     if (dead(e)) return false;
     const r = e.getBoundingClientRect();
@@ -31,7 +31,17 @@
     const layers = []; let approx = false, grad = false, opaque = false;
     for (let n = e; n; n = n.parentElement) {
       const cs = getComputedStyle(n);
-      if (cs.backgroundImage && cs.backgroundImage !== 'none' && !grad) { grad = (cs.backgroundImage.match(/rgba?\([^)]+\)/g) || []).map(parse).filter(g => g && g.a >= 0.9); if (!grad.length) grad = true; }
+      if (cs.backgroundImage && cs.backgroundImage !== 'none' && !grad) {
+        // CSS lists the top layer first: judge against the bottom-most layer that has opaque colour stops (rivets and sheens on top are thin).
+        const parts = []; let depth = 0, cur = '';
+        for (const ch of cs.backgroundImage) { if (ch === '(') depth++; if (ch === ')') depth--; if (ch === ',' && depth === 0) { parts.push(cur); cur = ''; } else cur += ch; }
+        parts.push(cur);
+        grad = true;
+        for (let i = parts.length - 1; i >= 0; i--) {
+          const stops = (parts[i].match(/rgba?\([^)]+\)/g) || []).map(parse).filter(g => g && g.a >= 0.9);
+          if (stops.length) { grad = stops; break; }
+        }
+      }
       const c = parse(cs.backgroundColor);
       if (c && c.a > 0) { layers.push(c); if (c.a >= 0.9) { opaque = true; break; } }
     }

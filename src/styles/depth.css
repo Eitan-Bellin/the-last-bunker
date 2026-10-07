@@ -35,8 +35,8 @@
 .incident-title { font-family: var(--font-title); font-size: calc(18px * var(--fs, 1)); color: #ffd2b8; letter-spacing: 0.03em; }
 .incident-desc { color: #f0d8cc; font-size: calc(13px * var(--fs, 1)); margin: 4px 0 8px; line-height: 1.45; }
 .incident-bars { display: grid; grid-template-columns: auto 1fr; gap: 6px 10px; align-items: center; margin: 8px 0; }
-.bar-track.good .bar-fill { background: repeating-linear-gradient(90deg, #7affb0 0 4px, transparent 4px 5px); box-shadow: 0 0 5px rgba(120, 255, 170, 0.5); }
-.bar-track.danger .bar-fill { background: repeating-linear-gradient(90deg, #ff6a3a 0 4px, transparent 4px 5px); box-shadow: 0 0 5px rgba(255, 100, 60, 0.6); }
+.bar-track.good .bar-fill { background: repeating-linear-gradient(90deg, var(--ok, #7affb0) 0 4px, transparent 4px 5px); box-shadow: 0 0 5px rgba(120, 255, 170, 0.5); }
+.bar-track.danger .bar-fill { background: repeating-linear-gradient(90deg, var(--bad, #ff6a3a) 0 4px, transparent 4px 5px); box-shadow: 0 0 5px rgba(255, 100, 60, 0.6); }
 .incident-actions { display: flex; gap: 10px; align-items: stretch; flex-wrap: wrap; }
 .incident-fix { display: flex; flex-direction: column; gap: 4px; flex: 1; }
 .btn-fight {
@@ -53,7 +53,7 @@
 
 /* ---------- Production chains ---------- */
 .chain-row.bad .bp-value { color: #ff7a6a; }
-.chain-row.ok .bp-value { color: #7dff9e; }
+.chain-row.ok .bp-value { color: var(--ok, #7dff9e); }
 
 /* ---------- Specialization ---------- */
 .spec-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 8px 0; }
