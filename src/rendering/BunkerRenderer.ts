@@ -7,7 +7,7 @@ import type { EraDef } from '../data/eras';
 import type { BuildingInstance, GameState, Position, Ruin, SurvivorState } from '../core/GameState';
 import { effectiveLevel, isDistrict, roomFloors, roomSlots } from '../data/buildingDefs';
 import { i18n } from '../i18n/I18nManager';
-import { BUILDING_W, DISTRICT_X, FLOOR_H, ROOM_H, SLOT_W, TOPSOIL, buildingH, buildingX, floorTop, slotX } from './layout';
+import { BUILDING_W, DISTRICT_X, FLOOR_H, ROOM_H, SLOT_W, TOPSOIL, buildingH, buildingX, floorExtent, floorTop, slotX } from './layout';
 import { hashString, seeded } from './draw';
 import { PEOPLE_STYLE, Person, ROOM_ACTIVITY, type Activity, type Lane } from './people';
 import { crowdFor, restCountFor, settleCrowds } from './workSpots'; // gfx-p0 people
@@ -532,7 +532,7 @@ export class BunkerRenderer {
       : buildShaft(this.floors, () => this.onElevator?.());
     this.shaftHolder.addChild(this.shaft.container);
     this.dust.setFloors(this.floors);
-    this.placement.rebuildPad(this.floors);
+    this.placement.rebuildPad(this.floors, f => floorExtent(state, f)); // [plan4:X-2]
     this.utilitiesSig = '';
     this.digSig = '';
     this.roomViews.collectStructureCullables(this.undergroundHolder);

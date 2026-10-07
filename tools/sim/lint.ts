@@ -1,7 +1,8 @@
 // Data checks for CI (run by tools/sim/lint.mjs): research is a sound DAG, every cost names a real resource,
 // every resource has a name in both languages, and every upgrade and dig of Acts II-VII fits in storage (L2).
 import { RESEARCH } from '../../src/data/research';
-import { BUILDING_DEFS } from '../../src/data/buildingDefs';
+import { BUILDING_DEFS, getDef, isDistrict, roomFloors, roomSlots } from '../../src/data/buildingDefs';
+import { allowedFloors } from '../../src/data/zones';
 import { ALL_RESOURCES, RESOURCES } from '../../src/data/resources';
 import type { BuildingType, GameState, ResourceType } from '../../src/core/GameState';
 import { createInitialState, floorExtent, migrateState } from '../../src/core/GameState';
@@ -9,7 +10,7 @@ import { ACTS } from '../../src/data/acts';
 import { TUNING } from '../../src/data/tuning';
 import { BOOK, HELP_TOPICS } from '../../src/data/book';
 import { CHAPTERS } from '../../src/data/story';
-import { BuildingSystem } from '../../src/systems/BuildingSystem';
+import { BuildingSystem, SLOTS_PER_FLOOR } from '../../src/systems/BuildingSystem';
 import { ResourceSystem } from '../../src/systems/ResourceSystem';
 
 export function lintData(i18n: Record<string, Record<string, string>>): string[] {
@@ -124,17 +125,74 @@ export function lintData(i18n: Record<string, Record<string, string>>): string[]
 }
 
 /**
- * [plan4:QA-3] NON-FAILING report: places that still derive the floor from a Y coordinate (`/ FLOOR_H`) or assume a fixed slot count
- * (`SLOTS_PER_FLOOR`) outside rendering/geom.ts. The redesign (variable floor heights and widths) must route all of these through geom.ts;
- * once the count reaches 0 a later wave turns the report into a gate (return the lines as problems instead of warnings).
+ * [plan4:X-2] The placement truth table did not change: the pre-X-2 canPlaceBuilding (fixed 12 slots, copied below) must agree with
+ * placeBlock/canPlaceBuilding/findFreeSpot (floorExtent) for every type, floor and slot of the given games (sample saves plus a synthetic one).
+ */
+export function placementTruthTable(games: { name: string; json: string | null }[]): string[] {
+  const problems: string[] = [];
+  const bs = new BuildingSystem();
+  const oldCanPlace = (type: BuildingType, pos: { x: number; floor: number }, state: GameState): boolean => {
+    const def = getDef(type);
+    if (!def || isDistrict(type)) return false;
+    const levels = roomFloors(type);
+    if (pos.floor < 0 || pos.floor + levels > state.currentFloors) return false;
+    const allowed = allowedFloors(type, state.currentFloors);
+    for (let f = pos.floor; f < pos.floor + levels; f++) if (!allowed.includes(f)) return false;
+    const w = roomSlots(type);
+    if (pos.x < 0 || pos.x + w > SLOTS_PER_FLOOR) return false;
+    const top = pos.floor, bottom = pos.floor + levels - 1;
+    for (const r of state.ruins ?? []) if (r.floor >= top && r.floor <= bottom && pos.x < r.x + r.w && pos.x + w > r.x) return false;
+    for (const e of state.buildings) {
+      const eTop = e.position.floor, eBottom = eTop + roomFloors(e.type) - 1;
+      if (eBottom < top || eTop > bottom) continue;
+      if (pos.x < e.position.x + roomSlots(e.type) && pos.x + w > e.position.x) return false;
+    }
+    return true;
+  };
+  const oldFree = (type: BuildingType, floor: number, state: GameState) => {
+    for (let x = 0; x < SLOTS_PER_FLOOR; x++) if (oldCanPlace(type, { x, floor }, state)) return x;
+    return null;
+  };
+  const states: { name: string; state: GameState }[] = [];
+  const synth = createInitialState();
+  synth.currentFloors = 10;
+  states.push({ name: 'synthetic', state: synth });
+  for (const g of games) if (g.json) states.push({ name: g.name, state: migrateState(JSON.parse(g.json) as GameState) });
+  const reasons = new Set(['floor', 'bounds', 'zone', 'ruin', 'overlap']);
+  let checked = 0;
+  for (const { name, state } of states) {
+    for (const type of Object.keys(BUILDING_DEFS) as BuildingType[]) {
+      for (let floor = -1; floor <= state.currentFloors + 1; floor++) {
+        for (let x = -3; x <= SLOTS_PER_FLOOR + 2; x++) {
+          const pos = { x, y: 0, floor };
+          const old = oldCanPlace(type, pos, state);
+          const why = bs.placeBlock(type, pos, state);
+          checked++;
+          if (bs.canPlaceBuilding(type, pos, state) !== old || (why === null) !== old || (why !== null && !reasons.has(why))) {
+            if (problems.length < 10) problems.push(`placement: ${name} ${type} at floor ${floor} slot ${x}: old ${old}, new ${why ?? 'free'}`);
+          }
+        }
+        const nf = bs.findFreeSpot(type, floor, state);
+        if ((nf ? nf.x : null) !== oldFree(type, floor, state) && problems.length < 10) problems.push(`placement: ${name} findFreeSpot ${type} floor ${floor} differs`);
+      }
+    }
+  }
+  if (!checked) problems.push('placement: nothing was checked');
+  return problems;
+}
+
+/**
+ * [plan4:X-2] Places that still derive the floor from a Y coordinate (`/ FLOOR_H`, `(y - TOPSOIL) /`) or assume a fixed slot count
+ * (`SLOTS_PER_FLOOR`) outside rendering/geom.ts. All of the first kind must go through floorAtY (and friends) in geom.ts, so it is a gate:
+ * `lint.mjs` fails on it. The fixed slot count stays a warning (BuildingSystem keeps the constant exported for tools).
  */
 export function legacyGeometryWarnings(files: { rel: string; text: string }[]): string[] {
   const hits: string[] = [];
   for (const { rel, text } of files) {
     if (rel === 'rendering/geom.ts') continue;
     text.split('\n').forEach((line: string, i: number) => {
-      if (/\/\s*FLOOR_H\b/.test(line)) hits.push(`${rel}:${i + 1}: reverse floor lookup "/ FLOOR_H"`);
-      if (/\bSLOTS_PER_FLOOR\b/.test(line)) hits.push(`${rel}:${i + 1}: SLOTS_PER_FLOOR`);
+      if (/\/\s*FLOOR_H\b/.test(line) || /\(\s*\w+(\.\w+)*\s*-\s*TOPSOIL\s*\)\s*\//.test(line) || /\/\s*\(\s*ROOM_H\s*\+\s*SLAB\s*\)/.test(line)) hits.push(`${rel}:${i + 1}: reverse floor lookup "/ FLOOR_H"`);
+      if (/\bSLOTS_PER_FLOOR\b/.test(line) && rel !== 'systems/BuildingSystem.ts') hits.push(`${rel}:${i + 1}: SLOTS_PER_FLOOR`);
     });
   }
   return hits;

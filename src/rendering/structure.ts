@@ -1,9 +1,8 @@
 import { Container, FillPattern, Graphics, Matrix, NineSliceSprite, Rectangle, Sprite, Texture, TilingSprite, type FillGradient } from 'pixi.js';
 import type { BuildingInstance, Ruin } from '../core/GameState';
 import { isDistrict, isHall, roomSlots } from '../data/buildingDefs';
-import { SLOTS_PER_FLOOR } from '../systems/BuildingSystem';
 import { ArtLibrary, glowTexture } from '../art/ArtLibrary';
-import { BUILDING_W, FLOOR_H, ROOMS_W, ROOMS_X, ROOM_H, SHAFT_W, SLAB, SLOT_W, TOPSOIL, floorTop, slotX } from './layout';
+import { BASE_EAST, BUILDING_W, ROOMS_W, ROOMS_X, ROOM_H, SHAFT_W, SLAB, SLOT_W, TOPSOIL, floorAtY, floorFrac, floorTop, slotX } from './layout';
 import { ERAS } from '../data/eras';
 import { roomFlicker } from './paintedRoom';
 import { seeded, vGradient } from './draw';
@@ -102,10 +101,10 @@ type Cell = { key: string } | null;
 
 /** What stands in every slot of every floor: a compound key per room/ruin, or null for an empty bay. */
 export function occupancy(buildings: BuildingInstance[], ruins: Ruin[], floors: number): Cell[][] {
-  const grid: Cell[][] = Array.from({ length: floors }, () => Array.from({ length: SLOTS_PER_FLOOR }, () => null));
+  const grid: Cell[][] = Array.from({ length: floors }, () => Array.from({ length: BASE_EAST }, () => null)); // [plan4:X-2] one row = the floor's east slots (the default extent)
   const put = (f: number, x: number, w: number, key: string) => {
     if (f < 0 || f >= floors) return;
-    for (let i = x; i < x + w && i < SLOTS_PER_FLOOR; i++) grid[f][i] = { key };
+    for (let i = x; i < x + w && i < grid[f].length; i++) grid[f][i] = { key };
   };
   for (const b of buildings) {
     if (isDistrict(b.type)) continue;
@@ -148,10 +147,11 @@ export function buildBays(grid: Cell[][]): Container {
   for (let f = 0; f < grid.length; f++) {
     let s = 0;
     let n = 0;
-    while (s < SLOTS_PER_FLOOR) {
+    const width = grid[f].length;
+    while (s < width) {
       if (grid[f][s]) { s++; continue; }
       let e = s;
-      while (e < SLOTS_PER_FLOOR && !grid[f][e]) e++;
+      while (e < width && !grid[f][e]) e++;
       let run = e - s;
       let x = s;
       while (run > 0) {
@@ -576,7 +576,7 @@ export function softTexture(kind: 'fadeH' | 'fadeV' | 'blob' | 'streak' | 'drop'
  * Returns per-channel gains for a world y.
  */
 export function depthGains(y: number): [number, number, number] {
-  const f = Math.max(0, (y - TOPSOIL) / (ROOM_H + SLAB));
+  const f = Math.max(0, floorFrac(y));
   const k = Math.max(0.75, 1 - 0.035 * f);
   const cold = Math.min(0.25, 0.04 * f);
   // Mix toward #8A9AB0 relative to white.
@@ -764,7 +764,7 @@ export function buildFrontStructure(
       const top = floorTop(f);
       const row = grid[f];
       const xs: number[] = [ROOMS_X, ROOMS_X + ROOMS_W];
-      for (let s = 1; s < SLOTS_PER_FLOOR; s++) {
+      for (let s = 1; s < row.length; s++) {
         const a = row[s - 1], b = row[s];
         if ((a || b) && a?.key !== b?.key) xs.push(slotX(s));
       }
@@ -772,7 +772,7 @@ export function buildFrontStructure(
       const floorY = top + ROOM_H - LIP;
       const above = hallSpans(buildings, f - 1);
       const below = hallSpans(buildings, f);
-      const floorLamps = lamps.filter(l => Math.floor((l.y - TOPSOIL) / FLOOR_H) === f);
+      const floorLamps = lamps.filter(l => floorAtY(l.y).floor === f);
       for (const x of xs) {
         // The lamps hang inside the rooms, so the column's front face only catches grazing light: half the lamp light
         // and a little less ambient,
@@ -829,7 +829,7 @@ export function buildFrontStructure(
 
   for (const l of lamps) {
     if (!l.ceiling) continue;
-    const f = Math.floor((l.y - TOPSOIL) / FLOOR_H);
+    const f = floorAtY(l.y).floor;
     const top = floorTop(f);
     const room = roomIndex(l.room);
     const ceil = new Sprite(glow);

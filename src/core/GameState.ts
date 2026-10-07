@@ -388,10 +388,13 @@ export function createLayout(): LayoutState {
   return { v: 1, ext: {}, doors: {}, infra: [], surfaceOpen: false };
 }
 
+/** [plan4:X-2] Slots east of the shaft on a floor without a wing (the classic 12). */
+export const BASE_EAST = 12;
+
 /** [plan4:X-3] How far a floor reaches: the saved wing sizes, or no west wing and the classic 12 slots east. */
 export function floorExtent(state: Pick<GameState, 'layout'>, floor: number): { w: number; e: number } {
   const x = state.layout?.ext?.[String(floor)];
-  return x ? { w: x.w, e: x.e } : { w: 0, e: 12 };
+  return x ? { w: x.w, e: x.e } : { w: 0, e: BASE_EAST };
 }
 
 export interface GameState {

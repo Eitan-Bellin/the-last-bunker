@@ -35,7 +35,7 @@ export function hashLayout(state: GameState): void {
   let hr = 2166136261, hu = 2166136261, hd = 2166136261;
   for (const b of state.buildings) {
     const fresh = b.isConstructing && b.level === 1 ? 1 : 0;
-    const where = b.position.floor * 64 + b.position.x;
+    const where = (b.position.floor + 8) * 128 + (b.position.x + 32); // [plan4:X-2] offsets keep negative floors and west slots (< 0) from colliding
     hr = mix(mix(mix(mix(hr, sh(b.id)), sh(b.type)), where), (b.level << 2) | (fresh << 1) | (b.isConstructing ? 1 : 0));
     hu = mix(mix(mix(mix(hu, sh(b.id)), sh(b.type)), where), (b.level << 1) | fresh);
     if (isDistrict(b.type)) hd = mix(hd, b.position.floor);

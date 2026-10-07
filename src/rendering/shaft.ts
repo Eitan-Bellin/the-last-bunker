@@ -1,6 +1,6 @@
 import { Container, Graphics, Sprite, TilingSprite, type Texture } from 'pixi.js';
 import { ArtLibrary, glowTexture } from '../art/ArtLibrary';
-import { FLOOR_H, ROOM_H, SHAFT_W, floorTop } from './layout';
+import { ROOM_H, SHAFT_W, floorAfterTravel, floorTop } from './layout';
 import { seeded } from './draw';
 import { depthGains, kitState, softTexture, type KitState } from './structure';
 import type { Animated } from './world';
@@ -496,7 +496,7 @@ export function buildShaft2(floors: number, era: number, onArrive?: () => void):
 
       // Indicator lamps: green where the car stands, amber while it travels (blinking at the destination).
       const moving = mode === 'moving';
-      const near = moving ? Math.round((car.y - travelTop) / FLOOR_H) : cur;
+      const near = moving ? floorAfterTravel(car.y - travelTop) : cur;
       const blink = Math.sin(t * 9) > 0;
       for (let f = 0; f < floors; f++) {
         const L = lamps[f];

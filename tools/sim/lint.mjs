@@ -35,15 +35,22 @@ const mod = await import(pathToFileURL(file).href);
 problems.push(...mod.lintData(i18n));
 try { rmSync(file); } catch { /* cache file */ }
 
-// [plan4:QA-3] Non-failing: legacy floor geometry outside rendering/geom.ts (a later wave turns this into a gate).
+// [plan4:X-2] Placement truth table: the old fixed-12-slot rule and placeBlock/floorExtent agree on every slot of the sample saves (when present).
+const savesDir = join(ROOT, 'store', 'sim', 'saves-v6');
+let saves = [];
+try { saves = readdirSync(savesDir).filter(f => f.endsWith('.json')).sort().map(f => ({ name: f, json: readFileSync(join(savesDir, f), 'utf8') })); } catch { /* gitignored samples: the synthetic game is still checked */ }
+problems.push(...mod.placementTruthTable(saves));
+
+// [plan4:X-2] Reverse floor lookups outside rendering/geom.ts fail the lint; a fixed slot count (SLOTS_PER_FLOOR) is a warning.
 const srcFiles = [];
 const walkSrc = d => { for (const f of readdirSync(d)) { const p = join(d, f); if (statSync(p).isDirectory()) walkSrc(p); else if (f.endsWith('.ts')) srcFiles.push({ rel: relative(join(ROOT, 'src'), p).split(sep).join('/'), text: readFileSync(p, 'utf8') }); } };
 walkSrc(join(ROOT, 'src'));
 const legacy = mod.legacyGeometryWarnings(srcFiles);
-if (legacy.length) {
-  console.log(`lint warning: ${legacy.length} legacy floor-geometry use(s) outside rendering/geom.ts (/ FLOOR_H: ${legacy.filter(l => l.includes('FLOOR_H')).length}, SLOTS_PER_FLOOR: ${legacy.filter(l => l.includes('SLOTS_PER_FLOOR')).length})`);
-  if (process.argv.includes('--verbose')) console.log(' - ' + legacy.join('\n - '));
-}
+const lookups = legacy.filter(l => l.includes('FLOOR_H'));
+const counts = legacy.filter(l => l.includes('SLOTS_PER_FLOOR'));
+for (const l of lookups) problems.push(`geometry: ${l} (use floorAtY in rendering/geom.ts)`);
+if (counts.length) console.log(`lint warning: ${counts.length} use(s) of SLOTS_PER_FLOOR outside rendering/geom.ts (use floorExtent)`);
+if (process.argv.includes('--verbose')) console.log(`legacy geometry: ${lookups.length} reverse lookup(s), ${counts.length} slot-count use(s)` + (legacy.length ? '\n - ' + legacy.join('\n - ') : ''));
 
 if (problems.length) {
   console.error(`lint: ${problems.length} problem(s)\n - ${problems.join('\n - ')}`);

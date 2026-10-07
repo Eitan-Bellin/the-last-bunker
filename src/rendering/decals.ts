@@ -1,9 +1,8 @@
 import { Container, Rectangle, Sprite, Texture } from 'pixi.js';
 import type { BuildingInstance, BuildingType } from '../core/GameState';
 import { isDistrict, isHall, roomSlots } from '../data/buildingDefs';
-import { SLOTS_PER_FLOOR } from '../systems/BuildingSystem';
 import { ArtLibrary } from '../art/ArtLibrary';
-import { BUILDING_W, ROOMS_W, ROOMS_X, ROOM_H, SHAFT_W, SLAB, SLOT_W, floorTop, slotX } from './layout';
+import { BASE_EAST, BUILDING_W, ROOMS_W, ROOMS_X, ROOM_H, SHAFT_W, SLAB, SLOT_W, floorTop, slotX } from './layout';
 import { hashString, seeded } from './draw';
 import { depthGains, type WorldLamp } from './structure';
 
@@ -224,29 +223,30 @@ export function buildDecals(
     const top = floorTop(f);
     const bottom = top + ROOM_H;
     const row = grid[f] ?? [];
+    const slots = grid[f] ? row.length : BASE_EAST; // [plan4:X-2] a floor the grid lacks still reads as the default extent
     const taken: Rect[] = blocked.filter(b => b.y1 > top - SLAB - 4 && b.y0 < top + ROOM_H + SLAB + 4);
 
     // Room middles stay clear (empty bays are fair game).
     const interiors: Rect[] = [];
-    for (let s = 0; s < SLOTS_PER_FLOOR;) {
+    for (let s = 0; s < slots;) {
       const cell = row[s];
       let e2 = s + 1;
-      while (cell && e2 < SLOTS_PER_FLOOR && row[e2]?.key === cell.key) e2++;
+      while (cell && e2 < slots && row[e2]?.key === cell.key) e2++;
       if (cell) interiors.push({ x0: slotX(s) + ROOM_EDGE, y0: top + PIPES_BOTTOM + 2, x1: slotX(e2) - ROOM_EDGE, y1: bottom - 2 });
       s = e2;
     }
     // Columns stand wherever two different things meet, and at both ends of the level.
     const cols: number[] = [ROOMS_X, ROOMS_X + ROOMS_W];
-    for (let s = 1; s < SLOTS_PER_FLOOR; s++) {
+    for (let s = 1; s < slots; s++) {
       const a = row[s - 1], b = row[s];
       if ((a || b) && a?.key !== b?.key) cols.push(slotX(s));
     }
     cols.sort((a, b) => a - b);
     const bays: [number, number][] = [];
-    for (let s = 0; s < SLOTS_PER_FLOOR;) {
+    for (let s = 0; s < slots;) {
       if (row[s]) { s++; continue; }
       let e2 = s;
-      while (e2 < SLOTS_PER_FLOOR && !row[e2]) e2++;
+      while (e2 < slots && !row[e2]) e2++;
       bays.push([slotX(s), slotX(e2)]);
       s = e2;
     }
