@@ -1,7 +1,7 @@
 // Data checks for CI (run by tools/sim/lint.mjs): research is a sound DAG, every cost names a real resource,
 // every resource has a name in both languages, and every upgrade and dig of Acts II-VII fits in storage (L2).
 import { RESEARCH } from '../../src/data/research';
-import { BUILDING_DEFS, BUILDABLE_TYPES, DISTRICT_KINDS, getDef, isDistrict, roomFloors, roomSlots, type BuildingDef } from '../../src/data/buildingDefs';
+import { BUILDING_DEFS, BUILDABLE_TYPES, DISTRICT_KINDS, getDef, isDistrict, isInfra, roomFloors, roomSlots, type BuildingDef } from '../../src/data/buildingDefs';
 import { CHAIN_INPUTS } from '../../src/data/chains';
 import { cargoMult, earlyWarningLead, evacuationMult, expeditionTeamsBonus, hygieneMult, mourningMult, quarantineCapacity, returnSafetyMult, roomChildGrowth, ventilationRelief } from '../../src/data/roomEffects';
 import { PopulationSystem, moraleBreakdown } from '../../src/systems/PopulationSystem';
@@ -102,6 +102,7 @@ export function lintData(i18n: Record<string, Record<string, string>>): string[]
       }
     };
     for (const [type, def] of Object.entries(BUILDING_DEFS)) {
+      if (isInfra(type)) continue; // plan4:ST-14 infra has no room levels to upgrade
       const top = Math.min(def.maxLevel, Math.max(1, Math.floor((act.levelCap * def.maxLevel) / 10)));
       for (let level = 1; level < top; level++) {
         over(`${type} level ${level}->${level + 1}`, bs.getUpgradeCost({ id: 'x', type: type as BuildingType, level, position: { x: 0, y: 0, floor: 0 }, assignedSurvivorIds: [], constructionProgress: 0, constructionTotal: 0, isConstructing: false, specialization: null }));
@@ -156,7 +157,7 @@ export function wingChecks(): string[] {
   a.layout.ext['1'] = { w: 4, e: 16 };
   let tested = 0;
   for (const type of Object.keys(BUILDING_DEFS) as BuildingType[]) {
-    if (isDistrict(type) || roomFloors(type) !== 1 || !allowedFloors(type, a.currentFloors).includes(1)) continue;
+    if (isInfra(type) || isDistrict(type) || roomFloors(type) !== 1 || !allowedFloors(type, a.currentFloors).includes(1)) continue; // plan4:ST-14 infra is not a room
     const w = roomSlots(type);
     tested++;
     for (let x = -6; x <= 18; x++) {
@@ -277,6 +278,7 @@ export function placementTruthTable(games: { name: string; json: string | null }
   let checked = 0;
   for (const { name, state } of states) {
     for (const type of Object.keys(BUILDING_DEFS) as BuildingType[]) {
+      if (isInfra(type)) continue; // plan4:ST-14
       // [plan4:BL-1] Rooms with placement rules (surface row, adjacency, flag, copies) are checked by effectHookProblems, not against the pre-X-2 rule.
       if (BUILDING_DEFS[type].place?.floors === 'surface' || BUILDING_DEFS[type].place?.adjacentTo || BUILDING_DEFS[type].place?.needsFlag || BUILDING_DEFS[type].maxCopies !== undefined) continue;
       for (let floor = -1; floor <= state.currentFloors + 1; floor++) {

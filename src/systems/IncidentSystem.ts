@@ -3,12 +3,14 @@ import type { StateManager } from '../core/StateManager';
 import type { SeededRandom } from '../core/Random';
 import type { ResourceSystem } from './ResourceSystem';
 import { bus } from '../core/EventBus';
-import { roomSlots } from '../data/buildingDefs';
+import { roomSlots, touching } from '../data/buildingDefs'; // [plan4:ST-2] touching: one definition of "next to each other"
 import { INCIDENTS, INCIDENT_KINDS, DISASTERS, disasterCost, quickFixCost, breachGuardMult } from '../data/incidents';
 import { specOf } from '../data/specializations';
 import { isHall, isDistrict, roomSlots as slotsOf, effectiveLevel } from '../data/buildingDefs';
 import { RUIN_KINDS } from '../data/ruins';
-import { evacuationMult, hygieneMult, isFirebreak, quarantineCapacity } from '../data/roomEffects'; // [plan4:BL-8]
+import { evacuationMult, fireCodeMult, hygieneMult, isFirebreak, quarantineCapacity } from '../data/roomEffects'; // [plan4:BL-8, ST-15]
+import { DOOR_FIRE_CHANCE, VENT_EPIDEMIC_MULT, breachSpeed, epidemicWeights, shutDoorBetween, ventStackCount } from './InfraSystem'; // plan4:ST-14/15
+import { shutDoorCount } from './doors'; // plan4:ST-14
 import { wearOf, wearRisk } from './MaintenanceSystem';
 import { DAY_MS, disastersPaused, isQuiet, type DeathSystem } from './DeathSystem';
 import type { BuildingSystem } from './BuildingSystem';
@@ -187,20 +189,21 @@ export class IncidentSystem {
         return inc;
       }
       const progress = Math.min(1, inc.progress + this.crewRate(state, inc) * dt);
-      let severity = Math.min(1, inc.severity + dt / PEAK_SECONDS);
+      // [plan4:ST-14] Raiders inside lose time at every shut door between the shaft and the room (1 with no doors).
+      let severity = Math.min(1, inc.severity + (inc.kind === 'breach' ? dt * breachSpeed(state, b, PEAK_SECONDS) : dt) / PEAK_SECONDS);
       const peak = severity >= 1 ? (inc.peak ?? 0) + dt : 0;
       let spreadDone = !!inc.spread;
       for (const [r, v] of Object.entries(def.drain ?? {}) as [ResourceType, number][]) drain[r] = (drain[r] ?? 0) - v * severity * dt;
       if (def.harm) {
-        const exit = inc.kind === 'fire' ? evacuationMult(state, b.position.floor) : 1; // [plan4:BL-8] a stairwell near by saves skin
+        const exit = inc.kind === 'fire' ? evacuationMult(state, b.position.floor) * fireCodeMult(state, b.position.floor) : 1; // [plan4:BL-8, ST-15] a stairwell near by saves skin; a deep floor without one costs it
         for (const id of b.assignedSurvivorIds) harmed.set(id, (harmed.get(id) ?? 0) + def.harm * severity * dt * exit);
       }
       // A fire at its peak jumps to the next room along the floor.
       if (inc.kind === 'fire' && severity >= 1 && !spreadDone && state.incidents.length + spread.length < 3 && !isFirebreak(b)) {
-        const w = roomSlots(b.type);
-        const near = state.buildings.find(o => o.position.floor === b.position.floor && !o.isConstructing
-          && (o.position.x === b.position.x + w || o.position.x + roomSlots(o.type) === b.position.x)
-          && !isFirebreak(o) && !state.incidents.some(i => i.buildingId === o.id));
+        // [plan4:ST-2/ST-14] Next-door rooms by touching(); a shut bulkhead between them lets the fire through only 10% of the time (the pipes).
+        const near = state.buildings.find(o => o !== b && !o.isConstructing && touching(o, b)
+          && !isFirebreak(o) && !state.incidents.some(i => i.buildingId === o.id)
+          && (!shutDoorBetween(state, b, o) || this.rng.chance(DOOR_FIRE_CHANCE)));
         if (near) spread.push({ kind: 'fire', id: near.id });
         spreadDone = true;
       }
@@ -312,7 +315,7 @@ export class IncidentSystem {
     }
     const pop = state.survivors.length;
     if (pop >= EPIDEMIC_POP && state.buildings.some(b => b.type === 'medbay' && !b.isConstructing)) {
-      out.push({ kind: 'epidemic', buildingId: null, w: (1 + (pop - EPIDEMIC_POP) / 40) * hygieneMult(state) }); // [plan4:BL-8] hygiene thins the odds
+      out.push({ kind: 'epidemic', buildingId: null, w: (1 + (pop - EPIDEMIC_POP) / 40) * hygieneMult(state) * Math.pow(VENT_EPIDEMIC_MULT, ventStackCount(state)) }); // plan4:ST-15 each vent stack x0.9 // [plan4:BL-8] hygiene thins the odds
     }
     return out;
   }
@@ -421,6 +424,28 @@ export class IncidentSystem {
   }
 
   /**
+   * [plan4:ST-14] Who falls sick in an epidemic. With no shut door: the old pick (a shuffle, the first 30%). With shut doors the epidemic starts
+   * in one person's part of the bunker; people behind a shut door from it catch it at a quarter of the odds, so fewer fall sick in all.
+   */
+  private pickSick(state: GameState, adults: SurvivorState[], soft: boolean): SurvivorState[] {
+    const n = Math.ceil(adults.length * (soft ? 0.2 : 0.3));
+    if (shutDoorCount(state) === 0 || adults.length === 0) return this.rng.shuffle(adults).slice(0, n);
+    const weights = epidemicWeights(state, adults, this.rng.pick(adults).id);
+    if (!weights) return this.rng.shuffle(adults).slice(0, n);
+    const pool = [...adults];
+    const total = pool.reduce((t, a) => t + (weights.get(a.id) ?? 1), 0);
+    const count = Math.min(pool.length, Math.ceil(n * total / pool.length));
+    const out: SurvivorState[] = [];
+    while (out.length < count && pool.length) {
+      let roll = this.rng.next() * pool.reduce((t, a) => t + (weights.get(a.id) ?? 1), 0);
+      let at = 0;
+      for (let i = 0; i < pool.length; i++) { roll -= weights.get(pool[i].id) ?? 1; if (roll <= 0) { at = i; break; } }
+      out.push(pool.splice(at, 1)[0]);
+    }
+    return out;
+  }
+
+  /**
    * The disaster happens. Online it is the full thing (a room wrecked, a flood, a plague, a shutdown reactor);
    * away it is the soft version: people are hurt (never below 15 health), nothing is destroyed.
    * Deaths happen only when allowed (and never inside the breather after a death).
@@ -441,7 +466,7 @@ export class IncidentSystem {
     switch (dz.kind) {
       case 'collapse':
         if (!b) break;
-        res.hurt = this.hurt(b.assignedSurvivorIds, (soft ? 20 : HURT) * evacuationMult(state, b.position.floor), floor); // [plan4:BL-8]
+        res.hurt = this.hurt(b.assignedSurvivorIds, (soft ? 20 : HURT) * evacuationMult(state, b.position.floor) * fireCodeMult(state, b.position.floor), floor); // [plan4:BL-8, ST-15]
         // The room is wrecked: shut (half a day online, a quarter away) and fully worn until the crew maintains it back to life.
         this.sm.applyDelta({ path: 'buildings', value: this.sm.state.buildings.map(x => (x.id === b.id ? { ...x, wear: 100 } : x)) });
         this.setDanger({ disabled: { ...this.sm.state.danger.disabled, [b.id]: now + (soft ? DAY_MS / 4 : DAY_MS / 2) } });
@@ -460,7 +485,7 @@ export class IncidentSystem {
       }
       case 'epidemic': {
         const adults = state.survivors.filter(s => !s.child);
-        const sick = this.rng.shuffle(adults).slice(0, Math.ceil(adults.length * (soft ? 0.2 : 0.3)));
+        const sick = this.pickSick(state, adults, soft); // [plan4:ST-14] shut doors shield the rooms behind them
         const sickDmg = soft ? 25 : 40;
         const ward = quarantineCapacity(state); // [plan4:BL-8] the sick held in a ward take half the harm
         if (ward > 0) res.hurt = this.hurt(sick.slice(ward).map(s => s.id), sickDmg, floor) + this.hurt(sick.slice(0, ward).map(s => s.id), sickDmg / 2, floor);

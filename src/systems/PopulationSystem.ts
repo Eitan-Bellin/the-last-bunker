@@ -6,6 +6,8 @@ import type { SeededRandom } from '../core/Random';
 import { bus } from '../core/EventBus';
 import { getDef, effectiveLevel, workforceMultiplier, type MoraleKind } from '../data/buildingDefs';
 import { childCapacityOf, ventilationRelief } from '../data/roomEffects'; // [plan4:BL-3/4/8]
+import { roomSlots } from '../data/buildingDefs'; // plan4:ST-14
+import { isSealedOff } from './doors'; // plan4:ST-14
 import { hasFeature, researchBuildingMult, researchMorale } from './ResearchSystem';
 import { chainFactor } from '../data/chains';
 import { incidentBlocks } from '../data/incidents';
@@ -414,6 +416,7 @@ export class PopulationSystem {
   canAssign(state: GameState, buildingId: string, child = false): boolean {
     const b = state.buildings.find(x => x.id === buildingId);
     if (!b) return false;
+    if (isSealedOff(state, b.position.floor, b.position.x, roomSlots(b.type))) return false; // [plan4:ST-14] nobody from outside is sent behind a sealed door
     const kids = b.assignedSurvivorIds.filter(id => state.survivors.find(s => s.id === id)?.child).length;
     if (child) return kids < childCapacityOf(b);
     return b.assignedSurvivorIds.length - kids < (getDef(b.type)?.maxWorkers ?? 0);

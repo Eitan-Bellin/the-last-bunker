@@ -12,7 +12,7 @@ import type { GameState } from '../core/GameState';
 
 export type DoorState = 'open' | 'closed' | 'sealed';
 export type InfraKind = 'bulkhead' | 'stairwell' | 'ventStack';
-export interface InfraItem { id: string; kind: string; floor: number; x: number; floors?: number }
+export interface InfraItem { id: string; kind: string; floor: number; x: number; floors?: number; level?: number }
 
 /** Key of the door on a floor's boundary x (between slot x-1 and slot x). */
 export function doorKey(floor: number, boundaryX: number): string {

@@ -105,6 +105,15 @@ export const DISTRICT_KINDS: BuildingType[] = ['cave', 'lake', 'metro'];
 export const HALL_KINDS: BuildingType[] = ['atrium', 'reactorHall'];
 export const DISTRICT_SLOTS = 4;
 
+/**
+ * [plan4:ST-14/ST-15] Defined in buildings.json (name, price, research) but NOT rooms: they live in state.layout.infra / state.layout.doors
+ * (src/systems/doors.ts, InfraSystem.ts), never in state.buildings, and are not in BuildingType. Tools that loop over the defs skip them.
+ */
+export const INFRA_KINDS = ['bulkhead', 'stairwell', 'ventStack'] as const;
+export function isInfra(type: string): boolean {
+  return (INFRA_KINDS as readonly string[]).includes(type);
+}
+
 export function isDistrict(type: BuildingType): boolean {
   return DISTRICT_KINDS.includes(type);
 }

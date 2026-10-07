@@ -13,6 +13,8 @@ import type { DigState } from '../core/state/longGame';
 import { BASE_FLOORS, MAX_FLOORS, allowedFloors, crossesGallery } from '../data/zones';
 import { RETOOL_PRICE_MULT, RETOOL_SECONDS, SPEC_COST, specTotal, specsFor } from '../data/specializations';
 import { RELOCATE_SECONDS, relocateBlock, relocateCost, stateWithout } from './relocate'; // [plan4:ST-19]
+import { isInfra } from '../data/buildingDefs'; // plan4:ST-14
+import { infraOccupies } from './doors'; // plan4:ST-15
 
 /** Slots east of the shaft on a floor without a wing. [plan4:X-2] Placement reads floorExtent(state, floor); this stays exported for tools. */
 export const SLOTS_PER_FLOOR = BASE_EAST;
@@ -158,7 +160,7 @@ export class BuildingSystem {
   /** [plan4:X-2] Why a room cannot stand here (null = it can). Same truth table as the old canPlaceBuilding, with the reason. */
   placeBlock(type: BuildingType, pos: Position, state: GameState): PlaceBlock | null {
     const def = getDef(type);
-    if (!def || isDistrict(type)) return 'floor';
+    if (!def || isDistrict(type) || isInfra(type)) return 'floor'; // plan4:ST-14 infra is not a room
     const levels = roomFloors(type);
     const place = def.place;
     // [plan4:BL-1] Surface rooms stand on the gate-house row (floor -1) once it is open; nobody else may use floor -1.
@@ -187,6 +189,7 @@ export class BuildingSystem {
       const ew = roomSlots(existing.type);
       if (pos.x < existing.position.x + ew && pos.x + w > existing.position.x) return 'overlap';
     }
+    for (let f = top; f <= bottom; f++) if (infraOccupies(state, f, pos.x, w)) return 'overlap'; // plan4:ST-15 a stairwell or vent stack column takes the slot
     // [plan4:BL-1] Must touch a room of the given type on the same floor (fish ponds by the lake, a ward by the medbay).
     if (place?.adjacentTo) {
       const spot = { type, position: { x: pos.x, floor: pos.floor } };

@@ -1013,5 +1013,83 @@
     "maxWorkers": 3,
     "powerConsumption": 1,
     "color": "#6A6A5A"
-  }
+  },
+    "bulkhead": {
+      "name": {
+        "en": "Bulkhead Door",
+        "he": "דלת מחיצה"
+      },
+      "description": {
+        "en": "A heavy blast door between two rooms. Shut, it slows fire and sickness and holds raiders back. A shut door draws a little power.",
+        "he": "דלת הדף כבדה בין שני חדרים. כשהיא סגורה היא מאטה אש ומחלות ומעכבת פורצים. דלת סגורה אוכלת מעט חשמל."
+      },
+      "tier": 2,
+      "size": {
+        "w": 1,
+        "h": 1
+      },
+      "maxLevel": 3,
+      "baseCost": {
+        "materials": 40,
+        "scrap": 5
+      },
+      "costMultiplier": 1.5,
+      "constructionTime": 60,
+      "maxWorkers": 0,
+      "powerConsumption": 0,
+      "color": "#6A6A72"
+    },
+    "stairwell": {
+      "name": {
+        "en": "Emergency Stairwell",
+        "he": "חדר מדרגות חירום"
+      },
+      "description": {
+        "en": "Concrete stairs with a red emergency light. Make the way out shorter in a fire or a collapse. From floor 9 down, rooms without one nearby are in danger.",
+        "he": "מדרגות בטון עם אור חירום אדום. מקצרות את הדרך החוצה באש ובקריסה. מקומה 9 ומטה, חדרים בלי מדרגות קרובות בסכנה."
+      },
+      "tier": 2,
+      "size": {
+        "w": 1,
+        "h": 1
+      },
+      "maxLevel": 1,
+      "baseCost": {
+        "materials": 70,
+        "scrap": 10
+      },
+      "costMultiplier": 1.6,
+      "constructionTime": 90,
+      "slots": 1,
+      "maxWorkers": 0,
+      "powerConsumption": 0.5,
+      "color": "#7A6A5A"
+    },
+    "ventStack": {
+      "name": {
+        "en": "Vent Stack",
+        "he": "פיר אוורור"
+      },
+      "description": {
+        "en": "A tall shaft with a big slow fan. Eases the crowding, lowers the odds of an epidemic and carries smoke away.",
+        "he": "פיר גבוה עם מאוורר גדול ואיטי. מקל על הצפיפות, מקטין סיכוי למגפה ומוציא עשן החוצה."
+      },
+      "tier": 3,
+      "size": {
+        "w": 1,
+        "h": 1
+      },
+      "maxLevel": 1,
+      "baseCost": {
+        "materials": 120,
+        "scrap": 20
+      },
+      "costMultiplier": 1,
+      "constructionTime": 120,
+      "slots": 1,
+      "maxCopies": 3,
+      "maxWorkers": 0,
+      "powerConsumption": 1,
+      "color": "#5A8AA0"
+    }
 }

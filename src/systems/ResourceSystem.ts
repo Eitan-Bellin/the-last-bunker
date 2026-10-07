@@ -15,6 +15,7 @@ import { difficultyOf } from '../data/difficulty';
 import { actCapBonus } from '../data/pricing';
 import { TUNING } from '../data/tuning';
 import { scenarioOf } from '../data/scenarios';
+import { infraPowerDraw } from './InfraSystem'; // plan4:ST-14/15
 
 const EMERGENCY_EFFICIENCY = 0.25;
 const FOOD_PER_SURVIVOR = 0.08;
@@ -116,6 +117,8 @@ export class ResourceSystem {
       const p = def.production?.power;
       if (p && !incidentBlocks(state, b)) powerProd += this.powerOutput(state, b, level);
     }
+
+    powerDemand += infraPowerDraw(state); // [plan4:ST-14/15] shut doors 0.2 each, stairwell lights, vent fans
 
     const storedPower = state.resources.power.amount;
     const supplyRatio = storedPower > 0.01 || powerProd >= powerDemand
