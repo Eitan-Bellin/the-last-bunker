@@ -23,6 +23,8 @@ export class Modal {
   private overlay: HTMLDivElement;
   private box: HTMLDivElement;
   private dismiss: (() => void) | null = null;
+  private scroll: HTMLDivElement | null = null;
+  private shownTitle = '';
 
   constructor() {
     this.overlay = el('div', 'modal-overlay');
@@ -38,16 +40,20 @@ export class Modal {
     const previous = this.dismiss;
     this.dismiss = opts.onDismiss ?? null;
     previous?.();
-    const content: HTMLElement[] = [];
-    if (opts.icon) content.push(el('div', 'modal-icon', opts.icon));
+    // [plan4:UX-3] The same dialog shown again while open (a toggle list) keeps its scroll position instead of jumping to the top.
+    const keepScroll = this.isVisible && this.shownTitle === opts.title ? this.scroll?.scrollTop ?? 0 : 0;
+    this.shownTitle = opts.title;
+    // Everything above the buttons scrolls; the (last) buttons stay pinned. Many choices (mutators, scenarios) scroll with the text
+    // and only the last, main button is pinned, so a long list can never push the way out of the screen.
+    const scroll = el('div', 'modal-scroll');
+    if (opts.icon) scroll.appendChild(el('div', 'modal-icon', opts.icon));
     const title = el('h2', 'modal-title', opts.title);
     title.id = 'modal-title';
     this.box.setAttribute('aria-labelledby', title.id);
-    content.push(title);
-    content.push(typeof opts.body === 'string' ? el('p', 'modal-body', opts.body) : opts.body);
+    scroll.appendChild(title);
+    scroll.appendChild(typeof opts.body === 'string' ? el('p', 'modal-body', opts.body) : opts.body);
 
-    const actions = el('div', 'modal-actions');
-    for (const a of opts.actions) {
+    const makeButton = (a: ModalAction): HTMLButtonElement => {
       const btn = el('button', `btn ${a.className ?? 'btn-primary'}`);
       btn.appendChild(el('span', '', a.label));
       if (a.detail) btn.appendChild(a.detail);
@@ -58,15 +64,24 @@ export class Modal {
         uiSound(cls.includes('btn-primary') || cls.includes('btn-danger') ? 'confirm' : 'cancel', 0.8);
         a.onClick();
       });
-      actions.appendChild(btn);
+      return btn;
+    };
+    const pinnedFrom = opts.actions.length > 3 ? opts.actions.length - 1 : 0;
+    if (pinnedFrom > 0) {
+      const list = el('div', 'modal-actions');
+      for (const a of opts.actions.slice(0, pinnedFrom)) list.appendChild(makeButton(a));
+      scroll.appendChild(list);
     }
-    content.push(actions);
+    const actions = el('div', 'modal-actions');
+    for (const a of opts.actions.slice(pinnedFrom)) actions.appendChild(makeButton(a));
 
-    this.box.replaceChildren(...content);
+    this.scroll = scroll;
+    this.box.replaceChildren(scroll, actions);
+    scroll.scrollTop = keepScroll;
     if (!this.isVisible) uiSound('modalOpen', 0.8, 300);
     this.overlay.classList.add('open');
     // Keyboard and screen-reader users land on the first choice.
-    actions.querySelector<HTMLButtonElement>('button:not(:disabled)')?.focus({ preventScroll: true });
+    this.box.querySelector<HTMLButtonElement>('.modal-actions button:not(:disabled)')?.focus({ preventScroll: true });
   }
 
   hide(): void {

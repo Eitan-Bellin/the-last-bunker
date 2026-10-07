@@ -1,5 +1,5 @@
 import { el, setRich } from '../dom';
-import { vibrate } from '../../utils/haptics';
+import { haptic } from '../../utils/haptics';
 import { uiSound } from '../../audio/uiSound';
 import { i18n } from '../../i18n/I18nManager';
 
@@ -38,7 +38,7 @@ export class Sheet {
     close.setAttribute('aria-label', i18n.t('journal.close'));
     close.addEventListener('click', (e) => {
       e.stopPropagation();
-      vibrate(8);
+      haptic('tap');
       this.hide();
     });
     // [Q6] The "?" plate: opens the Bunker Book at this sheet's topic (shown only when a topic was set).
@@ -47,7 +47,7 @@ export class Sheet {
     this.helpBtn.setAttribute('aria-label', i18n.t('book.title'));
     this.helpBtn.addEventListener('click', (e) => {
       e.stopPropagation();
-      vibrate(8);
+      haptic('tap');
       const topic = this.helpBtn.dataset.topic;
       if (topic) Sheet.onHelp?.(topic);
     });
@@ -70,6 +70,7 @@ export class Sheet {
 
   /** Pull-to-dismiss. Touch works anywhere while the body sits at the top; the mouse drags the handle or title. */
   private bindPullDown(handle: HTMLElement): void {
+    let startX = 0;
     let startY = 0;
     let startT = 0;
     let dy = 0;
@@ -108,19 +109,32 @@ export class Sheet {
 
     this.panel.addEventListener('touchstart', (e) => {
       if (e.touches.length !== 1) { armed = false; return; }
+      // [plan4:UX-4] A touch that starts on a text field or a slider belongs to that control (typing, selecting, dragging a thumb),
+      // never to the pull-down: the old code cancelled every downward touchmove, which froze the volume sliders.
+      const t = e.target as Element | null;
+      if (t?.closest?.('input,textarea,select,[data-no-pulldown]')) { armed = false; return; }
       // Only a pull that starts with the content at its top may close the sheet.
       armed = this.panel.scrollTop <= 0;
+      startX = e.touches[0].clientX;
       begin(e.touches[0].clientY);
     }, { passive: true });
     this.panel.addEventListener('touchmove', (e) => {
       if (!armed || e.touches.length !== 1) return;
       const y = e.touches[0].clientY;
-      if (!dragging && y < startY) {
-        // Pushing the content up is a normal scroll: hand the gesture back to the browser.
-        armed = false;
-        return;
+      if (!dragging) {
+        const dy = y - startY;
+        const dx = e.touches[0].clientX - startX;
+        if (dy < -8) {
+          // Pushing the content up is a normal scroll: hand the gesture back to the browser.
+          armed = false;
+          return;
+        }
+        // [plan4:UX-4] Claim the gesture only once it is clearly a downward pull (more than 8 px, and more vertical than
+        // horizontal): a sideways swipe or a small wobble of a tap must stay with the content under the finger.
+        if (dy <= 8) return;
+        if (Math.abs(dy) <= Math.abs(dx)) { armed = false; return; }
       }
-      // At the top a downward pull has nothing to scroll, so claim it from the first move
+      // At the top a downward pull has nothing to scroll, so once claimed the sheet follows the finger
       // (later touchmoves stop being cancelable once the browser starts its own pan).
       if (e.cancelable) e.preventDefault();
       move(y);

@@ -1,4 +1,4 @@
-import { vibrate } from '../../utils/haptics';
+import { haptic } from '../../utils/haptics';
 import { HUD } from '../../ui/HUD';
 import { i18n } from '../../i18n/I18nManager';
 import { getDef } from '../../data/buildingDefs';
@@ -55,6 +55,7 @@ export class WorldController {
   rejectAt(pos: Position): void {
     const c = this.app.renderer.slotCenter(pos);
     this.app.popups.spawn(c.x, c.y, '[[close]]', 0xff4444);
+    haptic('error'); // [plan4:UX-2] every invalid placement is rejected through here
   }
 
   tryPlaceBuilding(type: BuildingType, pos: Position): boolean {
@@ -67,6 +68,7 @@ export class WorldController {
     }
     this.app.engine.buildingSystem.placeBuilding(type, pos, this.app.engine.stateManager);
     this.app.engine.requestSave();
+    haptic('success');
     return true;
   }
 
@@ -101,7 +103,7 @@ export class WorldController {
     this.app.engine.resourceSystem.gain(this.app.engine.stateManager, { [r]: amount });
     this.app.audio.play(r === 'water' ? 'drip' : r === 'materials' || r === 'scrap' ? 'coin' : 'collect');
     if (r === 'water') this.app.audio.play('collect', { volume: 0.6 });
-    vibrate(12);
+    haptic('tap');
     this.flyToHud(r, pos.x, pos.y, `+${amount}`);
     this.app.engine.notifyInteraction();
   }
@@ -163,7 +165,7 @@ export class WorldController {
       this.app.toasts.show(`${BUILDING_ICONS[b.type] ?? ''} ${i18n.t('drag.assigned', { name, room: def.name[i18n.currentLocale] ?? def.name.en, ...this.app.gOf(s) })}`, 'good');
     }
     this.app.audio.play('assign');
-    vibrate(18);
+    haptic('impact');
     this.app.engine.requestSave();
   }
 

@@ -37,6 +37,17 @@ html, body {
   touch-action: none;
 }
 
+/* [plan4:UX-4] Text fields: the html/body user-select:none is inherited by inputs in WebKit and blocks typing. 16px+ stops iOS zooming
+   the page when a field is focused (which is why maximum-scale used to be needed; it is gone from the viewport so players can zoom). */
+input, textarea, select {
+  -webkit-user-select: text;
+  user-select: text;
+  font-size: max(16px, 1em);
+}
+/* Never let iOS inflate text on rotation; and no long-press "save image" sheet over the portraits and icons. */
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+img { -webkit-touch-callout: none; }
+
 button {
   font-family: inherit;
   color: inherit;
@@ -102,8 +113,9 @@ button {
 .resource-icon { font-size: calc(14px * var(--fs, 1)); }
 .resource-value { font-weight: 700; font-size: calc(13px * var(--fs, 1)); }
 .resource-rate {
-  font-size: calc(10px * var(--fs, 1));
-  color: var(--text-dim);
+  font-size: calc(11px * var(--fs, 1));
+  /* [plan4:AC-3] was --text-dim: 2.8:1 on the steel plate. */
+  color: var(--text-secondary);
   margin-inline-start: auto;
   unicode-bidi: isolate;
   font-variant-numeric: tabular-nums;
@@ -207,7 +219,7 @@ button {
   transition: background 0.2s, transform 0.1s;
 }
 .nav-btn:active { background: var(--accent-glow); color: var(--accent); transform: scale(0.95); }
-.nav-btn.locked { opacity: 0.45; }
+.nav-btn.locked { opacity: 1; }
 .nav-icon { font-size: calc(22px * var(--fs, 1)); position: relative; }
 .nav-label { font-size: calc(11px * var(--fs, 1)); }
 .nav-badge {
@@ -346,7 +358,7 @@ body.placement-mode #game-canvas { cursor: crosshair; }
   transition: transform 0.1s, border-color 0.2s;
 }
 .build-item:active { border-color: var(--accent); transform: scale(0.98); }
-.build-item.disabled { opacity: 0.45; }
+.build-item.disabled { filter: grayscale(0.7) brightness(0.8); } /* [plan4:AC-3] a filter, not opacity: text keeps its contrast */
 
 .build-icon {
   flex-shrink: 0;
@@ -440,7 +452,8 @@ body.placement-mode #game-canvas { cursor: crosshair; }
   align-items: center;
   justify-content: center;
   z-index: 40;
-  padding: 20px;
+  /* [plan4:UX-3] Keep clear of the notch, the home bar and rounded corners. */
+  padding: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.2s;
@@ -458,13 +471,29 @@ body.placement-mode #game-canvas { cursor: crosshair; }
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
   transform: scale(0.92);
   transition: transform 0.22s cubic-bezier(0.2, 1.4, 0.4, 1);
+  /* [plan4:UX-3] A dialog never grows past the screen (small phone, landscape, big text): the text scrolls, the buttons stay in reach.
+     html/body are overflow:hidden, so a dialog taller than the screen used to push its buttons out of reach (Genesis choices could lock). */
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 80px);
+  overflow: hidden;
 }
+@supports (height: 100dvh) {
+  .modal { max-height: calc(100dvh - max(12px, env(safe-area-inset-top)) - max(12px, env(safe-area-inset-bottom)) - 24px); }
+}
+/* Icon, title, text (and the choices beyond the last button) scroll together; touch-action is needed because the page itself is touch-action:none. */
+.modal-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; touch-action: pan-y; }
+.modal-body { min-height: 0; }
 .modal-overlay.open .modal { transform: scale(1); }
 .modal-icon { font-size: calc(44px * var(--fs, 1)); margin-bottom: 6px; }
 .modal-title { font-size: calc(19px * var(--fs, 1)); font-weight: 700; color: var(--accent); margin-bottom: 8px; }
 .modal-body { font-size: calc(14px * var(--fs, 1)); line-height: 1.5; color: var(--text-primary); margin-bottom: 14px; }
 .modal-sub { font-size: calc(12px * var(--fs, 1)); color: var(--text-secondary); margin-bottom: 8px; }
 .modal-actions { display: flex; flex-direction: column; gap: 8px; }
+/* The last (main) button stays pinned under the scrolling part; a very tall pinned group may scroll on its own, never push the text away. */
+.modal > .modal-actions { flex: 0 0 auto; max-height: 45vh; overflow-y: auto; overscroll-behavior: contain; touch-action: pan-y; padding: 8px 4px max(2px, env(safe-area-inset-bottom)); margin-inline: -4px; }
+.modal-scroll > .modal-actions { margin-bottom: 8px; }
+@supports (height: 100dvh) { .modal > .modal-actions { max-height: 45dvh; } }
 .modal-actions .btn { display: flex; justify-content: space-between; align-items: center; gap: 10px; text-align: start; }
 .modal-actions .btn:only-child { justify-content: center; }
 .gains-list { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; margin-bottom: 14px; }
@@ -528,7 +557,7 @@ body.placement-mode #game-canvas { cursor: crosshair; }
 .research-card.available { border-color: rgba(77, 255, 143, 0.35); }
 .research-card.active { border-color: rgba(255, 181, 71, 0.7); box-shadow: 0 0 12px rgba(255, 181, 71, 0.22); }
 .research-card.done { opacity: 0.6; }
-.research-card.locked { opacity: 0.55; }
+.research-card.locked { filter: grayscale(0.7) brightness(0.8); }
 .research-name { font-weight: 700; font-size: calc(13px * var(--fs, 1)); }
 .tier-chip { font-size: calc(10px * var(--fs, 1)); font-weight: 700; color: var(--text-secondary); background: rgba(0, 0, 0, 0.3); border-radius: 6px; padding: 1px 6px; }
 .research-done { font-size: calc(12px * var(--fs, 1)); font-weight: 600; color: var(--positive); }

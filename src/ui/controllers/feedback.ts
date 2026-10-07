@@ -1,7 +1,7 @@
 import { ENDINGS } from '../../data/endings';
 import { SEASONS, nextSeason, seasonAt } from '../../data/seasons';
 import { ACTS } from '../../data/acts';
-import { vibrate } from '../../utils/haptics';
+import { haptic } from '../../utils/haptics';
 import { getProject } from '../../data/projects';
 import { getPartner } from '../../data/trade';
 import { WEEKLY_CREDITS } from '../../data/challenges';
@@ -46,6 +46,7 @@ export class FeedbackController {
       }
       const name = getDef(b.type)?.name[i18n.currentLocale] ?? b.type;
       this.app.toasts.show(`[[check]] ${i18n.t('toast.buildingComplete', { name })}`, 'good');
+      haptic('success'); // [plan4:UX-2] the same event fires when an upgrade finishes
       if (b.type === 'generator' || b.type === 'reactor' || b.type === 'reactorHall') this.app.audio.play('engineStart');
       else {
         this.app.audio.play('complete');
@@ -58,6 +59,7 @@ export class FeedbackController {
     bus.on('survivor:levelup', (s: unknown, stat: unknown) => {
       const survivor = s as SurvivorState;
       this.app.audio.play('levelup');
+      haptic('success');
       const p = this.app.renderer.personPos(survivor.id);
       if (p) this.app.renderer.floatIcons(p.x, p.y, 'star', 5, '#ffe27a');
       this.app.toasts.show(`[[star]] ${i18n.t('toast.levelUp', {
@@ -85,6 +87,7 @@ export class FeedbackController {
       const a = ACHIEVEMENTS.find(x => x.id === id);
       if (!a) return;
       this.app.audio.play('achievement');
+      haptic('success');
       this.app.toasts.show(`[[trophy]] ${i18n.t('toast.achievement', { name: a.name[i18n.currentLocale] ?? a.name.en })}`, 'good');
       this.app.engine.requestSave();
     });
@@ -105,7 +108,7 @@ export class FeedbackController {
       this.app.audio.play(sound[inc.kind]);
       if (inc.kind !== 'breach') setTimeout(() => this.app.audio.play('alarm'), 400);
       this.app.renderer.shake(inc.kind === 'breach' ? 6 : 4, 0.5);
-      vibrate([40, 60, 40]);
+      haptic('warning');
       this.app.toasts.show(`[[${def.icon}]] ${i18n.t('incident.started', { name: def.name[i18n.currentLocale], room: this.app.roomName(inc.buildingId) })}`, 'bad');
     });
     bus.on('incident:burnout', (i: unknown) => {
@@ -154,6 +157,7 @@ export class FeedbackController {
       const res = r as { kind: keyof typeof DISASTERS };
       const def = DISASTERS[res.kind];
       this.app.audio.play('error');
+      haptic('error');
       this.app.toasts.show(`[[${def.icon}]] ${i18n.t('danger.toast.struck', { name: def.name[i18n.currentLocale], text: def.struck[i18n.currentLocale] })}`, 'bad');
     });
     bus.on('family:couple', (c: unknown) => {

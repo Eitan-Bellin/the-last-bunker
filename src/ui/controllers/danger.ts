@@ -1,6 +1,6 @@
 import { getDef } from '../../data/buildingDefs';
 import type { BuildingType, RaidStance } from '../../core/GameState';
-import { vibrate } from '../../utils/haptics';
+import { haptic } from '../../utils/haptics';
 import { i18n } from '../../i18n/I18nManager';
 import { costRow, el } from '../../ui/dom';
 import { portraitFor, portraitUrl } from '../../data/portraits';
@@ -232,7 +232,7 @@ export class DangerController {
     this.app.engine.notifyInteraction();
     const sound: Record<string, 'splash' | 'click' | 'place'> = { fire: 'splash', flood: 'splash', blackout: 'click', roaches: 'place', breach: 'place' };
     this.app.audio.play(sound[inc.kind]);
-    vibrate(14);
+    haptic('tap');
     this.app.renderer.incidents.hit(id);
     this.app.engine.incidentSystem.tap(id);
     if (this.app.buildingPanel.isVisible) this.app.buildingPanel.refresh(this.app.state);

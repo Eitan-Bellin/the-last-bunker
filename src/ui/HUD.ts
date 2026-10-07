@@ -1,7 +1,7 @@
 import { seasonAt, seasonsActive } from '../data/seasons';
 import { resourceDef } from '../data/resources';
 import type { GameState, ResourceType } from '../core/GameState';
-import { vibrate } from '../utils/haptics';
+import { haptic } from '../utils/haptics';
 import { timeOfDay } from '../data/dayCycle';
 import { i18n } from '../i18n/I18nManager';
 import { RESOURCE_ICONS, el, setRich } from './dom';
@@ -101,7 +101,7 @@ export class HUD {
       } catch {
         // the choice just won't be remembered
       }
-      vibrate(6);
+      haptic('tap');
       this.lastMore = '';
       if (this.lastState) this.update(this.lastState);
     });
@@ -289,7 +289,7 @@ export class HUD {
       if (btn.key === 'people') this.peopleBadge = badge;
       b.append(icon, el('span', 'nav-label', i18n.t(`hud.${btn.key}`)));
       b.addEventListener('click', () => {
-        vibrate(8);
+        haptic('select');
         this.onNav?.(btn.key);
       });
       nav.appendChild(b);
@@ -300,7 +300,7 @@ export class HUD {
     menu.title = i18n.t('menu.title');
     menu.append(el('span', 'nav-icon', '[[menu]]'));
     menu.addEventListener('click', () => {
-      vibrate(8);
+      haptic('select');
       this.onMenu?.();
     });
     nav.appendChild(menu);
