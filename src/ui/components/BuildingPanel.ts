@@ -1,7 +1,7 @@
 import type { BuildingInstance, GameState, ResourceType, SurvivorState } from '../../core/GameState';
 import type { GameEngine } from '../../core/GameEngine';
 import { i18n } from '../../i18n/I18nManager';
-import { getDef, effectiveLevel, workforceMultiplier, traitBonus, compoundNeighbors } from '../../data/buildingDefs';
+import { getDef, effectiveLevel, workforceMultiplier, traitBonus, compoundNeighbors, synergyOf } from '../../data/buildingDefs';
 import { Sheet } from './Sheet';
 import { genderOf, portraitFor, portraitUrl } from '../../data/portraits';
 import { bunkerDefense } from '../../systems/EventSystem';
@@ -10,6 +10,7 @@ import { INCIDENTS, quickFixCost } from '../../data/incidents';
 import { boostReserve, chainInputs, inputFed, inputRate } from '../../data/chains';
 import { roomPowerDraw } from '../../systems/ResourceSystem';
 import { bedsBuilt } from '../../systems/BuildingSystem';
+import { MORALE_CAPS } from '../../systems/PopulationSystem'; // [plan4:BL-39]
 import { allowedFloors } from '../../data/zones';
 import { RETOOL_SECONDS, specOf, specsFor } from '../../data/specializations';
 import type { Incident } from '../../core/GameState';
@@ -170,6 +171,11 @@ export class BuildingPanel {
     if (def.effects?.morale) {
       const m = def.effects.morale;
       stats.appendChild(this.row(`[[happy]] ${i18n.t('building.morale')}`, `+${Math.round((m.base + m.perLevel * (level - 1)) * workforceMultiplier(state, b))}`));
+      // [plan4:BL-39] Which of the three morale channels it feeds (each has its own ceiling).
+      if (def.effects.moraleKind && def.effects.moraleKind !== 'base') {
+        const cap = MORALE_CAPS[def.effects.moraleKind];
+        stats.appendChild(this.row(`[[happy]] ${i18n.t('building.moraleChannel')}`, `${i18n.t(`morale.channel.${def.effects.moraleKind}`)} · max ${cap}`));
+      }
     }
     if (def.effects?.storageCap) {
       const caps = Object.entries(def.effects.storageCap).map(([r, v]) => `${RESOURCE_ICONS[r] ?? ''}+${v * level}`).join('  ');
@@ -177,6 +183,11 @@ export class BuildingPanel {
     }
     const compound = compoundNeighbors(state, b);
     if (compound > 0) stats.appendChild(this.row(`[[compound]] ${i18n.t('building.compound')}`, `+${compound * 10}%`));
+    // [plan4:BL-39] Neighbour pairs (doc 2.5): who stands next door and what the pair gives.
+    for (const link of synergyOf(state, b).links) {
+      const nd = getDef(link.with);
+      stats.appendChild(this.row(`[[compound]] ${i18n.t('building.synergyRow', { name: nd?.name[locale] ?? nd?.name.en ?? link.with })}`, `+${Math.round(link.value * 100)}% ${i18n.t(`synergy.effect.${link.effect}`)}`));
+    }
     if (def.effects?.defense) {
       const d = def.effects.defense;
       stats.appendChild(this.row(`[[endurance]] ${i18n.t('building.defense')}`, `+${Math.round((d.base + d.perLevel * (level - 1)) * workforceMultiplier(state, b))} · ${i18n.t('building.totalDefense', { n: bunkerDefense(state) })}`));

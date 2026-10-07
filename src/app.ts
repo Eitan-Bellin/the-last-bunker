@@ -58,6 +58,7 @@ import './styles/story.css';
 import './styles/bunker-os.css';
 import './styles/depth.css';
 import './styles/command.css';
+import './styles/buildmenu.css'; // [plan4:BL-39] before touch.css so its 44px rules still win
 import './styles/touch.css'; // [plan4:UX-5] last again (its header says so): its 44px targets must beat the older sheet-help sizes in command.css
 import { FeedbackController } from './ui/controllers/feedback';
 import { InboxController } from './ui/controllers/inbox';
@@ -794,6 +795,11 @@ export class GameApp {
     this.buildMenu.onSelectBuilding = (type: BuildingType) => {
       this.audio.play('click');
       this.world.startPlacement(type);
+    };
+
+    this.buildMenu.onOpenResearch = () => { // [plan4:BL-39] a locked room's "unlocked by" line opens the research panel
+      this.closeSheets();
+      this.researchPanel.show();
     };
 
     this.researchPanel.onOpenGenesis = () => {
