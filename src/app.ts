@@ -1,4 +1,5 @@
 import { VIEW } from './rendering/perfFx'; // [perf]
+import { floorTag } from './ui/floorTag'; // plan4:ST-16
 import { GameEngine, type OfflineReport } from './core/GameEngine';
 import { ProjectsPanel } from './ui/components/ProjectsPanel'; // [LateGame B1]
 import { PROJECTS, projectDone, stagesDone } from './data/projects'; // [LateGame B1]
@@ -1142,7 +1143,7 @@ export class GameApp {
   roomName(buildingId: string): string {
     const b = this.state.buildings.find(x => x.id === buildingId);
     if (!b) return '';
-    return `${getDef(b.type)?.name[i18n.currentLocale] ?? b.type} · B${b.position.floor + 1}`;
+    return `${getDef(b.type)?.name[i18n.currentLocale] ?? b.type} · ${floorTag(b.position.floor)}`; // plan4:ST-16
   }
 
   private specialize(buildingId: string, specId: string): void {

@@ -27,6 +27,7 @@ const CATEGORY_OF: Partial<Record<BuildingType, BuildCategory>> = {
   medbay: 'health',
   armory: 'defense', gatePost: 'defense', barracks: 'defense',
   storage: 'infra',
+  solarArray: 'surface', windTurbine: 'surface', watchtower: 'surface', // plan4:ST-16 the surface row's rooms
 };
 
 /** A room's category; anything not listed yet counts as infrastructure. */

@@ -16,6 +16,8 @@ import { steelTag, tagLamp } from './signage';
 import { depthGains } from './structure';
 import type { RuinVisual } from './ruinArt';
 import { labelState } from './LabelScale'; // [plan4:ST-12]
+import { SURFACE_FLOOR } from '../core/GameState'; // plan4:ST-16
+import { buildSurfaceBlock } from './surfaceRow'; // plan4:ST-16
 
 // [plan4 X-1] Split out of BunkerRenderer.ts with no change in behaviour: the room views (build queue, look rebuilds, name tags),
 // the "in zone" / parking logic and the per-picture culling of rooms, ruins and the structure.
@@ -178,7 +180,8 @@ export class RoomViews {
       const openL = this.isOpenTo(state, b, -1);
       const openR = this.isOpenTo(state, b, 1);
       // The look follows the finished level, so an upgrade reveals the new painting when it completes.
-      const artKey = isNew ? buildingArtKey(b.type, 0) : buildingArtKey(b.type, roomTier(effectiveLevel(b)));
+      const onRow = b.position.floor === SURFACE_FLOOR; // plan4:ST-16 a surface-row room is a structure outdoors, not a painted interior
+      const artKey = onRow ? null : isNew ? buildingArtKey(b.type, 0) : buildingArtKey(b.type, roomTier(effectiveLevel(b)));
       const texture = artKey ? ArtLibrary.get(artKey) : null;
       // A painting on its way (it was released, or is new): keep what the room shows instead of drawing a stand-in; a room that has
       // shown nothing yet gets the drawn stand-in after 0.7 s (a slow connection must not leave a new room empty).
@@ -204,7 +207,8 @@ export class RoomViews {
         if (!view.oldVisual) view.visual?.container.destroy({ children: true });
         view.fade = 0;
         const rnd = seeded(hashString(b.id));
-        view.visual = isNew
+        view.visual = onRow ? buildSurfaceBlock(b.type, view.width, isNew, hashString(b.id)) // plan4:ST-16
+          : isNew
           ? texture ? buildPaintedConstruction(texture, view.width, view.height) : buildConstructionVisual(b.type, view.width)
           : texture && artKey
             ? buildPaintedRoom(texture, artEntry(artKey)!, view.width, openL, openR, mirror, rnd, view.height, host.gfx2 ? this.roomGains(b, artKey) : undefined, b.id /* G4 lighting: shared flicker key */)

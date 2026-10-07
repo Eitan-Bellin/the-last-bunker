@@ -2,6 +2,7 @@ import { Rectangle } from 'pixi.js';
 import type { BunkerRenderer } from '../rendering/BunkerRenderer';
 import type { GameState } from '../core/GameState';
 import { BUILDING_W, ROOM_H, ROOMS_X, SHAFT_W, SLOT_W, buildingX, floorTop } from '../rendering/layout';
+import { ROW_X0, ROW_X1 } from '../rendering/surfaceRow'; // plan4:ST-16
 
 interface Cam {
   id: string;
@@ -27,6 +28,8 @@ const CAMS: Cam[] = [
     },
   },
   { id: 'cam6-deep', at: s => ({ x: ROOMS_X + SLOT_W * 6, y: floorTop(Math.max(0, s.currentFloors - 2)) + ROOM_H / 2, z: 2 }) },
+  // [plan4:ST-16] the surface (gate-house) row, once it is open (or its ruin before: null there, the entrance view cam3 shows it)
+  { id: 'cam7-surface', at: s => ({ x: s.layout?.surfaceOpen ? (ROW_X0 + ROW_X1) / 2 : -200, y: -60, z: s.layout?.surfaceOpen ? 1.05 : 1.8 }) },
 ];
 
 /** Steps the renderer by hand, so shots work even in a background tab where requestAnimationFrame sleeps. */

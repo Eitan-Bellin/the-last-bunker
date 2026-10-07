@@ -1,7 +1,7 @@
 import { Container, type Graphics } from 'pixi.js';
-import { BASE_EAST, type Position } from '../core/GameState';
+import { BASE_EAST, SURFACE_EXT, SURFACE_FLOOR, type Position } from '../core/GameState';
 import { statusTint } from '../utils/a11y';
-import { ROOM_H, SLAB, SLOT_W, floorAtY, floorTop, slotAtX, slotX } from './geom';
+import { ROOM_H, SLAB, SLOT_W, SURFACE_TOP, TOPSOIL, floorAtY, floorTop, slotAtX, slotX } from './geom';
 
 // [plan4 X-1] Split out of BunkerRenderer.ts with no change in behaviour: the empty-slot tap pad (one tappable area that works out
 // which slot was hit) and the green highlight of the slots where the room being placed fits.
@@ -43,6 +43,8 @@ export class PlacementController {
   private extentOf: (floor: number) => { w: number; e: number } = () => ({ w: 0, e: BASE_EAST });
   /** [plan4:ST-19] How many floors the pad covers (for slotAtWorld). */
   private floorCount = 0;
+  /** [plan4:ST-16] The surface (gate-house) row is open: its slots can be tapped and are drawn as spots. Set by the renderer. */
+  surfaceOpen = false;
 
   constructor(host: PlacementHost, slotLayer: Container, highlightLayer: Graphics) {
     this.host = host;
@@ -74,6 +76,7 @@ export class PlacementController {
   slotAtWorld(px: number, py: number): Position | null {
     const s = slotAtX(px);
     const { floor: f, offset } = floorAtY(py);
+    if (s !== null && py < TOPSOIL && py >= SURFACE_TOP && this.surfaceOpen && s >= -SURFACE_EXT.w && s < SURFACE_EXT.e) return { x: s, y: 0, floor: SURFACE_FLOOR }; // plan4:ST-16 the surface row
     if (s === null || f < 0 || f >= this.floorCount || offset >= ROOM_H) return null;
     const ext = this.extentOf(f);
     if (s < -ext.w || s >= ext.e) return null;
@@ -96,7 +99,7 @@ export class PlacementController {
     // [plan4:AC-6/7] The colour follows the player's colour mode, and a valid slot is a DASHED frame (an unavailable one would be dotted),
     // so the answer does not depend on telling green from red.
     const ok = statusTint('ok');
-    for (let f = 0; f < floors; f++) {
+    for (let f = this.surfaceOpen ? SURFACE_FLOOR : 0; f < floors; f++) { // plan4:ST-16 the surface row first
       const ext = this.extentOf(f);
       for (let s = -ext.w; s < ext.e; s++) {
         if (!isValid({ x: s, y: 0, floor: f })) continue;

@@ -595,7 +595,7 @@ export async function runSim(o: SimOptions): Promise<SimResult> {
   };
 
   /** [plan4] The rooms of the redesign's first wave: the bot builds them last and upgrades them last (core rooms carry the Act goals). */
-  const NEW_ROOMS: BuildingType[] = ['batteryBank', 'commons', 'library', 'recycler', 'condenser', 'mushroomFarm', 'gatePost', 'barracks'];
+  const NEW_ROOMS: BuildingType[] = ['batteryBank', 'commons', 'library', 'recycler', 'condenser', 'mushroomFarm', 'gatePost', 'barracks', 'solarArray', 'windTurbine', 'watchtower']; // [plan4:ST-16] the last three stand on the surface row
   const hallsStillFit = (type: BuildingType, pos: { x: number; y: number; floor: number }) => {
     const s = state();
     const fake = { id: 'b_fake', type, level: 1, position: pos, assignedSurvivorIds: [], constructionProgress: 0, constructionTotal: 1, isConstructing: true, specialization: null };
@@ -645,6 +645,11 @@ export async function runSim(o: SimOptions): Promise<SimResult> {
     wantNew('gatePost', 2, act >= 4 ? 2 : 1);
     wantNew('recycler', 3, 1, s.resources.scrap.amount < s.resources.scrap.cap * 0.6);
     wantNew('barracks', 3, act >= 5 ? 2 : 1, pop >= s.maxPopulation - 3);
+    // [plan4:ST-16] The surface row (open from Act II): panels while power is thin, a turbine once the gusts are worth a room, a lookout against raids.
+    // findSpot walks allowedFloors, which for these is floor -1 only (a gate post takes floor 0 first, then the row).
+    wantNew('solarArray', 2, act >= 4 ? 3 : 2, net('power') < 3 || act >= 3);
+    wantNew('windTurbine', 3, act >= 5 ? 3 : 1, net('power') < 3 || act >= 4);
+    wantNew('watchtower', 3, act >= 5 ? 2 : 1);
     noSpaceFor = null;
     for (const type of want) {
       if (!BUILDABLE_TYPES.includes(type) || !isBuildingUnlocked(s, type)) continue;

@@ -415,6 +415,8 @@
   "build.deepOnly": "Deep levels only",
   "build.entranceOnly": "Entrance level only",
   "build.surfaceOnly": "Surface row only",
+  "build.entranceOrSurface": "Entrance or surface row",
+  "floor.surface": "Surface",
   "build.actPrice": "Price x{n} in this Act",
   "build.noMatch": "No room matches. Try another word or category.",
   "build.width": "Width: {n} slots",

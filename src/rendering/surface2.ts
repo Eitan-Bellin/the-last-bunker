@@ -8,6 +8,7 @@ import { GFX } from './gfxFeatures';
 import { windAt } from '../data/dayCycle';
 import { hGradient, mix, seeded, softGlow, vGradient } from './draw';
 import { PAINT_RIGHT, SKY_TOP, WORLD_LEFT, WORLD_RIGHT, type Animated } from './world';
+import { ROW_X0, ROW_X1, buildGateHouseRuin, buildYardApron, newInside, surfaceLive, type Inside } from './surfaceRow'; // [plan4:ST-16/20]
 import {
   Birds, Smoke, Weather, analyseSky, canvasTexture, cloudTexture, fogTexture, groundY, lightGrade, moonTexture, mulColor,
   silhouetteTexture, smoothstep, soilThickness, type SurfaceQuality, type View,
@@ -39,6 +40,10 @@ export interface Surface2 extends Animated {
   light: number;
   grade: number;
   wind: number;
+  /** [plan4:ST-16] The game clock (state.stats.totalPlayTime), set by the renderer every picture: the wind and the turbines' blades follow it, not the renderer's own clock. */
+  playTime: number;
+  /** [plan4:ST-20] What the inside is doing (fire, generator load, decon chamber, ventilation stacks), refreshed by the renderer (surfaceRow.readInside). */
+  inside: Inside;
 }
 
 /** Portal look per era (0 wrecked, 1–2 cleared, 3 gatehouse); positions are relative to the trimmed sprite. */
@@ -50,11 +55,14 @@ interface PortalLook {
   beacon?: [number, number];
   /** Top of the exhaust stack poking out of the mound. */
   vent: [number, number];
+  /** [plan4:ST-20] Where the decontamination chamber's status lamp sits (on the door frame) and where its steam leaves the door. */
+  decon?: [number, number];
+  steam?: [number, number];
 }
 const PORTALS: Record<number, PortalLook> = {
   0: { key: 'kit/portal-0', hub: [0.5, 0.548], lamps: [], vent: [0.77, 0.12] },
-  1: { key: 'kit/portal-1', hub: [0.5, 0.553], lamps: [[0.34, 0.45], [0.643, 0.45]], vent: [0.77, 0.1] },
-  3: { key: 'kit/portal-3', hub: [0.497, 0.628], lamps: [[0.155, 0.075], [0.84, 0.075]], flood: true, beacon: [0.638, 0.07], vent: [0.74, 0.16] },
+  1: { key: 'kit/portal-1', hub: [0.5, 0.553], lamps: [[0.34, 0.45], [0.643, 0.45]], vent: [0.77, 0.1], decon: [0.5, 0.215], steam: [0.36, 0.88] },
+  3: { key: 'kit/portal-3', hub: [0.497, 0.628], lamps: [[0.155, 0.075], [0.84, 0.075]], flood: true, beacon: [0.638, 0.07], vent: [0.74, 0.16], decon: [0.5, 0.31], steam: [0.37, 0.9] },
 };
 const portalFor = (era: number): PortalLook => PORTALS[era <= 0 ? 0 : era >= 3 ? 3 : 1];
 
@@ -152,13 +160,15 @@ let rising = true;
 
 /** Expeditions leaving or coming home turn the blast-door wheel. */
 let wheelKicks: number[] = [];
+/** [plan4:ST-20] Seconds of steam still to come out of the decon chamber's door: a team coming home is washed down. */
+let steamLeft = 0;
 let busHooked = false;
 function hookBus(): void {
   if (busHooked) return;
   busHooked = true;
   bus.on('mission:start', () => wheelKicks.push(1));
-  bus.on('mission:recall', () => wheelKicks.push(-1));
-  bus.on('mission:complete', () => wheelKicks.push(-1));
+  bus.on('mission:recall', () => { wheelKicks.push(-1); steamLeft = 7; });
+  bus.on('mission:complete', () => { wheelKicks.push(-1); steamLeft = 9; });
 }
 
 const keyed = new Map<string, HTMLCanvasElement>();
@@ -253,7 +263,7 @@ function splitStrip(key: string, c: HTMLCanvasElement): [Texture, Texture, numbe
  * The topsoil as two meshes that follow the rolling ground line: the grass fringe (its tip row leans in the
  * wind) and the soil band whose thickness varies, with a ragged dark blend into the rock below.
  */
-function buildGround(key: string, c: HTMLCanvasElement, left = WORLD_LEFT): { layer: Container; sway: (t: number, wind: number) => void } {
+function buildGround(key: string, c: HTMLCanvasElement, left = WORLD_LEFT, rowOpen = false): { layer: Container; sway: (t: number, wind: number) => void } {
   const [grassTex, soilTex, splitF] = splitStrip(key, c);
   const layer = new Container();
   const k = SOIL_H / c.height;
@@ -321,7 +331,7 @@ function buildGround(key: string, c: HTMLCanvasElement, left = WORLD_LEFT): { la
     stones.poly(p).fill(vGradient([[0, mix(0x8a8070, 0x6a5e50, 1 - tone + 0.5)], [1, 0x2e2822]]));
     stones.ellipse(x - r * 0.3, y - r * 0.35, r * 0.55, r * 0.22).fill({ color: 0xd8c8b0, alpha: 0.18 });
   }
-  for (const [px, py, pr] of [[688, 15, 3.6], [-186, 11, 2.6]] as [number, number, number][]) {
+  for (const [px, py, pr] of ([[688, 15, 3.6], [-186, 11, 2.6]] as [number, number, number][]).filter(c => !(rowOpen && c[0] < 0))) { // [plan4:ST-16] the old conduit lies under the apron
     const y = base(px) + py;
     stones.circle(px, y, pr + 0.8).fill({ color: 0x000000, alpha: 0.35 });
     stones.circle(px, y, pr).fill(vGradient([[0, 0x8a5a3a], [1, 0x3a2418]]));
@@ -421,6 +431,7 @@ function rainNow(wet: number): number {
 export function buildSurface2(
   backdrop: Texture | null, rayTexture: Texture | null, rayColor: number, era: number, getNight: () => number,
   left = WORLD_LEFT, // [plan4:ST-4] the world's west edge: WORLD_LEFT, or 260 beyond the widest west wing (world.ts worldLeft)
+  rowOpen = false, // [plan4:ST-16] the gate-house yard is open: a concrete apron under the surface row (closed: the old gate house stands there as a ruin)
 ): Surface2 {
   hookBus();
   const root = new Container();
@@ -609,10 +620,15 @@ export function buildSurface2(
   const nightLamps: { s: Sprite; day: number; night: number; ph: number }[] = [];
   const swayers: { s: Sprite; k: number; ph: number }[] = [];
   const props = new Container();
-  for (const p of PROPS) {
-    if (era < p.from || era > p.to) continue;
-    const tex = ArtLibrary.get(`kit/prop-${p.i}`);
+  for (const place of PROPS) {
+    if (era < place.from || era > place.to) continue;
+    // [plan4:ST-16] Once the gate-house yard is open the row stands where the old fence and the weeds were: the fence moves to the yard's far end, the weeds go.
+    const tex = ArtLibrary.get(`kit/prop-${place.i}`);
     if (!tex) continue;
+    const half = (place.h * tex.width) / tex.height / 2;
+    const inYard = rowOpen && place.x - half < ROW_X1 && place.x + half > ROW_X0;
+    if (inYard && place.i === 7) continue;
+    const p = inYard ? { ...place, x: ROW_X0 - 70 } : place;
     const s = new Sprite(tex);
     s.anchor.set(0.5, 1);
     const k = p.h / tex.height;
@@ -637,6 +653,12 @@ export function buildSurface2(
       }
     }
   }
+  // [plan4:ST-16] Before Act II the yard west of the entrance is the ruin of the old gate house (props stand in front of it).
+  if (!rowOpen) {
+    const shell = buildGateHouseRuin();
+    shell.tint = grade;
+    lit.addChild(shell);
+  }
   lit.addChild(props);
 
   // ---------- Topsoil cross-section (above the rock painting) ----------
@@ -644,7 +666,7 @@ export function buildSurface2(
   const soilCanvas = keyedStrip(soilKey);
   let sway: ((t: number, wind: number) => void) | null = null;
   if (soilCanvas) {
-    const g = buildGround(soilKey, soilCanvas, left);
+    const g = buildGround(soilKey, soilCanvas, left, rowOpen);
     sway = g.sway;
     soil.addChild(g.layer);
   } else {
@@ -653,6 +675,8 @@ export function buildSurface2(
     g.rect(left, -8, w, 10).fill(0x4a3a2a);
     soil.addChild(g);
   }
+  // [plan4:ST-16] The yard's poured apron covers the grass under the surface row (the rooms themselves are the renderer's room layer).
+  if (rowOpen) soil.addChild(buildYardApron());
   // Past the world's sides the rock and the soil fade into the dark.
   {
     const v = new Graphics();
@@ -664,6 +688,10 @@ export function buildSurface2(
   // ---------- Entrance portal over the shaft ----------
   const look = portalFor(era);
   const ptex = ArtLibrary.get(look.key);
+  const ventColor = era <= 0 ? 0x8a8078 : 0xe4e0d8;
+  // [plan4:ST-20] The decontamination chamber's lamp and steam at the door (built only when the portal has the spots for them).
+  let deconLamp: Sprite | null = null;
+  let steam: Smoke | null = null;
   let wheel: Sprite | null = null;
   let rim: Sprite | null = null;
   let vent: Smoke | null = null;
@@ -688,8 +716,8 @@ export function buildSurface2(
       frontLit.addChild(stack);
       vent = new Smoke(frontSmoke, {
         x: vx, y: vy - 3, rate: 2.2, life: 4.2, rise: 13, size: [3, 22], alpha: era <= 0 ? 0.32 : 0.24,
-        color: era <= 0 ? 0x8a8078 : 0xe4e0d8, drift: 9,
-      }, 14, 23);
+        color: ventColor, drift: 9,
+      }, 20, 23);
     }
     const sil = silhouetteTexture(look.key, ptex);
     if (sil) {
@@ -754,6 +782,13 @@ export function buildSurface2(
       if (era <= 0) plate.rotation = num.rotation = 0.06;
       frontLit.addChild(plate, num);
     }
+    if (look.decon && look.steam) {
+      deconLamp = glow(left + look.decon[0] * PORTAL_W, top + look.decon[1] * pph, 18, 0x6aff9a);
+      frontGlows.addChild(deconLamp);
+      steam = new Smoke(frontSmoke, {
+        x: left + look.steam[0] * PORTAL_W, y: top + look.steam[1] * pph, rate: 7, life: 2.6, rise: 9, size: [4, 20], alpha: 0.4, color: 0xf2f6f8, drift: 6,
+      }, 16, 61);
+    }
     if (look.beacon) {
       const g = glow(left + look.beacon[0] * PORTAL_W, top + look.beacon[1] * pph, 22, 0xff3a3a);
       frontGlows.addChild(g);
@@ -797,6 +832,51 @@ export function buildSurface2(
     root.addChildAt(sun, 1);
   }
 
+  // ---------- [plan4:ST-20] Ventilation stacks (layout.infra 'ventStack'): a tower with a turning fan, dust out of its mouth (smoke when a fire needs the air) ----------
+  interface Stack { fan: Container; smoke: Smoke; ph: number }
+  let stacks: Stack[] = [];
+  let stackSig = '';
+  const stackRoot = new Container();
+  const stackSmoke = new Container();
+  frontLit.addChild(stackRoot);
+  frontSmoke.addChild(stackSmoke);
+  const syncStacks = (t: number, dt: number, wind: number, cap: number, ins: Inside, calm: boolean): void => {
+    const sig = ins.stacks.join(',');
+    if (sig !== stackSig) {
+      stackSig = sig;
+      stackRoot.removeChildren().forEach(c => c.destroy({ children: true }));
+      stackSmoke.removeChildren().forEach(c => c.destroy({ children: true }));
+      stacks = ins.stacks.map((x, i) => {
+        const gy = ground(x) - 3;
+        const tower = new Graphics();
+        tower.rect(x - 4.8, gy - 62, 9.6, 62).fill(hGradient([[0, 0x6a6f74], [0.4, 0xc8ccd0], [1, 0x4a4e52]]));
+        for (const y of [-14, -30, -46]) tower.rect(x - 5.6, gy + y, 11.2, 2.2).fill(0x5a5e62);
+        for (let k = 0; k < 4; k++) tower.rect(x - 3, gy - 58 + k * 3.2, 6, 1.2).fill({ color: 0x14181c, alpha: 0.55 });
+        tower.roundRect(x - 7, gy - 66, 14, 4.4, 1.6).fill(vGradient([[0, 0x8a8f94], [1, 0x484c50]]));
+        tower.ellipse(x, gy + 1, 11, 2.6).fill({ color: 0x000000, alpha: 0.3 });
+        const fan = new Container();
+        fan.position.set(x, gy - 70);
+        for (const a of [0, Math.PI / 2]) {
+          const b = new Graphics();
+          b.ellipse(0, 0, 9, 1.9).fill(vGradient([[0, 0xd8dce0], [1, 0x70757a]]));
+          b.rotation = a;
+          fan.addChild(b);
+        }
+        fan.addChild(new Graphics().circle(0, 0, 1.8).fill(0x30343a));
+        stackRoot.addChild(tower, fan);
+        return {
+          fan, ph: i * 1.7,
+          smoke: new Smoke(stackSmoke, { x, y: gy - 72, rate: 1.1, life: 3.6, rise: 12, size: [3, 16], alpha: 0.2, color: 0xd0c8be, drift: 8 }, 10, 90 + i),
+        };
+      });
+    }
+    for (const st of stacks) {
+      st.fan.scale.x = calm ? 1 : Math.cos(t * 7 + st.ph); // a fan seen edge-on: its blades swing through
+      st.smoke.setColor(ins.fire > 0.04 ? mix(0xd0c8be, 0x1c1816, Math.min(1, ins.fire * 1.5)) : 0xd0c8be);
+      st.smoke.update(dt, wind, 99, cap * (0.35 + 1.6 * ins.fire));
+    }
+  };
+
   let lastT = -1;
   let spin = 0, spinFrom = 0, spinTo = 0, spinT0 = -10;
   const SPIN_DUR = 2.6;
@@ -811,6 +891,8 @@ export function buildSurface2(
     light: 0xffffff,
     grade,
     wind: 0.6,
+    playTime: 0,
+    inside: newInside(),
     setQuality: q => { quality = q; },
     animate: (t, power) => {
       // A replaced surface can still get one call after it was destroyed (the sprites are gone by then).
@@ -884,9 +966,11 @@ export function buildSurface2(
       }
 
       // Clouds drift with the wind; they thicken and grey in rain, darken at night.
-      const gust = 0.2 + 0.8 * windAt(t); // [plan4:BL-8] the same curve the wind turbines use (data/dayCycle.ts)
+      // [plan4:ST-16] The wind is the GAME's wind: windAt of the play clock, the very curve the turbines' output follows (it used the renderer's clock).
+      const gust = 0.2 + 0.8 * windAt(calm ? 0 : api.playTime);
       const wind = gust * (1 + 0.6 * rain);
       api.wind = wind;
+      surfaceLive.light = tint; surfaceLive.night = night; surfaceLive.wind = wind; surfaceLive.rain = rain; surfaceLive.play = api.playTime;
       cloudHigh.tilePosition.x += dt * 3.2 * (0.7 + 0.3 * wind);
       cloudLow.tilePosition.x += dt * 6.5 * (0.6 + 0.4 * wind);
       const cTint = mulColor(mix(sky.cloud, 0x9aa2b2, rain * 0.75), mix(0xffffff, 0x2a3048, smoothstep(0.2, 0.9, night)));
@@ -931,7 +1015,14 @@ export function buildSurface2(
         for (const p of swayers) p.s.skew.x = p.k * (wind * 0.8 + 0.5 * Math.sin(t * 2.1 + p.ph)) * wind;
         const smokeCap = quality === 'low' ? 0.5 : 1;
         for (const s of farSmoke) s.update(dt, wind, 99, smokeCap * (1 - 0.6 * rain));
-        vent?.update(dt, wind, 99, smokeCap * (0.6 + 0.4 * on));
+        // [plan4:ST-20] The exhaust follows the generators' load, and a fire inside turns it black and heavy.
+        const ins = api.inside;
+        vent?.setColor(ins.fire > 0.04 ? mix(ventColor, 0x1c1816, Math.min(1, ins.fire * 1.5)) : ventColor);
+        vent?.update(dt, wind, 99, smokeCap * (0.22 + 0.78 * ins.gen) * (0.6 + 0.4 * on) * (1 + 1.5 * ins.fire));
+        if (steamLeft > 0) steamLeft -= dt;
+        steam?.update(dt, wind, 99, ins.decon && steamLeft > 0 ? smokeCap : 0);
+        if (deconLamp) deconLamp.alpha = ins.decon ? (0.45 + 0.2 * Math.sin(t * 1.6) + (steamLeft > 0 ? 0.3 : 0)) * (0.5 + 0.5 * dark) * Math.max(0.3, on) : 0;
+        syncStacks(t, dt, wind, smokeCap, ins, calm);
         birds?.update(t, dt, calm ? 1 : night, rain); // [plan4:AC-2] night = no flocks
         weather.update(dt, t, view, wind, calm ? 0 : rain, calm ? 0 : ash, budget, 1 - 0.55 * dark, era === 0);
       }

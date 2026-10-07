@@ -1,6 +1,7 @@
 import type { Application, Container } from 'pixi.js';
 import { BUILDING_W, ROOM_H, SIDE_MARGIN, SLOT_W, floorTop } from './layout';
 import { reducedMotion } from '../utils/a11y';
+import { ROW_X0, ROW_X1 } from './surfaceRow'; // plan4:ST-16
 import { getHudInsets, subscribeHudInsets } from '../utils/hudInsets';
 
 // [plan4 X-1] Split out of BunkerRenderer.ts with no change in behaviour: everything about the camera (constants, pan / pinch / fling /
@@ -923,7 +924,7 @@ export class CameraController {
 
   /** Glides a floor into view (used when placing a room and after digging). */
   focusFloor(floor: number): void {
-    this.focusTo(this.camX, floorTop(floor) + ROOM_H / 2, this.zoom);
+    this.focusTo(floor < 0 ? (ROW_X0 + ROW_X1) / 2 : this.camX, floorTop(floor) + ROOM_H / 2, this.zoom); // plan4:ST-16 the surface row is west of the shaft: the camera goes there
   }
 
   /** Centers the camera on a world point and zooms in a little. */

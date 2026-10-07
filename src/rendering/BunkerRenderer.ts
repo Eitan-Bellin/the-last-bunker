@@ -22,6 +22,7 @@ import { LAYOUT, VIEW, bandize, hashLayout } from './perfFx'; // [perf]
 import { buildShaft2 } from './shaft';
 import { buildGalleries } from './gallery'; // [plan4:ST-1]
 import { buildSurface2, mountSurface2, surface2Sig } from './surface2'; // [gfx2 surface]
+import { ROW_X0, buildSurfaceRuin, newInside, readInside } from './surfaceRow'; // plan4:ST-16
 import { roomFlicker, setRoomFxQuality } from './paintedRoom'; // gfx-p0 rooms: quality
 import { lineWidth, richLine } from './richText';
 import { ArtLibrary } from '../art/ArtLibrary';
@@ -264,6 +265,9 @@ export class BunkerRenderer {
   private extentL = 0;
   /** [plan4:ST-4] The world's west edge the surface was built for (see world.ts worldLeft). */
   private surfaceLeft = worldLeft(0);
+  /** [plan4:ST-16] The surface (gate-house) row is open: the world reaches west far enough for its 8 slots. */
+  private rowOpen = false;
+  private inside = newInside();
   private extentWingR = BUILDING_W;
   private exts: Ext[] = [];
   private wingSigns = new WingSigns(() => this.cam.isDragging);
@@ -603,18 +607,21 @@ export class BunkerRenderer {
     const exts = this.extsFor(state);
     this.exts = exts;
     this.extentL = exts.reduce((m, x) => Math.max(m, x.w), 0) > 0 ? slotX(-exts.reduce((m, x) => Math.max(m, x.w), 0)) - 14 : 0;
+    if (this.rowOpen) this.extentL = Math.min(this.extentL, ROW_X0 - 14); // plan4:ST-16 the camera may pan to the row's west end
     this.extentWingR = slotX(exts.reduce((m, x) => Math.max(m, x.e), 12));
     this.extentR = Math.max(BUILDING_W, this.extentWingR, this.projectSites.right);
     // [plan4:ST-4] A west wing past the classic edge: the sky, ground and dark edge of the surface move out with the rock (rebuilt once per two-slot step).
-    const wl = worldLeft(exts.reduce((m, x) => Math.max(m, x.w), 0));
-    if (wl !== this.surfaceLeft) { this.surfaceLeft = wl; this.surfaceSig = ''; this.refreshSurface(); }
+    const rowWas = this.rowOpen;
+    this.rowOpen = !!state.layout?.surfaceOpen; // plan4:ST-16
+    const wl = worldLeft(Math.max(this.rowOpen ? 11 : 0, exts.reduce((m, x) => Math.max(m, x.w), 0))); // plan4:ST-16 the row's slots -11..-4 need the world to reach west
+    if (wl !== this.surfaceLeft || rowWas !== this.rowOpen) { this.surfaceLeft = wl; this.surfaceSig = ''; this.refreshSurface(); }
     this.undergroundHolder.removeChildren().forEach(c => c.destroy({ children: true }));
     const districtList = state.buildings.filter(b => isDistrict(b.type));
     const districts = districtList.map(b => b.position.floor);
     const districtSlot: Record<number, number> = {};
     for (const b of districtList) districtSlot[b.position.floor] = b.position.x; // [plan4:ST-8]
     const casing = this.gfx2 && kitReady() ? buildCasing(this.floors, kitState(this.surfaceEra), exts) : null;
-    this.undergroundHolder.addChild(buildUnderground(this.floors, i18n.currentLocale, this.gloom, ArtLibrary.get('backdrops/rock'), districts, casing, exts, districtSlot));
+    this.undergroundHolder.addChild(buildUnderground(this.floors, i18n.currentLocale, this.gloom, ArtLibrary.get('backdrops/rock'), districts, casing, exts, districtSlot, this.rowOpen ? 11 : 0)); // plan4:ST-16
     this.undergroundSig = this.structureSig(state);
     this.structureGloom = this.gloom;
     this.shaftHolder.removeChildren().forEach(c => c.destroy({ children: true }));
@@ -625,6 +632,7 @@ export class BunkerRenderer {
     this.shaftHolder.addChild(this.shaft.container);
     this.dust.setFloors(this.floors);
     this.placement.rebuildPad(this.floors, f => floorExtent(state, f)); // [plan4:X-2]
+    this.placement.surfaceOpen = this.rowOpen; // plan4:ST-16
     this.utilitiesSig = '';
     this.digSig = '';
     this.roomViews.collectStructureCullables(this.undergroundHolder);
@@ -1290,6 +1298,8 @@ export class BunkerRenderer {
       for (const c of [this.surfaceHolder, this.projectSites.layer, this.projectSites.smokeLayer, this.projectSites.glowLayer, this.projectSites.crew, this.projectSites.signLayer]) c.visible = !surfaceOff;
     }
     if (!surfaceOff) {
+      const live = this.surface as { playTime?: number; inside?: unknown } | null; // plan4:ST-16/20 the game clock (wind, blades) and what the inside is doing (smoke, vents)
+      if (live && 'playTime' in live) { live.playTime = state.stats.totalPlayTime; live.inside = readInside(state, this.inside); }
       this.surface?.animate(this.time, power);
       // The project lots share the surface's light, the painting's grade and the wind (src/rendering/projectSites.ts).
       const s2 = this.surface as { light?: number; grade?: number; wind?: number } | null;
@@ -1403,14 +1413,14 @@ export class BunkerRenderer {
   private refreshSurface(): void {
     const key = `backdrops/surface-${Math.max(0, this.surfaceEra)}`;
     const tex = ArtLibrary.get(key);
-    const sig = `${key}|${!!tex}|${this.surfaceLeft}${this.gfx2 ? `|${surface2Sig(Math.max(0, this.surfaceEra))}` : ''}`; // [gfx2 surface] [plan4:ST-4] the west edge
+    const sig = `${key}|${!!tex}|${this.surfaceLeft}|${this.rowOpen}${this.gfx2 ? `|${surface2Sig(Math.max(0, this.surfaceEra))}` : ''}`; // [gfx2 surface] [plan4:ST-4] the west edge [plan4:ST-16] the row's apron or the gate-house ruin
     if (sig === this.surfaceSig) return;
     this.surfaceSig = sig;
     this.surfaceHolder.removeChildren().forEach(c => c.destroy({ children: true }));
     const RAYS = [0xc8d4e8, 0xffe2b8, 0xffd496, 0xffc878];
     if (this.gfx2) {
       // [gfx2 surface] painted entrance, topsoil and props: src/rendering/surface2.ts
-      const s2 = buildSurface2(tex, coneTexture(), RAYS[Math.max(0, Math.min(3, this.surfaceEra))], Math.max(0, this.surfaceEra), () => this.nightNow, this.surfaceLeft);
+      const s2 = buildSurface2(tex, coneTexture(), RAYS[Math.max(0, Math.min(3, this.surfaceEra))], Math.max(0, this.surfaceEra), () => this.nightNow, this.surfaceLeft, this.rowOpen); // plan4:ST-16
       mountSurface2(s2, this.worldContainer, this.undergroundHolder, this.shaftHolder);
       this.surface = s2;
     } else this.surface = buildSurface(tex, coneTexture(), RAYS[Math.max(0, Math.min(3, this.surfaceEra))], this.surfaceLeft);
@@ -1477,7 +1487,7 @@ export class BunkerRenderer {
       if (view.visualSig !== visualSig) {
         view.visualSig = visualSig;
         view.visual?.container.destroy({ children: true });
-        view.visual = buildRuinVisual(r, view.width, texture, !!art?.darken, seeded(hashString(r.id)));
+        view.visual = r.floor < 0 ? buildSurfaceRuin(r, view.width, seeded(hashString(r.id))) : buildRuinVisual(r, view.width, texture, !!art?.darken, seeded(hashString(r.id))); // plan4:ST-16 a wreck on the surface row is rubble in the open
         view.root.addChildAt(view.visual.container, 0);
       }
       const workers = state.survivors.filter(s => s.assignedBuildingId === r.id && !s.isOnMission).length;
