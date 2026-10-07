@@ -12,7 +12,7 @@
  * Only paintings listed here give people anything to use; every other room keeps its work spots (workSpots.ts).
  */
 import { composedKey } from '../art/registry'; // [plan4:BL-6]
-import { composedMeta, composedTypes } from './roomComposer'; // [plan4:BL-6]
+import { composedDistrictTypes, composedMeta, composedTypes } from './roomComposer'; // [plan4:BL-6]
 
 export interface BedDef { x: number; y: number; head: -1 | 1 }
 export interface SeatDef { x: number; y: number; face: 1 | -1; kind: 'sit' | 'eat' }
@@ -52,7 +52,13 @@ export const ROOM_SET: Record<string, RoomSetDef> = {
 // ---- [plan4:BL-6] composed rooms: beds, seats and work spots come from the room's own spec (dry pass), under the same keys as paintings ----
 
 /** Work spots of the composed rooms in workSpots.ts' own format (`[x, face, activity?, depth?]`); spread into its ROOMS table. */
-export const COMPOSED_SPOTS: Record<string, { spots: readonly (readonly [number, 1 | -1, string?, number?])[] }> = {};
+export const COMPOSED_SPOTS: Record<string, {
+  spots: readonly (readonly [number, 1 | -1, string?, number?])[];
+  /** [plan4:BL-7] A district's walkable span / raised floor / blocked stretches (workSpots.ts RoomDef fields). */
+  range?: readonly [number, number];
+  dy?: number;
+  block?: readonly (readonly [number, number])[];
+}> = {};
 
 for (const type of composedTypes()) {
   for (const tier of [0, 1, 2] as const) {
@@ -63,5 +69,16 @@ for (const type of composedTypes()) {
     if (!m) continue;
     if (m.beds.length || m.seats.length) ROOM_SET[key] = { beds: m.beds, seats: m.seats };
     if (m.spots.length) COMPOSED_SPOTS[key] = { spots: m.spots };
+  }
+}
+
+// [plan4:BL-7] composed districts: their pictures are `districts/<type>-<tier>`; the cavern's walkable span and ledge come with the spec.
+for (const type of composedDistrictTypes()) {
+  for (const tier of [0, 1, 2] as const) {
+    const key = `districts/${type}-${tier}`;
+    const ck = composedKey(key);
+    const m = ck && composedMeta(type, tier, ck.slots);
+    if (!m) continue;
+    if (m.spots.length) COMPOSED_SPOTS[key] = { spots: m.spots, ...m.walk };
   }
 }

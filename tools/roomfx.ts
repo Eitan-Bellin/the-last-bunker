@@ -6,7 +6,7 @@
 import { Application, Container, Text } from 'pixi.js';
 import { ArtLibrary } from '../src/art/ArtLibrary';
 import { HALL_KEYS, PAINTED_TYPES, artEntry, composedKey } from '../src/art/registry';
-import { composedMeta, composedTypes } from '../src/rendering/roomComposer';
+import { composedDistrictTypes, composedMeta, composedTypes } from '../src/rendering/roomComposer';
 import { roomSlots } from '../src/data/buildingDefs';
 import { buildPaintedRoom, setRoomFxQuality, type RoomFxQuality } from '../src/rendering/paintedRoom';
 import { ROOM_H, SLAB, SLOT_W } from '../src/rendering/layout';
@@ -31,6 +31,11 @@ async function main(): Promise<void> {
   for (const t of [...PAINTED_TYPES as string[], ...composedTypes().filter(c => !(PAINTED_TYPES as string[]).includes(c))]) {
     if (only && !only.includes(t)) continue;
     for (const tier of tiers) keys.push({ key: `rooms/${t}-${tier}`, W: (composedKey(`rooms/${t}-${tier}`)?.slots ?? roomSlots(t as never)) * SLOT_W, H: ROOM_H });
+  }
+  // [plan4:BL-7] composed districts (`?type=geothermal`): four slots wide, three looks.
+  for (const t of composedDistrictTypes()) {
+    if (only && !only.includes(t)) continue;
+    for (const tier of tiers) keys.push({ key: `districts/${t}-${tier}`, W: (composedKey(`districts/${t}-${tier}`)?.slots ?? 4) * SLOT_W, H: ROOM_H });
   }
   if (!only || only.includes('halls')) for (const h of HALL_KEYS) keys.push({ key: `halls/${h}`, W: 3 * SLOT_W, H: 2 * ROOM_H + SLAB });
   // [plan4:BL-6] bake time of every composed room (ms, first request), and the lights / effects / spots / set data of each, for the brief and the perf table.
