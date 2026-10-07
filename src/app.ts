@@ -405,7 +405,7 @@ export class GameApp {
     if (this.renderer.cameraMoving) this.engine.noteCameraMotion();
     this.engine.fxBusy = this.renderer.fxActive || this.popups.anyIn(VIEW.x0, VIEW.y0, VIEW.x1, VIEW.y1);
     try { this.renderer.render(state, dt, alpha); } catch (err) { logCrash('render', err); throw err; }
-    this.guarded('hud', () => { this.hud.update(state); this.popups.update(); });
+    this.guarded('hud', () => { this.hud.update(state); this.popups.zoom = this.renderer.cameraZoom; this.popups.update(); });
     this.guarded('ui', () => this.frameUi(state));
   }
 

@@ -25,6 +25,7 @@ import { lineWidth, richLine } from './richText';
 import { ArtLibrary } from '../art/ArtLibrary';
 import { artEntry, buildingArtKey, roomTier, ruinArtKey } from '../art/registry';
 import { buildCityMap, type CityMap } from './cityMap';
+import { updateLabelScale } from './LabelScale'; // [plan4:ST-12]
 import { PostFX, startQuality, targetResolution } from './postfx';
 import { isLiteMode, logCrash } from '../core/crashGuard';
 import { isTouchDevice } from '../utils/device';
@@ -465,6 +466,11 @@ export class BunkerRenderer {
 
   private contentBottom(): number {
     return floorTop(this.floors + 1) + 20;
+  }
+
+  /** [plan4:ST-12] Current camera zoom (world px to screen px), for screen-space text and the depth ruler. */
+  get cameraZoom(): number {
+    return this.cam.zoom;
   }
 
   /** [perf] The camera (or a carried person) is moving right now: the engine draws at its motion rate (60) while this holds. */
@@ -1040,6 +1046,7 @@ export class BunkerRenderer {
     this.updateSpan(state);
     if (state.currentFloors !== this.floors || this.structureGloom !== this.gloom || this.undergroundSig !== this.structureSig(state)) this.rebuildStructure(state);
     this.cam.stepCamera(dt); // [camera]
+    if (updateLabelScale(this.cam.zoom, now)) this.roomViews.applyLabelScale(); // [plan4:ST-12] tags keep a readable screen size
     this.updateView(); // [perf]
     this.frontBands?.update();
     this.updateLod(state, dt);
