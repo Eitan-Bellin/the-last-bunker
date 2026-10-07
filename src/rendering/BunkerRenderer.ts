@@ -19,7 +19,10 @@ import { AMBIENCE_FOR, type AmbienceKey } from '../audio/ambience';
 import type { AmbienceMix } from '../audio/AudioEngine';
 import { Dust, buildDigSign, buildShaft, buildSurface, buildUnderground, buildUtilities, worldLeft, type Animated } from './world';
 import { LAYOUT, VIEW, bandize, hashLayout } from './perfFx'; // [perf]
-import { buildShaft2 } from './shaft';
+import { buildShaft2, type ShaftAnimated } from './shaft';
+import { Walkers } from './walkers'; // plan4:ST-18
+import { setDoorBlocked } from './routes'; // plan4:ST-18
+import { isPassable } from '../systems/doors'; // plan4:ST-14
 import { buildGalleries } from './gallery'; // [plan4:ST-1]
 import { buildSurface2, mountSurface2, surface2Sig } from './surface2'; // [gfx2 surface]
 import { ROW_X0, buildSurfaceRuin, newInside, readInside } from './surfaceRow'; // plan4:ST-16
@@ -110,6 +113,8 @@ export class BunkerRenderer {
   private gradeTarget = { r: 1, g: 1, b: 1, saturation: 1, brightness: 1, contrast: 1 };
   private gradeDirty = true;
   private people = new Map<string, Person>();
+  /** [plan4:ST-18] People walking between rooms, floors and the lift (cosmetic; behind the `walkers` flag). */
+  private walkers = new Walkers();
   private selectedId: string | null = null;
   private floors = 0;
   private utilitiesSig = '';
@@ -473,7 +478,7 @@ export class BunkerRenderer {
     this.surface = buildSurface();
     this.worldContainer.addChild(
       this.surfaceHolder, this.projectSites.layer, this.projectSites.smokeLayer, this.projectSites.glowLayer, this.projectSites.crew, this.projectSites.signLayer, this.undergroundHolder, this.bayHolder, this.slotLayer, this.highlightLayer,
-      this.roomLayer, this.shaftHolder, this.utilitiesHolder, this.dust.container, this.digHolder, this.wingSigns.container, this.districtSignHolder, this.fxLayer, this.incidents.fx, this.disasterFx.fx,
+      this.roomLayer, this.shaftHolder, this.utilitiesHolder, this.walkers.layer, this.dust.container, this.digHolder, this.wingSigns.container, this.districtSignHolder, this.fxLayer, this.incidents.fx, this.disasterFx.fx,
       this.labelLayer, this.incidents.badges, this.ghost.layer,
     );
     this.ghost.onDown = (e, gx, gy) => this.beginGhostDrag(e.pointerId, gx, gy); // [plan4:ST-19]
@@ -630,6 +635,7 @@ export class BunkerRenderer {
       ? buildShaft2(this.floors, this.surfaceEra, () => this.onElevator?.(), exts.map(x => x.w > 0)) // [plan4:ST-4] a second landing door where a floor has a west wing
       : buildShaft(this.floors, () => this.onElevator?.());
     this.shaftHolder.addChild(this.shaft.container);
+    this.walkers.setLift((this.shaft as Partial<ShaftAnimated>).lift ?? null); // plan4:ST-18
     this.dust.setFloors(this.floors);
     this.placement.rebuildPad(this.floors, f => floorExtent(state, f)); // [plan4:X-2]
     this.placement.surfaceOpen = this.rowOpen; // plan4:ST-16
@@ -778,6 +784,7 @@ export class BunkerRenderer {
       v.label.destroy({ children: true });
     }
     this.ruinViews.clear();
+    this.walkers.clear(); // plan4:ST-18
     for (const p of this.people.values()) p.container.destroy({ children: true });
     this.people.clear();
     this.selectedId = null;
@@ -871,7 +878,13 @@ export class BunkerRenderer {
     this.onPersonDrop?.(d.survivorId, overHud ? null : this.targetAt(sx, sy - BunkerRenderer.LIFT_PX));
   }
 
+  /** [plan4:ST-14/18] Latest state for the walkers' door check (one closure for the renderer's life: no allocation per frame). */
+  private doorState: GameState | null = null;
+  private readonly doorBlockedFn = (f: number, a: number, b: number): boolean => !!this.doorState && !isPassable(this.doorState, f, a, b);
+
   private renderPeople(state: GameState, dt: number): void {
+    this.doorState = state; setDoorBlocked(this.doorBlockedFn); // plan4:ST-14/18 closed or sealed bulkheads stop walkers
+    this.walkers.update(dt, this.time, this.cam.zoom); // plan4:ST-18 (before the placement below, so a finished walk is placed this picture)
     const quarters = state.buildings.filter(b => b.type === 'quarters' && !(b.isConstructing && b.level === 1));
     const seen = new Set<string>();
     const sleeping = new Map<string, number>();
@@ -930,6 +943,7 @@ export class BunkerRenderer {
       // Plan 2026-10 M5: where the painting has beds and seats, the idle use them (lie down at night, eat at mealtimes, sit by day).
       person.setIntent(!this.gfx2 || ruinView || usable ? 'none' : asleep ? 'sleep' : meal ? 'eat' : (hashString(s.id) + hour) % 5 < 2 ? (mealOn ? 'eat' : 'sit') : 'none');
       if (person.roomId !== roomId || person.container.parent !== view.people) {
+        if (this.walkers.intercept(person, person.roomId ? this.views.get(person.roomId) : undefined, this.views.get(roomId!), roomId!, state, this.cam.zoom)) continue; // plan4:ST-18 walks there instead of appearing
         view.people.addChild(person.container);
         person.placeIn(roomId!, view.lane);
       }

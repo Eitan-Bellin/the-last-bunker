@@ -1,5 +1,7 @@
 import type { BuildingType, Ruin } from '../core/GameState';
-import { roomSlots } from '../data/buildingDefs';
+import { getDef, roomSlots } from '../data/buildingDefs';
+import { composedMeta, composedSpec, composedTypes, hasComposedSpec, type ComposeTier } from '../rendering/roomComposer'; // [plan4:BL-6]
+import '../rendering/roomSpecs'; // [plan4:BL-6] registers the composed room specs (side effect)
 
 /**
  * Registry of every painted asset in the game.
@@ -23,7 +25,9 @@ export interface LightSpot {
 export type FxKind = 'drip' | 'smoke' | 'steam' | 'sparks' | 'blink' | 'pulse' | 'bubbles' | 'screen'
   // gfx-p0 rooms: painted motion for every painting.
   | 'stream' | 'mist' | 'leaf' | 'ripple' | 'flame' | 'tube' | 'twinkle' | 'weld' | 'ecg' | 'radar'
-  | 'needle' | 'reel' | 'fan' | 'moth' | 'haze';
+  | 'needle' | 'reel' | 'fan' | 'moth' | 'haze'
+  // [plan4:BL-6] composed rooms: a scrolling conveyor belt and a turbine rotor.
+  | 'belt' | 'rotor';
 
 /** A spot in the painting that gets a live effect layered on top. */
 export interface FxSpot {
@@ -47,6 +51,10 @@ export interface FxSpot {
   amp?: number;
   /** Screens: false = no rolling scan band (lit meters, dials). */
   band?: boolean;
+  /** [plan4:BL-6] Moves only while the room is staffed (paintedRoom reads `roomWorking`); always on when nobody reports staffing. */
+  work?: boolean;
+  /** [plan4:BL-6] Count (rotor blades, belt dashes). */
+  n?: number;
 }
 
 export interface ArtEntry {
@@ -58,6 +66,8 @@ export interface ArtEntry {
   focusY?: number;
   lights?: LightSpot[];
   fx?: FxSpot[];
+  /** [plan4:BL-6] The picture already carries its lamp light (a composed room): live glows are tamed and the baked cone is not drawn twice. */
+  baked?: boolean;
 }
 
 /** Visual tier of a room: 0 = salvaged and rusty, 1 = restored, 2 = advanced. */
@@ -425,14 +435,32 @@ const HALL_FX: Record<string, FxSpot[]> = {
   ],
 };
 
+/** [plan4:BL-6] Width in slots of a composed room: the building definition once the type exists, else the spec's own. */
+function composedSlots(type: string): number {
+  return getDef(type as BuildingType) ? roomSlots(type as BuildingType) : composedSpec(type)?.slots ?? 2;
+}
+
+/**
+ * [plan4:BL-6] A room key (`rooms/<type>-<tier>`) that can be composed in code (rendering/roomComposer.ts). `painted` = a painting exists for the
+ * type (it is in PAINTED_TYPES), so the bake is only the fallback when the file is missing (tier C falls back to B).
+ */
+export function composedKey(key: string): { type: string; tier: ComposeTier; slots: number; painted: boolean } | null {
+  const m = /^rooms\/(\w+)-([012])$/.exec(key);
+  if (!m || !hasComposedSpec(m[1])) return null;
+  return { type: m[1], tier: Number(m[2]) as ComposeTier, slots: composedSlots(m[1]), painted: (PAINTED_TYPES as string[]).includes(m[1]) };
+}
+
 function roomEntry(type: BuildingType, tier: RoomTier): ArtEntry {
   const key = `${type}-${tier}`;
+  const comp = hasComposedSpec(type) ? composedMeta(type, tier, composedSlots(type)) : null;
   return {
     key: `rooms/${key}`,
     kind: 'room',
-    out: roomSlots(type) === 3 ? WIDE_OUT : NARROW_OUT,
-    lights: ROOM_LIGHTS[key],
-    fx: ROOM_FX[key],
+    out: composedSlots(type) === 3 ? WIDE_OUT : NARROW_OUT,
+    // [plan4:BL-6] hand-placed lights and effects (a painting) win; a composed room brings its own, aligned with its bake.
+    lights: ROOM_LIGHTS[key] ?? comp?.lights,
+    fx: ROOM_FX[key] ?? comp?.fx,
+    baked: !ROOM_LIGHTS[key] && !!comp ? true : undefined,
   };
 }
 
@@ -443,6 +471,9 @@ export const PAINTED_TYPES: BuildingType[] = [
 
 /** Room paintings that exist on disk: every room type in all three tiers. */
 const AVAILABLE_ROOMS: [BuildingType, RoomTier][] = PAINTED_TYPES.flatMap(t => [[t, 0], [t, 1], [t, 2]] as [BuildingType, RoomTier][]);
+/** [plan4:BL-6] Room types drawn in code (no painting yet): every one gets the three tiers under the usual keys. */
+const COMPOSED_ROOMS: [BuildingType, RoomTier][] = composedTypes().filter(t => !(PAINTED_TYPES as string[]).includes(t))
+  .flatMap(t => [[t, 0], [t, 1], [t, 2]] as [BuildingType, RoomTier][]);
 
 /** Ruin paintings: generic ruins in both widths, plus wrecked versions of the rooms found at the start. */
 export const RUIN_KEYS = [
@@ -502,7 +533,7 @@ export function portraitKey(index: number): string {
 }
 
 export const ART: ArtEntry[] = [
-  ...AVAILABLE_ROOMS.map(([t, tier]) => roomEntry(t, tier)),
+  ...[...AVAILABLE_ROOMS, ...COMPOSED_ROOMS].map(([t, tier]) => roomEntry(t, tier)),
   ...RUIN_KEYS.map(ruinEntry),
   ...[1, 2, 3].map(i => ({ key: `story/intro-${i}`, kind: 'story' as const, out: [720, 963] as [number, number] })),
   ...[0, 1, 2, 3].map(i => ({ key: `backdrops/surface-${i}`, kind: 'backdrop' as const, out: [1400, 706] as [number, number] })),

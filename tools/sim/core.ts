@@ -12,6 +12,10 @@ import { ERAS } from '../../src/data/eras';
 import { specsFor } from '../../src/data/specializations';
 import { expeditionEvent } from '../../src/data/expeditionEvents';
 import { bunkerDefense } from '../../src/systems/EventSystem'; // [Danger bot]
+import {
+  buildColumn, buildDoor, closeEmergencyDoors, columnBlock, columnCost, doorBlock, doorCost, fireCodeFloors, infraUnlocked, openAllDoors, roomEdgeBoundaries, troubleOn,
+} from '../../src/systems/InfraSystem'; // [plan4:ST-14/15]
+import { infraOfKind, shutDoorCount } from '../../src/systems/doors'; // [plan4:ST-14/15]
 
 /**
  * Balance simulator core (NICE4), shared by the Node runner (tools/sim/run.mjs) and the browser page
@@ -441,6 +445,11 @@ export async function runSim(o: SimOptions): Promise<SimResult> {
       if (!ds || !((reacts && ds.answerMemorial('ceremony', e.resourceSystem)) || ds.answerMemorial('carryOn', e.resourceSystem))) break;
     }
     if (!reacts) return;
+    // [plan4:ST-14] Trouble (a fire, an epidemic, a raid on the way): shut the doors around it; when it is over, open them again (shut doors draw power).
+    if (infraUnlocked(state(), 'bulkhead')) {
+      if (troubleOn(state())) { if (closeEmergencyDoors(sm) > 0) acted('doors'); }
+      else if (shutDoorCount(state()) > 0 && openAllDoors(sm) > 0) acted('doors');
+    }
     const d = (state() as unknown as { danger: DangerLike }).danger;
     // A raid is coming: post guards, and pay the toll if the door still looks too weak.
     const freshRaid = !!d.raid && !noticed.has(`raid:${d.raid.hitAt}`);
@@ -667,6 +676,42 @@ export async function runSim(o: SimOptions): Promise<SimResult> {
       break;
     }
     return capBlocked;
+  };
+
+  /**
+   * [plan4:ST-14/15] The safety works: an emergency stairwell for every deep floor under the fire code, a couple of vent stacks for a crowded bunker,
+   * and bulkhead doors beside the rooms that burn. Only out of a surplus (what is left after paying stays at 30% of storage).
+   */
+  const infraBuild = () => {
+    const s = state();
+    const act = (s as unknown as { longGame?: { meta: { act: number } } }).longGame?.meta.act ?? 1;
+    const surplus = (cost: Record<string, number>) => Object.entries(cost).every(([r, v]) => { const x = s.resources[r as ResourceType]; return !x || x.amount - v >= 0.3 * x.cap; });
+    if (infraUnlocked(s, 'stairwell')) {
+      const bad = fireCodeFloors(s);
+      if (bad.length) {
+        const cost = columnCost(s, 'stairwell', 1);
+        const tries = [Math.min(bad[0] + 1, s.currentFloors - 1), bad[0]];
+        const f = tries.find(t => columnBlock(s, 'stairwell', t, 1) === null);
+        if (f !== undefined && surplus(cost) && e.resourceSystem.canAfford(s, cost) && buildColumn(sm, e.resourceSystem, 'stairwell', f, 1) === null) { mark('first stairwell'); acted('infra'); return; }
+      }
+    }
+    if (infraUnlocked(s, 'ventStack') && s.survivors.length >= 16 && infraOfKind(s, 'ventStack').length < (act >= 5 ? 3 : 2)) {
+      const cost = columnCost(s, 'ventStack', 1);
+      let f = -1;
+      for (let t = s.currentFloors - 1; t >= 0 && f < 0; t--) if (columnBlock(s, 'ventStack', t, 1) === null) f = t;
+      if (f >= 0 && surplus(cost) && e.resourceSystem.canAfford(s, cost) && buildColumn(sm, e.resourceSystem, 'ventStack', f, 1) === null) { mark('first vent stack'); acted('infra'); return; }
+    }
+    if (infraUnlocked(s, 'bulkhead') && act >= 3 && infraOfKind(s, 'bulkhead').length < (act >= 4 ? 4 : 2)) {
+      const cost = doorCost();
+      if (!surplus(cost) || !e.resourceSystem.canAfford(s, cost)) return;
+      const hot = new Set(['generator', 'reactor', 'batteryBank', 'recycler', 'reactorHall']);
+      for (const b of s.buildings) {
+        if (b.isConstructing || !hot.has(b.type)) continue;
+        for (const x of roomEdgeBoundaries(b)) {
+          if (doorBlock(s, b.position.floor, x) === null && buildDoor(sm, e.resourceSystem, b.position.floor, x) === null) { mark('first bulkhead'); acted('infra'); return; }
+        }
+      }
+    }
   };
 
   const upgrade = (capBlocked: boolean) => {
@@ -919,6 +964,7 @@ export async function runSim(o: SimOptions): Promise<SimResult> {
       startResearch();
       shopBuy();
       const capBlocked = build();
+      infraBuild(); // [plan4:ST-14/15]
       upgrade(capBlocked);
       specializeAndDig();
       ruinsAndStaff();

@@ -340,7 +340,7 @@ export class PeoplePanel {
       if (s.child ? childCapacityOf(b) <= 0 || b.isConstructing : false) continue;
       const kids = b.assignedSurvivorIds.length - crewCount(state, b);
       const used = s.child ? kids : crewCount(state, b);
-      const cap = s.child ? childCapacityOf(b) : def.maxWorkers;
+      const cap = s.child ? childCapacityOf(b, state) : def.maxWorkers; // plan4:BL-1 counts the school-by-nursery bonus
       const full = used >= cap && !b.assignedSurvivorIds.includes(s.id);
       const statVal = def.optimalStat ? `${STAT_ICONS[def.optimalStat]} ${s.stats[def.optimalStat]}` : '';
       const star = traitBonus(s.traits, b.type) > 0 ? ' [[star]]' : '';

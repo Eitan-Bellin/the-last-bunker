@@ -1,7 +1,7 @@
 // Data checks for CI (run by tools/sim/lint.mjs): research is a sound DAG, every cost names a real resource,
 // every resource has a name in both languages, and every upgrade and dig of Acts II-VII fits in storage (L2).
 import { RESEARCH } from '../../src/data/research';
-import { BUILDING_DEFS, BUILDABLE_TYPES, DISTRICT_KINDS, getDef, isDistrict, roomFloors, roomSlots, type BuildingDef } from '../../src/data/buildingDefs';
+import { BUILDING_DEFS, BUILDABLE_TYPES, DISTRICT_KINDS, INFRA_KINDS, getDef, isDistrict, isInfra, roomFloors, roomSlots, type BuildingDef } from '../../src/data/buildingDefs';
 import { CHAIN_INPUTS } from '../../src/data/chains';
 import { cargoMult, earlyWarningLead, evacuationMult, expeditionTeamsBonus, hygieneMult, mourningMult, quarantineCapacity, returnSafetyMult, roomChildGrowth, ventilationRelief } from '../../src/data/roomEffects';
 import { PopulationSystem, moraleBreakdown } from '../../src/systems/PopulationSystem';
@@ -102,6 +102,7 @@ export function lintData(i18n: Record<string, Record<string, string>>): string[]
       }
     };
     for (const [type, def] of Object.entries(BUILDING_DEFS)) {
+      if (isInfra(type)) continue; // plan4:ST-14 infra has no room levels to upgrade
       const top = Math.min(def.maxLevel, Math.max(1, Math.floor((act.levelCap * def.maxLevel) / 10)));
       for (let level = 1; level < top; level++) {
         over(`${type} level ${level}->${level + 1}`, bs.getUpgradeCost({ id: 'x', type: type as BuildingType, level, position: { x: 0, y: 0, floor: 0 }, assignedSurvivorIds: [], constructionProgress: 0, constructionTotal: 0, isConstructing: false, specialization: null }));
@@ -156,7 +157,7 @@ export function wingChecks(): string[] {
   a.layout.ext['1'] = { w: 4, e: 16 };
   let tested = 0;
   for (const type of Object.keys(BUILDING_DEFS) as BuildingType[]) {
-    if (isDistrict(type) || roomFloors(type) !== 1 || !allowedFloors(type, a.currentFloors).includes(1)) continue;
+    if (isInfra(type) || isDistrict(type) || roomFloors(type) !== 1 || !allowedFloors(type, a.currentFloors).includes(1)) continue; // plan4:ST-14 infra is not a room
     const w = roomSlots(type);
     tested++;
     for (let x = -6; x <= 18; x++) {
@@ -277,6 +278,7 @@ export function placementTruthTable(games: { name: string; json: string | null }
   let checked = 0;
   for (const { name, state } of states) {
     for (const type of Object.keys(BUILDING_DEFS) as BuildingType[]) {
+      if (isInfra(type)) continue; // plan4:ST-14
       // [plan4:BL-1] Rooms with placement rules (surface row, adjacency, flag, copies) are checked by effectHookProblems, not against the pre-X-2 rule.
       if (BUILDING_DEFS[type].place?.floors === 'surface' || BUILDING_DEFS[type].place?.floors === 'entranceOrSurface' || BUILDING_DEFS[type].place?.adjacentTo || BUILDING_DEFS[type].place?.needsFlag || BUILDING_DEFS[type].maxCopies !== undefined) continue;
       for (let floor = -1; floor <= state.currentFloors + 1; floor++) {
@@ -363,6 +365,13 @@ export function buildingSchemaProblems(known: Set<string>): string[] {
       for (const k of ['evacuation', 'firebreak'] as const) if (fx[k] !== undefined && typeof fx[k] !== 'boolean') bad(type, `effects.${k} must be a boolean`);
       for (const r of Object.keys(fx.storageCap ?? {})) if (!known.has(r)) bad(type, `storageCap names unknown resource ${r}`);
     }
+  }
+  // [plan4:ST-14/15] Bulkhead door, emergency stairwell and vent stack are defined in buildings.json and unlocked by exactly one research node;
+  // they live in state.layout (never state.buildings), so they must not be in BUILDABLE_TYPES (the build menu would offer them as rooms).
+  for (const k of INFRA_KINDS) {
+    if (!types.has(k)) { bad(k, 'infra kind has no definition in buildings.json'); continue; }
+    if (!RESEARCH.some(r => r.effects.some(e => e.type === 'unlock' && (e.building as string) === k))) bad(k, 'infra kind is unlocked by no research node');
+    if ((BUILDABLE_TYPES as string[]).includes(k)) bad(k, 'infra kind must not be in BUILDABLE_TYPES');
   }
   // One unlocking research node per room type: only the first counts in isBuildingUnlocked, a second would be dead data.
   const unlockers = new Map<string, string[]>();

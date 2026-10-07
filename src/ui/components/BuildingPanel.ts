@@ -17,6 +17,7 @@ import type { Incident } from '../../core/GameState';
 import { uiSound } from '../../audio/uiSound';
 import { maintenanceCard } from './MaintenanceCard'; // [Danger C3]
 import { relocateBlock } from '../../systems/relocate'; // [plan4:ST-19]
+import { infraCard, infraSignature } from './InfraCard'; // plan4:ST-14
 
 export class BuildingPanel {
   private sheet = new Sheet('building-sheet', 'building');
@@ -83,6 +84,7 @@ export class BuildingPanel {
       b.level, b.isConstructing, state.rush ?? 0, b.assignedSurvivorIds.join(','), this.pickerOpen, upgradeAffordable,
       state.survivors.map(s => `${s.id}:${s.assignedBuildingId}:${s.level}`).join(','),
       state.powerRatio < 0.99,
+      infraSignature(state, b), // plan4:ST-14
       this.incidentFor(state, b)?.id ?? '', b.specialization ?? '', Math.floor((b.wear ?? 0) / 5), this.engine.maintenanceSystem.canMaintain(state, b), // [Danger C3]
 
       chainInputs(b).map(i => inputFed(state, i)).join(','),
@@ -232,6 +234,8 @@ export class BuildingPanel {
     // [Danger C3] wear and the Maintain button
     const maint = maintenanceCard(this.engine, state, b, () => this.refresh(this.engine.stateManager.state));
     if (maint) root.appendChild(maint);
+    const infra = infraCard(this.engine, state, b, () => this.refresh(this.engine.stateManager.state)); // plan4:ST-14/15 doors, stairwell, vent stack
+    if (infra) root.appendChild(infra);
     root.appendChild(this.renderUpgrade(state, b, upgradeAffordable));
     if (this.engine.buildingSystem.canSpecialize(state, b.id)) root.appendChild(this.renderSpecs(state, b));
     else if (b.specialization && specsFor(b.type, state).length > 1) root.appendChild(this.renderRetool(state, b)); // [Long game]

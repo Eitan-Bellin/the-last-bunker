@@ -8,7 +8,7 @@ import { artEntry, buildingArtKey, roomTier } from '../art/registry';
 import { BUILDING_W, DEPTH_X, FLOOR_H, ROOM_H, SLAB, SLOT_W, buildingH, buildingX, floorTop } from './layout';
 import { hashString, seeded } from './draw';
 import { buildConstructionVisual, buildPaintedConstruction, buildRoomVisual, buildScaffold, type RoomVisual } from './roomArt';
-import { buildPaintedRoom } from './paintedRoom';
+import { buildPaintedRoom, roomWorking } from './paintedRoom'; // plan4:BL-6
 import type { Lane } from './people';
 import { LAYOUT, VIEW } from './perfFx';
 import { lineWidth, richLine } from './richText';
@@ -152,6 +152,7 @@ export class RoomViews {
         this.labelLayer.addChild(view.label);
       }
       view.gen = gen;
+      roomWorking.set(b.id, b.assignedSurvivorIds.length > 0 || !(def.maxWorkers ?? 0) ? 1 : 0); // plan4:BL-6 staffed rooms run their conveyors and showers
       if (roomsChanged) {
         // [plan4:ST-8] A district pushed out by an east wing keeps its view: only the place moves (people ride along inside the root).
         // [plan4:ST-19] Same for a room moved by BuildingSystem.relocate: it goes to the new spot, and its tag with it.

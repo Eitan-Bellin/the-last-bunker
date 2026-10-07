@@ -1,4 +1,4 @@
-import { Container, DisplacementFilter, Graphics, Rectangle, Sprite, Texture } from 'pixi.js';
+import { Container, DisplacementFilter, Graphics, Rectangle, Sprite, Texture, TilingSprite } from 'pixi.js';
 import type { ArtEntry, FxSpot, LightSpot } from '../art/registry';
 import { ArtLibrary, coneTexture, glowTexture, moteTexture } from '../art/ArtLibrary';
 import { ROOM_H } from './layout';
@@ -13,6 +13,13 @@ import { viewport } from '../utils/viewport'; // [perf] window size without forc
  * keyed by room id, so the structure lit by those lamps (tints, light spill) dips with them.
  */
 export const roomFlicker = new Map<string, number>();
+
+/**
+ * [plan4:BL-6] Whether a room is staffed right now (1 = yes, 0 = nobody), keyed by room id like roomFlicker. Live effects marked `work` in a
+ * composed room (conveyors, status lamps, screens) slow to a stop when it is 0; a room nobody reports for counts as working. The renderer
+ * publishes it from RoomViews (one line, plan4:BL-6).
+ */
+export const roomWorking = new Map<string, number>();
 
 /** gfx-p0 rooms: the renderer's quality tier. High adds heat haze; low halves the particles and drops moths and leaves. */
 export type RoomFxQuality = 'high' | 'medium' | 'low';
@@ -728,6 +735,17 @@ function glowFx(layer: Container, fxLayer: Container, spot: FxSpot, W: number, H
   }
 }
 
+/** [plan4:BL-6] Ribs of a conveyor belt (white, tinted per use): two dark bars and a thin highlight per 16 x 8 tile. */
+function beltTexture(): Texture {
+  return canvasTexture('belt', 16, 8, ctx => {
+    ctx.fillStyle = 'rgba(255,255,255,0.35)';
+    ctx.fillRect(0, 0, 16, 8);
+    ctx.fillStyle = 'rgba(255,255,255,1)';
+    ctx.fillRect(1, 0, 3, 8);
+    ctx.fillRect(9, 0, 3, 8);
+  });
+}
+
 /** Gauge needles quivering, spinning tape reels and fan blades, moths circling a lamp. */
 function propFx(layer: Container, spot: FxSpot, W: number, H: number, mirror: boolean, seed: number, rnd: () => number): Animator {
   const x = (mirror ? 1 - spot.x : spot.x) * W;
@@ -775,6 +793,48 @@ function propFx(layer: Container, spot: FxSpot, W: number, H: number, mirror: bo
         last = t;
         // Spins up and down with the power instead of snapping.
         v += (speed * (power > 0.2 ? 1 : 0) - v) * Math.min(1, dt * 1.5);
+        ang += v * dt;
+        g.rotation = ang * dir;
+      };
+    }
+    case 'belt': {
+      // [plan4:BL-6] A conveyor belt: one tiling sprite of dark ribs sliding along a strip (x, y = centre, w x h = the strip).
+      const bw = (spot.w ?? 0.2) * W, bh = Math.max(1.2, (spot.h ?? 0.03) * H);
+      const ts = new TilingSprite({ texture: beltTexture(), width: bw, height: bh });
+      ts.anchor.set(0.5);
+      ts.tint = spot.color ?? 0x15110d;
+      ts.alpha = 0.55;
+      ts.tileScale.set(bh / 8);
+      ts.position.set(x, y);
+      layer.addChild(ts);
+      const sp = 14 * (spot.rate ?? 1);
+      let off = rnd() * 10, last = -1, v = 0;
+      return (t, power) => {
+        const dt = last < 0 ? 0 : Math.min(0.1, t - last);
+        last = t;
+        v += (sp * Math.min(1, power * 1.2) - v) * Math.min(1, dt * 2);
+        off += v * dt * dir;
+        ts.tilePosition.x = off / ts.tileScale.x;
+      };
+    }
+    case 'rotor': {
+      // [plan4:BL-6] A turbine rotor: `n` long tapering blades turning slowly (wind keeps it going even without grid power).
+      const len = (spot.size ?? 0.2) * W, n = spot.n ?? 3;
+      const g = new Graphics();
+      for (let i = 0; i < n; i++) {
+        const a = (i / n) * Math.PI * 2;
+        const ca = Math.cos(a), sa = Math.sin(a);
+        g.poly([ca * 1.2 - sa * 0.9, sa * 1.2 + ca * 0.9, ca * len, sa * len, ca * 1.2 + sa * 0.9, sa * 1.2 - ca * 0.9]).fill({ color: spot.color ?? 0xcfd2cc, alpha: 0.95 });
+      }
+      g.circle(0, 0, 1.6).fill({ color: 0x585c60 });
+      g.position.set(x, y);
+      layer.addChild(g);
+      let ang = rnd() * 6, last = -1, v = 0;
+      return (t) => {
+        const dt = last < 0 ? 0 : Math.min(0.1, t - last);
+        last = t;
+        const gust = 0.7 + 0.3 * Math.sin(t * 0.37 + seed) + 0.15 * Math.sin(t * 1.3 + seed * 2);
+        v += (1.1 * (spot.rate ?? 1) * gust - v) * Math.min(1, dt * 0.8);
         ang += v * dt;
         g.rotation = ang * dir;
       };
@@ -910,7 +970,7 @@ function rockFrame(W: number, H: number, rnd: () => number): Graphics {
 }
 
 const GLOW_KINDS = new Set<FxSpot['kind']>(['blink', 'pulse', 'screen', 'flame', 'twinkle', 'tube', 'weld', 'ecg', 'radar']);
-const PROP_KINDS = new Set<FxSpot['kind']>(['needle', 'reel', 'fan', 'moth']);
+const PROP_KINDS = new Set<FxSpot['kind']>(['needle', 'reel', 'fan', 'moth', 'belt', 'rotor']);
 
 /** gfx-p0 rooms: true when the room is near the screen, so off-screen rooms skip their particle work. */
 function onScreen(c: Container, W: number, H: number): boolean {
@@ -965,16 +1025,19 @@ export function buildPaintedRoom(
   const seed = rnd() * 100;
   // gfx-p0 rooms: bright paintings already carry their lamp light, so the live glow is tamed and cones are skipped.
   const lum = ArtLibrary.lumOf(entry.key) ?? 0.15;
-  const tame = Math.max(0.25, Math.min(1, 1 - (lum - 0.15) * 1.7));
+  // [plan4:BL-6] A composed room has its lamp pools baked in: tamed glows, no second cone.
+  const tame = Math.max(0.25, Math.min(entry.baked ? 0.7 : 1, 1 - (lum - 0.15) * 1.7));
   beamBudget.n = 0;
-  ArtLibrary.lightsFor(entry).forEach((l, i) => animators.push(addLight(lights, l, W, H, mirror, seed + i * 7, tame, lum < 0.3)));
+  ArtLibrary.lightsFor(entry).forEach((l, i) => animators.push(addLight(lights, l, W, H, mirror, seed + i * 7, tame, lum < 0.3 && !entry.baked)));
   (entry.fx ?? []).forEach((spot, i) => {
     const s = seed + i * 1.37;
-    animators.push(GLOW_KINDS.has(spot.kind) ? glowFx(lights, fxLayer, spot, W, H, mirror, s, rnd)
+    const an = GLOW_KINDS.has(spot.kind) ? glowFx(lights, fxLayer, spot, W, H, mirror, s, rnd)
       : PROP_KINDS.has(spot.kind) ? propFx(fxLayer, spot, W, H, mirror, s, rnd)
         : spot.kind === 'haze' ? hazeFx(hazeLayer, texture, entry, spot, i, W, H, mirror, art)
           : spot.kind === 'ripple' ? ripples(fxLayer, spot, W, H, mirror, rnd)
-            : emitter(fxLayer, spot, W, H, mirror, rnd));
+            : emitter(fxLayer, spot, W, H, mirror, rnd);
+    // [plan4:BL-6] `work` effects follow whether the room is staffed (see roomWorking).
+    animators.push(spot.work && flickerKey ? (t, power) => an(t, power * (roomWorking.get(flickerKey) ?? 1)) : an);
   });
   animators.push(dustMotes(lights, W, H, rnd));
   container.addChild(art);

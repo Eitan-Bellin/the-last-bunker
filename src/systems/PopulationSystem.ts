@@ -4,8 +4,10 @@ import type { GameState, SurvivorState, SurvivorStats, BuildingInstance, Buildin
 import type { StateManager } from '../core/StateManager';
 import type { SeededRandom } from '../core/Random';
 import { bus } from '../core/EventBus';
-import { getDef, effectiveLevel, workforceMultiplier, type MoraleKind } from '../data/buildingDefs';
+import { getDef, effectiveLevel, synergyBonus, workforceMultiplier, type MoraleKind } from '../data/buildingDefs';
 import { childCapacityOf, ventilationRelief } from '../data/roomEffects'; // [plan4:BL-3/4/8]
+import { roomSlots } from '../data/buildingDefs'; // plan4:ST-14
+import { isSealedOff } from './doors'; // plan4:ST-14
 import { hasFeature, researchBuildingMult, researchMorale } from './ResearchSystem';
 import { chainFactor } from '../data/chains';
 import { incidentBlocks } from '../data/incidents';
@@ -41,7 +43,8 @@ function roomMorale(state: GameState, b: BuildingInstance): number {
   const level = effectiveLevel(b);
   if (!morale || level <= 0 || incidentBlocks(state, b)) return 0;
   return (morale.base + morale.perLevel * (level - 1)) * workforceMultiplier(state, b) * (state.powerRatio ?? 1)
-    * researchBuildingMult(state, b.type) * Math.min(1, chainFactor(state, b));
+    * researchBuildingMult(state, b.type) * Math.min(1, chainFactor(state, b))
+    * (1 + synergyBonus(state, b, 'morale')); // [plan4:BL-1] canteen next to the commons: +5% for both
 }
 
 export interface MoraleSource {
@@ -128,7 +131,9 @@ export class PopulationSystem {
     const thirsty = state.resources.water.amount <= 0;
     const medbays = state.buildings.filter(b => b.type === 'medbay' && effectiveLevel(b) > 0 && b.assignedSurvivorIds.length > 0
       && !incidentBlocks(state, b));
-    const healMult = specMax(state, 'healMult', 'medbay');
+    // [plan4:BL-1] A medbay next to a quarantine ward heals faster (healMult synergy); the best medbay counts.
+    const healSyn = medbays.reduce((m, b) => Math.max(m, synergyBonus(state, b, 'healMult')), 0);
+    const healMult = specMax(state, 'healMult', 'medbay') * (1 + healSyn);
     const gymMult = specMax(state, 'xpMult', 'trainingRoom');
     let medicine = state.resources.medicine.amount;
 
@@ -414,8 +419,9 @@ export class PopulationSystem {
   canAssign(state: GameState, buildingId: string, child = false): boolean {
     const b = state.buildings.find(x => x.id === buildingId);
     if (!b) return false;
+    if (isSealedOff(state, b.position.floor, b.position.x, roomSlots(b.type))) return false; // [plan4:ST-14] nobody from outside is sent behind a sealed door
     const kids = b.assignedSurvivorIds.filter(id => state.survivors.find(s => s.id === id)?.child).length;
-    if (child) return kids < childCapacityOf(b);
+    if (child) return kids < childCapacityOf(b, state);
     return b.assignedSurvivorIds.length - kids < (getDef(b.type)?.maxWorkers ?? 0);
   }
 
@@ -426,7 +432,7 @@ export class PopulationSystem {
     // [plan4:BL-4] A child may only go to a room with childCapacity (nursery, school), and an adult never takes a child's place.
     if (buildingId && survivor.child) {
       const target = state.buildings.find(b => b.id === buildingId);
-      if (!target || childCapacityOf(target) <= 0) return false;
+      if (!target || childCapacityOf(target, state) <= 0) return false;
     }
     if (buildingId && survivor.assignedBuildingId !== buildingId && !this.canAssign(state, buildingId, !!survivor.child)) return false;
 

@@ -1,6 +1,7 @@
 import { lawArrivals, lawDefense } from '../data/laws';
 import { roomSlots } from '../data/buildingDefs';
 import { earlyWarningLead } from '../data/roomEffects'; // [plan4:BL-8]
+import { doorDefense } from './InfraSystem'; // plan4:ST-14
 import { seasonEffects } from '../data/seasons';
 import { inBreather, threatPace, threatStrength } from './ThreatSystem';
 import type { RaidKind, RaidStance, Ruin } from '../core/GameState';
@@ -366,6 +367,7 @@ export function defenseParts(state: GameState): { walls: number; guards: number;
   }
   if (hasFeature(state, 'fortifiedDoor')) walls += 15;
   walls += specTotal(state, 'defense');
+  walls += doorDefense(state); // plan4:ST-14 shut bulkheads on the entrance floor: +3 per door level
   if (state.storyFlags.includes('gideon:joined')) guards += 10;
   // [Danger C1] Residents help a little; whoever is posted at an armory fights much harder. The Wall adds 50.
   for (const s of state.survivors) {

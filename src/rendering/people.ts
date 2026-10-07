@@ -7,6 +7,7 @@ import type { Crowd, CrowdMember, Rest, Spot } from './workSpots';
 import { Body3D, PEOPLE3D, UNITS_PER_M, bodyData, hasSetPoses, ppm, requestSetPoses, type Anim3, type BodyKind } from './people3d';
 import { GFX } from './gfxFeatures';
 import { SlopArea } from './HitSlop'; // [plan4:ST-12]
+import { LOOK_ACTIVITY, LOOK_OUTFIT } from './roomSpecs'; // plan4:BL-7
 
 const SPEED = 24;
 const FLOOR_FRONT = ROOM_H - 3;
@@ -35,6 +36,7 @@ export type Activity = 'idle' | 'water' | 'hammer' | 'wrench' | 'stir' | 'type' 
 
 /** What each room has its workers doing. */
 export const ROOM_ACTIVITY: Partial<Record<BuildingType, Activity>> = {
+  ...(LOOK_ACTIVITY as Partial<Record<BuildingType, Activity>>), // plan4:BL-7 wave 2 rooms (keys not yet building types are harmless)
   farm: 'water', hydroponics: 'water', workshop: 'hammer', armory: 'hammer',
   generator: 'wrench', reactor: 'wrench', waterPump: 'wrench', waterPurifier: 'wrench',
   canteen: 'stir', laboratory: 'type', radioTower: 'type', trainingRoom: 'lift', storage: 'carry', medbay: 'tend',
@@ -62,6 +64,7 @@ const PANTS = [0x2e3a4e, 0x3a3328, 0x2a2a2a, 0x4a4a52, 0x3e3a30];
 
 /** Work clothes: you can tell who does what from across the bunker (worn, sun-starved colours). */
 const JOB_OUTFIT: Partial<Record<BuildingType | 'ruin', Outfit>> = {
+  ...(LOOK_OUTFIT as Partial<Record<BuildingType | 'ruin', Outfit>>), // plan4:BL-7
   farm: { top: 0x74885a, bottom: 0x4a5a72, hat: 'straw', tool: 'can' },
   hydroponics: { top: 0x4c7a66, bottom: 0x2e3a4e, hat: 'cap', tool: 'can' },
   workshop: { top: 0x8a6a4a, bottom: 0x3a3328, hat: null, tool: 'hammer', apron: 0x5a3a22, goggles: true },
@@ -766,6 +769,87 @@ export class Person implements CrowdMember {
     this.sync();
   }
 
+  // --- [plan4:ST-18] Walking between rooms: walkers.ts takes the person out of their room, moves the container along a route and hands them back ---
+
+  /** True while walkers.ts drives this person (they stand in no room's crowd and `update` does nothing). */
+  inTransit = false;
+  /** Where to appear in the next room once the walk is over: room-local x and floor depth (null = the crowd's usual entry). */
+  private entryLocal: number | null = null;
+  private entryDepth = 0.5;
+
+  /** Leaves the room's crowd and starts being moved by the walkers (the work spot and bed are given up). */
+  beginTransit(): void {
+    this.inTransit = true;
+    this.setCrowd(null);
+    this.breather = false;
+    this.wait = 0;
+    this.setTag(null);
+    if (this.restHit) {
+      this.restHit = false;
+      const h = this.height();
+      this.hit.set(-10, -h - 2, 20, h + 4);
+    }
+    this.container.visible = true;
+  }
+
+  /**
+   * One step of a walk: `wx, wy` the new position (world units, feet), `dist` the ground covered since the last step, `facing` -1/1 (0 keeps it),
+   * `moving` false while waiting (for the lift). Uses the same bodies, strides and turning as in a room.
+   */
+  stepTransit(dt: number, t: number, wx: number, wy: number, dist: number, facing: number, moving: boolean): void {
+    this.try3d();
+    this.b3?.step(dt);
+    if (this.b3) this.faceStep();
+    if (facing !== 0) this.facing = facing;
+    this.container.scale.set(1);
+    if (moving) {
+      if (this.b3) {
+        const a = this.b3.data.anims[this.hurt ? 'limp' : 'walk'];
+        this.walk3 = (this.walk3 + dist / (a.stride * UNITS_PER_M)) % 1;
+      }
+      this.walkPhase += dist / ((this.b.thigh + this.b.shin) * this.baseScale * 0.36);
+      this.setMode('walk', 0.18);
+      this.walkPose(this.tgt, false);
+    } else {
+      this.setMode('idle');
+      this.workPose(this.tgt, 'idle', t);
+    }
+    this.turnStep(dt);
+    if (this.b3) this.show3(t, moving, 'idle', false);
+    else this.show(dt);
+    this.container.position.set(wx, wy);
+    this.container.zIndex = Math.round(wy * 10);
+    this.applyTint();
+    this.shadowStep();
+  }
+
+  /** The walk is over: the person is put back in a room by the renderer's usual placement and appears at `localX` (a doorway) on depth `depth`. */
+  endTransit(localX: number | null, depth: number): void {
+    this.inTransit = false;
+    this.entryLocal = localX;
+    this.entryDepth = depth;
+    this.replan = true;
+  }
+
+  /** Gives up a walk without placing the person (they are being dragged, or are gone). */
+  abortTransit(): void {
+    this.inTransit = false;
+    this.entryLocal = null;
+  }
+
+  /** Hidden while inside the lift cabin (the shaft draws a rider figure instead). */
+  setRiding(on: boolean): void {
+    this.container.visible = !on;
+  }
+
+  /** Shirt, skin and trouser colours, for the rider figure in the lift cabin. */
+  riderColors(out: { shirt: number; skin: number; pants: number }): void {
+    const o = this.outfit;
+    out.shirt = mute(o ? o.coat ?? o.top : this.casual);
+    out.skin = mute(shade(this.look.skin, this.skinV));
+    out.pants = mute(o ? o.bottom : this.pants);
+  }
+
   /** gfx-p0 people: the room's crowd (work spots, spacing, lamp); call every frame, cheap when unchanged. */
   setCrowd(crowd: Crowd | null): void {
     if (crowd === this.crowd && (!crowd || crowd.members.includes(this))) return;
@@ -1145,6 +1229,7 @@ export class Person implements CrowdMember {
    * `activity` is what this person does when standing still.
    */
   update(dt: number, t: number, energy: number, activity: Activity = 'idle'): void {
+    if (this.inTransit && !this.lifted) return; // [plan4:ST-18] walkers.ts moves this person
     this.try3d();
     this.b3?.step(dt);
     if (PEOPLE_STYLE.painted) {
@@ -1204,8 +1289,9 @@ export class Person implements CrowdMember {
       this.replan = false;
       const snap = this.arrive === 'snap';
       if (!snap && this.crowd) {
-        // Walking in from the side of the room nearest the lift.
-        this.x = this.crowd.entryX();
+        // Walking in from the side of the room nearest the lift (or, after a walk across the bunker [plan4:ST-18], from the doorway they came through).
+        this.x = this.entryLocal ?? this.crowd.entryX();
+        if (this.entryLocal !== null) { this.depth = this.entryDepth; this.entryLocal = null; }
         this.facing = this.turn = this.x < (this.crowd.x0 + this.crowd.x1) / 2 ? 1 : -1;
       }
       this.arrive = 'snap';
