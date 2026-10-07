@@ -330,7 +330,7 @@ export class MenuPanel {
     const box = el('div', 'bp');
     const a = getA11y();
     const redraw = () => { this.signature = ''; this.refresh(this.engine.stateManager.state); };
-    const card = el('div', 'bp-card');
+    const card = el('div', 'bp-card a11y-card');
     card.appendChild(el('div', 'bp-section-title', `[[eye]] ${i18n.t('a11y.title')}`));
 
     const cycleRow = <T extends string>(icon: string, labelKey: string, order: readonly T[], value: T, optKey: string, onPick: (v: T) => void): HTMLElement => {

@@ -4,7 +4,6 @@
   const out = { targets: [], contrast: [], noName: [], noAlt: [], overflow: [], modals: [], docOverflow: document.documentElement.scrollWidth > VW + 1 };
   const sel = (e) => {
     let s = e.tagName.toLowerCase();
-    if (e.id) s += '#' + e.id;
     const c = typeof e.className === 'string' ? e.className.trim().split(/\s+/).filter(Boolean).slice(0, 3).join('.') : '';
     if (c) s += '.' + c;
     const p = e.parentElement;
@@ -97,7 +96,7 @@
     const eff = over(fg, bd.c);
     let cr = ratio(eff, bd.c);
     // A gradient background: judge the text against its worst colour stop.
-    if (bd.stops) for (const st of bd.stops) cr = Math.min(cr, ratio(over(fg, st), st));
+    if (bd.stops) { cr = Infinity; for (const st of bd.stops) cr = Math.min(cr, ratio(over(fg, st), st)); }
     const px = parseFloat(cs.fontSize), bold = +cs.fontWeight >= 700;
     const large = px >= 24 || (px >= 18.66 && bold);
     const need = large ? 3 : 4.5;

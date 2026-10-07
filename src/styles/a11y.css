@@ -142,3 +142,8 @@ canvas:focus-visible { outline-offset: -3px; }
 .struct-room.fault { border-style: dashed; border-color: var(--bad); }
 .struct-room.building { border-style: dotted; border-color: var(--warn); }
 .struct-empty { color: var(--text-secondary); padding: 6px 2px; }
+
+/* ---- AC-12/AC-15: the accessibility tab and the list view practise what they preach: every button at least 44 x 44. ------------------- */
+.a11y-card .btn-small, .struct-room .btn-small { min-height: 44px; min-width: 44px; }
+
+.modal-actions .btn { min-height: 44px; }
