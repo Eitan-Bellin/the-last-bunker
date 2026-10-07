@@ -2,7 +2,7 @@ import { Container, Graphics, Sprite, Texture } from 'pixi.js';
 import type { BuildingInstance } from '../core/GameState';
 import { isHall, roomSlots } from '../data/buildingDefs';
 import { glowTexture, moteTexture } from '../art/ArtLibrary';
-import { FLOOR_H, ROOMS_W, ROOMS_X, ROOM_H, SLOT_W, TOPSOIL, floorTop, slotX } from './layout';
+import { ROOMS_W, ROOMS_X, ROOM_H, SLOT_W, floorAtY, floorTop, slotX } from './layout';
 import { hashString, seeded } from './draw';
 import type { WorldLamp } from './structure';
 import type { DecalSources } from './decals';
@@ -125,7 +125,7 @@ export function buildAtmosphere(buildings: BuildingInstance[], floors: number, e
   // Dust turning in the light under each ceiling lamp.
   for (const l of lamps) {
     if (!l.ceiling) continue;
-    const f = Math.max(0, Math.floor((l.y - TOPSOIL) / FLOOR_H));
+    const f = Math.max(0, floorAtY(l.y).floor);
     ems.push({ kind: 'dust', x: l.x, y: l.y + 4, next: r() * 2, until: 0, w: Math.min(26, l.reach * 0.22), floorY: floorTop(f) + ROOM_H - 10, color: l.color, alive: 0 });
   }
 

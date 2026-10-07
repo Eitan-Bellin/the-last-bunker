@@ -2,7 +2,6 @@ import { Container, Graphics, Sprite, Texture } from 'pixi.js';
 import type { BuildingInstance, BuildingType, Ruin } from '../core/GameState';
 import { isDistrict, isHall, roomSlots } from '../data/buildingDefs';
 import { zoneForFloor } from '../data/zones';
-import { SLOTS_PER_FLOOR } from '../systems/BuildingSystem';
 import { ArtLibrary } from '../art/ArtLibrary';
 import { ROOMS_W, ROOMS_X, ROOM_H, SHAFT_W, SLOT_W, floorTop, slotX } from './layout';
 import { hashString, mix, seeded, shade, vGradient } from './draw';
@@ -484,11 +483,11 @@ function lightTint(v: number, y: number): number {
 /** Columns of a level: x, and whether the slot on each side is an empty bay (no room painting). */
 function columnsOf(row: ({ key: string } | null)[]): { x: number; openL: boolean; openR: boolean }[] {
   const out: { x: number; openL: boolean; openR: boolean }[] = [];
-  for (let s = 1; s < SLOTS_PER_FLOOR; s++) {
+  for (let s = 1; s < row.length; s++) {
     const a = row[s - 1], b = row[s];
     if ((a || b) && a?.key !== b?.key) out.push({ x: slotX(s), openL: !a, openR: !b });
   }
-  out.push({ x: ROOMS_X + ROOMS_W, openL: !row[SLOTS_PER_FLOOR - 1], openR: false });
+  out.push({ x: ROOMS_X + ROOMS_W, openL: !row[row.length - 1], openR: false });
   return out;
 }
 

@@ -1,7 +1,6 @@
 import { Container, type Graphics } from 'pixi.js';
-import type { Position } from '../core/GameState';
-import { SLOTS_PER_FLOOR } from '../systems/BuildingSystem';
-import { FLOOR_H, ROOM_H, SLAB, SLOT_W, floorTop, slotX } from './layout';
+import { BASE_EAST, type Position } from '../core/GameState';
+import { ROOM_H, SLAB, SLOT_W, floorAtY, floorTop, slotAtX, slotX } from './geom';
 
 // [plan4 X-1] Split out of BunkerRenderer.ts with no change in behaviour: the empty-slot tap pad (one tappable area that works out
 // which slot was hit) and the green highlight of the slots where the room being placed fits.
@@ -20,6 +19,8 @@ export class PlacementController {
   private readonly slotLayer: Container;
   /** Draws the valid-slot highlight. */
   private readonly highlightLayer: Graphics;
+  /** [plan4:X-2] How far each floor reaches (slots x in [-w, e)); the classic 12 east until the renderer passes the saved layout. */
+  private extentOf: (floor: number) => { w: number; e: number } = () => ({ w: 0, e: BASE_EAST });
 
   constructor(host: PlacementHost, slotLayer: Container, highlightLayer: Graphics) {
     this.host = host;
@@ -28,14 +29,17 @@ export class PlacementController {
   }
 
   /** Replaces the tap pad for a bunker of `floors` floors. */
-  rebuildPad(floors: number): void {
+  rebuildPad(floors: number, extentOf?: (floor: number) => { w: number; e: number }): void {
+    if (extentOf) this.extentOf = extentOf;
     this.slotLayer.removeChildren().forEach(c => c.destroy());
     // [perf] The empty slots are one tappable area that works out which slot was hit, not 12 objects per floor (288 at 24 floors).
     const pad = new Container();
     const slotAt = (px: number, py: number): Position | null => {
-      const s = Math.floor((px - slotX(0)) / SLOT_W);
-      const f = Math.floor((py - floorTop(0)) / FLOOR_H);
-      if (s < 0 || s >= SLOTS_PER_FLOOR || f < 0 || f >= floors || py - floorTop(f) >= ROOM_H) return null;
+      const s = slotAtX(px);
+      const { floor: f, offset } = floorAtY(py);
+      if (s === null || f < 0 || f >= floors || offset >= ROOM_H) return null;
+      const ext = this.extentOf(f);
+      if (s < -ext.w || s >= ext.e) return null;
       return { x: s, y: 0, floor: f };
     };
     pad.hitArea = { contains: (px: number, py: number) => slotAt(px, py) !== null };
@@ -56,7 +60,8 @@ export class PlacementController {
     if (!isValid) return;
     const H = levels * ROOM_H + (levels - 1) * SLAB;
     for (let f = 0; f < floors; f++) {
-      for (let s = 0; s < SLOTS_PER_FLOOR; s++) {
+      const ext = this.extentOf(f);
+      for (let s = -ext.w; s < ext.e; s++) {
         if (!isValid({ x: s, y: 0, floor: f })) continue;
         const x = slotX(s), y = floorTop(f);
         g.rect(x + 2, y + 2, SLOT_W - 4, H - 4).fill({ color: 0x44ff88, alpha: 0.18 });

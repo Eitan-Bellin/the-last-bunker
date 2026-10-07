@@ -1,5 +1,5 @@
 import { hasFeature } from './ResearchSystem';
-import type { GameState, BuildingType, BuildingInstance, Position } from '../core/GameState';
+import { BASE_EAST, floorExtent, type GameState, type BuildingType, type BuildingInstance, type Position } from '../core/GameState';
 import type { StateManager } from '../core/StateManager';
 import { bus } from '../core/EventBus';
 import { getDef, effectiveLevel, isDistrict, roomFloors, roomSlots, specLevel, type BuildingDef } from '../data/buildingDefs';
@@ -11,7 +11,11 @@ import { districtDef, nextDistrict } from '../data/districts';
 import { BASE_FLOORS, MAX_FLOORS, allowedFloors } from '../data/zones';
 import { RETOOL_PRICE_MULT, RETOOL_SECONDS, SPEC_COST, specTotal, specsFor } from '../data/specializations';
 
-export const SLOTS_PER_FLOOR = 12;
+/** Slots east of the shaft on a floor without a wing. [plan4:X-2] Placement reads floorExtent(state, floor); this stays exported for tools. */
+export const SLOTS_PER_FLOOR = BASE_EAST;
+
+/** Why a room cannot be placed at a spot; null = it can. 'floor' = no such floor / not placeable on the grid, 'bounds' = outside the floor's extent, 'zone' = wrong zone for the type. */
+export type PlaceBlock = 'floor' | 'bounds' | 'zone' | 'ruin' | 'overlap';
 
 /**
  * S1: each upgrade level past the first costs another (costMultiplier + this), so rooms max out over days, not in the first hour.
@@ -141,26 +145,35 @@ export class BuildingSystem {
   }
 
   canPlaceBuilding(type: BuildingType, pos: Position, state: GameState): boolean {
+    return this.placeBlock(type, pos, state) === null;
+  }
+
+  /** [plan4:X-2] Why a room cannot stand here (null = it can). Same truth table as the old canPlaceBuilding, with the reason. */
+  placeBlock(type: BuildingType, pos: Position, state: GameState): PlaceBlock | null {
     const def = getDef(type);
-    if (!def || isDistrict(type)) return false;
+    if (!def || isDistrict(type)) return 'floor';
     const levels = roomFloors(type);
-    if (pos.floor < 0 || pos.floor + levels > state.currentFloors) return false;
+    if (pos.floor < 0 || pos.floor + levels > state.currentFloors) return 'floor';
     const allowed = allowedFloors(type, state.currentFloors);
-    for (let f = pos.floor; f < pos.floor + levels; f++) if (!allowed.includes(f)) return false;
+    for (let f = pos.floor; f < pos.floor + levels; f++) if (!allowed.includes(f)) return 'zone';
     const w = roomSlots(type);
-    if (pos.x < 0 || pos.x + w > SLOTS_PER_FLOOR) return false;
+    // Every floor the room spans must reach the whole width (valid slots x in [-west, east)).
+    for (let f = pos.floor; f < pos.floor + levels; f++) {
+      const ext = floorExtent(state, f);
+      if (pos.x < -ext.w || pos.x + w > ext.e) return 'bounds';
+    }
     const top = pos.floor, bottom = pos.floor + levels - 1;
 
     for (const r of state.ruins ?? []) {
-      if (r.floor >= top && r.floor <= bottom && pos.x < r.x + r.w && pos.x + w > r.x) return false;
+      if (r.floor >= top && r.floor <= bottom && pos.x < r.x + r.w && pos.x + w > r.x) return 'ruin';
     }
     for (const existing of state.buildings) {
       const eTop = existing.position.floor, eBottom = eTop + roomFloors(existing.type) - 1;
       if (eBottom < top || eTop > bottom) continue;
       const ew = roomSlots(existing.type);
-      if (pos.x < existing.position.x + ew && pos.x + w > existing.position.x) return false;
+      if (pos.x < existing.position.x + ew && pos.x + w > existing.position.x) return 'overlap';
     }
-    return true;
+    return null;
   }
 
   /** Tunnels sideways out of the east wall into the next natural cavern. */
@@ -177,7 +190,7 @@ export class BuildingSystem {
       type: kind as BuildingType,
       level: 1,
       // Districts sit just beyond the last slot, outside the concrete casing.
-      position: { x: SLOTS_PER_FLOOR, y: 0, floor: d.floor },
+      position: { x: floorExtent(sm.state, d.floor).e, y: 0, floor: d.floor },
       assignedSurvivorIds: [],
       constructionProgress: 0,
       constructionTotal: def.constructionTime,
@@ -258,7 +271,8 @@ export class BuildingSystem {
   }
 
   findFreeSpot(type: BuildingType, floor: number, state: GameState): Position | null {
-    for (let x = 0; x < SLOTS_PER_FLOOR; x++) {
+    const ext = floorExtent(state, floor);
+    for (let x = -ext.w; x < ext.e; x++) {
       const pos = { x, y: 0, floor };
       if (this.canPlaceBuilding(type, pos, state)) return pos;
     }
