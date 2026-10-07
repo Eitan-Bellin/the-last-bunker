@@ -1,5 +1,6 @@
 import type { Application, Container } from 'pixi.js';
 import { BUILDING_W, ROOM_H, SIDE_MARGIN, floorTop } from './layout';
+import { reducedMotion } from '../utils/a11y';
 
 // [plan4 X-1] Split out of BunkerRenderer.ts with no change in behaviour: everything about the camera (constants, pan / pinch / fling /
 // double tap input, bounds, zoom springs, shake and punch) lives here. BunkerRenderer stays the public facade and builds this class
@@ -84,7 +85,8 @@ export class CameraController {
   private punchAmt = 0;
   private punchDX = 0;
   private punchDY = 0;
-  private readonly calm = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  /** [plan4:AC-2] Live: the in-game motion setting (auto follows the OS) now reaches shake and punch. */
+  private get calm(): boolean { return reducedMotion(); }
 
   private readonly host: CameraHost;
 
