@@ -17,9 +17,7 @@ import { BOOK, HELP_TOPICS } from '../../src/data/book';
 import { CHAPTERS } from '../../src/data/story';
 import { BuildingSystem, SLOTS_PER_FLOOR } from '../../src/systems/BuildingSystem';
 import { ResourceSystem } from '../../src/systems/ResourceSystem';
-import { StateManager } from '../../src/core/StateManager';
 import { DigSystem } from '../../src/systems/DigSystem';
-import { PopulationSystem } from '../../src/systems/PopulationSystem';
 import { WING_CAP_EAST, WING_CAP_WEST, maxEast, maxWest, stabilityCut, wingCost, wingOptions } from '../../src/data/wings';
 
 export function lintData(i18n: Record<string, Record<string, string>>): string[] {
