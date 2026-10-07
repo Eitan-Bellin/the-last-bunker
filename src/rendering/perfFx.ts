@@ -21,7 +21,7 @@ export const VIEW = { x0: -1e9, y0: -1e9, x1: 1e9, y1: 1e9 };
  * a string several times per picture just to learn that nothing changed. `rooms` covers what a room's look depends on (type, place,
  * level, new or not), `util` what the structure around the rooms depends on (the same, plus the ruins), `districts` the side tunnels.
  */
-export const LAYOUT = { rooms: 0, util: 0, districts: 0 };
+export const LAYOUT = { rooms: 0, util: 0, districts: 0, ext: 0 };
 
 const strHash = new Map<string, number>();
 const sh = (s: string): number => {
@@ -41,6 +41,12 @@ export function hashLayout(state: GameState): void {
     if (isDistrict(b.type)) hd = mix(hd, b.position.floor);
   }
   for (const r of state.ruins) hu = mix(mix(mix(hu, sh(r.id)), r.x), r.floor);
+  // [plan4:ST-4] How far each floor reaches (layout.ext) shapes the structure, the shaft and the map: one more number, no allocation (for..in).
+  let he = 2166136261;
+  const ext = state.layout?.ext;
+  if (ext) for (const k in ext) he = mix(mix(mix(he, sh(k)), ext[k].w + 64), ext[k].e + 64);
+  hu = mix(hu, he);
+  LAYOUT.ext = he;
   LAYOUT.rooms = hr;
   LAYOUT.util = hu;
   LAYOUT.districts = hd;
@@ -227,7 +233,7 @@ export class Dust {
     this.motes = [];
     for (let i = 0; i < 26 * floors; i++) {
       this.motes.push({
-        x: ROOMS_X + rnd() * ROOMS_W, y: floorTop(0) + rnd() * floors * FLOOR_H,
+        x: ROOMS_X + rnd() * ROOMS_W, y: floorTop(0) + rnd() * (floorTop(floors) - floorTop(0)), // [plan4:ST-1] the galleries add height
         vx: (rnd() - 0.5) * 4, vy: (rnd() - 0.5) * 3, ph: rnd() * Math.PI * 2,
       });
     }

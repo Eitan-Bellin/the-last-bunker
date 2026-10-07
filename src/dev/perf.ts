@@ -266,13 +266,15 @@ export function installPerf(renderer: BunkerRenderer, engine: Any, audio?: Any):
 /**
  * A bunker of N full floors with M people, built through the game's own state (never saved: use a fresh profile or ?slot).
  *
- * [plan4:X-4] `?perfFixture=wide` is the hook for the wide-floor scenarios (f24w-*: 24 floors, west wing 8, east wing 22, 160 rooms).
- * Until the layout extents exist (plan 4, wave 1) it builds the standard fixture, so the f24w-* scenarios measure the same bunker as
- * f24-* and cannot be told apart from them. When wide floors land, branch on `wide` below to place rooms beyond today's slot range.
+ * [plan4:X-4,ST-7] `?perfFixture=wide` builds the wide-floor bunker of the f24w-* scenarios: 24 floors, floors 1-12 reach 8 slots west and 22 east
+ * (layout.ext = {w: 8, e: 22}) with rooms on both sides of the shaft (about 160 rooms in all); the other floors are the standard ones.
  */
 function buildFixture(E: Any, floors: number, people: number): { buildings: number; people: number } {
   const wide = new URLSearchParams(location.search).get('perfFixture') === 'wide';
-  void wide; // reserved: see above
+  // Wide floors: three rooms west of the shaft (slots -8..-1, one bay left against the shaft) and six east of it (slots 0..15, bays out to the end at 22).
+  const WIDE_FLOORS = (f: number) => wide && f >= 1 && f <= 12;
+  const westPat = [3, 2, 2];
+  const eastPat = [3, 2, 3, 3, 2, 3];
   const sm = E.stateManager;
   const t2 = ['generator', 'workshop', 'canteen', 'laboratory', 'waterPurifier', 'trainingRoom', 'waterPump', 'medbay', 'radioTower', 'armory'];
   const t3 = ['quarters', 'farm', 'hydroponics', 'reactor', 'storage'];
@@ -281,14 +283,27 @@ function buildFixture(E: Any, floors: number, people: number): { buildings: numb
   const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
   let id = 1000;
   const blds: Any[] = [];
+  const layoutExt: Record<string, { w: number; e: number }> = {};
   for (let f = 0; f < floors; f++) {
-    let x = 0;
-    for (const wd of pat[f % pat.length]) {
+    const place = (x: number, wd: number) => {
       const type = wd === 3 ? t3[Math.floor(rnd() * t3.length)] : t2[Math.floor(rnd() * t2.length)];
       blds.push({ id: `b_${id++}`, type, level: 1 + Math.floor(rnd() * 9), position: { x, y: 0, floor: f }, assignedSurvivorIds: [], constructionProgress: 10, constructionTotal: 10, isConstructing: false, specialization: null });
+    };
+    if (WIDE_FLOORS(f)) {
+      layoutExt[String(f)] = { w: 8, e: 22 };
+      let x = -8;
+      for (const wd of westPat) { place(x, wd); x += wd; }
+      x = 0;
+      for (const wd of eastPat) { place(x, wd); x += wd; }
+      continue;
+    }
+    let x = 0;
+    for (const wd of pat[f % pat.length]) {
+      place(x, wd);
       x += wd;
     }
   }
+  if (wide) sm.applyDelta({ path: 'layout', value: { ...sm.state.layout, ext: layoutExt } });
   sm.applyDelta({ path: 'ruins', value: [] });
   sm.applyDelta({ path: 'currentFloors', value: floors });
   sm.applyDelta({ path: 'buildings', value: blds });

@@ -7,7 +7,7 @@ import type { EraDef } from '../data/eras';
 import type { BuildingInstance, GameState, Position, Ruin, SurvivorState } from '../core/GameState';
 import { effectiveLevel, isDistrict, roomFloors, roomSlots } from '../data/buildingDefs';
 import { i18n } from '../i18n/I18nManager';
-import { BUILDING_W, DISTRICT_X, FLOOR_H, ROOM_H, SHAFT_GAP, SLOT_W, TOPSOIL, buildingH, buildingX, floorExtent, floorTop, slotX } from './layout';
+import { BUILDING_W, DISTRICT_X, FLOOR_H, ROOM_H, SHAFT_GAP, SLOT_W, TOPSOIL, buildingH, buildingX, extentsFor, floorExtent, floorIndexAt, floorTop, slotX, ROOMS_X, type Ext } from './layout';
 import { hashString, seeded } from './draw';
 import { PEOPLE_STYLE, Person, ROOM_ACTIVITY, type Activity, type Lane } from './people';
 import { crowdFor, restCountFor, settleCrowds } from './workSpots'; // gfx-p0 people
@@ -19,6 +19,7 @@ import type { AmbienceMix } from '../audio/AudioEngine';
 import { Dust, buildDigSign, buildShaft, buildSurface, buildUnderground, buildUtilities, type Animated } from './world';
 import { LAYOUT, VIEW, bandize, hashLayout } from './perfFx'; // [perf]
 import { buildShaft2 } from './shaft';
+import { buildGalleries } from './gallery'; // [plan4:ST-1]
 import { buildSurface2, mountSurface2, surface2Sig } from './surface2'; // [gfx2 surface]
 import { roomFlicker, setRoomFxQuality } from './paintedRoom'; // gfx-p0 rooms: quality
 import { lineWidth, richLine } from './richText';
@@ -43,9 +44,11 @@ const NAME_LOCALIZER = new PopulationSystem();
 import { setPopupBlocker } from '../ui/components/NumberPopup'; // [camera]
 import { buildDecals, type DecalLayer } from './decals'; // [gfx2 wear]
 import { buildAtmosphere, type Atmosphere } from './atmosphere'; // [gfx2 wear]
-import { ROOMS_W, ROOMS_X } from './layout';
+import { WingSigns } from './wingSigns'; // [plan4:ST-4]
+import { wingOptions } from './wingsApi'; // [plan4:ST-4] (one-line swap to ../data/wings once it merges)
 import { buildSignage, sprayOutline, steelTag } from './signage';
-import { KIT_KEYS, buildBays,buildCasing, buildFrontStructure, depthGains, structureAmbient, gfx2Enabled, kitReady, kitState, occupancy, type WorldLamp } from './structure';
+import { FrontChunks } from './frontChunks'; // [plan4:ST-7]
+import { KIT_KEYS, buildBays,buildCasing, depthGains, structureAmbient, gfx2Enabled, kitReady, kitState, occupancy, type WorldLamp } from './structure';
 
 
 
@@ -78,7 +81,11 @@ export class BunkerRenderer {
   /** Graphics overhaul switch: the painted structure kit instead of flat shapes. */
   readonly gfx2 = gfx2Enabled();
   private bayHolder = new Container();
-  private front: Animated | null = null;
+  /** [plan4:ST-7] The structure in front of the rooms, in chunks of 4 slots x 3 floors (frontChunks.ts); one manager for the life of the renderer, its chunks outlive a rebuild when unchanged. */
+  private frontChunks = new FrontChunks();
+  private front: FrontChunks | null = null;
+  /** [plan4:ST-1] The service galleries between floors (gallery.ts). */
+  private galleries: Animated | null = null;
   /** [gfx2 wear] Story-telling decals and the living atmosphere (decals.ts, atmosphere.ts). */
   private decals: DecalLayer | null = null;
   private atmo: Atmosphere | null = null;
@@ -148,6 +155,7 @@ export class BunkerRenderer {
       contentBottom: () => r.contentBottom(),
       extentR: () => r.extentR,
       floorSpan: () => r.span,
+      extentL: () => r.extentL, // [plan4:ST-4]
       projectTop: () => r.projectSites.top,
       time: () => r.time,
       selectedId: () => r.selectedId,
@@ -174,12 +182,21 @@ export class BunkerRenderer {
       isDragging: () => r.cam.isDragging,
       onBuildingClick: id => r.onBuildingClick?.(id),
       projectRight: () => r.projectSites.right,
-      setExtentR: x => { r.extentR = x; },
+      setExtentR: x => { r.extentR = Math.max(x, r.extentWingR); }, // [plan4:ST-4] the widest floor counts too
       burstAt: (x, y, w) => r.burstAt(x, y, w),
       onScreen: (x, y) => r.onScreen(x, y),
       punch: k => r.punch(k),
       mapCovers: () => r.mapCovers,
     }, this.views, this.ruinViews, this.roomLayer, this.labelLayer);
+    // [plan4:ST-4] Dev only: `__setExt(floor, w, e)` edits state.layout.ext (the structure rebuilds on the next picture) to look at wings before the dig flow exists.
+    if (import.meta.env.DEV) {
+      (window as unknown as Record<string, unknown>).__setExt = (floor: number, w: number, e: number): boolean => {
+        const st = this.devState;
+        if (!st) return false;
+        st.layout.ext[String(floor)] = { w, e };
+        return true;
+      };
+    }
   }
 
   /**
@@ -220,6 +237,16 @@ export class BunkerRenderer {
   private extentR = BUILDING_W;
   /** [plan4:ST-12] Widest floor in world x (west wing reach, east reach): what the floor-overview zoom fits. */
   private span = { l: 0, r: BUILDING_W };
+  /** [plan4:ST-4] How far the floors reach, for the camera: the west edge (0 without a wing) and the east edge of the widest floor. */
+  private extentL = 0;
+  private extentWingR = BUILDING_W;
+  private exts: Ext[] = [];
+  private wingSigns = new WingSigns(() => this.cam.isDragging);
+  private wingSig = '';
+  private wingHash = -1;
+  private wingAt = -9;
+  /** Dev only: the live state, for the `__setExt(floor, w, e)` console helper. */
+  private devState: GameState | null = null;
   private districtSignHolder = new Container();
   private districtSig = '';
   private undergroundSig = '';
@@ -416,7 +443,7 @@ export class BunkerRenderer {
     this.surface = buildSurface();
     this.worldContainer.addChild(
       this.surfaceHolder, this.projectSites.layer, this.projectSites.smokeLayer, this.projectSites.glowLayer, this.projectSites.crew, this.projectSites.signLayer, this.undergroundHolder, this.bayHolder, this.slotLayer, this.highlightLayer,
-      this.roomLayer, this.shaftHolder, this.utilitiesHolder, this.dust.container, this.digHolder, this.districtSignHolder, this.fxLayer, this.incidents.fx, this.disasterFx.fx,
+      this.roomLayer, this.shaftHolder, this.utilitiesHolder, this.dust.container, this.digHolder, this.wingSigns.container, this.districtSignHolder, this.fxLayer, this.incidents.fx, this.disasterFx.fx,
       this.labelLayer, this.incidents.badges,
     );
     this.app.stage.addChild(this.worldContainer);
@@ -542,16 +569,22 @@ export class BunkerRenderer {
 
   private rebuildStructure(state: GameState): void {
     this.floors = state.currentFloors;
+    // [plan4:ST-4] How far every floor reaches (layout.ext): the camera's world edges follow the widest ones.
+    const exts = this.extsFor(state);
+    this.exts = exts;
+    this.extentL = exts.reduce((m, x) => Math.max(m, x.w), 0) > 0 ? slotX(-exts.reduce((m, x) => Math.max(m, x.w), 0)) - 14 : 0;
+    this.extentWingR = slotX(exts.reduce((m, x) => Math.max(m, x.e), 12));
+    this.extentR = Math.max(BUILDING_W, this.extentWingR, this.projectSites.right);
     this.undergroundHolder.removeChildren().forEach(c => c.destroy({ children: true }));
     const districts = state.buildings.filter(b => isDistrict(b.type)).map(b => b.position.floor);
-    const casing = this.gfx2 && kitReady() ? buildCasing(this.floors, kitState(this.surfaceEra)) : null;
-    this.undergroundHolder.addChild(buildUnderground(this.floors, i18n.currentLocale, this.gloom, ArtLibrary.get('backdrops/rock'), districts, casing));
+    const casing = this.gfx2 && kitReady() ? buildCasing(this.floors, kitState(this.surfaceEra), exts) : null;
+    this.undergroundHolder.addChild(buildUnderground(this.floors, i18n.currentLocale, this.gloom, ArtLibrary.get('backdrops/rock'), districts, casing, exts));
     this.undergroundSig = this.structureSig(state);
     this.structureGloom = this.gloom;
     this.shaftHolder.removeChildren().forEach(c => c.destroy({ children: true }));
     // G3 shaft hook: the painted industrial lift with the new look.
     this.shaft = this.gfx2 && kitReady()
-      ? buildShaft2(this.floors, this.surfaceEra, () => this.onElevator?.())
+      ? buildShaft2(this.floors, this.surfaceEra, () => this.onElevator?.(), exts.map(x => x.w > 0)) // [plan4:ST-4] a second landing door where a floor has a west wing
       : buildShaft(this.floors, () => this.onElevator?.());
     this.shaftHolder.addChild(this.shaft.container);
     this.dust.setFloors(this.floors);
@@ -562,9 +595,31 @@ export class BunkerRenderer {
   }
 
 
+  /** [plan4:ST-4] How far every floor reaches; with the `wings` feature switched off every floor draws as the classic 12 east of the shaft. */
+  private extsFor(state: GameState): Ext[] {
+    return GFX.wings ? extentsFor(state, this.floors) : Array.from({ length: this.floors }, () => ({ w: 0, e: 12 }));
+  }
+
+  /** [plan4:ST-4] The dig signs at the open ends of the floors: the options are asked for twice a second (or when the reach of a floor changes). */
+  private updateWingSigns(state: GameState): void {
+    if (import.meta.env.DEV) this.devState = state;
+    if (LAYOUT.ext !== this.wingHash || this.time - this.wingAt > 0.5) {
+      this.wingHash = LAYOUT.ext;
+      this.wingAt = this.time;
+      const opts = wingOptions(state);
+      const sig = opts.map(o => `${o.floor}${o.side}${o.steps}${o.block ?? ''}${JSON.stringify(o.cost)}`).join(';') + `|${this.floors}|${LAYOUT.ext}`;
+      if (sig !== this.wingSig) {
+        this.wingSig = sig;
+        this.wingSigns.onDig = (f, side) => this.onWingDig?.(f, side);
+        this.wingSigns.set(opts, this.exts);
+      }
+    }
+    this.wingSigns.update(this.mapCovers);
+  }
+
   private structureSig(state: GameState): string {
     void state;
-    return `${LAYOUT.districts}|${!!ArtLibrary.get('backdrops/rock')}|${this.gfx2 && kitReady()}|${this.gfx2 ? this.surfaceEra : ''}`; // [perf] districts = hash of their floors (hashLayout)
+    return `${LAYOUT.districts}|${LAYOUT.ext}|${!!ArtLibrary.get('backdrops/rock')}|${this.gfx2 && kitReady()}|${this.gfx2 ? this.surfaceEra : ''}`; // [perf] districts = hash of their floors (hashLayout)
   }
 
   setDigSign(available: boolean, text: string, cost: string): void {
@@ -804,31 +859,38 @@ export class BunkerRenderer {
     if (sig === this.utilitiesSig) return;
     this.utilitiesSig = sig;
     const memorial = this.memorialText(state); // [Danger C5]
+    this.frontChunks.container.parent?.removeChild(this.frontChunks.container); // [plan4:ST-7] the chunks are kept, not destroyed with the rest
     this.utilitiesHolder.removeChildren().forEach(c => c.destroy({ children: true }));
     this.bayHolder.removeChildren().forEach(c => c.destroy({ children: true }));
     this.front = null;
-    this.frontBands = null;
+    this.galleries = null;
+    if (!painted) this.frontChunks.clear();
     this.decals = null; // [gfx2 wear]
     this.atmo = null; // [gfx2 wear]
     if (painted) {
-      const grid = occupancy(state.buildings, state.ruins, this.floors);
+      const exts = this.extsFor(state); // [plan4:ST-4]
+      const grid = occupancy(state.buildings, state.ruins, this.floors, exts);
       this.bayHolder.addChild(buildBays(grid));
       const lamps = this.worldLamps(state);
-      this.front = buildFrontStructure(grid, state.buildings, this.floors, lamps, structureAmbient(this.surfaceEra) /* G4 lighting: era ambient */, kitState(this.surfaceEra));
-      this.utilitiesHolder.addChild(this.group(this.front.container, 'front'));
-      this.frontBands = bandize(this.front.container, 'front', 3 * FLOOR_H, TOPSOIL); // [perf] only the bands the camera sees are drawn
-      this.frontBands.update();
+      // [plan4:ST-7] Describe the structure to the chunk manager: unchanged chunks stay as they are, changed ones are rebuilt lazily when near the camera.
+      this.frontChunks.set(grid, state.buildings, this.floors, lamps, structureAmbient(this.surfaceEra) /* G4 lighting: era ambient */, kitState(this.surfaceEra));
+      this.front = this.frontChunks;
+      this.utilitiesHolder.addChild(this.group(this.frontChunks.container, 'front'));
+      this.frontChunks.update(performance.now());
+      // [plan4:ST-1] Service galleries (no-op while the flag is off or fewer than four floors exist).
+      this.galleries = buildGalleries(this.floors, exts, kitState(this.surfaceEra), structureAmbient(this.surfaceEra));
+      if (this.galleries.container.children.length) this.utilitiesHolder.addChild(this.group(this.galleries.container, 'galleries'));
       // [gfx2 signage] Zone plates, slab stencils and wall props (signage.ts).
       this.utilitiesHolder.addChild(this.group(buildSignage({
         buildings: state.buildings, ruins: state.ruins, floors: this.floors, era: Math.max(0, this.surfaceEra),
-        locale: i18n.currentLocale, rtl: i18n.isRTL, lamps, ambient: 0.5 - this.gloom * 0.35, memorial,
+        locale: i18n.currentLocale, rtl: i18n.isRTL, lamps, ambient: 0.5 - this.gloom * 0.35, memorial, exts,
       }), 'signage'));
       // [gfx2 wear] Wear decals in front of the structure (clear of the signage), then the atmosphere.
       const wearEra = Math.max(0, this.surfaceEra);
       this.decals = buildDecals(grid, state.buildings, this.floors, wearEra, lamps, structureAmbient(this.surfaceEra),
         this.utilitiesHolder.children.filter(c => c !== this.front?.container));
       this.utilitiesHolder.addChild(this.group(this.decals.container, 'decals'));
-      this.atmo = buildAtmosphere(state.buildings, this.floors, wearEra, lamps, this.decals.sources);
+      this.atmo = buildAtmosphere(state.buildings, this.floors, wearEra, lamps, this.decals.sources, exts);
       this.utilitiesHolder.addChild(this.group(this.atmo.container, 'atmosphere'));
       // A room's light colour: its lamps' colours, weighted by strength.
       this.roomLight.clear();
@@ -842,7 +904,7 @@ export class BunkerRenderer {
         this.roomLight.set(l.room, (mix((c >> 16) & 255, (l.color >> 16) & 255, k) << 16) | (mix((c >> 8) & 255, (l.color >> 8) & 255, k) << 8) | mix(c & 255, l.color & 255, k));
       }
     }
-    this.utilities = buildUtilities(state.buildings, this.floors, painted);
+    this.utilities = buildUtilities(state.buildings, this.floors, painted, this.extsFor(state));
     this.utilitiesHolder.addChild(this.group(this.utilities.container, 'pipes'));
   }
 
@@ -1063,11 +1125,12 @@ export class BunkerRenderer {
     hitState.zoom = this.cam.zoom;
     if (updateLabelScale(this.cam.zoom, now)) this.roomViews.applyLabelScale(); // [plan4:ST-12] tags keep a readable screen size
     this.updateView(); // [perf]
-    this.frontBands?.update();
+    this.front?.update(now); // [plan4:ST-7] chunks near the camera are built, the ones in view shown, the far ones given back
     this.updateLod(state, dt);
     this.roomViews.render(state);
     this.renderRuins(state);
     this.renderUtilities(state);
+    this.updateWingSigns(state);
     this.renderPeople(state, dt);
 
     const power = state.powerRatio ?? 1;
@@ -1093,6 +1156,7 @@ export class BunkerRenderer {
     this.utilities?.animate(this.time, power);
     if (!this.lowSkip) {
       this.front?.animate(this.time, power);
+      this.galleries?.animate(this.time, power);
       if (!lowQ) this.decals?.animate(this.time, power); // [gfx2 wear]
     }
     this.atmo?.update(this.time, dt, power, this.worldContainer, this.app.screen, this.postfx?.quality ?? 'high'); // [gfx2 wear]
@@ -1120,7 +1184,7 @@ export class BunkerRenderer {
       v.label.y = floorTop(r?.floor ?? 0) + ROOM_H * 0.3 + Math.sin(this.time * 2.2 + v.root.x) * 2;
     }
     this.incidents.quality = this.postfx?.quality ?? 'high'; // gfx-p0 crisis: particle budget follows the quality ladder
-    this.incidents.update(state, this.time, dt, id => this.roomRect(id), f => ({ x: ROOMS_X, y: floorTop(f), w: ROOMS_W }));
+    this.incidents.update(state, this.time, dt, id => this.roomRect(id), f => { const ex = floorExtent(state, f); return { x: slotX(-ex.w), y: floorTop(f), w: (ex.w + ex.e) * SLOT_W }; }); // [plan4:ST-4] a floor reaches as far as its wings
     this.disasterFx.update(state, this.time, id => this.roomRect(id)); // [Danger]
     this.updateBlockers(state); // [camera]
     this.updateBursts(dt);
@@ -1186,8 +1250,6 @@ export class BunkerRenderer {
   private mapAt = -1;
   /** [perf] The camera is far below the ground: the surface is hidden and not animated (see updateScene). */
   private surfaceOff = false;
-  /** [perf] Band culling of the structure in front of the rooms (see bandize in perfFx.ts). */
-  private frontBands: { update(): void } | null = null;
 
   /** Each era has its own look: the Remnant is cold and drained, the Undercity warm and full. */
   private refreshSurface(): void {
@@ -1390,7 +1452,8 @@ export class BunkerRenderer {
       if (!v) continue;
       const r = this.blockRects[n] ?? (this.blockRects[n] = { x: 0, y: 0, w: 0, h: 0 });
       if (inc.kind === 'blackout') {
-        r.x = ROOMS_X; r.y = v.root.y; r.w = ROOMS_W; r.h = v.height;
+        const fx = floorExtent(state, floorIndexAt(v.root.y)); // [plan4:ST-4] the whole floor, wings included
+        r.x = slotX(-fx.w); r.y = v.root.y; r.w = (fx.w + fx.e) * SLOT_W; r.h = v.height;
       } else {
         r.x = v.root.x; r.y = v.root.y; r.w = v.width; r.h = v.height;
       }
