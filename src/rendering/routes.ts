@@ -119,7 +119,14 @@ export function entryX(roomX: number, roomW: number, fromX: number): number {
 /** The world x of the middle of a stairwell column that runs through every floor from lo to hi, or NaN when there is none. */
 export function stairColumnX(state: GameState, lo: number, hi: number): number {
   for (const inf of state.layout?.infra ?? []) {
-    if (inf.kind === 'stairs' && inf.floor <= lo && inf.floor + (inf.floors ?? 1) - 1 >= hi) return slotX(inf.x) + SLOT_W / 2;
+    if ((inf.kind === 'stairs' || inf.kind === 'stairwell') && inf.floor <= lo && inf.floor + (inf.floors ?? 1) - 1 >= hi) return slotX(inf.x) + SLOT_W / 2;
+  }
+  // [plan4:ST-15] Built stairwells are one floor each (BL-28): a column is the same slot on every floor from lo to hi.
+  for (const inf of state.layout?.infra ?? []) {
+    if (inf.kind !== 'stairwell' || inf.floor !== lo) continue;
+    let ok = true;
+    for (let f = lo + 1; f <= hi && ok; f++) ok = (state.layout?.infra ?? []).some(o => o.kind === 'stairwell' && o.x === inf.x && f >= o.floor && f <= o.floor + (o.floors ?? 1) - 1);
+    if (ok) return slotX(inf.x) + SLOT_W / 2;
   }
   const bs = state.buildings;
   for (const c of bs) {

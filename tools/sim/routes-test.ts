@@ -38,7 +38,7 @@ export function routeChecks(): { problems: string[]; notes: string[] } {
   if (route(st, stop(0, ROOMS_X + 50), stop(18, ROOMS_X + 50), false, 0.5, r) !== null) fail('an 18-floor ladder climb should be refused as too long');
 
   // A stairwell column through floors 1..4 at slot 3: blackout trips use it; with power only some short hops do.
-  st.layout.infra.push({ id: 's1', kind: 'stairs', floor: 1, x: 3, floors: 4 });
+  st.layout.infra.push({ id: 's1', kind: 'stairwell', floor: 1, x: 3, floors: 4 });
   o = route(st, stop(1, ROOMS_X + 400), stop(3, ROOMS_X + 20), false, 0.5, r);
   if (!o || !Array.from(r.kind.slice(0, r.n)).includes(LEG_STAIRS)) fail('blackout with a stairwell should take the stairs');
   else {
