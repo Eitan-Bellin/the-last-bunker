@@ -9,10 +9,17 @@ import type { DigSystem } from './DigSystem';
 import type { ContractSystem } from './ContractSystem';
 import type { ResourceSystem } from './ResourceSystem';
 import { rankOf } from '../data/mastery';
+import { closeEmergencyDoors, doorsOperable, emergencyDoorTargets, setDoorState, troubleOn } from './InfraSystem';
+import { getDoor } from './doors';
 
 /** The Foreman's standing orders (long-game plan, pillar C): routine the player hands over instead of repeating. */
-export type ForemanOrder = 'maintain' | 'deposit' | 'staff' | 'train' | 'contracts';
-export const FOREMAN_ORDERS: ForemanOrder[] = ['maintain', 'deposit', 'staff', 'train', 'contracts'];
+export type ForemanOrder = 'maintain' | 'deposit' | 'staff' | 'train' | 'contracts' | 'sealOnAlarm';
+export const FOREMAN_ORDERS: ForemanOrder[] = ['maintain', 'deposit', 'staff', 'train', 'contracts', 'sealOnAlarm'];
+/**
+ * [plan4:GP-8 #7] 'sealOnAlarm' watches for trouble (a fire, an epidemic, a raid on the way) every few seconds instead of once a round:
+ * a fire does not wait a minute. Off by default; the price is visible (shut rooms are cut off and the doors draw power).
+ */
+const ALARM_EVERY = 5;
 /** [Q9] Training only runs while knowledge is at least this share of its cap, so the order never starves research. */
 const TRAIN_KNOWLEDGE_SHARE = 0.5;
 /** Quick trainings per round. */
@@ -40,6 +47,7 @@ export class ForemanSystem {
   private contracts: ContractSystem;
   private resources: ResourceSystem;
   private clock = 0;
+  private alarmClock = 0;
   /** The last round's result per order (not saved: the first round after a load fills it again). */
   readonly last: Partial<Record<ForemanOrder, ForemanReport>> = {};
 
@@ -68,6 +76,8 @@ export class ForemanSystem {
     this.sm.applyDelta({ path: 'longGame.foreman.orders', value: { ...lg.foreman.orders, [order]: on } });
     if (on && this.available(this.sm.state)) this.run(order);
     else delete this.last[order];
+    // [plan4:GP-8] Turning the door order off ends its duty: what it shut stays as it is (the Safety card opens it), nothing is reopened later.
+    if (!on && order === 'sealOnAlarm' && (lg.foreman.sealed?.length ?? 0) > 0) this.sm.applyDelta({ path: 'longGame.foreman.sealed', value: [] });
   }
 
   /** Seconds until the next round. */
@@ -76,6 +86,12 @@ export class ForemanSystem {
   }
 
   update(dt: number): void {
+    this.alarmClock += dt;
+    if (this.alarmClock >= ALARM_EVERY) {
+      this.alarmClock = 0;
+      const st = this.sm.state;
+      if (this.available(st) && this.isOn(st, 'sealOnAlarm')) this.last.sealOnAlarm = this.sealOnAlarm();
+    }
     this.clock += dt;
     if (this.clock < FOREMAN_ROUND) return;
     this.clock = 0;
@@ -86,7 +102,38 @@ export class ForemanSystem {
 
   private run(order: ForemanOrder): void {
     this.last[order] = order === 'maintain' ? this.maintain() : order === 'deposit' ? this.deposit()
-      : order === 'staff' ? this.staff() : order === 'train' ? this.train() : this.takeContracts();
+      : order === 'staff' ? this.staff() : order === 'train' ? this.train() : order === 'sealOnAlarm' ? this.sealOnAlarm() : this.takeContracts();
+  }
+
+  /**
+   * [plan4:GP-8 #7] While a fire, an epidemic or a raid is on, shuts the open doors around it (the same doors the Safety card's button
+   * shuts); when the trouble is over, opens again only the doors it shut itself and that are still shut (a door the player changed
+   * since stays as the player left it). The list of its doors is saved (foreman.sealed), so a reload in the middle does not leave them shut.
+   */
+  private sealOnAlarm(): ForemanReport {
+    const state = this.sm.state;
+    const mine = state.longGame?.foreman.sealed ?? [];
+    if (troubleOn(state)) {
+      if (!doorsOperable(state)) return { key: 'sealBlackout' };
+      const targets = emergencyDoorTargets(state);
+      if (targets.length === 0) return mine.length ? { key: 'sealShut', n: mine.length } : { key: 'sealNone' };
+      const keys = targets.map(t => `${t.floor}:${t.x}`);
+      const n = closeEmergencyDoors(this.sm);
+      if (n > 0) this.sm.applyDelta({ path: 'longGame.foreman.sealed', value: [...new Set([...mine, ...keys])] });
+      return { key: 'sealShut', n: n || mine.length };
+    }
+    if (mine.length === 0) return { key: 'sealNone' };
+    if (!doorsOperable(state)) return { key: 'sealBlackout' };
+    let opened = 0;
+    const left: string[] = [];
+    for (const key of mine) {
+      const [f, x] = key.split(':').map(Number);
+      if (getDoor(this.sm.state, f, x) !== 'closed') continue; // opened, sealed or removed by the player meanwhile
+      if (setDoorState(this.sm, f, x, 'open') === null) opened++;
+      else left.push(key);
+    }
+    this.sm.applyDelta({ path: 'longGame.foreman.sealed', value: left });
+    return opened ? { key: 'sealOpened', n: opened } : { key: 'sealNone' };
   }
 
   /** [Q9] Quick paid training for the most experienced workers who can still rank up (the training room's job, handed over). */

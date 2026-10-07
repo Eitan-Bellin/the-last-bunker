@@ -177,8 +177,8 @@ export const BOOK: BookEntry[] = [
     id: 'foreman', icon: '[[worker]]', group: 'people',
     title: { he: 'מנהל העבודה', en: 'The Foreman' },
     text: {
-      he: 'ממערכה II אפשר למסור שגרה לפקודות קבע: תחזוקה, העברת עודפים לפרויקט, שיבוץ בטלנים, אימון מהיר ומענה לחוזים בטוחים. הוא פועל אחת לדקה גם כשאתם רחוקים, ומדווח מה עשה. הפקודות נמצאות במרכז הפיקוד.',
-      en: 'From Act II you can hand routine to standing orders: servicing, delivering spare goods to the project, placing idle people, quick training and answering safe contracts. He works about once a minute, also while you are away, and reports what he did. The orders are in the Command panel.',
+      he: 'ממערכה II אפשר למסור שגרה לפקודות קבע: תחזוקה, העברת עודפים לפרויקט, שיבוץ בטלנים, אימון מהיר, מענה לחוזים בטוחים וסגירת דלתות בשעת סכנה (בחירה שלכם, עם מחיר בייצור). הוא פועל אחת לדקה גם כשאתם רחוקים, ומדווח מה עשה. הפקודות נמצאות במרכז הפיקוד.',
+      en: 'From Act II you can hand routine to standing orders: servicing, delivering spare goods to the project, placing idle people, quick training, answering safe contracts and shutting doors in danger (your choice, with a cost in output). He works about once a minute, also while you are away, and reports what he did. The orders are in the Command panel.',
     },
   },
   {

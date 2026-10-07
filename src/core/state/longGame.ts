@@ -105,6 +105,8 @@ export interface InboxState {
 /** [UX lane] Standing orders that take routine off the player's hands. */
 export interface ForemanState {
   orders: Record<string, unknown>;
+  /** [plan4:GP-8] Door keys ("floor:x") the 'sealOnAlarm' order shut and has not yet opened again (optional: absent in older saves). */
+  sealed?: string[];
 }
 
 /** [Q14] One line of the Chronicle (src/systems/ChronicleSystem.ts). */
