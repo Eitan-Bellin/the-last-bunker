@@ -6,6 +6,8 @@ import { ROOMS_W, ROOMS_X, ROOM_H, SLOT_W, floorAtY, floorTop, slotX } from './l
 import { hashString, seeded } from './draw';
 import type { WorldLamp } from './structure';
 import type { DecalSources } from './decals';
+import { galleryVents } from './gallery'; // [plan4:ST-1]
+import type { Ext } from './geom';
 
 /**
  * Graphics overhaul G7: the bunker breathes. Every effect comes from something you can see —
@@ -76,7 +78,7 @@ interface Emitter {
   flash?: Sprite;
 }
 
-export function buildAtmosphere(buildings: BuildingInstance[], floors: number, era: number, lamps: WorldLamp[], src: DecalSources): Atmosphere {
+export function buildAtmosphere(buildings: BuildingInstance[], floors: number, era: number, lamps: WorldLamp[], src: DecalSources, exts: readonly Ext[] = []): Atmosphere {
   const root = new Container();
   root.eventMode = 'none';
   const fixtures = new Graphics();
@@ -127,6 +129,12 @@ export function buildAtmosphere(buildings: BuildingInstance[], floors: number, e
     if (!l.ceiling) continue;
     const f = Math.max(0, floorAtY(l.y).floor);
     ems.push({ kind: 'dust', x: l.x, y: l.y + 4, next: r() * 2, until: 0, w: Math.min(26, l.reach * 0.22), floorY: floorTop(f) + ROOM_H - 10, color: l.color, alive: 0 });
+  }
+
+  // [plan4:ST-1] Steam from the valves of the service galleries (same pool and budget; none while a gallery does not exist or in Low, which draws no atmosphere).
+  if (exts.length) {
+    const gr = seeded(hashString(`gallery-steam:${floors}`));
+    for (const v of galleryVents(floors, exts)) ems.push({ kind: 'steam', x: v.x + 2.5, y: v.y - 1, next: gr() * 6, until: 0, w: gr() < 0.5 ? -1 : 1, floorY: 0, color: 0xd6dadb, alive: 0 });
   }
 
   const pool: P[] = [];

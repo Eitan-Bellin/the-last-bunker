@@ -37,14 +37,14 @@ export function kitState(era: number): KitState {
 }
 
 const MATERIALS = ['wall', 'slab', 'column', 'pipes'] as const;
-type Material = typeof MATERIALS[number];
+export type Material = typeof MATERIALS[number];
 
 export const KIT_KEYS = [
   ...MATERIALS.flatMap(m => ['F', 'R', 'L'].map(st => `kit/${m}-${st}`)), 'kit/bay-A-wide', 'kit/bay-A-narrow',
 ];
 
 /** The material in the era's state, falling back to the restored look while it loads. */
-function kitTex(m: Material, st: KitState): Texture | null {
+export function kitTex(m: Material, st: KitState): Texture | null {
   return ArtLibrary.get(`kit/${m}-${st}`) ?? ArtLibrary.get(`kit/${m}-F`);
 }
 

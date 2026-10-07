@@ -7,7 +7,7 @@ import type { EraDef } from '../data/eras';
 import type { BuildingInstance, GameState, Position, Ruin, SurvivorState } from '../core/GameState';
 import { effectiveLevel, isDistrict, roomFloors, roomSlots } from '../data/buildingDefs';
 import { i18n } from '../i18n/I18nManager';
-import { BUILDING_W, DISTRICT_X, FLOOR_H, ROOM_H, SLOT_W, TOPSOIL, buildingH, buildingX, floorExtent, floorTop, slotX } from './layout';
+import { BUILDING_W, DISTRICT_X, FLOOR_H, ROOM_H, SLOT_W, TOPSOIL, buildingH, buildingX, extentsFor, floorExtent, floorTop, slotX } from './layout';
 import { hashString, seeded } from './draw';
 import { PEOPLE_STYLE, Person, ROOM_ACTIVITY, type Activity, type Lane } from './people';
 import { crowdFor, restCountFor, settleCrowds } from './workSpots'; // gfx-p0 people
@@ -19,6 +19,7 @@ import type { AmbienceMix } from '../audio/AudioEngine';
 import { Dust, buildDigSign, buildShaft, buildSurface, buildUnderground, buildUtilities, type Animated } from './world';
 import { LAYOUT, VIEW, bandize, hashLayout } from './perfFx'; // [perf]
 import { buildShaft2 } from './shaft';
+import { buildGalleries } from './gallery'; // [plan4:ST-1]
 import { buildSurface2, mountSurface2, surface2Sig } from './surface2'; // [gfx2 surface]
 import { roomFlicker, setRoomFxQuality } from './paintedRoom'; // gfx-p0 rooms: quality
 import { lineWidth, richLine } from './richText';
@@ -76,6 +77,8 @@ export class BunkerRenderer {
   readonly gfx2 = gfx2Enabled();
   private bayHolder = new Container();
   private front: Animated | null = null;
+  /** [plan4:ST-1] The service galleries between floors (gallery.ts). */
+  private galleries: Animated | null = null;
   /** [gfx2 wear] Story-telling decals and the living atmosphere (decals.ts, atmosphere.ts). */
   private decals: DecalLayer | null = null;
   private atmo: Atmosphere | null = null;
@@ -784,6 +787,7 @@ export class BunkerRenderer {
     this.utilitiesHolder.removeChildren().forEach(c => c.destroy({ children: true }));
     this.bayHolder.removeChildren().forEach(c => c.destroy({ children: true }));
     this.front = null;
+    this.galleries = null;
     this.frontBands = null;
     this.decals = null; // [gfx2 wear]
     this.atmo = null; // [gfx2 wear]
@@ -795,6 +799,10 @@ export class BunkerRenderer {
       this.utilitiesHolder.addChild(this.group(this.front.container, 'front'));
       this.frontBands = bandize(this.front.container, 'front', 3 * FLOOR_H, TOPSOIL); // [perf] only the bands the camera sees are drawn
       this.frontBands.update();
+      // [plan4:ST-1] Service galleries (no-op while the flag is off or fewer than four floors exist).
+      const exts = extentsFor(state, this.floors);
+      this.galleries = buildGalleries(this.floors, exts, kitState(this.surfaceEra), structureAmbient(this.surfaceEra));
+      if (this.galleries.container.children.length) this.utilitiesHolder.addChild(this.group(this.galleries.container, 'galleries'));
       // [gfx2 signage] Zone plates, slab stencils and wall props (signage.ts).
       this.utilitiesHolder.addChild(this.group(buildSignage({
         buildings: state.buildings, ruins: state.ruins, floors: this.floors, era: Math.max(0, this.surfaceEra),
@@ -805,7 +813,7 @@ export class BunkerRenderer {
       this.decals = buildDecals(grid, state.buildings, this.floors, wearEra, lamps, structureAmbient(this.surfaceEra),
         this.utilitiesHolder.children.filter(c => c !== this.front?.container));
       this.utilitiesHolder.addChild(this.group(this.decals.container, 'decals'));
-      this.atmo = buildAtmosphere(state.buildings, this.floors, wearEra, lamps, this.decals.sources);
+      this.atmo = buildAtmosphere(state.buildings, this.floors, wearEra, lamps, this.decals.sources, exts);
       this.utilitiesHolder.addChild(this.group(this.atmo.container, 'atmosphere'));
       // A room's light colour: its lamps' colours, weighted by strength.
       this.roomLight.clear();
@@ -1067,6 +1075,7 @@ export class BunkerRenderer {
     this.utilities?.animate(this.time, power);
     if (!this.lowSkip) {
       this.front?.animate(this.time, power);
+      this.galleries?.animate(this.time, power);
       if (!lowQ) this.decals?.animate(this.time, power); // [gfx2 wear]
     }
     this.atmo?.update(this.time, dt, power, this.worldContainer, this.app.screen, this.postfx?.quality ?? 'high'); // [gfx2 wear]
@@ -1094,7 +1103,7 @@ export class BunkerRenderer {
       v.label.y = floorTop(r?.floor ?? 0) + ROOM_H * 0.3 + Math.sin(this.time * 2.2 + v.root.x) * 2;
     }
     this.incidents.quality = this.postfx?.quality ?? 'high'; // gfx-p0 crisis: particle budget follows the quality ladder
-    this.incidents.update(state, this.time, dt, id => this.roomRect(id), f => ({ x: ROOMS_X, y: floorTop(f), w: ROOMS_W }));
+    this.incidents.update(state, this.time, dt, id => this.roomRect(id), f => { const ex = floorExtent(state, f); return { x: slotX(-ex.w), y: floorTop(f), w: (ex.w + ex.e) * SLOT_W }; }); // [plan4:ST-4] a floor reaches as far as its wings
     this.disasterFx.update(state, this.time, id => this.roomRect(id)); // [Danger]
     this.updateBlockers(state); // [camera]
     this.updateBursts(dt);

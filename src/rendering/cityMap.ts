@@ -2,7 +2,7 @@ import { Container, Graphics, Text } from 'pixi.js';
 import type { BuildingType, GameState } from '../core/GameState';
 import { isDistrict, isHall, roomSlots } from '../data/buildingDefs';
 import { zoneForFloor } from '../data/zones';
-import { BUILDING_W, ROOMS_X, SHAFT_W, SLAB, SLOT_W, TOPSOIL, buildingH, buildingX, floorTop } from './layout';
+import { BUILDING_W, ROOMS_X, SHAFT_W, SLAB, SLOT_W, TOPSOIL, buildingH, buildingX, floorTop, galleryCount, galleryTop, GALLERY_H } from './layout';
 import { hashString } from './draw';
 
 export interface CityMap {
@@ -41,6 +41,8 @@ export function buildCityMap(state: GameState, floors: number, locale: string): 
     const y = f < floors ? floorTop(f) - SLAB / 2 : floorTop(f) - SLAB / 2;
     base.rect(-28, y, right + 28, 1.5).fill({ color: 0x5ab8ff, alpha: 0.35 });
   }
+  // [plan4:ST-1] Service galleries: an orange line each, so the far view reads the rhythm of the floors.
+  for (let g = 0; g < galleryCount(floors); g++) base.rect(-28, galleryTop(g) + GALLERY_H / 2 - 1.5, right + 28, 3).fill({ color: 0xff9a3a, alpha: 0.5 });
   // The shaft as a column of light.
   base.rect(SHAFT_W / 2 - 3, top, 6, bottom - top).fill({ color: 0xffd47a, alpha: 0.18 });
   container.addChild(base);

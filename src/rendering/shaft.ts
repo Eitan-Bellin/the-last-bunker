@@ -1,6 +1,6 @@
 import { Container, Graphics, Sprite, TilingSprite, type Texture } from 'pixi.js';
 import { ArtLibrary, glowTexture } from '../art/ArtLibrary';
-import { ROOM_H, SHAFT_W, floorAfterTravel, floorTop } from './layout';
+import { FLOOR_H, GALLERY_H, ROOM_H, SHAFT_W, floorAfterTravel, floorTop, galleryCount, galleryTop } from './layout';
 import { seeded } from './draw';
 import { depthGains, kitState, softTexture, type KitState } from './structure';
 import type { Animated } from './world';
@@ -107,7 +107,7 @@ export function buildShaft2(floors: number, era: number, onArrive?: () => void):
   const pipeTex = kit('pipes', st);
   // The wall in floor-high bands so the depth fog can darken it level by level.
   const bands: [number, number][] = [[TOP, floorTop(0)]];
-  for (let f = 0; f < floors; f++) bands.push([floorTop(f), floorTop(f) + ROOM_H + 16]);
+  for (let f = 0; f < floors; f++) bands.push([floorTop(f), floorTop(f) + ROOM_H + 16 + (floorTop(f + 1) - floorTop(f) - FLOOR_H)]); // [plan4:ST-1] a gallery under the floor is part of the band: the shaft passes through it
   for (const [y0, y1] of bands) {
     if (wallTex) {
       const w = new TilingSprite({ texture: wallTex, width: SHAFT_W, height: y1 - y0 });
@@ -175,6 +175,29 @@ export function buildShaft2(floors: number, era: number, onArrive?: () => void):
     }
   }
   back.addChild(clamps);
+
+  // [plan4:ST-1] Where a service gallery crosses the shaft: a girder pair behind the car, a hatch on the back wall and an amber lamp (the car passes in front).
+  for (let g = 0; g < galleryCount(floors); g++) {
+    const y0 = galleryTop(g);
+    const sg = new Graphics();
+    sg.rect(1, y0 + 3, SHAFT_W - 2, 5).fill(tintAt(0x24241f, y0));
+    sg.rect(1, y0 + 3, SHAFT_W - 2, 1).fill({ color: 0xa09a8a, alpha: 0.3 });
+    sg.rect(1, y0 + GALLERY_H - 7, SHAFT_W - 2, 5).fill(tintAt(0x24241f, y0));
+    for (let x = 3; x < SHAFT_W - 4; x += 8) sg.poly([x, y0 + GALLERY_H - 7, x + 4, y0 + GALLERY_H - 7, x + 1, y0 + GALLERY_H - 2, x - 3, y0 + GALLERY_H - 2]).fill({ color: 0xd9a441, alpha: 0.5 });
+    sg.rect(SHAFT_W - 22, y0 + 10, 14, 16).fill(tintAt(0x1a1b1c, y0));
+    sg.rect(SHAFT_W - 22, y0 + 10, 14, 1).fill({ color: 0x9a9a92, alpha: 0.3 });
+    sg.circle(SHAFT_W - 9, y0 + 18, 1.6).fill(0xffb050);
+    back.addChild(sg);
+    const lampHalo = new Sprite(glow);
+    lampHalo.anchor.set(0.5);
+    lampHalo.tint = 0xffa24a;
+    lampHalo.blendMode = 'add';
+    lampHalo.alpha = 0.55;
+    lampHalo.width = 34;
+    lampHalo.height = GALLERY_H * 1.1;
+    lampHalo.position.set(SHAFT_W - 9, y0 + 18);
+    back.addChild(lampHalo);
+  }
 
   // Guide rails: steel columns in floor-long lengths joined by fishplates.
   const rails = new Container();

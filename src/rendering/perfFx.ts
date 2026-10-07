@@ -227,7 +227,7 @@ export class Dust {
     this.motes = [];
     for (let i = 0; i < 26 * floors; i++) {
       this.motes.push({
-        x: ROOMS_X + rnd() * ROOMS_W, y: floorTop(0) + rnd() * floors * FLOOR_H,
+        x: ROOMS_X + rnd() * ROOMS_W, y: floorTop(0) + rnd() * (floorTop(floors) - floorTop(0)), // [plan4:ST-1] the galleries add height
         vx: (rnd() - 0.5) * 4, vy: (rnd() - 0.5) * 3, ph: rnd() * Math.PI * 2,
       });
     }
