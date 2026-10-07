@@ -25,6 +25,10 @@ export async function checkMigration(json: string): Promise<MigrateCheck> {
 
     if (m.version !== SAVE_VERSION) problems.push(`version ${m.version}, expected ${SAVE_VERSION}`);
     if (!m.longGame?.meta) problems.push('no longGame slice');
+    // [plan4:ST-3] The second dig slot exists, and a dig without `kind` is a floor dig (older saves).
+    if (m.longGame && (!m.longGame.dig2 || m.longGame.dig2.floor !== null || (m.longGame.dig.kind ?? 'floor') !== 'floor')) problems.push('dig2 / dig.kind not defaulted');
+    // [plan4:X-3] v7: an older save gets the empty layout (no wings, doors, infrastructure; surface row closed).
+    if (!old.layout && (!m.layout || m.layout.v !== 1 || Object.keys(m.layout.ext).length || Object.keys(m.layout.doors).length || m.layout.infra.length || m.layout.surfaceOpen)) problems.push('layout not defaulted');
     // Nothing the player has may be taken away.
     if (m.buildings.length !== old.buildings.length) problems.push(`buildings ${old.buildings.length} -> ${m.buildings.length}`);
     if (m.survivors.length !== old.survivors.length) problems.push(`survivors ${old.survivors.length} -> ${m.survivors.length}`);
@@ -36,7 +40,8 @@ export async function checkMigration(json: string): Promise<MigrateCheck> {
     for (const f of old.storyFlags ?? []) if (!m.storyFlags.includes(f)) problems.push(`flag ${f} lost`);
     if ((m.currentFloors ?? 0) < (old.currentFloors ?? 0)) problems.push(`floors ${old.currentFloors} -> ${m.currentFloors}`);
     if ((m.prestige?.rebirthCount ?? 0) !== (old.prestige?.rebirthCount ?? 0)) problems.push('rebirth count changed');
-    if (m.longGame && (old.era ?? 0) >= 3 && m.longGame.meta.act !== 4) problems.push(`era 3 save placed in Act ${m.longGame.meta.act}`);
+    // Only for saves from before the Acts existed (no longGame slice): those were placed in Act 4. A v5+ save keeps the Act it was in. [plan4:QA-1]
+    if (m.longGame && !old.longGame && (old.era ?? 0) >= 3 && m.longGame.meta.act !== 4) problems.push(`era 3 save placed in Act ${m.longGame.meta.act}`);
 
     // Then start it like the app does (adoptState through init, an hour of time away) and play ten minutes.
     const e = new GameEngine();

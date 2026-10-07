@@ -1,5 +1,7 @@
 import { Container, TextStyle } from 'pixi.js';
 import { richLine } from '../../rendering/richText';
+import { popupScale } from '../../rendering/LabelScale'; // [plan4:ST-12]
+import { statusTint } from '../../utils/a11y';
 
 interface PopupInstance {
   line: Container;
@@ -63,6 +65,8 @@ const easeOutCubic = (k: number) => 1 - (1 - k) * (1 - k) * (1 - k);
  */
 export class NumberPopupManager {
   private parent: Container;
+  /** [plan4:ST-12] Extra scale that keeps the numbers readable when the camera is zoomed out (set by the renderer). */
+  zoom = 1;
   private active: PopupInstance[] = [];
   private pool = new Map<string, Container[]>();
   private pooled = 0;
@@ -72,7 +76,7 @@ export class NumberPopupManager {
     this.parent = parent;
   }
 
-  spawn(x: number, y: number, value: string, color: number = 0x44ff44): void {
+  spawn(x: number, y: number, value: string, color: number = statusTint('ok')): void {
     if (blockedAt?.(x, y)) return;
     const spot = `${Math.round(x)}|${Math.round(y)}|${color}`;
     // Merge into a popup still being read at the same spot: "+6 [food]" + "+6 [food]" -> "+12 [food]".
@@ -130,6 +134,7 @@ export class NumberPopupManager {
   /** Steps all popups; `dt` in seconds is optional (measured from the clock when omitted). */
   update(dt?: number): void {
     const now = performance.now();
+    const ps = popupScale(this.zoom);
     const step = Math.min(0.1, dt ?? (now - this.last) / 1000);
     this.last = now;
     for (let i = this.active.length - 1; i >= 0; i--) {
@@ -145,7 +150,7 @@ export class NumberPopupManager {
       const t = p.age;
       let s = t < 0.12 ? 0.4 + 0.75 * easeOutCubic(t / 0.12) : t < 0.22 ? 1.15 - 0.15 * ((t - 0.12) / 0.1) : 1;
       if (p.bump < 0.2) s *= 1 + 0.28 * Math.sin((p.bump / 0.2) * Math.PI);
-      p.line.scale.set(s);
+      p.line.scale.set(s * ps);
       let a = k < 0.65 ? 1 : 1 - (k - 0.65) / 0.35;
       if (p.kill > 0) a *= Math.max(0, 1 - p.kill / 0.18);
       p.line.alpha = a;

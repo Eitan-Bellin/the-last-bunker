@@ -1,5 +1,5 @@
 import type { GameState, ResourceType, SurvivorStats } from '../core/GameState';
-import { vibrate } from '../utils/haptics';
+import { haptic } from '../utils/haptics';
 import { i18n } from '../i18n/I18nManager';
 import { iconSvg, isIcon, tok, type IconName } from './icons';
 import { uiSound } from '../audio/uiSound';
@@ -48,7 +48,33 @@ export const BUILDING_ICONS: Record<string, string> = {
   trainingRoom: tok('trainingRoom'),
   armory: tok('armory'),
   reactor: tok('reactor'),
+  // [plan4:BL-9..14,19,33] the first eight new rooms
+  batteryBank: tok('batteryBank'),
+  commons: tok('commons'),
+  library: tok('library'),
+  recycler: tok('recycler'),
+  condenser: tok('condenser'),
+  mushroomFarm: tok('mushroomFarm'),
+  gatePost: tok('gatePost'),
+  barracks: tok('barracks'),
+  // [plan4:BL-15..32] wave 2 rooms
+  quarantineWard: tok('quarantineWard'),
+  solarArray: tok('solarArray'),
+  windTurbine: tok('windTurbine'),
+  watchtower: tok('watchtower'),
+  garage: tok('garage'),
+  decon: tok('decon'),
+  aquaculture: tok('aquaculture'),
+  market: tok('market'),
+  nursery: tok('nursery'),
+  school: tok('school'),
+  bathhouse: tok('bathhouse'),
+  memorialHall: tok('memorialHall'),
 };
+// [plan4:ST-16] stand-in icons for the surface row's rooms until Rooms-Data's own arrive (??= keeps theirs)
+BUILDING_ICONS.solarArray ??= tok('sun');
+BUILDING_ICONS.windTurbine ??= tok('wave');
+BUILDING_ICONS.watchtower ??= tok('eye');
 
 const TOKEN = /\[\[([a-zA-Z0-9]+)\]\]/g;
 
@@ -132,10 +158,10 @@ export function button(label: string, className: string, onClick: () => void, di
   b.addEventListener('click', (e) => {
     e.stopPropagation();
     if (b.disabled) {
-      vibrate([10, 40, 10]);
+      haptic('error');
       return;
     }
-    vibrate(8);
+    haptic('tap');
     if (/\btab(-btn)?\b/.test(b.className)) uiSound('tab');
     onClick();
   });

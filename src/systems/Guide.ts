@@ -3,9 +3,11 @@ import type { GameState, ResourceType } from '../core/GameState';
 import { ACTS, actOf, type ActDef, type ActGoal } from '../data/acts';
 import { eraOf } from '../data/eras';
 import { getProject, projectDone, stagesDone } from '../data/projects';
+import { RESEARCH } from '../data/research';
 import { i18n } from '../i18n/I18nManager';
 import { RESOURCE_ICONS } from '../ui/dom';
 import type { Objective, ObjectiveAction } from './ObjectiveSystem';
+import { wingOptions } from '../data/wings';
 
 /**
  * [Q2] The guide: what blocks the run right now, in plain words, and where to tap to deal with it.
@@ -36,6 +38,15 @@ const ICONS: Record<ActGoal['kind'], string> = {
 
 const list = (o: Partial<Record<ResourceType, number>>): string => Object.entries(o)
   .map(([r, v]) => `${RESOURCE_ICONS[r] ?? ''}${i18n.formatCompact(v ?? 0)}`).join(' ');
+
+/** [plan4:ST-5] True when even the smallest rooms have no free slot on any floor: only a wider (or deeper) floor makes space. */
+export function noSpace(engine: GameEngine, state: GameState): boolean {
+  const bs = engine.buildingSystem;
+  for (const type of ['generator', 'quarters', 'storage', 'farm', 'workshop'] as const) {
+    for (let f = 0; f < state.currentFloors; f++) if (bs.findFreeSpot(type, f, state)) return false;
+  }
+  return true;
+}
 
 /** The Act's share done, 0..1 (goals and charter projects weigh the same). */
 export function actFraction(engine: GameEngine, state: GameState, act: ActDef = actOf(state)): number {
@@ -76,6 +87,11 @@ function goalRequirement(engine: GameEngine, state: GameState, act: ActDef, g: A
         const want = engine.digSystem.wanted(state);
         const text = crew < want ? i18n.t('guide.digCrew', { n: want - crew }) : i18n.t('guide.digBusy', { t2: isFinite(eta) ? i18n.formatDuration(eta) : '…' });
         return { ...base, text, action: { kind: 'dig' }, immediate: crew < want };
+      }
+      // [plan4:ST-5] No deeper floor allowed and no room left on the floors there are: widen a wing.
+      if ((block === 'act' || block === 'max') && noSpace(engine, state)) {
+        const o = wingOptions(state).filter(w => w.block === null || w.block === 'cost').sort((a, b) => (a.block === null ? 0 : 1) - (b.block === null ? 0 : 1) || a.floor - b.floor)[0];
+        if (o) return { ...base, text: i18n.t('guide.wing', { cost: list(o.cost) }), action: null, immediate: o.block === null };
       }
       const over = bs.digOverCap(state);
       if (over) return { ...base, text: i18n.t('guide.digStorage', { res: i18n.t(`resources.${over.resource}`) }), action: { kind: 'rooms' } };
@@ -176,4 +192,42 @@ export function guideObjective(engine: GameEngine, state: GameState): Objective 
       return again ? again.progress : pick.progress;
     },
   };
+}
+
+/** [plan4:GP-3] One thing the check-in screen suggests doing now: a line and where one tap leads. */
+export interface Suggestion {
+  id: string;
+  icon: string;
+  text: string;
+  action: ObjectiveAction;
+}
+
+/**
+ * [plan4:GP-3] Up to `max` suggestions for the "Now" part of the check-in screen: free actions first (a project to start, a crew to put on it),
+ * then idle research, then full storage (spend it on a project), then the Act's slower requirements. Pure reading of the state.
+ */
+export function checkinSuggestions(engine: GameEngine, state: GameState, max = 3): Suggestion[] {
+  const out: Suggestion[] = [];
+  const lg = state.longGame;
+  const reqs = lg && !lg.meta.legacy ? actRequirements(engine, state).filter(r => !r.done && r.action) : [];
+  const push = (s: Suggestion) => {
+    if (!s.action || out.some(o => o.id === s.id || (o.action?.kind === s.action?.kind && o.text === s.text))) return;
+    out.push(s);
+  };
+  for (const r of reqs.filter(q => q.immediate)) push({ id: r.id, icon: r.icon, text: r.text, action: r.action });
+  const rs = engine.researchSystem;
+  if (!rs.activeId(state) && RESEARCH.some(r => rs.canStart(state, r.id))) {
+    push({ id: 'research', icon: '[[research]]', text: i18n.t('checkin.sugResearch'), action: { kind: 'research' } });
+  }
+  const full = (['materials', 'food', 'water', 'knowledge'] as ResourceType[]).find(r => {
+    const res = state.resources[r];
+    return res.cap > 0 && res.amount >= res.cap * 0.95 && res.productionRate > res.consumptionRate;
+  });
+  if (full) push({ id: 'storage', icon: '[[storage]]', text: i18n.t('checkin.sugStorage', { res: i18n.t(`resources.${full}`) }), action: { kind: lg ? 'projects' : 'rooms' } });
+  for (const r of reqs.filter(q => !q.immediate).sort((a, b) => a.fraction - b.fraction)) push({ id: r.id, icon: r.icon, text: r.text, action: r.action });
+  if (out.length === 0) {
+    const o = engine.objectiveSystem.current(state);
+    push({ id: `obj:${o.id}`, icon: o.icon, text: o.text[i18n.currentLocale] ?? o.text.en, action: o.action });
+  }
+  return out.slice(0, max);
 }

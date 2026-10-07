@@ -62,9 +62,9 @@ export class SystemsController {
     this.app = app;
   }
 
-  /** Called while no dialog is open. Shows at most one card, and only when the last one is a while ago. */
-  update(state: GameState): void {
-    if (!state.longGame || !state.storyFlags.includes('intro:done')) return;
+  /** [plan4:UX-10] The card that is due now. Shows and flags nothing, except the one-time marking of what an older save already knew. */
+  private due(state: GameState): SystemCard | null {
+    if (!state.longGame || !state.storyFlags.includes('intro:done')) return null;
     const flags = state.storyFlags;
     if (!this.initDone) {
       this.initDone = true;
@@ -72,14 +72,30 @@ export class SystemsController {
       if (!flags.includes('sys:init')) {
         const known = CARDS.filter(c => c.ready(state, this.app)).map(c => `sys:${c.id}`);
         this.flag(state, ['sys:init', ...known]);
-        return;
+        return null;
       }
     }
     const now = state.stats.totalPlayTime;
-    if (now - this.lastShown < CARD_GAP) return;
-    const card = CARDS.find(c => !flags.includes(`sys:${c.id}`) && c.ready(state, this.app));
+    if (now - this.lastShown < CARD_GAP) return null;
+    return CARDS.find(c => !flags.includes(`sys:${c.id}`) && c.ready(state, this.app)) ?? null;
+  }
+
+  /** A card is due (for the dialog queue). */
+  hasDue(state: GameState): boolean {
+    return this.due(state) !== null;
+  }
+
+  /** Title of the card due now, for the "N waiting" line. */
+  dueTitle(state: GameState): string {
+    const card = this.due(state);
+    return card ? i18n.t(card.title ?? `sys.${card.id}.title`, card.params?.(state) ?? {}) : '';
+  }
+
+  /** Called while no dialog is open. Shows at most one card, and only when the last one is a while ago. */
+  update(state: GameState): void {
+    const card = this.due(state);
     if (!card) return;
-    this.lastShown = now;
+    this.lastShown = state.stats.totalPlayTime;
     this.flag(state, [`sys:${card.id}`]);
     this.show(card, state);
   }

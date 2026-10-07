@@ -1,11 +1,10 @@
 import { Container, Rectangle, Sprite, Texture } from 'pixi.js';
 import type { BuildingInstance, BuildingType } from '../core/GameState';
 import { isDistrict, isHall, roomSlots } from '../data/buildingDefs';
-import { SLOTS_PER_FLOOR } from '../systems/BuildingSystem';
 import { ArtLibrary } from '../art/ArtLibrary';
-import { BUILDING_W, ROOMS_W, ROOMS_X, ROOM_H, SHAFT_W, SLAB, SLOT_W, floorTop, slotX } from './layout';
+import { BASE_EAST, ROOMS_X, ROOM_H, SHAFT_GAP, SHAFT_W, SLAB, SLOT_W, floorTop, slotX } from './layout';
 import { hashString, seeded } from './draw';
-import { depthGains, type WorldLamp } from './structure';
+import { depthGains, type Grid, type WorldLamp } from './structure';
 
 /**
  * Graphics overhaul G2-decals: story-telling wear on the bunker's structure — cracks, water stains, rust,
@@ -161,7 +160,7 @@ function signFor(types: BuildingType[], r: () => number): DecalName {
 }
 
 export function buildDecals(
-  grid: ({ key: string } | null)[][], buildings: BuildingInstance[], floors: number, era: number, lamps: WorldLamp[] = [], ambient = 0.5,
+  grid: Grid, buildings: BuildingInstance[], floors: number, era: number, lamps: WorldLamp[] = [], ambient = 0.5,
   avoid: Container[] = [],
 ): DecalLayer {
   const root = new Container();
@@ -224,30 +223,38 @@ export function buildDecals(
     const top = floorTop(f);
     const bottom = top + ROOM_H;
     const row = grid[f] ?? [];
+    const slots = grid[f] ? row.length : BASE_EAST; // [plan4:X-2] a floor the grid lacks still reads as the default extent
+    // [plan4:ST-4] Index i of the row is slot i - ew; the shaft sits between the last west slot and slot 0, so no run of cells crosses index ew.
+    const ex = grid.ext[f] ?? { w: 0, e: BASE_EAST };
+    const ew = ex.w;
+    const runEnd = (a: number, b: number) => slotX(b - 1 - ew) + SLOT_W; // x of the right edge of the slots [a, b)
+    const xFirst = ew > 0 ? slotX(-ew) : ROOMS_X, xLast = slotX(ex.e);
     const taken: Rect[] = blocked.filter(b => b.y1 > top - SLAB - 4 && b.y0 < top + ROOM_H + SLAB + 4);
 
     // Room middles stay clear (empty bays are fair game).
     const interiors: Rect[] = [];
-    for (let s = 0; s < SLOTS_PER_FLOOR;) {
+    for (let s = 0; s < slots;) {
       const cell = row[s];
       let e2 = s + 1;
-      while (cell && e2 < SLOTS_PER_FLOOR && row[e2]?.key === cell.key) e2++;
-      if (cell) interiors.push({ x0: slotX(s) + ROOM_EDGE, y0: top + PIPES_BOTTOM + 2, x1: slotX(e2) - ROOM_EDGE, y1: bottom - 2 });
+      while (cell && e2 < slots && e2 !== ew && row[e2]?.key === cell.key) e2++;
+      if (cell) interiors.push({ x0: slotX(s - ew) + ROOM_EDGE, y0: top + PIPES_BOTTOM + 2, x1: runEnd(s, e2) - ROOM_EDGE, y1: bottom - 2 });
       s = e2;
     }
     // Columns stand wherever two different things meet, and at both ends of the level.
-    const cols: number[] = [ROOMS_X, ROOMS_X + ROOMS_W];
-    for (let s = 1; s < SLOTS_PER_FLOOR; s++) {
+    const cols: number[] = [ROOMS_X, xLast];
+    if (ew > 0) cols.push(xFirst, -SHAFT_GAP);
+    for (let s = 1; s < slots; s++) {
+      if (s === ew) continue;
       const a = row[s - 1], b = row[s];
-      if ((a || b) && a?.key !== b?.key) cols.push(slotX(s));
+      if ((a || b) && a?.key !== b?.key) cols.push(slotX(s - ew));
     }
     cols.sort((a, b) => a - b);
     const bays: [number, number][] = [];
-    for (let s = 0; s < SLOTS_PER_FLOOR;) {
+    for (let s = 0; s < slots;) {
       if (row[s]) { s++; continue; }
-      let e2 = s;
-      while (e2 < SLOTS_PER_FLOOR && !row[e2]) e2++;
-      bays.push([slotX(s), slotX(e2)]);
+      let e2 = s + 1;
+      while (e2 < slots && e2 !== ew && !row[e2]) e2++;
+      bays.push([slotX(s - ew), runEnd(s, e2)]);
       s = e2;
     }
     const bayUse: number[] = [];
@@ -259,7 +266,8 @@ export function buildDecals(
       switch (surface) {
         case 'slab': {
           if (h > SLAB + 3) { w *= (SLAB + 2) / h; h = SLAB + 2; }
-          const x = -6 + w / 2 + r() * (BUILDING_W + 12 - w);
+          const lo = ew > 0 ? xFirst - 6 : -6, hi = xLast + 6;
+          const x = lo + w / 2 + r() * (hi - lo - w);
           if (inSlabGap(x - w / 2, x + w / 2) || x - w / 2 < SHAFT_W + 2 && x + w / 2 > -2 && r() < 0.6) return null;
           return { x, y: bottom + 6.5 + (r() - 0.5) * 2, w, h };
         }
@@ -271,7 +279,7 @@ export function buildDecals(
         case 'edgeTop': {
           if (w > 22) { h *= 22 / w; w = 22; }
           const x = cols[Math.floor(r() * cols.length)];
-          const side = x <= ROOMS_X ? 1 : x >= ROOMS_X + ROOMS_W ? -1 : r() < 0.5 ? -1 : 1;
+          const side = x <= xFirst ? 1 : x >= xLast ? -1 : ew > 0 && x === -SHAFT_GAP ? -1 : ew > 0 && x === ROOMS_X ? 1 : r() < 0.5 ? -1 : 1;
           return { x: x + side * (COLUMN_W / 2 + 1 + w / 2 + r() * 3), y: top + PIPES_BOTTOM + h / 2 - 1, w, h };
         }
         case 'bay': {
@@ -287,7 +295,7 @@ export function buildDecals(
         case 'casing': {
           // The narrow strips of casing either side of the bunker (the east one is a tunnel on district floors).
           const east = !district.has(f) && r() < 0.6;
-          const x = east ? BUILDING_W + 6 : -6;
+          const x = east ? xLast + 6 : ew > 0 ? xFirst - 7 : -6;
           // The west strip is a hand's width beside the shaft: keep to it.
           const cap = east ? 16 : 11;
           if (w > cap) { h *= cap / w; w = cap; }
@@ -351,7 +359,7 @@ export function buildDecals(
       const chance = Math.min(1, signs);
       signs -= 1;
       if (r() > chance) continue;
-      const inner = cols.filter(x => x > ROOMS_X + 1);
+      const inner = cols.filter(x => x > xFirst + 1);
       if (!inner.length) break;
       const x = inner[Math.floor(r() * inner.length)];
       const y = top + PIPES_BOTTOM + 16 + r() * 10;
@@ -379,7 +387,7 @@ export function buildDecals(
     if (e === 0 && (r() < 0.45 || f === 0)) {
       for (let k = 0; k < 6; k++) {
         const useCasing = r() < 0.35;
-        const x = useCasing ? (district.has(f) ? -6 : BUILDING_W + 6) : cols[Math.floor(r() * cols.length)];
+        const x = useCasing ? (district.has(f) ? (ew > 0 ? xFirst - 7 : -6) : xLast + 6) : cols[Math.floor(r() * cols.length)];
         const y = top + PIPES_BOTTOM + 10 + r() * 14;
         const rect = fits(x, y, 11, 14.5);
         if (!rect) continue;

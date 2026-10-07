@@ -4,7 +4,9 @@ import type { SeededRandom } from '../core/Random';
 import { bus } from '../core/EventBus';
 import type { PopulationSystem } from './PopulationSystem';
 import { STAT_KEYS } from './PopulationSystem';
-import { specMax } from '../data/specializations';
+import { specMax, specOf } from '../data/specializations';
+import { effectiveLevel, getDef } from '../data/buildingDefs';
+import { graduateStatOf, roomChildGrowth } from '../data/roomEffects'; // [plan4:BL-4]
 
 /** How often the bunker's social life is checked, and its pace. */
 const CHECK_SECONDS = 30;
@@ -51,6 +53,7 @@ export class FamilySystem {
     this.acc = 0;
     const state = this.sm.state;
     if (state.survivors.length < 2) return;
+    this.accrueSchool(state, span);
     this.growUp(state);
     // Long offline stretches roll the dice a few times, not once per 30 s.
     const rolls = Math.min(4, Math.max(1, Math.floor(span / CHECK_SECONDS)));
@@ -64,8 +67,36 @@ export class FamilySystem {
     return state.survivors.filter(s => !s.child);
   }
 
+  /** Growing-up speed: the family suites' role or the best nursery, whichever is faster (1 with neither). */
   childGrowth(state: GameState): number {
-    return specMax(state, 'childGrowth', 'quarters');
+    return Math.max(specMax(state, 'childGrowth', 'quarters'), roomChildGrowth(state)); // [plan4:BL-4]
+  }
+
+  /** [plan4:BL-4] Children in a school (a room with graduateStat) log their hours; a nursery only holds them. */
+  private accrueSchool(state: GameState, seconds: number): void {
+    const inSchool = (s: SurvivorState): boolean => {
+      if (!s.child || !s.assignedBuildingId) return false;
+      const b = state.buildings.find(x => x.id === s.assignedBuildingId);
+      return !!b && graduateStatOf(b) > 0 && effectiveLevel(b) > 0;
+    };
+    if (!state.survivors.some(inSchool)) return;
+    this.sm.applyDelta({
+      path: 'survivors',
+      value: state.survivors.map(s => (inSchool(s) ? { ...s, schoolTime: (s.schoolTime ?? 0) + seconds } : s)),
+    });
+  }
+
+  /** [plan4:BL-4] Stat points a graduate gets: 0 unless they spent 60% of their childhood in school, then the school's graduateStat (an academy role raises it). */
+  private graduateBonus(state: GameState, s: SurvivorState): number {
+    const age = state.stats.totalPlayTime - (s.bornAt ?? state.stats.totalPlayTime);
+    if ((s.schoolTime ?? 0) <= 0 || (s.schoolTime ?? 0) < 0.6 * age) return 0;
+    let best = 0;
+    for (const b of state.buildings) {
+      if (b.isConstructing && b.level === 1) continue;
+      const base = graduateStatOf(b);
+      if (base > 0 && getDef(b.type)) best = Math.max(best, base, specOf(b)?.graduateStat ?? 0);
+    }
+    return best;
   }
 
   /** 0..1 how far a child is from growing up. */
@@ -81,7 +112,17 @@ export class FamilySystem {
     const ids = new Set(grown.map(g => g.id));
     this.sm.applyDelta({
       path: 'survivors',
-      value: this.sm.state.survivors.map(s => (ids.has(s.id) ? { ...s, child: false, happiness: Math.max(s.happiness, 70) } : s)),
+      value: this.sm.state.survivors.map(s => {
+        if (!ids.has(s.id)) return s;
+        const grownUp = { ...s, child: false, happiness: Math.max(s.happiness, 70) };
+        // [plan4:BL-4] A schooled child grows up a little better: +1 (or more) in a random stat, up to 10.
+        const bonus = this.graduateBonus(this.sm.state, s);
+        if (bonus > 0) {
+          const stat = this.rng.pick(STAT_KEYS);
+          grownUp.stats = { ...s.stats, [stat]: Math.max(s.stats[stat], Math.min(10, s.stats[stat] + bonus)) };
+        }
+        return grownUp;
+      }),
     });
     for (const g of grown) bus.emit('family:grownUp', this.sm.state.survivors.find(s => s.id === g.id));
   }

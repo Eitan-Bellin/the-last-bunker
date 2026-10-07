@@ -13,7 +13,7 @@ export const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 export function chromePath() {
   const cands = [process.env.CHROME, 'C:/Program Files/Google/Chrome/Application/chrome.exe', 'C:/Program Files (x86)/Google/Chrome/Application/chrome.exe',
-    '/usr/bin/google-chrome', '/usr/bin/google-chrome-stable', '/usr/bin/chromium', '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'];
+    '/usr/bin/google-chrome', '/usr/bin/google-chrome-stable', '/usr/bin/chromium', '/opt/pw-browsers/chromium', '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'];
   const p = cands.find(c => c && fs.existsSync(c));
   if (!p) throw new Error('Chrome not found: set CHROME=<path>');
   return p;
@@ -59,7 +59,9 @@ export async function launch(extraArgs = []) {
     '--enable-precise-memory-info', '--window-size=400,800', '--autoplay-policy=no-user-gesture-required', '--disable-background-timer-throttling',
     '--disable-renderer-backgrounding', '--disable-backgrounding-occluded-windows',
     // A CI machine has no GPU: software GL (the counts the gate uses do not depend on it), and no sandbox inside the runner's container.
-    ...(process.env.CI ? ['--no-sandbox', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] : []),
+    // Running as root (a container) also needs --no-sandbox; Chrome then falls back to software GL by itself.
+    ...(process.env.CI || process.getuid?.() === 0 ? ['--no-sandbox'] : []),
+    ...(process.env.CI ? [ '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] : []),
     ...extraArgs, 'about:blank'];
   const proc = spawn(chromePath(), args, { stdio: 'ignore' });
   let version = null;

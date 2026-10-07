@@ -1,5 +1,7 @@
 import { lawArrivals, lawDefense } from '../data/laws';
 import { roomSlots } from '../data/buildingDefs';
+import { earlyWarningLead } from '../data/roomEffects'; // [plan4:BL-8]
+import { doorDefense } from './InfraSystem'; // plan4:ST-14
 import { seasonEffects } from '../data/seasons';
 import { inBreather, threatPace, threatStrength } from './ThreatSystem';
 import type { RaidKind, RaidStance, Ruin } from '../core/GameState';
@@ -365,6 +367,7 @@ export function defenseParts(state: GameState): { walls: number; guards: number;
   }
   if (hasFeature(state, 'fortifiedDoor')) walls += 15;
   walls += specTotal(state, 'defense');
+  walls += doorDefense(state); // plan4:ST-14 shut bulkheads on the entrance floor: +3 per door level
   if (state.storyFlags.includes('gideon:joined')) guards += 10;
   // [Danger C1] Residents help a little; whoever is posted at an armory fights much harder. The Wall adds 50.
   for (const s of state.survivors) {
@@ -561,7 +564,7 @@ export class EventSystem {
     const state = this.ctx.sm.state;
     // [P2] The scout report: who is coming is known at once (the forecast is exact).
     const kind: RaidKind = this.ctx.rng.chance(0.5) ? 'scavengers' : 'marauders';
-    const warning = RAID_WARNING + (hasFeature(state, 'watchtower') ? 180 : 0) + (hasFeature(state, 'rapidResponse') ? 120 : 0); // [P3] the watchtower sees them sooner
+    const warning = RAID_WARNING + (hasFeature(state, 'watchtower') ? 180 : 0) + (hasFeature(state, 'rapidResponse') ? 120 : 0) + earlyWarningLead(state); // [P3] the watchtower sees them sooner; [plan4:BL-8] lookouts add their seconds
     const raid = { hitAt: state.stats.totalPlayTime + warning, strength: raidStrength(state, this.ctx.rng.next()), kind, stance: 'hold' as RaidStance };
     this.setDanger({ raid });
     bus.emit('raid:warning', raid);
@@ -597,8 +600,11 @@ export class EventSystem {
   private wreckRoom(): string | null {
     const sm = this.ctx.sm;
     const state = sm.state;
-    const pick = this.ctx.rng.shuffle(state.buildings.filter(b => !b.isConstructing && b.position.floor <= 1 && b.type !== 'quarters'
-      && b.type !== 'elevator' && !getDef(b.type)?.effects?.maxPopulation && roomSlots(b.type) <= 3 && getDef(b.type)?.maxLevel === 10))[0];
+    const pool = state.buildings.filter(b => !b.isConstructing && b.position.floor <= 1 && b.type !== 'quarters'
+      && b.type !== 'elevator' && !getDef(b.type)?.effects?.maxPopulation && roomSlots(b.type) <= 3 && getDef(b.type)?.maxLevel === 10);
+    // [plan4:ST-16] The surface row is the raiders' first target (twice the odds) unless a working gate post, or the wall project, covers it.
+    const covered = state.storyFlags.includes('project:wall') || state.buildings.some(b => b.type === 'gatePost' && !b.isConstructing);
+    const pick = this.ctx.rng.shuffle(covered ? pool : pool.flatMap(b => (b.position.floor === -1 ? [b, b] : [b])))[0];
     if (!pick) return null;
     const w = roomSlots(pick.type);
     const d = state.danger;

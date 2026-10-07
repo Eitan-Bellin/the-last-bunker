@@ -9,8 +9,11 @@ import { Sheet } from './Sheet';
 import { button, el } from '../dom';
 import { uiSound } from '../../audio/uiSound';
 import type { BackupInfo, BackupKind } from '../../core/SaveManager';
+import { getA11y, setA11y } from '../../utils/a11y';
+import { haptic } from '../../utils/haptics';
+import { enhanceTabs } from '../a11yDom';
 
-export type MenuTab = 'settings' | 'stats' | 'achievements' | 'genesis';
+export type MenuTab = 'settings' | 'a11y' | 'stats' | 'achievements' | 'genesis';
 
 /** Genesis checklist (research, survivors, era): shown wherever the rebirth button or its lock appears. */
 export function genesisRequirements(state: GameState, meta: MetaSystem): HTMLElement {
@@ -53,6 +56,8 @@ export interface MenuActions {
   /** Music and effects volume, 0..1. */
   getLevels: () => { music: number; fx: number };
   setLevels: (music: number, fx: number) => void;
+  /** [plan4:AC-11] Opens the list view of the bunker. */
+  openStructure: () => void;
   /** Text size: current label and cycling to the next. */
   textSize: () => string;
   cycleTextSize: () => void;
@@ -64,6 +69,9 @@ export interface MenuActions {
   openBook: () => void;
   /** [Q14] Opens the Chronicle (the run's milestones). */
   openChronicle: () => void;
+  /** [plan4:UX-11] Forget which gesture tips were seen / play the opening story again (no change to the game). */
+  showTipsAgain?: () => void;
+  replayIntro?: () => void;
 }
 
 export class MenuPanel {
@@ -111,6 +119,7 @@ export class MenuPanel {
       meta.canRebirth(state), this.tab === 'stats' ? Math.floor(state.stats.totalPlayTime / 5) : 0,
       this.tab === 'genesis' ? meta.rebirthGain(state) : 0, this.actions.isSoundOn(), this.actions.graphics(), this.actions.brightness(), this.actions.textSize(), this.actions.persistLabel(),
       this.backups?.map(b => `${b.kind}${b.timestamp}`).join(',') ?? 'loading',
+      this.tab === 'a11y' ? JSON.stringify(getA11y()) : '',
       this.tab === 'genesis' ? meta.rebirthRequirements(state).map(r => r.current).join(',') : '',
     ].join('|');
     if (sig === this.signature) return;
@@ -124,6 +133,7 @@ export class MenuPanel {
     const tabs = el('div', 'tab-row');
     const tabDefs: { id: MenuTab; icon: string }[] = [
       { id: 'settings', icon: '[[settings]]' },
+      { id: 'a11y', icon: '[[eye]]' },
       { id: 'stats', icon: '[[chart]]' },
       { id: 'achievements', icon: '[[trophy]]' },
       { id: 'genesis', icon: '[[isotope7]]' },
@@ -135,13 +145,30 @@ export class MenuPanel {
         this.refresh(this.engine.stateManager.state);
       }));
     }
+    // [plan4:AC-8] ARIA tabs: tablist / tab / tabpanel, arrow keys.
+    const panel = el('div');
+    panel.id = 'menu-tabpanel';
+    enhanceTabs(tabs, i18n.t('menu.title'), panel);
     root.appendChild(tabs);
 
-    if (this.tab === 'settings') root.appendChild(this.renderSettings());
-    if (this.tab === 'stats') root.appendChild(this.renderStats(state));
-    if (this.tab === 'achievements') root.appendChild(this.renderAchievements(state));
-    if (this.tab === 'genesis') root.appendChild(this.renderGenesis(state));
+    if (this.tab === 'settings') panel.appendChild(this.renderSettings());
+    if (this.tab === 'a11y') panel.appendChild(this.renderA11y());
+    if (this.tab === 'stats') panel.appendChild(this.renderStats(state));
+    if (this.tab === 'achievements') panel.appendChild(this.renderAchievements(state));
+    if (this.tab === 'genesis') panel.appendChild(this.renderGenesis(state));
+    root.appendChild(panel);
     this.sheet.body.replaceChildren(root);
+  }
+
+  /** [plan4:UX-11] Learning aids, as a block of their own: the gesture tips again, and the opening story again. */
+  private renderTipsBlock(): HTMLElement {
+    const card = el('div', 'bp-card settings-learn');
+    const tips = button(`[[hand]] ${i18n.t('settings.tipsAgain')}`, 'btn-secondary learn-btn', () => { uiSound('click'); this.actions.showTipsAgain?.(); });
+    const intro = button(`[[flashlight]] ${i18n.t('settings.introAgain')}`, 'btn-secondary learn-btn', () => { uiSound('click'); this.actions.replayIntro?.(); });
+    if (!this.actions.showTipsAgain) tips.hidden = true;
+    if (!this.actions.replayIntro) intro.hidden = true;
+    card.append(tips, intro);
+    return card;
   }
 
   private renderSettings(): HTMLElement {
@@ -154,6 +181,7 @@ export class MenuPanel {
     chron.append(el('span', '', `[[journal]] ${i18n.t('chronicle.title')}`), button(i18n.t('book.open'), 'btn-small', () => { uiSound('click'); this.actions.openChronicle(); }));
     guide.append(book, chron);
     box.appendChild(guide);
+    box.appendChild(this.renderTipsBlock());
     const general = el('div', 'bp-card');
     const lang = el('div', 'bp-row');
     lang.append(el('span', '', `[[surface]] ${i18n.t('settings.language')}`),
@@ -177,6 +205,8 @@ export class MenuPanel {
       input.value = String(Math.round(value * 100));
       input.className = 'vol-slider';
       input.setAttribute('aria-label', i18n.t(labelKey));
+      // [plan4:UX-4] Dragging the thumb must not be taken over by the sheet's pull-down-to-close.
+      input.setAttribute('data-no-pulldown', '');
       // No redraw while dragging: replacing the slider under the finger would end the drag.
       input.addEventListener('input', () => onInput(Number(input.value) / 100));
       input.addEventListener('change', () => uiSound('switch'));
@@ -253,6 +283,7 @@ export class MenuPanel {
     saves.appendChild(el('div', 'bp-section-title', `[[save]] ${i18n.t('settings.save')}`));
     const area = el('textarea', 'save-area');
     area.placeholder = i18n.t('settings.pasteHere');
+    area.setAttribute('aria-label', i18n.t('settings.save')); // [plan4:AC-8]
     const row = el('div', 'btn-row');
     row.append(
       button(i18n.t('settings.export'), 'btn-small', async () => {
@@ -300,6 +331,91 @@ export class MenuPanel {
     const danger = el('div', 'bp-card');
     danger.appendChild(button(`[[warning]] ${i18n.t('settings.newGame')}`, 'btn-ghost danger-btn', () => this.actions.newGame()));
     box.appendChild(danger);
+    return box;
+  }
+
+  /**
+   * [plan4:AC-1] The accessibility tab. Every control writes through utils/a11y.ts (the single source), which applies it to the page.
+   * Still to come, and therefore not shown yet (each needs its own implementation before a switch for it is honest):
+   * flash budget (flash), contrast (contrast), colour-blind modes (colorMode), popup density (popups), sound captions (captions),
+   * screen-reader announcements (announce), power saver (powerSaver). [plan4:AC-12] One-hand mode and large touch targets are live
+   * (styles/touch.css keys off data-onehand / data-large on <html>).
+   */
+  private renderA11y(): HTMLElement {
+    const box = el('div', 'bp');
+    const a = getA11y();
+    const redraw = () => { this.signature = ''; this.refresh(this.engine.stateManager.state); };
+    const card = el('div', 'bp-card a11y-card');
+    card.appendChild(el('div', 'bp-section-title', `[[eye]] ${i18n.t('a11y.title')}`));
+
+    const cycleRow = <T extends string>(icon: string, labelKey: string, order: readonly T[], value: T, optKey: string, onPick: (v: T) => void): HTMLElement => {
+      const row = el('div', 'bp-row');
+      row.append(el('span', '', `${icon} ${i18n.t(labelKey)}`),
+        button(i18n.t(`${optKey}.${value}`), 'btn-small', () => {
+          uiSound('switch');
+          onPick(order[(order.indexOf(value) + 1) % order.length]);
+          redraw();
+        }));
+      return row;
+    };
+
+    const hapticsRow = cycleRow('[[hand]]', 'a11y.haptics', ['off', 'light', 'strong'] as const, a.haptics, 'a11y.haptics', v => {
+      setA11y({ haptics: v });
+      haptic('success'); // a sample of the new strength (nothing when it was just turned off)
+    });
+    const silentRow = el('div', 'bp-row');
+    silentRow.append(el('span', '', `[[sound]] ${i18n.t('a11y.playInSilent')}`),
+      button(i18n.t(a.playInSilent ? 'settings.on' : 'settings.off'), 'btn-small', () => {
+        uiSound('switch');
+        setA11y({ playInSilent: !a.playInSilent });
+        redraw();
+      }));
+    const textRow = el('div', 'bp-row');
+    textRow.append(el('span', '', `[[note]] ${i18n.t('settings.textSize')}`),
+      button(this.actions.textSize(), 'btn-small', () => {
+        uiSound('switch');
+        this.actions.cycleTextSize();
+        redraw();
+      }));
+    const motionRow = cycleRow('[[sparkle]]', 'a11y.motion', ['auto', 'reduced', 'full'] as const, a.motion, 'a11y.motion', v => setA11y({ motion: v }));
+
+    // [plan4:AC-12] One-hand mode: which thumb; large targets: every touch target at least 52 px.
+    const oneHandRow = cycleRow('[[hand]]', 'a11y.oneHand', ['off', 'right', 'left'] as const, a.oneHand, 'a11y.oneHand', v => setA11y({ oneHand: v }));
+    const largeRow = el('div', 'bp-row');
+    largeRow.append(el('span', '', `[[hand]] ${i18n.t('a11y.largeTargets')}`),
+      button(i18n.t(a.largeTargets ? 'settings.on' : 'settings.off'), 'btn-small', () => {
+        uiSound('switch');
+        setA11y({ largeTargets: !a.largeTargets });
+        redraw();
+      }));
+
+    // [plan4:AC-5/AC-6] Flash budget switch and the three colour-vision modes.
+    const flashRow = cycleRow('[[sparkle]]', 'a11y.flash', ['normal', 'safe'] as const, a.flash, 'a11y.flash', v => setA11y({ flash: v }));
+    const colorRow = cycleRow('[[eye]]', 'a11y.color', ['none', 'deuter', 'protan', 'tritan'] as const, a.colorMode, 'a11y.color', v => setA11y({ colorMode: v }));
+
+    // [plan4:AC-9/AC-11] Captions for sounds, and announcements for a screen reader.
+    const toggleRow = (icon: string, key: string, on: boolean, set: (v: boolean) => void): HTMLElement => {
+      const row = el('div', 'bp-row');
+      row.append(el('span', '', `${icon} ${i18n.t(key)}`), button(i18n.t(on ? 'settings.on' : 'settings.off'), 'btn-small', () => {
+        uiSound('switch');
+        set(!on);
+        redraw();
+      }));
+      return row;
+    };
+    const captionsRow = toggleRow('[[note]]', 'a11y.captions', a.captions, v => setA11y({ captions: v }));
+    const announceRow = toggleRow('[[eye]]', 'a11y.announce', a.announce, v => setA11y({ announce: v }));
+    // [plan4:AC-11] The list view: the bunker as floors and rooms.
+    const listRow = el('div', 'bp-row');
+    listRow.append(el('span', '', `[[build]] ${i18n.t('structure.openList')}`),
+      button(i18n.t('structure.open'), 'btn-small', () => { uiSound('click'); this.actions.openStructure(); }));
+
+    card.append(listRow, el('div', 'bp-hint', i18n.t('structure.openListHint')), hapticsRow, el('div', 'bp-hint', i18n.t('a11y.hapticsHint')), silentRow, el('div', 'bp-hint', i18n.t('a11y.playInSilentHint')),
+      textRow, motionRow, el('div', 'bp-hint', i18n.t('a11y.motionHint')),
+      flashRow, el('div', 'bp-hint', i18n.t('a11y.flashHint')), colorRow, el('div', 'bp-hint', i18n.t('a11y.colorHint')),
+      captionsRow, el('div', 'bp-hint', i18n.t('a11y.captionsHint')), announceRow, el('div', 'bp-hint', i18n.t('a11y.announceHint')),
+      oneHandRow, el('div', 'bp-hint', i18n.t('a11y.oneHandHint')), largeRow, el('div', 'bp-hint', i18n.t('a11y.largeTargetsHint')));
+    box.appendChild(card);
     return box;
   }
 

@@ -54,7 +54,29 @@ export type BuildingType =
   | 'lake'
   | 'metro'
   | 'atrium'
-  | 'reactorHall';
+  | 'reactorHall'
+  // [plan4:BL-9..14,19,33] first eight new rooms
+  | 'batteryBank'
+  | 'commons'
+  | 'library'
+  | 'recycler'
+  | 'condenser'
+  | 'mushroomFarm'
+  | 'gatePost'
+  | 'barracks'
+  // [plan4:BL-15..32] wave 2 (BL-27 bulkhead, BL-28 stairwell and BL-29 ventStack are added by the Rooms-Systems agent)
+  | 'quarantineWard'
+  | 'solarArray'
+  | 'windTurbine'
+  | 'watchtower'
+  | 'garage'
+  | 'decon'
+  | 'aquaculture'
+  | 'market'
+  | 'nursery'
+  | 'school'
+  | 'bathhouse'
+  | 'memorialHall';
 
 export interface BuildingInstance {
   id: string;
@@ -105,6 +127,8 @@ export interface SurvivorState {
   /** [LateGame B3] Mastery: seconds of work in a role (rank 1-5 derives from it), and the specialization chosen at rank 5. */
   mxp?: number;
   spec?: string;
+  /** [plan4:X-3] Seconds of schooling a child has had (reserved; optional, absent in older saves). */
+  schoolTime?: number;
 }
 
 export interface ResearchNode {
@@ -179,12 +203,43 @@ export interface PrestigeState {
   storySeen?: string[];
 }
 
+/** [plan4:AC-1] Accessibility and comfort preferences. Read and applied only through utils/a11y.ts. */
+export interface A11ySettings {
+  /** auto = follow the system's reduced-motion setting. */
+  motion: 'auto' | 'reduced' | 'full';
+  /** safe = no flashes. */
+  flash: 'safe' | 'normal';
+  textScale: 1.0 | 1.1 | 1.25 | 1.4 | 1.6;
+  contrast: 'normal' | 'high';
+  colorMode: 'none' | 'deuter' | 'protan' | 'tritan';
+  haptics: 'off' | 'light' | 'strong';
+  oneHand: 'off' | 'right' | 'left';
+  largeTargets: boolean;
+  popups: 'all' | 'important' | 'off';
+  /** Visual captions for sounds. */
+  captions: boolean;
+  /** Screen-reader announcements. */
+  announce: boolean;
+  powerSaver: boolean;
+  /** iPhone: keep sound when the silent switch is on (audioSession 'playback' instead of 'ambient'). */
+  playInSilent: boolean;
+}
+
+export function defaultA11y(): A11ySettings {
+  return {
+    motion: 'auto', flash: 'normal', textScale: 1.1, contrast: 'normal', colorMode: 'none', haptics: 'light', oneHand: 'off',
+    largeTargets: false, popups: 'all', captions: false, announce: false, powerSaver: false, playInSilent: false,
+  };
+}
+
 export interface GameSettings {
   language: 'en' | 'he';
   musicVolume: number;
   sfxVolume: number;
   notificationsEnabled: boolean;
   autoSave: boolean;
+  /** [plan4:AC-1] Absent in older saves: migrateState fills it in. */
+  a11y: A11ySettings;
 }
 
 export interface GameStats {
@@ -336,6 +391,42 @@ export interface Ruin {
   cost?: Partial<Record<ResourceType, number>>;
 }
 
+/**
+ * [plan4:X-3] The bunker's shape beyond the vertical shaft. Additive since save v7; every part defaults to "nothing built".
+ *  ext         per-floor side wings, keyed by floor index as a string: w = slots dug west of the shaft, e = slots east of it
+ *  doors       bulkhead state by door id
+ *  infra       corridors, stairs, ventilation shafts and similar: kind, floor, x slot (floors = how many floors it spans)
+ *  surfaceOpen the gate-house row above ground is open
+ */
+export interface LayoutState {
+  v: 1;
+  ext: Record<string, { w: number; e: number }>;
+  doors: Record<string, 'open' | 'closed' | 'sealed'>;
+  infra: Array<{ id: string; kind: string; floor: number; x: number; floors?: number; level?: number /* [plan4:ST-14] bulkhead level 1-3 */ }>;
+  surfaceOpen: boolean;
+}
+
+export function createLayout(): LayoutState {
+  return { v: 1, ext: {}, doors: {}, infra: [], surfaceOpen: false };
+}
+
+/** [plan4:X-2] Slots east of the shaft on a floor without a wing (the classic 12). */
+export const BASE_EAST = 12;
+
+/**
+ * [plan4:ST-16] The surface (gate-house) row is floor -1. Its slots are -11..-4: west of the shaft and clear of the portal's hill (slots -3..-1 stand under it;
+ * see store/plan-2026-10/4-redesign/S0-surface-survey.md). As an extent that is {w: 11, e: -3}: a room fits when x >= -11 and x + width <= -3.
+ */
+export const SURFACE_FLOOR = -1;
+export const SURFACE_EXT: { w: number; e: number } = { w: 11, e: -3 };
+
+/** [plan4:X-3] How far a floor reaches: the saved wing sizes, or no west wing and the classic 12 slots east. */
+export function floorExtent(state: Pick<GameState, 'layout'>, floor: number): { w: number; e: number } {
+  if (floor === -1) return { w: SURFACE_EXT.w, e: SURFACE_EXT.e }; // [plan4:ST-16] the gate-house row: slots -11..-4, west of the portal's hill (never saved)
+  const x = state.layout?.ext?.[String(floor)];
+  return x ? { w: x.w, e: x.e } : { w: 0, e: BASE_EAST };
+}
+
 export interface GameState {
   version: number;
   timestamp: number;
@@ -362,6 +453,8 @@ export interface GameState {
   achievements: string[];
   storyFlags: string[];
   currentFloors: number;
+  /** [plan4:X-3] Side wings, doors, infrastructure and the surface row (save v7; see LayoutState). */
+  layout: LayoutState;
   maxPopulation: number;
   /** [reserved: saved, not used yet] */
   tensionValue: number;
@@ -441,16 +534,25 @@ export function createLateGame(): LateGameState {
   };
 }
 
-/** v6: the Chronicle (longGame.chronicle) and the standing orders added by the balance plan; a v5 save is kept once as lastbunker_auto_v5 before it migrates. */
-export const SAVE_VERSION = 6;
+/**
+ * v7 (plan 4): additive `layout` (side wings, doors, infrastructure, surface row); a v6 save is kept once as lastbunker_auto_v6 before it migrates.
+ * v6: the Chronicle (longGame.chronicle) and the standing orders added by the balance plan; a v5 save is kept once as lastbunker_auto_v5 before it migrates.
+ */
+export const SAVE_VERSION = 7;
 
 export function migrateState(saved: GameState): GameState {
   const fresh = createInitialState();
   const merged = { ...fresh, ...saved } as GameState;
   merged.stats = { ...fresh.stats, ...saved.stats };
+  // [plan4:AC-1] settings: older saves have no a11y block (the shallow merge above would otherwise drop the defaults).
+  merged.settings = { ...fresh.settings, ...saved.settings, a11y: { ...fresh.settings.a11y, ...(saved.settings?.a11y ?? {}) } };
   merged.resources = { ...fresh.resources, ...saved.resources };
   merged.version = fresh.version;
   merged.currentFloors = Math.max(saved.currentFloors ?? 1, fresh.currentFloors);
+  // [plan4:X-3] v7: no wings, doors or infrastructure yet; a partial layout keeps what it has.
+  merged.layout = { ...createLayout(), ...(saved.layout ?? {}), v: 1 };
+  // [plan4:ST-9] A save from before v7 is owed the one-time "the bunker can grow sideways" card (ui/controllers/whatsnew.ts shows it after the first half hour, Act II+).
+  if ((saved.version ?? 1) < 7 && !(merged.storyFlags ?? []).includes('whatsnew:v7')) merged.storyFlags = [...(merged.storyFlags ?? []), 'whatsnew:v7'];
   if ((saved.version ?? 1) < 4) {
     // Bunkers from before the restoration update were never ruined and have already been "entered".
     merged.ruins = [];
@@ -530,6 +632,7 @@ export function createInitialState(): GameState {
       sfxVolume: 1.0,
       notificationsEnabled: true,
       autoSave: true,
+      a11y: defaultA11y(),
     },
     stats: {
       totalPlayTime: 0,
@@ -543,6 +646,7 @@ export function createInitialState(): GameState {
     achievements: [],
     storyFlags: [],
     currentFloors: 3,
+    layout: createLayout(),
     maxPopulation: 0,
     tensionValue: 0,
     lastEventTime: now,

@@ -434,10 +434,15 @@ export function mulColor(a: number, b: number): number {
 
 // ---------- Ground line ----------
 
+/** [plan4:ST-16] West end of the level gate-house yard (the surface row's apron; its east end meets the entrance hill). */
+export const YARD_X0 = -540, YARD_X1 = -110;
+
 /** The entrance sits on level ground; elsewhere the topsoil rolls gently so no edge reads as a ruler. */
 export function groundY(x: number, flatX: number): number {
   const w = smoothstep(150, 235, Math.abs(x - flatX));
-  return w * (2.4 * Math.sin(x * 0.0113 + 0.7) + 1.5 * Math.sin(x * 0.029 + 2.1) + 0.7 * Math.sin(x * 0.067 + 4));
+  // [plan4:ST-16] The old gate-house yard (x -540 .. -110) is level concrete ground: the surface row stands on it, and it eases back into rolling land past its west end.
+  const pad = smoothstep(0, 70, x < YARD_X0 ? YARD_X0 - x : x > YARD_X1 ? x - YARD_X1 : 0);
+  return w * pad * (2.4 * Math.sin(x * 0.0113 + 0.7) + 1.5 * Math.sin(x * 0.029 + 2.1) + 0.7 * Math.sin(x * 0.067 + 4));
 }
 
 /** Thickness factor of the soil band below the grass. */
@@ -487,6 +492,13 @@ export class Smoke {
   private rnd(): number {
     this.seed = (Math.imul(this.seed, 1664525) + 1013904223) | 0;
     return (this.seed >>> 0) / 4294967296;
+  }
+
+  /** [plan4:ST-20] New puffs and the ones in the air take this colour (fire turns the exhaust black). */
+  setColor(color: number): void {
+    if (color === this.o.color) return;
+    this.o.color = color;
+    for (const p of this.puffs) p.s.tint = color;
   }
 
   update(dt: number, wind: number, cap: number, strength = 1): void {

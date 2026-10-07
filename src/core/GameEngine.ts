@@ -504,7 +504,7 @@ export class GameEngine {
     fresh.resources.isotope7.amount = old.resources.isotope7.amount + gain;
     fresh.achievements = [...old.achievements];
     // The "new system" cards (sys:*) were seen once: they are tips, not part of the timeline.
-    fresh.storyFlags = old.storyFlags.filter(f => f.startsWith('event:radio') || f === 'intro:done' || f.startsWith('sys:'));
+    fresh.storyFlags = old.storyFlags.filter(f => f.startsWith('event:radio') || f === 'intro:done' || f.startsWith('sys:') || f.startsWith('tip:')); // plan4:UX-11 gesture tips were learned once, not per timeline
     // What was learned from the previous residents carries into the new timeline.
     fresh.lore = [...(old.lore ?? [])];
     fresh.settings = { ...old.settings };

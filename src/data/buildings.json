@@ -638,8 +638,8 @@
       "he": "האטריום"
     },
     "description": {
-      "en": "A two-storey garden with a living tree under a sun lamp. The heart of the colony.",
-      "he": "גן בגובה שתי קומות עם עץ חי תחת מנורת שמש. הלב של המושבה."
+      "en": "A two-storey garden with a living tree under a sun lamp. The heart of the colony. Needs two floors with no service gallery between them.",
+      "he": "גן בגובה שתי קומות עם עץ חי תחת מנורת שמש. הלב של המושבה. דורש זוג קומות בלי קומת שירות ביניהן."
     },
     "tier": 4,
     "size": {
@@ -677,8 +677,8 @@
       "he": "אולם הכור"
     },
     "description": {
-      "en": "A fusion core two storeys tall. Enough light for a city, if it is kept cool.",
-      "he": "ליבת היתוך בגובה שתי קומות. מספיק אור לעיר שלמה, אם שומרים עליה קרה."
+      "en": "A fusion core two storeys tall. Enough light for a city, if it is kept cool. Needs two floors with no service gallery between them.",
+      "he": "ליבת היתוך בגובה שתי קומות. מספיק אור לעיר שלמה, אם שומרים עליה קרה. דורש זוג קומות בלי קומת שירות ביניהן."
     },
     "tier": 5,
     "size": {
@@ -705,5 +705,883 @@
     "maxWorkers": 3,
     "powerConsumption": 0,
     "color": "#2a8a9a"
+  },
+  "batteryBank": {
+    "name": {
+      "en": "Battery Bank",
+      "he": "מצבר ענק"
+    },
+    "description": {
+      "en": "Rows of storage cells. Keeps power for the dark hours, and needs no crew.",
+      "he": "שורות של תאי אגירה. שומרים חשמל לשעות החושך, ואין צורך בעובדים."
+    },
+    "tier": 2,
+    "size": {
+      "w": 2,
+      "h": 1
+    },
+    "maxLevel": 10,
+    "baseCost": {
+      "materials": 120,
+      "scrap": 25
+    },
+    "costMultiplier": 1.8,
+    "constructionTime": 100,
+    "effects": {
+      "storageCap": {
+        "power": 150
+      }
+    },
+    "slots": 2,
+    "maxCopies": 3,
+    "priceByAct": true,
+    "maxWorkers": 0,
+    "powerConsumption": 0,
+    "color": "#5A7FB0"
+  },
+  "commons": {
+    "name": {
+      "en": "Commons",
+      "he": "אולם מועדון"
+    },
+    "description": {
+      "en": "Couches, cards and an old radio. A place to gather in the evening and feel less alone.",
+      "he": "ספות, קלפים ורדיו ישן. מקום להתאסף בו בערב ולהרגיש פחות לבד."
+    },
+    "tier": 2,
+    "size": {
+      "w": 2,
+      "h": 1
+    },
+    "maxLevel": 10,
+    "baseCost": {
+      "materials": 70,
+      "food": 10
+    },
+    "costMultiplier": 1.8,
+    "constructionTime": 70,
+    "effects": {
+      "morale": {
+        "base": 2,
+        "perLevel": 1
+      },
+      "moraleKind": "comfort"
+    },
+    "slots": 2,
+    "maxCopies": 2,
+    "priceByAct": true,
+    "optimalStat": "charisma",
+    "statBonusPerPoint": 0.05,
+    "maxWorkers": 1,
+    "powerConsumption": 1,
+    "color": "#B07A4A"
+  },
+  "library": {
+    "name": {
+      "en": "Library",
+      "he": "ספרייה"
+    },
+    "description": {
+      "en": "Shelves of books and a quiet reading table. Adds knowledge, holds more of it, and lifts spirits.",
+      "he": "מדפי ספרים ושולחן קריאה שקט. מוסיפה ידע, מגדילה את אחסון הידע ומרימה את הרוח."
+    },
+    "tier": 3,
+    "size": {
+      "w": 2,
+      "h": 1
+    },
+    "maxLevel": 10,
+    "baseCost": {
+      "materials": 110,
+      "scrap": 10
+    },
+    "costMultiplier": 1.9,
+    "constructionTime": 120,
+    "production": {
+      "knowledge": {
+        "base": 0.06,
+        "perLevel": 0.5
+      }
+    },
+    "effects": {
+      "storageCap": {
+        "knowledge": 60
+      },
+      "morale": {
+        "base": 1,
+        "perLevel": 0.5
+      },
+      "moraleKind": "culture"
+    },
+    "slots": 2,
+    "maxCopies": 2,
+    "priceByAct": true,
+    "optimalStat": "intelligence",
+    "statBonusPerPoint": 0.05,
+    "maxWorkers": 1,
+    "powerConsumption": 1,
+    "color": "#7A6A9A"
+  },
+  "recycler": {
+    "name": {
+      "en": "Recycler",
+      "he": "מרכז מחזור"
+    },
+    "description": {
+      "en": "A conveyor, a shredder and a magnet. Turns materials and junk into scrap.",
+      "he": "מסוע, מגרסה ומגנט. הופך חומרים ופסולת לגרוטאות."
+    },
+    "tier": 3,
+    "size": {
+      "w": 3,
+      "h": 1
+    },
+    "maxLevel": 10,
+    "baseCost": {
+      "materials": 200,
+      "scrap": 20
+    },
+    "costMultiplier": 2.0,
+    "constructionTime": 240,
+    "production": {
+      "scrap": {
+        "base": 0.14,
+        "perLevel": 0.5
+      }
+    },
+    "slots": 3,
+    "maxCopies": 2,
+    "priceByAct": true,
+    "optimalStat": "strength",
+    "statBonusPerPoint": 0.05,
+    "maxWorkers": 2,
+    "powerConsumption": 3,
+    "color": "#8A7A5A"
+  },
+  "condenser": {
+    "name": {
+      "en": "Air Condenser",
+      "he": "מעבה אדים"
+    },
+    "description": {
+      "en": "Cooling coils and big fans. Pull water out of the air without a crew, but eat a lot of power.",
+      "he": "סלילי קירור ומאווררים גדולים. מוציאים מים מהאוויר בלי עובדים, אבל אוכלים הרבה חשמל."
+    },
+    "tier": 2,
+    "size": {
+      "w": 2,
+      "h": 1
+    },
+    "maxLevel": 10,
+    "baseCost": {
+      "materials": 110,
+      "scrap": 20
+    },
+    "costMultiplier": 1.8,
+    "constructionTime": 120,
+    "production": {
+      "water": {
+        "base": 0.7,
+        "perLevel": 0.5
+      }
+    },
+    "slots": 2,
+    "maxCopies": 3,
+    "priceByAct": true,
+    "maxWorkers": 0,
+    "powerConsumption": 5,
+    "color": "#4A9AB8"
+  },
+  "mushroomFarm": {
+    "name": {
+      "en": "Mushroom Farm",
+      "he": "חוות פטריות"
+    },
+    "description": {
+      "en": "Mushrooms that thrive in the dark and damp of the deep levels. Food, and a little medicine.",
+      "he": "פטריות שגדלות בחושך ובלחות של הקומות העמוקות. אוכל, ומעט תרופות."
+    },
+    "tier": 2,
+    "size": {
+      "w": 2,
+      "h": 1
+    },
+    "maxLevel": 10,
+    "baseCost": {
+      "materials": 90,
+      "scrap": 10
+    },
+    "costMultiplier": 1.7,
+    "constructionTime": 120,
+    "production": {
+      "food": {
+        "base": 0.9,
+        "perLevel": 0.5
+      },
+      "medicine": {
+        "base": 0.01,
+        "perLevel": 0.5
+      }
+    },
+    "slots": 2,
+    "maxCopies": 3,
+    "place": {
+      "floors": "deep"
+    },
+    "priceByAct": true,
+    "optimalStat": "endurance",
+    "statBonusPerPoint": 0.05,
+    "maxWorkers": 2,
+    "powerConsumption": 2,
+    "color": "#8A6A7A"
+  },
+  "gatePost": {
+    "name": {
+      "en": "Gate Post",
+      "he": "עמדת שער"
+    },
+    "description": {
+      "en": "A guard post by the entrance door: a blast door, a sign and some cover. Makes it harder for raiders to break in.",
+      "he": "עמדת שמירה ליד דלת הכניסה: דלת הדף, שלט וקצת מחסה. מקשה על שודדים לפרוץ פנימה."
+    },
+    "tier": 2,
+    "size": {
+      "w": 2,
+      "h": 1
+    },
+    "maxLevel": 10,
+    "baseCost": {
+      "materials": 120,
+      "scrap": 30
+    },
+    "costMultiplier": 1.9,
+    "constructionTime": 100,
+    "effects": {
+      "defense": {
+        "base": 6,
+        "perLevel": 3
+      }
+    },
+    "slots": 2,
+    "maxCopies": 2,
+    "place": {
+      "floors": "entranceOrSurface"
+    },
+    "priceByAct": true,
+    "optimalStat": "strength",
+    "statBonusPerPoint": 0.05,
+    "maxWorkers": 2,
+    "powerConsumption": 1,
+    "color": "#7A7A52"
+  },
+  "barracks": {
+    "name": {
+      "en": "Barracks",
+      "he": "מגורי שומרים"
+    },
+    "description": {
+      "en": "Bunks and a weapon rack for the guards. Adds beds and more defense.",
+      "he": "דרגשים ומתקן נשק לשומרים. מוסיפים מיטות ועוד הגנה."
+    },
+    "tier": 3,
+    "size": {
+      "w": 3,
+      "h": 1
+    },
+    "maxLevel": 10,
+    "baseCost": {
+      "materials": 200,
+      "scrap": 40
+    },
+    "costMultiplier": 1.9,
+    "constructionTime": 180,
+    "effects": {
+      "maxPopulation": {
+        "base": 6,
+        "perLevel": 2
+      },
+      "defense": {
+        "base": 8,
+        "perLevel": 5
+      }
+    },
+    "slots": 3,
+    "maxCopies": 2,
+    "priceByAct": true,
+    "optimalStat": "strength",
+    "statBonusPerPoint": 0.05,
+    "maxWorkers": 3,
+    "powerConsumption": 1,
+    "color": "#6A6A5A"
+  },
+  "quarantineWard": {
+    "name": {
+      "en": "Quarantine Ward",
+      "he": "מחלקת בידוד"
+    },
+    "description": {
+      "en": "Isolation beds behind glass. The sick recover faster there and cannot pass it on.",
+      "he": "מיטות בידוד מאחורי זכוכית. החולים מחלימים שם מהר יותר ולא מדביקים את האחרים."
+    },
+    "tier": 3,
+    "size": {
+      "w": 2,
+      "h": 1
+    },
+    "maxLevel": 10,
+    "baseCost": {
+      "materials": 150,
+      "scrap": 20,
+      "medicine": 6
+    },
+    "costMultiplier": 1.9,
+    "constructionTime": 150,
+    "effects": {
+      "quarantine": {
+        "base": 4,
+        "perLevel": 1
+      }
+    },
+    "slots": 2,
+    "maxCopies": 1,
+    "priceByAct": true,
+    "optimalStat": "intelligence",
+    "statBonusPerPoint": 0.05,
+    "maxWorkers": 2,
+    "powerConsumption": 2,
+    "color": "#B05A6A"
+  },
+  "solarArray": {
+    "name": {
+      "en": "Solar Array",
+      "he": "שדה פאנלים"
+    },
+    "description": {
+      "en": "Panels on the roof of the bunker. Free power in the daylight hours, and nothing at night.",
+      "he": "פאנלים על גג הבונקר. חשמל חינם בשעות היום, ושום דבר בלילה."
+    },
+    "tier": 2,
+    "size": {
+      "w": 2,
+      "h": 1
+    },
+    "maxLevel": 10,
+    "baseCost": {
+      "materials": 100,
+      "scrap": 30
+    },
+    "costMultiplier": 1.8,
+    "constructionTime": 90,
+    "production": {
+      "power": {
+        "base": 3,
+        "perLevel": 0.5
+      }
+    },
+    "slots": 2,
+    "maxCopies": 4,
+    "place": {
+      "floors": "surface"
+    },
+    "shape": "daylight",
+    "priceByAct": true,
+    "maxWorkers": 0,
+    "powerConsumption": 0,
+    "color": "#4A7AB8"
+  },
+  "windTurbine": {
+    "name": {
+      "en": "Wind Turbine",
+      "he": "טורבינת רוח"
+    },
+    "description": {
+      "en": "A tall mast and a spinning rotor. Power follows the wind: sometimes plenty, sometimes almost none.",
+      "he": "תורן גבוה ופרופלר מסתובב. החשמל עוקב אחרי הרוח: לפעמים הרבה, לפעמים כמעט כלום."
+    },
+    "tier": 3,
+    "size": {
+      "w": 1,
+      "h": 1
+    },
+    "maxLevel": 10,
+    "baseCost": {
+      "materials": 140,
+      "scrap": 40
+    },
+    "costMultiplier": 2,
+    "constructionTime": 150,
+    "production": {
+      "power": {
+        "base": 2.4,
+        "perLevel": 0.5
+      }
+    },
+    "slots": 1,
+    "maxCopies": 4,
+    "place": {
+      "floors": "surface"
+    },
+    "shape": "wind",
+    "priceByAct": true,
+    "maxWorkers": 0,
+    "powerConsumption": 0,
+    "color": "#7AA8B8"
+  },
+  "watchtower": {
+    "name": {
+      "en": "Watchtower",
+      "he": "מגדל תצפית"
+    },
+    "description": {
+      "en": "A high lookout over the wasteland. Spots raiders early and adds to the defense.",
+      "he": "עמדת תצפית גבוהה על השממה. מזהה שודדים מוקדם ומוסיפה להגנה."
+    },
+    "tier": 2,
+    "size": {
+      "w": 1,
+      "h": 1
+    },
+    "maxLevel": 10,
+    "baseCost": {
+      "materials": 80,
+      "scrap": 20
+    },
+    "costMultiplier": 1.7,
+    "constructionTime": 80,
+    "effects": {
+      "defense": {
+        "base": 4,
+        "perLevel": 2
+      },
+      "earlyWarning": {
+        "base": 30,
+        "perLevel": 30
+      }
+    },
+    "slots": 1,
+    "maxCopies": 2,
+    "place": {
+      "floors": "surface"
+    },
+    "priceByAct": true,
+    "optimalStat": "agility",
+    "statBonusPerPoint": 0.05,
+    "maxWorkers": 1,
+    "powerConsumption": 0.5,
+    "color": "#8A7A52"
+  },
+  "garage": {
+    "name": {
+      "en": "Motor Pool",
+      "he": "מוסך שיירות"
+    },
+    "description": {
+      "en": "Vehicles, tools and a crane. Lets more expedition teams go out and fills the caravans.",
+      "he": "רכבים, כלים ומנוף. מאפשר לעוד צוותי משלחת לצאת, ומוסיף למטען של השיירות."
+    },
+    "tier": 3,
+    "size": {
+      "w": 3,
+      "h": 1
+    },
+    "maxLevel": 10,
+    "baseCost": {
+      "materials": 220,
+      "scrap": 50
+    },
+    "costMultiplier": 2,
+    "constructionTime": 240,
+    "effects": {
+      "expeditionTeams": [
+        3,
+        8
+      ],
+      "cargo": {
+        "base": 0.05,
+        "perLevel": 0.05
+      }
+    },
+    "slots": 3,
+    "maxCopies": 1,
+    "place": {
+      "floors": "entranceOrSurface"
+    },
+    "priceByAct": true,
+    "optimalStat": "agility",
+    "statBonusPerPoint": 0.05,
+    "maxWorkers": 2,
+    "powerConsumption": 2,
+    "color": "#7A6A4A"
+  },
+  "decon": {
+    "name": {
+      "en": "Decon Chamber",
+      "he": "תא טיהור"
+    },
+    "description": {
+      "en": "Chemical showers by the entrance. Everyone coming back from a trip goes through, and fewer return hurt or sick.",
+      "he": "מקלחות כימיות ליד הכניסה. כל מי שחוזר ממסע עובר בו, ופחות אנשים חוזרים פצועים או חולים."
+    },
+    "tier": 3,
+    "size": {
+      "w": 2,
+      "h": 1
+    },
+    "maxLevel": 10,
+    "baseCost": {
+      "materials": 140,
+      "scrap": 30
+    },
+    "costMultiplier": 1.9,
+    "constructionTime": 150,
+    "effects": {
+      "returnSafety": {
+        "base": 0.04,
+        "perLevel": 0.04
+      }
+    },
+    "slots": 2,
+    "maxCopies": 1,
+    "place": {
+      "floors": "entrance"
+    },
+    "priceByAct": true,
+    "optimalStat": "endurance",
+    "statBonusPerPoint": 0.05,
+    "maxWorkers": 1,
+    "powerConsumption": 2,
+    "color": "#5AA88A"
+  },
+  "aquaculture": {
+    "name": {
+      "en": "Fish Ponds",
+      "he": "בריכות דגים"
+    },
+    "description": {
+      "en": "Ponds and nets beside the lake. Food from the water, and a little clean water too. Must touch the lake.",
+      "he": "בריכות ורשתות ליד האגם. אוכל מהמים, וגם קצת מים נקיים. חייבת לגעת באגם."
+    },
+    "tier": 3,
+    "size": {
+      "w": 3,
+      "h": 1
+    },
+    "maxLevel": 10,
+    "baseCost": {
+      "materials": 260,
+      "scrap": 40
+    },
+    "costMultiplier": 2,
+    "constructionTime": 240,
+    "production": {
+      "food": {
+        "base": 1.1,
+        "perLevel": 0.5
+      },
+      "water": {
+        "base": 0.2,
+        "perLevel": 0.5
+      }
+    },
+    "slots": 3,
+    "maxCopies": 1,
+    "place": {
+      "adjacentTo": "lake"
+    },
+    "priceByAct": true,
+    "optimalStat": "endurance",
+    "statBonusPerPoint": 0.05,
+    "baseEfficiency": 0.25,
+    "maxWorkers": 2,
+    "powerConsumption": 2,
+    "color": "#3A8AA8"
+  },
+  "market": {
+    "name": {
+      "en": "Market",
+      "he": "שוק"
+    },
+    "description": {
+      "en": "Stalls, scales and a price board. Caravans bring home more, and traders offer swaps that change through the day.",
+      "he": "דוכנים, מאזניים ולוח מחירים. השיירות מביאות יותר הביתה, ויש הצעות החלפה שמתחלפות במהלך היום."
+    },
+    "tier": 3,
+    "size": {
+      "w": 3,
+      "h": 1
+    },
+    "maxLevel": 10,
+    "baseCost": {
+      "materials": 240,
+      "scrap": 30
+    },
+    "costMultiplier": 2,
+    "constructionTime": 240,
+    "effects": {
+      "cargo": {
+        "base": 0.1,
+        "perLevel": 0.1
+      }
+    },
+    "slots": 3,
+    "maxCopies": 1,
+    "priceByAct": true,
+    "optimalStat": "charisma",
+    "statBonusPerPoint": 0.05,
+    "maxWorkers": 3,
+    "powerConsumption": 1,
+    "color": "#B0883A"
+  },
+  "nursery": {
+    "name": {
+      "en": "Nursery",
+      "he": "גן ילדים"
+    },
+    "description": {
+      "en": "Mats, toys and small beds. A safe place for the little ones, and they grow up faster there.",
+      "he": "מחצלות, צעצועים ומיטות קטנות. מקום בטוח לקטנים, והם גדלים בו מהר יותר."
+    },
+    "tier": 2,
+    "size": {
+      "w": 2,
+      "h": 1
+    },
+    "maxLevel": 10,
+    "baseCost": {
+      "materials": 80,
+      "food": 20
+    },
+    "costMultiplier": 1.7,
+    "constructionTime": 90,
+    "effects": {
+      "childCapacity": {
+        "base": 4,
+        "perLevel": 2
+      },
+      "childGrowth": {
+        "base": 1.25,
+        "perLevel": 0.05
+      },
+      "morale": {
+        "base": 1,
+        "perLevel": 0.5
+      },
+      "moraleKind": "comfort"
+    },
+    "slots": 2,
+    "maxCopies": 2,
+    "priceByAct": true,
+    "optimalStat": "charisma",
+    "statBonusPerPoint": 0.05,
+    "baseEfficiency": 0.3,
+    "maxWorkers": 2,
+    "powerConsumption": 1,
+    "color": "#C98AA8"
+  },
+  "school": {
+    "name": {
+      "en": "School",
+      "he": "בית ספר"
+    },
+    "description": {
+      "en": "A blackboard, desks and a map on the wall. Children learn here and grow up stronger, and the teachers add knowledge.",
+      "he": "לוח, שולחנות ומפה על הקיר. ילדים לומדים כאן וגדלים חזקים יותר, והמורים מוסיפים ידע."
+    },
+    "tier": 3,
+    "size": {
+      "w": 3,
+      "h": 1
+    },
+    "maxLevel": 10,
+    "baseCost": {
+      "materials": 180,
+      "knowledge": 20
+    },
+    "costMultiplier": 2,
+    "constructionTime": 240,
+    "production": {
+      "knowledge": {
+        "base": 0.05,
+        "perLevel": 0.5
+      }
+    },
+    "effects": {
+      "childCapacity": {
+        "base": 6,
+        "perLevel": 3
+      },
+      "graduateStat": 1
+    },
+    "slots": 3,
+    "maxCopies": 1,
+    "priceByAct": true,
+    "optimalStat": "intelligence",
+    "statBonusPerPoint": 0.05,
+    "baseEfficiency": 0.25,
+    "maxWorkers": 3,
+    "powerConsumption": 2,
+    "color": "#6A8AC8"
+  },
+  "bathhouse": {
+    "name": {
+      "en": "Bathhouse",
+      "he": "מקלחות וכביסה"
+    },
+    "description": {
+      "en": "Showers, benches and steam. Lifts spirits, and a clean bunker has fewer epidemics and roaches.",
+      "he": "מקלחות, ספסלים וקיטור. מרימות את הרוח, ובונקר נקי סובל פחות ממגפות ומג׳וקים."
+    },
+    "tier": 2,
+    "size": {
+      "w": 2,
+      "h": 1
+    },
+    "maxLevel": 10,
+    "baseCost": {
+      "materials": 90,
+      "scrap": 10
+    },
+    "costMultiplier": 1.8,
+    "constructionTime": 90,
+    "effects": {
+      "morale": {
+        "base": 1.5,
+        "perLevel": 0.5
+      },
+      "moraleKind": "comfort",
+      "hygiene": {
+        "base": 0.04,
+        "perLevel": 0.04
+      }
+    },
+    "slots": 2,
+    "maxCopies": 2,
+    "priceByAct": true,
+    "optimalStat": "endurance",
+    "statBonusPerPoint": 0.05,
+    "maxWorkers": 1,
+    "powerConsumption": 2,
+    "color": "#6AB0C8"
+  },
+  "memorialHall": {
+    "name": {
+      "en": "Memorial Hall",
+      "he": "אולם זיכרון"
+    },
+    "description": {
+      "en": "A wall of names, candles and a small statue. A place to remember those we lost, so the grief is lighter. Opens after the first memorial.",
+      "he": "קיר של שמות, נרות ופסל קטן. מקום לזכור את מי שאבד, כדי שהאבל יהיה קל יותר. נפתח אחרי הזיכרון הראשון."
+    },
+    "tier": 2,
+    "size": {
+      "w": 2,
+      "h": 1
+    },
+    "maxLevel": 10,
+    "baseCost": {
+      "materials": 100
+    },
+    "costMultiplier": 1.7,
+    "constructionTime": 100,
+    "effects": {
+      "morale": {
+        "base": 2,
+        "perLevel": 1
+      },
+      "moraleKind": "culture",
+      "mourning": {
+        "base": 0.1,
+        "perLevel": 0.1
+      }
+    },
+    "slots": 2,
+    "maxCopies": 1,
+    "place": {
+      "needsFlag": "memorial:first"
+    },
+    "priceByAct": true,
+    "optimalStat": "charisma",
+    "statBonusPerPoint": 0.05,
+    "maxWorkers": 1,
+    "powerConsumption": 1,
+    "color": "#8A8AA8"
+  },
+  "bulkhead": {
+    "name": {
+      "en": "Bulkhead Door",
+      "he": "דלת מחיצה"
+    },
+    "description": {
+      "en": "A heavy blast door between two rooms. Shut, it slows fire and sickness and holds raiders back. A shut door draws a little power.",
+      "he": "דלת הדף כבדה בין שני חדרים. כשהיא סגורה היא מאטה אש ומחלות ומעכבת פורצים. דלת סגורה אוכלת מעט חשמל."
+    },
+    "tier": 2,
+    "size": {
+      "w": 1,
+      "h": 1
+    },
+    "maxLevel": 3,
+    "baseCost": {
+      "materials": 40,
+      "scrap": 5
+    },
+    "costMultiplier": 1.5,
+    "constructionTime": 60,
+    "maxWorkers": 0,
+    "powerConsumption": 0,
+    "color": "#6A6A72"
+  },
+  "stairwell": {
+    "name": {
+      "en": "Emergency Stairwell",
+      "he": "חדר מדרגות חירום"
+    },
+    "description": {
+      "en": "Concrete stairs with a red emergency light. Make the way out shorter in a fire or a collapse. From floor 9 down, rooms without one nearby are in danger.",
+      "he": "מדרגות בטון עם אור חירום אדום. מקצרות את הדרך החוצה באש ובקריסה. מקומה 9 ומטה, חדרים בלי מדרגות קרובות בסכנה."
+    },
+    "tier": 2,
+    "size": {
+      "w": 1,
+      "h": 1
+    },
+    "maxLevel": 1,
+    "baseCost": {
+      "materials": 70,
+      "scrap": 10
+    },
+    "costMultiplier": 1.6,
+    "constructionTime": 90,
+    "slots": 1,
+    "maxWorkers": 0,
+    "powerConsumption": 0.5,
+    "color": "#7A6A5A"
+  },
+  "ventStack": {
+    "name": {
+      "en": "Vent Stack",
+      "he": "פיר אוורור"
+    },
+    "description": {
+      "en": "A tall shaft with a big slow fan. Eases the crowding, lowers the odds of an epidemic and carries smoke away.",
+      "he": "פיר גבוה עם מאוורר גדול ואיטי. מקל על הצפיפות, מקטין סיכוי למגפה ומוציא עשן החוצה."
+    },
+    "tier": 3,
+    "size": {
+      "w": 1,
+      "h": 1
+    },
+    "maxLevel": 1,
+    "baseCost": {
+      "materials": 120,
+      "scrap": 20
+    },
+    "costMultiplier": 1,
+    "constructionTime": 120,
+    "slots": 1,
+    "maxCopies": 3,
+    "maxWorkers": 0,
+    "powerConsumption": 1,
+    "color": "#5A8AA0"
   }
 }

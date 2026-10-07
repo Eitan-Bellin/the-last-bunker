@@ -35,8 +35,8 @@
 .incident-title { font-family: var(--font-title); font-size: calc(18px * var(--fs, 1)); color: #ffd2b8; letter-spacing: 0.03em; }
 .incident-desc { color: #f0d8cc; font-size: calc(13px * var(--fs, 1)); margin: 4px 0 8px; line-height: 1.45; }
 .incident-bars { display: grid; grid-template-columns: auto 1fr; gap: 6px 10px; align-items: center; margin: 8px 0; }
-.bar-track.good .bar-fill { background: repeating-linear-gradient(90deg, #7affb0 0 4px, transparent 4px 5px); box-shadow: 0 0 5px rgba(120, 255, 170, 0.5); }
-.bar-track.danger .bar-fill { background: repeating-linear-gradient(90deg, #ff6a3a 0 4px, transparent 4px 5px); box-shadow: 0 0 5px rgba(255, 100, 60, 0.6); }
+.bar-track.good .bar-fill { background: repeating-linear-gradient(90deg, var(--ok, #7affb0) 0 4px, transparent 4px 5px); box-shadow: 0 0 5px rgba(120, 255, 170, 0.5); }
+.bar-track.danger .bar-fill { background: repeating-linear-gradient(90deg, var(--bad, #ff6a3a) 0 4px, transparent 4px 5px); box-shadow: 0 0 5px rgba(255, 100, 60, 0.6); }
 .incident-actions { display: flex; gap: 10px; align-items: stretch; flex-wrap: wrap; }
 .incident-fix { display: flex; flex-direction: column; gap: 4px; flex: 1; }
 .btn-fight {
@@ -53,7 +53,7 @@
 
 /* ---------- Production chains ---------- */
 .chain-row.bad .bp-value { color: #ff7a6a; }
-.chain-row.ok .bp-value { color: #7dff9e; }
+.chain-row.ok .bp-value { color: var(--ok, #7dff9e); }
 
 /* ---------- Specialization ---------- */
 .spec-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 8px 0; }
@@ -213,7 +213,7 @@
 .story-cost { font-size: calc(11px * var(--fs, 1)); opacity: 0.8; }
 
 /* ---------- Story codex in the journal ---------- */
-.story-item.locked { opacity: 0.45; }
+.story-item.locked { filter: grayscale(0.7) brightness(0.8); }
 .char-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 10px; margin-top: 8px; }
 .char-card { display: flex; flex-direction: column; align-items: center; gap: 4px; text-align: center; }
 .char-face { width: 72px; height: 72px; border-radius: 50%; object-fit: cover; border: 2px solid var(--border); }
@@ -238,6 +238,18 @@
 .exp-log summary { cursor: pointer; color: var(--phosphor); font-size: calc(13px * var(--fs, 1)); }
 .exp-journal { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; border-inline-start: 2px solid var(--border); padding-inline-start: 10px; }
 .exp-entry { display: grid; grid-template-columns: auto auto 1fr; gap: 6px; align-items: start; font-size: calc(12px * var(--fs, 1)); color: var(--text-primary); }
-.exp-time { color: var(--text-dim); font-family: monospace; direction: ltr; }
+.exp-time { color: var(--text-secondary); font-family: monospace; direction: ltr; }
 .exp-entry.event .exp-text { color: #ffd27a; }
 .exp-entry.choice .exp-text { color: var(--phosphor); }
+
+/* ---------- [plan4:ST-8] District choice cards ---------- */
+.district-choice { display: flex; flex-direction: column; gap: 8px; text-align: start; }
+.district-card {
+  display: flex; flex-direction: column; gap: 4px; align-items: flex-start; text-align: start; width: 100%;
+  min-height: 44px; padding: 10px 12px; border-radius: 8px; cursor: pointer;
+  background: var(--bg-card-hi); color: var(--text-primary); border: 2px solid var(--border, transparent); font: inherit;
+}
+.district-card.selected { border-color: var(--amber); }
+.district-card-name { font-weight: 700; font-size: calc(14px * var(--fs, 1)); }
+.district-card-floor { font-size: calc(11px * var(--fs, 1)); color: var(--text-secondary); }
+.district-card-find { font-size: calc(12px * var(--fs, 1)); line-height: 1.4; color: var(--text-secondary); }

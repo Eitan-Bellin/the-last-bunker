@@ -12,6 +12,8 @@ import { actFraction, actRequirements, pickRequirement, type Requirement } from 
 import type { ObjectiveAction } from '../../systems/ObjectiveSystem';
 import { resourceDef } from '../../data/resources';
 import { getScenario, homeShare, type HomeSite } from '../../data/scenarios';
+import { wingSummary } from '../../data/wings';
+import { fillSafetyCard } from './SafetyCard'; // plan4:ST-14/15
 
 /** Sets a line of text that may hold icon tokens ([[food]]), only when it changed (the panel refreshes four times a second). */
 function setLine(node: HTMLElement | null, text: string): void {
@@ -66,6 +68,10 @@ export class EraPanel {
   private forecastBox: HTMLElement | null = null;
   private endingBars: { id: string; bar: HTMLElement; label: HTMLElement }[] = [];
   private pctLabel: HTMLElement | null = null;
+  /** [plan4:ST-5] The wing width line (west/east reach and the running wing dig's time left). */
+  private wingLine: HTMLElement | null = null;
+  /** [plan4:ST-14/15] The Safety card's box (fire code, shut doors, emergency door button). */
+  private safetyBox: HTMLElement | null = null;
 
   show(state: GameState): void {
     this.signature = '';
@@ -75,6 +81,17 @@ export class EraPanel {
 
   hide(): void {
     this.sheet.hide();
+  }
+
+  /** [plan4:ST-9] Scrolls the wing line into view and lets it glow for a moment (the "what's new" card's "Show me"). */
+  revealWings(): void {
+    const line = this.wingLine;
+    if (!line) return;
+    requestAnimationFrame(() => {
+      line.scrollIntoView({ block: 'center', behavior: 'auto' });
+      line.classList.add('wing-hl');
+      setTimeout(() => line.classList.remove('wing-hl'), 3200);
+    });
   }
 
   get isVisible(): boolean {
@@ -131,8 +148,21 @@ export class EraPanel {
       if (this.nowGo) this.nowGo.style.display = this.nowAction ? '' : 'none';
     }
     if (this.pctLabel) this.pctLabel.textContent = `${Math.floor(Math.min(0.99, actFraction(engine, state, act)) * 100)}%`;
+    this.refreshWings(state);
+    fillSafetyCard(this.safetyBox, engine, state); // plan4:ST-14/15
     this.refreshForecast(state);
     this.refreshEndings(state);
+  }
+
+  /** [plan4:ST-5] "Wing width: west X/Y, east X/Y" (X = widest floor now, Y = what the Act and depth allow) and the next wing's ETA. */
+  private refreshWings(state: GameState): void {
+    if (!this.wingLine || !this.engine) return;
+    const w = wingSummary(state, 'w'), e = wingSummary(state, 'e');
+    if (w.max <= 0 && e.max <= 12 && w.have <= 0 && e.have <= 12) { setLine(this.wingLine, `[[build]] ${i18n.t('wing.line.closed')}`); return; }
+    const ds = this.engine.digSystem;
+    const etas = ds.slots(state).filter(i => ds.dig(state, i)?.kind === 'wing').map(i => ds.eta(state, i)).filter(t => isFinite(t));
+    const next = etas.length ? ` · ${i18n.t('wing.line.eta', { t: i18n.formatDuration(Math.min(...etas)) })}` : '';
+    setLine(this.wingLine, `[[build]] ${i18n.t('wing.line', { wh: w.have, wm: w.max, eh: e.have, em: e.max })}${next}`);
   }
 
   /** [N1] The first card: the one thing to do now, what it is for, and a button that takes you there. */
@@ -159,6 +189,9 @@ export class EraPanel {
       el('div', 'act-limits', i18n.t('act.limits', { level: act.levelCap, people: act.popCap, floors: act.floorCap })),
     );
     if (act.opens) card.appendChild(el('div', 'bp-hint', act.opens[locale]));
+    // [plan4:ST-5] How wide the bunker may grow, and how wide it is.
+    this.wingLine = el('div', 'act-limits');
+    card.appendChild(this.wingLine);
     // [P2] How tempting the bunker looks out there.
     if (this.lastState?.longGame) {
       const t = this.lastState.longGame.threat;
@@ -363,6 +396,7 @@ export class EraPanel {
     this.endingBars = [];
     if (act && this.engine && state) {
       root.appendChild(this.renderNow());
+      this.safetyBox = el('div', 'safety-box'); root.appendChild(this.safetyBox); // plan4:ST-14/15
       root.appendChild(this.renderAct(act));
       root.appendChild(button(`[[build]] ${i18n.t('proj.open')}`, 'btn-primary', () => this.onOpenProjects?.())); // [LateGame B1]
       root.appendChild(this.renderForecast());

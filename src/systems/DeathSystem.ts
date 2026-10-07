@@ -2,6 +2,7 @@ import { difficultyOf } from '../data/difficulty';
 import type { Fallen, GameState, Grief, SurvivorState } from '../core/GameState';
 import type { StateManager } from '../core/StateManager';
 import { bus } from '../core/EventBus';
+import { mourningMult } from '../data/roomEffects'; // [plan4:BL-8]
 
 /**
  * [Danger C5] Meaningful death: every loss is remembered (memorial modal, plaque at the entrance), mourned
@@ -32,10 +33,11 @@ export function disastersPaused(state: GameState, now = Date.now()): boolean {
 /** The mourning (or ceremony glow) a survivor feels right now. */
 export function griefFor(state: GameState, id: string, now = Date.now()): number {
   let sum = 0;
+  const soften = (state.danger?.grief?.length ?? 0) > 0 ? mourningMult(state) : 1; // [plan4:BL-8] a memorial hall shortens the sorrow, not the ceremony's lift
   for (const g of state.danger?.grief ?? []) {
     if (now < g.from || now >= g.until) continue;
     if (g.ids && !g.ids.includes(id)) continue;
-    sum += g.value;
+    sum += g.value < 0 ? g.value * soften : g.value;
   }
   return sum;
 }
@@ -98,6 +100,7 @@ export class DeathSystem {
     const d = this.sm.state.danger;
     const f = d.memorialQueue[0];
     if (!f) return false;
+    if (!this.sm.state.storyFlags.includes('memorial:first')) this.sm.applyDelta({ path: 'storyFlags', value: [...this.sm.state.storyFlags, 'memorial:first'] }); // plan4:BL-32 the first remembered death opens the memorial hall
     let grief = d.grief;
     if (choice === 'ceremony') {
       if (!resources.spend(this.sm, CEREMONY_COST)) return false;

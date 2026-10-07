@@ -1,7 +1,8 @@
 import { Rectangle } from 'pixi.js';
 import type { BunkerRenderer } from '../rendering/BunkerRenderer';
 import type { GameState } from '../core/GameState';
-import { BUILDING_W, DISTRICT_X, ROOM_H, ROOMS_X, SHAFT_W, SLOT_W, floorTop } from '../rendering/layout';
+import { BUILDING_W, ROOM_H, ROOMS_X, SHAFT_W, SLOT_W, buildingX, floorTop } from '../rendering/layout';
+import { ROW_X0, ROW_X1 } from '../rendering/surfaceRow'; // plan4:ST-16
 
 interface Cam {
   id: string;
@@ -23,10 +24,13 @@ const CAMS: Cam[] = [
   {
     id: 'cam5-district', at: s => {
       const d = s.buildings.find(b => b.type === 'cave' || b.type === 'lake' || b.type === 'metro');
-      return d ? { x: DISTRICT_X - 20, y: floorTop(d.position.floor) + ROOM_H / 2, z: 1.9 } : null;
+      return d ? { x: buildingX(d) - 20, y: floorTop(d.position.floor) + ROOM_H / 2, z: 1.9 } : null;
     },
   },
   { id: 'cam6-deep', at: s => ({ x: ROOMS_X + SLOT_W * 6, y: floorTop(Math.max(0, s.currentFloors - 2)) + ROOM_H / 2, z: 2 }) },
+  // [plan4:ST-16] the surface (gate-house) row, once it is open (or its ruin before: null there, the entrance view cam3 shows it)
+  { id: 'cam7-surface', at: s => ({ x: s.layout?.surfaceOpen ? (ROW_X0 + ROW_X1) / 2 : -200, y: -60, z: s.layout?.surfaceOpen ? 1.05 : 1.8 }) },
+  { id: 'cam8-surface-close', at: s => (s.layout?.surfaceOpen ? { x: ROW_X0 + (ROW_X1 - ROW_X0) * 0.62, y: -55, z: 2.4 } : null) }, // plan4:ST-16 two rooms of the row up close
 ];
 
 /** Steps the renderer by hand, so shots work even in a background tab where requestAnimationFrame sleeps. */
@@ -74,6 +78,23 @@ export function installCamShots(renderer: BunkerRenderer, getState: () => GameSt
       saved.push(`${cam.id} ${(blob.size / 1024).toFixed(0)}KB`);
     }
     return saved;
+  };
+  /**
+   * [plan4:X-5] For tools/compare/run.mjs: the ids of the fixed views, and one view as a base64 PNG (no upload to the dev server), at the given
+   * pixel density (default: the screen's). Resolves null when the bunker lacks the subject of that view.
+   */
+  w.__camIds = CAMS.map(c => c.id);
+  w.__camPng = async (id: string, resolution = window.devicePixelRatio || 1, settleFrames = 20) => {
+    const cam = CAMS.find(c => c.id.startsWith(id));
+    const at = cam?.at(getState());
+    if (!cam || !at) return null;
+    renderer.devCamera(at.x, at.y, at.z);
+    await frames(settleFrames);
+    const app = renderer.app;
+    const canvas = app.renderer.extract.canvas({
+      target: app.stage, resolution, frame: new Rectangle(0, 0, app.screen.width, app.screen.height),
+    }) as HTMLCanvasElement;
+    return { id: cam.id, w: canvas.width, h: canvas.height, png: canvas.toDataURL('image/png').split(',')[1] };
   };
   /** One extra view at any world point, saved next to the fixed six. */
   w.__shotAt = async (x: number, y: number, z: number, name: string, tag = 'before') => {

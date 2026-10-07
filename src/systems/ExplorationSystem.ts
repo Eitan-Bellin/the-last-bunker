@@ -10,6 +10,7 @@ import {
   type BiomeId,
 } from '../data/surface';
 import { hasFeature } from './ResearchSystem';
+import { cargoMult, expeditionTeamsBonus, returnSafetyMult } from '../data/roomEffects'; // [plan4:BL-8]
 import { eventsFor, expeditionEvent } from '../data/expeditionEvents';
 import { specTotal } from '../data/specializations';
 import { metroSpeedup } from '../data/districts';
@@ -30,7 +31,7 @@ export function hexKey(q: number, r: number): string {
 
 /** Teams that can be out at once: two from the start, one more per "Scout teams" Genesis upgrade. */
 export function maxTeams(state: GameState): number {
-  return 2 + (state.prestige.upgrades['scoutTeams'] ?? 0);
+  return 2 + (state.prestige.upgrades['scoutTeams'] ?? 0) + expeditionTeamsBonus(state); // [plan4:BL-8] a motor pool adds teams
 }
 
 const POI_POOL = ['supermarket', 'pharmacy', 'hardware', 'junkyard', 'library', 'survivorCamp', 'militaryDepot', 'abandonedLab', 'crashSite'];
@@ -321,7 +322,7 @@ export class ExplorationSystem {
 
     const injuries: MissionReport['injuries'] = [];
     const geiger = hasFeature(state, 'geiger') ? 0.7 : 1;
-    const injuryChance = (success ? biome.danger * 0.08 : 0.6 + biome.danger * 0.08) + (mission.injuryMod ?? 0);
+    const injuryChance = ((success ? biome.danger * 0.08 : 0.6 + biome.danger * 0.08) + (mission.injuryMod ?? 0)) * returnSafetyMult(state); // [plan4:BL-8] the decon chamber
     const xpGain = 40 * Math.max(1, biome.danger);
     const survivors = this.sm.state.survivors.map(s => {
       if (!mission.survivorIds.includes(s.id)) return s;
@@ -441,7 +442,7 @@ export class ExplorationSystem {
     let recruitName: string | null = null;
     const injured: string[] = [];
     if (!ambushed && p) {
-      const back = cargoValue(cargo) * tradeRate(levelBefore);
+      const back = cargoValue(cargo) * tradeRate(levelBefore) * cargoMult(state); // [plan4:BL-8] garage and market
       for (const [r, share] of Object.entries(p.goods) as [ResourceType, number][]) {
         const unit = TRADE_VALUE[r] ?? 1;
         const exact = (back * share) / unit;
@@ -458,7 +459,7 @@ export class ExplorationSystem {
         this.population.addSurvivor(this.sm, s);
         recruitName = s.name;
       }
-    } else if (this.rng.chance(0.4)) {
+    } else if (this.rng.chance(0.4 * returnSafetyMult(state))) {
       // The ambush: the cargo is gone and one of the pair is hurt.
       injured.push(this.rng.pick(mission.survivorIds));
     }

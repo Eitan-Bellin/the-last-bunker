@@ -1,4 +1,5 @@
 import type { GameState, ResourceType, Ruin } from '../../core/GameState';
+import { floorTag } from '../floorTag'; // plan4:ST-16
 import type { GameEngine } from '../../core/GameEngine';
 import { i18n } from '../../i18n/I18nManager';
 import { getDef } from '../../data/buildingDefs';
@@ -82,7 +83,7 @@ export class RuinPanel {
     const locale = i18n.currentLocale;
     const rs = this.engine.restorationSystem;
     const kind = RUIN_KINDS[r.kind];
-    this.sheet.setTitle(`${this.title(r)} · B${r.floor + 1}`);
+    this.sheet.setTitle(`${this.title(r)} · ${floorTag(r.floor)}`);
     const root = el('div', 'bp');
 
     const desc = el('div', 'bp-card ruin-desc');

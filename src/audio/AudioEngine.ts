@@ -12,6 +12,15 @@ export type ZoomMix = 'far' | 'mid' | 'close';
 export type { Sfx } from './sfx';
 export type MusicMood = 'shelter' | 'dark';
 
+/** iPhone / iPad (iPadOS reports itself as a Mac with a touch screen). */
+function isIOSDevice(): boolean {
+  const ua = navigator.userAgent;
+  return /iP(hone|ad|od)/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+}
+
+/** WebKit grants audio activation on these (not on a touch's pointerdown), so all of them try to unlock until the context runs. */
+const UNLOCK_EVENTS = ['pointerup', 'touchend', 'click', 'keydown'] as const;
+
 const STORAGE_KEY = 'lastbunker_sound';
 /** The player's music and effects levels (0..1, 1 = the mix as it was designed). A device preference, not part of the save. */
 const VOLUME_KEY = 'lastbunker_vol';
@@ -86,6 +95,8 @@ export class AudioEngine {
   private expeditionGain: GainNode | null = null;
   private expedition = false;
   private lastPlayed = new Map<Sfx, number>();
+  /** [plan4:AC-9] Told of every cue asked for, even with the sound off: the app turns the important ones into on-screen captions. */
+  onCue: ((name: Sfx) => void) | null = null;
   private seedCounter = 1000;
   // [perf] Synthesis is a queue of small jobs, run one at a time in idle moments, most urgent first (see enqueue).
   private jobs: { id: string; prio: number; run: () => Promise<void> }[] = [];
@@ -94,7 +105,16 @@ export class AudioEngine {
   /** The first sounds (interface effects, base ambience, the era's music) are there. */
   private ready = false;
   /** A device with little memory renders effects mono at 22 kHz and the loops at 16 kHz (about a third of the memory). */
-  private readonly light = isLiteMode() || ((navigator as unknown as { deviceMemory?: number }).deviceMemory ?? 8) <= 3;
+  // [plan4:UX-1] Safari does not report deviceMemory at all: the old "?? 8" gave every iPhone the full ~610 MB of buffers. An iPhone
+  // without the number is treated as a small device (lite audio) until the adaptive monitor says otherwise.
+  private readonly light = isLiteMode() || ((navigator as unknown as { deviceMemory?: number }).deviceMemory ?? (isIOSDevice() ? 3 : 8)) <= 3;
+  /** [plan4:UX-1] The context exists but is not running (autoplay block, a phone call, Siri): the HUD shows a "tap to enable sound" chip. */
+  private blocked = false;
+  /** Called when `blocked` changes; the app shows or hides the chip. */
+  onBlockedChange: ((blocked: boolean) => void) | null = null;
+  private unlockArmed = false;
+  private playInSilent = false;
+  private clickAfterUnlock = false;
   private beds = new Map<BedKey, GainNode>();
   private zoom: ZoomMix = 'mid';
   private musicLevel = MUSIC_LEVEL;
@@ -117,16 +137,122 @@ export class AudioEngine {
     } catch {
       // defaults
     }
-    const unlock = () => {
-      window.removeEventListener('pointerdown', unlock);
-      if (this.enabled) void this.start();
-    };
-    window.addEventListener('pointerdown', unlock);
+    this.applyAudioSession();
+    this.armUnlock();
+    // Back from the background (app switcher, lock screen, a call): the system may have left the context suspended or "interrupted".
     document.addEventListener('visibilitychange', () => {
       if (!this.ctx) return;
       if (document.hidden) void this.ctx.suspend();
-      else if (this.enabled) void this.ctx.resume();
+      else this.tryResume();
     });
+    // bfcache restores and window focus do not always fire visibilitychange on iOS.
+    window.addEventListener('pageshow', () => this.tryResume());
+    window.addEventListener('focus', () => this.tryResume());
+  }
+
+  /**
+   * [plan4:UX-1] 'ambient' follows the silent switch and mixes with the player's music; 'playback' ignores the switch.
+   * Only iOS 17+ has navigator.audioSession, elsewhere this is a no-op.
+   */
+  private applyAudioSession(): void {
+    try {
+      const session = (navigator as unknown as { audioSession?: { type: string } }).audioSession;
+      if (session) session.type = this.playInSilent ? 'playback' : 'ambient';
+    } catch {
+      // not supported: the browser default
+    }
+  }
+
+  /** Settings: "sound even when the phone is on silent". */
+  setPlayInSilent(on: boolean): void {
+    this.playInSilent = on;
+    this.applyAudioSession();
+  }
+
+  private readonly onGesture = (): void => { this.gesture(); };
+
+  private armUnlock(): void {
+    if (this.unlockArmed) return;
+    this.unlockArmed = true;
+    for (const ev of UNLOCK_EVENTS) window.addEventListener(ev, this.onGesture, { capture: true, passive: true });
+  }
+
+  private disarmUnlock(): void {
+    if (!this.unlockArmed) return;
+    this.unlockArmed = false;
+    for (const ev of UNLOCK_EVENTS) window.removeEventListener(ev, this.onGesture, { capture: true });
+  }
+
+  private setBlocked(blocked: boolean): void {
+    if (blocked === this.blocked) return;
+    this.blocked = blocked;
+    this.onBlockedChange?.(blocked);
+  }
+
+  /** Runs inside the player's touch: everything that must count as "from a gesture" has to start synchronously here. */
+  private gesture(): void {
+    if (!this.enabled) return;
+    if (!this.ctx) void this.start(); // creates the context synchronously (no await before it)
+    const ctx = this.ctx;
+    if (!ctx) return;
+    if (ctx.state === 'running') {
+      this.disarmUnlock();
+      this.setBlocked(false);
+      return;
+    }
+    // iOS only unlocks output once something has been started inside the gesture: a one-sample silent buffer is enough.
+    try {
+      const src = ctx.createBufferSource();
+      src.buffer = ctx.createBuffer(1, 1, 22050);
+      src.connect(ctx.destination);
+      src.start(0);
+    } catch {
+      // resume() below is still tried
+    }
+    ctx.resume().then(() => {
+      if (ctx.state !== 'running') return;
+      this.disarmUnlock();
+      this.setBlocked(false);
+      // The very first tap's click is played only now: before this it would have been dropped by play()'s "not running" guard.
+      if (!this.clickAfterUnlock) {
+        this.clickAfterUnlock = true;
+        this.play('click', { volume: 0.6 });
+      }
+    }).catch(() => this.setBlocked(true));
+    // On iOS the promise can stay pending (and no statechange fires) if the system refused: after a moment, say so.
+    window.setTimeout(() => {
+      if (this.enabled && !document.hidden && ctx.state !== 'running') this.setBlocked(true);
+    }, 700);
+  }
+
+  /** Not from a gesture, so iOS may refuse: if the context is still not running a moment later, ask for a tap. */
+  private tryResume(): void {
+    const ctx = this.ctx;
+    if (!ctx || !this.enabled || document.hidden) return;
+    void ctx.resume().catch(() => undefined);
+    window.setTimeout(() => {
+      if (this.ctx && this.enabled && !document.hidden && this.ctx.state !== 'running') {
+        this.armUnlock();
+        this.setBlocked(true);
+      }
+    }, 600);
+  }
+
+  /** ctx.onstatechange: 'suspended' or iOS's 'interrupted' (call, Siri, alarm) while the player expects sound. */
+  private onContextState(): void {
+    const ctx = this.ctx;
+    if (!ctx) return;
+    if (ctx.state === 'running') {
+      this.disarmUnlock();
+      this.setBlocked(false);
+      return;
+    }
+    if (!this.enabled) {
+      this.setBlocked(false);
+      return;
+    }
+    this.armUnlock(); // the next tap resumes it
+    if (!document.hidden) this.setBlocked(true); // hidden = we suspended it on purpose
   }
 
   get isOn(): boolean {
@@ -172,14 +298,19 @@ export class AudioEngine {
       return;
     }
     if (this.enabled) void this.ctx.resume();
-    else void this.ctx.suspend();
+    else {
+      void this.ctx.suspend();
+      this.setBlocked(false);
+    }
   }
 
   private async start(): Promise<void> {
     if (this.ctx) return;
     const Ctor = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
     if (!Ctor) return;
+    this.applyAudioSession();
     this.ctx = new Ctor();
+    this.ctx.onstatechange = () => this.onContextState();
     this.master = this.ctx.createGain();
     this.master.gain.value = 0.9;
     const limiter = this.ctx.createDynamicsCompressor();
@@ -512,6 +643,7 @@ export class AudioEngine {
   }
 
   play(name: Sfx, opts: { pan?: number; volume?: number } = {}): void {
+    this.onCue?.(name);
     if (!this.enabled || !this.ctx || this.ctx.state !== 'running') return;
     const buffer = this.sfx.get(name);
     if (!buffer) {

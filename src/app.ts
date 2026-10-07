@@ -1,4 +1,5 @@
 import { VIEW } from './rendering/perfFx'; // [perf]
+import { floorTag } from './ui/floorTag'; // plan4:ST-16
 import { GameEngine, type OfflineReport } from './core/GameEngine';
 import { ProjectsPanel } from './ui/components/ProjectsPanel'; // [LateGame B1]
 import { PROJECTS, projectDone, stagesDone } from './data/projects'; // [LateGame B1]
@@ -17,6 +18,7 @@ import { MenuPanel } from './ui/components/MenuPanel';
 import { Modal } from './ui/components/Modal';
 import { Toasts } from './ui/components/Toast';
 import { NumberPopupManager } from './ui/components/NumberPopup';
+import { DepthRuler } from './ui/components/DepthRuler'; // [plan4:ST-12]
 import { AudioEngine } from './audio/AudioEngine';
 import { setUiSound } from './audio/uiSound';
 import { timeOfDay } from './ui/HUD';
@@ -46,17 +48,30 @@ import { genderOf, genderOfName } from './data/portraits';
 import { ensurePersistentStorage, getPersistStatus } from './core/SaveManager';
 import { claimOwnership, onSuperseded } from './core/singleInstance';
 import { currentTextSize, cycleTextSize } from './ui/textSize';
+import { getA11y, hydrateA11y, subscribeA11y } from './utils/a11y';
+import { showCaption } from './ui/a11yDom';
+import { StructurePanel } from './ui/components/StructurePanel'; // [plan4:AC-11]
+import { KeyboardShortcuts } from './ui/controllers/keyboard'; // [plan4:AC-10]
+import { setSoundChip } from './ui/soundChip';
 import { hideSplash } from './ui/splash';
 import { StoryDialog } from './ui/components/StoryDialog';
 import { DISASTERS } from './data/incidents';
 import { Notifier, type NotifyItem } from './ui/notifications';
 import { arrivalGap, type RaidResult } from './systems/EventSystem';
+import { DialogQueue, type DialogSource } from './ui/dialogQueue'; // [plan4:UX-10]
+import { getChapter } from './data/story';
+import { districtDef } from './data/districts';
+import { haptic } from './utils/haptics'; // [plan4:UX-20]
 import './style.css';
 import './styles/story.css';
 import './styles/bunker-os.css';
 import './styles/depth.css';
-import './styles/touch.css';
 import './styles/command.css';
+import './styles/buildmenu.css'; // [plan4:BL-39] before touch.css so its 44px rules still win
+import './styles/checkin.css'; // [plan4:Gameplay] dialog queue card, gesture tips, check-in screen
+import './styles/touch.css'; // [plan4:UX-5] last again (its header says so): its 44px targets must beat the older sheet-help sizes in command.css
+import './styles/placement.css'; // [plan4:ST-19] the confirm bar and the chips over the ghost room
+import './styles/a11y.css'; // [plan4:AC-2] the accessibility layer, last of all: reduced motion, colour modes, focus rings
 import { FeedbackController } from './ui/controllers/feedback';
 import { InboxController } from './ui/controllers/inbox';
 import { SaveController } from './ui/controllers/saves';
@@ -66,7 +81,9 @@ import { DangerController } from './ui/controllers/danger';
 import { EventController } from './ui/controllers/events';
 import { StoryController } from './ui/controllers/story';
 import { SystemsController } from './ui/controllers/systems';
+import { WhatsNewController } from './ui/controllers/whatsnew'; // [plan4:ST-9]
 import { WelcomeController } from './ui/controllers/welcome';
+import { TipsController } from './ui/controllers/tips'; // [plan4:UX-11]
 import { PRODUCTION_POPUP_MS, WorldController } from './ui/controllers/world';
 
 /** Icons drawn inside the Pixi scene (plaques, signs, popups); rasterized once at startup. */
@@ -93,9 +110,13 @@ export class GameApp {
   readonly events = new EventController(this);
   readonly story = new StoryController(this);
   readonly welcome = new WelcomeController(this);
+  /** [plan4:UX-11] Gesture tips. */
+  readonly tips = new TipsController(this);
   readonly world = new WorldController(this);
   /** [Q7] "A new system" cards. */
   readonly systems = new SystemsController(this);
+  /** [plan4:ST-9] The one-time "the bunker can grow sideways" card for saves from v6. */
+  readonly whatsNew = new WhatsNewController(this);
   engine: GameEngine;
   renderer: BunkerRenderer;
   hud: HUD;
@@ -103,12 +124,14 @@ export class GameApp {
   buildingPanel: BuildingPanel;
   private peoplePanel: PeoplePanel;
   private researchPanel: ResearchPanel;
+  private structurePanel!: StructurePanel; // [plan4:AC-11] the list view
   private surfacePanel: SurfacePanel;
   menuPanel: MenuPanel;
   modal: Modal;
   toasts: Toasts;
   audio: AudioEngine;
   popups!: NumberPopupManager;
+  ruler!: DepthRuler;
   private ruinPanel: RuinPanel;
   journal = new JournalPanel();
   loreReader = new LoreReader();
@@ -134,6 +157,16 @@ export class GameApp {
   private lastProductionPopup = 0;
   private lastBubbleCheck = 0;
   welcomeOpen = false;
+  /** [plan4:UX-10] A welcome-back report waiting for the gate (the report, or null for people only at the door). */
+  pendingWelcome: { report: OfflineReport | null } | null = null;
+  /** [plan4:UX-10] Every auto-opening dialog is a source in this queue; dialogGate decides when one may land. */
+  dialogs!: DialogQueue;
+  private lastDialogCheck = 0;
+  /** [plan4:UX-10] Pointers that are down right now (id -> last event time) and the time of the last touch gesture. */
+  private pointersDown = new Map<number, number>();
+  private lastGestureAt = -Infinity;
+  /** [plan4:UX-10] A ceremony (GP-2) holds every dialog back until this time (performance.now() ms). */
+  ceremonyUntil = 0;
   private shortages = new Set<ResourceType>();
   private lowWarned = new Set<ResourceType>();
   private hurtWarned = new Set<string>();
@@ -148,15 +181,31 @@ export class GameApp {
     this.hud = new HUD();
     this.audio = new AudioEngine();
     setUiSound((name, volume) => this.audio.play(name, { volume }));
+    // [plan4:UX-1] "tap to enable sound" chip while the context is suspended/interrupted; [plan4:AC-1] audio and the save follow the a11y source.
+    this.audio.onBlockedChange = setSoundChip;
+    this.audio.setPlayInSilent(getA11y().playInSilent);
+    subscribeA11y(a => {
+      this.audio.setPlayInSilent(a.playInSilent);
+      if (this.engine.stateManager.state) this.state.settings.a11y = { ...a }; // mirrored into the save (device preference stays primary)
+    });
     this.buildMenu = new BuildMenu(this.engine.resourceSystem, this.engine.buildingSystem);
     this.buildingPanel = new BuildingPanel(this.engine);
     this.peoplePanel = new PeoplePanel(this.engine);
     this.researchPanel = new ResearchPanel(this.engine);
+    this.structurePanel = new StructurePanel(() => this.state);
+    this.structurePanel.onOpenRoom = id => {
+      const room = this.renderer.roomRect(id);
+      this.closeSheets();
+      if (room) this.renderer.focusOn(room.x + room.w / 2, room.y + 50, 1.6);
+      this.renderer.setSelected(id);
+      this.buildingPanel.show(id);
+    };
     this.surfacePanel = new SurfacePanel(this.engine);
     this.projectsPanel = new ProjectsPanel(this.engine); // [LateGame B1]
     this.couponPanel = new CouponPanel(this.engine, (text, good) => this.toasts.show(text, good ? 'good' : 'bad'));
     this.menuPanel = new MenuPanel(this.engine, {
       toggleLanguage: () => void this.toggleLanguage(),
+      openStructure: () => this.toggleStructure(),
       toggleSound: () => this.audio.toggle(),
       isSoundOn: () => this.audio.isOn,
       newGame: () => this.saves.confirmNewGame(),
@@ -198,6 +247,8 @@ export class GameApp {
       persistLabel: () => i18n.t(`settings.persist.${getPersistStatus()}`),
       openBook: () => this.helpPanel.show(),
       openChronicle: () => this.chroniclePanel.show(this.state),
+      showTipsAgain: () => { this.tips.reset(); this.toasts.show(`[[hand]] ${i18n.t('settings.tipsReset')}`, 'good'); }, // [plan4:UX-11]
+      replayIntro: () => { this.closeSheets(); this.story.replayIntro(); },
       redeemCoupon: (code: string) => { // the coupon sheet: pick how much to skip or add
         if (!couponValid(code)) return false;
         this.closeSheets();
@@ -209,6 +260,7 @@ export class GameApp {
     this.resourceSheet = new ResourceSheet(this.engine);
     this.modal = new Modal();
     this.toasts = new Toasts();
+    this.dialogs = new DialogQueue(this.dialogSources(), this.modal, c => this.dialogGate(c), () => this.engine.stateManager.state?.stats.totalPlayTime ?? 0);
   }
 
   async start(): Promise<void> {
@@ -217,14 +269,26 @@ export class GameApp {
     onSuperseded(() => this.saves.showSuperseded());
     const guard = installCrashGuard(() => this.diagnostics());
     const canvas = document.getElementById('game-canvas') as HTMLCanvasElement;
+    // [plan4:AC-8] The picture is not readable by a screen reader: say what it is and where the list view is (key L, Accessibility tab).
+    canvas.setAttribute('role', 'application');
+    canvas.setAttribute('aria-label', i18n.t('a11y.canvas'));
+    canvas.setAttribute('aria-keyshortcuts', 'B P R L');
+    canvas.setAttribute('aria-description', i18n.t('a11y.keys'));
+    new KeyboardShortcuts(this).install();
+    // [plan4:AC-9] Captions for the sounds that carry information (only when the player turned them on).
+    const CAPTIONED = new Set(['warn', 'pulse', 'alarm', 'siren', 'door', 'thunder']);
+    this.audio.onCue = name => { if (CAPTIONED.has(name)) showCaption(i18n.t(`caption.${name}`)); };
     await Promise.all([this.renderer.init(canvas), preloadIcons(SCENE_ICONS).catch(() => undefined)]);
     await this.engine.init();
+    hydrateA11y(this.state.settings?.a11y); // [plan4:AC-1] a device with no preference of its own takes the save's
+    this.state.settings.a11y = { ...getA11y() };
     // Decode the paintings of the rooms already built so the first frame shows art, not placeholders.
     // [perf] Only the rooms the first picture can show (the top of the bunker): the rest load when the camera comes near (renderRooms).
     const keys = this.state.buildings.filter(b => b.position.floor < 10).map(b => buildingArtKey(b.type, roomTier(b.level))).filter((k): k is string => !!k);
     await Promise.all([ArtLibrary.preload([...new Set([...keys, 'backdrops/rock'])]), ArtLibrary.loadMeta(), ArtLibrary.loadBalance()]).catch(() => undefined);
 
     this.popups = new NumberPopupManager(this.renderer.worldContainer);
+    this.ruler = new DepthRuler(this.renderer); // [plan4:ST-12 #5]
     this.setupEventHandlers();
 
     this.engine.onRender = (dt, alpha) => this.frame(dt, alpha);
@@ -234,17 +298,24 @@ export class GameApp {
       (window as unknown as Record<string, unknown>).__engine = this.engine;
       (window as unknown as Record<string, unknown>).__renderer = this.renderer;
       (window as unknown as Record<string, unknown>).__audio = this.audio;
+      (window as unknown as Record<string, unknown>).__app = this; // [plan4:UX-10] tests poke dialogGate / the dialog queue
+
     }
     // [perf] ?perf shows the overlay, ?debug/?perf expose __perf2() and __perfFixture(); nothing loads otherwise.
     { const q = new URLSearchParams(location.search); if (import.meta.env.DEV || q.has('perf') || q.has('debug')) void import('./dev/perf').then(m => m.installPerf(this.renderer, this.engine, this.audio)); }
     if (import.meta.env.DEV) void import('./dev/storeShots').then(m => m.installStoreShots(this.renderer.app));
     if (import.meta.env.DEV) void import('./dev/camShots').then(m => m.installCamShots(this.renderer, () => this.state));
+    if (import.meta.env.DEV) void import('./dev/structureDev').then(m => m.installStructureDev(this.renderer, () => this.state)); // plan4:ST-14
 
     this.engine.onRenderStuck = fails => this.recoverRender(fails);
     this.saves.watchSaving();
     // A save that could not be read, or one restored from a backup, is explained before the game moves a step.
     if (this.engine.loadProblem) await this.saves.resolveLoadProblem();
     else if (this.engine.recoveredFrom) await this.saves.noticeRecovered();
+    // Back from a break, or people still waiting at the door from last time: the welcome screen comes first. [plan4:UX-10] It waits in the
+    // dialog queue (top priority) so a gesture or placement under way is not interrupted; it is set before the loop starts, or the first
+    // frame would open the door-only welcome without the report.
+    if (this.state.storyFlags.includes('intro:done') && (this.engine.offlineReport || (this.state.doorWaiting?.length ?? 0) > 0)) this.pendingWelcome = { report: this.engine.offlineReport };
     this.engine.start();
     this.installBackNavigation();
     // Ask the browser to keep the save safe (it may clear site data when the phone runs low on space): after the first tap, and once more later.
@@ -252,8 +323,6 @@ export class GameApp {
     setTimeout(() => void ensurePersistentStorage(), 10 * 60_000);
     if (guard.liteJustEnabled) this.toasts.show(`[[sparkle]] ${i18n.t('toast.liteMode')}`, 'info');
     if (!this.state.storyFlags.includes('intro:done')) this.story.playIntroSequence();
-    // Back from a break, or people still waiting at the door from last time: the welcome screen comes first.
-    else if (this.engine.offlineReport || (this.state.doorWaiting?.length ?? 0) > 0) this.welcome.showWelcome(this.engine.offlineReport);
     this.setupNotifications();
   }
 
@@ -394,7 +463,7 @@ export class GameApp {
     if (this.renderer.cameraMoving) this.engine.noteCameraMotion();
     this.engine.fxBusy = this.renderer.fxActive || this.popups.anyIn(VIEW.x0, VIEW.y0, VIEW.x1, VIEW.y1);
     try { this.renderer.render(state, dt, alpha); } catch (err) { logCrash('render', err); throw err; }
-    this.guarded('hud', () => { this.hud.update(state); this.popups.update(); });
+    this.guarded('hud', () => { this.hud.update(state); this.popups.zoom = this.renderer.cameraZoom; this.popups.update(); this.ruler.update(state); this.hud.setNavCurrent(this.buildMenu.isVisible ? 'build' : this.peoplePanel.isVisible ? 'people' : this.researchPanel.isVisible ? 'research' : this.surfacePanel.isVisible ? 'surface' : this.menuPanel.isVisible ? 'menu' : null); });
     this.guarded('ui', () => this.frameUi(state));
   }
 
@@ -414,6 +483,7 @@ export class GameApp {
       if (this.buildingPanel.isVisible) this.buildingPanel.refresh(state);
       if (this.peoplePanel.isVisible) this.peoplePanel.refresh(state);
       if (this.researchPanel.isVisible) this.researchPanel.refresh(state);
+      if (this.structurePanel.isVisible) this.structurePanel.refresh(state);
       if (this.surfacePanel.isVisible) this.surfacePanel.refresh(state);
       if (this.menuPanel.isVisible) this.menuPanel.refresh(state);
       if (this.ruinPanel.isVisible) this.ruinPanel.refresh(state);
@@ -435,25 +505,129 @@ export class GameApp {
       this.world.spawnBubbles();
     }
     this.renderer.setNight(timeOfDay(state.stats.totalPlayTime).night);
-    if (!this.modal.isVisible && !this.welcomeOpen && !this.introPlaying && !this.storyOpen && !this.loreReader.isVisible && !this.storyDialog.isVisible) {
-      const asking = this.engine.explorationSystem.waitingMission();
-      // People who gathered at the door during a short absence get their answer first, too.
-      if ((state.doorWaiting?.length ?? 0) > 0) this.welcome.showWelcome(null);
-      else if ((state.danger?.memorialQueue?.length ?? 0) > 0) this.danger.showMemorial(); // [Danger C5]
-      else if (this.raidResult) { const r = this.raidResult; this.raidResult = null; this.danger.showRaidResult(r); } // [Danger C1]
-      else if (this.dangerPrompt) { this.dangerPrompt = false; if (this.danger.dangerBanner()) this.danger.showDanger(); } // [Danger C1/C2]
-      // [Long game] After the first era these wait in the Decision Inbox; emergencies and the story still open by themselves.
-      else if (this.inbox.autoOpenEvent(state)) this.events.showEvent();
-      else if (asking && !this.inbox.defers(state)) this.events.showMissionChoice(asking);
-      else if (state.missionReports.length > 0 && !this.inbox.defers(state)) this.events.showMissionReport(state.missionReports[0]);
-      else if (this.pendingChapter && !document.querySelector('.era-banner')) this.story.playChapter(this.pendingChapter);
-      else if (!document.querySelector('.era-banner')) this.systems.update(state);
+    // [plan4:UX-10] One dialog at a time, never into a gesture: the sources and their priorities are in dialogSources().
+    if (!this.modal.isVisible && !this.welcomeOpen && !this.introPlaying && !this.storyOpen && !this.loreReader.isVisible && !this.storyDialog.isVisible
+      && now - this.lastDialogCheck > 100) {
+      this.lastDialogCheck = now;
+      this.dialogs.update(now);
     }
     this.checkShortages();
-    if (this.districtFoundQueue.length && !this.modal.isVisible && !this.welcomeOpen && !this.introPlaying && !this.storyOpen && !this.storyDialog.isVisible) {
-      this.dig.showDistrictFound(this.districtFoundQueue.shift()!);
-    }
-    this.lore.flushLoreQueue();
+  }
+
+  /**
+   * [plan4:UX-10] May an auto-opening dialog land right now? Not while a building is being placed, a finger is down (a camera drag,
+   * a pinch, a carried survivor), a gesture ended less than 1.2 s ago, a ceremony is playing, or (for anything that is not an
+   * emergency) a sheet is open under the player's hands. A sheet left open and untouched for 20 s no longer holds the dialogs back.
+   */
+  dialogGate(critical = false): boolean {
+    const now = performance.now();
+    if (this.placementMode) return false;
+    for (const [id, t] of this.pointersDown) if (now - t > 12000) this.pointersDown.delete(id); // a lost pointerup must not block forever
+    if (this.pointersDown.size > 0) return false;
+    if (now - this.lastGestureAt < 1200) return false;
+    if (this.ceremonyActive(now)) return false;
+    if (!critical && this.anyPanelOpen() && now - this.lastGestureAt < 20000) return false;
+    return true;
+  }
+
+  /** [plan4:UX-10] A ceremony is on screen: a timed one (ceremonyUntil, set by GP-2), or a full-screen era/act banner. */
+  ceremonyActive(now = performance.now()): boolean {
+    return now < this.ceremonyUntil || !!document.querySelector('.era-banner, .ceremony');
+  }
+
+  /** [plan4:UX-10] Keeps dialogs out of gestures; installed once. */
+  private watchGestures(): void {
+    const stamp = () => { this.lastGestureAt = performance.now(); };
+    document.addEventListener('pointerdown', e => { this.pointersDown.set(e.pointerId, performance.now()); stamp(); }, { capture: true, passive: true });
+    document.addEventListener('pointermove', e => { if (this.pointersDown.has(e.pointerId)) { this.pointersDown.set(e.pointerId, performance.now()); stamp(); } }, { capture: true, passive: true });
+    const up = (e: PointerEvent) => { this.pointersDown.delete(e.pointerId); stamp(); };
+    window.addEventListener('pointerup', up, { capture: true, passive: true });
+    window.addEventListener('pointercancel', up, { capture: true, passive: true });
+    window.addEventListener('blur', () => this.pointersDown.clear());
+    document.addEventListener('wheel', stamp, { capture: true, passive: true });
+    document.addEventListener('keydown', stamp, { capture: true, passive: true });
+  }
+
+  /** [plan4:UX-10] Every dialog that opens by itself, in the order of the old fixed chain (higher priority = first). */
+  private dialogSources(): DialogSource[] {
+    const st = () => this.state;
+    const memorialN = () => st().danger?.memorialQueue?.length ?? 0;
+    const asking = () => this.engine.explorationSystem.waitingMission();
+    // [Long game] After the first era events, questions and reports wait in the Decision Inbox; emergencies and the story still open by themselves.
+    return [
+      {
+        id: 'welcome', priority: 100, snoozeMs: 60_000, critical: true, icon: '[[door]]',
+        ready: () => !!this.pendingWelcome || (st().doorWaiting?.length ?? 0) > 0,
+        open: () => { const p = this.pendingWelcome; this.pendingWelcome = null; this.welcome.showWelcome(p ? p.report : null); },
+        label: () => i18n.t('welcome.title'),
+      },
+      {
+        id: 'memorial', priority: 90, snoozeMs: 60_000, critical: true, icon: '[[heart]]',
+        ready: () => memorialN() > 0,
+        open: () => this.danger.showMemorial(), // [Danger C5]
+        label: () => i18n.t('dq.memorial'),
+      },
+      {
+        id: 'raidResult', priority: 80, snoozeMs: 60_000, critical: true, icon: '[[warning]]',
+        ready: () => !!this.raidResult,
+        open: () => { const r = this.raidResult!; this.raidResult = null; this.danger.showRaidResult(r); }, // [Danger C1]
+        label: () => i18n.t('dq.raidResult'),
+      },
+      {
+        id: 'danger', priority: 70, snoozeMs: 30_000, critical: true, icon: '[[warning]]',
+        ready: () => this.dangerPrompt,
+        open: () => { this.dangerPrompt = false; if (this.danger.dangerBanner()) this.danger.showDanger(); }, // [Danger C1/C2]
+        label: () => i18n.t('dq.danger'),
+      },
+      {
+        id: 'event', priority: 60, snoozeMs: 120_000, icon: '[[inbox]]',
+        ready: () => this.inbox.autoOpenEvent(st()),
+        open: () => this.events.showEvent(),
+        label: () => { const ev = st().activeEvent; return ev ? i18n.t(`event.${ev.id}.title`, this.events.eventParams(ev.data)) : ''; },
+      },
+      {
+        id: 'missionChoice', priority: 50, snoozeMs: 180_000, icon: '[[radioTower]]',
+        ready: () => !!asking() && !this.inbox.defers(st()),
+        open: () => { const m = asking(); if (m) this.events.showMissionChoice(m); },
+        label: () => i18n.t('inbox.missionAsks'),
+      },
+      {
+        id: 'missionReport', priority: 40, snoozeMs: 180_000, icon: '[[map]]',
+        ready: () => st().missionReports.length > 0 && !this.inbox.defers(st()),
+        open: () => this.events.showMissionReport(st().missionReports[0]),
+        label: () => i18n.t(st().missionReports[0]?.success ? 'inbox.reportOk' : 'inbox.reportBad'),
+      },
+      {
+        id: 'chapter', priority: 30, snoozeMs: 240_000, icon: '[[books]]',
+        ready: () => !!this.pendingChapter,
+        open: () => this.story.playChapter(this.pendingChapter!),
+        label: () => { const c = this.pendingChapter ? getChapter(this.pendingChapter) : undefined; return c ? c.title[i18n.currentLocale] : i18n.t('dq.chapter'); },
+      },
+      {
+        id: 'system', priority: 20, snoozeMs: 300_000, icon: '[[sparkle]]',
+        ready: () => this.systems.hasDue(st()),
+        open: () => this.systems.update(st()),
+        label: () => this.systems.dueTitle(st()),
+      },
+      {
+        id: 'lore', priority: 15, snoozeMs: 300_000, icon: '[[note]]',
+        ready: () => this.lore.hasQueued,
+        open: () => this.lore.flushLoreQueue(),
+        label: () => i18n.t('journal.found'),
+      },
+      {
+        id: 'whatsNew', priority: 5, snoozeMs: 600_000, icon: '[[build]]', // [plan4:ST-9] last in line: every other dialog goes first
+        ready: () => this.whatsNew.hasDue(st()),
+        open: () => this.whatsNew.open(st()),
+        label: () => this.whatsNew.label(),
+      },
+      {
+        id: 'district', priority: 10, snoozeMs: 300_000, icon: '[[pick]]',
+        ready: () => this.districtFoundQueue.length > 0,
+        open: () => this.dig.showDistrictFound(this.districtFoundQueue.shift()!),
+        label: () => { const d = districtDef(this.districtFoundQueue[0] ?? ''); return d ? i18n.t('district.found', { name: d.name[i18n.currentLocale] }) : ''; },
+      },
+    ];
   }
 
   /** [LateGame B1] What stands on each project's lot: started or finished projects, and the active one even before its first stage. */
@@ -496,11 +670,8 @@ export class GameApp {
     this.hud.setJournalUnread(state.loreUnread?.length ?? 0);
     this.hud.setSupply(this.engine.supplySystem.isReady(state), i18n.t('supply.title'));
     this.danger.updateIncidentBanner();
-    // One-time tip once the player has done their first restoration.
-    if (!this.introPlaying && (state.ruinsCleared ?? 0) >= 1 && !state.storyFlags.includes('tip:drag') && !this.modal.isVisible) {
-      this.engine.stateManager.applyDelta({ path: 'storyFlags', value: [...state.storyFlags, 'tip:drag'] });
-      this.toasts.show(`[[hand]] ${i18n.t('tip.drag')}`, 'info');
-    }
+    // [plan4:UX-11] The gesture tips (pinch, double tap, hold a survivor, wings), once each; the old drag toast is the "hold" tip now.
+    this.tips.update(performance.now());
     const obj = this.engine.objectiveSystem.current(state);
     const reward = (Object.entries(obj.reward) as [ResourceType, number][]).map(([r, v]) => `${RESOURCE_ICONS[r] ?? ''}${v}`).join(' ');
     this.hud.setObjective(obj.icon, obj.text[i18n.currentLocale] ?? obj.text.en, obj.progress(state), reward);
@@ -537,8 +708,15 @@ export class GameApp {
     this.runAction(this.engine.objectiveSystem.current(this.state).action);
   }
 
+  /** [plan4:ST-9] Opens the Command panel and draws the eye to its wing line. */
+  showWingLine(): void {
+    this.closeSheets();
+    this.eraPanel.show(this.state);
+    this.eraPanel.revealWings();
+  }
+
   /** [Q2] Takes the player to where an objective or a guide step is dealt with. */
-  private runAction(action: ObjectiveAction): void {
+  runAction(action: ObjectiveAction): void {
     const state = this.state;
     this.closeSheets();
     if (!action) return;
@@ -627,12 +805,16 @@ export class GameApp {
       if (falling && res.amount > 0 && res.amount < res.cap * 0.1 && !this.lowWarned.has(r)) {
         this.lowWarned.add(r);
         this.audio.play('warn');
+        // [plan4:AC-9] The sound has a visual twin: a toast and a blink of the resource plate.
+        this.toasts.show(`[[warning]] ${i18n.t('shortage.low', { name: i18n.t(`resources.${r}`) })}`, 'bad');
+        this.hud.alertResource(r);
       } else if (res.amount > res.cap * 0.25) this.lowWarned.delete(r);
     }
     for (const s of state.survivors) {
       if (s.health < 30 && !this.hurtWarned.has(s.id)) {
         this.hurtWarned.add(s.id);
         this.audio.play('pulse');
+        this.toasts.show(`[[warning]] ${i18n.t('shortage.hurt', { name: s.name })}`, 'bad');
       } else if (s.health > 60) this.hurtWarned.delete(s.id);
     }
     const ok = (state.powerRatio ?? 1) >= 0.99;
@@ -750,9 +932,8 @@ export class GameApp {
     this.renderer.onRuinClick = (ruinId: string) => {
       this.engine.notifyInteraction();
       if (this.placementMode) {
-        this.audio.play('error');
         const r = this.state.ruins.find(x => x.id === ruinId);
-        if (r) this.world.rejectAt({ x: r.x, y: 0, floor: r.floor });
+        if (r) this.world.ghostTap({ x: r.x, y: 0, floor: r.floor }); // [plan4:ST-19]
         return;
       }
       this.audio.play('click');
@@ -760,6 +941,7 @@ export class GameApp {
     };
     this.hud.onObjectiveTap = () => this.onObjectiveTap();
     this.renderer.onDigClick = () => this.dig.confirmDig();
+    this.renderer.onWingDig = (floor, side) => { this.audio.play('click'); this.dig.confirmWingDig(floor, side); }; // [plan4:ST-3]
     this.renderer.onElevator = () => {
       if (this.renderer.zoomLevel !== 'far' && Math.random() < 0.6) this.audio.play('elevator', { volume: 0.35 });
     };
@@ -773,8 +955,16 @@ export class GameApp {
     };
     this.renderer.nameOf = (s: { name: string }) => this.localName(s.name);
     this.renderer.onBubbleTap = (id: string) => this.world.collectBubble(id);
-    this.renderer.onPersonDrop = (sid: string, target: string | null) => this.world.dropSurvivor(sid, target);
+    this.renderer.onPersonLift = () => haptic('impact'); // [plan4:UX-20] the lift; the drop's own impact is in WorldController.dropSurvivor
+    this.renderer.onPersonHover = (sid, tid, sx, sy) => this.world.hoverPerson(sid, tid, sx, sy);
+    this.renderer.onPersonDrop = (sid: string, target: string | null) => { this.tips.learned('hold'); this.world.dropSurvivor(sid, target); }; // [plan4:UX-11]
     this.renderer.onPersonTap = (sid: string) => {
+      if (this.placementMode) {
+        // [plan4:ST-19] While choosing a spot a tap on someone is a tap on the room they stand in (the ghost shows why it cannot go there), not the people panel.
+        const room = this.state.buildings.find(b => b.id === this.state.survivors.find(s => s.id === sid)?.assignedBuildingId);
+        if (room) this.world.ghostTap(room.position);
+        return;
+      }
       this.audio.play('click');
       this.closeSheets();
       this.peoplePanel.show(sid);
@@ -783,6 +973,11 @@ export class GameApp {
     this.buildMenu.onSelectBuilding = (type: BuildingType) => {
       this.audio.play('click');
       this.world.startPlacement(type);
+    };
+
+    this.buildMenu.onOpenResearch = () => { // [plan4:BL-39] a locked room's "unlocked by" line opens the research panel
+      this.closeSheets();
+      this.researchPanel.show();
     };
 
     this.researchPanel.onOpenGenesis = () => {
@@ -795,6 +990,7 @@ export class GameApp {
       this.researchPanel.show();
     };
 
+    this.buildingPanel.onMove = (id: string) => { this.world.beginRelocate(id); }; // [plan4:ST-19]
     this.buildingPanel.onUpgrade = (id: string) => {
       const b = this.state.buildings.find(x => x.id === id);
       if (!b) return;
@@ -813,31 +1009,24 @@ export class GameApp {
 
     this.buildingPanel.onClose = () => this.renderer.setSelected(null);
 
+    // [plan4:ST-19] A tap on a slot no longer builds: it puts the ghost of the room there (Build on the bar confirms, WorldController.confirmPlacement).
     this.renderer.onTileClick = (pos: Position) => {
       this.engine.notifyInteraction();
       if (!this.placementMode) return;
-      if (this.world.tryPlaceBuilding(this.placementMode, pos)) {
-        this.audio.play('place');
-        const c = this.renderer.slotCenter(pos);
-        this.renderer.burstAt(c.x, c.y + 30, 80);
-        this.renderer.shake(2, 0.25);
-        this.world.cancelPlacement();
-      } else {
-        this.audio.play('error');
-        this.world.rejectAt(pos);
-      }
+      this.world.ghostTap(pos);
     };
+    this.renderer.onBuildingLongPress = (id: string) => this.world.roomActions(id); // [plan4:ST-19] press and hold a room: Move
 
     this.renderer.onBuildingClick = (buildingId: string) => {
       this.engine.notifyInteraction();
       const building = this.state.buildings.find(b => b.id === buildingId);
       if (!building) return;
       if (this.placementMode) {
-        this.audio.play('error');
-        this.world.rejectAt(building.position);
+        this.world.ghostTap(building.position); // [plan4:ST-19] the ghost shows there why it cannot stand on a room
         return;
       }
       this.audio.play('click');
+      this.tips.noteRoomTap(); // [plan4:UX-11]
       this.closeSheets();
       this.renderer.setSelected(buildingId);
       this.buildingPanel.show(buildingId);
@@ -845,6 +1034,8 @@ export class GameApp {
 
     this.feedback.install();
     this.inbox.install();
+    this.watchGestures(); // [plan4:UX-10]
+    this.tips.install(); // [plan4:UX-11]
 
     bus.on('state:loaded', () => {
       this.closeSheets();
@@ -855,7 +1046,7 @@ export class GameApp {
 
     bus.on('offline:processed', (report: unknown) => {
       if (this.engine.offlineReport === report) return;
-      this.welcome.showWelcome(report as OfflineReport);
+      this.pendingWelcome = { report: report as OfflineReport }; // [plan4:UX-10] through the gate, like every auto dialog
     });
 
     // Any touch, drag, wheel or key counts: the picture draws at full speed while the player is handling the bunker.
@@ -878,7 +1069,7 @@ export class GameApp {
 
   // ---- the phone's back button ----
 
-  private anyPanelOpen(): boolean {
+  anyPanelOpen(): boolean {
     return this.buildMenu.isVisible || this.buildingPanel.isVisible || this.peoplePanel.isVisible || this.researchPanel.isVisible
       || this.surfacePanel.isVisible || this.menuPanel.isVisible || this.ruinPanel.isVisible || this.journal.isVisible
       || this.eraPanel.isVisible || this.projectsPanel.isVisible || this.helpPanel.isVisible || this.chroniclePanel.isVisible || this.loreReader.isVisible || this.inbox.isVisible || this.resourceSheet.isVisible;
@@ -923,11 +1114,19 @@ export class GameApp {
     return this.engine.populationSystem.getLocalizedName({ name } as SurvivorState, i18n.currentLocale);
   }
 
+  /** [plan4:AC-11] The list view of the bunker (key L, and the Accessibility tab). */
+  toggleStructure(): void {
+    const wasOpen = this.structurePanel.isVisible;
+    this.closeSheets();
+    if (!wasOpen) this.structurePanel.show();
+  }
+
   closeSheets(): void {
     this.buildMenu.hide();
     this.buildingPanel.hide();
     this.peoplePanel.hide();
     this.researchPanel.hide();
+    this.structurePanel.hide();
     this.menuPanel.hide();
     this.ruinPanel.hide();
     this.journal.hide();
@@ -945,7 +1144,7 @@ export class GameApp {
   roomName(buildingId: string): string {
     const b = this.state.buildings.find(x => x.id === buildingId);
     if (!b) return '';
-    return `${getDef(b.type)?.name[i18n.currentLocale] ?? b.type} · B${b.position.floor + 1}`;
+    return `${getDef(b.type)?.name[i18n.currentLocale] ?? b.type} · ${floorTag(b.position.floor)}`; // plan4:ST-16
   }
 
   private specialize(buildingId: string, specId: string): void {

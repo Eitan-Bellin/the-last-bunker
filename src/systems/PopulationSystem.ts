@@ -1,10 +1,13 @@
 import { projectMorale } from '../data/projects';
 import { lawMorale } from '../data/laws';
-import type { GameState, SurvivorState, SurvivorStats, BuildingInstance } from '../core/GameState';
+import type { GameState, SurvivorState, SurvivorStats, BuildingInstance, BuildingType } from '../core/GameState';
 import type { StateManager } from '../core/StateManager';
 import type { SeededRandom } from '../core/Random';
 import { bus } from '../core/EventBus';
-import { getDef, effectiveLevel, workforceMultiplier } from '../data/buildingDefs';
+import { getDef, effectiveLevel, synergyBonus, workforceMultiplier, type MoraleKind } from '../data/buildingDefs';
+import { childCapacityOf, ventilationRelief } from '../data/roomEffects'; // [plan4:BL-3/4/8]
+import { roomSlots } from '../data/buildingDefs'; // plan4:ST-14
+import { isSealedOff } from './doors'; // plan4:ST-14
 import { hasFeature, researchBuildingMult, researchMorale } from './ResearchSystem';
 import { chainFactor } from '../data/chains';
 import { incidentBlocks } from '../data/incidents';
@@ -30,7 +33,70 @@ export const TRAITS = [
 export const STAT_KEYS: (keyof SurvivorStats)[] = ['strength', 'intelligence', 'agility', 'charisma', 'endurance'];
 const STAT_CAP = 20;
 const MORALE_DRIFT_PER_SECOND = 0.01;
-const MAX_CANTEEN_BONUS = 22;
+/** [plan4:BL-3] Morale channels: the canteen channel (22, as always) and two small ones for comfort and culture rooms. Max 34 in all. */
+export const MORALE_CAPS: Record<MoraleKind, number> = { base: 22, comfort: 6, culture: 6 };
+export const MORALE_KINDS: MoraleKind[] = ['base', 'comfort', 'culture'];
+
+/** [plan4:BL-3] What one room gives its morale channel right now (0 when it gives none). */
+function roomMorale(state: GameState, b: BuildingInstance): number {
+  const morale = getDef(b.type)?.effects?.morale;
+  const level = effectiveLevel(b);
+  if (!morale || level <= 0 || incidentBlocks(state, b)) return 0;
+  return (morale.base + morale.perLevel * (level - 1)) * workforceMultiplier(state, b) * (state.powerRatio ?? 1)
+    * researchBuildingMult(state, b.type) * Math.min(1, chainFactor(state, b))
+    * (1 + synergyBonus(state, b, 'morale')); // [plan4:BL-1] canteen next to the commons: +5% for both
+}
+
+export interface MoraleSource {
+  type: BuildingType;
+  kind: MoraleKind;
+  /** Rooms of this type, and the sum of what they give before the channel's ceiling. */
+  count: number;
+  value: number;
+}
+
+export interface MoraleBreakdown {
+  /** Per channel: what the rooms add up to, and what counts after the ceiling. */
+  channels: Record<MoraleKind, { raw: number; value: number; cap: number }>;
+  /** Rooms that give morale, strongest first. */
+  sources: MoraleSource[];
+  /** The three channels together (the 'canteen' factor of the morale list, before rounding). */
+  total: number;
+}
+
+/**
+ * [plan4:BL-3] The morale rooms give, by channel. Rooms without `effects.moraleKind` feed 'base' (canteen, lake, atrium),
+ * so a bunker with only the old rooms gets exactly the old total: min(22, sum).
+ */
+export function moraleBreakdown(state: GameState): MoraleBreakdown {
+  const raw: Record<MoraleKind, number> = { base: 0, comfort: 0, culture: 0 };
+  const byType = new Map<string, MoraleSource>();
+  for (const b of state.buildings) {
+    const def = getDef(b.type);
+    if (!def?.effects?.morale) continue;
+    const kind = def.effects.moraleKind ?? 'base';
+    const v = roomMorale(state, b);
+    raw[kind] += v;
+    const src = byType.get(b.type) ?? { type: b.type, kind, count: 0, value: 0 };
+    src.count++;
+    src.value += v;
+    byType.set(b.type, src);
+  }
+  const channels = {} as MoraleBreakdown['channels'];
+  let total = 0;
+  for (const k of MORALE_KINDS) {
+    const value = Math.min(MORALE_CAPS[k], raw[k]);
+    channels[k] = { raw: raw[k], value, cap: MORALE_CAPS[k] };
+    total += value;
+  }
+  return { channels, sources: [...byType.values()].sort((a, b) => b.value - a.value), total };
+}
+
+/** The crowding penalty of a big bunker (points off everyone's mood), less what ventilation takes away. [plan4:BL-8] */
+function crowdingPenalty(state: GameState): number {
+  const crowd = Math.min(14, Math.max(0, Math.round((state.survivors.length - 12) * 0.4)));
+  return Math.max(0, crowd - ventilationRelief(state));
+}
 
 export interface MoraleFactor {
   key: string;
@@ -65,7 +131,9 @@ export class PopulationSystem {
     const thirsty = state.resources.water.amount <= 0;
     const medbays = state.buildings.filter(b => b.type === 'medbay' && effectiveLevel(b) > 0 && b.assignedSurvivorIds.length > 0
       && !incidentBlocks(state, b));
-    const healMult = specMax(state, 'healMult', 'medbay');
+    // [plan4:BL-1] A medbay next to a quarantine ward heals faster (healMult synergy); the best medbay counts.
+    const healSyn = medbays.reduce((m, b) => Math.max(m, synergyBonus(state, b, 'healMult')), 0);
+    const healMult = specMax(state, 'healMult', 'medbay') * (1 + healSyn);
     const gymMult = specMax(state, 'xpMult', 'trainingRoom');
     let medicine = state.resources.medicine.amount;
 
@@ -100,7 +168,7 @@ export class PopulationSystem {
 
       const job = s.assignedBuildingId ? state.buildings.find(b => b.id === s.assignedBuildingId) : undefined;
       const clearing = !job && !!s.assignedBuildingId?.startsWith('r_') && state.ruins.some(r => r.id === s.assignedBuildingId && r.started);
-      if (((job && effectiveLevel(job) > 0) || clearing) && !s.isOnMission) {
+      if (((job && effectiveLevel(job) > 0) || clearing) && !s.isOnMission && !s.child) { // [plan4:BL-4] a child at school is not at work
         let rate = 1;
         if (s.traits.includes('quickLearner')) rate *= 2;
         if (s.traits.includes('lazy')) rate *= 0.5;
@@ -204,7 +272,7 @@ export class PopulationSystem {
     if (state.resources.water.amount <= 0) factors.push({ key: 'noWater', value: -30 });
     if (state.survivors.length > state.maxPopulation) factors.push({ key: 'overcrowded', value: -15 });
     // A bigger bunker is louder and more cramped: gardens, the lake and the canteen have to make up for it.
-    const crowd = Math.min(14, Math.max(0, Math.round((state.survivors.length - 12) * 0.4)));
+    const crowd = crowdingPenalty(state);
     if (crowd > 0) factors.push({ key: 'crowding', value: -crowd });
     if ((state.powerRatio ?? 1) < 0.99) factors.push({ key: 'darkness', value: -Math.round(15 * (1 - state.powerRatio)) - 5 });
     if (s.health < 50) factors.push({ key: 'injured', value: -10 });
@@ -246,7 +314,7 @@ export class PopulationSystem {
     if (state.resources.food.amount <= 0) sum -= 30;
     if (state.resources.water.amount <= 0) sum -= 30;
     if (state.survivors.length > state.maxPopulation) sum -= 15;
-    const crowd = Math.min(14, Math.max(0, Math.round((state.survivors.length - 12) * 0.4)));
+    const crowd = crowdingPenalty(state);
     if (crowd > 0) sum -= crowd;
     if ((state.powerRatio ?? 1) < 0.99) sum -= Math.round(15 * (1 - state.powerRatio)) + 5;
     const canteen = this.getCanteenBonus(state);
@@ -291,16 +359,14 @@ export class PopulationSystem {
     return Math.max(0, Math.min(100, total));
   }
 
+  /** What morale rooms give in all (the 'canteen' factor): the three channels of moraleBreakdown. */
   private getCanteenBonus(state: GameState): number {
-    let bonus = 0;
-    for (const b of state.buildings) {
-      const morale = getDef(b.type)?.effects?.morale;
-      const level = effectiveLevel(b);
-      if (!morale || level <= 0 || incidentBlocks(state, b)) continue;
-      bonus += (morale.base + morale.perLevel * (level - 1)) * workforceMultiplier(state, b) * (state.powerRatio ?? 1)
-        * researchBuildingMult(state, b.type) * Math.min(1, chainFactor(state, b));
-    }
-    return Math.min(MAX_CANTEEN_BONUS, bonus);
+    return moraleBreakdown(state).total;
+  }
+
+  /** [plan4:BL-3] For the People panel: where the bunker's morale comes from. */
+  getMoraleSources(state: GameState): MoraleBreakdown {
+    return moraleBreakdown(state);
   }
 
   createSurvivor(rng: SeededRandom): SurvivorState {
@@ -346,18 +412,29 @@ export class PopulationSystem {
     });
   }
 
-  canAssign(state: GameState, buildingId: string): boolean {
+  /**
+   * [plan4:BL-4] Workers fill maxWorkers; children fill the separate childCapacity of a nursery or school (never maxWorkers).
+   * Without `child` this is the old check, so adults see no change.
+   */
+  canAssign(state: GameState, buildingId: string, child = false): boolean {
     const b = state.buildings.find(x => x.id === buildingId);
     if (!b) return false;
-    return b.assignedSurvivorIds.length < (getDef(b.type)?.maxWorkers ?? 0);
+    if (isSealedOff(state, b.position.floor, b.position.x, roomSlots(b.type))) return false; // [plan4:ST-14] nobody from outside is sent behind a sealed door
+    const kids = b.assignedSurvivorIds.filter(id => state.survivors.find(s => s.id === id)?.child).length;
+    if (child) return kids < childCapacityOf(b, state);
+    return b.assignedSurvivorIds.length - kids < (getDef(b.type)?.maxWorkers ?? 0);
   }
 
   assignSurvivorToBuilding(sm: StateManager, survivorId: string, buildingId: string | null): boolean {
     const state = sm.state;
     const survivor = state.survivors.find(s => s.id === survivorId);
     if (!survivor) return false;
-    if (buildingId && survivor.child) return false;
-    if (buildingId && survivor.assignedBuildingId !== buildingId && !this.canAssign(state, buildingId)) return false;
+    // [plan4:BL-4] A child may only go to a room with childCapacity (nursery, school), and an adult never takes a child's place.
+    if (buildingId && survivor.child) {
+      const target = state.buildings.find(b => b.id === buildingId);
+      if (!target || childCapacityOf(target, state) <= 0) return false;
+    }
+    if (buildingId && survivor.assignedBuildingId !== buildingId && !this.canAssign(state, buildingId, !!survivor.child)) return false;
 
     const buildings: BuildingInstance[] = state.buildings.map(b => {
       let ids = b.assignedSurvivorIds.filter(id => id !== survivorId);

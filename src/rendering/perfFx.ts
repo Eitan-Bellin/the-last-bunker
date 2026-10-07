@@ -21,7 +21,7 @@ export const VIEW = { x0: -1e9, y0: -1e9, x1: 1e9, y1: 1e9 };
  * a string several times per picture just to learn that nothing changed. `rooms` covers what a room's look depends on (type, place,
  * level, new or not), `util` what the structure around the rooms depends on (the same, plus the ruins), `districts` the side tunnels.
  */
-export const LAYOUT = { rooms: 0, util: 0, districts: 0 };
+export const LAYOUT = { rooms: 0, util: 0, districts: 0, ext: 0 };
 
 const strHash = new Map<string, number>();
 const sh = (s: string): number => {
@@ -35,12 +35,19 @@ export function hashLayout(state: GameState): void {
   let hr = 2166136261, hu = 2166136261, hd = 2166136261;
   for (const b of state.buildings) {
     const fresh = b.isConstructing && b.level === 1 ? 1 : 0;
-    const where = b.position.floor * 64 + b.position.x;
+    const where = (b.position.floor + 8) * 128 + (b.position.x + 32); // [plan4:X-2] offsets keep negative floors and west slots (< 0) from colliding
     hr = mix(mix(mix(mix(hr, sh(b.id)), sh(b.type)), where), (b.level << 2) | (fresh << 1) | (b.isConstructing ? 1 : 0));
     hu = mix(mix(mix(mix(hu, sh(b.id)), sh(b.type)), where), (b.level << 1) | fresh);
-    if (isDistrict(b.type)) hd = mix(hd, b.position.floor);
+    if (isDistrict(b.type)) hd = mix(mix(hd, b.position.floor), b.position.x + 64); // [plan4:ST-8] a wing pushes the tunnel
   }
   for (const r of state.ruins) hu = mix(mix(mix(hu, sh(r.id)), r.x), r.floor);
+  // [plan4:ST-4] How far each floor reaches (layout.ext) shapes the structure, the shaft and the map: one more number, no allocation (for..in).
+  let he = 2166136261;
+  const ext = state.layout?.ext;
+  if (ext) for (const k in ext) he = mix(mix(mix(he, sh(k)), ext[k].w + 64), ext[k].e + 64);
+  if (state.layout?.surfaceOpen) he = mix(he, 0x5f); // plan4:ST-16 the gate-house yard opening changes the world's west edge and the surface
+  hu = mix(hu, he);
+  LAYOUT.ext = he;
   LAYOUT.rooms = hr;
   LAYOUT.util = hu;
   LAYOUT.districts = hd;
@@ -227,7 +234,7 @@ export class Dust {
     this.motes = [];
     for (let i = 0; i < 26 * floors; i++) {
       this.motes.push({
-        x: ROOMS_X + rnd() * ROOMS_W, y: floorTop(0) + rnd() * floors * FLOOR_H,
+        x: ROOMS_X + rnd() * ROOMS_W, y: floorTop(0) + rnd() * (floorTop(floors) - floorTop(0)), // [plan4:ST-1] the galleries add height
         vx: (rnd() - 0.5) * 4, vy: (rnd() - 0.5) * 3, ph: rnd() * Math.PI * 2,
       });
     }

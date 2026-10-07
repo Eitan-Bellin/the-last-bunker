@@ -114,7 +114,7 @@ export class CouponPanel {
         return n ? i18n.t('coupon.build.on', { n }) : i18n.t('coupon.none');
       }
       case 'dig': {
-        const d = state.longGame?.dig;
+        const d = e.digSystem.dig(state); // [plan4:ST-3] the primary dig (the floor dig, else the first running one)
         if (!d || d.floor == null) return i18n.t('coupon.none');
         return i18n.t('coupon.dig.on', { n: d.floor + 1, h: Math.ceil(Math.max(0, d.total - d.progress) / 3600) });
       }
@@ -160,9 +160,10 @@ export class CouponPanel {
         return any;
       }
       case 'dig': {
-        const d = sm.state.longGame?.dig;
+        const slot = e.digSystem.primary(sm.state);
+        const d = e.digSystem.dig(sm.state, slot);
         if (!d || d.floor == null) return false;
-        sm.applyDelta({ path: 'longGame.dig.progress', value: Math.min(d.total, d.progress + n * 3600) });
+        sm.applyDelta({ path: slot === 0 ? 'longGame.dig.progress' : 'longGame.dig2.progress', value: Math.min(d.total, d.progress + n * 3600) });
         // Opens the floor at once if the dig is now complete (even with no crew on site).
         if (d.progress + n * 3600 >= d.total) e.digSystem.update(0);
         return true;

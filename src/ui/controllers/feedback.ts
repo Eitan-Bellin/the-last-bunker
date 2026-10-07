@@ -1,13 +1,15 @@
 import { ENDINGS } from '../../data/endings';
 import { SEASONS, nextSeason, seasonAt } from '../../data/seasons';
 import { ACTS } from '../../data/acts';
-import { vibrate } from '../../utils/haptics';
+import { haptic } from '../../utils/haptics';
+import { statusTint } from '../../utils/a11y';
+import { announce } from '../a11yDom';
 import { getProject } from '../../data/projects';
 import { getPartner } from '../../data/trade';
 import { WEEKLY_CREDITS } from '../../data/challenges';
 import { i18n } from '../../i18n/I18nManager';
 import { bus } from '../../core/EventBus';
-import { getDef } from '../../data/buildingDefs';
+import { getDef, isPowerPlant } from '../../data/buildingDefs';
 import { getResearch } from '../../data/research';
 import { ACHIEVEMENTS } from '../../data/achievements';
 import { RESOURCE_ICONS } from '../../ui/dom';
@@ -46,18 +48,22 @@ export class FeedbackController {
       }
       const name = getDef(b.type)?.name[i18n.currentLocale] ?? b.type;
       this.app.toasts.show(`[[check]] ${i18n.t('toast.buildingComplete', { name })}`, 'good');
-      if (b.type === 'generator' || b.type === 'reactor' || b.type === 'reactorHall') this.app.audio.play('engineStart');
+      haptic('success'); // [plan4:UX-2] the same event fires when an upgrade finishes
+      if (isPowerPlant(b.type)) this.app.audio.play('engineStart'); // [plan4:BL-8]
       else {
         this.app.audio.play('complete');
         setTimeout(() => this.app.audio.play('hiss', { volume: 0.6 }), 260);
       }
       const c = this.app.renderer.roomCenter(b);
-      this.app.popups.spawn(c.x, c.y, '[[check]]', 0x44ff88);
+      this.app.popups.spawn(c.x, c.y, '[[check]]', statusTint('ok'));
     });
+
+    bus.on('surface:open', () => { this.app.toasts.show(`[[sun]] ${i18n.t('toast.surfaceOpen')}`, 'good'); haptic('success'); }); // [plan4:ST-16] the gate-house yard is cleared
 
     bus.on('survivor:levelup', (s: unknown, stat: unknown) => {
       const survivor = s as SurvivorState;
       this.app.audio.play('levelup');
+      haptic('success');
       const p = this.app.renderer.personPos(survivor.id);
       if (p) this.app.renderer.floatIcons(p.x, p.y, 'star', 5, '#ffe27a');
       this.app.toasts.show(`[[star]] ${i18n.t('toast.levelUp', {
@@ -85,6 +91,7 @@ export class FeedbackController {
       const a = ACHIEVEMENTS.find(x => x.id === id);
       if (!a) return;
       this.app.audio.play('achievement');
+      haptic('success');
       this.app.toasts.show(`[[trophy]] ${i18n.t('toast.achievement', { name: a.name[i18n.currentLocale] ?? a.name.en })}`, 'good');
       this.app.engine.requestSave();
     });
@@ -105,8 +112,11 @@ export class FeedbackController {
       this.app.audio.play(sound[inc.kind]);
       if (inc.kind !== 'breach') setTimeout(() => this.app.audio.play('alarm'), 400);
       this.app.renderer.shake(inc.kind === 'breach' ? 6 : 4, 0.5);
-      vibrate([40, 60, 40]);
+      haptic('warning');
       this.app.toasts.show(`[[${def.icon}]] ${i18n.t('incident.started', { name: def.name[i18n.currentLocale], room: this.app.roomName(inc.buildingId) })}`, 'bad');
+      // [plan4:AC-11] Said to a screen reader as an alert, with the floor (when the player turned announcements on).
+      const floor = this.app.state.buildings.find(b => b.id === inc.buildingId)?.position.floor ?? 0;
+      announce(i18n.t('announce.incident', { name: def.name[i18n.currentLocale], floor: floor + 1 }), 'assertive');
     });
     bus.on('incident:burnout', (i: unknown) => {
       const inc = i as Incident;
@@ -126,7 +136,7 @@ export class FeedbackController {
       const rect = this.app.renderer.roomRect(incident.buildingId);
       if (rect) {
         this.app.renderer.floatIcons(rect.x + rect.w / 2, rect.y + 40, 'star', 5, '#ffd27a');
-        this.app.popups.spawn(rect.x + rect.w / 2, rect.y + 30, `[[check]] ${def.name[i18n.currentLocale]}`, 0x7affb0);
+        this.app.popups.spawn(rect.x + rect.w / 2, rect.y + 30, `[[check]] ${def.name[i18n.currentLocale]}`, statusTint('ok'));
       }
       this.app.toasts.show(`[[check]] ${i18n.t(quick ? 'incident.fixedQuick' : 'incident.fixed', { name: def.name[i18n.currentLocale] })}`, 'good');
       this.app.engine.requestSave();
@@ -154,6 +164,7 @@ export class FeedbackController {
       const res = r as { kind: keyof typeof DISASTERS };
       const def = DISASTERS[res.kind];
       this.app.audio.play('error');
+      haptic('error');
       this.app.toasts.show(`[[${def.icon}]] ${i18n.t('danger.toast.struck', { name: def.name[i18n.currentLocale], text: def.struck[i18n.currentLocale] })}`, 'bad');
     });
     bus.on('family:couple', (c: unknown) => {
@@ -322,8 +333,16 @@ export class FeedbackController {
     // [P5] A new timeline: choose its hardships (if any) for more Legacy.
     // [P3-5] First where the next world begins, then the hardships.
     bus.on('rebirth', () => setTimeout(() => this.app.story.chooseScenario(() => this.app.story.chooseMutators()), 1500));
-    bus.on('dig:start', () => {
-      this.app.toasts.show(`[[pick]] ${i18n.t('dig.started', { n: this.app.state.currentFloors + 1, t: i18n.formatDuration(this.app.state.longGame?.dig.total ?? 0) })}`, 'info');
+    bus.on('dig:start', (_floor: unknown, total: unknown) => {
+      this.app.toasts.show(`[[pick]] ${i18n.t('dig.started', { n: this.app.state.currentFloors + 1, t: i18n.formatDuration((total as number | undefined) ?? this.app.state.longGame?.dig.total ?? 0) })}`, 'info');
+    });
+    // [plan4:ST-3] Wings: the dig starts, and a step opens (the camera goes to the floor).
+    bus.on('wing:start', (floor: unknown, side: unknown, total: unknown) => {
+      this.app.toasts.show(`[[pick]] ${i18n.t('wing.started', { n: (floor as number) + 1, side: i18n.t(`wing.side.${side as string}`), t: i18n.formatDuration(total as number) })}`, 'info');
+    });
+    bus.on('wing:dug', (floor: unknown, side: unknown) => {
+      this.app.toasts.show(`[[pick]] ${i18n.t('wing.done', { n: (floor as number) + 1, side: i18n.t(`wing.side.${side as string}`) })}`, 'good');
+      this.app.renderer.focusFloor(floor as number);
     });
   }
 }

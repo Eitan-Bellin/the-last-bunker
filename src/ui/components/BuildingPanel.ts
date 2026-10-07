@@ -1,7 +1,8 @@
 import type { BuildingInstance, GameState, ResourceType, SurvivorState } from '../../core/GameState';
 import type { GameEngine } from '../../core/GameEngine';
 import { i18n } from '../../i18n/I18nManager';
-import { getDef, effectiveLevel, workforceMultiplier, traitBonus, compoundNeighbors } from '../../data/buildingDefs';
+import { getDef, effectiveLevel, workforceMultiplier, traitBonus, compoundNeighbors, synergyOf, isDistrict, shapeFactor, type BuildingDef } from '../../data/buildingDefs';
+import { roomEffect, childCapacityOf } from '../../data/roomEffects'; // [plan4:BL-15..32]
 import { Sheet } from './Sheet';
 import { genderOf, portraitFor, portraitUrl } from '../../data/portraits';
 import { bunkerDefense } from '../../systems/EventSystem';
@@ -10,11 +11,14 @@ import { INCIDENTS, quickFixCost } from '../../data/incidents';
 import { boostReserve, chainInputs, inputFed, inputRate } from '../../data/chains';
 import { roomPowerDraw } from '../../systems/ResourceSystem';
 import { bedsBuilt } from '../../systems/BuildingSystem';
+import { MORALE_CAPS } from '../../systems/PopulationSystem'; // [plan4:BL-39]
 import { allowedFloors } from '../../data/zones';
 import { RETOOL_SECONDS, specOf, specsFor } from '../../data/specializations';
 import type { Incident } from '../../core/GameState';
 import { uiSound } from '../../audio/uiSound';
 import { maintenanceCard } from './MaintenanceCard'; // [Danger C3]
+import { relocateBlock } from '../../systems/relocate'; // [plan4:ST-19]
+import { infraCard, infraSignature } from './InfraCard'; // plan4:ST-14
 
 export class BuildingPanel {
   private sheet = new Sheet('building-sheet', 'building');
@@ -30,6 +34,7 @@ export class BuildingPanel {
   private efficiencyEl: HTMLElement | null = null;
 
   onUpgrade: ((buildingId: string) => void) | null = null;
+  onMove: ((buildingId: string) => void) | null = null; // [plan4:ST-19] "Move": starts the relocate flow (WorldController.beginRelocate)
   onClose: (() => void) | null = null;
   onIncidentTap: ((incidentId: string) => void) | null = null;
   onQuickFix: ((incidentId: string) => void) | null = null;
@@ -80,6 +85,7 @@ export class BuildingPanel {
       b.level, b.isConstructing, state.rush ?? 0, b.assignedSurvivorIds.join(','), this.pickerOpen, upgradeAffordable,
       state.survivors.map(s => `${s.id}:${s.assignedBuildingId}:${s.level}`).join(','),
       state.powerRatio < 0.99,
+      infraSignature(state, b), // plan4:ST-14
       this.incidentFor(state, b)?.id ?? '', b.specialization ?? '', Math.floor((b.wear ?? 0) / 5), this.engine.maintenanceSystem.canMaintain(state, b), // [Danger C3]
 
       chainInputs(b).map(i => inputFed(state, i)).join(','),
@@ -170,6 +176,11 @@ export class BuildingPanel {
     if (def.effects?.morale) {
       const m = def.effects.morale;
       stats.appendChild(this.row(`[[happy]] ${i18n.t('building.morale')}`, `+${Math.round((m.base + m.perLevel * (level - 1)) * workforceMultiplier(state, b))}`));
+      // [plan4:BL-39] Which of the three morale channels it feeds (each has its own ceiling).
+      if (def.effects.moraleKind && def.effects.moraleKind !== 'base') {
+        const cap = MORALE_CAPS[def.effects.moraleKind];
+        stats.appendChild(this.row(`[[happy]] ${i18n.t('building.moraleChannel')}`, `${i18n.t(`morale.channel.${def.effects.moraleKind}`)} · max ${cap}`));
+      }
     }
     if (def.effects?.storageCap) {
       const caps = Object.entries(def.effects.storageCap).map(([r, v]) => `${RESOURCE_ICONS[r] ?? ''}+${v * level}`).join('  ');
@@ -177,10 +188,16 @@ export class BuildingPanel {
     }
     const compound = compoundNeighbors(state, b);
     if (compound > 0) stats.appendChild(this.row(`[[compound]] ${i18n.t('building.compound')}`, `+${compound * 10}%`));
+    // [plan4:BL-39] Neighbour pairs (doc 2.5): who stands next door and what the pair gives.
+    for (const link of synergyOf(state, b).links) {
+      const nd = getDef(link.with);
+      stats.appendChild(this.row(`[[compound]] ${i18n.t('building.synergyRow', { name: nd?.name[locale] ?? nd?.name.en ?? link.with })}`, `+${Math.round(link.value * 100)}% ${i18n.t(`synergy.effect.${link.effect}`)}`));
+    }
     if (def.effects?.defense) {
       const d = def.effects.defense;
       stats.appendChild(this.row(`[[endurance]] ${i18n.t('building.defense')}`, `+${Math.round((d.base + d.perLevel * (level - 1)) * workforceMultiplier(state, b))} · ${i18n.t('building.totalDefense', { n: bunkerDefense(state) })}`));
     }
+    for (const r of this.wave2Rows(state, b, def)) stats.appendChild(r); // [plan4:BL-15..32]
     if (b.type === 'radioTower') stats.appendChild(el('div', 'bp-hint', `[[radioTower]] ${i18n.t('building.radio')}`));
     if (b.type === 'trainingRoom') stats.appendChild(el('div', 'bp-hint', `[[trainingRoom]] ${i18n.t('building.training')}`));
     if (b.type === 'laboratory') {
@@ -219,6 +236,8 @@ export class BuildingPanel {
     // [Danger C3] wear and the Maintain button
     const maint = maintenanceCard(this.engine, state, b, () => this.refresh(this.engine.stateManager.state));
     if (maint) root.appendChild(maint);
+    const infra = infraCard(this.engine, state, b, () => this.refresh(this.engine.stateManager.state)); // plan4:ST-14/15 doors, stairwell, vent stack
+    if (infra) root.appendChild(infra);
     root.appendChild(this.renderUpgrade(state, b, upgradeAffordable));
     if (this.engine.buildingSystem.canSpecialize(state, b.id)) root.appendChild(this.renderSpecs(state, b));
     else if (b.specialization && specsFor(b.type, state).length > 1) root.appendChild(this.renderRetool(state, b)); // [Long game]
@@ -300,6 +319,34 @@ export class BuildingPanel {
     }
     card.append(grid, costRow(state, cost));
     return card;
+  }
+
+  /**
+   * [plan4:BL-15..32] The effect rows of the wave 2 rooms (children, quarantine, warning, trips, hygiene, mourning, weather), one per effect the room has.
+   * Values are the room's own at its level; the bunker-wide totals are capped where the systems apply them.
+   */
+  private wave2Rows(state: GameState, b: BuildingInstance, def: BuildingDef): HTMLDivElement[] {
+    const fx = def.effects;
+    const out: HTMLDivElement[] = [];
+    const pct = (v: number) => `${Math.round(v * 100)}%`;
+    if (fx?.childCapacity) {
+      const kids = b.assignedSurvivorIds.filter(id => state.survivors.find(s => s.id === id)?.child).length;
+      out.push(this.row(`[[baby]] ${i18n.t('building.childPlaces')}`, `${kids}/${childCapacityOf(b)}`));
+    }
+    if (fx?.childGrowth) out.push(this.row(`[[baby]] ${i18n.t('building.childGrowth')}`, `×${roomEffect(b, 'childGrowth').toFixed(2)}`));
+    if (fx?.graduateStat) out.push(this.row(`[[cap]] ${i18n.t('building.graduate')}`, `+${fx.graduateStat}`));
+    if (fx?.quarantine) out.push(this.row(`[[medbay]] ${i18n.t('building.quarantine')}`, String(Math.floor(roomEffect(b, 'quarantine')))));
+    if (fx?.earlyWarning) out.push(this.row(`[[signal]] ${i18n.t('building.earlyWarning')}`, `+${Math.round(roomEffect(b, 'earlyWarning'))}s`));
+    if (fx?.expeditionTeams) {
+      const level = effectiveLevel(b);
+      out.push(this.row(`[[backpack]] ${i18n.t('building.expeditionTeams')}`, `+${fx.expeditionTeams.filter(at => level >= at).length}`));
+    }
+    if (fx?.cargo) out.push(this.row(`[[cart]] ${i18n.t('building.cargo')}`, `+${pct(roomEffect(b, 'cargo'))}`));
+    if (fx?.returnSafety) out.push(this.row(`[[backpack]] ${i18n.t('building.returnSafety')}`, `−${pct(roomEffect(b, 'returnSafety'))}`));
+    if (fx?.hygiene) out.push(this.row(`[[bandage]] ${i18n.t('building.hygiene')}`, `−${pct(roomEffect(b, 'hygiene'))}`));
+    if (fx?.mourning) out.push(this.row(`[[heart]] ${i18n.t('building.mourning')}`, `−${pct(roomEffect(b, 'mourning'))}`));
+    if (def.shape) out.push(this.row(`[[${def.shape === 'wind' ? 'wave' : 'sun'}]] ${i18n.t(`building.weather.${def.shape}`)}`, `×${shapeFactor(def, state.stats.totalPlayTime).toFixed(2)}`));
+    return out;
   }
 
   private row(label: string, value: string): HTMLDivElement {
@@ -427,6 +474,8 @@ export class BuildingPanel {
     const bs = this.engine.buildingSystem;
     const card = el('div', 'bp-card bp-demolish');
     const block = bs.demolishBlock(state, b.id);
+    // [plan4:ST-19] Move the room (10% of its price, 30 s of downtime); greyed out with the reason when it can't move now.
+    if (this.onMove && !isDistrict(b.type)) card.appendChild(button(`[[walker]] ${i18n.t('relocate.button')}`, 'btn-secondary btn-small', () => this.onMove?.(b.id), relocateBlock(state, b) !== null));
     if (block === 'busy') return card;
     if (block) {
       card.appendChild(el('div', 'bp-hint', `[[lock]] ${i18n.t(block === 'incident' ? 'build.demolishIncident' : 'build.demolishBeds')}`));

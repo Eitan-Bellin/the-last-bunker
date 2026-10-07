@@ -1,0 +1,161 @@
+/* [plan4:BL-39] The categorized build menu: search, category chips, "available now", a recommended row and room cards.
+   Every control is at least 44px tall (var(--tap)); state is always said with an icon or a word, never colour alone. */
+
+.bm { display: flex; flex-direction: column; gap: 10px; }
+
+/* Search and the "available now" switch. The input is 16px+ (style.css) so iOS does not zoom on focus. */
+.bm-tools { display: flex; gap: 8px; align-items: stretch; flex-wrap: wrap; }
+.bm-search {
+  flex: 1 1 160px;
+  min-width: 0;
+  min-height: var(--tap, 44px);
+  padding: 0 12px;
+  font-size: 16px;
+  color: var(--text-primary);
+  background: rgba(0, 0, 0, 0.45);
+  border: 1px solid rgba(110, 255, 160, 0.28);
+  border-radius: 6px;
+  outline: none;
+}
+.bm-search:focus { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-glow); }
+.bm-toggle {
+  flex: 0 0 auto;
+  min-height: var(--tap, 44px);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 12px;
+  font-size: calc(13px * var(--fs, 1));
+  font-weight: 600;
+  color: var(--text-primary);
+  background: rgba(0, 0, 0, 0.45);
+  border: 1px solid rgba(110, 255, 160, 0.28);
+  border-radius: 6px;
+  cursor: pointer;
+}
+.bm-toggle.on { color: var(--accent); border-color: var(--accent); background: rgba(255, 181, 71, 0.14); }
+.bm-toggle .ic { width: 18px; height: 18px; }
+
+/* Category chips: one horizontal strip that scrolls. */
+.bm-chips { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 2px; scrollbar-width: none; margin-inline: -2px; padding-inline: 2px; }
+.bm-chips::-webkit-scrollbar { display: none; }
+.bm-chip {
+  flex: 0 0 auto;
+  min-height: var(--tap, 44px);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 11px;
+  font-size: calc(13px * var(--fs, 1));
+  color: var(--text-secondary);
+  background: var(--bg-card);
+  border: 1px solid rgba(110, 255, 160, 0.16);
+  border-radius: 6px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.bm-chip .ic { width: 18px; height: 18px; }
+.bm-chip.active { color: var(--accent); border-color: var(--accent); background: rgba(255, 181, 71, 0.14); font-weight: 700; }
+.bm-chip-n { font-size: calc(11px * var(--fs, 1)); opacity: 0.8; font-variant-numeric: tabular-nums; }
+
+/* Recommended now. */
+.bm-rec { display: flex; flex-direction: column; gap: 6px; padding: 8px; border-radius: 6px; border: 1px dashed rgba(255, 181, 71, 0.45); background: rgba(255, 181, 71, 0.06); }
+.bm-rec-title { font-size: calc(12px * var(--fs, 1)); font-weight: 700; color: var(--accent); }
+.bm-rec-title .ic { width: 14px; height: 14px; vertical-align: -2px; }
+.bm-rec-row { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; }
+.bm-rec-row::-webkit-scrollbar { display: none; }
+.bm-rec-chip {
+  flex: 0 0 auto;
+  min-height: var(--tap, 44px);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 10px;
+  text-align: start;
+  color: var(--text-primary);
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(255, 181, 71, 0.5);
+  border-radius: 6px;
+  cursor: pointer;
+}
+.bm-rec-chip.disabled { filter: grayscale(0.6); }
+.bm-rec-ic .ic { width: 22px; height: 22px; }
+.bm-rec-text { display: flex; flex-direction: column; line-height: 1.2; }
+.bm-rec-name { font-weight: 700; font-size: calc(13px * var(--fs, 1)); }
+.bm-rec-why { font-size: calc(11px * var(--fs, 1)); color: var(--text-secondary); }
+
+/* Cards. */
+.bm-list { display: flex; flex-direction: column; gap: 8px; }
+.bm-empty { padding: 18px 8px; text-align: center; color: var(--text-secondary); font-size: calc(13px * var(--fs, 1)); }
+.bm-card {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  min-height: 88px;
+  padding: 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  background: linear-gradient(180deg, rgba(20, 44, 28, 0.78), rgba(10, 26, 16, 0.78));
+  border: 1px solid rgba(110, 255, 160, 0.16);
+  transition: transform 0.1s, border-color 0.2s;
+}
+.bm-card:active, .bm-card:focus-visible { border-color: var(--accent); transform: scale(0.99); outline: none; }
+.bm-card.disabled { filter: grayscale(0.7) brightness(0.85); }
+.bm-card.locked { cursor: default; }
+.bm-card.locked .bm-thumb { filter: grayscale(1) brightness(0.6); }
+.bm-thumb { flex: 0 0 auto; display: grid; place-items: center; }
+.bm-thumb-ic { color: rgba(255, 255, 255, 0.92); display: grid; place-items: center; }
+.bm-thumb-ic .ic { width: 34px; height: 34px; }
+.bm-info { gap: 5px; }
+.bm-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.bm-dots { display: inline-flex; gap: 3px; flex: 0 0 auto; }
+.bm-dot { width: 8px; height: 8px; border-radius: 2px; background: var(--text-secondary); box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.5); }
+.bm-outs { display: flex; flex-wrap: wrap; gap: 4px 6px; }
+.bm-out {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 6px;
+  font-size: calc(11px * var(--fs, 1));
+  font-weight: 600;
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.07);
+  border-radius: 4px;
+  unicode-bidi: isolate;
+}
+.bm-out .ic, .bm-cost .ic { width: 13px; height: 13px; }
+.bm-cost { gap: 5px; }
+.bm-cost .cost-chip { display: inline-flex; align-items: center; gap: 3px; }
+.bm-cost .cost-chip.affordable .ic-check { color: var(--positive); }
+.bm-cost .cost-chip.expensive .ic-close { color: var(--negative); }
+.bm-act .ic, .bm-limit .ic, .bm-lock .ic { width: 13px; height: 13px; vertical-align: -2px; }
+
+/* What unlocks a locked room: a real 44px button that opens the research panel. */
+.bm-unlock {
+  align-self: flex-start;
+  min-height: var(--tap, 44px);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  text-align: start;
+  font-size: calc(12px * var(--fs, 1));
+  color: var(--accent);
+  background: rgba(255, 181, 71, 0.1);
+  border: 1px solid rgba(255, 181, 71, 0.5);
+  border-radius: 6px;
+  cursor: pointer;
+}
+.bm-unlock .ic { width: 15px; height: 15px; flex: 0 0 auto; }
+
+/* Short phones (375x667): keep the toolbar compact so more than one card shows. */
+@media (max-height: 720px) {
+  .bm { gap: 6px; }
+  .bm-rec { padding: 4px 6px; }
+  .bm-rec-title { display: none; }
+}
+
+@media (max-width: 380px) {
+  .bm-thumb { width: 60px; height: 50px; }
+  .bm-card { gap: 8px; }
+}
