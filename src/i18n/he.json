@@ -1273,5 +1273,6 @@
   "a11y.announceHint": "אירועים חשובים (שריפה, פשיטה, חדר שהושלם) נקראים בקול על ידי קורא המסך.",
   "announce.incident": "{name} בקומה {floor}",
   "announce.built": "{name} הושלם",
-  "announce.raid": "אזהרת פשיטה: {time}"
+  "announce.raid": "אזהרת פשיטה: {time}",
+  "bulkhead.sealed": "אטום"
 }

@@ -3,6 +3,7 @@ import { isLiteMode } from '../core/crashGuard';
 import { hashString, rgba, seeded, shade } from './draw';
 import { gfxLevel } from './gfxFeatures';
 import { VIEW } from './perfFx';
+import { lightOf } from './structure';
 
 /**
  * [plan4:ST-10] Rock strata: the earth under the bunker as five bands of geology, measured in world units from the ground (not floor
@@ -44,6 +45,8 @@ export interface StrataOpts {
   features?: boolean;
   /** Small tiles (256) for Low quality / lite mode. Default: follows the quality level. */
   small?: boolean;
+  /** [plan4:ST-11] The bunker's ambient (0..1, like the structure's): the rock is lit by it through structure.lightOf, so a wrecked, dark era has darker rock. */
+  ambient?: number;
 }
 
 type G = CanvasRenderingContext2D;
@@ -221,7 +224,7 @@ function seamless(c: HTMLCanvasElement, S: number, vertical: boolean): void {
 
 /** The slice of the rock painting (fractions of its height) each band starts from, and the colour grade laid over it. */
 const SLICE: [number, number][] = [[0.0, 0.33], [0.43, 0.73], [0.76, 1], [0.8, 1], [0.84, 1]];
-const BASE = [0x4d3322, 0x6c6252, 0x4a4c52, 0x2c3238, 0x1a1618] as const;
+const BASE = [0x4d3322, 0x6c6252, 0x4a4c52, 0x322e2c, 0x1a1618] as const; // [plan4:ST-11] basalt was 0x2c3238 (blue); now a warm dark grey
 
 type RockSrc = { img: CanvasImageSource; w: number; h: number } | null;
 
@@ -258,7 +261,7 @@ export function paintTile(i: number, rock: Texture | null | undefined, S = 512):
   if (i === 0) { grade('multiply', 0xe0b090, 0.55); grade('soft-light', 0x8a4a28, 0.35); }
   if (i === 1) { grade('multiply', 0xd8d0c0, 0.5); grade('color', 0x9a8466, 0.18); }
   if (i === 2) { grade('color', 0x808490, 0.4); grade('screen', 0x16181c, 1); grade('multiply', 0xc8ccd4, 0.5); }
-  if (i === 3) { grade('color', 0x505862, 0.62); grade('multiply', 0x929aa4, 0.7); }
+  if (i === 3) { grade('color', 0x5c5654, 0.58); grade('multiply', 0x9c968e, 0.7); } // [plan4:ST-11] warm dark basalt (the veins and the lamps carry the colour)
   if (i === 4) { grade('color', 0x2a2024, 0.8); grade('multiply', 0x5a5258, 0.8); }
   if (!src) {
     // No painting (not loaded yet, or the file is missing): the base carries a large mottle of its own.
@@ -266,6 +269,12 @@ export function paintTile(i: number, rock: Texture | null | undefined, S = 512):
   }
   grain(g, S, 1.5 * k, 'overlay', 0.4);
   grain(g, S, 4 * k, 'soft-light', 0.5, 17, 9);
+  // [plan4:ST-11] Crisper than before: a fine hard-light grain and a scatter of 1-unit chips, lit on one side, so the rock holds its detail next to the paintings.
+  grain(g, S, 0.8 * k, 'hard-light', 0.22, 31, 5);
+  for (let n = 0; n < 260 * k * k + 40; n++) {
+    g.fillStyle = n % 3 ? rgba(0x000000, 0.22) : rgba(0xfff0d8, 0.12);
+    g.fillRect(rnd() * S, rnd() * S, (0.6 + rnd() * 1.2) * k, (0.5 + rnd() * 0.9) * k);
+  }
 
   if (i === 0) {
     // Soil and clay: wavy laminae, a scatter of small stones, darker clods.
@@ -306,14 +315,14 @@ export function paintTile(i: number, rock: Texture | null | undefined, S = 512):
     }
     for (let n = 0; n < 420; n++) { g.fillStyle = rnd() < 0.55 ? rgba(0xe4e4e8, 0.28) : rgba(0x101014, 0.4); g.fillRect(rnd() * S, rnd() * S, (1 + rnd() * 1.4) * k, (1 + rnd()) * k); }
   } else if (i === 3) {
-    // Basalt: columnar joints, blue sheen, a few pale mineral dots.
+    // Basalt: columnar joints, a faint warm sheen, a few pale mineral dots.
     for (let n = 0; n < 16; n++) {
       const x = (n / 16) * S + rnd() * 20 * k;
-      crack(g, jag(x, -4, x + (rnd() - 0.5) * 50 * k, S + 4, rnd, 8 * k, 12), (1.2 + rnd() * 1.5) * k, 'rgba(4,6,10,0.8)', 'rgba(150,170,200,0.16)');
+      crack(g, jag(x, -4, x + (rnd() - 0.5) * 50 * k, S + 4, rnd, 8 * k, 12), (1.2 + rnd() * 1.5) * k, 'rgba(6,5,4,0.8)', 'rgba(190,176,156,0.16)');
     }
     for (let n = 0; n < 4; n++) { const y = rnd() * S; crack(g, jag(0, y, S, y + (rnd() - 0.5) * 30 * k, rnd, 6 * k, 14), 1 * k, 'rgba(4,6,10,0.4)'); }
-    for (let n = 0; n < 18; n++) blot(g, S, rnd() * S, rnd() * S, (40 + rnd() * 60) * k, (26 + rnd() * 40) * k, rnd() < 0.5 ? 0x5a7a9a : 0x06080c, 0.2);
-    for (let n = 0; n < 260; n++) { g.fillStyle = rnd() < 0.5 ? rgba(0x9ab0c8, 0.3) : rgba(0x040608, 0.45); g.fillRect(rnd() * S, rnd() * S, (1 + rnd()) * k, (1 + rnd()) * k); }
+    for (let n = 0; n < 18; n++) blot(g, S, rnd() * S, rnd() * S, (40 + rnd() * 60) * k, (26 + rnd() * 40) * k, rnd() < 0.5 ? 0x7a6a5a : 0x080706, 0.2);
+    for (let n = 0; n < 260; n++) { g.fillStyle = rnd() < 0.5 ? rgba(0xc0b2a0, 0.3) : rgba(0x060504, 0.45); g.fillRect(rnd() * S, rnd() * S, (1 + rnd()) * k, (1 + rnd()) * k); }
   } else {
     // Bedrock: near black, deep jagged cracks that glow red from within.
     for (let n = 0; n < 14; n++) blot(g, S, rnd() * S, rnd() * S, (50 + rnd() * 80) * k, (30 + rnd() * 50) * k, rnd() < 0.5 ? 0x3a3034 : 0x020202, 0.3);
@@ -478,7 +487,8 @@ const PIECES: Piece[] = [
   { id: 'faultB', w: 240, h: 240, paint: (g, w, h, rnd) => faultCrack(g, w, h, rnd) },
   {
     id: 'slab', w: 240, h: 150, paint: (g, w, h, rnd) => {
-      // Old foundation block, broken off at the top, rebar stubs, rust weeping down, hairline cracks.
+      // [plan4:ST-11] Not a bare block any more: a fragment of an old cellar. Broken off at the top with rebar stubs, a bricked-up arch, a strip of cracked tile
+      // floor along the bottom, a rusted pipe stub with a flange and a valve wheel, rust weeping down, hairline cracks.
       const top = [8, 44, 16, 26, 30, 12, 62, 30, 100, 8, 140, 24, 180, 6, 210, 22, 228, 40];
       g.fillStyle = 'rgba(0,0,0,0.4)';
       g.beginPath(); g.moveTo(14, h); for (let i = 0; i < top.length; i += 2) g.lineTo(top[i] + 5, top[i + 1] + 8); g.lineTo(w - 4, h); g.fill();
@@ -487,6 +497,40 @@ const PIECES: Piece[] = [
       g.fillStyle = gr;
       g.beginPath(); g.moveTo(6, h - 4); g.lineTo(0, 90); g.lineTo(top[0], top[1]); for (let i = 2; i < top.length; i += 2) g.lineTo(top[i], top[i + 1]); g.lineTo(w, 96); g.lineTo(w - 8, h - 4); g.closePath(); g.fill();
       g.strokeStyle = 'rgba(220,214,200,0.35)'; g.lineWidth = 2; g.beginPath(); g.moveTo(top[0], top[1] + 1); for (let i = 2; i < top.length; i += 2) g.lineTo(top[i], top[i + 1] + 1); g.stroke();
+      // The bricked-up arch (a doorway someone walled in): mortar, rows of brick in rust browns, a darker keystone ring.
+      g.save();
+      g.beginPath(); g.moveTo(52, 124); g.lineTo(52, 74); g.arc(84, 74, 32, Math.PI, 0); g.lineTo(116, 124); g.closePath(); g.clip();
+      g.fillStyle = rgba(0x3a342e, 1); g.fillRect(40, 30, 90, 100);
+      for (let row = 0; row < 18; row++) {
+        const y = 44 + row * 5, off = row % 2 ? 6 : 0;
+        for (let x = 40 - off; x < 130; x += 12) {
+          g.fillStyle = rgba(shade(0x8a4a30, 0.7 + rnd() * 0.55), 0.95);
+          g.fillRect(x + 0.6, y + 0.6, 10.8, 4);
+          g.fillStyle = 'rgba(255,230,200,0.14)'; g.fillRect(x + 0.6, y + 0.6, 10.8, 0.8);
+        }
+      }
+      const arch = g.createRadialGradient(84, 90, 8, 84, 90, 52);
+      arch.addColorStop(0, 'rgba(0,0,0,0)'); arch.addColorStop(1, 'rgba(0,0,0,0.45)');
+      g.fillStyle = arch; g.fillRect(40, 30, 90, 100);
+      g.restore();
+      g.strokeStyle = 'rgba(214,208,194,0.4)'; g.lineWidth = 3; g.beginPath(); g.moveTo(49, 124); g.lineTo(49, 74); g.arc(84, 74, 35, Math.PI, 0); g.lineTo(119, 124); g.stroke();
+      // The tile floor along the foot: small squares, some missing, grout dark.
+      for (let x = 6; x < w - 10; x += 9) {
+        for (let r = 0; r < 2; r++) {
+          if (rnd() < 0.12) continue;
+          g.fillStyle = (Math.floor(x / 9) + r) % 2 ? rgba(0xcfc6aa, 0.92) : rgba(0x3e5a52, 0.92);
+          g.fillRect(x + 0.5, 126 + r * 9 + 0.5, 8, 8);
+          g.fillStyle = 'rgba(255,255,240,0.2)'; g.fillRect(x + 0.5, 126 + r * 9 + 0.5, 8, 1);
+        }
+      }
+      // A rusted pipe stub out of the wall with a flange and a valve wheel.
+      const pg = g.createLinearGradient(0, 62, 0, 78); pg.addColorStop(0, rgba(0x9a6a46, 1)); pg.addColorStop(0.5, rgba(0x6a4630, 1)); pg.addColorStop(1, rgba(0x2e1c12, 1));
+      g.fillStyle = pg; g.fillRect(150, 62, 56, 14);
+      g.fillStyle = rgba(0x5a3a28, 1); g.fillRect(146, 57, 8, 24);
+      g.fillStyle = 'rgba(220,170,120,0.35)'; g.fillRect(146, 57, 8, 2);
+      g.strokeStyle = rgba(0x7a4a30, 1); g.lineWidth = 2.4; g.beginPath(); g.arc(180, 52, 8, 0, Math.PI * 2); g.stroke();
+      g.beginPath(); g.moveTo(172, 52); g.lineTo(188, 52); g.moveTo(180, 44); g.lineTo(180, 62); g.stroke();
+      g.fillStyle = rgba(0x7a3a1a, 0.4); g.fillRect(168, 76, 3, 22); g.fillRect(190, 76, 2, 14);
       for (let n = 0; n < 5; n++) { const x = 20 + rnd() * (w - 40); const y0 = 6 + rnd() * 14; g.strokeStyle = rgba(0x7a3a1a, 0.95); g.lineWidth = 2.4; g.beginPath(); g.moveTo(x, y0 + 14); g.lineTo(x + (rnd() - 0.5) * 10, y0 - 8); g.stroke(); }
       for (let n = 0; n < 7; n++) { const x = 10 + rnd() * (w - 20); g.fillStyle = rgba(0x7a3a1a, 0.3); g.fillRect(x, 20 + rnd() * 20, 2 + rnd() * 3, 20 + rnd() * 70); }
       for (let n = 0; n < 4; n++) crack(g, jag(10 + rnd() * (w - 20), 30, 10 + rnd() * (w - 20), h - 8, rnd, 8, 7), 1.5);
@@ -739,9 +783,9 @@ const RULES: Rule[][] = [
 ];
 
 /** Per-band tint on the feature sprites: the deeper, the colder and darker (the depth fade applies on top). */
-const FEATURE_TINT = [0xc0b0a0, 0xb8b4ac, 0xa8acb4, 0x9098a8, 0x84808a] as const;
+const FEATURE_TINT = [0xc0b0a0, 0xb8b4ac, 0xa8acb4, 0xa09890, 0x84808a] as const;
 /** Per-band brightness of the tile itself (deeper = darker and colder; the lamp-lit bunker must stay the brightest thing on screen). */
-const TILE_TINT = [0xb8a89c, 0xa89f94, 0x9ea2aa, 0x8c94a0, 0x867f8a] as const;
+const TILE_TINT = [0xb8a89c, 0xa89f94, 0x9ea2aa, 0x96908a, 0x867f8a] as const;
 
 // ---------------------------------------------------------------------------------------------------------------------------------
 // Assets shared by every build (the tiles and the atlas survive structure rebuilds)
@@ -839,6 +883,13 @@ export function buildStrata(bottomY: number, left: number, right: number, opts: 
   const set = tileSet;
   const width = right - left;
   const bands: Band[] = [];
+  // [plan4:ST-11] The rock takes the same light as the structure (lightOf with no lamps: the era's ambient): 1 at the ambient the tints were set for (0.44).
+  const lit = lightOf(Math.max(0.1, Math.min(0.9, opts.ambient ?? 0.44)), [], 1, [1], 0) / 0.44;
+  const kLit = Math.max(0.78, Math.min(1.14, 0.55 + 0.45 * lit));
+  const litTint = (c: number): number => {
+    const ch = (s: number) => Math.min(255, Math.round(((c >> s) & 255) * kLit));
+    return (ch(16) << 16) | (ch(8) << 8) | ch(0);
+  };
 
   for (let i = 0; i < 5; i++) {
     const y0 = BAND_TOP[i], y1 = i < 4 ? BAND_TOP[i + 1] : bottomY;
@@ -851,7 +902,7 @@ export function buildStrata(bottomY: number, left: number, right: number, opts: 
     const lap = 2, off = i > 0 ? lap : 0, ext = i < 4 ? lap : 0;
     const tile = new TilingSprite({ texture: set.tiles[i] ?? Texture.WHITE, width, height: y1 + ext - (y0 + off) });
     tile.position.set(left, y0 + off);
-    tile.tint = set.tiles[i] ? TILE_TINT[i] : BASE[i];
+    tile.tint = set.tiles[i] ? litTint(TILE_TINT[i]) : BASE[i];
     tile.tileScale.set(TILE_W[i] / S, bh / S);
     tile.tilePosition.set(-left + ((i * 211) % 400), -off);
     group.addChild(tile);
@@ -865,7 +916,7 @@ export function buildStrata(bottomY: number, left: number, right: number, opts: 
         const ub = bandHeight(i - 1, bottomY);
         fade.tileScale.set(TILE_W[i - 1] / S, ub / S);
         fade.tilePosition.set(-left + (((i - 1) * 211) % 400), 0);
-        fade.tint = TILE_TINT[i - 1];
+        fade.tint = litTint(TILE_TINT[i - 1]);
         fade.visible = !!set.fades[i - 1];
         group.addChild(fade);
       }
@@ -878,9 +929,9 @@ export function buildStrata(bottomY: number, left: number, right: number, opts: 
     if (root.destroyed) return;
     for (const b of bands) {
       const t = set.tiles[b.i];
-      if (t && b.tile.texture !== t) { b.tile.texture = t; b.tile.tint = TILE_TINT[b.i]; }
+      if (t && b.tile.texture !== t) { b.tile.texture = t; b.tile.tint = litTint(TILE_TINT[b.i]); }
       const f = b.i > 0 ? set.fades[b.i - 1] : null;
-      if (b.fade && f && b.fade.texture !== f) { b.fade.texture = f; b.fade.tint = TILE_TINT[b.i - 1]; b.fade.visible = true; }
+      if (b.fade && f && b.fade.texture !== f) { b.fade.texture = f; b.fade.tint = litTint(TILE_TINT[b.i - 1]); b.fade.visible = true; }
     }
   };
   // Paint the tiles one per timer tick after the first picture, nearest band first (never inside the render path; a rebuild reuses the cache).
@@ -912,7 +963,7 @@ export function buildStrata(bottomY: number, left: number, right: number, opts: 
           const kk = K[id];
           spr.scale.set((sc * flip) / kk, sc / kk);
           spr.position.set(x, y);
-          spr.tint = rule.add ? 0xffffff : FEATURE_TINT[b.i];
+          spr.tint = rule.add ? 0xffffff : litTint(FEATURE_TINT[b.i]);
           spr.alpha = rule.add ? 0.7 : rule.a ?? 0.92;
           spr.eventMode = 'none';
           feats.addChild(spr);

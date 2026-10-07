@@ -304,6 +304,7 @@ export class GameApp {
     { const q = new URLSearchParams(location.search); if (import.meta.env.DEV || q.has('perf') || q.has('debug')) void import('./dev/perf').then(m => m.installPerf(this.renderer, this.engine, this.audio)); }
     if (import.meta.env.DEV) void import('./dev/storeShots').then(m => m.installStoreShots(this.renderer.app));
     if (import.meta.env.DEV) void import('./dev/camShots').then(m => m.installCamShots(this.renderer, () => this.state));
+    if (import.meta.env.DEV) void import('./dev/structureDev').then(m => m.installStructureDev(this.renderer, () => this.state)); // plan4:ST-14
 
     this.engine.onRenderStuck = fails => this.recoverRender(fails);
     this.saves.watchSaving();

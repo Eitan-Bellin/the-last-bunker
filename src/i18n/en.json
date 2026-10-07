@@ -1273,5 +1273,6 @@
   "a11y.announceHint": "Important events (a fire, a raid, a finished room) are read out by the screen reader.",
   "announce.incident": "{name} on floor {floor}",
   "announce.built": "{name} finished",
-  "announce.raid": "Raid warning: {time}"
+  "announce.raid": "Raid warning: {time}",
+  "bulkhead.sealed": "SEALED"
 }

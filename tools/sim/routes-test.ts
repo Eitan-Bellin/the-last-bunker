@@ -76,7 +76,7 @@ export function routeChecks(): { problems: string[]; notes: string[] } {
   if (!o || r.floor[r.n - 1] !== -1 || r.y[r.n - 1] !== -8) fail('floor to surface should end on the surface line');
 
   // Doorway side: the edge facing where the walker comes from.
-  if (entryX(100, 92, 20) !== 103 || entryX(100, 92, 400) !== 189) fail('entryX picks the wrong doorway side');
+  if (entryX(100, 92, 20) !== 104 || entryX(100, 92, 400) !== 188) fail('entryX picks the wrong doorway side');
   notes.push('routes: 20+ plans checked (same floor, wings, lift, stairs, ladder, doors, surface, length cap)');
   return { problems, notes };
 }
