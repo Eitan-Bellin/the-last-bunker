@@ -48,11 +48,12 @@ import { genderOf, genderOfName } from './data/portraits';
 import { ensurePersistentStorage, getPersistStatus } from './core/SaveManager';
 import { claimOwnership, onSuperseded } from './core/singleInstance';
 import { currentTextSize, cycleTextSize } from './ui/textSize';
-import { getA11y, hydrateA11y, subscribeA11y } from './utils/a11y';
+import { getA11y, hydrateA11y, setA11y, subscribeA11y } from './utils/a11y';
 import { showCaption } from './ui/a11yDom';
 import { StructurePanel } from './ui/components/StructurePanel'; // [plan4:AC-11]
 import { KeyboardShortcuts } from './ui/controllers/keyboard'; // [plan4:AC-10]
 import { setSoundChip } from './ui/soundChip';
+import { pwaDialogSources, setGraphicsNotice, startPhoneWatchers } from './ui/pwa'; // [plan4:UX-13]
 import { hideSplash } from './ui/splash';
 import { StoryDialog } from './ui/components/StoryDialog';
 import { DISASTERS } from './data/incidents';
@@ -71,6 +72,7 @@ import './styles/buildmenu.css'; // [plan4:BL-39] before touch.css so its 44px r
 import './styles/checkin.css'; // [plan4:Gameplay] dialog queue card, gesture tips, check-in screen
 import './styles/touch.css'; // [plan4:UX-5] last again (its header says so): its 44px targets must beat the older sheet-help sizes in command.css
 import './styles/placement.css'; // [plan4:ST-19] the confirm bar and the chips over the ghost room
+import './styles/pwa.css'; // [plan4:UX-13] update chip, home-screen card, copy box
 import './styles/a11y.css'; // [plan4:AC-2] the accessibility layer, last of all: reduced motion, colour modes, focus rings
 import { FeedbackController } from './ui/controllers/feedback';
 import { InboxController } from './ui/controllers/inbox';
@@ -183,6 +185,8 @@ export class GameApp {
     setUiSound((name, volume) => this.audio.play(name, { volume }));
     // [plan4:UX-1] "tap to enable sound" chip while the context is suspended/interrupted; [plan4:AC-1] audio and the save follow the a11y source.
     this.audio.onBlockedChange = setSoundChip;
+    this.renderer.onContextChange = setGraphicsNotice; // [plan4:UX-17]
+    startPhoneWatchers(); // [plan4:UX-24] notices a 30 Hz rhythm (iOS Low Power Mode) so the battery-saver card can be offered
     this.audio.setPlayInSilent(getA11y().playInSilent);
     subscribeA11y(a => {
       this.audio.setPlayInSilent(a.playInSilent);
@@ -425,8 +429,8 @@ export class GameApp {
   private copyDiagnostics(): void {
     const text = crashReport();
     const done = () => this.toasts.show(`[[save]] ${i18n.t('toast.diagnosticsCopied')}`, 'good');
-    if (navigator.clipboard?.writeText) navigator.clipboard.writeText(text).then(done, () => window.prompt('Diagnostics', text));
-    else window.prompt('Diagnostics', text);
+    if (navigator.clipboard?.writeText) navigator.clipboard.writeText(text).then(done, () => this.saves.showCopyCode(text, 'save.copy.diagTitle')); // [plan4:UX-16] no more window.prompt
+    else this.saves.showCopyCode(text, 'save.copy.diagTitle');
   }
 
   /** The picture keeps failing: rebuild the scene first; if it still fails, save and reload (at most twice in 5 minutes). */
@@ -455,6 +459,7 @@ export class GameApp {
     }
     // Each part is guarded on its own: a throwing panel must not stop the picture or the dialogs behind it.
     this.renderer.frameTarget = this.engine.frameTargetMs;
+    if (this.renderer.postfx) this.renderer.postfx.powerSaver = getA11y().powerSaver; // [plan4:UX-24]
     const fps = this.renderer.postfx?.profile.fps;
     if (fps) this.engine.frameRates = fps;
     // [perf] 60 only while the camera moves; short animations keep the watching rate.
@@ -554,6 +559,15 @@ export class GameApp {
     const memorialN = () => st().danger?.memorialQueue?.length ?? 0;
     const asking = () => this.engine.explorationSystem.waitingMission();
     // [Long game] After the first era events, questions and reports wait in the Decision Inbox; emergencies and the story still open by themselves.
+    // [plan4:UX-13] The two lowest sources: "Add to Home Screen" (iPhone Safari) and the weekly backup reminder.
+    const pwa = pwaDialogSources({
+      modal: this.modal,
+      powerSaverOn: () => getA11y().powerSaver,
+      enablePowerSaver: () => { setA11y({ powerSaver: true }); this.toasts.show(`[[battery]] ${i18n.t('power.on')}`, 'good'); },
+      playSeconds: () => st().stats.totalPlayTime,
+      exportBackup: () => this.saves.exportFile(),
+      snooze: (id, ms) => this.dialogs.snooze(id, ms),
+    });
     return [
       {
         id: 'welcome', priority: 100, snoozeMs: 60_000, critical: true, icon: '[[door]]',
@@ -627,6 +641,7 @@ export class GameApp {
         open: () => this.dig.showDistrictFound(this.districtFoundQueue.shift()!),
         label: () => { const d = districtDef(this.districtFoundQueue[0] ?? ''); return d ? i18n.t('district.found', { name: d.name[i18n.currentLocale] }) : ''; },
       },
+      ...pwa,
     ];
   }
 

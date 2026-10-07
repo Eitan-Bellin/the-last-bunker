@@ -12,6 +12,7 @@ import { BUILDING_ICONS, STAT_ICONS, bar, button, el, localizedTrait, setBar } f
 import { uiSound } from '../../audio/uiSound';
 import { MAX_RANK, SPECS, rankOf, rankProgress, trainingCost } from '../../data/mastery'; // [LateGame B3]
 import { RESOURCE_ICONS } from '../dom';
+import { flowArrow } from '../rtl'; // [plan4:UX-22]
 
 interface Bars {
   health: HTMLElement;
@@ -290,7 +291,7 @@ export class PeoplePanel {
     }
     const target = Math.round(this.engine.populationSystem.getTargetHappiness(state, s));
     const total = el('div', 'bp-row total');
-    total.append(el('span', '', '→'), el('span', 'bp-value', `${target}%`));
+    total.append(el('span', '', flowArrow()), el('span', 'bp-value', `${target}%`)); // [plan4:UX-22]
     box.appendChild(total);
     box.appendChild(this.renderMoraleSources(state));
     return box;

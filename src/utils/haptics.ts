@@ -10,6 +10,7 @@
  * Browsers refuse vibration (and log an error) until the player has touched the page, so ask first.
  */
 import { getA11y, reducedMotion } from './a11y';
+import { isIOS, nativePlugin } from './platform'; // [plan4:UX-12]
 
 export type HapticKind = 'tap' | 'select' | 'success' | 'warning' | 'error' | 'impact' | 'heavy';
 
@@ -38,13 +39,8 @@ const recent: number[] = [];
 let switchLabel: HTMLLabelElement | null = null;
 let switchBroken = false;
 
-function isIOS(): boolean {
-  const ua = navigator.userAgent;
-  return /iP(hone|ad|od)/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-}
-
 function viaCapacitor(kind: HapticKind, strong: boolean): boolean {
-  const plugin = (window as unknown as { Capacitor?: { Plugins?: { Haptics?: CapacitorHaptics } } }).Capacitor?.Plugins?.Haptics;
+  const plugin = nativePlugin<CapacitorHaptics>('Haptics');
   if (!plugin) return false;
   try {
     if (kind === 'success') void plugin.notification?.({ type: 'SUCCESS' });

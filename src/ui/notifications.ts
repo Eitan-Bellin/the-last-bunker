@@ -6,6 +6,8 @@
  * Capacitor LocalNotifications in the app build (same schedule/cancel calls, real OS scheduling).
  */
 
+import { webNotificationsHonest } from '../utils/platform';
+
 export type NotifyKind = 'expedition' | 'research' | 'storage' | 'door' | 'danger';
 
 export interface NotifyItem {
@@ -31,11 +33,14 @@ class WebBackend implements NotifyBackend {
   private timers: ReturnType<typeof setTimeout>[] = [];
 
   permission(): NotifyPermission {
+    // [plan4:UX-15] On iPhone the page and its timers are suspended within seconds of leaving, and Web Push needs a server: a switch
+    // here would promise notices that never come. Only the native app (local notifications) can keep that promise.
+    if (!webNotificationsHonest()) return 'unsupported';
     return typeof Notification === 'undefined' ? 'unsupported' : Notification.permission;
   }
 
   async request(): Promise<boolean> {
-    if (typeof Notification === 'undefined') return false;
+    if (typeof Notification === 'undefined' || !webNotificationsHonest()) return false;
     try {
       return (await Notification.requestPermission()) === 'granted';
     } catch {
