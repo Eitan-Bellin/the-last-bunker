@@ -1,5 +1,5 @@
 import { Container, FillPattern, Graphics, Matrix, NineSliceSprite, Rectangle, Sprite, Texture, TilingSprite, type FillGradient } from 'pixi.js';
-import type { BuildingInstance, Ruin } from '../core/GameState';
+import type { BuildingInstance } from '../core/GameState';
 import { isDistrict, isHall, roomSlots } from '../data/buildingDefs';
 import { ArtLibrary, glowTexture } from '../art/ArtLibrary';
 import { BASE_EAST, BUILDING_W, FLOOR_H, ROOMS_W, ROOMS_X, ROOM_H, SHAFT_GAP, SHAFT_W, SLAB, SLOT_W, TOPSOIL, floorAtY, floorFrac, floorTop, galleryCount, galleryExt, galleryTop, slotX, type Ext } from './layout';
@@ -8,6 +8,7 @@ import { GFX } from './gfxFeatures';
 import { roomFlicker } from './paintedRoom';
 import { seeded, vGradient } from './draw';
 import type { Animated } from './world';
+import type { Grid } from './occupancy';
 
 /**
  * Graphics overhaul (G1+): the bunker's structure built from the painted kit instead of flat shapes —
@@ -98,41 +99,8 @@ export interface WorldLamp {
   room?: string;
 }
 
-type Cell = { key: string } | null;
-
-/**
- * [plan4:ST-4] The occupancy of every floor: row f holds the floor's slots from -w to e - 1 (index i = slot i - w; slot 0 is the first east of the shaft, the
- * shaft itself is not a cell), `ext[f]` is the {w, e} the row was built for. A bunker with no wings has rows of 12 and w = 0, as before.
- */
-export type Grid = Cell[][] & { ext: Ext[] };
-
-/** The cell of slot s on floor f (null outside the floor's reach). */
-export function cellAt(grid: Grid, f: number, s: number): Cell {
-  return grid[f]?.[s + (grid.ext[f]?.w ?? 0)] ?? null;
-}
-
-/** What stands in every slot of every floor: a compound key per room/ruin, or null for an empty bay. */
-export function occupancy(buildings: BuildingInstance[], ruins: Ruin[], floors: number, exts: readonly Ext[] = []): Grid {
-  const ext: Ext[] = Array.from({ length: floors }, (_, f) => exts[f] ?? { w: 0, e: BASE_EAST });
-  const grid = ext.map(x => Array.from({ length: x.w + x.e }, () => null as Cell)) as Grid; // [plan4:X-2] one row = the floor's slots (the default extent: 12 east)
-  grid.ext = ext;
-  const put = (f: number, x: number, w: number, key: string) => {
-    if (f < 0 || f >= floors) return;
-    const o = ext[f].w;
-    for (let i = x; i < x + w; i++) if (i + o >= 0 && i + o < grid[f].length) grid[f][i + o] = { key };
-  };
-  for (const b of buildings) {
-    if (isDistrict(b.type)) continue;
-    const fresh = b.isConstructing && b.level === 1;
-    // Same-type, same-level neighbours open into one compound (no column between them).
-    const key = fresh ? b.id : `${b.type}:${b.level}`;
-    const w = roomSlots(b.type);
-    put(b.position.floor, b.position.x, w, isHall(b.type) ? b.id : key);
-    if (isHall(b.type)) put(b.position.floor + 1, b.position.x, w, b.id);
-  }
-  for (const r of ruins) put(r.floor, r.x, r.w, r.id);
-  return grid;
-}
+// [plan4:ST-13] The occupancy grid is pure data and lives in occupancy.ts (so the sim tools and the walking code can use it); re-exported here.
+export { cellAt, occupancy, type Cell, type Grid } from './occupancy';
 
 /** Halls on floor f swallow the slab under f (and the ceiling of f+1) across their width. */
 export function hallSpans(buildings: BuildingInstance[], floor: number): [number, number][] {

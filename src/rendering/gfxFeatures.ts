@@ -20,8 +20,13 @@ import type { QualityLevel } from '../utils/PerformanceMonitor';
  *   strata      rock layers and the stepped casing (geology)
  *   walkers     people walking between rooms and the lift with passengers
  *   surfaceRow  the gate-house row above ground
+ * [plan4:ST-11/13/14/17] Wave 2 structure switches, same rules:
+ *   floorId     floor identity: per-kind tint, light colour, paint band and number tag, column / slab / ceiling variants
+ *   openings    door openings in the columns between rooms and the corridor stub where a wing ends
+ *   bulkheads   bulkhead doors, stairwells and vent stacks (state.layout.doors / .infra)
+ *   branches    separate feed lines (red power, blue water) along the wings that a closed bulkhead cuts
  *
- * Debug override: `?gx=-wings,-strata` turns those off, `?gx=wings` (or `+wings`) forces one on, `?gx=-all` turns all five
+ * Debug override: `?gx=-wings,-strata` turns those off, `?gx=wings` (or `+wings`) forces one on, `?gx=-all` turns all of the
  * plan 4 switches off. Names not in the list are ignored. Read once at load; it never touches the save.
  */
 export interface GfxFeatures {
@@ -36,12 +41,16 @@ export interface GfxFeatures {
   strata: boolean;
   walkers: boolean;
   surfaceRow: boolean;
+  floorId: boolean;
+  openings: boolean;
+  bulkheads: boolean;
+  branches: boolean;
 }
 
 /** The plan 4 structure switches (also the names `?gx=` understands). */
-export const PLAN4_FLAGS = ['wings', 'galleries', 'strata', 'walkers', 'surfaceRow'] as const;
+export const PLAN4_FLAGS = ['wings', 'galleries', 'strata', 'walkers', 'surfaceRow', 'floorId', 'openings', 'bulkheads', 'branches'] as const;
 type Plan4Flag = typeof PLAN4_FLAGS[number];
-const P4_ON = { wings: true, galleries: true, strata: true, walkers: true, surfaceRow: true };
+const P4_ON = { wings: true, galleries: true, strata: true, walkers: true, surfaceRow: true, floorId: true, openings: true, bulkheads: true, branches: true };
 
 export const GFX_FEATURES: Record<QualityLevel, GfxFeatures> = {
   high: { fade: true, place: true, wallShadow: true, beams: true, sitSleep: true, skyLayers: true, ...P4_ON },
