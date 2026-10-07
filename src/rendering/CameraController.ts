@@ -107,6 +107,8 @@ export class CameraController {
   /** Called (at most once per picture) when the camera moved: the depth ruler follows it. */
   onChange: (() => void) | null = null;
   private pinched = false;
+  /** [plan4:ST-12 #6] A running camera tour (see tourPath). */
+  private tour: { pts: { x: number; y: number; z: number }[]; i: number; dwell: number; wait: number; done: (completed: boolean) => void } | null = null;
   /** Nobody (player or code) has moved the camera since the last fit: a HUD that finishes measuring itself refits instead of shifting. */
   private untouched = true;
   private lastX = NaN;
@@ -266,6 +268,7 @@ export class CameraController {
       }
       this.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
       this.untouched = false;
+      this.cancelTour(); // a touch is the player taking the camera back
       // A touch catches a gliding camera; that touch only stops it (no room tap).
       // (Not when this touch may be the second half of a double tap.)
       const pendingTap = performance.now() - this.lastTap.t < DOUBLE_TAP_MS;
@@ -345,6 +348,7 @@ export class CameraController {
       e.preventDefault();
       const dy = e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY;
       this.untouched = false;
+      this.cancelTour();
       const from = this.wheelZoom ?? this.zoom;
       this.focusTarget = null;
       this.camVX = this.camVY = 0;
@@ -673,8 +677,57 @@ export class CameraController {
     this.wheelZoom = null;
   }
 
+  /**
+   * [plan4:ST-12 #6] Tour hook (the story's camera moves, GP-6): glides through `points` (world x, y and an optional zoom; the current zoom when
+   * omitted), staying `dwellMs` at each one. A touch or the wheel ends it. Resolves true when the last point was reached and held, false when
+   * it was cancelled (by the player, or by another tourPath). Under reduced motion the camera cuts from point to point instead of gliding.
+   */
+  tourPath(points: { x: number; y: number; z?: number }[], dwellMs = 1500): Promise<boolean> {
+    this.cancelTour();
+    if (!points.length) return Promise.resolve(true);
+    return new Promise<boolean>(resolve => {
+      this.tour = { pts: points.map(p => ({ x: p.x, y: p.y, z: p.z ?? -1 })), i: -1, dwell: Math.max(0, dwellMs) / 1000, wait: 0, done: resolve };
+    });
+  }
+
+  /** [plan4:ST-12 #6] Ends a tour where it is. */
+  cancelTour(): void {
+    const t = this.tour;
+    if (!t) return;
+    this.tour = null;
+    t.done(false);
+  }
+
+  get touring(): boolean {
+    return this.tour !== null;
+  }
+
+  /** One step of the tour: when the glide to a point has settled and its dwell is over, go to the next. */
+  private stepTour(dt: number): void {
+    const t = this.tour!;
+    if (this.focusTarget || this.pointers.size) return;
+    if (t.i >= 0 && (t.wait += dt) < t.dwell) return;
+    t.i++;
+    t.wait = 0;
+    if (t.i >= t.pts.length) {
+      this.tour = null;
+      t.done(true);
+      return;
+    }
+    const p = t.pts[t.i];
+    const z = this.clampZoom(p.z > 0 ? p.z : this.zoom);
+    if (this.calm) {
+      this.stopCamera();
+      this.zoom = z;
+      this.camX = p.x;
+      this.camY = p.y;
+      this.clampCamera();
+    } else this.focusTo(p.x, p.y, z);
+  }
+
   /** One time step of the camera: focus glide, wheel zoom, zoom-limit spring, coasting, edge springs, shake. */
   stepCamera(dt: number): void {
+    if (this.tour) this.stepTour(dt);
     if (this.trauma > 0) this.trauma = Math.max(0, this.trauma - this.traumaDecay * dt);
     if (this.punchT < 1) this.punchT += dt;
     // While a sheet lets the camera rest lower, check now and then whether it closed (then glide back).
