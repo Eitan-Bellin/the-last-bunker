@@ -12,6 +12,17 @@ import type { QualityLevel } from '../utils/PerformanceMonitor';
  *   beams       soft light shafts under the big lamps (a few additive sprites per lit room)
  *   sitSleep    people use the set: sit on benches and bed edges, sleep in bunks, eat at the table
  *   skyLayers   the panorama's sky and landscape drift on separate parallax layers
+ *
+ * Plan 4 structure switches [plan4:X-6]. Nothing reads them yet; the structure agents gate their new drawing on them so
+ * each can be A/B-measured and switched off for a regression check. All on by default at every level.
+ *   wings       side wings west/east of the shaft (per-floor extents, layout.ext)
+ *   galleries   service floors / galleries between the main floors
+ *   strata      rock layers and the stepped casing (geology)
+ *   walkers     people walking between rooms and the lift with passengers
+ *   surfaceRow  the gate-house row above ground
+ *
+ * Debug override: `?gx=-wings,-strata` turns those off, `?gx=wings` (or `+wings`) forces one on, `?gx=-all` turns all five
+ * plan 4 switches off. Names not in the list are ignored. Read once at load; it never touches the save.
  */
 export interface GfxFeatures {
   fade: boolean;
@@ -20,14 +31,46 @@ export interface GfxFeatures {
   beams: boolean;
   sitSleep: boolean;
   skyLayers: boolean;
+  wings: boolean;
+  galleries: boolean;
+  strata: boolean;
+  walkers: boolean;
+  surfaceRow: boolean;
 }
 
+/** The plan 4 structure switches (also the names `?gx=` understands). */
+export const PLAN4_FLAGS = ['wings', 'galleries', 'strata', 'walkers', 'surfaceRow'] as const;
+type Plan4Flag = typeof PLAN4_FLAGS[number];
+const P4_ON = { wings: true, galleries: true, strata: true, walkers: true, surfaceRow: true };
+
 export const GFX_FEATURES: Record<QualityLevel, GfxFeatures> = {
-  high: { fade: true, place: true, wallShadow: true, beams: true, sitSleep: true, skyLayers: true },
-  medium: { fade: true, place: true, wallShadow: true, beams: true, sitSleep: true, skyLayers: true },
+  high: { fade: true, place: true, wallShadow: true, beams: true, sitSleep: true, skyLayers: true, ...P4_ON },
+  medium: { fade: true, place: true, wallShadow: true, beams: true, sitSleep: true, skyLayers: true, ...P4_ON },
   // Low: only the free ones (plan 6.4: Q1 and Q2 stay on, the rest off).
-  low: { fade: true, place: true, wallShadow: false, beams: false, sitSleep: true, skyLayers: false },
+  low: { fade: true, place: true, wallShadow: false, beams: false, sitSleep: true, skyLayers: false, ...P4_ON },
 };
+
+/** Applies `?gx=-wings,-strata` to every level's table (so the quality switch in `setGfxQuality` keeps the override). */
+function applyGxQuery(search: string): void {
+  const raw = new URLSearchParams(search).get('gx');
+  if (!raw) return;
+  for (const part of raw.split(',')) {
+    const t = part.trim();
+    if (!t) continue;
+    const off = t.startsWith('-');
+    const name = t.replace(/^[-+]/, '');
+    const names: readonly string[] = name === 'all' ? PLAN4_FLAGS : [name];
+    for (const n of names) {
+      if (!(PLAN4_FLAGS as readonly string[]).includes(n)) continue;
+      for (const lvl of Object.values(GFX_FEATURES)) lvl[n as Plan4Flag] = !off;
+    }
+  }
+}
+try {
+  if (typeof location !== 'undefined') applyGxQuery(location.search);
+} catch {
+  // no location (headless tools): defaults stand
+}
 
 /** The live feature set (mutated in place by `setGfxQuality`, so callers can hold the reference). */
 export const GFX: GfxFeatures = { ...GFX_FEATURES.high };

@@ -3,8 +3,8 @@
 import { RESEARCH } from '../../src/data/research';
 import { BUILDING_DEFS } from '../../src/data/buildingDefs';
 import { ALL_RESOURCES, RESOURCES } from '../../src/data/resources';
-import type { BuildingType, ResourceType } from '../../src/core/GameState';
-import { createInitialState } from '../../src/core/GameState';
+import type { BuildingType, GameState, ResourceType } from '../../src/core/GameState';
+import { createInitialState, floorExtent, migrateState } from '../../src/core/GameState';
 import { ACTS } from '../../src/data/acts';
 import { TUNING } from '../../src/data/tuning';
 import { BOOK, HELP_TOPICS } from '../../src/data/book';
@@ -106,6 +106,19 @@ export function lintData(i18n: Record<string, Record<string, string>>): string[]
       s.currentFloors = floors;
       over(`dig to B${floors + 1}`, bs.digCost(s));
     }
+  }
+  // [plan4:X-3] The bunker layout state exists with its defaults, and an empty layout reaches the classic 12 slots east, none west.
+  {
+    const s = createInitialState();
+    const l = s.layout;
+    if (!l || l.v !== 1 || !l.ext || !l.doors || !Array.isArray(l.infra) || l.surfaceOpen !== false) problems.push('layout: createInitialState().layout is missing or not the empty default');
+    else if (Object.keys(l.ext).length || Object.keys(l.doors).length || l.infra.length) problems.push('layout: the default layout is not empty');
+    for (const f of [0, 3, 11]) {
+      const x = floorExtent(s, f);
+      if (x.w !== 0 || x.e !== 12) problems.push(`layout: floorExtent(empty, ${f}) = {w:${x.w}, e:${x.e}}, expected {w:0, e:12}`);
+    }
+    const m = migrateState({ ...createInitialState(), version: 6, layout: undefined } as unknown as GameState);
+    if (!m.layout || m.layout.v !== 1 || m.layout.surfaceOpen !== false) problems.push('layout: migrateState does not default layout for a v6 save');
   }
   return problems;
 }
