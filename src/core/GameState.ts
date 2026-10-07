@@ -63,7 +63,20 @@ export type BuildingType =
   | 'condenser'
   | 'mushroomFarm'
   | 'gatePost'
-  | 'barracks';
+  | 'barracks'
+  // [plan4:BL-15..32] wave 2 (BL-27 bulkhead, BL-28 stairwell and BL-29 ventStack are added by the Rooms-Systems agent)
+  | 'quarantineWard'
+  | 'solarArray'
+  | 'windTurbine'
+  | 'watchtower'
+  | 'garage'
+  | 'decon'
+  | 'aquaculture'
+  | 'market'
+  | 'nursery'
+  | 'school'
+  | 'bathhouse'
+  | 'memorialHall';
 
 export interface BuildingInstance {
   id: string;

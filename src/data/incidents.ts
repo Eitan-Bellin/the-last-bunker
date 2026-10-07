@@ -40,7 +40,8 @@ export const INCIDENTS: Record<IncidentKind, IncidentDef> = {
   fire: {
     kind: 'fire', icon: 'fire', color: 0xff7a2a, stat: 'endurance',
     rooms: { generator: 3, reactor: 2, reactorHall: 2, workshop: 2, canteen: 2, laboratory: 1.5, armory: 1, storage: 1, metro: 0.5,
-      batteryBank: 2.5, recycler: 1.5, commons: 0.5, library: 1, condenser: 0.5 }, // [plan4:BL-9..13] batteries burn, the recycler runs hot
+      batteryBank: 2.5, recycler: 1.5, commons: 0.5, library: 1, condenser: 0.5,
+      garage: 1 }, // [plan4:BL-9..13,20] batteries burn, the recycler runs hot, the motor pool is full of fuel and oil
     quickFix: { water: 25 }, harm: 0.35,
     name: { he: 'שריפה', en: 'Fire' },
     desc: { he: 'להבות אוכלות את החדר. היא תתפשט לחדר הסמוך אם לא תכבו אותה.', en: 'Flames are eating the room. It will spread next door if nobody puts it out.' },
@@ -50,7 +51,7 @@ export const INCIDENTS: Record<IncidentKind, IncidentDef> = {
   flood: {
     kind: 'flood', icon: 'wave', color: 0x4aa8ff, stat: 'strength',
     rooms: { waterPump: 3, waterPurifier: 2, hydroponics: 2, farm: 1.5, medbay: 1, quarters: 1, lake: 1, atrium: 0.5,
-      condenser: 1.5, mushroomFarm: 1 }, // [plan4:BL-13,14] wet rooms
+      condenser: 1.5, mushroomFarm: 1, aquaculture: 2, bathhouse: 1.5, decon: 1 }, // [plan4:BL-13,14,21,22,31] wet rooms
     quickFix: { materials: 20 }, drain: { water: 0.6, materials: 0.15 },
     name: { he: 'הצפה', en: 'Flood' },
     desc: { he: 'צינור התפוצץ והמים עולים. כל רגע הולכים לאיבוד מים.', en: 'A main burst and the water is rising. Every second wastes water.' },
@@ -69,7 +70,7 @@ export const INCIDENTS: Record<IncidentKind, IncidentDef> = {
   roaches: {
     kind: 'roaches', icon: 'bug', color: 0xb08a4a, stat: 'agility',
     rooms: { farm: 3, hydroponics: 2, canteen: 2, storage: 2, quarters: 1, cave: 1, atrium: 1,
-      mushroomFarm: 3, library: 0.5 }, // [plan4:BL-14,11] the damp farm breeds them, the books feed them
+      mushroomFarm: 3, library: 0.5, market: 1, nursery: 0.5 }, // [plan4:BL-14,11,23,26] the damp farm breeds them, the books and the stalls feed them
     quickFix: { medicine: 4 }, drain: { food: 0.5 },
     name: { he: 'מכת ג׳וקים', en: 'Roach Swarm' },
     desc: { he: 'ג׳וקים מוטנטיים פשטו על המזון. הם אוכלים מהר.', en: 'Mutant roaches swarmed the food. They eat fast.' },
@@ -78,7 +79,8 @@ export const INCIDENTS: Record<IncidentKind, IncidentDef> = {
   },
   breach: {
     kind: 'breach', icon: 'skull', color: 0xff3a3a, stat: 'strength', topFloor: true,
-    rooms: { storage: 3, workshop: 2, armory: 2, canteen: 1, quarters: 1, farm: 1, generator: 1, waterPump: 1 },
+    rooms: { storage: 3, workshop: 2, armory: 2, canteen: 1, quarters: 1, farm: 1, generator: 1, waterPump: 1,
+      garage: 1, market: 1 }, // [plan4:BL-20,23] the doors and the goods draw raiders (breaches only hit floor 0)
     quickFix: { scrap: 25 }, drain: { materials: 0.6, scrap: 0.3 }, harm: 0.3,
     name: { he: 'פריצת שודדים', en: 'Raider Breach' },
     desc: { he: 'שודדים חדרו דרך פיר האוורור ובוזזים את החדר.', en: 'Raiders got in through a vent shaft and are looting the room.' },

@@ -32,6 +32,23 @@ export interface SpecDef {
   childGrowth?: number;
   /** [plan4:BL-4] A school role: the stat points a graduate gets (replaces the school's own 1). */
   graduateStat?: number;
+  // ---- [plan4:BL-15..32] role fields of the wave 2 rooms: data only, the readers belong to the systems that own each effect ----
+  /** Sick people the quarantine ward holds apart, added to the room's own capacity. */
+  quarantine?: number;
+  /** Seconds added to the raid warning (watchtower). */
+  warning?: number;
+  /** Caravan cargo, as a fraction (garage, market): 0.1 = +10%. Adds to the room's own cargo effect. */
+  cargo?: number;
+  /** Fraction cut from injuries on the way home from trips (decon chamber). Adds to the room's own effect. */
+  returnSafety?: number;
+  /** Extra swap offers on the market's trade board. */
+  barterSlots?: number;
+  /** Rank in the mastery ladder a child of the school starts with (apprenticeship: 2). */
+  startRank?: number;
+  /** Multiplies the room's hygiene effect (bathhouse laundry). */
+  hygiene?: number;
+  /** Lowest value the weather shape (daylight/wind) may fall to: solar cells keep 0.2 at night, a grid-tied turbine 0.7. */
+  weatherFloor?: number;
   /** [Long game] First Act in which this role can be chosen. */
   act?: number;
   /** [Long game] What the role consumes for its `extra` (a starved input slows the whole room, as in chains.ts). */
@@ -275,6 +292,103 @@ export const SPECIALIZATIONS: SpecDef[] = [
   {
     id: 'bunks', type: 'barracks', icon: 'quarters', population: 4,
     name: { he: 'דרגשים נוספים', en: 'Extra Bunks' }, desc: { he: '+4 מקומות לינה', en: '+4 beds' },
+  },
+  // ---- [plan4:BL-15..32] roles of the wave 2 rooms (2 each; SPEC_COST, at the room's specLevel). Fields without a reader yet are listed in the Rooms-Data report. ----
+  {
+    id: 'isolationPods', type: 'quarantineWard', icon: 'lock', quarantine: 4,
+    name: { he: 'תאי בידוד', en: 'Isolation Pods' }, desc: { he: '+4 מקומות בידוד', en: '+4 isolation places' },
+  },
+  {
+    id: 'fieldHospital', type: 'quarantineWard', icon: 'medicine', healMult: 1.5,
+    name: { he: 'בית חולים שדה', en: 'Field Hospital' }, desc: { he: 'ריפוי מהיר ב-50%', en: '50% faster healing' },
+  },
+  {
+    id: 'trackers', type: 'solarArray', icon: 'sun', outputMult: 1.25,
+    name: { he: 'פאנלים עוקבי שמש', en: 'Sun Trackers' }, desc: { he: '+25% חשמל', en: '+25% power' },
+  },
+  {
+    id: 'cells', type: 'solarArray', icon: 'battery', weatherFloor: 0.2,
+    name: { he: 'תאי לילה', en: 'Night Cells' }, desc: { he: '20% מהתפוקה גם בלילה', en: '20% of the output even at night' },
+  },
+  {
+    id: 'tall', type: 'windTurbine', icon: 'up', outputMult: 1.2,
+    name: { he: 'תורן גבוה', en: 'Taller Mast' }, desc: { he: '+20% חשמל', en: '+20% power' },
+  },
+  {
+    id: 'gridTied', type: 'windTurbine', icon: 'plug', weatherFloor: 0.7,
+    name: { he: 'חיבור לרשת', en: 'Grid-Tied' }, desc: { he: 'לא יורד מתחת ל-70% מהתפוקה', en: 'Never drops below 70% of the output' },
+  },
+  {
+    id: 'radar', type: 'watchtower', icon: 'signal', warning: 60,
+    name: { he: 'מכ״ם', en: 'Radar' }, desc: { he: '+60 שניות התראה', en: '+60 seconds of warning' },
+  },
+  {
+    id: 'sniperNest', type: 'watchtower', icon: 'target', defense: 6,
+    name: { he: 'קן צלפים', en: 'Sniper Nest' }, desc: { he: '+6 הגנה', en: '+6 defense' },
+  },
+  {
+    id: 'convoy', type: 'garage', icon: 'cart', cargo: 0.1,
+    name: { he: 'שיירה מאורגנת', en: 'Organized Convoy' }, desc: { he: '+10% מטען שיירות', en: '+10% caravan cargo' },
+  },
+  {
+    id: 'recon', type: 'garage', icon: 'eye', expeditionChance: 0.05,
+    name: { he: 'סיור קדמי', en: 'Scout Cars' }, desc: { he: '+5% הצלחת משלחות', en: '+5% expedition success' },
+  },
+  {
+    id: 'uvLock', type: 'decon', icon: 'rad', returnSafety: 0.15,
+    name: { he: 'סינון קרינה', en: 'UV Lock' }, desc: { he: '15% פחות פצועים וחולים בחזרה', en: '15% fewer hurt or sick on return' },
+  },
+  {
+    id: 'salvageWash', type: 'decon', icon: 'recycle', expeditionLoot: 0.1,
+    name: { he: 'שטיפת שלל', en: 'Salvage Wash' }, desc: { he: '+10% שלל ממשלחות', en: '+10% expedition loot' },
+  },
+  {
+    id: 'tilapia', type: 'aquaculture', icon: 'clover', outputMult: 1.2,
+    name: { he: 'אמנונים', en: 'Tilapia' }, desc: { he: '+20% אוכל', en: '+20% food' },
+  },
+  {
+    id: 'purifyingPonds', type: 'aquaculture', icon: 'water', extra: { water: 0.3 },
+    name: { he: 'בריכות מסננות', en: 'Purifying Ponds' }, desc: { he: '+0.3 מים לשנייה', en: '+0.3 water per second' },
+  },
+  {
+    id: 'auctionHall', type: 'market', icon: 'crown', cargo: 0.1,
+    name: { he: 'בית מכרזים', en: 'Auction Hall' }, desc: { he: '+10% מטען שיירות', en: '+10% caravan cargo' },
+  },
+  {
+    id: 'guild', type: 'market', icon: 'people', barterSlots: 1,
+    name: { he: 'גילדת סוחרים', en: 'Traders\' Guild' }, desc: { he: 'הצעת החלפה נוספת בלוח', en: 'One more swap offer on the board' },
+  },
+  {
+    id: 'playground', type: 'nursery', icon: 'happy', morale: 2,
+    name: { he: 'מגרש משחקים', en: 'Playground' }, desc: { he: '+2 מורל', en: '+2 morale' },
+  },
+  {
+    id: 'kindergarten', type: 'nursery', icon: 'baby', childGrowth: 1.15,
+    name: { he: 'גן מסודר', en: 'Kindergarten' }, desc: { he: 'ילדים גדלים מהר ב-15%', en: 'Children grow up 15% faster' },
+  },
+  {
+    id: 'academy', type: 'school', icon: 'cap', graduateStat: 2,
+    name: { he: 'אקדמיה', en: 'Academy' }, desc: { he: 'בוגר מקבל +2 בתכונה', en: 'A graduate gets +2 in a stat' },
+  },
+  {
+    id: 'apprenticeship', type: 'school', icon: 'medal', startRank: 2,
+    name: { he: 'חניכות', en: 'Apprenticeship' }, desc: { he: 'בוגרים מתחילים בדרגת מקצוע 2', en: 'Graduates start at trade rank 2' },
+  },
+  {
+    id: 'sauna', type: 'bathhouse', icon: 'thermometer', morale: 2,
+    name: { he: 'סאונה', en: 'Sauna' }, desc: { he: '+2 מורל', en: '+2 morale' },
+  },
+  {
+    id: 'laundry', type: 'bathhouse', icon: 'broom', hygiene: 1.3,
+    name: { he: 'כביסה מרוכזת', en: 'Central Laundry' }, desc: { he: 'היגיינה חזקה ב-30%', en: 'Hygiene 30% stronger' },
+  },
+  {
+    id: 'eternalFlame', type: 'memorialHall', icon: 'fire', morale: 3,
+    name: { he: 'להבה נצחית', en: 'Eternal Flame' }, desc: { he: '+3 מורל', en: '+3 morale' },
+  },
+  {
+    id: 'archiveOfNames', type: 'memorialHall', icon: 'journal', extra: { knowledge: 0.03 },
+    name: { he: 'ארכיון שמות', en: 'Archive of Names' }, desc: { he: '+0.03 ידע לשנייה', en: '+0.03 knowledge per second' },
   },
 ];
 

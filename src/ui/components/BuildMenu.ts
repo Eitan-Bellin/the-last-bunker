@@ -230,6 +230,16 @@ export class BuildMenu {
     if (fx?.maxPopulation) out.push(`[[quarters]] +${fx.maxPopulation.base}`);
     if (fx?.defense) out.push(`[[endurance]] +${fx.defense.base}`);
     for (const [r, v] of Object.entries(fx?.storageCap ?? {})) if (def.maxWorkers === 0 || r === 'power' || r === 'knowledge') out.push(`[[storage]] ${RESOURCE_ICONS[r] ?? ''} +${v}`);
+    // [plan4:BL-15..32] the wave 2 effects (icon + number, same as the chips above)
+    const pct = (v: number) => `${Math.round(v * 100)}%`;
+    if (fx?.childCapacity) out.push(`[[baby]] ${fx.childCapacity.base}`);
+    if (fx?.quarantine) out.push(`[[medbay]] ${fx.quarantine.base}`);
+    if (fx?.earlyWarning) out.push(`[[signal]] +${fx.earlyWarning.base}s`);
+    if (fx?.expeditionTeams) out.push(`[[backpack]] +1`);
+    if (fx?.cargo) out.push(`[[cart]] +${pct(fx.cargo.base)}`);
+    if (fx?.returnSafety) out.push(`[[backpack]] \u2212${pct(fx.returnSafety.base)}`);
+    if (fx?.hygiene) out.push(`[[bandage]] \u2212${pct(fx.hygiene.base)}`);
+    if (fx?.mourning) out.push(`[[heart]] \u2212${pct(fx.mourning.base)}`);
     return out.slice(0, 4);
   }
 

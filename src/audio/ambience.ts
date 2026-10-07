@@ -35,6 +35,9 @@ export const AMBIENCE_FOR: Partial<Record<BuildingType, AmbienceKey>> = {
   mushroomFarm: 'air',
   gatePost: 'base',
   barracks: 'base',
+  // [plan4:BL-15..32]
+  quarantineWard: 'medical', solarArray: 'air', windTurbine: 'air', watchtower: 'air', garage: 'workshop', decon: 'water',
+  aquaculture: 'water', market: 'kitchen', nursery: 'base', school: 'base', bathhouse: 'water', memorialHall: 'air',
 };
 
 function loopNoise(ctx: OfflineAudioContext, dest: AudioNode, color: 'white' | 'pink' | 'brown', type: BiquadFilterType, freq: number, q: number, level: number, seed: number): void {

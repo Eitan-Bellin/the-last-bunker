@@ -97,6 +97,8 @@ export const BUILDABLE_TYPES: BuildingType[] = [
   'storage', 'atrium', 'reactorHall',
   // [plan4:BL-9..14,19,33] first eight new rooms
   'batteryBank', 'commons', 'library', 'recycler', 'condenser', 'mushroomFarm', 'gatePost', 'barracks',
+  // [plan4:BL-15..32] wave 2 rooms
+  'quarantineWard', 'solarArray', 'windTurbine', 'watchtower', 'garage', 'decon', 'aquaculture', 'market', 'nursery', 'school', 'bathhouse', 'memorialHall',
 ];
 
 /** Natural caverns reached by tunnelling sideways (not built from the menu). */

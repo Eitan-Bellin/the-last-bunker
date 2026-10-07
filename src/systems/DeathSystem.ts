@@ -100,6 +100,7 @@ export class DeathSystem {
     const d = this.sm.state.danger;
     const f = d.memorialQueue[0];
     if (!f) return false;
+    if (!this.sm.state.storyFlags.includes('memorial:first')) this.sm.applyDelta({ path: 'storyFlags', value: [...this.sm.state.storyFlags, 'memorial:first'] }); // plan4:BL-32 the first remembered death opens the memorial hall
     let grief = d.grief;
     if (choice === 'ceremony') {
       if (!resources.spend(this.sm, CEREMONY_COST)) return false;

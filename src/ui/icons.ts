@@ -271,6 +271,34 @@ export const ICON_SVG = {
   barracks: '<rect x="3" y="3" width="2" height="18" rx=".5"/><rect x="19" y="3" width="2" height="18" rx=".5"/>'
     + '<rect x="3" y="8.4" width="18" height="2.6" rx=".8" opacity=".6"/><rect x="3" y="16" width="18" height="2.6" rx=".8" opacity=".6"/>'
     + '<rect x="5.6" y="5.6" width="5.2" height="2.6" rx="1.1"/><rect x="5.6" y="13.2" width="5.2" height="2.6" rx="1.1"/>',
+  // [plan4:BL-15..32] wave 2 rooms
+  quarantineWard: '<rect x="3" y="3" width="18" height="18" rx="2.2" opacity=".6"/><rect x="9.6" y="6" width="4.8" height="12" rx="1"/><rect x="6" y="9.6" width="12" height="4.8" rx="1"/>'
+    + '<path d="M3 12h3M18 12h3" stroke="#000" stroke-opacity=".5" stroke-width="1.6"/>',
+  solarArray: '<path d="M3.6 8.4h16.8l1.8 8.6H1.8z"/><path d="M8.2 8.4 7 17M12 8.4V17M15.8 8.4 17 17M2.7 12.7h18.6" stroke="#000" stroke-opacity=".5" stroke-width="1.3" fill="none"/>'
+    + '<path d="M12 17v4M8 21.4h8" ' + S + ' stroke-width="1.9"/><circle cx="19" cy="3.8" r="1.9"/>',
+  windTurbine: '<path d="M11 10.6h2L14 22h-4z" opacity=".6"/><circle cx="12" cy="9.2" r="1.7"/>'
+    + '<path d="M12 7.5C11.4 4.8 11.6 3 12 1.8c.4 1.2.6 3 0 5.7zM13.5 10.1c2.6-.6 4.2-.4 5.4.1-.9.9-2.5 1.7-5.1 1.9zM10.5 10.1c-2.6-.6-4.2-.4-5.4.1.9.9 2.5 1.7 5.1 1.9z"/>',
+  watchtower: '<path d="M7.4 11h9.2l1.4 11h-12z" opacity=".6"/><rect x="5" y="6" width="14" height="5" rx="1"/>'
+    + '<path d="M7.4 6V3.6h9.2V6" ' + S + ' stroke-width="1.7"/><rect x="9.6" y="7.3" width="4.8" height="2.4" rx=".6" ' + CUT + '/><path d="M9 14.5l6 4M15 14.5l-6 4" stroke="#000" stroke-opacity=".5" stroke-width="1.3"/>',
+  garage: '<path d="M2 9.6 12 3.4l10 6.2V21H2z" opacity=".6"/><rect x="5" y="11.4" width="14" height="9.6" rx=".8"/>'
+    + '<path d="M5.6 14.2h12.8M5.6 16.6h12.8M5.6 19h12.8" stroke="#000" stroke-opacity=".5" stroke-width="1.2"/>',
+  decon: '<rect x="3" y="3" width="18" height="3.4" rx="1.2"/><path d="M12 6.4v2.4" ' + S + ' stroke-width="1.7"/>'
+    + '<path d="M7 11.2l-1.2 2.6M10 11.6l-.8 3.4M14 11.6l.8 3.4M17 11.2l1.2 2.6M12 11.8v4.4" ' + S + ' stroke-width="1.8" opacity=".7"/>'
+    + '<path d="M3 21h18" ' + S + ' stroke-width="2.2"/><circle cx="12" cy="18.6" r="1.6"/>',
+  aquaculture: '<path d="M2.6 12.8c2.6-3.8 6.2-5.6 10.2-5.6 3 0 5.6 1 7.6 2.8l1.8-2v7.6l-1.8-2c-2 1.8-4.6 2.8-7.6 2.8-4 0-7.6-1.8-10.2-5.6z"/>'
+    + '<circle cx="8" cy="11.4" r="1.2" ' + CUT + '/><path d="M2 20.6c2-1.6 3.6-1.6 5.6 0s3.6 1.6 5.6 0 3.6-1.6 5.6 0" ' + S + ' stroke-width="1.8" opacity=".7"/>',
+  market: '<path d="M2.6 8.2 4.6 3h14.8l2 5.2z"/><path d="M4.4 8.2v2.4a2.4 2.4 0 0 0 4.8 0 2.4 2.4 0 0 0 4.8 0 2.4 2.4 0 0 0 4.8 0V8.2" opacity=".6"/>'
+    + '<rect x="4" y="12.6" width="2" height="8.4" rx=".6"/><rect x="18" y="12.6" width="2" height="8.4" rx=".6"/><rect x="3" y="16.6" width="18" height="2.6" rx=".8"/>',
+  nursery: '<path d="M2 12.4h20v3.2H2z" opacity=".6"/><rect x="2" y="9.4" width="2.4" height="11.6" rx=".7"/><rect x="19.6" y="9.4" width="2.4" height="11.6" rx=".7"/>'
+    + '<circle cx="12" cy="8.2" r="4.4"/><circle cx="10.6" cy="8" r=".9" ' + CUT + '/><circle cx="13.4" cy="8" r=".9" ' + CUT + '/><rect x="4.4" y="17.2" width="15.2" height="2.6" rx=".8"/>',
+  school: '<path d="M2.4 4h19.2v13H2.4z" opacity=".6"/><path d="M5 6.6h14v7.8H5z" ' + CUT + '/><path d="M7.4 9.4h5.6M7.4 12h8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>'
+    + '<path d="M6 17v4M18 17v4M9 21h6" ' + S + ' stroke-width="1.9"/>',
+  bathhouse: '<rect x="3" y="2.5" width="18" height="3" rx="1.2"/><path d="M12 5.5v2.8" ' + S + ' stroke-width="1.7"/><path d="M7 8.4h10l-2 2.4H9z"/>'
+    + '<path d="M8.4 13.6v2.6M12 13.2v4M15.6 13.6v2.6" ' + S + ' stroke-width="1.8" opacity=".7"/>'
+    + '<path d="M5 20.6c.8-1.2.8-2 0-3M19 20.6c.8-1.2.8-2 0-3M12 22c.8-1.2.8-2 0-3" ' + S + ' stroke-width="1.4" opacity=".6"/>',
+  memorialHall: '<path d="M12 2.4c2.4 2.6 3.4 4.4 3.4 6.6a3.4 3.4 0 0 1-6.8 0c0-1.2.6-2 1.4-3 .2.8.6 1.2 1 1.4.4-1.6.8-3.4 1-5z"/>'
+    + '<rect x="9.8" y="12.4" width="4.4" height="4.4" rx=".6" opacity=".6"/><path d="M3 21h18" ' + S + ' stroke-width="2.4"/>'
+    + '<path d="M5 16.8h14v4.2H5z" opacity=".6"/><path d="M7.6 18.2v1.4M10.2 18.2v1.4M12.8 18.2v1.4M15.4 18.2v1.4" stroke="#000" stroke-opacity=".5" stroke-width="1.1"/>',
 } as const;
 
 export type IconName = keyof typeof ICON_SVG;

@@ -12,6 +12,7 @@ import { ERAS } from '../../src/data/eras';
 import { specsFor } from '../../src/data/specializations';
 import { expeditionEvent } from '../../src/data/expeditionEvents';
 import { bunkerDefense } from '../../src/systems/EventSystem'; // [Danger bot]
+import { childCapacityOf } from '../../src/data/roomEffects'; // [plan4:BL-26/30] the bot puts children in the nursery and the school
 
 /**
  * Balance simulator core (NICE4), shared by the Node runner (tools/sim/run.mjs) and the browser page
@@ -595,7 +596,9 @@ export async function runSim(o: SimOptions): Promise<SimResult> {
   };
 
   /** [plan4] The rooms of the redesign's first wave: the bot builds them last and upgrades them last (core rooms carry the Act goals). */
-  const NEW_ROOMS: BuildingType[] = ['batteryBank', 'commons', 'library', 'recycler', 'condenser', 'mushroomFarm', 'gatePost', 'barracks'];
+  const NEW_ROOMS: BuildingType[] = ['batteryBank', 'commons', 'library', 'recycler', 'condenser', 'mushroomFarm', 'gatePost', 'barracks',
+    // [plan4:BL-15..32] wave 2
+    'quarantineWard', 'solarArray', 'windTurbine', 'watchtower', 'garage', 'decon', 'aquaculture', 'market', 'nursery', 'school', 'bathhouse', 'memorialHall'];
   const hallsStillFit = (type: BuildingType, pos: { x: number; y: number; floor: number }) => {
     const s = state();
     const fake = { id: 'b_fake', type, level: 1, position: pos, assignedSurvivorIds: [], constructionProgress: 0, constructionTotal: 1, isConstructing: true, specialization: null };
@@ -645,6 +648,20 @@ export async function runSim(o: SimOptions): Promise<SimResult> {
     wantNew('gatePost', 2, act >= 4 ? 2 : 1);
     wantNew('recycler', 3, 1, s.resources.scrap.amount < s.resources.scrap.cap * 0.6);
     wantNew('barracks', 3, act >= 5 ? 2 : 1, pop >= s.maxPopulation - 3);
+    // [plan4:BL-15..32] wave 2 rooms: each one when its Act has come and the bunker has a use for it (research and the room's own rules - surface row, lake, flag - decide the rest).
+    const kids = s.survivors.filter(x => x.child).length;
+    wantNew('nursery', 2, 1, kids > 0);
+    wantNew('school', 3, 1, kids > 1);
+    wantNew('bathhouse', 2, 1, pop >= 20);
+    wantNew('memorialHall', 2, 1);
+    wantNew('solarArray', 2, act >= 4 ? 3 : 2, net('power') < 3);
+    wantNew('windTurbine', 3, act >= 5 ? 2 : 1, net('power') < 3);
+    wantNew('watchtower', 2, 1);
+    wantNew('quarantineWard', 3, 1, pop >= 30);
+    wantNew('garage', 3, 1);
+    wantNew('decon', 3, 1);
+    wantNew('aquaculture', 3, 1);
+    wantNew('market', 3, 1);
     noSpaceFor = null;
     for (const type of want) {
       if (!BUILDABLE_TYPES.includes(type) || !isBuildingUnlocked(s, type)) continue;
@@ -784,6 +801,12 @@ export async function runSim(o: SimOptions): Promise<SimResult> {
       const b = rooms.find(x => producesShort(x.type)) ?? rooms[0];
       if (b) e.populationSystem.assignSurvivorToBuilding(sm, sv.id, b.id);
       else if (r) e.restorationSystem.assign(r.id, sv.id);
+    }
+    // [plan4:BL-26/30] Children go to a nursery or school that has room (never into a crew place).
+    for (const kid of state().survivors) {
+      if (!kid.child || kid.assignedBuildingId) continue;
+      const home = state().buildings.find(x => !x.isConstructing && childCapacityOf(x) > 0 && e.populationSystem.canAssign(state(), x.id, true));
+      if (home) e.populationSystem.assignSurvivorToBuilding(sm, kid.id, home.id);
     }
   };
 

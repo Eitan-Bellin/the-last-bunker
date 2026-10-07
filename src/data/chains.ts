@@ -27,6 +27,11 @@ export const CHAIN_INPUTS: Partial<Record<BuildingType, ChainInput[]>> = {
   laboratory: [{ resource: 'scrap', base: 0.02, perLevel: 0.3, boost: true }],
   // [plan4:BL-12] The recycler chews through materials to make scrap; without them it crawls.
   recycler: [{ resource: 'materials', base: 0.12, perLevel: 0.3 }],
+  // [plan4:BL-15,20,21,31] the ward uses a little medicine (a boost), the motor pool a little scrap (a boost); the decon chamber and the bathhouse need water
+  quarantineWard: [{ resource: 'medicine', base: 0.02, perLevel: 0.3, boost: true }],
+  garage: [{ resource: 'scrap', base: 0.02, perLevel: 0.3, boost: true }],
+  decon: [{ resource: 'water', base: 0.1, perLevel: 0.3 }],
+  bathhouse: [{ resource: 'water', base: 0.08, perLevel: 0.3 }],
 };
 
 export const STARVED_FACTOR = 0.35;

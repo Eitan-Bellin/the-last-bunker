@@ -27,6 +27,11 @@ const CATEGORY_OF: Partial<Record<BuildingType, BuildCategory>> = {
   medbay: 'health',
   armory: 'defense', gatePost: 'defense', barracks: 'defense',
   storage: 'infra',
+  // [plan4:BL-15..32] wave 2 rooms
+  quarantineWard: 'health', bathhouse: 'health', nursery: 'living', school: 'living', memorialHall: 'living',
+  solarArray: 'surface', windTurbine: 'surface', watchtower: 'surface',
+  garage: 'trade', market: 'trade', decon: 'trade',
+  aquaculture: 'food',
 };
 
 /** A room's category; anything not listed yet counts as infrastructure. */

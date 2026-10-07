@@ -63,6 +63,8 @@ const BUILDING_ZONE: Partial<Record<BuildingType, ZoneId>> = {
   barracks: 'living',
   library: 'engineering',
   recycler: 'engineering',
+  // [plan4:BL-15..32] wave 2: residential rooms in the living zone, the school beside the laboratories; the rest stand on any level or use `place`
+  quarantineWard: 'living', nursery: 'living', bathhouse: 'living', memorialHall: 'living', school: 'engineering',
 };
 
 /**

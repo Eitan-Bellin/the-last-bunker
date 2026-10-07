@@ -43,6 +43,19 @@ export const PALETTES: Record<BuildingType, Palette> = {
   mushroomFarm: { wall: 0x3a3a48, floor: 0x2e2e38, accent: 0xc8a0ff, light: 0xb8a0e8 },
   gatePost: { wall: 0x4c4c44, floor: 0x36362f, accent: 0xff7a3a, light: 0xffd8a0 },
   barracks: { wall: 0x4e5a46, floor: 0x3c4034, accent: 0xb0b060, light: 0xffe8b0 },
+  // [plan4:BL-15..32] fallback palettes of the wave 2 rooms: the generic room look until the RoomComposer draws them (solar, wind and watchtower are surface rooms and may never use it)
+  quarantineWard: { wall: 0x5e4a52, floor: 0x45393e, accent: 0xff7a8a, light: 0xffd0d6 },
+  solarArray: { wall: 0x3a4a60, floor: 0x2e3846, accent: 0x6ab0ff, light: 0xd0e8ff },
+  windTurbine: { wall: 0x44525c, floor: 0x343e46, accent: 0x9ad8e8, light: 0xe0f4ff },
+  watchtower: { wall: 0x54503c, floor: 0x3e3b2e, accent: 0xffc060, light: 0xffe4b0 },
+  garage: { wall: 0x504a3e, floor: 0x3a362e, accent: 0xffa040, light: 0xffd49a },
+  decon: { wall: 0x3e5a52, floor: 0x32443f, accent: 0x7affc0, light: 0xc8fff0 },
+  aquaculture: { wall: 0x2e4e5e, floor: 0x2a3c46, accent: 0x5ac8e8, light: 0xb0ecff },
+  market: { wall: 0x6a5238, floor: 0x4e3c2a, accent: 0xffc34a, light: 0xffe2a0 },
+  nursery: { wall: 0x7a5e60, floor: 0x5c4648, accent: 0xff9ac0, light: 0xffd8e6 },
+  school: { wall: 0x4e5878, floor: 0x3a4260, accent: 0x9ab4ff, light: 0xdce6ff },
+  bathhouse: { wall: 0x3e5e6a, floor: 0x34484f, accent: 0x8ae0f0, light: 0xd0f6ff },
+  memorialHall: { wall: 0x4a4a62, floor: 0x383848, accent: 0xffd27a, light: 0xffe8b8 },
 };
 
 interface Ctx {

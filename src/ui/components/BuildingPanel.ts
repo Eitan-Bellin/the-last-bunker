@@ -1,7 +1,8 @@
 import type { BuildingInstance, GameState, ResourceType, SurvivorState } from '../../core/GameState';
 import type { GameEngine } from '../../core/GameEngine';
 import { i18n } from '../../i18n/I18nManager';
-import { getDef, effectiveLevel, workforceMultiplier, traitBonus, compoundNeighbors, synergyOf, isDistrict } from '../../data/buildingDefs';
+import { getDef, effectiveLevel, workforceMultiplier, traitBonus, compoundNeighbors, synergyOf, isDistrict, shapeFactor, type BuildingDef } from '../../data/buildingDefs';
+import { roomEffect, childCapacityOf } from '../../data/roomEffects'; // [plan4:BL-15..32]
 import { Sheet } from './Sheet';
 import { genderOf, portraitFor, portraitUrl } from '../../data/portraits';
 import { bunkerDefense } from '../../systems/EventSystem';
@@ -194,6 +195,7 @@ export class BuildingPanel {
       const d = def.effects.defense;
       stats.appendChild(this.row(`[[endurance]] ${i18n.t('building.defense')}`, `+${Math.round((d.base + d.perLevel * (level - 1)) * workforceMultiplier(state, b))} · ${i18n.t('building.totalDefense', { n: bunkerDefense(state) })}`));
     }
+    for (const r of this.wave2Rows(state, b, def)) stats.appendChild(r); // [plan4:BL-15..32]
     if (b.type === 'radioTower') stats.appendChild(el('div', 'bp-hint', `[[radioTower]] ${i18n.t('building.radio')}`));
     if (b.type === 'trainingRoom') stats.appendChild(el('div', 'bp-hint', `[[trainingRoom]] ${i18n.t('building.training')}`));
     if (b.type === 'laboratory') {
@@ -313,6 +315,34 @@ export class BuildingPanel {
     }
     card.append(grid, costRow(state, cost));
     return card;
+  }
+
+  /**
+   * [plan4:BL-15..32] The effect rows of the wave 2 rooms (children, quarantine, warning, trips, hygiene, mourning, weather), one per effect the room has.
+   * Values are the room's own at its level; the bunker-wide totals are capped where the systems apply them.
+   */
+  private wave2Rows(state: GameState, b: BuildingInstance, def: BuildingDef): HTMLDivElement[] {
+    const fx = def.effects;
+    const out: HTMLDivElement[] = [];
+    const pct = (v: number) => `${Math.round(v * 100)}%`;
+    if (fx?.childCapacity) {
+      const kids = b.assignedSurvivorIds.filter(id => state.survivors.find(s => s.id === id)?.child).length;
+      out.push(this.row(`[[baby]] ${i18n.t('building.childPlaces')}`, `${kids}/${childCapacityOf(b)}`));
+    }
+    if (fx?.childGrowth) out.push(this.row(`[[baby]] ${i18n.t('building.childGrowth')}`, `×${roomEffect(b, 'childGrowth').toFixed(2)}`));
+    if (fx?.graduateStat) out.push(this.row(`[[cap]] ${i18n.t('building.graduate')}`, `+${fx.graduateStat}`));
+    if (fx?.quarantine) out.push(this.row(`[[medbay]] ${i18n.t('building.quarantine')}`, String(Math.floor(roomEffect(b, 'quarantine')))));
+    if (fx?.earlyWarning) out.push(this.row(`[[signal]] ${i18n.t('building.earlyWarning')}`, `+${Math.round(roomEffect(b, 'earlyWarning'))}s`));
+    if (fx?.expeditionTeams) {
+      const level = effectiveLevel(b);
+      out.push(this.row(`[[backpack]] ${i18n.t('building.expeditionTeams')}`, `+${fx.expeditionTeams.filter(at => level >= at).length}`));
+    }
+    if (fx?.cargo) out.push(this.row(`[[cart]] ${i18n.t('building.cargo')}`, `+${pct(roomEffect(b, 'cargo'))}`));
+    if (fx?.returnSafety) out.push(this.row(`[[backpack]] ${i18n.t('building.returnSafety')}`, `−${pct(roomEffect(b, 'returnSafety'))}`));
+    if (fx?.hygiene) out.push(this.row(`[[bandage]] ${i18n.t('building.hygiene')}`, `−${pct(roomEffect(b, 'hygiene'))}`));
+    if (fx?.mourning) out.push(this.row(`[[heart]] ${i18n.t('building.mourning')}`, `−${pct(roomEffect(b, 'mourning'))}`));
+    if (def.shape) out.push(this.row(`[[${def.shape === 'wind' ? 'wave' : 'sun'}]] ${i18n.t(`building.weather.${def.shape}`)}`, `×${shapeFactor(def, state.stats.totalPlayTime).toFixed(2)}`));
+    return out;
   }
 
   private row(label: string, value: string): HTMLDivElement {

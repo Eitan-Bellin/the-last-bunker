@@ -132,6 +132,38 @@ export const BOOK: BookEntry[] = [
       en: 'Drag with a finger to move around. Pinch with two fingers to zoom in and out. Double-tap a room to frame it, and double-tap again to return to the wide view. Press and hold a survivor to pick them up, drag them to a room and let go to assign them there. Once there are wings, a floor can be widened sideways. The tips can be shown again in Settings.',
     },
   },
+  {
+    id: 'moraleChannels', icon: '[[happy]]', group: 'basics',
+    title: { he: 'מורל: שלושה ערוצים', en: 'Morale: three channels' },
+    text: {
+      he: 'חדרי מורל נחלקים לשלושה ערוצים, ולכל ערוץ תקרה משלו: בסיס (קפיטריה, אגם, אטריום; עד 22), נוחות (אולם מועדון, גן ילדים, מקלחות; עד 6) ותרבות (ספרייה, אולם זיכרון; עד 6). חדר נוסף באותו ערוץ מפסיק לעזור כשהתקרה מלאה, אז כדאי לגוון. הפירוט נמצא בפאנל האנשים.',
+      en: 'Morale rooms feed three channels, each with its own ceiling: base (canteen, lake, atrium; up to 22), comfort (commons, nursery, bathhouse; up to 6) and culture (library, memorial hall; up to 6). Another room in a full channel stops helping, so mix them. The breakdown is in the People panel.',
+    },
+  },
+  {
+    id: 'neighbours', icon: '[[compound]]', group: 'basics',
+    title: { he: 'חדרים שכנים', en: 'Neighbouring rooms' },
+    text: {
+      he: 'חדרים שנוגעים זה בזה באותה קומה יכולים לעזור זה לזה. שני חדרים מאותו סוג ורמה מוסיפים 10% כל אחד. זוגות מיוחדים נותנים עוד, למשל קפיטריה ליד אולם מועדון, או ספרייה ליד מעבדה. הבונוס עולה עד שלושה שכנים ולא יותר מ-20%, והוא מוצג בפאנל החדר ובשעת ההצבה. אש עוברת בין שכנים.',
+      en: 'Rooms that touch on the same floor can help each other. Two rooms of the same type and level add 10% each. Special pairs give more, such as a canteen beside a commons, or a library beside a laboratory. The bonus counts up to three neighbours and at most 20%, and shows in the room panel and while you place a room. Fire spreads between neighbours.',
+    },
+  },
+  {
+    id: 'placeRules', icon: '[[lock]]', group: 'basics',
+    title: { he: 'חוקי מקום ומגבלות', en: 'Where rooms may stand' },
+    text: {
+      he: 'לחלק מהחדרים יש חוק מקום: חוות פטריות רק בקומות העמוקות, עמדת שער ותא טיהור בקומת הכניסה, פאנלים, טורבינה ומגדל על הגג, בריכות דגים ליד האגם. ולחדרים רבים יש מספר מקסימלי של עותקים. בתפריט הבנייה השורה הכהה מסבירה למה אי אפשר לבנות עכשיו.',
+      en: 'Some rooms have a place rule: the mushroom farm only on the deep levels, the gate post and the decon chamber on the entrance floor, panels, turbines and the watchtower on the roof, fish ponds beside the lake. Many rooms also have a limit on copies. In the build menu the dim line says why you cannot build one right now.',
+    },
+  },
+  {
+    id: 'weatherPower', icon: '[[sun]]', group: 'basics',
+    title: { he: 'חשמל מהשמיים', en: 'Power from the sky' },
+    text: {
+      he: 'פאנלים סולאריים נותנים חשמל רק ביום, וטורבינת רוח נותנת לפי הרוח, לפעמים הרבה ולפעמים כמעט כלום. לא צריך להאכיל אותם, ואין להם תקלות חשמל. מצבר ענק שומר את העודף ליום שאין בו כלום. שניהם בנויים על הגג, ושימו לב לשעות החושך.',
+      en: 'Solar panels give power only by day, and a wind turbine gives it by the wind: sometimes plenty, sometimes almost none. They need no fuel and never short out. A battery bank keeps the surplus for the hours with nothing. Both stand on the roof, so watch the dark hours.',
+    },
+  },
   // ---- people and work ----
   {
     id: 'mastery', icon: '[[medal]]', group: 'people',
@@ -163,6 +195,14 @@ export const BOOK: BookEntry[] = [
     text: {
       he: 'חדרים שהרוסים (בתחילת המשחק, או אחרי תבוסה בפשיטה) מתחילים כהריסה. מקישים, משבצים אנשים והם מפנים את ההריסות עד שהחדר חוזר לחיים.',
       en: 'Wrecked rooms (at the start of the game, or after a lost raid) begin as ruins. Tap one, assign people, and they clear the rubble until the room comes back to life.',
+    },
+  },
+  {
+    id: 'children', icon: '[[baby]]', group: 'people',
+    title: { he: 'ילדים וחינוך', en: 'Children and school' },
+    text: {
+      he: 'ילדים לא עובדים. הם גדלים עם הזמן, ומהר יותר בגן ילדים. בגן ובבית הספר יש מקומות לילדים (נפרדים ממקומות העבודה): גרור ילד לשם. ילד שבילה את רוב ילדותו בבית ספר יגדל וירוויח נקודה בתכונה, ובית הספר גם מוסיף ידע.',
+      en: 'Children do not work. They grow up with time, and faster in a nursery. The nursery and the school hold children in places of their own (separate from work places): drag a child there. A child who spent most of childhood in school grows up with a point in a stat, and the school also adds knowledge.',
     },
   },
   // ---- decisions ----

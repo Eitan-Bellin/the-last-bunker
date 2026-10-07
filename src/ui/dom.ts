@@ -57,6 +57,19 @@ export const BUILDING_ICONS: Record<string, string> = {
   mushroomFarm: tok('mushroomFarm'),
   gatePost: tok('gatePost'),
   barracks: tok('barracks'),
+  // [plan4:BL-15..32] wave 2 rooms
+  quarantineWard: tok('quarantineWard'),
+  solarArray: tok('solarArray'),
+  windTurbine: tok('windTurbine'),
+  watchtower: tok('watchtower'),
+  garage: tok('garage'),
+  decon: tok('decon'),
+  aquaculture: tok('aquaculture'),
+  market: tok('market'),
+  nursery: tok('nursery'),
+  school: tok('school'),
+  bathhouse: tok('bathhouse'),
+  memorialHall: tok('memorialHall'),
 };
 
 const TOKEN = /\[\[([a-zA-Z0-9]+)\]\]/g;

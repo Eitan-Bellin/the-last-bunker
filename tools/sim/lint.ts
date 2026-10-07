@@ -157,6 +157,7 @@ export function wingChecks(): string[] {
   let tested = 0;
   for (const type of Object.keys(BUILDING_DEFS) as BuildingType[]) {
     if (isDistrict(type) || roomFloors(type) !== 1 || !allowedFloors(type, a.currentFloors).includes(1)) continue;
+    if (BUILDING_DEFS[type].place?.adjacentTo || BUILDING_DEFS[type].place?.needsFlag) continue; // plan4:BL-22 a room that must touch another (fish ponds by the lake) or wait for a flag is not placeable on an empty floor
     const w = roomSlots(type);
     tested++;
     for (let x = -6; x <= 18; x++) {

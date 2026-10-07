@@ -22,6 +22,9 @@ const CATEGORY: Partial<Record<BuildingType, number>> = {
   // [plan4:BL-9..14,19,33]
   batteryBank: 0xffd84a, commons: 0xffb070, library: 0x9a8cff, recycler: 0xffa040,
   condenser: 0x4ab8ff, mushroomFarm: 0x7dff6a, gatePost: 0xff6a5a, barracks: 0xff6a5a,
+  // [plan4:BL-15..32]
+  quarantineWard: 0xff6a8a, solarArray: 0xffd84a, windTurbine: 0x9ad8e8, watchtower: 0xff6a5a, garage: 0xffc060, decon: 0x6affd0,
+  aquaculture: 0x6ad8ff, market: 0xffc060, nursery: 0xffb0d0, school: 0x9a8cff, bathhouse: 0x6ad8ff, memorialHall: 0xffb070,
 };
 
 /**
