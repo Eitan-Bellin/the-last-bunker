@@ -12,6 +12,7 @@ import { WING_STEP, floorDigging, freeDigSlot, wingBlock, wingCost, wingCrew, wi
 import type { DigState } from '../core/state/longGame';
 import { BASE_FLOORS, MAX_FLOORS, allowedFloors } from '../data/zones';
 import { RETOOL_PRICE_MULT, RETOOL_SECONDS, SPEC_COST, specTotal, specsFor } from '../data/specializations';
+import { RELOCATE_SECONDS, relocateBlock, relocateCost, stateWithout } from './relocate'; // [plan4:ST-19]
 
 /** Slots east of the shaft on a floor without a wing. [plan4:X-2] Placement reads floorExtent(state, floor); this stays exported for tools. */
 export const SLOTS_PER_FLOOR = BASE_EAST;
@@ -503,6 +504,31 @@ export class BuildingSystem {
 
   getMaxWorkers(type: BuildingType): number {
     return getDef(type)?.maxWorkers ?? 0;
+  }
+
+  /**
+   * [plan4:ST-19] Moves a finished room to another spot. Allowed when the room is not being built or upgraded, has no incident and is not already
+   * moving (relocate.ts), and the new spot is valid for it ignoring itself (placeBlock). Pays 10% of its build price and the room stands still
+   * for 30 s (the retool clock: it produces nothing meanwhile). Its crew stays assigned. Returns false (nothing changed) when any of that fails
+   * or the resources do not cover the price.
+   */
+  relocate(sm: StateManager, buildingId: string, pos: Position): boolean {
+    const state = sm.state;
+    const b = state.buildings.find(x => x.id === buildingId);
+    if (!b || relocateBlock(state, b) !== null) return false;
+    if (b.position.floor === pos.floor && b.position.x === pos.x) return false;
+    if (this.placeBlock(b.type, pos, stateWithout(state, buildingId)) !== null) return false;
+    const cost = relocateCost(this, state, b);
+    for (const [r, v] of Object.entries(cost)) if ((state.resources[r as keyof GameState['resources']]?.amount ?? 0) < v) return false;
+    for (const [r, v] of Object.entries(cost)) sm.applyDelta({ path: `resources.${r}.amount`, value: sm.state.resources[r as keyof GameState['resources']].amount - v });
+    const lg = sm.state.longGame; // (always there in a real save; without the world clock there is no downtime to count)
+    const until = lg ? Math.max(b.retoolUntil ?? 0, lg.meta.worldT) + RELOCATE_SECONDS : b.retoolUntil;
+    sm.applyDelta({
+      path: 'buildings',
+      value: sm.state.buildings.map(x => (x.id === buildingId ? { ...x, position: { x: pos.x, y: 0, floor: pos.floor }, ...(until === undefined ? {} : { retoolUntil: until }) } : x)),
+    });
+    bus.emit('building:relocated', buildingId);
+    return true;
   }
 }
 
