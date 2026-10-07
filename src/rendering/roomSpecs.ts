@@ -20,6 +20,12 @@ export const LOOK_ACTIVITY: Record<string, string> = {
   nursery: 'tend', school: 'inspect', bathhouse: 'idle', memorialHall: 'idle', watchtower: 'idle',
 };
 
+/** Room soundscape of the wave 2 rooms (keys of `AmbienceKey`, audio/ambience.ts), from doc 02 section 4.3; spread into AMBIENCE_FOR. */
+export const LOOK_AMBIENCE: Record<string, string> = {
+  quarantineWard: 'medical', solarArray: 'air', windTurbine: 'air', watchtower: 'air', garage: 'workshop', decon: 'water',
+  aquaculture: 'water', market: 'kitchen', nursery: 'base', school: 'base', bathhouse: 'water', memorialHall: 'air',
+};
+
 export interface LookOutfit {
   top: number;
   bottom: number;

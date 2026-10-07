@@ -377,27 +377,28 @@ export const SPECS_A: Record<string, RoomSpec> = {
       p.lamp(p.t('bulb', 'tube', 'led'), 46, 9.5, { color: lampCol(p), r: 40, flicker: p.t(0.4, 0.2, 0.1) });
       p.lamp(p.t('bulb', 'tube', 'led'), 100, 9.5, { color: lampCol(p), r: 32, flicker: p.t(0.4, 0.2, 0.1) });
       const blanket = p.t(0x5a6a4a, 0x66724e, 0x3a4a4e);
-      bunk(p, 14, yb, 2, blanket);
-      bunk(p, 54, yb, 2, shade(blanket, 1.1));
-      p.seat(32, yb - 11, 1, 'sit');
-      p.seat(72, yb - 11, 1, 'sit');
-      p.plate(50, 20, 16, 10, 'chevrons', p.t(0x3a4630, 0x44502e, 0x2a4458), 0xe0d8a8);
+      // Bunks are 42 wide like the painted ones, so a sleeper fits on the mattress.
+      bunk(p, 14, yb, 2, blanket, { w: 42 });
+      bunk(p, 58, yb, 2, shade(blanket, 1.1), { w: 42 });
+      p.seat(36, yb - 11, 1, 'sit');
+      p.seat(80, yb - 11, 1, 'sit');
+      p.plate(56, 20, 16, 10, 'chevrons', p.t(0x3a4630, 0x44502e, 0x2a4458), 0xe0d8a8);
       // Lockers, a weapon rack and the duty roster.
-      for (let i = 0; i < 2; i++) locker(p, 96 + i * 9.4, yb, 8.6, 48, p.t(0x5a6258, 0x5a6458, 0x3e4850));
-      p.rect(115, 24, 11, 40, 0x2e2e28);
-      for (let i = 0; i < 4; i++) {
-        p.rect(116.4 + i * 2.5, 27, 1, 32, 0x14140f);
-        p.rect(116 + i * 2.5, 48, 2, 5, 0x5a3a2a);
+      for (let i = 0; i < 2; i++) locker(p, 104 + i * 9.4, yb, 8.6, 48, p.t(0x5a6258, 0x5a6458, 0x3e4850));
+      p.rect(104, 14, 18, 22, 0x2e2e28);
+      for (let i = 0; i < 5; i++) {
+        p.rect(106 + i * 3.2, 16, 1, 17, 0x14140f);
+        p.rect(105.6 + i * 3.2, 26, 2, 4, 0x5a3a2a);
       }
-      notice(p, 80, 28, 10, 14);
-      led(p, 85, 24, 0xff4a3a, { rate: 1.1 });
-      for (const bx of [24, 70]) {
+      notice(p, 84, 12, 10, 14);
+      led(p, 89, 9.6, 0xff4a3a, { rate: 1.1 });
+      for (const bx of [28, 74]) {
         p.ell(bx, yb + 8, 3, 1.6, 0x241c14);
         p.ell(bx + 5, yb + 8.4, 3, 1.6, 0x241c14);
       }
       if (p.tier === 0) {
-        p.tally(66, 22, 2);
-        p.stain(100, 40, 10, 0x000000, 0.22);
+        p.tally(70, 18, 2);
+        p.stain(100, 50, 10, 0x000000, 0.22);
       }
       p.spot(0.4, 1, 'idle', 0.4);
       p.spot(0.72, -1, 'idle', 0.3);

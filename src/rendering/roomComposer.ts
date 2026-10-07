@@ -87,6 +87,8 @@ export interface RoomSpec {
   build(p: Painter): void;
   /** Extra darkness per tier (0 salvaged, 1 restored, 2 advanced): rooms that should read dim or bright. Default 0. */
   dim?: number;
+  /** An open-air room of the surface row (solar field, mast, tower): a dusk sky and broken ground instead of walls, a ceiling and a floor. */
+  outdoor?: boolean;
 }
 
 export interface ComposeResult {
@@ -533,9 +535,9 @@ export class Painter {
     this.meta.fx.push(s);
   }
 
-  /** Where a survivor stands to work: x in units, `face` the side the equipment is on. */
+  /** Where a survivor stands to work: `x` a FRACTION of the room's width (workSpots.ts' own unit), `face` the side the equipment is on. */
   spot(x: number, face: 1 | -1, act?: string, depth?: number): void {
-    this.meta.spots.push([x / this.W, face, act, depth]);
+    this.meta.spots.push([x, face, act, depth]);
   }
   /** A mattress to sleep on (y = mattress top in units, head = side of the pillow). */
   bed(x: number, y: number, head: -1 | 1): void {
@@ -572,7 +574,7 @@ export type IconName =
 
 const ICONS: Record<IconName, (c: Ctx2D) => void> = {
   bolt: c => { c.beginPath(); c.moveTo(0.25, -1); c.lineTo(-0.55, 0.12); c.lineTo(-0.05, 0.12); c.lineTo(-0.3, 1); c.lineTo(0.6, -0.2); c.lineTo(0.08, -0.2); c.closePath(); c.fill(); },
-  book: c => { c.beginPath(); c.moveTo(-0.95, -0.55); c.quadraticCurveTo(-0.45, -0.8, 0, -0.45); c.quadraticCurveTo(0.45, -0.8, 0.95, -0.55); c.lineTo(0.95, 0.65); c.quadraticCurveTo(0.45, 0.4, 0, 0.75); c.quadraticCurveTo(-0.45, 0.4, -0.95, 0.65); c.closePath(); c.fill(); c.globalCompositeOperation = 'destination-out'; c.globalCompositeOperation = 'source-over'; },
+  book: c => { c.beginPath(); c.moveTo(-0.95, -0.55); c.quadraticCurveTo(-0.45, -0.8, 0, -0.45); c.quadraticCurveTo(0.45, -0.8, 0.95, -0.55); c.lineTo(0.95, 0.65); c.quadraticCurveTo(0.45, 0.4, 0, 0.75); c.quadraticCurveTo(-0.45, 0.4, -0.95, 0.65); c.closePath(); c.fill(); },
   cog: c => {
     c.beginPath();
     for (let i = 0; i < 8; i++) { const a = (i / 8) * Math.PI * 2; c.lineTo(Math.cos(a - 0.2) * 0.72, Math.sin(a - 0.2) * 0.72); c.lineTo(Math.cos(a - 0.14) * 0.98, Math.sin(a - 0.14) * 0.98); c.lineTo(Math.cos(a + 0.14) * 0.98, Math.sin(a + 0.14) * 0.98); c.lineTo(Math.cos(a + 0.2) * 0.72, Math.sin(a + 0.2) * 0.72); }
@@ -587,7 +589,16 @@ const ICONS: Record<IconName, (c: Ctx2D) => void> = {
   wind: c => { c.lineWidth = 0.2; for (const [y, l] of [[-0.55, 0.9], [0, 1], [0.55, 0.7]] as const) { c.beginPath(); c.moveTo(-1, y); c.lineTo(l - 0.3, y); c.arc(l - 0.3, y - 0.22, 0.22, Math.PI / 2, -Math.PI * 0.6, true); c.stroke(); } },
   tower: c => { c.beginPath(); c.moveTo(-0.35, 1); c.lineTo(-0.2, -0.3); c.lineTo(0.2, -0.3); c.lineTo(0.35, 1); c.closePath(); c.fill(); c.fillRect(-0.6, -0.8, 1.2, 0.5); c.fillRect(-0.75, -0.9, 1.5, 0.15); },
   wrench: c => { c.save(); c.rotate(-0.8); c.fillRect(-0.18, -0.4, 0.36, 1.4); c.beginPath(); c.arc(0, -0.55, 0.5, 0, Math.PI * 2); c.fill(); c.fillStyle = 'rgba(0,0,0,0.6)'; c.fillRect(-0.16, -1.1, 0.32, 0.55); c.restore(); },
-  recycle: c => { c.lineWidth = 0.3; for (let i = 0; i < 3; i++) { const a = (i / 3) * Math.PI * 2 - Math.PI / 2; const b = a + 1.7; c.beginPath(); c.arc(0, 0, 0.7, a, b); c.stroke(); const ex = Math.cos(b) * 0.7, ey = Math.sin(b) * 0.7; c.beginPath(); c.moveTo(ex + Math.cos(b + Math.PI / 2) * 0.32, ey + Math.sin(b + Math.PI / 2) * 0.32); c.lineTo(ex + Math.cos(b - 0.6) * 0.3, ey + Math.sin(b - 0.6) * 0.3); c.lineTo(ex - Math.cos(b + Math.PI / 2) * 0.3, ey - Math.sin(b + Math.PI / 2) * 0.3); c.closePath(); c.fill(); } },
+  recycle: c => {
+    c.lineWidth = 0.34;
+    c.lineCap = 'butt';
+    for (let i = 0; i < 3; i++) {
+      const a0 = (i / 3) * Math.PI * 2 - Math.PI / 2 + 0.25, a1 = a0 + 1.55;
+      c.beginPath(); c.arc(0, 0, 0.68, a0, a1); c.stroke();
+      const ex = Math.cos(a1) * 0.68, ey = Math.sin(a1) * 0.68, tx = -Math.sin(a1), ty = Math.cos(a1);
+      c.beginPath(); c.moveTo(ex + tx * 0.52, ey + ty * 0.52); c.lineTo(ex - Math.cos(a1) * 0.45, ey - Math.sin(a1) * 0.45); c.lineTo(ex + Math.cos(a1) * 0.45, ey + Math.sin(a1) * 0.45); c.closePath(); c.fill();
+    }
+  },
   coin: c => { c.beginPath(); c.arc(0, 0, 0.9, 0, Math.PI * 2); c.fill(); c.fillStyle = 'rgba(0,0,0,0.5)'; c.beginPath(); c.arc(0, 0, 0.62, 0, Math.PI * 2); c.lineWidth = 0.12; c.strokeStyle = 'rgba(0,0,0,0.55)'; c.stroke(); c.fillRect(-0.12, -0.42, 0.24, 0.84); },
   apple: c => { c.beginPath(); c.arc(-0.28, 0.1, 0.62, 0, Math.PI * 2); c.arc(0.28, 0.1, 0.62, 0, Math.PI * 2); c.fill(); c.fillRect(-0.06, -0.85, 0.12, 0.5); c.beginPath(); c.ellipse(0.32, -0.62, 0.3, 0.14, -0.5, 0, Math.PI * 2); c.fill(); },
   flame: c => { c.beginPath(); c.moveTo(0, -1); c.bezierCurveTo(0.2, -0.45, 0.85, -0.2, 0.7, 0.4); c.bezierCurveTo(0.6, 0.9, 0.2, 1, 0, 1); c.bezierCurveTo(-0.5, 1, -0.8, 0.6, -0.65, 0.1); c.bezierCurveTo(-0.55, -0.2, -0.2, -0.3, 0, -1); c.fill(); },
@@ -680,6 +691,39 @@ function drawShell(p: Painter, spec: RoomSpec): void {
   }
   // Floor drain and a puddle of lamp light is added by the light pass.
   p.ell(W * (0.3 + p.vr() * 0.4), H - 7, 5, 1.4, 0x000000, 0.28);
+}
+
+/** The open-air variant of the shell: a dusk sky with a low sun and a ruined skyline, concrete ground in front. */
+function drawSky(p: Painter, spec: RoomSpec): void {
+  if (p.dry) return;
+  const { W, H, inB, tier } = p;
+  const haze = p.t(0.35, 0.18, 0.0);
+  p.rectG(0, 0, W, inB + 2, [[0, mix(0x1c2840, 0x4a4236, haze)], [0.55, mix(0x4a5c78, 0x7a6a58, haze)], [1, mix(0xc09468, 0x9a7c5e, haze)]]);
+  const sx = W * 0.3;
+  p.soft(sx, inB - 22, 44, 34, 0xffd49a, 0.55);
+  p.ell(sx, inB - 22, 6.5, 6.5, 0xfff0d2, 0.95);
+  // Two layers of broken skyline, the far one hazier.
+  for (const [layer, col, base, amp] of [[0, 0x6a6460, inB - 6, 22], [1, 0x3a3836, inB, 30]] as const) {
+    let x = layer ? -4 : -10;
+    while (x < W) {
+      const w = 6 + p.vr() * 12, h = 6 + p.vr() * amp;
+      p.rect(x, base - h, w, h + 6, col, layer ? 0.96 : 0.7);
+      if (p.vr() > 0.5) p.rect(x + w * 0.2, base - h - 3, w * 0.35, 3, col, layer ? 0.96 : 0.7);
+      for (let wy = base - h + 3; wy < base - 3; wy += 5) if (p.vr() > 0.78) p.rect(x + 1.5 + p.vr() * (w - 4), wy, 1.2, 1.4, 0xe8b868, layer ? 0.5 : 0.2);
+      x += w + p.vr() * 3;
+    }
+  }
+  // The pad: concrete and rubble, with a darker edge toward the viewer.
+  p.polyG([0, inB, W, inB, W, H, 0, H], inB, H, [[0, 0x5a544c], [0.4, 0x433e38], [1, 0x2c2825]]);
+  p.rect(0, inB, W, 1, 0xffffff, 0.12);
+  for (let i = 0; i < 5; i++) p.line(p.vr() * W, inB + 2, p.vr() * W, H, 0x000000, 0.4, 0.2);
+  p.speckle(0, inB, W, H - inB, 0x000000, 140, 0.35, 0.7);
+  p.speckle(0, inB, W, H - inB, 0x8a8478, 60, 0.25, 0.7);
+  // Steel edge posts like every other room, so the row reads as a set.
+  p.polyG([0, 0, 6, 0, 6, H, 0, H], 0, H, [[0, 0x2a2b2f], [1, 0x1c1d20]]);
+  p.polyG([W - 6, 0, W, 0, W, H, W - 6, H], 0, H, [[0, 0x2a2b2f], [1, 0x1c1d20]]);
+  void spec;
+  void tier;
 }
 
 // ---------------------------------------------------------------- light pass and finish
@@ -793,9 +837,16 @@ function finish(p: Painter, w: number, h: number): { lum: number; rgb: [number, 
 // ---------------------------------------------------------------- public API
 
 const SPEC_TABLE = new Map<string, RoomSpec>();
+/** Debug switch: `?nocomposed` makes every room fall back to the old live-drawn stand-in (roomArt.ts), for an A/B perf and look check. Never touches the save. */
+let disabled = false;
+try {
+  disabled = typeof location !== 'undefined' && /[?&]nocomposed\b/.test(location.search);
+} catch {
+  // no location (Node tools): composed rooms stay on
+}
 /** Registers the specs (roomSpecs.ts calls this once; kept as a function so the import graph stays acyclic). */
 export function registerRoomSpecs(specs: Record<string, RoomSpec>): void {
-  for (const [k, v] of Object.entries(specs)) SPEC_TABLE.set(k, v);
+  if (!disabled) for (const [k, v] of Object.entries(specs)) SPEC_TABLE.set(k, v);
 }
 export const hasComposedSpec = (type: string): boolean => SPEC_TABLE.has(type);
 export const composedTypes = (): string[] => [...SPEC_TABLE.keys()];
@@ -830,7 +881,8 @@ export function composeRoom(type: string, tier: ComposeTier, slots: number, stam
   ctx.scale(COMPOSE_SCALE, COMPOSE_SCALE);
   const p = new Painter(type, W, tier, spec.pal, ctx);
   p.stampSource = stampSource ?? null;
-  drawShell(p, spec);
+  if (spec.outdoor) drawSky(p, spec);
+  else drawShell(p, spec);
   spec.build(p);
   lightPass(p, spec, w, h);
   const m = finish(p, w, h);

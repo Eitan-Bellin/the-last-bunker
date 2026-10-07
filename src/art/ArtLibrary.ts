@@ -81,7 +81,7 @@ class ArtLibraryImpl {
     if (tex) return tex;
     // [plan4:BL-6] A room type with no painting is composed in code (rendering/roomComposer.ts) and baked on first use.
     const comp = composedKey(key);
-    if (comp && !comp.painted) return this.bakeComposed(key);
+    if (comp && !comp.painted) return this.bakeBudgeted(key);
     if (!this.pending.has(key) && !this.failed.has(key) && artEntry(key)) void this.load(key);
     return null;
   }
@@ -101,7 +101,7 @@ class ArtLibraryImpl {
   }
 
   async preload(keys: string[]): Promise<void> {
-    await Promise.all(keys.map(k => (this.textures.has(k) ? null : composedKey(k)?.painted === false ? this.get(k) : this.load(k))));
+    await Promise.all(keys.map(k => (this.textures.has(k) ? null : composedKey(k)?.painted === false ? this.bakeComposed(k) : this.load(k))));
   }
 
   private async load(key: string): Promise<void> {
@@ -142,6 +142,38 @@ class ArtLibraryImpl {
     return tex;
   }
   private composedKeys = new Set<string>();
+
+  /**
+   * [plan4:BL-6] Bakes are one-off but not free (about 8 ms for a 3-slot room): at most ~10 ms of them per picture. A room asked for beyond
+   * that waits (null, like a painting on its way) and is baked in a following picture, announced through onLoaded like any arrival.
+   */
+  private bakeStamp = 0;
+  private bakeSpent = 0;
+  private bakeQueue = new Set<string>();
+  private bakeBudgeted(key: string): Texture | null {
+    const now = performance.now();
+    if (now - this.bakeStamp > 16) {
+      this.bakeStamp = now;
+      this.bakeSpent = 0;
+    }
+    if (this.bakeSpent > 10) {
+      if (!this.bakeQueue.size) requestAnimationFrame(() => this.drainBakes());
+      this.bakeQueue.add(key);
+      return null;
+    }
+    const tex = this.bakeComposed(key);
+    this.bakeSpent += performance.now() - now;
+    return tex;
+  }
+  private drainBakes(): void {
+    const keys = [...this.bakeQueue];
+    this.bakeQueue.clear();
+    for (const key of keys) {
+      if (this.textures.has(key)) continue;
+      // an over-budget key re-queues itself (and schedules the next drain) inside bakeBudgeted
+      if (this.bakeBudgeted(key)) for (const fn of this.listeners) fn(key);
+    }
+  }
 
   private loadedAt = new Map<string, number>();
   private trimmed = new Set<string>();

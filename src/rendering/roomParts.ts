@@ -238,7 +238,7 @@ export function stringLights(p: Painter, x0: number, x1: number, y: number, n: n
     const c = cols[i % cols.length];
     p.ell(x, yy + 1, 1, 1.3, c);
     p.glow(x, yy + 1, 5, c, { a: 0.4 });
-    p.fx('twinkle', x, yy + 1, { color: c, size: 0.9 });
+    if (i % 2 === 1) p.fx('twinkle', x, yy + 1, { color: c, size: 0.9 }); // every other bulb is live: the rest are baked (fewer objects per room)
   }
 }
 
@@ -262,7 +262,9 @@ export const lampCol = (p: Painter): Rgb => mix(p.pal.light, WARM, 0.55);
 /** A sheet of glass: faint tint, a frame and a diagonal glint. */
 export function glassPane(p: Painter, x: number, y: number, w: number, h: number, tint: Rgb = 0x9ad0e0, frame: Rgb = 0x4a4e54): void {
   p.rect(x, y, w, h, tint, 0.14);
-  p.poly([x + w * 0.15, y, x + w * 0.35, y, x + w * 0.1, y + h, x - w * 0.1 + w * 0.0, y + h].map((v, i) => (i % 2 ? Math.min(y + h, Math.max(y, v)) : Math.min(x + w, Math.max(x, v)))), 0xffffff, 0.08);
+  p.clip(x, y, w, h);
+  p.poly([x + w * 0.15, y, x + w * 0.38, y, x + w * 0.1, y + h, x - w * 0.13, y + h], 0xffffff, 0.08);
+  p.unclip();
   p.rect(x - 0.7, y, 0.9, h, frame);
   p.rect(x + w - 0.2, y, 0.9, h, frame);
   p.rect(x - 0.7, y - 0.7, w + 1.6, 1.1, frame);

@@ -7,6 +7,7 @@ import type { Crowd, CrowdMember, Rest, Spot } from './workSpots';
 import { Body3D, PEOPLE3D, UNITS_PER_M, bodyData, hasSetPoses, ppm, requestSetPoses, type Anim3, type BodyKind } from './people3d';
 import { GFX } from './gfxFeatures';
 import { SlopArea } from './HitSlop'; // [plan4:ST-12]
+import { LOOK_ACTIVITY, LOOK_OUTFIT } from './roomSpecs'; // plan4:BL-7
 
 const SPEED = 24;
 const FLOOR_FRONT = ROOM_H - 3;
@@ -35,6 +36,7 @@ export type Activity = 'idle' | 'water' | 'hammer' | 'wrench' | 'stir' | 'type' 
 
 /** What each room has its workers doing. */
 export const ROOM_ACTIVITY: Partial<Record<BuildingType, Activity>> = {
+  ...(LOOK_ACTIVITY as Partial<Record<BuildingType, Activity>>), // plan4:BL-7 wave 2 rooms (keys not yet building types are harmless)
   farm: 'water', hydroponics: 'water', workshop: 'hammer', armory: 'hammer',
   generator: 'wrench', reactor: 'wrench', waterPump: 'wrench', waterPurifier: 'wrench',
   canteen: 'stir', laboratory: 'type', radioTower: 'type', trainingRoom: 'lift', storage: 'carry', medbay: 'tend',
@@ -62,6 +64,7 @@ const PANTS = [0x2e3a4e, 0x3a3328, 0x2a2a2a, 0x4a4a52, 0x3e3a30];
 
 /** Work clothes: you can tell who does what from across the bunker (worn, sun-starved colours). */
 const JOB_OUTFIT: Partial<Record<BuildingType | 'ruin', Outfit>> = {
+  ...(LOOK_OUTFIT as Partial<Record<BuildingType | 'ruin', Outfit>>), // plan4:BL-7
   farm: { top: 0x74885a, bottom: 0x4a5a72, hat: 'straw', tool: 'can' },
   hydroponics: { top: 0x4c7a66, bottom: 0x2e3a4e, hat: 'cap', tool: 'can' },
   workshop: { top: 0x8a6a4a, bottom: 0x3a3328, hat: null, tool: 'hammer', apron: 0x5a3a22, goggles: true },

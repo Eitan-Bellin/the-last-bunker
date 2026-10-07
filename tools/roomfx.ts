@@ -6,7 +6,7 @@
 import { Application, Container, Text } from 'pixi.js';
 import { ArtLibrary } from '../src/art/ArtLibrary';
 import { HALL_KEYS, PAINTED_TYPES, artEntry, composedKey } from '../src/art/registry';
-import { composedTypes } from '../src/rendering/roomComposer';
+import { composedMeta, composedTypes } from '../src/rendering/roomComposer';
 import { roomSlots } from '../src/data/buildingDefs';
 import { buildPaintedRoom, setRoomFxQuality, type RoomFxQuality } from '../src/rendering/paintedRoom';
 import { ROOM_H, SLAB, SLOT_W } from '../src/rendering/layout';
@@ -33,6 +33,19 @@ async function main(): Promise<void> {
     for (const tier of tiers) keys.push({ key: `rooms/${t}-${tier}`, W: (composedKey(`rooms/${t}-${tier}`)?.slots ?? roomSlots(t as never)) * SLOT_W, H: ROOM_H });
   }
   if (!only || only.includes('halls')) for (const h of HALL_KEYS) keys.push({ key: `halls/${h}`, W: 3 * SLOT_W, H: 2 * ROOM_H + SLAB });
+  // [plan4:BL-6] bake time of every composed room (ms, first request), and the lights / effects / spots / set data of each, for the brief and the perf table.
+  const bake: [string, number][] = [];
+  const metas: Record<string, unknown> = {};
+  for (const k of keys) {
+    const ck = composedKey(k.key);
+    if (ck?.painted !== false) continue;
+    const t0 = performance.now();
+    ArtLibrary.get(k.key);
+    bake.push([k.key, +(performance.now() - t0).toFixed(1)]);
+    metas[k.key] = composedMeta(ck.type, ck.tier, ck.slots);
+  }
+  (window as unknown as { __bake: [string, number][]; __meta: Record<string, unknown> }).__bake = bake;
+  (window as unknown as { __meta: Record<string, unknown> }).__meta = metas;
   await ArtLibrary.preload(keys.map(k => k.key));
   const world = new Container();
   world.scale.set(zoom);
