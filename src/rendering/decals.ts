@@ -151,10 +151,10 @@ function litTint(x: number, y: number, lamps: WorldLamp[], ambient: number): num
 
 /** Which sign suits a column, from the rooms either side of it. */
 function signFor(types: BuildingType[], r: () => number): DecalName {
-  if (types.some(t => t === 'reactor' || t === 'reactorHall')) return 'sign-radiation';
-  if (types.some(t => t === 'generator' || t === 'radioTower')) return 'sign-voltage';
-  if (types.some(t => t === 'waterPump' || t === 'waterPurifier' || t === 'hydroponics' || t === 'farm')) return 'sign-water';
-  if (types.some(t => t === 'storage' || t === 'armory' || t === 'workshop' || t === 'canteen')) return 'sign-nosmoke';
+  if (types.some(t => t === 'reactor' || t === 'reactorHall' || t === 'seedLab' || t === 'quarantineWard' || t === 'decon')) return 'sign-radiation'; // plan4:BL-13 hazard rooms
+  if (types.some(t => t === 'generator' || t === 'radioTower' || t === 'batteryBank' || t === 'dataCenter')) return 'sign-voltage'; // plan4:BL-13
+  if (types.some(t => t === 'waterPump' || t === 'waterPurifier' || t === 'hydroponics' || t === 'farm' || t === 'condenser' || t === 'mushroomFarm' || t === 'aquaculture' || t === 'bathhouse')) return 'sign-water'; // plan4:BL-13
+  if (types.some(t => t === 'storage' || t === 'armory' || t === 'workshop' || t === 'canteen' || t === 'recycler' || t === 'garage' || t === 'library' || t === 'alloyFoundry' || t === 'componentsPlant' || t === 'gatePost')) return 'sign-nosmoke'; // plan4:BL-13
   const any: DecalName[] = ['sign-voltage', 'sign-nosmoke', 'sign-water'];
   return any[Math.floor(r() * any.length)];
 }
