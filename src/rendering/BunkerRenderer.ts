@@ -44,7 +44,8 @@ import { buildAtmosphere, type Atmosphere } from './atmosphere'; // [gfx2 wear]
 import { WingSigns } from './wingSigns'; // [plan4:ST-4]
 import { wingOptions } from './wingsApi'; // [plan4:ST-4] (one-line swap to ../data/wings once it merges)
 import { buildSignage, sprayOutline, steelTag } from './signage';
-import { KIT_KEYS, buildBays,buildCasing, buildFrontStructure, depthGains, structureAmbient, gfx2Enabled, kitReady, kitState, occupancy, type WorldLamp } from './structure';
+import { FrontChunks } from './frontChunks'; // [plan4:ST-7]
+import { KIT_KEYS, buildBays,buildCasing, depthGains, structureAmbient, gfx2Enabled, kitReady, kitState, occupancy, type WorldLamp } from './structure';
 
 
 
@@ -77,7 +78,9 @@ export class BunkerRenderer {
   /** Graphics overhaul switch: the painted structure kit instead of flat shapes. */
   readonly gfx2 = gfx2Enabled();
   private bayHolder = new Container();
-  private front: Animated | null = null;
+  /** [plan4:ST-7] The structure in front of the rooms, in chunks of 4 slots x 3 floors (frontChunks.ts); one manager for the life of the renderer, its chunks outlive a rebuild when unchanged. */
+  private frontChunks = new FrontChunks();
+  private front: FrontChunks | null = null;
   /** [plan4:ST-1] The service galleries between floors (gallery.ts). */
   private galleries: Animated | null = null;
   /** [gfx2 wear] Story-telling decals and the living atmosphere (decals.ts, atmosphere.ts). */
@@ -835,11 +838,12 @@ export class BunkerRenderer {
     if (sig === this.utilitiesSig) return;
     this.utilitiesSig = sig;
     const memorial = this.memorialText(state); // [Danger C5]
+    this.frontChunks.container.parent?.removeChild(this.frontChunks.container); // [plan4:ST-7] the chunks are kept, not destroyed with the rest
     this.utilitiesHolder.removeChildren().forEach(c => c.destroy({ children: true }));
     this.bayHolder.removeChildren().forEach(c => c.destroy({ children: true }));
     this.front = null;
     this.galleries = null;
-    this.frontBands = null;
+    if (!painted) this.frontChunks.clear();
     this.decals = null; // [gfx2 wear]
     this.atmo = null; // [gfx2 wear]
     if (painted) {
@@ -847,10 +851,11 @@ export class BunkerRenderer {
       const grid = occupancy(state.buildings, state.ruins, this.floors, exts);
       this.bayHolder.addChild(buildBays(grid));
       const lamps = this.worldLamps(state);
-      this.front = buildFrontStructure(grid, state.buildings, this.floors, lamps, structureAmbient(this.surfaceEra) /* G4 lighting: era ambient */, kitState(this.surfaceEra));
-      this.utilitiesHolder.addChild(this.group(this.front.container, 'front'));
-      this.frontBands = bandize(this.front.container, 'front', 3 * FLOOR_H, TOPSOIL); // [perf] only the bands the camera sees are drawn
-      this.frontBands.update();
+      // [plan4:ST-7] Describe the structure to the chunk manager: unchanged chunks stay as they are, changed ones are rebuilt lazily when near the camera.
+      this.frontChunks.set(grid, state.buildings, this.floors, lamps, structureAmbient(this.surfaceEra) /* G4 lighting: era ambient */, kitState(this.surfaceEra));
+      this.front = this.frontChunks;
+      this.utilitiesHolder.addChild(this.group(this.frontChunks.container, 'front'));
+      this.frontChunks.update(performance.now());
       // [plan4:ST-1] Service galleries (no-op while the flag is off or fewer than four floors exist).
       this.galleries = buildGalleries(this.floors, exts, kitState(this.surfaceEra), structureAmbient(this.surfaceEra));
       if (this.galleries.container.children.length) this.utilitiesHolder.addChild(this.group(this.galleries.container, 'galleries'));
@@ -1096,7 +1101,7 @@ export class BunkerRenderer {
     if (state.currentFloors !== this.floors || this.structureGloom !== this.gloom || this.undergroundSig !== this.structureSig(state)) this.rebuildStructure(state);
     this.cam.stepCamera(dt); // [camera]
     this.updateView(); // [perf]
-    this.frontBands?.update();
+    this.front?.update(now); // [plan4:ST-7] chunks near the camera are built, the ones in view shown, the far ones given back
     this.updateLod(state, dt);
     this.roomViews.render(state);
     this.renderRuins(state);
@@ -1210,8 +1215,6 @@ export class BunkerRenderer {
   private mapAt = -1;
   /** [perf] The camera is far below the ground: the surface is hidden and not animated (see updateScene). */
   private surfaceOff = false;
-  /** [perf] Band culling of the structure in front of the rooms (see bandize in perfFx.ts). */
-  private frontBands: { update(): void } | null = null;
 
   /** Each era has its own look: the Remnant is cold and drained, the Undercity warm and full. */
   private refreshSurface(): void {

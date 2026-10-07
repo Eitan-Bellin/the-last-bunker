@@ -55,20 +55,20 @@ export function kitReady(): boolean {
 }
 
 /** Slab profile drawn over the floor line: the room's bottom lip plus the slab itself. */
-const LIP = 3;
-const SLAB_DRAW = SLAB + LIP;
-const COLUMN_W = 9;
-const PIPES_Y = 1;
-const PIPES_H = 11;
+export const LIP = 3;
+export const SLAB_DRAW = SLAB + LIP;
+export const COLUMN_W = 9;
+export const PIPES_Y = 1;
+export const PIPES_H = 11;
 /** Ambient occlusion: dark ramp beside every column, contact line where a room floor meets the slab lip. */
-const AO_SIDE = 8;
-const AO_CONTACT = 4;
+export const AO_SIDE = 8;
+export const AO_CONTACT = 4;
 /** Width of the lamp light caught on a column face. */
-const COLUMN_SPILL_W = 10;
+export const COLUMN_SPILL_W = 10;
 /** Brightest a lamp-lit structure tint gets (1 = the kit texture as painted). */
 const LIT_MAX = 1.02;
 /** Ambient lift per kit state, against how dark each kit is painted. */
-const KIT_LIFT: Record<KitState, number> = { R: 1.8, F: 1.25, L: 1 };
+export const KIT_LIFT: Record<KitState, number> = { R: 1.8, F: 1.25, L: 1 };
 
 /**
  * Underground night (gfx-p0 light): 0 = day .. 1 = night, set every frame by PostFX from the bunker clock.
@@ -135,15 +135,15 @@ export function occupancy(buildings: BuildingInstance[], ruins: Ruin[], floors: 
 }
 
 /** Halls on floor f swallow the slab under f (and the ceiling of f+1) across their width. */
-function hallSpans(buildings: BuildingInstance[], floor: number): [number, number][] {
+export function hallSpans(buildings: BuildingInstance[], floor: number): [number, number][] {
   return buildings.filter(b => isHall(b.type) && b.position.floor === floor)
     .map(b => [slotX(b.position.x), slotX(b.position.x) + roomSlots(b.type) * SLOT_W]);
 }
 
-const inSpan = (x0: number, x1: number, spans: [number, number][]) => spans.some(([a, b]) => x0 >= a - 0.5 && x1 <= b + 0.5);
+export const inSpan = (x0: number, x1: number, spans: [number, number][]) => spans.some(([a, b]) => x0 >= a - 0.5 && x1 <= b + 0.5);
 
 /** Segment edges from x0 to x1 that land on the slot grid (so a hall's span is always whole segments). */
-function gridSegments(x0: number, x1: number, step: number, west = false): [number, number][] {
+export function gridSegments(x0: number, x1: number, step: number, west = false): [number, number][] {
   const edges = [x0];
   // [plan4:ST-4] West of the shaft the slot grid is anchored at its west edge (slotX(-1) + SLOT_W = -SHAFT_GAP).
   if (west) {
@@ -672,7 +672,7 @@ export function structureAmbient(era: number): number {
   return ERAS[Math.max(0, Math.min(ERAS.length - 1, era))].ambient;
 }
 
-interface Lit {
+export interface Lit {
   node: Sprite | TilingSprite;
   /** The unlit floor (ambient) and what each nearby lamp adds: pairs of [room index, amount]. */
   base: number;
@@ -681,7 +681,7 @@ interface Lit {
 }
 
 /** What every lamp in reach adds to the light at (x, y), split by the room the lamp hangs in. */
-function lampParts(x: number, y: number, lamps: WorldLamp[], roomIndex: (id?: string) => number): number[] {
+export function lampParts(x: number, y: number, lamps: WorldLamp[], roomIndex: (id?: string) => number): number[] {
   const out: number[] = [];
   for (const l of lamps) {
     const R = l.reach * 1.6;
@@ -694,7 +694,7 @@ function lampParts(x: number, y: number, lamps: WorldLamp[], roomIndex: (id?: st
 }
 
 /** Light level from its parts, with the power ratio, each room's lamp flicker (1 = steady) and the night (unlit parts sink). */
-function lightOf(base: number, parts: number[], power: number, flicker: number[], night = 0): number {
+export function lightOf(base: number, parts: number[], power: number, flicker: number[], night = 0): number {
   let sum = 0;
   for (let i = 0; i < parts.length; i += 2) sum += parts[i + 1] * power * (0.55 + 0.45 * flicker[parts[i]]);
   // Lamp light saturates softly toward full brightness, so a segment between two lamps still reads brighter
@@ -788,401 +788,8 @@ export function depthGains(y: number): [number, number, number] {
   return [k * (1 - cold * (1 - 0x8a / 255)), k * (1 - cold * (1 - 0x9a / 255)), k * (1 - cold * (1 - 0xb0 / 255))];
 }
 
-function shadeAt(v: number, y: number): number {
+export function shadeAt(v: number, y: number): number {
   const [r, g, b] = depthGains(y);
   const c = (k: number) => Math.round(255 * Math.max(0, Math.min(1, v * k)));
   return (c(r) << 16) | (c(g) << 8) | c(b);
-}
-
-/**
- * Everything in front of the rooms: slab profiles, columns where rooms meet, the pipe bundle under each ceiling,
- * soft ambient occlusion where they meet the rooms, and the light the lamps throw on all of it.
- * Rebuilt when the layout changes; per frame only tints and spill alphas move (with power and each room's flicker).
- * Not baked with cacheAsTexture (G9): the whole front batches into ~3 draw calls and hiding it entirely made no
- * measurable difference to the frame time, while a baked texture would cost memory and sharpness at zoom 3.
- */
-export function buildFrontStructure(
-  grid: Grid, buildings: BuildingInstance[], floors: number, lamps: WorldLamp[], ambient: number, st: KitState = 'F',
-): Animated {
-  const root = new Container();
-  root.eventMode = 'none';
-  const slabTex = kitTex('slab', st);
-  const colTex = kitTex('column', st);
-  const pipeTex = kitTex('pipes', st);
-  // The wrecked and patched kits are painted much darker than the cared-for one (slab luminance ~23 / 40 / 55),
-  // so their unlit floor is lifted to keep the structure readable on a phone while the eras still step darker.
-  const lift = KIT_LIFT[st];
-  const lit: Lit[] = [];
-  const spill = new Container();
-  spill.blendMode = 'add';
-  const ao = new Container();
-  const rnd = seeded(9137);
-
-  // Rooms whose lamps light the structure; their flicker is read back every frame.
-  const roomIds = [...new Set(lamps.map(l => l.room).filter((r): r is string => !!r))];
-  const NONE = roomIds.length;
-  const roomIdx = new Map(roomIds.map((r, i) => [r, i]));
-  const roomIndex = (id?: string) => (id ? roomIdx.get(id) ?? NONE : NONE);
-  const flicker: number[] = new Array(roomIds.length + 1).fill(1);
-
-  const add = (tex: Texture, x: number, y: number, w: number, h: number, scale: number, cx: number, cy: number, lampGain = 1, baseGain = 1) => {
-    const t = new TilingSprite({ texture: tex, width: w, height: h });
-    t.position.set(x, y);
-    t.tileScale.set(scale);
-    // Keep the pattern continuous across segments.
-    t.tilePosition.set(-x, 0);
-    const parts = lampParts(cx, cy, lamps, roomIndex);
-    for (let i = 1; i < parts.length; i += 2) parts[i] *= lampGain;
-    const node: Lit = { node: t, base: Math.min(0.9, ambient * lift * baseGain), parts, y: cy };
-    lit.push(node);
-    t.tint = shadeAt(lightOf(node.base, node.parts, 1, flicker), cy);
-    root.addChild(t);
-    return t;
-  };
-  // A painted overlay lit like the structure (the slab nosing).
-  const addLit = (tex: Texture, x: number, y: number, w: number, h: number, cx: number, cy: number, lampGain: number, baseGain: number) => {
-    const sp = new Sprite(tex);
-    sp.position.set(x, y);
-    sp.width = w;
-    sp.height = h;
-    const parts = lampParts(cx, cy, lamps, roomIndex);
-    for (let i = 1; i < parts.length; i += 2) parts[i] *= lampGain;
-    const node: Lit = { node: sp, base: Math.min(0.9, ambient * lift * baseGain), parts, y: cy };
-    lit.push(node);
-    sp.tint = shadeAt(lightOf(node.base, node.parts, 1, flicker), cy);
-    root.addChild(sp);
-  };
-  const shade = (tex: Texture, x: number, y: number, w: number, h: number, alpha: number, flipX = false) => {
-    const s = new Sprite(tex);
-    s.tint = 0x000000;
-    s.alpha = alpha;
-    s.width = w;
-    s.height = h;
-    s.position.set(x, y);
-    if (flipX) {
-      s.scale.x *= -1;
-      s.x += w;
-    }
-    ao.addChild(s);
-  };
-
-  // Pipe bundle under every ceiling (none where a hall from the level above passes through).
-  if (pipeTex) {
-    for (let f = 0; f < floors; f++) {
-      const spans = hallSpans(buildings, f - 1);
-      const y = floorTop(f) + PIPES_Y;
-      const { w: ew, e: ee } = grid.ext[f];
-      // [plan4:ST-4] The mains split at the shaft: east of it as ever, and the west wing's bundle runs the other way.
-      const runs: [number, number][] = gridSegments(SHAFT_W - 20, slotX(ee) + 6, SLOT_W / 2);
-      if (ew > 0) runs.push(...gridSegments(slotX(-ew) - 6, 20, SLOT_W / 2, true));
-      for (const [x, x1] of runs) {
-        const w = x1 - x;
-        if (inSpan(x, x1, spans)) continue;
-        add(pipeTex, x, y, w, PIPES_H, PIPES_H / pipeTex.height, x + w / 2, y + PIPES_H / 2);
-      }
-    }
-  }
-
-  // Shadow under each slab and pipe run falls into the room below (one smooth gradient per run, gfx-p0 light);
-  // a dark contact line where the room floor meets the slab lip.
-  const fadeV = softTexture('fadeV');
-  const drop = softTexture('drop');
-  for (let f = 0; f < floors; f++) {
-    const top = floorTop(f);
-    const above = hallSpans(buildings, f - 1);
-    const below = hallSpans(buildings, f);
-    let run0 = -1;
-    let run1 = -1;
-    const flush = () => {
-      if (run1 > run0) shade(drop, run0, top + PIPES_Y + PIPES_H, run1 - run0, 15, 0.36);
-      run0 = run1 = -1;
-    };
-    const { w: ew, e: ee } = grid.ext[f];
-    for (const half of [gridSegments(ROOMS_X, slotX(ee), SLOT_W), ...(ew > 0 ? [gridSegments(slotX(-ew), -SHAFT_GAP, SLOT_W, true)] : [])]) {
-      for (const [x0, x1] of half) {
-        if (!inSpan(x0, x1, above)) {
-          if (run0 < 0) run0 = x0;
-          run1 = x1;
-        } else flush();
-        if (!inSpan(x0, x1, below)) shade(fadeV, x0, top + ROOM_H - LIP - AO_CONTACT, x1 - x0, AO_CONTACT, 0.62 + rnd() * 0.15);
-      }
-      flush();
-    }
-  }
-  root.addChildAt(ao, 0);
-
-  if (slabTex) {
-    const scale = SLAB_DRAW / slabTex.height;
-    const lip = softTexture('lip');
-    const endFade = softTexture('fadeH');
-    // The roof slab under the topsoil, then one under every level.
-    const lines = [{ y: TOPSOIL - SLAB - LIP, spans: [] as [number, number][], ext: slabExt(grid.ext, floors, 0) }];
-    for (let f = 0; f < floors; f++) lines.push({ y: floorTop(f) + ROOM_H - LIP, spans: hallSpans(buildings, f), ext: slabExt(grid.ext, floors, f + 1) });
-    for (const line of lines) {
-      // [plan4:ST-6] A slab reaches as far as the wider of the two rows it joins (a concrete shoulder where they differ), and ends in the casing walls.
-      const sx0 = (line.ext.w > 0 ? slotX(-line.ext.w) : 0) - 12, sx1 = slotX(line.ext.e) + 12;
-      for (const [x, x1] of gridSegments(sx0, sx1, SLOT_W, line.ext.w > 0)) {
-        const w = x1 - x;
-        if (inSpan(x, x1, line.spans)) continue;
-        add(slabTex, x, line.y, w, SLAB_DRAW, scale, x + w / 2, line.y + SLAB_DRAW / 2);
-        // gfx-p0 light: the nosing catches the lamps of the room standing on it.
-        addLit(lip, x, line.y, w, 6, x + w / 2, line.y - 6, 1.5, 0.95);
-      }
-      // The slab ends bear into the casing walls: a soft dark where they enter.
-      for (const [ex, flip] of [[sx0, false], [sx1 - 5, true]] as [number, boolean][]) {
-        const cap = new Sprite(endFade);
-        cap.tint = 0x000000;
-        cap.alpha = 0.6;
-        cap.width = 5;
-        cap.height = SLAB_DRAW;
-        cap.position.set(ex, line.y);
-        if (flip) {
-          cap.scale.x *= -1;
-          cap.x += 5;
-        }
-        root.addChild(cap);
-      }
-    }
-  }
-
-  // Lamp light spilling onto the ceiling pipes, the floor slab and the column faces next to the lamps.
-  const spills: { s: Sprite; a: number; room: number }[] = [];
-  // gfx-p0 light: warm night guide lights at the column feet (fixture always there, lit only at night).
-  const guides: { s: Sprite; a: number }[] = [];
-  const fixtures = new Graphics();
-  const guide = (x: number, floorY: number) => {
-    const fy = floorY - 13;
-    fixtures.rect(x - 2.4, fy - 1.3, 4.8, 2.8).fill(0x1e1c1a);
-    fixtures.rect(x - 1.7, fy - 0.5, 3.4, 1.3).fill(0x6a4420);
-    for (const [tint, w, h, y, a] of [[0xffc878, 6, 3.5, fy + 0.2, 0.9], [0xff9a3c, 30, 22, fy + 5, 0.42], [0xff9040, 46, 8, floorY + 0.5, 0.38]]) {
-      const g = new Sprite(glow);
-      g.anchor.set(0.5);
-      g.tint = tint;
-      g.width = w;
-      g.height = h;
-      g.position.set(x, y);
-      g.alpha = 0;
-      g.visible = false;
-      spill.addChild(g);
-      guides.push({ s: g, a });
-    }
-  };
-  const glow = glowTexture();
-  const streak = softTexture('streak');
-
-  // [plan4:ST-6] The dug end of a wing: a timber post with a cap beam and a diagonal brace instead of a steel column, and a soft marker lamp (one slow
-  // breath, never a hard flicker) so the end of the dig can be found from afar. Static drawing; only the lamp's alpha moves.
-  const timbers = new Container();
-  const markers: { s: Sprite; ph: number }[] = [];
-  const woodAt = (c: number, y: number) => {
-    const [r, g, b] = depthGains(y);
-    const ch = (sh: number, k: number) => Math.round(Math.min(255, ((c >> sh) & 255) * k * (0.55 + 0.45 * ambient * lift)));
-    return (ch(16, r) << 16) | (ch(8, g) << 8) | ch(0, b);
-  };
-  // [plan4:ST-4] The west landing door: where the shaft meets the west wing the column becomes a steel doorframe, a lit passage and a door leaf ajar.
-  const doorFrame = (x: number, top: number) => {
-    const my = top + ROOM_H / 2;
-    const dg = new Graphics();
-    timbers.addChild(dg);
-    const y0 = top + PIPES_Y + PIPES_H - 3, y1 = top + ROOM_H - LIP + 1;
-    const steel = (c: number) => woodAt(c, my);
-    dg.rect(x - 4.8, y0 + 6, 9.6, y1 - y0 - 6).fill(0x120f0b);
-    dg.rect(x - 4.8, y0 + 6 + (y1 - y0 - 6) * 0.4, 9.6, (y1 - y0 - 6) * 0.6).fill({ color: 0x9a6a30, alpha: 0.4 });
-    dg.poly([x - 4.8, y0 + 8, x - 0.4, y0 + 10.5, x - 0.4, y1 - 1, x - 4.8, y1]).fill(steel(0x6a6e72));
-    dg.poly([x - 4.8, y0 + 8, x - 3.6, y0 + 8.6, x - 3.6, y1 - 0.4, x - 4.8, y1]).fill({ color: 0xd8d8d0, alpha: 0.22 });
-    dg.circle(x - 1.8, y0 + (y1 - y0) * 0.55, 0.9).fill(0x1c1d1e);
-    dg.rect(x - 6.6, y0, 2.4, y1 - y0).fill(steel(0x8a8f94));
-    dg.rect(x + 4.2, y0, 2.4, y1 - y0).fill(steel(0x7a7f84));
-    dg.rect(x - 6.6, y0, 0.8, y1 - y0).fill({ color: 0xffffff, alpha: 0.16 });
-    dg.rect(x - 7.6, y0 - 1.5, 15.2, 7.5).fill(steel(0x8a8f94));
-    dg.rect(x - 7.6, y0 - 1.5, 15.2, 1.1).fill({ color: 0xffffff, alpha: 0.2 });
-    dg.rect(x - 7.6, y0 + 4.6, 15.2, 1.4).fill({ color: 0x000000, alpha: 0.4 });
-    dg.circle(x, y0 + 2.2, 1.5).fill(0x2a1e10);
-    dg.circle(x, y0 + 2.2, 1.0).fill(0x6cff7a);
-    for (const bx of [x - 6, x + 6]) dg.circle(bx, y0 + 1, 0.6).fill(0x2a2a28);
-    const glowS = new Sprite(glow);
-    glowS.anchor.set(0.5);
-    glowS.tint = 0xffb868;
-    glowS.blendMode = 'add';
-    glowS.alpha = 0.3;
-    glowS.width = 30;
-    glowS.height = 40;
-    glowS.position.set(x + 2, y0 + (y1 - y0) * 0.65);
-    spill.addChild(glowS);
-  };
-  const timberEnd = (x: number, top: number, dir: 1 | -1) => {
-    const my = top + ROOM_H / 2;
-    const tg = new Graphics(); // one per end, so the front's bands can cull them with their floor
-    timbers.addChild(tg);
-    const post = (px: number, w: number, y0: number, y1: number) => {
-      tg.rect(px - w / 2, y0, w, y1 - y0).fill(woodAt(0x5a4228, my));
-      tg.rect(px - w / 2 + (dir > 0 ? 0 : w - 1.6), y0, 1.6, y1 - y0).fill({ color: woodAt(0x9a7a4c, my), alpha: 0.75 });
-      for (let g = 0; g < 3; g++) tg.rect(px - w / 2 + 1.2 + g * (w / 3.2), y0 + 1, 0.5, y1 - y0 - 2).fill({ color: 0x1c140c, alpha: 0.4 });
-    };
-    const yTop = top + PIPES_Y + PIPES_H - 3, yBot = top + ROOM_H - LIP + 2;
-    post(x, 7.5, yTop, yBot);
-    // Cap beam into the room and a brace under it.
-    const bx0 = dir > 0 ? x - 3 : x - 18, bx1 = dir > 0 ? x + 18 : x + 3;
-    tg.rect(bx0, yTop - 1, bx1 - bx0, 5.5).fill(woodAt(0x654a2c, my));
-    tg.rect(bx0, yTop - 1, bx1 - bx0, 1.4).fill({ color: woodAt(0xa88458, my), alpha: 0.7 });
-    tg.rect(bx0, yTop + 3.6, bx1 - bx0, 1.2).fill({ color: 0x000000, alpha: 0.35 });
-    const bxA = x + dir * 3, bxB = x + dir * 15;
-    tg.poly([bxA, yTop + 26, bxA + dir * 2.6, yTop + 26, bxB + dir * 2.6, yTop + 5, bxB, yTop + 5]).fill(woodAt(0x4e3a22, my));
-    // A footing plate, wedges and a stack of shoring boards at the foot.
-    tg.rect(x - 6, yBot - 3, 12, 4).fill(0x26282a);
-    tg.rect(x - 6, yBot - 3, 12, 1).fill({ color: 0x8a8f94, alpha: 0.35 });
-    for (let k = 0; k < 3; k++) tg.rect(x + dir * (6 + k * 2.6), yBot - 2 - k * 1.8, 6, 1.7).fill(woodAt(0x6a5030, my));
-    // The marker lamp: a caged bulb on the beam, with a halo.
-    const lx = x + dir * 8, ly = yTop + 9;
-    tg.rect(lx - 2.6, ly - 2.4, 5.2, 5).fill(0x15130f);
-    tg.rect(lx - 1.8, ly - 1.6, 3.6, 3.2).fill(0xb87430);
-    tg.rect(lx - 2.6, ly - 2.4, 5.2, 0.7).fill({ color: 0x8a8a80, alpha: 0.4 });
-    const halo = new Sprite(glow);
-    halo.anchor.set(0.5);
-    halo.tint = 0xffa24a;
-    halo.blendMode = 'add';
-    halo.width = 44;
-    halo.height = 34;
-    halo.alpha = 0.5;
-    halo.position.set(lx, ly);
-    spill.addChild(halo);
-    markers.push({ s: halo, ph: (x * 0.013 + top * 0.007) % 6.28 });
-  };
-
-  if (colTex) {
-    const scale = COLUMN_W / colTex.width;
-    const fadeH = softTexture('fadeH');
-    const blob = softTexture('blob');
-    for (let f = 0; f < floors; f++) {
-      const top = floorTop(f);
-      const row = grid[f];
-      const { w: ew, e: ee } = grid.ext[f];
-      // [plan4:ST-4] Columns stand at the ends of the floor, either side of the shaft, and wherever two different rooms meet; `l` / `r` say which sides
-      // have a room against them, `open` marks the dug end of a wing (timber, not steel).
-      const xs: { x: number; l: boolean; r: boolean; open: boolean; door?: boolean }[] = [
-        { x: ROOMS_X, l: false, r: true, open: false }, { x: slotX(ee), l: true, r: false, open: ee > BASE_EAST },
-      ];
-      for (let i = 1; i < row.length; i++) {
-        const sl = i - ew;
-        if (sl === 0) continue; // the shaft stands between the last west slot and slot 0
-        const a = row[i - 1], b = row[i];
-        if ((a || b) && a?.key !== b?.key) xs.push({ x: slotX(sl), l: true, r: true, open: false });
-      }
-      if (ew > 0) xs.push({ x: slotX(-ew), l: false, r: true, open: true }, { x: -SHAFT_GAP, l: true, r: false, open: false, door: true });
-      const ceil = top + PIPES_Y + PIPES_H;
-      const floorY = top + ROOM_H - LIP;
-      const above = hallSpans(buildings, f - 1);
-      const below = hallSpans(buildings, f);
-      const floorLamps = lamps.filter(l => floorAtY(l.y).floor === f);
-      for (const col of xs) {
-        const x = col.x;
-        // The lamps hang inside the rooms, so the column's front face only catches grazing light: half the lamp light
-        // and a little less ambient,
-        // plus a warm rim on the side facing each lamp (below).
-        if (col.open) timberEnd(x, top, x < 0 ? 1 : -1);
-        else if (col.door) doorFrame(x, top);
-        else {
-          const c = add(colTex, x - COLUMN_W / 2, top - 1, COLUMN_W, ROOM_H + 2, scale, x, top + ROOM_H / 2, 0.5, 0.8);
-          c.tilePosition.set(0, 0);
-        }
-        // Base and cap plates where the column meets the slabs.
-        const plates = new Graphics();
-        for (const py of [top + PIPES_Y + PIPES_H - 1, top + ROOM_H - LIP - 4]) {
-          plates.rect(x - COLUMN_W / 2 - 1.5, py, COLUMN_W + 3, 4).fill(0x26282a);
-          plates.rect(x - COLUMN_W / 2 - 1.5, py, COLUMN_W + 3, 1).fill({ color: 0x8a8f94, alpha: 0.35 });
-        }
-        root.addChild(plates);
-        for (const side of [-1, 1] as const) {
-          const edge = x + side * COLUMN_W / 2;
-          // The outer walls only have a room on their inner side.
-          if (side < 0 ? !col.l : !col.r) continue;
-          // Ambient occlusion: the room darkens toward the column, most of all in the corners.
-          shade(fadeH, side < 0 ? edge - AO_SIDE : edge, ceil, AO_SIDE, floorY - ceil, 0.55, side < 0);
-          const cx = edge + side * 2;
-          if (!inSpan(cx - 1, cx + 1, above)) shade(blob, cx - 14, ceil - 9, 28, 24, 0.62);
-          if (!inSpan(cx - 1, cx + 1, below)) shade(blob, cx - 14, floorY - 15, 28, 24, 0.68);
-          // Light from the lamps on this side catches the column face.
-          let strength = 0;
-          let best: WorldLamp | null = null;
-          let bestV = 0;
-          for (const l of floorLamps) {
-            if (Math.sign(l.x - x) !== side) continue;
-            const R = l.reach * 0.9;
-            const d = Math.abs(l.x - x);
-            if (d >= R) continue;
-            const v = l.power * (1 - d / R) ** 2;
-            strength += v;
-            if (v > bestV) {
-              bestV = v;
-              best = l;
-            }
-          }
-          if (!best || strength < 0.05) continue;
-          const s = new Sprite(streak);
-          s.anchor.set(0.5, 0);
-          s.tint = best.color;
-          s.width = COLUMN_SPILL_W;
-          s.height = floorY - ceil + 6;
-          s.position.set(x + side * (COLUMN_W / 2 - 2), ceil - 3);
-          spill.addChild(s);
-          spills.push({ s, a: 0.3 * Math.min(1, strength * 3), room: roomIndex(best.room) });
-        }
-        if (!inSpan(x - 1, x + 1, below) && rnd() < 0.75) guide(x, floorY);
-      }
-    }
-    root.addChild(fixtures);
-    root.addChild(timbers);
-  }
-
-  for (const l of lamps) {
-    if (!l.ceiling) continue;
-    const f = floorAtY(l.y).floor;
-    const top = floorTop(f);
-    const room = roomIndex(l.room);
-    const ceil = new Sprite(glow);
-    ceil.anchor.set(0.5);
-    ceil.tint = l.color;
-    ceil.width = l.reach * 0.95;
-    ceil.height = 22;
-    ceil.position.set(l.x, top + PIPES_Y + PIPES_H / 2);
-    spill.addChild(ceil);
-    spills.push({ s: ceil, a: 0.3 * l.power, room });
-    const pool = new Sprite(glow);
-    pool.anchor.set(0.5);
-    pool.tint = l.color;
-    pool.width = l.reach * 0.85;
-    pool.height = 12;
-    pool.position.set(l.x, top + ROOM_H);
-    spill.addChild(pool);
-    spills.push({ s: pool, a: 0.2 * l.power, room });
-  }
-  root.addChild(spill);
-
-  let lastPower = -1;
-  let lastNight = -1;
-  return {
-    container: root,
-    animate: (t, power) => {
-      const night = nightLight.k;
-      let changed = Math.abs(power - lastPower) >= 0.01 || Math.abs(night - lastNight) >= 0.01;
-      for (let i = 0; i < NONE; i++) {
-        const v = roomFlicker.get(roomIds[i]) ?? 1;
-        if (v !== flicker[i]) {
-          flicker[i] = v;
-          changed = true;
-        }
-      }
-      for (const sp of spills) sp.s.alpha = sp.a * power * flicker[sp.room];
-      for (const m of markers) m.s.alpha = (0.42 + 0.14 * Math.sin(t * 1.1 + m.ph)) * (0.6 + 0.4 * power); // [plan4:ST-6] one slow breath, no hard flicker
-      for (const g of guides) {
-        const a = g.a * night * (0.5 + 0.5 * power);
-        g.s.alpha = a;
-        g.s.visible = a > 0.004;
-      }
-      if (!changed) return;
-      lastPower = power;
-      lastNight = night;
-      for (const l of lit) l.node.tint = shadeAt(lightOf(l.base, l.parts, power, flicker, night), l.y);
-    },
-  };
 }
