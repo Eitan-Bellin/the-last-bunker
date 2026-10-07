@@ -8,6 +8,9 @@ import { BUILDING_ICONS, RESOURCE_ICONS, costRow, el } from '../../ui/dom';
 import type { BuildingType, GameState, Position, ResourceType } from '../../core/GameState';
 import { roomFloors, roomSlots } from '../../data/buildingDefs';
 import { PlacementBar, type Chip } from '../components/PlacementBar'; // [plan4:ST-19]
+import { DropChip } from '../components/DropChip'; // [plan4:UX-20]
+import { getHudInsets } from '../../utils/hudInsets';
+import { RUIN_KINDS } from '../../data/ruins';
 import type { PlaceBlock } from '../../systems/BuildingSystem';
 import { bestSpot, floorRangesLabel, nameOf, nearestSpot, placeEffects, spotForTap, validSpots } from '../../systems/placementRank';
 import { RELOCATE_SECONDS, relocateBlock, relocateCost, stateWithout } from '../../systems/relocate';
@@ -151,7 +154,7 @@ export class WorldController {
   private reasonText(block: PlaceBlock | 'same', type: BuildingType): string {
     const state = this.app.state;
     const def = getDef(type);
-    if (block === 'zone') return i18n.t('placement.r.zone', { floors: floorRangesLabel(allowedFloors(type, state.currentFloors)) });
+    if (block === 'zone') return i18n.t('placement.r.zone', { floors: `\u2066${floorRangesLabel(allowedFloors(type, state.currentFloors))}\u2069` }); // LRI..PDI keeps "B3–B14" in one piece inside a Hebrew line
     if (block === 'adjacency') {
       const need = def?.place?.adjacentTo;
       return i18n.t('placement.r.adjacency', { room: need ? nameOf(need, i18n.currentLocale) : '' });
@@ -278,7 +281,23 @@ export class WorldController {
     return true;
   }
 
-  /** Long press on a room: its action sheet (Move; Open). The room's panel has no "Move" button of its own yet. */
+  /** Starts moving a finished room: closes the sheets and opens the placement console for it (what a "Move" button in the room panel calls). false = refused (a toast says why). */
+  beginRelocate(buildingId: string): boolean {
+    const app = this.app;
+    const b = app.state.buildings.find(x => x.id === buildingId);
+    if (!b) return false;
+    const block = relocateBlock(app.state, b);
+    if (block) {
+      app.toasts.show(`[[warning]] ${i18n.t(`relocate.blocked.${block}`)}`, 'bad');
+      return false;
+    }
+    app.modal.hide();
+    app.closeSheets();
+    this.startPlacement(b.type, b.id);
+    return true;
+  }
+
+  /** Long press on a room: its action sheet (Move). The room's panel has no "Move" button of its own yet (see beginRelocate). */
   roomActions(buildingId: string): void {
     const app = this.app;
     if (app.placementMode || app.modal.isVisible || app.introPlaying) return;
@@ -298,7 +317,7 @@ export class WorldController {
       actions: [
         {
           label: i18n.t('relocate.button'), className: 'btn-primary', disabled: !!block, detail: costRow(app.state, cost),
-          onClick: () => { app.modal.hide(); app.closeSheets(); this.startPlacement(b.type, b.id); },
+          onClick: () => { this.beginRelocate(b.id); },
         },
         { label: i18n.t('placement.cancel'), className: 'btn-secondary', onClick: () => app.modal.hide() },
       ],
@@ -382,6 +401,38 @@ export class WorldController {
     }, 650);
   }
 
+  // ───────────────────────────── [plan4:UX-20] carrying a survivor: the label and ring over the room under them ─────────────────────────────
+
+  private dropChip: DropChip | null = null;
+
+  /** The carried survivor hovers over a room or ruin (or nothing): ring it (green: takes them, red: does not) and say so in a label that follows the finger. */
+  hoverPerson(survivorId: string, targetId: string | null, sx: number, sy: number): void {
+    const app = this.app;
+    const state = app.state;
+    const s = state.survivors.find(x => x.id === survivorId);
+    const clear = (): void => { app.renderer.setDropRing(null, true); this.dropChip?.hide(); };
+    if (!s || !targetId) { clear(); return; }
+    const chip = this.dropChip ?? (this.dropChip = new DropChip());
+    let ok = true;
+    let text = '';
+    if (targetId.startsWith('r_')) {
+      const ruin = state.ruins.find(r => r.id === targetId);
+      if (!ruin) { clear(); return; }
+      text = i18n.t('drag.moveToRuin', { room: RUIN_KINDS[ruin.kind]?.name[i18n.currentLocale] ?? '' });
+    } else {
+      const b = state.buildings.find(x => x.id === targetId);
+      const def = b ? getDef(b.type) : undefined;
+      if (!b || !def) { clear(); return; }
+      const room = def.name[i18n.currentLocale] ?? def.name.en;
+      if (def.maxWorkers === 0 && !s.child) { ok = false; text = i18n.t('drag.noJobs'); }
+      else if (s.assignedBuildingId === b.id) { ok = false; text = i18n.t('drag.same', { ...app.gOf(s) }); }
+      else if (!app.engine.populationSystem.canAssign(state, b.id, !!s.child)) { ok = false; text = i18n.t('drag.full', { room }); }
+      else text = i18n.t('drag.moveTo', { room });
+    }
+    app.renderer.setDropRing(targetId, ok);
+    chip.show(text, ok, sx, sy, getHudInsets().top);
+  }
+
   /** Dropping a carried survivor on a room puts them to work there. */
   dropSurvivor(survivorId: string, targetId: string | null): void {
     const state = this.app.state;
@@ -398,6 +449,7 @@ export class WorldController {
       }
       if (!this.app.engine.restorationSystem.assign(targetId, survivorId)) {
         this.app.audio.play('error');
+        haptic('error');
         this.app.toasts.show(`[[warning]] ${i18n.t('people.full')}`, 'bad');
         return;
       }
@@ -408,11 +460,13 @@ export class WorldController {
       const def = getDef(b.type);
       if (!def || def.maxWorkers === 0) {
         this.app.audio.play('error');
+        haptic('error');
         this.app.toasts.show(`[[warning]] ${i18n.t('drag.noJobs')}`, 'bad');
         return;
       }
       if (!ps.assignSurvivorToBuilding(this.app.engine.stateManager, survivorId, targetId)) {
         this.app.audio.play('error');
+        haptic('error');
         this.app.toasts.show(`[[warning]] ${i18n.t('drag.full', { room: def.name[i18n.currentLocale] ?? def.name.en })}`, 'bad');
         return;
       }

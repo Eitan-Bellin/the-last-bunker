@@ -85,7 +85,7 @@ export class PlacementController {
     if (this.floorCount <= 0) return false;
     let w = 0, e = BASE_EAST;
     for (let f = 0; f < this.floorCount; f++) { const x = this.extentOf(f); if (x.w > w) w = x.w; if (x.e > e) e = x.e; }
-    return px >= slotX(-w) - 8 && px <= slotX(e) + 4 && py >= floorTop(0) - 6 && py <= floorTop(this.floorCount - 1) + ROOM_H + SLAB;
+    return px >= (w > 0 ? slotX(-w) : 0) - 8 && px <= slotX(e) + 4 && py >= floorTop(0) - 6 && py <= floorTop(this.floorCount - 1) + ROOM_H + SLAB;
   }
 
   setHighlight(isValid: ((pos: Position) => boolean) | null, levels: number, floors: number): void {

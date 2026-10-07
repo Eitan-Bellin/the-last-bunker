@@ -67,7 +67,8 @@ export interface CameraHost {
   /** Pointer id of the survivor being carried by the player, or null. */
   carryPointer(): number | null;
   moveCarried(sx: number, sy: number): void;
-  endCarry(sx: number, sy: number): void;
+  /** `overHud`: the finger was let go over a HUD element (DOM above the canvas), not over the picture. */
+  endCarry(sx: number, sy: number, overHud?: boolean): void;
   /** Cancels the press-and-hold that would lift a survivor. */
   cancelPress(): void;
   /** [plan4:ST-19] A quick tap on the canvas (not a drag), in canvas px; true when something took it. Optional. */
@@ -326,7 +327,8 @@ export class CameraController {
       const carry = host.carryPointer();
       if (carry !== null && (e.pointerId === carry || !this.pointers.size)) {
         const r = canvas.getBoundingClientRect();
-        host.endCarry(e.clientX - r.left, e.clientY - r.top);
+        const under = document.elementFromPoint(e.clientX, e.clientY);
+        host.endCarry(e.clientX - r.left, e.clientY - r.top, !!under && under !== canvas); // [plan4:UX-20] over the HUD = cancel
       }
       if (!known) return;
       if (this.pinch) {

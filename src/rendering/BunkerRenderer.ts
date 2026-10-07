@@ -1,6 +1,6 @@
 import { Application, ColorMatrixFilter, Container, Graphics, Rectangle, Text } from 'pixi.js';
 import { CameraController, FAR_ZOOM, hudBottom, hudTop } from './CameraController'; // [plan4 X-1]
-import { PlacementController } from './PlacementController'; // [plan4 X-1]
+import { PlacementController, dashedRect } from './PlacementController'; // [plan4 X-1]
 import { PlacementGhost } from './PlacementGhost'; // [plan4:ST-19]
 import { RoomViews, type RoomView, type RuinView } from './RoomViews'; // [plan4 X-1]
 import type { IconName } from '../ui/icons';
@@ -160,6 +160,12 @@ export class BunkerRenderer {
   onPlacementEmptyTap: (() => void) | null = null;
   /** [plan4:UX-20] A survivor was lifted by the player (haptics hook). */
   onPersonLift: ((survivorId: string) => void) | null = null;
+  /** [plan4:UX-20] The carried survivor is over a room or ruin (id) or over nothing (null); (sx, sy) = the finger in canvas px. Called on every move so the label follows. */
+  onPersonHover: ((survivorId: string, targetId: string | null, sx: number, sy: number) => void) | null = null;
+  /** [plan4:UX-20] Ring around the room or ruin the carried survivor would be dropped on. */
+  private readonly dropRing = new Graphics();
+  private dropRingSig = '';
+  private hoverId: string | null = null;
 
   constructor() {
     const r = this;
@@ -183,7 +189,7 @@ export class BunkerRenderer {
       targetAt: (sx, sy) => r.targetAt(sx, sy),
       carryPointer: () => (r.drag ? r.drag.pointerId : r.ghostDrag ? r.ghostDrag.pointerId : null),
       moveCarried: (sx, sy) => { if (r.ghostDrag) r.moveGhostTo(sx, sy); else r.movePersonTo(sx, sy); },
-      endCarry: (sx, sy) => { if (r.ghostDrag) r.endGhostDrag(); else r.endDrag(sx, sy); },
+      endCarry: (sx, sy, overHud) => { if (r.ghostDrag) r.endGhostDrag(); else r.endDrag(sx, sy, overHud); },
       cancelPress: () => window.clearTimeout(r.pressTimer),
       canvasTap: (sx, sy) => r.onCanvasTap(sx, sy), // [plan4:ST-19]
     });
@@ -464,6 +470,9 @@ export class BunkerRenderer {
       this.labelLayer, this.incidents.badges, this.ghost.layer,
     );
     this.ghost.onDown = (e, gx, gy) => this.beginGhostDrag(e.pointerId, gx, gy); // [plan4:ST-19]
+    this.dropRing.eventMode = 'none';
+    this.dropRing.zIndex = 9000; // under the carried survivor (9999), over the rooms
+    this.fxLayer.addChild(this.dropRing);
     this.app.stage.addChild(this.worldContainer);
     this.worldContainer.filters = [this.grade];
     this.surfaceHolder.addChild(this.surface.container);
@@ -775,6 +784,7 @@ export class BunkerRenderer {
         person.container.zIndex = 9999;
         this.cam.pointerDown = false;
         this.movePersonTo(e.global.x, e.global.y);
+        this.onPersonLift?.(survivorId); // [plan4:UX-20] haptic impact on the lift
       }, 260);
     });
     person.container.on('pointerup', () => {
@@ -784,11 +794,39 @@ export class BunkerRenderer {
     person.container.on('pointerupoutside', () => window.clearTimeout(this.pressTimer));
   }
 
+  /** [plan4:UX-20] The carried survivor hovers this many screen px above the finger, so the hand does not hide them or the room they are over. */
+  private static readonly LIFT_PX = 44;
+
   private movePersonTo(sx: number, sy: number): void {
     if (!this.drag) return;
-    const p = this.worldContainer.toLocal({ x: sx, y: sy });
-    this.drag.person.container.position.set(p.x, p.y + 22);
+    // The feet are 44 screen px above the fingertip (at any zoom); the room under the feet is the drop target.
+    const p = this.worldContainer.toLocal({ x: sx, y: sy - BunkerRenderer.LIFT_PX });
+    this.drag.person.container.position.set(p.x, p.y);
     this.drag.person.container.scale.set(1.25);
+    this.hoverId = this.targetAt(sx, sy - BunkerRenderer.LIFT_PX);
+    this.onPersonHover?.(this.drag.survivorId, this.hoverId, sx, sy);
+  }
+
+  /** [plan4:UX-20] A ring round a room or ruin (green, solid: it takes the survivor; red, dashed: it does not); null clears it. */
+  setDropRing(targetId: string | null, ok: boolean): void {
+    const sig = `${targetId ?? ''}|${ok}`;
+    if (sig === this.dropRingSig) return;
+    this.dropRingSig = sig;
+    const g = this.dropRing;
+    g.clear();
+    if (!targetId) return;
+    const room = this.views.get(targetId);
+    const ruin = this.ruinViews.get(targetId);
+    const x = room ? room.root.x : ruin ? ruin.root.x : 0, y = room ? room.root.y : ruin ? ruin.root.y : 0;
+    const w = room ? room.width : ruin ? ruin.width : 0, h = room ? room.height : ROOM_H;
+    if (w <= 0) return;
+    const c = statusTint(ok ? 'ok' : 'bad');
+    g.rect(x, y, w, h).fill({ color: c, alpha: 0.14 });
+    if (ok) g.rect(x + 1.5, y + 1.5, w - 3, h - 3).stroke({ color: c, alpha: 0.95, width: 3 });
+    else {
+      dashedRect(g, x + 1.5, y + 1.5, w - 3, h - 3, 9, 5);
+      g.stroke({ color: c, alpha: 0.95, width: 3 });
+    }
   }
 
   /** Which room or ruin is under a screen point (for drops). */
@@ -803,13 +841,17 @@ export class BunkerRenderer {
     return null;
   }
 
-  private endDrag(sx: number, sy: number): void {
+  private endDrag(sx: number, sy: number, overHud = false): void {
     const d = this.drag;
     if (!d) return;
     this.drag = null;
     d.person.setLifted(false);
     d.person.roomId = null;
-    this.onPersonDrop?.(d.survivorId, this.targetAt(sx, sy));
+    this.hoverId = null;
+    this.setDropRing(null, true);
+    this.onPersonHover?.(d.survivorId, null, sx, sy);
+    // [plan4:UX-20] Let go over the HUD (or over nothing) and the drop is cancelled: the survivor goes back to what they were doing.
+    this.onPersonDrop?.(d.survivorId, overHud ? null : this.targetAt(sx, sy - BunkerRenderer.LIFT_PX));
   }
 
   private renderPeople(state: GameState, dt: number): void {

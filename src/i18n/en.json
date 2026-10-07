@@ -72,6 +72,7 @@
   "drag.moveTo": "Move to {room}",
   "drag.moveToRuin": "Help clear {room}",
   "drag.noMove": "Can't work here",
+  "drag.same": "Already works here",
   "build.title": "Build",
   "build.upgrade": "Upgrade",
   "build.demolish": "Demolish",

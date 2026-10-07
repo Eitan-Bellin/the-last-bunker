@@ -72,6 +72,7 @@
   "drag.moveTo": "העבר אל {room}",
   "drag.moveToRuin": "עזרה בפינוי {room}",
   "drag.noMove": "אי אפשר לעבוד כאן",
+  "drag.same": "כבר עובד/ת כאן",
   "build.title": "בנייה",
   "build.upgrade": "שדרוג",
   "build.demolish": "הריסה",

@@ -60,6 +60,7 @@ import { arrivalGap, type RaidResult } from './systems/EventSystem';
 import { DialogQueue, type DialogSource } from './ui/dialogQueue'; // [plan4:UX-10]
 import { getChapter } from './data/story';
 import { districtDef } from './data/districts';
+import { haptic } from './utils/haptics'; // [plan4:UX-20]
 import './style.css';
 import './styles/story.css';
 import './styles/bunker-os.css';
@@ -935,6 +936,8 @@ export class GameApp {
     };
     this.renderer.nameOf = (s: { name: string }) => this.localName(s.name);
     this.renderer.onBubbleTap = (id: string) => this.world.collectBubble(id);
+    this.renderer.onPersonLift = () => haptic('impact'); // [plan4:UX-20] the lift; the drop's own impact is in WorldController.dropSurvivor
+    this.renderer.onPersonHover = (sid, tid, sx, sy) => this.world.hoverPerson(sid, tid, sx, sy);
     this.renderer.onPersonDrop = (sid: string, target: string | null) => { this.tips.learned('hold'); this.world.dropSurvivor(sid, target); }; // [plan4:UX-11]
     this.renderer.onPersonTap = (sid: string) => {
       this.audio.play('click');
