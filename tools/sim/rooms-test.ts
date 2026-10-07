@@ -115,6 +115,49 @@ export function roomsChecks(games: { name: string; json: string }[]): { problems
       } else notes.push(`${g.name}: no lake yet`);
     }
 
+    // ---- [plan4:polish] fish ponds beside the lake: the sample saves have no free spot there, so clear the lake's neighbours and build one ----
+    {
+      const lake = base.buildings.find(b => b.type === 'lake');
+      if (!lake) fail(`${g.name}: no lake district to build fish ponds beside`);
+      else {
+        const f = lake.position.floor;
+        const w = getDef('aquaculture')!.slots ?? 3;
+        const at = lake.position.x - w; // touching the lake's west edge
+        const clear = (s: GameState): GameState => ({
+          ...s,
+          buildings: s.buildings.filter(b => !(b.position.floor === f && b.type !== 'lake' && b.position.x < at + w && b.position.x + (getDef(b.type)?.slots ?? 3) > at - 4)),
+          ruins: (s.ruins ?? []).filter(r => !(r.floor === f && r.x < at + w && r.x + r.w > at - 4)),
+          layout: { ...s.layout, infra: (s.layout.infra ?? []).filter(i => i.kind === 'bulkhead' || i.x < at - 4 || i.x >= at + w) },
+        });
+        const free = clear(base);
+        free.research = { ...free.research, aquaculture: { id: 'aquaculture', completed: true, progress: 0, total: 0, isResearching: false } };
+        free.buildings = free.buildings.filter(b => b.type !== 'aquaculture');
+        const reason = bs.placeBlock('aquaculture', { x: at, y: 0, floor: f }, free);
+        // (zone: the fish ponds may only stand on floors their zone allows; the lake is on its own floor, so a 'zone' answer here means data drift)
+        if (reason !== null) fail(`${g.name}: fish ponds refused at slot ${at} of floor ${f} touching the lake: ${reason}`);
+        else {
+          if (bs.placeBlock('aquaculture', { x: at - 1, y: 0, floor: f }, free) !== 'adjacency') fail(`${g.name}: fish ponds one slot away from the lake were not refused for adjacency`);
+          if (bs.placeBlock('aquaculture', { x: at, y: 0, floor: f + 1 }, free) === null) fail(`${g.name}: fish ponds on a floor without the lake were accepted`);
+          const sm = new StateManager();
+          sm.loadState(JSON.parse(JSON.stringify(free)) as GameState);
+          bs.syncNextId(sm.state); // (the game does this on every load; ids would clash with the sample's rooms)
+          const pond = bs.placeBuilding('aquaculture', { x: at, y: 0, floor: f }, sm);
+          if (!pond) fail(`${g.name}: placeBuilding did not build the fish ponds`);
+          else {
+            if (bs.placeBlock('aquaculture', { x: at, y: 0, floor: f }, sm.state) === null) fail(`${g.name}: a second fish pond spot was offered`);
+            const done = { ...sm.state, buildings: sm.state.buildings.map(b => (b.id === pond.id ? { ...b, isConstructing: false, constructionProgress: b.constructionTotal, assignedSurvivorIds: [] } : b)) };
+            const out = rs.getBuildingOutput(done, done.buildings.find(b => b.id === pond.id)!);
+            if (!(typeof out.food === 'number' && out.food >= 0)) fail(`${g.name}: fish ponds have no food output entry: ${JSON.stringify(out)} lvl ${effectiveLevel(done.buildings.find(b => b.id === pond.id)!)} inc ${JSON.stringify(done.incidents)}`);
+            const demol = new StateManager();
+            demol.loadState(JSON.parse(JSON.stringify(done)) as GameState);
+            if (!bs.demolish(demol, pond.id)) fail(`${g.name}: fish ponds could not be torn down: ${bs.demolishBlock(demol.state, pond.id)}`);
+            else if (bs.placeBlock('aquaculture', { x: at, y: 0, floor: f }, demol.state) !== null) fail(`${g.name}: the fish pond spot did not come back after tearing the ponds down`);
+          }
+          notes.push(`${g.name}: fish ponds built beside the lake at slot ${at} of floor ${f} (cleared neighbours)`);
+        }
+      }
+    }
+
     // ---- the first remembered death opens the memorial hall ----
     {
       const sm = new StateManager();
