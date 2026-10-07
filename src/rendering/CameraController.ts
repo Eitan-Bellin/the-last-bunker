@@ -1,16 +1,37 @@
 import type { Application, Container } from 'pixi.js';
-import { BUILDING_W, ROOM_H, SIDE_MARGIN, floorTop } from './layout';
+import { BUILDING_W, ROOM_H, SIDE_MARGIN, SLOT_W, floorTop } from './layout';
 import { reducedMotion } from '../utils/a11y';
+import { getHudInsets, subscribeHudInsets } from '../utils/hudInsets';
 
 // [plan4 X-1] Split out of BunkerRenderer.ts with no change in behaviour: everything about the camera (constants, pan / pinch / fling /
 // double tap input, bounds, zoom springs, shake and punch) lives here. BunkerRenderer stays the public facade and builds this class
 // with a small host that gives it the few things it needs from the scene.
 
 export const DRAG_THRESHOLD = 6;
-export const HUD_TOP = 150;
-export const HUD_BOTTOM = 72;
+/** [plan4:ST-12] Fallbacks until the HUD has measured itself (hudInsets.ts); the live numbers replace the old fixed 150 / 72 bands. */
+const HUD_TOP_FALLBACK = 150;
+const HUD_BOTTOM_FALLBACK = 72;
+/** Screen px from the top edge to the bottom of the status row (live; see utils/hudInsets.ts). */
+export function hudTop(): number {
+  const t = getHudInsets().top;
+  return t > 0 ? t : HUD_TOP_FALLBACK;
+}
+/** Screen px from the bottom edge to the top of the nav console (live, includes the home-bar safe area). */
+export function hudBottom(): number {
+  const b = getHudInsets().bottom;
+  return b > 0 ? b : HUD_BOTTOM_FALLBACK;
+}
 export const VIEW_TOP = -140;
 export const MAX_ZOOM = 3;
+/** [plan4:ST-12] Zoom tracks. The default on a phone shows SECTOR_SLOTS slots across; the floor overview fits the widest floor. */
+export const SECTOR_SLOTS = 7;
+export const MIN_ZOOM = 0.35;
+/** Below this absolute zoom the far-zoom city map takes over (it used to be relative to the fit zoom). */
+export const FAR_ZOOM = 0.42;
+/** Screens narrower than this (CSS px) start in the sector zoom; wider ones keep fit-to-width. */
+const PHONE_W = 700;
+/** A resize smaller than this (both axes) keeps zoom and centre: Safari's address bar slides and fires resize. */
+const RESIZE_KEEP = 0.15;
 // [camera] Feel constants: glide friction (1/s), edge spring and focus spring (rad/s, critically damped),
 // shake size at full trauma (screen px), double-tap window.
 export const FRICTION = 4.2;
@@ -28,6 +49,8 @@ export interface CameraHost {
   contentBottom(): number;
   /** Right edge of everything built (rooms and project lots). */
   extentR(): number;
+  /** [plan4:ST-12] Widest floor in world x: l is the west reach (0 without a west wing), r the east reach (no project lots). */
+  floorSpan(): { l: number; r: number };
   /** World y of the top of the tallest project building on the surface. */
   projectTop(): number;
   /** Scene clock in seconds (drives the shake noise). */
@@ -76,6 +99,19 @@ export class CameraController {
   private swallowClickUntil = 0;
   /** Screen px at the bottom covered by an open sheet; the camera may rest lower while it is open. */
   private bottomInset = 0;
+  /** [plan4:ST-12] Screen size at the last fit, and the HUD bands the view was laid out for. */
+  private fitW = 0;
+  private fitH = 0;
+  private lastTop = 0;
+  private lastBottom = 0;
+  /** Called (at most once per picture) when the camera moved: the depth ruler follows it. */
+  onChange: (() => void) | null = null;
+  private pinched = false;
+  /** Nobody (player or code) has moved the camera since the last fit: a HUD that finishes measuring itself refits instead of shifting. */
+  private untouched = true;
+  private lastX = NaN;
+  private lastY = NaN;
+  private lastZ = NaN;
   private framedId: string | null = null;
   private insetCheck = 0;
   private bnd = { x0: 0, x1: 0, y0: 0, y1: 0 };
@@ -92,6 +128,29 @@ export class CameraController {
 
   constructor(host: CameraHost) {
     this.host = host;
+    this.lastTop = hudTop();
+    this.lastBottom = hudBottom();
+    // [plan4:ST-12] The HUD grows with the text size and its banners come and go: keep what is on screen where it is.
+    subscribeHudInsets(() => this.onInsets());
+  }
+
+  /** The HUD bands changed: the view band moved, so shift the camera by the same amount and the picture does not jump. */
+  private onInsets(): void {
+    const top = hudTop(), bottom = hudBottom();
+    if (top === this.lastTop && bottom === this.lastBottom) return;
+    const h = this.host.app.screen.height;
+    const oldCy = this.lastTop + (h - this.lastTop - this.lastBottom) / 2;
+    const newCy = top + (h - top - bottom) / 2;
+    this.lastTop = top;
+    this.lastBottom = bottom;
+    if (this.untouched) { this.fitToScreen(); return; }
+    if (this.pointers.size === 0) this.camY += (newCy - oldCy) / this.zoom;
+    this.clampCamera();
+    if (this.focusTarget) {
+      this.camBounds(this.focusTarget.z);
+      this.focusTarget.y = Math.max(this.bnd.y0, Math.min(this.bnd.y1, this.focusTarget.y));
+    }
+    this.updateTransform();
   }
 
   /**
@@ -123,15 +182,69 @@ export class CameraController {
     this.punchDY = (dirY / len) * 6 * s;
   }
 
-  fitToScreen(): void {
+  /** [plan4:ST-12] Zoom that shows SECTOR_SLOTS slots across: about 0.94 on a 390 px phone, 0.9 on 375, 1.04 on 430. */
+  sectorZoom(): number {
     const { width } = this.host.app.screen;
-    const contentW = BUILDING_W + SIDE_MARGIN * 2;
-    this.baseZoom = Math.max(0.35, Math.min(1.6, (width - 8) / contentW));
+    return Math.max(0.9, Math.min(1.8, width / (SECTOR_SLOTS * SLOT_W + 2 * SIDE_MARGIN)));
+  }
+
+  /** The old default: the whole building width on screen (desktop keeps it, up to its cap of 1.6). */
+  private fitZoom(): number {
+    const { width } = this.host.app.screen;
+    return Math.max(MIN_ZOOM, Math.min(1.6, (width - 8) / (BUILDING_W + SIDE_MARGIN * 2)));
+  }
+
+  /** Floor overview: the widest floor fits the screen width (never above the default, never below MIN_ZOOM). */
+  overviewZoom(): number {
+    const { width } = this.host.app.screen;
+    const sp = this.host.floorSpan();
+    return Math.max(MIN_ZOOM, Math.min(this.baseZoom, width / (sp.r - sp.l + 2 * SIDE_MARGIN)));
+  }
+
+  /** The default zoom of this screen (also what baseZoom holds): sector zoom on a phone, fit-to-width elsewhere. */
+  private defaultZoom(): number {
+    return this.host.app.screen.width < PHONE_W ? this.sectorZoom() : this.fitZoom();
+  }
+
+  /** Is there a floor overview worth toggling to (it is clearly wider than the default view)? */
+  private hasOverview(): boolean {
+    return this.overviewZoom() < this.baseZoom * 0.88;
+  }
+
+  fitToScreen(): void {
+    const { width, height } = this.host.app.screen;
+    this.fitW = width;
+    this.fitH = height;
+    this.lastTop = hudTop();
+    this.lastBottom = hudBottom();
+    this.baseZoom = this.defaultZoom();
     this.zoom = this.baseZoom;
-    this.camX = BUILDING_W / 2;
-    const usable = this.host.app.screen.height - HUD_TOP - HUD_BOTTOM;
+    this.untouched = true;
+    const sp = this.host.floorSpan();
+    // Phone: the shaft and the first rooms next to it, just under the top HUD. Wider screens: the whole building, centred.
+    this.camX = width < PHONE_W ? width / 2 / this.zoom - SIDE_MARGIN + sp.l : (sp.l + sp.r) / 2;
+    const usable = height - hudTop() - hudBottom();
     this.camY = VIEW_TOP + usable / 2 / this.zoom;
     this.stopCamera();
+    this.clampCamera();
+    this.updateTransform();
+  }
+
+  /**
+   * [plan4:ST-12] The window changed size. A small change (Safari's address bar sliding, a keyboard) keeps zoom and centre; a big one
+   * (rotating the phone) starts from the default view again.
+   */
+  onResize(): void {
+    const { width, height } = this.host.app.screen;
+    if (!this.fitW || Math.abs(width - this.fitW) / this.fitW >= RESIZE_KEEP || Math.abs(height - this.fitH) / this.fitH >= RESIZE_KEEP) {
+      this.fitToScreen();
+      return;
+    }
+    this.fitW = width;
+    this.fitH = height;
+    this.baseZoom = this.defaultZoom();
+    this.lastTop = hudTop();
+    this.lastBottom = hudBottom();
     this.clampCamera();
     this.updateTransform();
   }
@@ -149,8 +262,10 @@ export class CameraController {
       if (e.isPrimary) {
         this.pointers.clear();
         this.pinch = null;
+        this.pinched = false;
       }
       this.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      this.untouched = false;
       // A touch catches a gliding camera; that touch only stops it (no room tap).
       // (Not when this touch may be the second half of a double tap.)
       const pendingTap = performance.now() - this.lastTap.t < DOUBLE_TAP_MS;
@@ -209,8 +324,11 @@ export class CameraController {
         return;
       }
       if (this.pointers.size) return;
-      if (this.pointerDown && this.isDragging) this.fling(e.timeStamp);
-      else if (this.pointerDown && e.type === 'pointerup' && e.timeStamp - this.downAt < 300) this.tapAt(e.clientX, e.clientY, true);
+      if (this.pointerDown && this.isDragging) {
+        // [plan4:ST-12] A pinch that ended near the sector / overview zoom settles on it (no fling then).
+        if (this.pinched) { this.pinched = false; this.snapZoom(); }
+        if (!this.focusTarget) this.fling(e.timeStamp);
+      } else if (this.pointerDown && e.type === 'pointerup' && e.timeStamp - this.downAt < 300) this.tapAt(e.clientX, e.clientY, true);
       this.pointerDown = false;
       // Keep isDragging until PixiJS has dispatched pointertap for this release.
       setTimeout(() => { this.isDragging = false; }, 0);
@@ -226,6 +344,7 @@ export class CameraController {
     canvas.addEventListener('wheel', (e: WheelEvent) => {
       e.preventDefault();
       const dy = e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY;
+      this.untouched = false;
       const from = this.wheelZoom ?? this.zoom;
       this.focusTarget = null;
       this.camVX = this.camVY = 0;
@@ -276,6 +395,7 @@ export class CameraController {
     };
     this.isDragging = true;
     this.pointerDown = true;
+    this.pinched = true;
   }
 
   /** Pinch: the world point under the fingers stays under them while they spread and move. */
@@ -358,7 +478,7 @@ export class CameraController {
     const wx = this.camX + (sx - width / 2) / this.zoom;
     const wy = this.camY + (sy - this.viewCY()) / this.zoom;
     if (rect) {
-      const visH = height - HUD_TOP - HUD_BOTTOM - inset;
+      const visH = height - hudTop() - hudBottom() - inset;
       const z = this.clampZoom(Math.min(width * 0.9 / rect.w, visH * 0.82 / rect.h, MAX_ZOOM));
       const cx = rect.x + rect.w / 2, cy = rect.y + rect.h / 2;
       // Already framed: the second double tap goes back to the overview.
@@ -368,16 +488,66 @@ export class CameraController {
       if (framed) this.focusTo(wx - (sx - width / 2) / this.baseZoom, wy - (sy - this.viewCY()) / this.baseZoom, this.baseZoom);
       // The visible middle sits inset/2 px above the view centre.
       else this.focusTo(cx, cy + inset / 2 / z, z);
+    } else if (this.hasOverview()) {
+      // [plan4:ST-12] Empty space toggles between the sector view and the floor overview (the widest floor on screen).
+      const ov = this.overviewZoom();
+      const z = this.zoom < (ov + this.baseZoom) / 2 ? this.baseZoom : ov;
+      this.focusTo(wx - (sx - width / 2) / z, wy - (sy - this.viewCY()) / z, z);
     } else {
       const z = this.zoom > this.baseZoom * 2.2 ? this.baseZoom : this.clampZoom(this.zoom * 1.8);
       this.focusTo(wx - (sx - width / 2) / z, wy - (sy - this.viewCY()) / z, z);
     }
   }
 
+  /** [plan4:ST-12] A pinch that ends close to the sector or the overview zoom settles on it exactly. */
+  private snapZoom(): void {
+    if (!this.hasOverview()) return;
+    const ov = this.overviewZoom();
+    const near = (t: number) => Math.abs(Math.log(this.zoom / t)) < 0.09;
+    if (near(ov)) this.focusTo(this.camX, this.camY, ov);
+    else if (near(this.baseZoom)) this.focusTo(this.camX, this.camY, this.baseZoom);
+  }
+
+  /** [plan4:ST-12] Zoom to the floor overview, or back to the default sector view (the depth ruler / chips use this too). */
+  toggleOverview(): void {
+    if (!this.hasOverview()) return;
+    const ov = this.overviewZoom();
+    this.focusTo(this.camX, this.camY, this.zoom < (ov + this.baseZoom) / 2 ? this.baseZoom : ov);
+  }
+
+  /** [plan4:ST-12] Is the camera at (about) the floor-overview zoom? */
+  get inOverview(): boolean {
+    return this.hasOverview() && this.zoom < (this.overviewZoom() + this.baseZoom) / 2;
+  }
+
+  /** [plan4:ST-12] Depth ruler scrub: put the camera's vertical centre on a world y right now (no glide). */
+  scrubY(y: number): void {
+    this.untouched = false;
+    this.stopCamera();
+    this.camY = y;
+    this.clampCamera();
+    this.updateTransform();
+  }
+
+  /** [plan4:ST-12] Section chips: spring-pan to a world x (keeps y and zoom). */
+  panToX(x: number): void {
+    this.focusTo(x, this.focusTarget?.y ?? this.camY, this.focusTarget?.z ?? this.zoom);
+  }
+
+  /** World y range currently between the HUD bands (for the ruler's viewport marker). */
+  visibleY(): { y0: number; y1: number } {
+    const h = this.viewH();
+    return { y0: this.camY - h / 2, y1: this.camY + h / 2 };
+  }
+
   /** Screen px of an open bottom sheet that reach above the nav bar. */
   private sheetInset(): number {
     const s = document.querySelector('.sheet-overlay.open .sheet') as HTMLElement | null;
-    return s ? Math.max(0, Math.min(this.host.app.screen.height * 0.7, s.offsetHeight - HUD_BOTTOM)) : 0;
+    if (!s) return 0;
+    // [plan4:ST-12] The sheet's own height already contains the padding that keeps its content above the nav (--nav-h + safe area), and
+    // the nav console is drawn over its bottom edge: what covers the world band is the sheet's height (plus the keyboard lift) minus the live nav band.
+    const kb = parseFloat(document.documentElement.style.getPropertyValue('--kb-inset')) || 0;
+    return Math.max(0, Math.min(this.host.app.screen.height * 0.7, s.offsetHeight + kb - hudBottom()));
   }
 
   /** After a room is selected: if its sheet (or the screen edge) hides it, glide just enough to show it. */
@@ -387,7 +557,7 @@ export class CameraController {
     const { width, height } = this.host.app.screen;
     const inset = this.sheetInset();
     const z = this.zoom, cy = this.viewCY();
-    const top = HUD_TOP + 10, bottom = height - HUD_BOTTOM - inset - 10;
+    const top = hudTop() + 10, bottom = height - hudBottom() - inset - 10;
     const rTop = cy + (v.y - this.camY) * z, rBot = cy + (v.y + v.h - this.camY) * z;
     const rL = width / 2 + (v.x - this.camX) * z, rR = width / 2 + (v.x + v.w - this.camX) * z;
     let sy = 0, sx = 0;
@@ -415,21 +585,21 @@ export class CameraController {
   }
 
   private viewH(): number {
-    return (this.host.app.screen.height - HUD_TOP - HUD_BOTTOM) / this.zoom;
+    return (this.host.app.screen.height - hudTop() - hudBottom()) / this.zoom;
   }
 
   /** Screen y the camera centre maps to (the middle between the HUD bars). */
   private viewCY(): number {
-    return HUD_TOP + (this.host.app.screen.height - HUD_TOP - HUD_BOTTOM) / 2;
+    return hudTop() + (this.host.app.screen.height - hudTop() - hudBottom()) / 2;
   }
 
   /** Where the camera centre may rest at zoom z (lo === hi on an axis when the content fits). Writes this.bnd. */
   private camBounds(z: number): void {
     const { width, height } = this.host.app.screen;
     const halfW = width / 2 / z;
-    const halfH = (height - HUD_TOP - HUD_BOTTOM) / 2 / z;
+    const halfH = (height - hudTop() - hudBottom()) / 2 / z;
     const b = this.bnd;
-    const minX = -SIDE_MARGIN, maxX = this.host.extentR() + SIDE_MARGIN;
+    const minX = Math.min(0, this.host.floorSpan().l) - SIDE_MARGIN, maxX = this.host.extentR() + SIDE_MARGIN;
     if (maxX - minX <= halfW * 2) b.x0 = b.x1 = (minX + maxX) / 2;
     else { b.x0 = minX + halfW; b.x1 = maxX - halfW; }
     // An open sheet lets the camera go lower, so the deepest rooms can sit above it.
@@ -440,12 +610,12 @@ export class CameraController {
   }
 
   clampZoom(z: number): number {
-    return Math.max(this.baseZoom * 0.5, Math.min(MAX_ZOOM, z));
+    return Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, z));
   }
 
   /** Pinching past the zoom limits gives way with resistance, then springs back on release. */
   private softZoom(z: number): number {
-    const lo = this.baseZoom * 0.5;
+    const lo = MIN_ZOOM;
     if (z > MAX_ZOOM) return MAX_ZOOM * Math.exp(Math.log(z / MAX_ZOOM) * 0.3);
     if (z < lo) return lo * Math.exp(Math.log(z / lo) * 0.3);
     return z;
@@ -472,6 +642,7 @@ export class CameraController {
   /** Glide (critically damped spring) to a camera centre and zoom; the target is kept inside the bounds. */
   focusTo(x: number, y: number, z: number): void {
     z = this.clampZoom(z);
+    this.untouched = false;
     this.camBounds(z);
     const b = this.bnd;
     const f = this.focusTarget ?? { x: 0, y: 0, z: 0 };
@@ -585,10 +756,17 @@ export class CameraController {
     wc.scale.set(z);
     wc.x = width / 2 - this.camX * z + ox;
     wc.y = cy - this.camY * z + oy;
+    if (this.onChange && (this.camX !== this.lastX || this.camY !== this.lastY || this.zoom !== this.lastZ)) {
+      this.lastX = this.camX;
+      this.lastY = this.camY;
+      this.lastZ = this.zoom;
+      this.onChange();
+    }
   }
 
   /** Dev tools: put the camera at a world point with a zoom relative to the fit-to-screen zoom. */
   devCamera(x: number, y: number, zoomRel: number): void {
+    this.untouched = false;
     this.stopCamera();
     this.zoom = this.clampZoom(this.baseZoom * zoomRel);
     this.camX = x;
