@@ -244,7 +244,7 @@ export class PeoplePanel {
     const ruin = !job && s.assignedBuildingId ? state.ruins.find(r => r.id === s.assignedBuildingId) : undefined;
     const jobName = job ? `${BUILDING_ICONS[job.type] ?? ''} ${getDef(job.type)?.name[locale] ?? ''}`
       : ruin ? `[[pick]] ${i18n.t('ruin.duty', { n: ruin.floor + 1 })}`
-        : s.assignedBuildingId === 'p_dig' ? `[[pick]] ${i18n.t('dig.duty', { n: (state.longGame?.dig.floor ?? 0) + 1 })}` // [Long game]
+        : s.assignedBuildingId === 'p_dig' || s.assignedBuildingId === 'p_dig2' ? this.digDuty(state, s.assignedBuildingId === 'p_dig2' ? 1 : 0) // [Long game] [plan4:ST-3] two crews
         : s.assignedBuildingId?.startsWith('p_') ? `[[build]] ${i18n.t('proj.duty')}` // [LateGame B1]
         : `[[warning]] ${i18n.t('people.noJob')}`;
     // [plan4:BL-4] A child in a nursery or school shows its room; otherwise "too young", as before.
@@ -266,6 +266,13 @@ export class PeoplePanel {
     if (this.expandedId === s.id) card.appendChild(this.renderMorale(state, s));
     if (this.choosingFor === s.id) card.appendChild(this.renderJobChooser(state, s));
     return card;
+  }
+
+  /** [plan4:ST-3] The job line of a dig crew member: a floor dig or a wing, in slot 0 or 1. */
+  private digDuty(state: GameState, slot: number): string {
+    const d = slot === 0 ? state.longGame?.dig : state.longGame?.dig2;
+    const n = (d?.floor ?? 0) + 1;
+    return `[[pick]] ${i18n.t(d?.kind === 'wing' ? 'wing.duty' : 'dig.duty', { n })}`;
   }
 
   private renderMorale(state: GameState, s: SurvivorState): HTMLElement {

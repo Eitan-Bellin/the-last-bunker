@@ -25,6 +25,8 @@ export async function checkMigration(json: string): Promise<MigrateCheck> {
 
     if (m.version !== SAVE_VERSION) problems.push(`version ${m.version}, expected ${SAVE_VERSION}`);
     if (!m.longGame?.meta) problems.push('no longGame slice');
+    // [plan4:ST-3] The second dig slot exists, and a dig without `kind` is a floor dig (older saves).
+    if (m.longGame && (!m.longGame.dig2 || m.longGame.dig2.floor !== null || (m.longGame.dig.kind ?? 'floor') !== 'floor')) problems.push('dig2 / dig.kind not defaulted');
     // [plan4:X-3] v7: an older save gets the empty layout (no wings, doors, infrastructure; surface row closed).
     if (!old.layout && (!m.layout || m.layout.v !== 1 || Object.keys(m.layout.ext).length || Object.keys(m.layout.doors).length || m.layout.infra.length || m.layout.surfaceOpen)) problems.push('layout not defaulted');
     // Nothing the player has may be taken away.

@@ -7,6 +7,7 @@ import { RESEARCH } from '../data/research';
 import { i18n } from '../i18n/I18nManager';
 import { RESOURCE_ICONS } from '../ui/dom';
 import type { Objective, ObjectiveAction } from './ObjectiveSystem';
+import { wingOptions } from '../data/wings';
 
 /**
  * [Q2] The guide: what blocks the run right now, in plain words, and where to tap to deal with it.
@@ -37,6 +38,15 @@ const ICONS: Record<ActGoal['kind'], string> = {
 
 const list = (o: Partial<Record<ResourceType, number>>): string => Object.entries(o)
   .map(([r, v]) => `${RESOURCE_ICONS[r] ?? ''}${i18n.formatCompact(v ?? 0)}`).join(' ');
+
+/** [plan4:ST-5] True when even the smallest rooms have no free slot on any floor: only a wider (or deeper) floor makes space. */
+export function noSpace(engine: GameEngine, state: GameState): boolean {
+  const bs = engine.buildingSystem;
+  for (const type of ['generator', 'quarters', 'storage', 'farm', 'workshop'] as const) {
+    for (let f = 0; f < state.currentFloors; f++) if (bs.findFreeSpot(type, f, state)) return false;
+  }
+  return true;
+}
 
 /** The Act's share done, 0..1 (goals and charter projects weigh the same). */
 export function actFraction(engine: GameEngine, state: GameState, act: ActDef = actOf(state)): number {
@@ -77,6 +87,11 @@ function goalRequirement(engine: GameEngine, state: GameState, act: ActDef, g: A
         const want = engine.digSystem.wanted(state);
         const text = crew < want ? i18n.t('guide.digCrew', { n: want - crew }) : i18n.t('guide.digBusy', { t2: isFinite(eta) ? i18n.formatDuration(eta) : '…' });
         return { ...base, text, action: { kind: 'dig' }, immediate: crew < want };
+      }
+      // [plan4:ST-5] No deeper floor allowed and no room left on the floors there are: widen a wing.
+      if ((block === 'act' || block === 'max') && noSpace(engine, state)) {
+        const o = wingOptions(state).filter(w => w.block === null || w.block === 'cost').sort((a, b) => (a.block === null ? 0 : 1) - (b.block === null ? 0 : 1) || a.floor - b.floor)[0];
+        if (o) return { ...base, text: i18n.t('guide.wing', { cost: list(o.cost) }), action: null, immediate: o.block === null };
       }
       const over = bs.digOverCap(state);
       if (over) return { ...base, text: i18n.t('guide.digStorage', { res: i18n.t(`resources.${over.resource}`) }), action: { kind: 'rooms' } };

@@ -1,5 +1,5 @@
 import { hasFeature } from './ResearchSystem';
-import { BASE_EAST, floorExtent, type GameState, type BuildingType, type BuildingInstance, type Position } from '../core/GameState';
+import { BASE_EAST, createLayout, floorExtent, type GameState, type BuildingType, type BuildingInstance, type Position } from '../core/GameState';
 import type { StateManager } from '../core/StateManager';
 import { bus } from '../core/EventBus';
 import { getDef, effectiveLevel, isDistrict, roomFloors, roomSlots, specLevel, touching, actMult, type BuildingDef } from '../data/buildingDefs';
@@ -8,6 +8,8 @@ import { TUNING } from '../data/tuning';
 import { scenarioOf } from '../data/scenarios';
 import { actPrice, digHours, floorAct, levelAct, payableHours, upgradeHours } from '../data/pricing';
 import { districtDef, nextDistrict } from '../data/districts';
+import { WING_STEP, floorDigging, freeDigSlot, wingBlock, wingCost, wingCrew, wingOptions, wingSeconds, type WingOption } from '../data/wings';
+import type { DigState } from '../core/state/longGame';
 import { BASE_FLOORS, MAX_FLOORS, allowedFloors } from '../data/zones';
 import { RETOOL_PRICE_MULT, RETOOL_SECONDS, SPEC_COST, specTotal, specsFor } from '../data/specializations';
 
@@ -319,14 +321,14 @@ export class BuildingSystem {
   }
 
   canDig(state: GameState): boolean {
-    // [Long game] One dig at a time, and the Act sets how deep the bunker may go.
-    if (state.longGame?.dig.floor != null) return false;
+    // [Long game] One floor dig at a time, and the Act sets how deep the bunker may go. [plan4:ST-3] It needs a free dig slot (a wing may hold the other).
+    if (floorDigging(state) || freeDigSlot(state) < 0) return false;
     return state.currentFloors < Math.min(MAX_FLOORS, actOf(state).floorCap);
   }
 
-  /** Why no dig can start: the Act's depth, the bunker's bottom, or a dig already under way (null = it can). */
+  /** Why no dig can start: the Act's depth, the bunker's bottom, or every dig slot busy (null = it can). */
   digBlock(state: GameState): 'digging' | 'act' | 'max' | null {
-    if (state.longGame?.dig.floor != null) return 'digging';
+    if (floorDigging(state) || freeDigSlot(state) < 0) return 'digging';
     if (state.currentFloors >= MAX_FLOORS) return 'max';
     if (state.currentFloors >= actOf(state).floorCap) return 'act';
     return null;
@@ -393,15 +395,64 @@ export class BuildingSystem {
       this.finishDig(sm);
       return;
     }
-    sm.applyDelta({ path: 'longGame.dig', value: { floor: state.currentFloors, paid: [], progress: 0, total: this.digTime(state), crew: [] } });
-    bus.emit('dig:start', state.currentFloors);
+    const slot = Math.max(0, freeDigSlot(state));
+    const total = this.digTime(state);
+    sm.applyDelta({ path: slot === 0 ? 'longGame.dig' : 'longGame.dig2', value: { floor: state.currentFloors, paid: [], progress: 0, total, crew: [], kind: 'floor' } });
+    bus.emit('dig:start', state.currentFloors, total, slot);
   }
 
-  /** The new floor opens. */
-  finishDig(sm: StateManager): void {
+  /**
+   * [plan4:ST-3] Starts widening one side of a floor by one step (2 slots): pays the price and puts the dig in a free slot.
+   * False (nothing paid) when wingBlock says no: the Act or depth caps it, a slot or the price is missing.
+   */
+  digWing(sm: StateManager, floor: number, side: 'w' | 'e'): boolean {
+    const state = sm.state;
+    if (floor < 0 || floor >= state.currentFloors || wingBlock(state, floor, side) !== null) return false;
+    const cost = wingCost(state, floor);
+    for (const [r, v] of Object.entries(cost)) {
+      const cur = state.resources[r as keyof GameState['resources']].amount;
+      sm.applyDelta({ path: `resources.${r}.amount`, value: cur - v });
+    }
+    const slot = freeDigSlot(state);
+    const total = wingSeconds(state, floor);
+    const dig: DigState = { floor, paid: [], progress: 0, total, crew: [], kind: 'wing', side };
+    sm.applyDelta({ path: slot === 0 ? 'longGame.dig' : 'longGame.dig2', value: dig });
+    bus.emit('wing:start', floor, side, total, slot);
+    return true;
+  }
+
+  /** [plan4:ST-5] Every floor/side with what its next wing step costs and why it may not be dug (see data/wings.ts); the bot reads it from here. */
+  wingOptions(state: GameState): WingOption[] {
+    return wingOptions(state);
+  }
+
+  /** People a dig wants for full speed (a floor: by depth; a wing: by how many steps the floor already has). */
+  crewFor(state: GameState, d: DigState | undefined): number {
+    if (!d || d.floor == null) return 0;
+    return d.kind === 'wing' ? wingCrew(state, d.floor) : this.digCrew(state);
+  }
+
+  /** The dig in this slot opens: a new floor, or a wing step on `d.floor`. Without `d` it is the classic floor dig. */
+  finishDig(sm: StateManager, d?: DigState): void {
+    if (d?.kind === 'wing' && d.floor != null && (d.side === 'w' || d.side === 'e')) { this.finishWing(sm, d.floor, d.side); return; }
     sm.applyDelta({ path: 'currentFloors', value: sm.state.currentFloors + 1 });
     bus.emit('floor:dug', sm.state.currentFloors - 1);
   }
+
+  /** One wing step is dug: the floor reaches 2 slots further. A district tunnel on the east side is pushed out by the same. */
+  private finishWing(sm: StateManager, floor: number, side: 'w' | 'e'): void {
+    const state = sm.state;
+    const ext = floorExtent(state, floor);
+    const next = side === 'w' ? { w: ext.w + WING_STEP, e: ext.e } : { w: ext.w, e: ext.e + WING_STEP };
+    const layout = state.layout ?? createLayout();
+    sm.applyDelta({ path: 'layout', value: { ...layout, ext: { ...layout.ext, [String(floor)]: next } } });
+    if (side === 'e' && state.buildings.some(b => isDistrict(b.type) && b.position.floor === floor)) {
+      // [plan4:ST-8] The district keeps its place beyond the casing. (The renderer still draws it at DISTRICT_X until it reads position.x.)
+      sm.applyDelta({ path: 'buildings', value: sm.state.buildings.map(b => (isDistrict(b.type) && b.position.floor === floor ? { ...b, position: { ...b.position, x: b.position.x + WING_STEP } } : b)) });
+    }
+    bus.emit('wing:dug', floor, side);
+  }
+
   /** A room at its top level can be fitted out for one of its two roles (permanent). */
   canSpecialize(state: GameState, buildingId: string): boolean {
     const b = state.buildings.find(x => x.id === buildingId);

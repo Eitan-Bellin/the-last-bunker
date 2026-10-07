@@ -140,6 +140,14 @@ export const LONG_RESEARCH: ResearchDef[] = [
   },
   // ---- Act III nodes ----
   {
+    // [plan4:ST-3] A second dig slot: two crews, two digs (a floor and a wing, or two wings) at once.
+    id: 'parallelDig', branch: 'infrastructure', tier: 5, icon: '[[pick]]', act: 3,
+    name: { he: 'חפירה מקבילה', en: 'Parallel Digging' },
+    desc: { he: 'שתי חפירות במקביל: צוות שני חופר לצד הראשון', en: 'Two digs at once: a second crew works beside the first' },
+    cost: { knowledge: 600, materials: 200 }, time: 3600, requires: ['deepDrilling'],
+    effects: [{ type: 'feature', feature: 'parallelDig' }],
+  },
+  {
     id: 'assemblyTheory', branch: 'infrastructure', tier: 5, icon: '[[components]]', act: 3, eureka: { kind: 'specialized', n: 4 },
     name: { he: 'תורת ההרכבה', en: 'Assembly Theory' },
     desc: { he: 'רכיבים +25%', en: 'Components +25%' },

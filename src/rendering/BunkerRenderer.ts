@@ -111,6 +111,8 @@ export class BunkerRenderer {
   onTileClick: ((pos: Position) => void) | null = null;
   onBuildingClick: ((buildingId: string) => void) | null = null;
   onDigClick: (() => void) | null = null;
+  /** [plan4:ST-3] Tap on a wing dig sign (assigned in app.ts; the wing signs call it). */
+  onWingDig?: (floor: number, side: 'w' | 'e') => void;
   onRuinClick: ((ruinId: string) => void) | null = null;
   /** Tap on a big project's lot on the surface. */
   onProjectClick: ((projectId: string) => void) | null = null;
