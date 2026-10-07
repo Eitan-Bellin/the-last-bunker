@@ -5,3 +5,50 @@
 .dq-list { list-style: none; text-align: start; margin: 0 0 12px; padding: 0; display: flex; flex-direction: column; gap: 6px; }
 .dq-list li { font-size: calc(14px * var(--fs, 1)); line-height: 1.4; padding: 8px 10px; border-radius: 8px; background: rgba(0, 0, 0, 0.28); }
 .dq-list li.dq-more { background: none; color: var(--text-secondary); text-align: center; padding: 2px; }
+
+/* ---------- UX-11: gesture tips (a card above the nav; never blocks the scene behind it) ---------- */
+.gesture-tip {
+  position: fixed; z-index: 28;
+  inset-inline: 12px; bottom: calc(var(--nav-h, 72px) + var(--obj-h, 0px) + 12px);
+  max-width: 420px; margin-inline: auto;
+  display: grid; grid-template-columns: 76px 1fr; gap: 6px 12px; align-items: center;
+  padding: 12px; border-radius: 14px;
+  background: rgba(16, 20, 18, 0.97); border: 1px solid var(--border); box-shadow: 0 10px 30px rgba(0, 0, 0, 0.55);
+  opacity: 0; transform: translateY(10px); transition: opacity 0.25s, transform 0.25s;
+}
+.gesture-tip.in { opacity: 1; transform: none; }
+.tip-text { font-size: calc(14px * var(--fs, 1)); line-height: 1.45; color: var(--text-primary); text-align: start; margin: 0; }
+.tip-actions { grid-column: 1 / -1; display: flex; gap: 8px; justify-content: flex-end; }
+.tip-btn { min-height: var(--tap, 44px); min-width: 88px; }
+
+/* The ghost fingers: two translucent discs on a faint frame. Only transform and opacity animate. */
+.tip-ghost { position: relative; width: 76px; height: 76px; border-radius: 12px; background: rgba(110, 255, 160, 0.06); border: 1px dashed rgba(110, 255, 160, 0.35); overflow: hidden; }
+.tip-ghost i { position: absolute; width: 22px; height: 22px; margin: -11px 0 0 -11px; border-radius: 50%; background: rgba(255, 224, 160, 0.72); box-shadow: 0 0 10px rgba(255, 181, 71, 0.55); }
+.tip-ghost b.tip-trail { position: absolute; inset: 0; }
+.tip-ghost u.tip-ring { position: absolute; left: 50%; top: 50%; width: 38px; height: 38px; margin: -19px 0 0 -19px; border-radius: 50%; border: 2px solid rgba(255, 181, 71, 0.8); opacity: 0; text-decoration: none; }
+/* static poses (also what "reduced motion" shows) */
+.g-pinch .tip-f1 { left: 34%; top: 66%; } .g-pinch .tip-f2 { left: 66%; top: 34%; }
+.g-pinch .tip-trail { background: linear-gradient(45deg, transparent 44%, rgba(255, 181, 71, 0.55) 49%, rgba(255, 181, 71, 0.55) 51%, transparent 56%); }
+.g-dbltap .tip-f1 { left: 50%; top: 50%; } .g-dbltap .tip-f2 { display: none; }
+.g-hold .tip-f1 { left: 30%; top: 38%; } .g-hold .tip-f2 { display: none; }
+.g-hold .tip-trail { background: linear-gradient(20deg, transparent 52%, rgba(255, 181, 71, 0.5) 56%, transparent 60%); }
+.g-wing .tip-f1 { left: 72%; top: 52%; } .g-wing .tip-f2 { display: none; }
+.g-wing .tip-trail { background: linear-gradient(90deg, rgba(110, 255, 160, 0.22) 0 38%, transparent 38%), linear-gradient(0deg, transparent 46%, rgba(255, 181, 71, 0.5) 49%, rgba(255, 181, 71, 0.5) 51%, transparent 54%); }
+:root[data-motion="full"] .g-pinch .tip-f1 { animation: tipPinchA 2.4s ease-in-out infinite; }
+:root[data-motion="full"] .g-pinch .tip-f2 { animation: tipPinchB 2.4s ease-in-out infinite; }
+:root[data-motion="full"] .g-dbltap .tip-f1 { animation: tipTap 2.2s ease-in-out infinite; }
+:root[data-motion="full"] .g-dbltap .tip-ring { animation: tipRipple 2.2s ease-out infinite; }
+:root[data-motion="full"] .g-hold .tip-f1 { animation: tipHold 2.8s ease-in-out infinite; }
+:root[data-motion="full"] .g-hold .tip-ring { animation: tipHoldRing 2.8s linear infinite; left: 30%; top: 38%; }
+:root[data-motion="full"] .g-wing .tip-f1 { animation: tipWing 2.4s ease-in-out infinite; }
+@keyframes tipPinchA { 0%, 15% { transform: translate(8px, -8px); } 55%, 70% { transform: translate(-14px, 14px); } 100% { transform: translate(8px, -8px); } }
+@keyframes tipPinchB { 0%, 15% { transform: translate(-8px, 8px); } 55%, 70% { transform: translate(14px, -14px); } 100% { transform: translate(-8px, 8px); } }
+@keyframes tipTap { 0%, 100% { transform: scale(1); opacity: 0.9; } 12% { transform: scale(0.7); } 24% { transform: scale(1); } 36% { transform: scale(0.7); } 48% { transform: scale(1); } 60%, 90% { opacity: 0.35; } }
+@keyframes tipRipple { 0%, 8%, 100% { opacity: 0; transform: scale(0.4); } 14% { opacity: 0.9; transform: scale(0.5); } 30%, 38% { opacity: 0; transform: scale(1.1); } 40% { opacity: 0.9; transform: scale(0.5); } 56% { opacity: 0; transform: scale(1.1); } }
+@keyframes tipHold { 0% { transform: translate(0, 0) scale(1); } 45% { transform: translate(0, 0) scale(0.85); } 55% { transform: translate(0, 0) scale(1.1); } 90% { transform: translate(30px, 14px) scale(1.1); } 100% { transform: translate(30px, 14px) scale(1.1); opacity: 0.3; } }
+@keyframes tipHoldRing { 0% { opacity: 0; transform: scale(1.3); } 8% { opacity: 0.9; } 45% { opacity: 0.9; transform: scale(0.7); } 52%, 100% { opacity: 0; transform: scale(0.7); } }
+@keyframes tipWing { 0%, 12% { transform: translateX(0); } 70%, 100% { transform: translateX(12px); } }
+
+/* Settings: the learning block (two full-width buttons, still 44px at any text size) */
+.settings-learn { display: flex; flex-direction: column; gap: 8px; }
+.settings-learn .learn-btn { width: 100%; min-height: var(--tap, 44px); text-align: start; }

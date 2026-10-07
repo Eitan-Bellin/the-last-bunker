@@ -73,6 +73,7 @@ import { EventController } from './ui/controllers/events';
 import { StoryController } from './ui/controllers/story';
 import { SystemsController } from './ui/controllers/systems';
 import { WelcomeController } from './ui/controllers/welcome';
+import { TipsController } from './ui/controllers/tips'; // [plan4:UX-11]
 import { PRODUCTION_POPUP_MS, WorldController } from './ui/controllers/world';
 
 /** Icons drawn inside the Pixi scene (plaques, signs, popups); rasterized once at startup. */
@@ -99,6 +100,8 @@ export class GameApp {
   readonly events = new EventController(this);
   readonly story = new StoryController(this);
   readonly welcome = new WelcomeController(this);
+  /** [plan4:UX-11] Gesture tips. */
+  readonly tips = new TipsController(this);
   readonly world = new WorldController(this);
   /** [Q7] "A new system" cards. */
   readonly systems = new SystemsController(this);
@@ -221,6 +224,8 @@ export class GameApp {
       persistLabel: () => i18n.t(`settings.persist.${getPersistStatus()}`),
       openBook: () => this.helpPanel.show(),
       openChronicle: () => this.chroniclePanel.show(this.state),
+      showTipsAgain: () => { this.tips.reset(); this.toasts.show(`[[hand]] ${i18n.t('settings.tipsReset')}`, 'good'); }, // [plan4:UX-11]
+      replayIntro: () => { this.closeSheets(); this.story.replayIntro(); },
       redeemCoupon: (code: string) => { // the coupon sheet: pick how much to skip or add
         if (!couponValid(code)) return false;
         this.closeSheets();
@@ -623,11 +628,8 @@ export class GameApp {
     this.hud.setJournalUnread(state.loreUnread?.length ?? 0);
     this.hud.setSupply(this.engine.supplySystem.isReady(state), i18n.t('supply.title'));
     this.danger.updateIncidentBanner();
-    // One-time tip once the player has done their first restoration.
-    if (!this.introPlaying && (state.ruinsCleared ?? 0) >= 1 && !state.storyFlags.includes('tip:drag') && !this.modal.isVisible) {
-      this.engine.stateManager.applyDelta({ path: 'storyFlags', value: [...state.storyFlags, 'tip:drag'] });
-      this.toasts.show(`[[hand]] ${i18n.t('tip.drag')}`, 'info');
-    }
+    // [plan4:UX-11] The gesture tips (pinch, double tap, hold a survivor, wings), once each; the old drag toast is the "hold" tip now.
+    this.tips.update(performance.now());
     const obj = this.engine.objectiveSystem.current(state);
     const reward = (Object.entries(obj.reward) as [ResourceType, number][]).map(([r, v]) => `${RESOURCE_ICONS[r] ?? ''}${v}`).join(' ');
     this.hud.setObjective(obj.icon, obj.text[i18n.currentLocale] ?? obj.text.en, obj.progress(state), reward);
@@ -900,7 +902,7 @@ export class GameApp {
     };
     this.renderer.nameOf = (s: { name: string }) => this.localName(s.name);
     this.renderer.onBubbleTap = (id: string) => this.world.collectBubble(id);
-    this.renderer.onPersonDrop = (sid: string, target: string | null) => this.world.dropSurvivor(sid, target);
+    this.renderer.onPersonDrop = (sid: string, target: string | null) => { this.tips.learned('hold'); this.world.dropSurvivor(sid, target); }; // [plan4:UX-11]
     this.renderer.onPersonTap = (sid: string) => {
       this.audio.play('click');
       this.closeSheets();
@@ -965,6 +967,7 @@ export class GameApp {
         return;
       }
       this.audio.play('click');
+      this.tips.noteRoomTap(); // [plan4:UX-11]
       this.closeSheets();
       this.renderer.setSelected(buildingId);
       this.buildingPanel.show(buildingId);
@@ -973,6 +976,7 @@ export class GameApp {
     this.feedback.install();
     this.inbox.install();
     this.watchGestures(); // [plan4:UX-10]
+    this.tips.install(); // [plan4:UX-11]
 
     bus.on('state:loaded', () => {
       this.closeSheets();
@@ -1006,7 +1010,7 @@ export class GameApp {
 
   // ---- the phone's back button ----
 
-  private anyPanelOpen(): boolean {
+  anyPanelOpen(): boolean {
     return this.buildMenu.isVisible || this.buildingPanel.isVisible || this.peoplePanel.isVisible || this.researchPanel.isVisible
       || this.surfacePanel.isVisible || this.menuPanel.isVisible || this.ruinPanel.isVisible || this.journal.isVisible
       || this.eraPanel.isVisible || this.projectsPanel.isVisible || this.helpPanel.isVisible || this.chroniclePanel.isVisible || this.loreReader.isVisible || this.inbox.isVisible || this.resourceSheet.isVisible;
