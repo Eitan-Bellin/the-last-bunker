@@ -940,6 +940,12 @@ export class GameApp {
     this.renderer.onPersonHover = (sid, tid, sx, sy) => this.world.hoverPerson(sid, tid, sx, sy);
     this.renderer.onPersonDrop = (sid: string, target: string | null) => { this.tips.learned('hold'); this.world.dropSurvivor(sid, target); }; // [plan4:UX-11]
     this.renderer.onPersonTap = (sid: string) => {
+      if (this.placementMode) {
+        // [plan4:ST-19] While choosing a spot a tap on someone is a tap on the room they stand in (the ghost shows why it cannot go there), not the people panel.
+        const room = this.state.buildings.find(b => b.id === this.state.survivors.find(s => s.id === sid)?.assignedBuildingId);
+        if (room) this.world.ghostTap(room.position);
+        return;
+      }
       this.audio.play('click');
       this.closeSheets();
       this.peoplePanel.show(sid);
