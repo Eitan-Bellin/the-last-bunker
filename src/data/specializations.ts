@@ -30,6 +30,8 @@ export interface SpecDef {
   expeditionLoot?: number;
   expeditionChance?: number;
   childGrowth?: number;
+  /** [plan4:BL-4] A school role: the stat points a graduate gets (replaces the school's own 1). */
+  graduateStat?: number;
   /** [Long game] First Act in which this role can be chosen. */
   act?: number;
   /** [Long game] What the role consumes for its `extra` (a starved input slows the whole room, as in chains.ts). */

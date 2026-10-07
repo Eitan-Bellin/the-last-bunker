@@ -3,6 +3,7 @@ import { resourceDef } from '../data/resources';
 import type { GameState, ResourceType } from '../core/GameState';
 import { haptic } from '../utils/haptics';
 import { timeOfDay } from '../data/dayCycle';
+import { isPowerPlant } from '../data/buildingDefs';
 import { i18n } from '../i18n/I18nManager';
 import { RESOURCE_ICONS, el, setRich } from './dom';
 import { bedsBuilt } from '../systems/BuildingSystem';
@@ -489,7 +490,7 @@ export class HUD {
 
     const ratio = state.powerRatio ?? 1;
     // No alarm before there is any power plant to blame: the dead bunker is simply dark.
-    const hasPlant = state.buildings.some(b => (b.type === 'generator' || b.type === 'reactor' || b.type === 'reactorHall') && !(b.isConstructing && b.level === 1));
+    const hasPlant = state.buildings.some(b => isPowerPlant(b.type) && !(b.isConstructing && b.level === 1));
     if (ratio < 0.99 && hasPlant) {
       this.setText(this.powerBanner, i18n.t('hud.powerLow', { pct: Math.round(ratio * 100) }));
       this.powerBanner.style.display = '';

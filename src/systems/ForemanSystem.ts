@@ -1,6 +1,6 @@
 import type { StateManager } from '../core/StateManager';
 import type { GameState } from '../core/GameState';
-import { getDef } from '../data/buildingDefs';
+import { crewCount, getDef } from '../data/buildingDefs';
 import { wearOf } from './MaintenanceSystem';
 import type { MaintenanceSystem } from './MaintenanceSystem';
 import type { ProjectSystem } from './ProjectSystem';
@@ -140,8 +140,8 @@ export class ForemanSystem {
       if (s.assignedBuildingId || s.child || s.isOnMission) continue;
       const st = this.sm.state;
       const room = st.buildings
-        .filter(b => !b.isConstructing && b.assignedSurvivorIds.length < (getDef(b.type)?.maxWorkers ?? 0))
-        .sort((a, b) => ((getDef(b.type)?.maxWorkers ?? 0) - b.assignedSurvivorIds.length) - ((getDef(a.type)?.maxWorkers ?? 0) - a.assignedSurvivorIds.length))[0];
+        .filter(b => !b.isConstructing && crewCount(st, b) < (getDef(b.type)?.maxWorkers ?? 0))
+        .sort((a, b) => ((getDef(b.type)?.maxWorkers ?? 0) - crewCount(st, b)) - ((getDef(a.type)?.maxWorkers ?? 0) - crewCount(st, a)))[0];
       if (!room || !this.population.assignSurvivorToBuilding(this.sm, s.id, room.id)) break;
       placed++;
     }

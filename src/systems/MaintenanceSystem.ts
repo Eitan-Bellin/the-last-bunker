@@ -3,6 +3,7 @@ import type { StateManager } from '../core/StateManager';
 import type { ResourceSystem } from './ResourceSystem';
 import type { BuildingSystem } from './BuildingSystem';
 import { bus } from '../core/EventBus';
+import { getDef, isPowerPlant } from '../data/buildingDefs';
 
 /**
  * [Danger C3] Maintenance: rooms of level 3+ wear down (1% an hour, 2% for the reactor and the generator).
@@ -13,7 +14,9 @@ import { bus } from '../core/EventBus';
 export const WEAR_FROM_LEVEL = 3;
 const WEAR_PER_HOUR = 1;
 const HOT_WEAR_PER_HOUR = 2;
-const HOT_ROOMS: BuildingType[] = ['reactor', 'reactorHall', 'generator'];
+/** [plan4:BL-8] Fuel plants run hot (generator, reactors); other rooms that wear double are listed here (batteries, recyclers... join in later). */
+const HOT_ROOMS: BuildingType[] = [];
+const isHot = (type: BuildingType) => (isPowerPlant(type) && !getDef(type)?.shape) || HOT_ROOMS.includes(type);
 /** Wear is written back to the state in chunks (it changes slowly; no need to touch the state every tick). */
 const FLUSH_SECONDS = 20;
 
@@ -23,7 +26,7 @@ export function wearOf(b: BuildingInstance): number {
 
 /** Wear in percent per second of work for a room, before the engineer's discount. */
 export function wearRate(b: BuildingInstance): number {
-  return (HOT_ROOMS.includes(b.type) ? HOT_WEAR_PER_HOUR : WEAR_PER_HOUR) / 3600;
+  return (isHot(b.type) ? HOT_WEAR_PER_HOUR : WEAR_PER_HOUR) / 3600;
 }
 
 /** Every 10% of wear adds 20% to the odds a malfunction picks this room (1 at no wear, 3 at full wear). */

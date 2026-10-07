@@ -1,5 +1,6 @@
 import { lawArrivals, lawDefense } from '../data/laws';
 import { roomSlots } from '../data/buildingDefs';
+import { earlyWarningLead } from '../data/roomEffects'; // [plan4:BL-8]
 import { seasonEffects } from '../data/seasons';
 import { inBreather, threatPace, threatStrength } from './ThreatSystem';
 import type { RaidKind, RaidStance, Ruin } from '../core/GameState';
@@ -561,7 +562,7 @@ export class EventSystem {
     const state = this.ctx.sm.state;
     // [P2] The scout report: who is coming is known at once (the forecast is exact).
     const kind: RaidKind = this.ctx.rng.chance(0.5) ? 'scavengers' : 'marauders';
-    const warning = RAID_WARNING + (hasFeature(state, 'watchtower') ? 180 : 0) + (hasFeature(state, 'rapidResponse') ? 120 : 0); // [P3] the watchtower sees them sooner
+    const warning = RAID_WARNING + (hasFeature(state, 'watchtower') ? 180 : 0) + (hasFeature(state, 'rapidResponse') ? 120 : 0) + earlyWarningLead(state); // [P3] the watchtower sees them sooner; [plan4:BL-8] lookouts add their seconds
     const raid = { hitAt: state.stats.totalPlayTime + warning, strength: raidStrength(state, this.ctx.rng.next()), kind, stance: 'hold' as RaidStance };
     this.setDanger({ raid });
     bus.emit('raid:warning', raid);

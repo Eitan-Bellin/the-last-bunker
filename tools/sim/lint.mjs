@@ -33,6 +33,8 @@ try {
 const { file } = await bundleSim({ tag: 'lint', entry: join(HERE, 'lint.ts') });
 const mod = await import(pathToFileURL(file).href);
 problems.push(...mod.lintData(i18n));
+// [plan4:BL-8] The effect readers are identity on today's rooms, and a probe room with every effect and rule behaves.
+problems.push(...mod.effectHookProblems());
 try { rmSync(file); } catch { /* cache file */ }
 
 // [plan4:X-2] Placement truth table: the old fixed-12-slot rule and placeBlock/floorExtent agree on every slot of the sample saves (when present).

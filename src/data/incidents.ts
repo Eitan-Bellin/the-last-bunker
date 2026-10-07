@@ -1,5 +1,6 @@
 import type { BuildingInstance, BuildingType, DisasterKind, GameState, IncidentKind, ResourceType, SurvivorStats } from '../core/GameState';
 import type { IconName } from '../ui/icons';
+import { BUILDING_DEFS, isPowerPlant } from './buildingDefs';
 
 /** In-room crises (Sprint 6). Each kind has the rooms it strikes, the skill that fights it and what it costs while it burns. */
 export interface IncidentDef {
@@ -24,6 +25,17 @@ export interface IncidentDef {
   fixLabel: Record<'he' | 'en', string>;
 }
 
+/** [plan4:BL-8] Blackout weights: the old table for the three plants, 2 for any later fuel plant; weather-fed plants (shape) never short out. */
+function blackoutRooms(): Partial<Record<BuildingType, number>> {
+  const known: Partial<Record<BuildingType, number>> = { generator: 3, reactor: 2, reactorHall: 2 };
+  const out: Partial<Record<BuildingType, number>> = {};
+  for (const type of Object.keys(BUILDING_DEFS) as BuildingType[]) {
+    if (!isPowerPlant(type) || BUILDING_DEFS[type].shape) continue;
+    out[type] = known[type] ?? 2;
+  }
+  return out;
+}
+
 export const INCIDENTS: Record<IncidentKind, IncidentDef> = {
   fire: {
     kind: 'fire', icon: 'fire', color: 0xff7a2a, stat: 'endurance',
@@ -45,7 +57,7 @@ export const INCIDENTS: Record<IncidentKind, IncidentDef> = {
   },
   blackout: {
     kind: 'blackout', icon: 'plug', color: 0x9fb8ff, stat: 'intelligence', wholeFloor: true,
-    rooms: { generator: 3, reactor: 2, reactorHall: 2 },
+    rooms: blackoutRooms(), // [plan4:BL-8] every fuel power plant (generator 3, reactor 2, hall 2); solar and wind have no switchboard
     quickFix: { materials: 15, knowledge: 10 },
     name: { he: 'הפסקת חשמל', en: 'Blackout' },
     desc: { he: 'קצר בלוח החשמל. כל הקומה בחושך ולא עובדת.', en: 'The switchboard shorted. The whole floor is dark and idle.' },

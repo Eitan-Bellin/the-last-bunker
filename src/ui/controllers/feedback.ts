@@ -7,7 +7,7 @@ import { getPartner } from '../../data/trade';
 import { WEEKLY_CREDITS } from '../../data/challenges';
 import { i18n } from '../../i18n/I18nManager';
 import { bus } from '../../core/EventBus';
-import { getDef } from '../../data/buildingDefs';
+import { getDef, isPowerPlant } from '../../data/buildingDefs';
 import { getResearch } from '../../data/research';
 import { ACHIEVEMENTS } from '../../data/achievements';
 import { RESOURCE_ICONS } from '../../ui/dom';
@@ -47,7 +47,7 @@ export class FeedbackController {
       const name = getDef(b.type)?.name[i18n.currentLocale] ?? b.type;
       this.app.toasts.show(`[[check]] ${i18n.t('toast.buildingComplete', { name })}`, 'good');
       haptic('success'); // [plan4:UX-2] the same event fires when an upgrade finishes
-      if (b.type === 'generator' || b.type === 'reactor' || b.type === 'reactorHall') this.app.audio.play('engineStart');
+      if (isPowerPlant(b.type)) this.app.audio.play('engineStart'); // [plan4:BL-8]
       else {
         this.app.audio.play('complete');
         setTimeout(() => this.app.audio.play('hiss', { volume: 0.6 }), 260);

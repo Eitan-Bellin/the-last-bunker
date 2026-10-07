@@ -2,7 +2,7 @@ import { hasFeature } from './ResearchSystem';
 import { BASE_EAST, floorExtent, type GameState, type BuildingType, type BuildingInstance, type Position } from '../core/GameState';
 import type { StateManager } from '../core/StateManager';
 import { bus } from '../core/EventBus';
-import { getDef, effectiveLevel, isDistrict, roomFloors, roomSlots, specLevel, type BuildingDef } from '../data/buildingDefs';
+import { getDef, effectiveLevel, isDistrict, roomFloors, roomSlots, specLevel, touching, actMult, type BuildingDef } from '../data/buildingDefs';
 import { actOf, levelCapFor } from '../data/acts';
 import { TUNING } from '../data/tuning';
 import { scenarioOf } from '../data/scenarios';
@@ -15,7 +15,9 @@ import { RETOOL_PRICE_MULT, RETOOL_SECONDS, SPEC_COST, specTotal, specsFor } fro
 export const SLOTS_PER_FLOOR = BASE_EAST;
 
 /** Why a room cannot be placed at a spot; null = it can. 'floor' = no such floor / not placeable on the grid, 'bounds' = outside the floor's extent, 'zone' = wrong zone for the type. */
-export type PlaceBlock = 'floor' | 'bounds' | 'zone' | 'ruin' | 'overlap';
+export type PlaceBlock = 'floor' | 'bounds' | 'zone' | 'ruin' | 'overlap'
+  // [plan4:BL-1] surface = a surface-row room off the (open) surface row, adjacency = needs a neighbour of a given type, locked = its story flag is not set, copies = the type's limit is reached
+  | 'surface' | 'adjacency' | 'locked' | 'copies';
 
 /**
  * S1: each upgrade level past the first costs another (costMultiplier + this), so rooms max out over days, not in the first hour.
@@ -78,10 +80,12 @@ export class BuildingSystem {
 
     const existingCount = state.buildings.filter(b => b.type === type).length;
     const multiplier = Math.pow(def.costMultiplier, existingCount);
+    // [plan4:BL-5] Rooms with priceByAct cost more in later Acts (x1 .. x5); every older room keeps its price (factor 1).
+    const act = def.priceByAct ? actMult(actOf(state).id) : 1;
 
     const costs: Record<string, number> = {};
     for (const [resource, amount] of Object.entries(def.baseCost)) {
-      costs[resource] = Math.ceil(amount * multiplier);
+      costs[resource] = Math.ceil(amount * multiplier * act);
     }
     return costs;
   }
@@ -153,7 +157,13 @@ export class BuildingSystem {
     const def = getDef(type);
     if (!def || isDistrict(type)) return 'floor';
     const levels = roomFloors(type);
-    if (pos.floor < 0 || pos.floor + levels > state.currentFloors) return 'floor';
+    const place = def.place;
+    // [plan4:BL-1] Surface rooms stand on the gate-house row (floor -1) once it is open; nobody else may use floor -1.
+    if (place?.floors === 'surface') {
+      if (pos.floor !== -1 || !state.layout?.surfaceOpen) return 'surface';
+    } else if (pos.floor < 0 || pos.floor + levels > state.currentFloors) return 'floor';
+    if (place?.needsFlag && !state.storyFlags.includes(place.needsFlag)) return 'locked';
+    if (def.maxCopies !== undefined && state.buildings.filter(b => b.type === type).length >= def.maxCopies) return 'copies';
     const allowed = allowedFloors(type, state.currentFloors);
     for (let f = pos.floor; f < pos.floor + levels; f++) if (!allowed.includes(f)) return 'zone';
     const w = roomSlots(type);
@@ -172,6 +182,11 @@ export class BuildingSystem {
       if (eBottom < top || eTop > bottom) continue;
       const ew = roomSlots(existing.type);
       if (pos.x < existing.position.x + ew && pos.x + w > existing.position.x) return 'overlap';
+    }
+    // [plan4:BL-1] Must touch a room of the given type on the same floor (fish ponds by the lake, a ward by the medbay).
+    if (place?.adjacentTo) {
+      const spot = { type, position: { x: pos.x, floor: pos.floor } };
+      if (!state.buildings.some(o => o.type === place.adjacentTo && touching(o, spot))) return 'adjacency';
     }
     return null;
   }

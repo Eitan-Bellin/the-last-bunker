@@ -4,7 +4,7 @@ import { hasFeature } from './ResearchSystem';
 import { seasonEffects } from '../data/seasons';
 import type { BuildingInstance, GameState, ResourceType, ResourceState } from '../core/GameState';
 import type { StateManager, StateDelta } from '../core/StateManager';
-import { getDef, effectiveLevel, levelMultiplier, workforceMultiplier } from '../data/buildingDefs';
+import { getDef, effectiveLevel, levelMultiplier, shapeFactor, workforceMultiplier } from '../data/buildingDefs';
 import { researchBuildingMult, researchCapBonus, researchResourceMult } from './ResearchSystem';
 import { chainFactor, chainInputs, inputFed, inputRate } from '../data/chains';
 import { incidentBlocks } from '../data/incidents';
@@ -285,14 +285,15 @@ export class ResourceSystem {
   private powerOutput(state: GameState, b: BuildingInstance, level: number): number {
     const p = getDef(b.type)?.production?.power;
     if (!p) return 0;
-    return p.base * levelMultiplier(p, level) * this.roomFactor(state, b) * modifierProduct({ state, building: b, resource: 'power', powerRatio: 1 });
+    return p.base * levelMultiplier(p, level) * this.roomFactor(state, b) * modifierProduct({ state, building: b, resource: 'power', powerRatio: 1 })
+      * shapeFactor(getDef(b.type), state.stats.totalPlayTime); // [plan4:BL-8] solar follows the sun, wind the gusts; 1 for every other room
   }
 
   private computeOutput(state: GameState, b: BuildingInstance, powerRatio: number): Partial<Record<ResourceType, number>> {
     const def = getDef(b.type);
     const level = effectiveLevel(b);
     if (!def?.production || level <= 0 || incidentBlocks(state, b)) return {};
-    const room = this.roomFactor(state, b);
+    const room = this.roomFactor(state, b) * shapeFactor(def, state.stats.totalPlayTime); // [plan4:BL-8] weather shape: 1 unless the def has one
     const out: Partial<Record<ResourceType, number>> = {};
     for (const [r, entry] of Object.entries(def.production)) {
       if (r === 'power') continue;

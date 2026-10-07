@@ -4,6 +4,7 @@ import { bus } from '../core/EventBus';
 import { viewport } from '../utils/viewport'; // [perf] window size without forcing layout
 import { BUILDING_W, SHAFT_W } from './layout';
 import { GFX } from './gfxFeatures';
+import { windAt } from '../data/dayCycle';
 import { hGradient, mix, seeded, softGlow, vGradient } from './draw';
 import { PAINT_RIGHT, SKY_TOP, WORLD_LEFT, WORLD_RIGHT, type Animated } from './world';
 import {
@@ -879,7 +880,7 @@ export function buildSurface2(
       }
 
       // Clouds drift with the wind; they thicken and grey in rain, darken at night.
-      const gust = 0.6 + 0.4 * Math.sin(t * 0.37) * Math.sin(t * 0.13 + 1);
+      const gust = 0.2 + 0.8 * windAt(t); // [plan4:BL-8] the same curve the wind turbines use (data/dayCycle.ts)
       const wind = gust * (1 + 0.6 * rain);
       api.wind = wind;
       cloudHigh.tilePosition.x += dt * 3.2 * (0.7 + 0.3 * wind);

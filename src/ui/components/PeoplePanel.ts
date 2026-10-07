@@ -1,8 +1,9 @@
 import type { GameState, SurvivorState } from '../../core/GameState';
 import type { GameEngine } from '../../core/GameEngine';
 import { i18n } from '../../i18n/I18nManager';
-import { getDef, traitBonus } from '../../data/buildingDefs';
-import { STAT_KEYS, xpForNextLevel } from '../../systems/PopulationSystem';
+import { crewCount, getDef, traitBonus } from '../../data/buildingDefs';
+import { childCapacityOf } from '../../data/roomEffects'; // [plan4:BL-4]
+import { MORALE_KINDS, STAT_KEYS, xpForNextLevel } from '../../systems/PopulationSystem';
 import { Sheet } from './Sheet';
 import { genderOf, portraitFor, portraitUrl } from '../../data/portraits';
 import { BUILDING_ICONS, STAT_ICONS, bar, button, el, localizedTrait, setBar } from '../dom';
@@ -244,13 +245,14 @@ export class PeoplePanel {
         : s.assignedBuildingId === 'p_dig' ? `[[pick]] ${i18n.t('dig.duty', { n: (state.longGame?.dig.floor ?? 0) + 1 })}` // [Long game]
         : s.assignedBuildingId?.startsWith('p_') ? `[[build]] ${i18n.t('proj.duty')}` // [LateGame B1]
         : `[[warning]] ${i18n.t('people.noJob')}`;
-    jobRow.appendChild(el('span', job || ruin || s.child || s.assignedBuildingId?.startsWith('p_') ? '' : 'warn', s.child ? `[[baby]] ${i18n.t('family.tooYoung', { g: genderOf(s) })}` : jobName));
+    // [plan4:BL-4] A child in a nursery or school shows its room; otherwise "too young", as before.
+    jobRow.appendChild(el('span', job || ruin || s.child || s.assignedBuildingId?.startsWith('p_') ? '' : 'warn', s.child && !job ? `[[baby]] ${i18n.t('family.tooYoung', { g: genderOf(s) })}` : jobName));
     const actions = el('div', 'person-actions');
     actions.appendChild(button('?', 'btn-small btn-ghost', () => {
       this.expandedId = this.expandedId === s.id ? null : s.id;
       this.refresh(this.engine.stateManager.state);
     }));
-    if (!s.child) {
+    if (!s.child || state.buildings.some(b => !b.isConstructing && childCapacityOf(b) > 0)) { // [plan4:BL-4] children can be placed once a room takes them
       actions.appendChild(button(i18n.t('people.assign'), 'btn-small', () => {
         this.choosingFor = this.choosingFor === s.id ? null : s.id;
         this.refresh(this.engine.stateManager.state);
@@ -280,6 +282,31 @@ export class PeoplePanel {
     const total = el('div', 'bp-row total');
     total.append(el('span', '', '→'), el('span', 'bp-value', `${target}%`));
     box.appendChild(total);
+    box.appendChild(this.renderMoraleSources(state));
+    return box;
+  }
+
+  /** [plan4:BL-3] "Morale sources": what each channel gives (against its ceiling) and which rooms feed it. Empty when no room gives morale. */
+  private renderMoraleSources(state: GameState): HTMLElement {
+    const box = el('div', 'morale-sources');
+    const m = this.engine.populationSystem.getMoraleSources(state);
+    if (m.sources.length === 0) return box;
+    const locale = i18n.currentLocale;
+    box.appendChild(el('div', 'bp-section-title', i18n.t('morale.sources')));
+    for (const kind of MORALE_KINDS) {
+      const ch = m.channels[kind];
+      const rows = m.sources.filter(x => x.kind === kind);
+      if (rows.length === 0) continue;
+      const head = el('div', 'bp-row');
+      head.append(el('span', '', i18n.t(`morale.channel.${kind}`)), el('span', 'bp-value', `${Math.round(ch.value)}/${ch.cap}`));
+      box.appendChild(head);
+      for (const r of rows) {
+        const name = getDef(r.type)?.name[locale] ?? r.type;
+        const row = el('div', 'bp-row');
+        row.append(el('span', 'bp-hint', `${BUILDING_ICONS[r.type] ?? ''} ${i18n.t('morale.sourceRow', { name, n: r.count })}`), el('span', 'bp-value positive', `+${r.value.toFixed(1)}`));
+        box.appendChild(row);
+      }
+    }
     return box;
   }
 
@@ -298,11 +325,16 @@ export class PeoplePanel {
 
     for (const b of state.buildings) {
       const def = getDef(b.type);
-      if (!def || def.maxWorkers === 0) continue;
-      const full = b.assignedSurvivorIds.length >= def.maxWorkers && !b.assignedSurvivorIds.includes(s.id);
+      if (!def || (def.maxWorkers === 0 && !s.child)) continue;
+      // [plan4:BL-4] Children pick rooms with childCapacity (a separate count); adults count only adults.
+      if (s.child ? childCapacityOf(b) <= 0 || b.isConstructing : false) continue;
+      const kids = b.assignedSurvivorIds.length - crewCount(state, b);
+      const used = s.child ? kids : crewCount(state, b);
+      const cap = s.child ? childCapacityOf(b) : def.maxWorkers;
+      const full = used >= cap && !b.assignedSurvivorIds.includes(s.id);
       const statVal = def.optimalStat ? `${STAT_ICONS[def.optimalStat]} ${s.stats[def.optimalStat]}` : '';
       const star = traitBonus(s.traits, b.type) > 0 ? ' [[star]]' : '';
-      const label = `B${b.position.floor + 1} · ${BUILDING_ICONS[b.type] ?? ''} ${def.name[locale] ?? def.name.en} (${b.assignedSurvivorIds.length}/${def.maxWorkers}) ${statVal}${star}`;
+      const label = `B${b.position.floor + 1} · ${BUILDING_ICONS[b.type] ?? ''} ${def.name[locale] ?? def.name.en} (${used}/${cap}) ${statVal}${star}`;
       const btn = button(full ? `${label} · ${i18n.t('people.full')}` : label, `btn-job ${b.id === s.assignedBuildingId ? 'current' : ''}`, () => assign(b.id), full);
       box.appendChild(btn);
     }

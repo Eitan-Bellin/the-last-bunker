@@ -9,3 +9,11 @@ export function timeOfDay(playSeconds: number): { hour: number; minute: number; 
   const night = Math.max(0, Math.min(1, (-daylight + 0.15) / 0.85));
   return { hour, minute, night };
 }
+
+/**
+ * [plan4:BL-8] The wind of the day, 0..1, from the play clock: a slow swell with a second, slower swell bending it.
+ * Wind turbines read it (ResourceSystem, shape 'wind') and the surface panorama leans its grass by the same curve.
+ */
+export function windAt(playSeconds: number): number {
+  return 0.5 + 0.5 * Math.sin(playSeconds / 1800 + 2 * Math.sin(playSeconds / 7300));
+}

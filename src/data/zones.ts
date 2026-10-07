@@ -1,4 +1,5 @@
 import type { BuildingType } from '../core/GameState';
+import { getDef } from './buildingDefs';
 
 export type ZoneId = 'living' | 'agri' | 'engineering' | 'deep';
 
@@ -59,14 +60,25 @@ const BUILDING_ZONE: Partial<Record<BuildingType, ZoneId>> = {
   reactor: 'engineering',
 };
 
-/** Floors a building type may be placed on: its own zone plus any deep level (storage fits anywhere). */
+/**
+ * Floors a building type may be placed on: its own zone plus any deep level (storage fits anywhere).
+ * [plan4:BL-1] `def.place` refines it: floors 'surface' = the gate-house row (-1), 'entrance' = floor 0, 'deep' = levels dug past the
+ * founding three, 'zone' = the old rule spelled out; `minFloor` drops everything above it.
+ */
 export function allowedFloors(type: BuildingType, totalFloors: number = BASE_FLOORS): number[] {
   const deep: number[] = [];
   for (let f = BASE_FLOORS; f < totalFloors; f++) deep.push(f);
-  if (type === 'reactorHall') return deep;
-  const zone = BUILDING_ZONE[type];
-  if (!zone) return [...ZONES.map(z => z.floor), ...deep];
-  return [ZONES.find(z => z.id === zone)!.floor, ...deep];
+  const place = getDef(type)?.place;
+  let floors: number[];
+  if (place?.floors === 'surface') floors = [-1];
+  else if (place?.floors === 'entrance') floors = [0];
+  else if (place?.floors === 'deep') floors = deep;
+  else if (type === 'reactorHall') floors = deep;
+  else {
+    const zone = BUILDING_ZONE[type];
+    floors = !zone ? [...ZONES.map(z => z.floor), ...deep] : [ZONES.find(z => z.id === zone)!.floor, ...deep];
+  }
+  return place?.minFloor === undefined ? floors : floors.filter(f => f >= place.minFloor!);
 }
 
 export function zoneForFloor(floor: number): ZoneDef {
