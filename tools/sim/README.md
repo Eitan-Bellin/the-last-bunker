@@ -25,6 +25,7 @@ node tools/sim/run.mjs --mode engaged --days 7   --seeds 1-5 --json store/sim/my
 | `--note` | free text stored in the JSON |
 | `--difficulty` | `settler`, `warden` (default) or `last` (long game) |
 | `--dump-save <prefix>` | write each run's final game as `<prefix>-seed<N>.json` (sample saves for migration tests) |
+| `--daily` | [plan4:GP-1] the bot's use of the daily orders: `half` (default: finishes and takes 1 then 2 of the 3 orders, 1.5 on average, gold as pieces of a blueprint), `full` (all three and the chest every day, the stress case), `off`. The result has a `daily` block (days, orders, chests, credits, rush, blueprints) |
 | `--progress` / `--quiet` | more / less console output |
 
 Re-print or compare saved runs:
@@ -77,6 +78,7 @@ levels, research, beds), objectives done and final state.
 
 ## Long-game tools
 
+- `node tools/sim/daily-test.mjs [folder]`: [plan4:GP-1] daily orders (04:00 day, pool and choice, streak and grace day, rewards, the 1.5-hour cap, progress, away rules, swap, save defaults, one pass through the engine).
 - `node tools/sim/lint.mjs`: en/he keys and placeholders match, research is a sound DAG, every cost names a real resource (also in CI and `npm run check`).
 - `node tools/sim/migrate-test.mjs [folder]`: migrates and starts every sample save in the folder (default `store/sim/saves-v4`); fails on anything lost.
 - `node tools/sim/gates.mjs <save.json> [--hours 24]`: determinism (same seed, same game), offline identity (a day away vs online, shared systems within 3%) and performance budgets.

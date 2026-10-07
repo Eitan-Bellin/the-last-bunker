@@ -224,6 +224,9 @@ export function checkinSuggestions(engine: GameEngine, state: GameState, max = 3
     return res.cap > 0 && res.amount >= res.cap * 0.95 && res.productionRate > res.consumptionRate;
   });
   if (full) push({ id: 'storage', icon: '[[storage]]', text: i18n.t('checkin.sugStorage', { res: i18n.t(`resources.${full}`) }), action: { kind: lg ? 'projects' : 'rooms' } });
+  // [plan4:GP-1] Daily orders still open: one tap to the sheet (after the free actions, before the slow requirements).
+  const dsum = engine.dailySystem.summary(state);
+  if (dsum.n > dsum.done) push({ id: 'daily', icon: '[[target]]', text: i18n.t('checkin.sugDaily', { n: dsum.n - dsum.done }), action: { kind: 'daily' } });
   for (const r of reqs.filter(q => !q.immediate).sort((a, b) => a.fraction - b.fraction)) push({ id: r.id, icon: r.icon, text: r.text, action: r.action });
   if (out.length === 0) {
     const o = engine.objectiveSystem.current(state);

@@ -69,6 +69,7 @@ import './styles/depth.css';
 import './styles/command.css';
 import './styles/buildmenu.css'; // [plan4:BL-39] before touch.css so its 44px rules still win
 import './styles/checkin.css'; // [plan4:Gameplay] dialog queue card, gesture tips, check-in screen
+import './styles/daily.css'; // [plan4:GP-1] daily orders
 import './styles/touch.css'; // [plan4:UX-5] last again (its header says so): its 44px targets must beat the older sheet-help sizes in command.css
 import './styles/placement.css'; // [plan4:ST-19] the confirm bar and the chips over the ghost room
 import './styles/a11y.css'; // [plan4:AC-2] the accessibility layer, last of all: reduced motion, colour modes, focus rings
@@ -85,6 +86,7 @@ import { WhatsNewController } from './ui/controllers/whatsnew'; // [plan4:ST-9]
 import { WelcomeController } from './ui/controllers/welcome';
 import { TipsController } from './ui/controllers/tips'; // [plan4:UX-11]
 import { PRODUCTION_POPUP_MS, WorldController } from './ui/controllers/world';
+import { DailyController } from './ui/controllers/daily'; // [plan4:GP-1]
 
 /** Icons drawn inside the Pixi scene (plaques, signs, popups); rasterized once at startup. */
 const SCENE_ICONS: IconName[] = [
@@ -110,6 +112,8 @@ export class GameApp {
   readonly events = new EventController(this);
   readonly story = new StoryController(this);
   readonly welcome = new WelcomeController(this);
+  /** [plan4:GP-1] Daily orders: HUD chip, sheet, day chest. */
+  readonly daily = new DailyController(this);
   /** [plan4:UX-11] Gesture tips. */
   readonly tips = new TipsController(this);
   readonly world = new WorldController(this);
@@ -669,6 +673,7 @@ export class GameApp {
     }
     this.hud.setJournalUnread(state.loreUnread?.length ?? 0);
     this.hud.setSupply(this.engine.supplySystem.isReady(state), i18n.t('supply.title'));
+    this.daily.refresh(state); // [plan4:GP-1]
     this.danger.updateIncidentBanner();
     // [plan4:UX-11] The gesture tips (pinch, double tap, hold a survivor, wings), once each; the old drag toast is the "hold" tip now.
     this.tips.update(performance.now());
@@ -735,6 +740,7 @@ export class GameApp {
     else if (action.kind === 'dig') this.dig.confirmDig();
     else if (action.kind === 'command') this.eraPanel.show(state);
     else if (action.kind === 'genesis') this.menuPanel.show('genesis');
+    else if (action.kind === 'daily') this.daily.show(); // [plan4:GP-1]
     else if (action.kind === 'ruins') {
       const rs = this.engine.restorationSystem;
       const target = state.ruins.find(r => r.started) ?? state.ruins.find(r => rs.canStart(state, r)) ?? state.ruins[0];
@@ -1034,6 +1040,7 @@ export class GameApp {
 
     this.feedback.install();
     this.inbox.install();
+    this.daily.install(); // [plan4:GP-1]
     this.watchGestures(); // [plan4:UX-10]
     this.tips.install(); // [plan4:UX-11]
 
@@ -1072,7 +1079,7 @@ export class GameApp {
   anyPanelOpen(): boolean {
     return this.buildMenu.isVisible || this.buildingPanel.isVisible || this.peoplePanel.isVisible || this.researchPanel.isVisible
       || this.surfacePanel.isVisible || this.menuPanel.isVisible || this.ruinPanel.isVisible || this.journal.isVisible
-      || this.eraPanel.isVisible || this.projectsPanel.isVisible || this.helpPanel.isVisible || this.chroniclePanel.isVisible || this.loreReader.isVisible || this.inbox.isVisible || this.resourceSheet.isVisible;
+      || this.eraPanel.isVisible || this.projectsPanel.isVisible || this.helpPanel.isVisible || this.chroniclePanel.isVisible || this.loreReader.isVisible || this.inbox.isVisible || this.resourceSheet.isVisible || this.daily.isVisible;
   }
 
   /**
@@ -1137,6 +1144,7 @@ export class GameApp {
     this.couponPanel.hide();
     this.inbox.hide();
     this.resourceSheet.hide();
+    this.daily.hide(); // [plan4:GP-1]
   }
 
   // ---- [Danger] raid warnings, disasters, memorials (LATEGAME-PLAN part C) ----

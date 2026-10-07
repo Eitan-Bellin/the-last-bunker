@@ -1,0 +1,48 @@
+/* [plan4:GP-1] Daily orders: the HUD chip, the sheet and its cards. Fonts go through --fs (Text size XL), buttons keep var(--tap) height, and
+   nothing is wider than the sheet. Tier colours are decoration; every tier also carries its name as text (never colour alone). */
+
+/* ---------- HUD chip ---------- */
+.daily-btn { position: relative; display: inline-flex; align-items: center; gap: 4px; }
+.daily-btn .daily-text { font-variant-numeric: tabular-nums; font-size: calc(12px * var(--fs, 1)); }
+.daily-btn .nav-badge { top: -6px; inset-inline-end: -6px; }
+.daily-btn.has-cards { color: #ffd27a; border-color: rgba(255, 210, 122, 0.6); }
+
+/* ---------- sheet ---------- */
+.daily-sheet .sheet-body { display: flex; flex-direction: column; gap: 10px; }
+.daily-head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 2px 12px; font-size: calc(12px * var(--fs, 1)); color: var(--text-secondary); }
+.daily-reset { font-variant-numeric: tabular-nums; }
+.daily-empty { text-align: center; color: var(--text-secondary); padding: 24px 8px; margin: 0; }
+
+.daily-card, .daily-chest { display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; border-radius: 10px; background: var(--bg-card); border: 1px solid var(--border); }
+.daily-card.tier-easy { border-inline-start: 4px solid #c58b57; }
+.daily-card.tier-medium { border-inline-start: 4px solid #b9c3cf; }
+.daily-card.tier-new { border-inline-start: 4px solid #ffd27a; }
+.daily-card.done:not(.claimed) { border-color: rgba(122, 255, 176, 0.7); box-shadow: 0 0 10px rgba(122, 255, 176, 0.18); }
+.daily-card.claimed { opacity: 0.7; }
+
+.daily-top { display: flex; gap: 10px; align-items: flex-start; }
+.daily-main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.daily-name { font-size: calc(14px * var(--fs, 1)); line-height: 1.4; color: var(--text-primary); overflow-wrap: anywhere; }
+.daily-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; font-size: calc(12px * var(--fs, 1)); color: var(--text-secondary); }
+.daily-tier { font-weight: 700; padding: 1px 8px; border-radius: 10px; border: 1px solid currentColor; }
+.daily-tier.tier-easy { color: #d9a070; }
+.daily-tier.tier-medium { color: #d6dee8; }
+.daily-tier.tier-new { color: #ffd27a; }
+.daily-reward { overflow-wrap: anywhere; }
+.daily-prog { display: flex; align-items: center; gap: 10px; }
+.daily-prog .bar-track { flex: 1 1 auto; }
+.daily-progtext { flex: 0 0 auto; min-width: 3.5em; text-align: end; font-size: calc(12px * var(--fs, 1)); font-variant-numeric: tabular-nums; color: var(--text-secondary); }
+.daily-hint { margin: 0; font-size: calc(12px * var(--fs, 1)); line-height: 1.4; color: var(--text-secondary); overflow-wrap: anywhere; }
+.daily-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; align-items: center; }
+.daily-actions .btn { min-height: var(--tap, 44px); min-width: 104px; }
+.daily-claim { flex: 1 1 120px; }
+.daily-taken { color: var(--ok, #7affb0); font-size: calc(13px * var(--fs, 1)); padding: 8px 4px; }
+.daily-swap { min-height: var(--tap, 44px); }
+.daily-all { width: 100%; min-height: var(--tap, 44px); }
+
+.daily-chest { flex-direction: row; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+.daily-chest.ready { border-color: rgba(255, 210, 122, 0.8); box-shadow: 0 0 12px rgba(255, 210, 122, 0.22); }
+.daily-chest.taken { opacity: 0.7; }
+.daily-chest .btn { min-height: var(--tap, 44px); min-width: 120px; }
+.daily-foot { display: flex; flex-direction: column; gap: 2px; padding: 2px 4px 8px; }
+.daily-streak { margin: 0; font-size: calc(14px * var(--fs, 1)); color: var(--accent); }
