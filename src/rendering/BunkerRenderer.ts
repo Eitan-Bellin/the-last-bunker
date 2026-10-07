@@ -17,7 +17,7 @@ import { timeOfDay } from '../data/dayCycle';
 import { ProjectSites, type SiteInfo } from './projectSites';
 import { AMBIENCE_FOR, type AmbienceKey } from '../audio/ambience';
 import type { AmbienceMix } from '../audio/AudioEngine';
-import { Dust, buildDigSign, buildShaft, buildSurface, buildUnderground, buildUtilities, type Animated } from './world';
+import { Dust, buildDigSign, buildShaft, buildSurface, buildUnderground, buildUtilities, worldLeft, type Animated } from './world';
 import { LAYOUT, VIEW, bandize, hashLayout } from './perfFx'; // [perf]
 import { buildShaft2 } from './shaft';
 import { buildGalleries } from './gallery'; // [plan4:ST-1]
@@ -262,6 +262,8 @@ export class BunkerRenderer {
   private span = { l: 0, r: BUILDING_W };
   /** [plan4:ST-4] How far the floors reach, for the camera: the west edge (0 without a wing) and the east edge of the widest floor. */
   private extentL = 0;
+  /** [plan4:ST-4] The world's west edge the surface was built for (see world.ts worldLeft). */
+  private surfaceLeft = worldLeft(0);
   private extentWingR = BUILDING_W;
   private exts: Ext[] = [];
   private wingSigns = new WingSigns(() => this.cam.isDragging);
@@ -603,6 +605,9 @@ export class BunkerRenderer {
     this.extentL = exts.reduce((m, x) => Math.max(m, x.w), 0) > 0 ? slotX(-exts.reduce((m, x) => Math.max(m, x.w), 0)) - 14 : 0;
     this.extentWingR = slotX(exts.reduce((m, x) => Math.max(m, x.e), 12));
     this.extentR = Math.max(BUILDING_W, this.extentWingR, this.projectSites.right);
+    // [plan4:ST-4] A west wing past the classic edge: the sky, ground and dark edge of the surface move out with the rock (rebuilt once per two-slot step).
+    const wl = worldLeft(exts.reduce((m, x) => Math.max(m, x.w), 0));
+    if (wl !== this.surfaceLeft) { this.surfaceLeft = wl; this.surfaceSig = ''; this.refreshSurface(); }
     this.undergroundHolder.removeChildren().forEach(c => c.destroy({ children: true }));
     const districtList = state.buildings.filter(b => isDistrict(b.type));
     const districts = districtList.map(b => b.position.floor);
@@ -1398,17 +1403,17 @@ export class BunkerRenderer {
   private refreshSurface(): void {
     const key = `backdrops/surface-${Math.max(0, this.surfaceEra)}`;
     const tex = ArtLibrary.get(key);
-    const sig = `${key}|${!!tex}${this.gfx2 ? `|${surface2Sig(Math.max(0, this.surfaceEra))}` : ''}`; // [gfx2 surface]
+    const sig = `${key}|${!!tex}|${this.surfaceLeft}${this.gfx2 ? `|${surface2Sig(Math.max(0, this.surfaceEra))}` : ''}`; // [gfx2 surface] [plan4:ST-4] the west edge
     if (sig === this.surfaceSig) return;
     this.surfaceSig = sig;
     this.surfaceHolder.removeChildren().forEach(c => c.destroy({ children: true }));
     const RAYS = [0xc8d4e8, 0xffe2b8, 0xffd496, 0xffc878];
     if (this.gfx2) {
       // [gfx2 surface] painted entrance, topsoil and props: src/rendering/surface2.ts
-      const s2 = buildSurface2(tex, coneTexture(), RAYS[Math.max(0, Math.min(3, this.surfaceEra))], Math.max(0, this.surfaceEra), () => this.nightNow);
+      const s2 = buildSurface2(tex, coneTexture(), RAYS[Math.max(0, Math.min(3, this.surfaceEra))], Math.max(0, this.surfaceEra), () => this.nightNow, this.surfaceLeft);
       mountSurface2(s2, this.worldContainer, this.undergroundHolder, this.shaftHolder);
       this.surface = s2;
-    } else this.surface = buildSurface(tex, coneTexture(), RAYS[Math.max(0, Math.min(3, this.surfaceEra))]);
+    } else this.surface = buildSurface(tex, coneTexture(), RAYS[Math.max(0, Math.min(3, this.surfaceEra))], this.surfaceLeft);
     this.surfaceHolder.addChild(this.surface.container);
   }
 

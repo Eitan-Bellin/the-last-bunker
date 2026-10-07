@@ -253,12 +253,12 @@ function splitStrip(key: string, c: HTMLCanvasElement): [Texture, Texture, numbe
  * The topsoil as two meshes that follow the rolling ground line: the grass fringe (its tip row leans in the
  * wind) and the soil band whose thickness varies, with a ragged dark blend into the rock below.
  */
-function buildGround(key: string, c: HTMLCanvasElement): { layer: Container; sway: (t: number, wind: number) => void } {
+function buildGround(key: string, c: HTMLCanvasElement, left = WORLD_LEFT): { layer: Container; sway: (t: number, wind: number) => void } {
   const [grassTex, soilTex, splitF] = splitStrip(key, c);
   const layer = new Container();
   const k = SOIL_H / c.height;
   const rep = c.width * k;
-  const x0 = WORLD_LEFT - GROUND_EXT, x1 = WORLD_RIGHT + GROUND_EXT, SEG = 14;
+  const x0 = left - GROUND_EXT, x1 = WORLD_RIGHT + GROUND_EXT, SEG = 14; // [plan4:ST-4] `left`: the world's west edge (further out when a wing needs it)
   const N = Math.ceil((x1 - x0) / SEG) + 1;
   const xs = new Float32Array(N);
   for (let i = 0; i < N; i++) xs[i] = x0 + i * SEG;
@@ -420,6 +420,7 @@ function rainNow(wet: number): number {
 
 export function buildSurface2(
   backdrop: Texture | null, rayTexture: Texture | null, rayColor: number, era: number, getNight: () => number,
+  left = WORLD_LEFT, // [plan4:ST-4] the world's west edge: WORLD_LEFT, or 260 beyond the widest west wing (world.ts worldLeft)
 ): Surface2 {
   hookBus();
   const root = new Container();
@@ -442,7 +443,7 @@ export function buildSurface2(
   front.addChild(frontLit, frontSmoke, frontGlows);
   far.addChild(farBack, nightSky, clouds, farLand, farFx);
   const rnd = seeded(77);
-  const w = WORLD_RIGHT - WORLD_LEFT;
+  const w = WORLD_RIGHT - left;
   const sky = ERA_SKY[Math.max(0, Math.min(3, era))];
   let quality: SurfaceQuality = 'high';
 
@@ -456,7 +457,7 @@ export function buildSurface2(
   // Scaled to the panorama's own span; past it the mirrored copies carry the land on east (the world is wider for the project lots).
   const pw = PAINT_RIGHT - WORLD_LEFT + 40, px0 = WORLD_LEFT - 20;
   let ph = 600, py0 = -500;
-  const skyX0 = WORLD_LEFT - SKY_EXT, skyX1 = WORLD_RIGHT + SKY_EXT;
+  const skyX0 = left - SKY_EXT, skyX1 = WORLD_RIGHT + SKY_EXT;
   if (backdrop) {
     const scale = pw / backdrop.width;
     ph = backdrop.height * scale;
@@ -500,7 +501,7 @@ export function buildSurface2(
     });
   } else {
     const g = new Graphics();
-    g.rect(WORLD_LEFT, SKY_TOP, w, -SKY_TOP).fill(vGradient([[0, 0x14101e], [0.55, 0x3a2430], [0.85, 0x7a4a2e], [1, 0x9a6a3a]]));
+    g.rect(left, SKY_TOP, w, -SKY_TOP).fill(vGradient([[0, 0x14101e], [0.55, 0x3a2430], [0.85, 0x7a4a2e], [1, 0x9a6a3a]]));
     farBack.addChild(g);
   }
 
@@ -643,19 +644,19 @@ export function buildSurface2(
   const soilCanvas = keyedStrip(soilKey);
   let sway: ((t: number, wind: number) => void) | null = null;
   if (soilCanvas) {
-    const g = buildGround(soilKey, soilCanvas);
+    const g = buildGround(soilKey, soilCanvas, left);
     sway = g.sway;
     soil.addChild(g.layer);
   } else {
     // While the strip loads: a plain earth line (the old look).
     const g = new Graphics();
-    g.rect(WORLD_LEFT, -8, w, 10).fill(0x4a3a2a);
+    g.rect(left, -8, w, 10).fill(0x4a3a2a);
     soil.addChild(g);
   }
   // Past the world's sides the rock and the soil fade into the dark.
   {
     const v = new Graphics();
-    v.rect(WORLD_LEFT - SKY_EXT, -46, SKY_EXT + 60, 6000).fill(hGradient([[0, VOID, 1], [0.86, VOID, 1], [0.97, VOID, 0.55], [1, VOID, 0]]));
+    v.rect(left - SKY_EXT, -46, SKY_EXT + 60, 6000).fill(hGradient([[0, VOID, 1], [0.86, VOID, 1], [0.97, VOID, 0.55], [1, VOID, 0]]));
     v.rect(WORLD_RIGHT - 60, -46, SKY_EXT + 60, 6000).fill(hGradient([[0, VOID, 0], [0.03, VOID, 0.55], [0.14, VOID, 1], [1, VOID, 1]]));
     soil.addChild(v);
   }
@@ -775,7 +776,7 @@ export function buildSurface2(
     const size = 1.5 + rnd() * 2.5;
     s.width = s.height = size;
     dust.addChild(s);
-    motes.push({ s, x: WORLD_LEFT + rnd() * w, y: -2 - rnd() * 26, v: 10 + rnd() * 18, ph: rnd() * 10, size });
+    motes.push({ s, x: left + rnd() * w, y: -2 - rnd() * 26, v: 10 + rnd() * 18, ph: rnd() * 10, size });
   }
 
   // ---------- Weather ----------
@@ -800,7 +801,7 @@ export function buildSurface2(
   let spin = 0, spinFrom = 0, spinTo = 0, spinT0 = -10;
   const SPIN_DUR = 2.6;
   let flashAge = 9;
-  const view: View = { x0: WORLD_LEFT, x1: WORLD_RIGHT, y0: -400, y1: 400 };
+  const view: View = { x0: left, x1: WORLD_RIGHT, y0: -400, y1: 400 };
   const lr = seeded(5150);
 
   const api: Surface2 = {
@@ -945,7 +946,7 @@ export function buildSurface2(
         m.s.visible = i < nMotes && surfaceShown;
         if (!m.s.visible) continue;
         m.x += m.v * gust * dt * (1 - 0.8 * flies);
-        if (m.x > WORLD_RIGHT) { m.x = WORLD_LEFT; m.y = -2 - ((m.ph * 7.3) % 26); }
+        if (m.x > WORLD_RIGHT) { m.x = left; m.y = -2 - ((m.ph * 7.3) % 26); }
         if (flies > 0.01) {
           const blink = Math.max(0, Math.sin(t * 1.3 + m.ph * 3));
           m.s.position.set(m.x + Math.sin(t * 0.7 + m.ph) * 8, m.y - 6 + Math.sin(t * 0.9 + m.ph * 2) * 7);

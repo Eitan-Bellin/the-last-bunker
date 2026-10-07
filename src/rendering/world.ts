@@ -7,6 +7,8 @@ import { block, hGradient, seeded, shade, softGlow, vGradient } from './draw';
 import { lineWidth, richLine } from './richText';
 import { steelTag } from './signage';
 import { FlowBeads } from './perfFx';
+import { GFX } from './gfxFeatures';
+import { buildStrata } from './strata';
 
 export const WORLD_LEFT = -260;
 /** Right edge of the painted panorama's own span (the painting is scaled to this width, never to the wider world). */
@@ -15,6 +17,15 @@ export const PAINT_RIGHT = BUILDING_W + 260;
 export const SURFACE_EAST = 1500;
 export const WORLD_RIGHT = PAINT_RIGHT + SURFACE_EAST;
 export const SKY_TOP = -300;
+
+/**
+ * [plan4:ST-4] The world's west edge for a bunker whose widest west wing is `maxW` slots: the classic WORLD_LEFT, or 260 units beyond the wing's
+ * outer wall. The rock, the topsoil, the ground line and the surface's dark edge all start here, so a wing never ends against empty sky.
+ * (The east side needs no such help: the surface already runs 1500 units past the bunker for the project lots, wider than the 22-slot cap.)
+ */
+export function worldLeft(maxW: number): number {
+  return Math.min(WORLD_LEFT, slotX(-maxW) - 260);
+}
 const ENTRANCE_H = 52;
 
 const signStyle = new TextStyle({ fontFamily: 'Rubik, sans-serif', fontSize: 11, fontWeight: '700', fill: 0xf2e6c8 });
@@ -28,11 +39,11 @@ export interface Animated {
  * Everything above ground: the era's painted panorama (or a drawn skyline while it loads),
  * rubble and the bunker's entrance block.
  */
-export function buildSurface(backdrop: Texture | null = null, rayTexture: Texture | null = null, rayColor = 0xffe2b8): Animated {
+export function buildSurface(backdrop: Texture | null = null, rayTexture: Texture | null = null, rayColor = 0xffe2b8, left = WORLD_LEFT): Animated {
   const root = new Container();
   const g = new Graphics();
   const rnd = seeded(77);
-  const w = WORLD_RIGHT - WORLD_LEFT;
+  const w = WORLD_RIGHT - left; // [plan4:ST-4]
   // Volumetric light: slow sun shafts falling through the haze over the ruins.
   const rays = new Container();
   rays.blendMode = 'add';
@@ -61,9 +72,9 @@ export function buildSurface(backdrop: Texture | null = null, rayTexture: Textur
     const scale = (PAINT_RIGHT - WORLD_LEFT + 40) / backdrop.width;
     painted.scale.set(scale);
     painted.position.set(WORLD_LEFT - 20, -backdrop.height * scale * 0.84);
-    g.rect(WORLD_LEFT, SKY_TOP - 400, w, painted.y - SKY_TOP + 404).fill(0x0c0b10);
+    g.rect(left, SKY_TOP - 400, w, painted.y - SKY_TOP + 404).fill(0x0c0b10);
   } else {
-    g.rect(WORLD_LEFT, SKY_TOP, w, -SKY_TOP).fill(vGradient([[0, 0x14101e], [0.55, 0x3a2430], [0.85, 0x7a4a2e], [1, 0x9a6a3a]]));
+    g.rect(left, SKY_TOP, w, -SKY_TOP).fill(vGradient([[0, 0x14101e], [0.55, 0x3a2430], [0.85, 0x7a4a2e], [1, 0x9a6a3a]]));
     softGlow(sun, BUILDING_W * 0.78, -150, 170, 120, 0xff8a4a, 0.35);
     sun.circle(BUILDING_W * 0.78, -150, 26).fill({ color: 0xffb070, alpha: 0.55 });
     sun.blendMode = 'add';
@@ -71,7 +82,7 @@ export function buildSurface(backdrop: Texture | null = null, rayTexture: Textur
 
   // Two layers of ruined skyline (only while the painted panorama is missing).
   for (const [layer, base, color] of (backdrop ? [] : [[0, -110, 0x2a1e24], [1, -60, 0x1c1418]]) as [number, number, number][]) {
-    let x = WORLD_LEFT;
+    let x = left;
     while (x < WORLD_RIGHT) {
       const bw = 26 + rnd() * 50;
       const bh = (layer ? 30 : 60) + rnd() * (layer ? 50 : 90);
@@ -89,9 +100,9 @@ export function buildSurface(backdrop: Texture | null = null, rayTexture: Textur
     }
   }
   // Ground line with rubble, a dead tree and a wrecked car.
-  g.rect(WORLD_LEFT, -8, w, 10).fill(0x4a3a2a);
+  g.rect(left, -8, w, 10).fill(0x4a3a2a);
   for (let i = 0; i < 70; i++) {
-    const x = WORLD_LEFT + rnd() * w, s = 2 + rnd() * 6;
+    const x = left + rnd() * w, s = 2 + rnd() * 6;
     g.poly([x, -6, x + s, -6 - s * 0.7, x + s * 2, -6]).fill(shade(0x6a5a48, 0.7 + rnd() * 0.5));
   }
   const tx = BUILDING_W - 60;
@@ -158,7 +169,7 @@ export function buildUnderground(
   const bottom = floorTop(floors) + 170;
   // [plan4:ST-4] The rock reaches further west only when a wing needs it (the plain bunker keeps the classic world edge).
   const maxW = exts.reduce((m, x) => Math.max(m, x.w), 0), maxE = exts.reduce((m, x) => Math.max(m, x.e), BASE_EAST);
-  const WORLD_LEFT_U = Math.min(WORLD_LEFT, slotX(-maxW) - 260);
+  const WORLD_LEFT_U = worldLeft(maxW);
   const extOf = (f: number): Ext => exts[f] ?? { w: 0, e: BASE_EAST };
   const w = WORLD_RIGHT - WORLD_LEFT_U;
   // gfx-p0 light: the rock layers sit behind the casing (they used to darken it too), and the earth carries on
@@ -167,7 +178,12 @@ export function buildUnderground(
   rockLayers.eventMode = 'none';
   const deep = bottom + 1100;
 
-  if (rock) {
+  // [plan4:ST-10] Five geology bands (src/rendering/strata.ts) replace the single stretched painting; `?gx=-strata` brings the old one back.
+  const strataLayer = GFX.strata ? buildStrata(deep, WORLD_LEFT_U, WORLD_RIGHT, { rock }) : null;
+  if (strataLayer) rockLayers.addChild(strataLayer);
+  const painted = !!rock || !!strataLayer;
+  const dk = strataLayer ? 0.8 : 1; // the bands carry their own depth shading
+  if (rock && !strataLayer) {
     // The painting runs topsoil → clay → gravel → sandstone → bedrock; stretch it over the dug depth.
     const strataSprite = new TilingSprite({ texture: rock, width: w, height: bottom });
     const s = Math.max(0.3, bottom / rock.height);
@@ -191,18 +207,18 @@ export function buildUnderground(
     }
   }
   const rockG = new Graphics();
-  if (!rock) {
+  if (!painted) {
     const strata = [0x5a4430, 0x4a3828, 0x3e3226, 0x34302c, 0x2a2826, 0x201e1e];
     const bandH = bottom / strata.length;
     for (let i = 0; i < strata.length; i++) rockG.rect(WORLD_LEFT_U, i * bandH, w, bandH + 1).fill(strata[i]);
     rockG.rect(WORLD_LEFT_U, bottom, w, deep - bottom).fill(strata[strata.length - 1]);
   }
   // Lighter than before (the strata stayed near-black); deeper rock sinks cold and dark.
-  rockG.rect(WORLD_LEFT_U, 0, w, bottom).fill(vGradient([[0, 0x000000, rock ? 0.1 : 0], [0.7, 0x04060a, rock ? 0.28 : 0.2], [1, 0x05070c, rock ? 0.46 : 0.4]]));
-  rockG.rect(WORLD_LEFT_U, bottom, w, deep - bottom).fill(vGradient([[0, 0x05070c, rock ? 0.46 : 0.4], [0.35, 0x05070c, 0.8], [1, 0x05070c, 0.95]]));
+  rockG.rect(WORLD_LEFT_U, 0, w, bottom).fill(vGradient([[0, 0x000000, painted ? 0.1 * dk : 0], [0.7, 0x04060a, painted ? 0.28 * dk : 0.2], [1, 0x05070c, painted ? 0.46 * dk : 0.4]]));
+  rockG.rect(WORLD_LEFT_U, bottom, w, deep - bottom).fill(vGradient([[0, 0x05070c, painted ? 0.46 * dk : 0.4], [0.35, 0x05070c, strataLayer ? 0.5 : 0.8], [1, 0x05070c, strataLayer ? 0.72 : 0.95]]));
   rockLayers.addChild(rockG);
   if (casing) rockLayers.addChild(rockDetails(floors, districts, exts));
-  for (let i = 0; i < (rock ? 0 : 220); i++) {
+  for (let i = 0; i < (painted ? 0 : 220); i++) {
     const x = WORLD_LEFT_U + rnd() * w, y = 8 + rnd() * (bottom - 20);
     const r = 1.5 + rnd() * 5;
     const pts: number[] = [];
@@ -213,13 +229,14 @@ export function buildUnderground(
     }
     g.poly(pts).fill({ color: shade(0x7a6a58, 0.6 + rnd() * 0.5), alpha: 0.5 });
   }
-  for (let i = 0; i < (rock ? 0 : 14); i++) {
+  for (let i = 0; i < (painted ? 0 : 14); i++) {
     const x = WORLD_LEFT_U + rnd() * w;
     g.moveTo(x, 2).bezierCurveTo(x + 6, 14, x - 5, 26, x + 3, 30 + rnd() * 20).stroke({ color: 0x2a1e16, width: 1.2, alpha: 0.7 });
   }
 
   // Tunnels through the east casing into each district, with the dug-out hollow around the cavern.
-  for (const f of districts) {
+  for (let di = 0; di < districts.length; di++) {
+    const f = districts[di];
     const top = floorTop(f);
     const dw = 4 * SLOT_W;
     // [plan4:ST-8] The tunnel runs from the end of the floor (its east casing) to the cavern, which sits wherever the district's own position says.
