@@ -20,6 +20,9 @@ import { labelState } from './LabelScale'; // [plan4:ST-12]
 // [plan4 X-1] Split out of BunkerRenderer.ts with no change in behaviour: the room views (build queue, look rebuilds, name tags),
 // the "in zone" / parking logic and the per-picture culling of rooms, ruins and the structure.
 
+/** [plan4:ST-19] How long a finger rests on a room before its action sheet opens (a survivor lifts at 260 ms, so this is longer). */
+const LONG_PRESS_MS = 450;
+
 /** [perf] A room out of the camera's reach for this long gives its look back (see render). */
 const PARK_AFTER_MS = 8000;
 
@@ -86,6 +89,10 @@ export interface RoomsHost {
   /** The camera is dragging: a tap that ends a drag is not a tap on a room. */
   isDragging(): boolean;
   onBuildingClick(buildingId: string): void;
+  /** [plan4:ST-19] Pressing and holding a room (the action sheet: Move). */
+  onBuildingLongPress(buildingId: string): void;
+  /** [plan4:ST-19] A survivor or the ghost room is being carried: a hold on a room is then not a long press. */
+  carrying(): boolean;
   /** Right edge of the project lots on the surface. */
   projectRight(): number;
   /** Reports how far east the rooms reach (the camera's bounds). */
@@ -143,6 +150,13 @@ export class RoomViews {
         this.labelLayer.addChild(view.label);
       }
       view.gen = gen;
+      // [plan4:ST-19] A room that was moved (BuildingSystem.relocate) keeps its view: it goes to the new spot, and its tag with it.
+      const bx = buildingX(b), by = floorTop(b.position.floor);
+      if (view.root.x !== bx || view.root.y !== by) {
+        view.root.position.set(bx, by);
+        view.label.position.set(bx + view.width / 2, by - SLAB / 2);
+        view.layoutH = undefined;
+      }
       const isNew = b.isConstructing && b.level === 1;
       // [perf] What a room's look depends on (type, place, level, who is next to it) is one number for the whole bunker (hashLayout):
       // the neighbour search and the signature string run only when it changed, or when the room has no look yet / a painting arrived.
@@ -274,7 +288,24 @@ export class RoomViews {
     root.hitArea = { contains: (x: number, y: number) => x >= 0 && x <= width && y >= 0 && y <= height };
     root.eventMode = 'static';
     root.cursor = 'pointer';
+    // [plan4:ST-19] A long press opens the room's action sheet (Move); the tap that ends it must not also open the room's panel.
+    let pressTimer = 0;
+    let longFired = false;
+    const stopPress = (): void => window.clearTimeout(pressTimer);
+    root.on('pointerdown', () => {
+      longFired = false;
+      stopPress();
+      pressTimer = window.setTimeout(() => {
+        if (host.isDragging() || host.carrying()) return;
+        longFired = true;
+        host.onBuildingLongPress(b.id);
+      }, LONG_PRESS_MS);
+    });
+    root.on('pointerup', stopPress);
+    root.on('pointerupoutside', stopPress);
+    root.on('pointercancel', stopPress);
     root.on('pointertap', () => {
+      if (longFired) { longFired = false; return; }
       if (!host.isDragging()) host.onBuildingClick(b.id);
     });
     const label = new Container();

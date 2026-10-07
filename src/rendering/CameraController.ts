@@ -70,6 +70,8 @@ export interface CameraHost {
   endCarry(sx: number, sy: number): void;
   /** Cancels the press-and-hold that would lift a survivor. */
   cancelPress(): void;
+  /** [plan4:ST-19] A quick tap on the canvas (not a drag), in canvas px; true when something took it. Optional. */
+  canvasTap?(sx: number, sy: number): void;
 }
 
 export class CameraController {
@@ -101,6 +103,10 @@ export class CameraController {
   private swallowClickUntil = 0;
   /** Screen px at the bottom covered by an open sheet; the camera may rest lower while it is open. */
   private bottomInset = 0;
+  /** [plan4:ST-19/UX-20] The carried thing's finger (canvas px) and extra px at the bottom the finger may not scroll under (the placement bar). */
+  private carryX = 0;
+  private carryY = 0;
+  carryBottomExtra = 0;
   /** [plan4:ST-12] Screen size at the last fit, and the HUD bands the view was laid out for. */
   private fitW = 0;
   private fitH = 0;
@@ -269,6 +275,7 @@ export class CameraController {
         this.pinched = false;
       }
       this.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (e.isPrimary) { const r = canvas.getBoundingClientRect(); this.carryX = e.clientX - r.left; this.carryY = e.clientY - r.top; }
       this.untouched = false;
       this.cancelTour(); // a touch is the player taking the camera back
       // A touch catches a gliding camera; that touch only stops it (no room tap).
@@ -288,7 +295,9 @@ export class CameraController {
       if (carry !== null) {
         if (e.pointerId !== carry) return;
         const r = canvas.getBoundingClientRect();
-        host.moveCarried(e.clientX - r.left, e.clientY - r.top);
+        this.carryX = e.clientX - r.left;
+        this.carryY = e.clientY - r.top;
+        host.moveCarried(this.carryX, this.carryY);
         return;
       }
       const p = this.pointers.get(e.pointerId);
@@ -333,7 +342,11 @@ export class CameraController {
         // [plan4:ST-12] A pinch that ended near the sector / overview zoom settles on it (no fling then).
         if (this.pinched) { this.pinched = false; this.snapZoom(); }
         if (!this.focusTarget) this.fling(e.timeStamp);
-      } else if (this.pointerDown && e.type === 'pointerup' && e.timeStamp - this.downAt < 300) this.tapAt(e.clientX, e.clientY, true);
+      } else if (this.pointerDown && e.type === 'pointerup' && e.timeStamp - this.downAt < 300) {
+        const r = canvas.getBoundingClientRect();
+        host.canvasTap?.(e.clientX - r.left, e.clientY - r.top);
+        this.tapAt(e.clientX, e.clientY, true);
+      }
       this.pointerDown = false;
       // Keep isDragging until PixiJS has dispatched pointertap for this release.
       setTimeout(() => { this.isDragging = false; }, 0);
@@ -598,6 +611,60 @@ export class CameraController {
     this.focusTo(this.camX + sx / z, this.camY + sy / z, z);
   }
 
+  /**
+   * [plan4:ST-19] Glides just enough to bring a world rectangle (the ghost room) fully above the placement bar and below the status row.
+   * `extraBottom` = px at the bottom the bar covers. Does nothing while a finger is down or the camera is already gliding.
+   */
+  keepRectInSight(v: { x: number; y: number; w: number; h: number }, extraBottom = 0, centre = false): void {
+    if (this.pointers.size) return;
+    const { width, height } = this.host.app.screen;
+    const inset = this.sheetInset() + extraBottom;
+    const z = this.zoom, cy = this.viewCY();
+    const top = hudTop() + 10, bottom = height - hudBottom() - inset - 10;
+    const rTop = cy + (v.y - this.camY) * z, rBot = cy + (v.y + v.h - this.camY) * z;
+    const rL = width / 2 + (v.x - this.camX) * z, rR = width / 2 + (v.x + v.w - this.camX) * z;
+    let sy = 0, sx = 0;
+    if (rBot - rTop > bottom - top) sy = (rTop + rBot) / 2 - (top + bottom) / 2;
+    else if (rBot > bottom) sy = rBot - bottom;
+    else if (rTop < top) sy = rTop - top;
+    if (rR - rL > width - 20) sx = (rL + rR) / 2 - width / 2;
+    else if (rR > width - 10) sx = rR - (width - 10);
+    else if (rL < 10) sx = rL - 10;
+    // `centre`: a jump to a far spot (the recommended one) puts the room in the middle of what is visible, not at its edge.
+    if (centre && (sy !== 0 || sx !== 0)) {
+      sy = (rTop + rBot) / 2 - (top + bottom) / 2;
+      sx = (rL + rR) / 2 - width / 2;
+    }
+    if (Math.abs(sx) < 2 && Math.abs(sy) < 2) return;
+    this.bottomInset = Math.max(this.bottomInset, inset);
+    this.focusTo(this.camX + sx / z, this.camY + sy / z, z);
+  }
+
+  /**
+   * [plan4:ST-19/UX-20] A carried thing (survivor, ghost room) whose finger rests at a screen edge scrolls the view that way, faster the closer to
+   * the edge. Returns true when the camera moved (the caller then re-places the carried thing under the finger).
+   */
+  private edgeScroll(dt: number): boolean {
+    const { width, height } = this.host.app.screen;
+    const Z = 26;
+    const top = hudTop() + 4, bottom = height - hudBottom() - this.carryBottomExtra;
+    const x = this.carryX, y = this.carryY;
+    let vx = 0, vy = 0;
+    if (x < Z) vx = -Math.min(1, 1 - x / Z);
+    else if (x > width - Z) vx = Math.min(1, (x - (width - Z)) / Z);
+    if (y < top + Z) vy = -Math.min(1, 1 - (y - top) / Z);
+    else if (y > bottom - Z) vy = Math.min(1, (y - (bottom - Z)) / Z);
+    if (vx === 0 && vy === 0) return false;
+    this.focusTarget = null;
+    this.camVX = this.camVY = 0;
+    const speed = 560 / this.zoom;
+    const ox = this.camX, oy = this.camY;
+    this.camX += vx * speed * dt;
+    this.camY += vy * speed * dt;
+    this.clampCamera();
+    return this.camX !== ox || this.camY !== oy;
+  }
+
   // ───────────────────────────── [camera] physics ─────────────────────────────
 
   stopCamera(): void {
@@ -778,7 +845,9 @@ export class CameraController {
       this.camY = this.axisStep(this.camY, this.camVY, b.y0, b.y1, dt);
       this.camVY = SPRING_V;
     }
+    const scrolled = this.host.carryPointer() !== null && this.edgeScroll(dt); // [plan4:ST-19/UX-20]
     this.updateTransform();
+    if (scrolled) this.host.moveCarried(this.carryX, this.carryY); // the world moved under the finger: the carried thing follows it
   }
 
   /** [perf] The camera (or a carried person) is moving right now: the engine draws at its motion rate (60) while this holds. */

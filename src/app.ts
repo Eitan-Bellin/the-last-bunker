@@ -67,6 +67,7 @@ import './styles/depth.css';
 import './styles/command.css';
 import './styles/checkin.css'; // [plan4:Gameplay] dialog queue card, gesture tips, check-in screen
 import './styles/touch.css'; // [plan4:UX-5] last again (its header says so): its 44px targets must beat the older sheet-help sizes in command.css
+import './styles/placement.css'; // [plan4:ST-19] the confirm bar and the chips over the ghost room
 import './styles/a11y.css'; // [plan4:AC-2] the accessibility layer, last of all: reduced motion, colour modes, focus rings
 import { FeedbackController } from './ui/controllers/feedback';
 import { InboxController } from './ui/controllers/inbox';
@@ -911,9 +912,8 @@ export class GameApp {
     this.renderer.onRuinClick = (ruinId: string) => {
       this.engine.notifyInteraction();
       if (this.placementMode) {
-        this.audio.play('error');
         const r = this.state.ruins.find(x => x.id === ruinId);
-        if (r) this.world.rejectAt({ x: r.x, y: 0, floor: r.floor });
+        if (r) this.world.ghostTap({ x: r.x, y: 0, floor: r.floor }); // [plan4:ST-19]
         return;
       }
       this.audio.play('click');
@@ -975,28 +975,20 @@ export class GameApp {
 
     this.buildingPanel.onClose = () => this.renderer.setSelected(null);
 
+    // [plan4:ST-19] A tap on a slot no longer builds: it puts the ghost of the room there (Build on the bar confirms, WorldController.confirmPlacement).
     this.renderer.onTileClick = (pos: Position) => {
       this.engine.notifyInteraction();
       if (!this.placementMode) return;
-      if (this.world.tryPlaceBuilding(this.placementMode, pos)) {
-        this.audio.play('place');
-        const c = this.renderer.slotCenter(pos);
-        this.renderer.burstAt(c.x, c.y + 30, 80);
-        this.renderer.shake(2, 0.25);
-        this.world.cancelPlacement();
-      } else {
-        this.audio.play('error');
-        this.world.rejectAt(pos);
-      }
+      this.world.ghostTap(pos);
     };
+    this.renderer.onBuildingLongPress = (id: string) => this.world.roomActions(id); // [plan4:ST-19] press and hold a room: Move
 
     this.renderer.onBuildingClick = (buildingId: string) => {
       this.engine.notifyInteraction();
       const building = this.state.buildings.find(b => b.id === buildingId);
       if (!building) return;
       if (this.placementMode) {
-        this.audio.play('error');
-        this.world.rejectAt(building.position);
+        this.world.ghostTap(building.position); // [plan4:ST-19] the ghost shows there why it cannot stand on a room
         return;
       }
       this.audio.play('click');
