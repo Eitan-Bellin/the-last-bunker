@@ -1,6 +1,7 @@
 import type { ResearchDef } from './research';
 import { LATE_RESEARCH } from './researchLate';
 import { ROOM_RESEARCH } from './researchRooms'; // [plan4:BL-9..14,19,33]
+import { INFRA_RESEARCH } from './researchInfra'; // plan4:BL-27/28/29
 
 /**
  * [Long game P3] The deeper research tree: four doctrine forks (one choice each, the others close for this run) and
@@ -223,4 +224,5 @@ export const LONG_RESEARCH: ResearchDef[] = [
   ...LATE_RESEARCH,
   // ---- [plan4] The unlocking nodes of the new rooms ----
   ...ROOM_RESEARCH,
+  ...INFRA_RESEARCH, // plan4:BL-27/28/29
 ];

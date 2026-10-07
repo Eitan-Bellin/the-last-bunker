@@ -1,6 +1,7 @@
 import type { BuildingInstance, GameState } from '../core/GameState';
-import { effectiveLevel, entryAt, getDef, type BuildingEffects, type ProductionEntry } from './buildingDefs';
+import { effectiveLevel, entryAt, getDef, synergyBonus, type BuildingEffects, type ProductionEntry } from './buildingDefs';
 import { incidentBlocks } from './incidents';
+import { infraOfKind, infraSpan } from '../systems/doors'; // [plan4:ST-15]
 
 /**
  * [plan4:BL-8] Readers for the room effects of the redesign (BuildingDef.effects). Each one has an identity default:
@@ -22,12 +23,23 @@ export function roomEffect(b: BuildingInstance, key: EntryEffect): number {
   return e ? entryAt(e, effectiveLevel(b)) : 0;
 }
 
+/**
+ * [plan4:BL-1] A room's effect with its neighbour bonus (SYNERGIES): hygiene is multiplied (bathhouse by the quarters: x1.2), the others are
+ * added (cargo +5% by the armory, child growth +0.05 by the quarters, child places +2 by the nursery). Effects without a pair are untouched.
+ */
+function withSynergy(state: GameState | undefined, b: BuildingInstance, key: EntryEffect, v: number): number {
+  if (!state || v <= 0) return v;
+  if (key === 'hygiene') return v * (1 + synergyBonus(state, b, 'hygiene'));
+  if (key === 'cargo' || key === 'childGrowth' || key === 'childCapacity') return v + synergyBonus(state, b, key);
+  return v;
+}
+
 /** Sum of an entry effect over every working room (0 when none). */
 export function effectSum(state: GameState, key: EntryEffect): number {
   let sum = 0;
   for (const b of state.buildings) {
     if (!getDef(b.type)?.effects?.[key] || !active(state, b)) continue;
-    sum += roomEffect(b, key);
+    sum += withSynergy(state, b, key, roomEffect(b, key));
   }
   return sum;
 }
@@ -37,7 +49,7 @@ export function effectMax(state: GameState, key: EntryEffect): number {
   let m = 0;
   for (const b of state.buildings) {
     if (!getDef(b.type)?.effects?.[key] || !active(state, b)) continue;
-    m = Math.max(m, roomEffect(b, key));
+    m = Math.max(m, withSynergy(state, b, key, roomEffect(b, key)));
   }
   return m;
 }
@@ -97,12 +109,32 @@ export function quarantineCapacity(state: GameState): number {
 
 /** Points of the crowding penalty that ventilation takes away (PopulationSystem). 0 without a vent stack. */
 export function ventilationRelief(state: GameState): number {
-  return Math.round(effectSum(state, 'ventilation'));
+  // [plan4:ST-15] Vent stacks (layout.infra): 2 points each, at most three stacks count (max 6). Rooms with a ventilation effect add theirs.
+  const stacks = Math.min(3, infraOfKind(state, 'ventStack').length);
+  return Math.round(effectSum(state, 'ventilation')) + 2 * stacks;
 }
 
 /** Multiplier on injuries from fire and collapse on a floor (IncidentSystem): an emergency stairwell within 3 floors. 1 without one. */
 export function evacuationMult(state: GameState, floor: number): number {
-  return anyFlag(state, 'evacuation', b => Math.abs(b.position.floor - floor) <= 3) ? 0.6 : 1;
+  // [plan4:ST-15] An emergency stairwell (layout.infra column) within three floors of the fire or collapse.
+  const stairs = infraOfKind(state, 'stairwell').some(i => {
+    const s = infraSpan(i);
+    return (floor < s.top ? s.top - floor : floor > s.bottom ? floor - s.bottom : 0) <= 3;
+  });
+  return stairs || anyFlag(state, 'evacuation', b => Math.abs(b.position.floor - floor) <= 3) ? 0.6 : 1;
+}
+
+/**
+ * [plan4:ST-15] The fire code: from floor index 8 (B9) down, a floor with no stairwell on it or next to it is a trap, and people hurt in a
+ * fire or a collapse there take x1.5. Combine with evacuationMult (a stairwell three floors away still shortens the way, a little).
+ */
+export function fireCodeMult(state: GameState, floor: number): number {
+  if (floor < 8) return 1;
+  const covered = infraOfKind(state, 'stairwell').some(i => {
+    const s = infraSpan(i);
+    return floor >= s.top - 1 && floor <= s.bottom + 1;
+  });
+  return covered ? 1 : 1.5;
 }
 
 /** A room that fire neither enters nor leaves (a bulkhead-walled or fire-doored room). */
@@ -118,8 +150,8 @@ export function hasFirebreak(state: GameState): boolean {
 // ---- children (BL-4) ----
 
 /** Children one room can hold: 0 for rooms without childCapacity (so nobody can be assigned a child there). */
-export function childCapacityOf(b: BuildingInstance): number {
-  return Math.floor(roomEffect(b, 'childCapacity'));
+export function childCapacityOf(b: BuildingInstance, state?: GameState): number {
+  return Math.floor(withSynergy(state, b, 'childCapacity', roomEffect(b, 'childCapacity'))); // [plan4:BL-1] a school next to a nursery: +2 places (pass the state to count it)
 }
 
 /** Growing-up speed from the rooms: the best nursery's multiplier (1 without one); FamilySystem takes the larger of this and the quarters spec. */

@@ -402,7 +402,7 @@ export interface LayoutState {
   v: 1;
   ext: Record<string, { w: number; e: number }>;
   doors: Record<string, 'open' | 'closed' | 'sealed'>;
-  infra: Array<{ id: string; kind: string; floor: number; x: number; floors?: number }>;
+  infra: Array<{ id: string; kind: string; floor: number; x: number; floors?: number; level?: number /* [plan4:ST-14] bulkhead level 1-3 */ }>;
   surfaceOpen: boolean;
 }
 

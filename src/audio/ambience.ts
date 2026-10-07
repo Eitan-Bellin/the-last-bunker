@@ -1,11 +1,13 @@
 import { envelope, fmBell, filter, gain, metalHit, noiseBuffer, noiseHit, osc, type Builder } from './dsp';
 import type { BuildingType } from '../core/GameState';
+import { LOOK_AMBIENCE } from '../rendering/roomSpecs'; // plan4:BL-7
 
 export const AMBIENCE_SECONDS = 8;
 
 export type AmbienceKey = 'base' | 'machine' | 'water' | 'air' | 'workshop' | 'medical' | 'kitchen' | 'electronics' | 'radio' | 'reactor';
 
 export const AMBIENCE_FOR: Partial<Record<BuildingType, AmbienceKey>> = {
+  ...(LOOK_AMBIENCE as Partial<Record<BuildingType, AmbienceKey>>), // plan4:BL-7 wave 2 rooms (keys not yet building types are harmless)
   generator: 'machine',
   reactor: 'reactor',
   waterPump: 'water',
