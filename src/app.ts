@@ -278,6 +278,10 @@ export class GameApp {
     // A save that could not be read, or one restored from a backup, is explained before the game moves a step.
     if (this.engine.loadProblem) await this.saves.resolveLoadProblem();
     else if (this.engine.recoveredFrom) await this.saves.noticeRecovered();
+    // Back from a break, or people still waiting at the door from last time: the welcome screen comes first. [plan4:UX-10] It waits in the
+    // dialog queue (top priority) so a gesture or placement under way is not interrupted; it is set before the loop starts, or the first
+    // frame would open the door-only welcome without the report.
+    if (this.state.storyFlags.includes('intro:done') && (this.engine.offlineReport || (this.state.doorWaiting?.length ?? 0) > 0)) this.pendingWelcome = { report: this.engine.offlineReport };
     this.engine.start();
     this.installBackNavigation();
     // Ask the browser to keep the save safe (it may clear site data when the phone runs low on space): after the first tap, and once more later.
@@ -285,9 +289,6 @@ export class GameApp {
     setTimeout(() => void ensurePersistentStorage(), 10 * 60_000);
     if (guard.liteJustEnabled) this.toasts.show(`[[sparkle]] ${i18n.t('toast.liteMode')}`, 'info');
     if (!this.state.storyFlags.includes('intro:done')) this.story.playIntroSequence();
-    // Back from a break, or people still waiting at the door from last time: the welcome screen comes first.
-    // [plan4:UX-10] It waits in the dialog queue (top priority), so a gesture or a placement that is already under way is not interrupted.
-    else if (this.engine.offlineReport || (this.state.doorWaiting?.length ?? 0) > 0) this.pendingWelcome = { report: this.engine.offlineReport };
     this.setupNotifications();
   }
 
@@ -667,7 +668,7 @@ export class GameApp {
   }
 
   /** [Q2] Takes the player to where an objective or a guide step is dealt with. */
-  private runAction(action: ObjectiveAction): void {
+  runAction(action: ObjectiveAction): void {
     const state = this.state;
     this.closeSheets();
     if (!action) return;

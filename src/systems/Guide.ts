@@ -3,6 +3,7 @@ import type { GameState, ResourceType } from '../core/GameState';
 import { ACTS, actOf, type ActDef, type ActGoal } from '../data/acts';
 import { eraOf } from '../data/eras';
 import { getProject, projectDone, stagesDone } from '../data/projects';
+import { RESEARCH } from '../data/research';
 import { i18n } from '../i18n/I18nManager';
 import { RESOURCE_ICONS } from '../ui/dom';
 import type { Objective, ObjectiveAction } from './ObjectiveSystem';
@@ -176,4 +177,42 @@ export function guideObjective(engine: GameEngine, state: GameState): Objective 
       return again ? again.progress : pick.progress;
     },
   };
+}
+
+/** [plan4:GP-3] One thing the check-in screen suggests doing now: a line and where one tap leads. */
+export interface Suggestion {
+  id: string;
+  icon: string;
+  text: string;
+  action: ObjectiveAction;
+}
+
+/**
+ * [plan4:GP-3] Up to `max` suggestions for the "Now" part of the check-in screen: free actions first (a project to start, a crew to put on it),
+ * then idle research, then full storage (spend it on a project), then the Act's slower requirements. Pure reading of the state.
+ */
+export function checkinSuggestions(engine: GameEngine, state: GameState, max = 3): Suggestion[] {
+  const out: Suggestion[] = [];
+  const lg = state.longGame;
+  const reqs = lg && !lg.meta.legacy ? actRequirements(engine, state).filter(r => !r.done && r.action) : [];
+  const push = (s: Suggestion) => {
+    if (!s.action || out.some(o => o.id === s.id || (o.action?.kind === s.action?.kind && o.text === s.text))) return;
+    out.push(s);
+  };
+  for (const r of reqs.filter(q => q.immediate)) push({ id: r.id, icon: r.icon, text: r.text, action: r.action });
+  const rs = engine.researchSystem;
+  if (!rs.activeId(state) && RESEARCH.some(r => rs.canStart(state, r.id))) {
+    push({ id: 'research', icon: '[[research]]', text: i18n.t('checkin.sugResearch'), action: { kind: 'research' } });
+  }
+  const full = (['materials', 'food', 'water', 'knowledge'] as ResourceType[]).find(r => {
+    const res = state.resources[r];
+    return res.cap > 0 && res.amount >= res.cap * 0.95 && res.productionRate > res.consumptionRate;
+  });
+  if (full) push({ id: 'storage', icon: '[[storage]]', text: i18n.t('checkin.sugStorage', { res: i18n.t(`resources.${full}`) }), action: { kind: lg ? 'projects' : 'rooms' } });
+  for (const r of reqs.filter(q => !q.immediate).sort((a, b) => a.fraction - b.fraction)) push({ id: r.id, icon: r.icon, text: r.text, action: r.action });
+  if (out.length === 0) {
+    const o = engine.objectiveSystem.current(state);
+    push({ id: `obj:${o.id}`, icon: o.icon, text: o.text[i18n.currentLocale] ?? o.text.en, action: o.action });
+  }
+  return out.slice(0, max);
 }
