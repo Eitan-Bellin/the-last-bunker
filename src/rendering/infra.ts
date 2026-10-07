@@ -344,9 +344,12 @@ export class InfraLayer implements Animated {
   private addLines(): void {
     if (!this.ctx || !this.state) return;
     const { floors, exts } = this.ctx;
+    const withDoor = new Set<number>(); // a floor with a bulkhead has its feed line drawn too, so a shut door can cut it
+    for (const k in this.state.layout.doors) { const p = parseKey(k); if (p) withDoor.add(p.floor); }
+    for (const it of this.state.layout.infra) if (it.kind === 'bulkhead') withDoor.add(it.floor);
     for (let f = 0; f < floors; f++) {
       const e = exts[f] ?? { w: 0, e: BASE_EAST };
-      if (e.w <= 0 && e.e <= BASE_EAST) continue; // only the levels with a wing have their own feed lines
+      if (e.w <= 0 && e.e <= BASE_EAST && !withDoor.has(f)) continue; // only the levels with a wing or a door have their own feed lines
       const g = new Graphics();
       const top = floorTop(f);
       this.container.addChild(g);

@@ -136,3 +136,14 @@ export function roomDoorX(state: Source, which: number | string): number[] | { w
 export function doorStateAt(state: Pick<GameState, 'layout'>, floor: number, slot: number): 'open' | 'closed' | 'sealed' {
   return state.layout?.doors?.[`${floor}:${slot}`] ?? 'open';
 }
+
+/** How far inside the room, from the doorway's centre line (the room edge), a walker stops when it enters (the doorway is DOOR_W wide, so it is still in it). */
+export const DOORWAY_INSET = 4;
+
+/**
+ * [plan4:ST-13] Pure: the world x where a walker enters or leaves a room standing at [roomX, roomX + roomW], on the side facing `fromX`. The doors are cut
+ * through the columns on the room's edges (and the landing against the shaft), so the doorway is the near edge, a few units inside the room.
+ */
+export function doorwayX(roomX: number, roomW: number, fromX: number): number {
+  return fromX < roomX + roomW / 2 ? roomX + DOORWAY_INSET : roomX + roomW - DOORWAY_INSET;
+}

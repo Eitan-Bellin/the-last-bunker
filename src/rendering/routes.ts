@@ -1,5 +1,6 @@
 import type { GameState } from '../core/GameState';
 import { getDef } from '../data/buildingDefs';
+import { doorwayX } from './openings';
 import { ROOMS_X, ROOM_H, SHAFT_GAP, SHAFT_W, SLOT_W, floorTop, slotAtX, slotX } from './geom';
 
 /**
@@ -107,10 +108,10 @@ export function walkBlocked(floor: number, x0: number, x1: number): boolean {
 
 /**
  * World x where a walker enters or leaves a room of the given extent, on the side they come from (`fromX` = where they were).
- * TODO [plan4:ST-13] switch to Structure-Render's `roomDoorX` once it is merged: until then the doorway is the room's edge.
+ * [plan4:ST-13] The doorway is where Structure-Render cuts the door (openings.ts `doorwayX`): in the column on the near edge of the room.
  */
 export function entryX(roomX: number, roomW: number, fromX: number): number {
-  return fromX < roomX + roomW / 2 ? roomX + 3 : roomX + roomW - 3;
+  return doorwayX(roomX, roomW, fromX); // plan4:ST-13
 }
 
 // --- Stairs ----------------------------------------------------------------------------------------------------------------------
