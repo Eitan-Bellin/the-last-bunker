@@ -52,7 +52,7 @@ import { buildDecals, type DecalLayer } from './decals'; // [gfx2 wear]
 import { buildAtmosphere, type Atmosphere } from './atmosphere'; // [gfx2 wear]
 import { WingSigns } from './wingSigns'; // [plan4:ST-4]
 import { wingOptions } from './wingsApi'; // [plan4:ST-4] (one-line swap to ../data/wings once it merges)
-import { buildSignage, sprayOutline, steelTag } from './signage';
+import { buildSignage, signZone, sprayOutline, steelTag } from './signage';
 import { FrontChunks } from './frontChunks'; // [plan4:ST-7]
 import { KIT_KEYS, buildBays,buildCasing, depthGains, structureAmbient, gfx2Enabled, kitReady, kitState, occupancy, type WorldLamp } from './structure';
 
@@ -636,7 +636,7 @@ export class BunkerRenderer {
     this.shaftHolder.removeChildren().forEach(c => c.destroy({ children: true }));
     // G3 shaft hook: the painted industrial lift with the new look.
     this.shaft = this.gfx2 && kitReady()
-      ? buildShaft2(this.floors, this.surfaceEra, () => this.onElevator?.(), exts.map(x => x.w > 0)) // [plan4:ST-4] a second landing door where a floor has a west wing
+      ? buildShaft2(this.floors, this.surfaceEra, () => this.onElevator?.(), exts.map(x => x.w > 0), GFX.airy ? Array.from({ length: this.floors }, (_, f) => signZone(f, state.buildings, i18n.currentLocale).color) : []) // [plan4:ST-4] a second landing door where a floor has a west wing [airy:B3] zone colours for the landing beacons
       : buildShaft(this.floors, () => this.onElevator?.());
     this.shaftHolder.addChild(this.shaft.container);
     this.walkers.setLift((this.shaft as Partial<ShaftAnimated>).lift ?? null); // plan4:ST-18
@@ -968,7 +968,9 @@ export class BunkerRenderer {
         const ch = (base: number, sh: number, k: number) => Math.round(Math.min(255, (base * 0.72 + ((lc >> sh) & 255) * 0.28) * v * k));
         person.setAmbient((ch(255, 16, dg[0]) << 16) | (ch(247, 8, dg[1]) << 8) | ch(228, 0, dg[2]));
       }
-      person.setTag(this.lod === 'close' ? this.nameOf?.(s) ?? s.name : null);
+      // [airy:B5] Name tags over every head stacked up on the painting: with `airy` only the selected room's people and a really close camera show them.
+      const tagged = this.lod === 'close' && (!GFX.airy || this.cam.zoom > 1.9 || (roomId !== null && roomId === this.selectedId));
+      person.setTag(tagged ? this.nameOf?.(s) ?? s.name : null);
       person.setCondition(s.happiness, s.health);
       const activity: Activity = siteView ? 'hammer' : ruinView ? 'dig' : usable ? ROOM_ACTIVITY[job!.type] ?? 'idle' : 'idle';
       // [perf] Nobody watches a room that is off screen: its people stand still until it comes back into view.

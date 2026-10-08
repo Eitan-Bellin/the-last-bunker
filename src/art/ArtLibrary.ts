@@ -2,6 +2,7 @@ import { isLiteMode } from '../core/crashGuard';
 import { Assets, CanvasSource, Texture } from 'pixi.js';
 import { artEntry, composedKey, type ArtEntry, type LightSpot } from './registry';
 import { composeRoom } from '../rendering/roomComposer'; // [plan4:BL-6]
+import { GFX } from '../rendering/gfxFeatures'; // [airy:B2]
 
 interface ArtMeta {
   lights: LightSpot[];
@@ -57,7 +58,9 @@ class ArtLibraryImpl {
     const mean = (r + g + b) / 3 || 1;
     // Warm neutral of the lamp-lit rooms: red a bit above the mean, blue below.
     const want = [1.12, 1.0, 0.82];
-    const cast = [r, g, b].map((v, i) => 1 + 0.5 * ((want[i] * mean) / Math.max(1, v) - 1));
+    // [airy:B2] Pulling every cast halfway to the warm neutral made a lab, a farm and a pump room the same brown: keep most of each painting's own colour.
+    const pull = GFX.airy ? 0.2 : 0.5;
+    const cast = [r, g, b].map((v, i) => 1 + pull * ((want[i] * mean) / Math.max(1, v) - 1));
     const top = Math.max(...cast);
     return cast.map(c => (c / top) * gain) as [number, number, number];
   }

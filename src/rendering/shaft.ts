@@ -5,6 +5,7 @@ import { seeded } from './draw';
 import { depthGains, kitState, softTexture, type KitState } from './structure';
 import type { Animated } from './world';
 import { GFX } from './gfxFeatures';
+import { labelState } from './LabelScale'; // [airy:B3]
 
 /**
  * Graphics overhaul (G3, shaft): an industrial cage lift instead of the flat code-drawn shaft.
@@ -120,7 +121,7 @@ function gateLeaf(w: number, h: number, steel: number): Graphics {
   return g;
 }
 
-export function buildShaft2(floors: number, era: number, onArrive?: () => void, westFloors: readonly boolean[] = []): ShaftAnimated {
+export function buildShaft2(floors: number, era: number, onArrive?: () => void, westFloors: readonly boolean[] = [], zoneColors: readonly number[] = []): ShaftAnimated {
   const st = kitState(era);
   const S = STYLE[st];
   const root = new Container();
@@ -156,7 +157,7 @@ export function buildShaft2(floors: number, era: number, onArrive?: () => void, 
   for (const right of [false, true]) {
     const side = new Sprite(softTexture('fadeH'));
     side.tint = 0x000000;
-    side.alpha = 0.4;
+    side.alpha = GFX.airy ? 0.2 : 0.4; // [airy:B3] a lighter slot: the shaft is the spine, not a hole
     side.width = 12;
     side.height = bottomY - TOP;
     side.position.set(right ? SHAFT_W : 0, TOP);
@@ -178,6 +179,15 @@ export function buildShaft2(floors: number, era: number, onArrive?: () => void, 
     grime.ellipse(x, y, 3 + rnd() * 6, 2 + rnd() * 5).fill({ color: rnd() < 0.3 ? 0x2a3020 : 0x0a0908, alpha: 0.12 + rnd() * 0.12 });
   }
   back.addChild(grime);
+  // [airy:B3] The spine: the shaft is lit from within (a warm lift over the whole wall, a light strip down each rail, bright jambs), the same at every
+  // depth (it is not run through the fog), so from the surface to the bottom level the eye can follow one clear line that the floors hang from.
+  if (GFX.airy) {
+    const spine = new Graphics();
+    spine.blendMode = 'add';
+    spine.rect(0, TOP, SHAFT_W, bottomY - TOP).fill({ color: 0xffd9a0, alpha: 0.09 });
+    spine.rect(0, TOP, SHAFT_W, bottomY - TOP).fill({ color: 0x504030, alpha: 0.1 });
+    back.addChild(spine);
+  }
 
   // Riser bundle (water, power, air) on the back wall, clamped at every level.
   const RISER_X = 8, RISER_W = 17;
@@ -466,6 +476,37 @@ export function buildShaft2(floors: number, era: number, onArrive?: () => void, 
     }
   }
 
+  // [airy:B3] Zone beacons: at every landing the doorposts light up in the colour of the level's zone (the same colour as the level plate), and a thin
+  // lit jamb runs down both edges of the whole shaft over the gates. Seen from far, the shaft reads as one bright line of coloured beads, one per level.
+  const beacons = new Container();
+  beacons.blendMode = 'add';
+  if (GFX.airy) {
+    const lines = new Graphics();
+    lines.rect(-2.2, TOP, 2.2, bottomY - TOP).fill({ color: 0xffd890, alpha: 0.38 });
+    lines.rect(SHAFT_W, TOP, 2.2, bottomY - TOP).fill({ color: 0xffd890, alpha: 0.38 });
+    lines.rect(0, TOP, 1.2, bottomY - TOP).fill({ color: 0xfff0d0, alpha: 0.4 });
+    lines.rect(SHAFT_W - 1.2, TOP, 1.2, bottomY - TOP).fill({ color: 0xfff0d0, alpha: 0.4 });
+    beacons.addChild(lines);
+    for (let f = 0; f < floors; f++) {
+      const col = zoneColors[f];
+      if (col === undefined) continue;
+      const top = floorTop(f);
+      const bg = new Graphics();
+      const y0 = top + HEADER_Y + HEADER_H, y1 = top + FLOOR_LIP;
+      for (const x of [1.2, SHAFT_W - 4.4]) bg.rect(x, y0, 3.2, y1 - y0).fill({ color: col, alpha: 0.8 });
+      bg.rect(1.2, top + HEADER_Y + HEADER_H - 1.5, SHAFT_W - 2.4, 2.4).fill({ color: col, alpha: 0.85 });
+      beacons.addChild(bg);
+      const halo = new Sprite(glow);
+      halo.anchor.set(0.5);
+      halo.tint = col;
+      halo.alpha = 0.4;
+      halo.width = SHAFT_W * 1.5;
+      halo.height = (y1 - y0) * 1.1;
+      halo.position.set(SHAFT_W / 2, (y0 + y1) / 2);
+      beacons.addChild(halo);
+    }
+  }
+
   // ---------- Pulley housing at the head of the shaft ----------
   const head = new Container();
   const hg = new Graphics();
@@ -503,7 +544,7 @@ export function buildShaft2(floors: number, era: number, onArrive?: () => void, 
   sheave.position.set(SHEAVE_X, SHEAVE_Y);
   head.addChild(sheave);
 
-  root.addChild(back, cw, rails, shadow, spread, cables, car, landings, lampGlows, head);
+  root.addChild(back, cw, rails, shadow, spread, cables, car, landings, lampGlows, beacons, head);
 
   // ---------- Motion ----------
   type Mode = 'idle' | 'closing' | 'moving' | 'opening';
@@ -627,6 +668,7 @@ export function buildShaft2(floors: number, era: number, onArrive?: () => void, 
     container: root,
     lift,
     animate: (t, power) => {
+      if (GFX.airy) beacons.alpha = 0.55 + 0.45 * labelState.clarity; // [airy:B3] brighter the further out the camera is
       const dt = lastT ? Math.max(0, Math.min(0.1, t - lastT)) : 0;
       lastT = t;
       lastPower = power;

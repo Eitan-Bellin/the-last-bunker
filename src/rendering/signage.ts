@@ -2,10 +2,11 @@ import { Container, Graphics, Sprite, Texture } from 'pixi.js';
 import type { BuildingInstance, BuildingType, Ruin } from '../core/GameState';
 import { isDistrict, isHall, roomSlots } from '../data/buildingDefs';
 import { zoneForFloor } from '../data/zones';
-import { ArtLibrary } from '../art/ArtLibrary';
+import { ArtLibrary, glowTexture } from '../art/ArtLibrary';
 import { ROOMS_X, ROOM_H, SHAFT_W, SLOT_W, floorTop, slotX, type Ext } from './layout';
 import { hashString, mix, seeded, shade, vGradient } from './draw';
 import { depthGains, occupancy, type Grid, type WorldLamp } from './structure';
+import { GFX } from './gfxFeatures';
 
 /**
  * Graphics overhaul G8 + G5 props: text and signs inside the world as painted / metal objects.
@@ -603,8 +604,10 @@ export function buildSignage(inp: SignageInput): Container {
       const zone = signZone(f, inp.buildings, inp.locale);
       const level = `B${f + 1}`;
       // Zone plate on the shaft landing, above the car's doors.
-      const pkey = `plate|${level}|${zone.name}|${zone.color}|${wear}|${inp.rtl}`;
-      const ptex = cachedTexture(pkey, () => paintPlate(level, zone.name, zone.color, wear, inp.rtl, hashString(pkey)));
+      // [airy:B3] The landing plate is the shaft's address sign: always clean enamel (no wear), lit, a little larger, with the zone's colour glowing round it.
+      const pwear = GFX.airy ? Math.min(wear, 0.1) : wear;
+      const pkey = `plate|${level}|${zone.name}|${zone.color}|${pwear}|${inp.rtl}`;
+      const ptex = cachedTexture(pkey, () => paintPlate(level, zone.name, zone.color, pwear, inp.rtl, hashString(pkey)));
       const plate = new Container();
       const shadow = new Graphics();
       shadow.roundRect(-PLATE_W / 2 + 0.8, -PLATE_H / 2 + 1.4, PLATE_W, PLATE_H, 1.6).fill({ color: 0x000000, alpha: 0.4 });
@@ -613,10 +616,21 @@ export function buildSignage(inp: SignageInput): Container {
       ps.anchor.set(0.5);
       ps.scale.set(1 / PS);
       const py = top + 11;
-      ps.tint = lightTint(0.92 - (inp.era <= 0 ? 0.12 : 0), py);
+      ps.tint = GFX.airy ? 0xffffff : lightTint(0.92 - (inp.era <= 0 ? 0.12 : 0), py);
+      if (GFX.airy) {
+        const halo = new Sprite(glowTexture());
+        halo.anchor.set(0.5);
+        halo.tint = zone.color;
+        halo.blendMode = 'add';
+        halo.alpha = 0.55;
+        halo.width = PLATE_W * 1.9;
+        halo.height = PLATE_H * 2.6;
+        plate.addChild(halo);
+      }
       plate.addChild(shadow, ps);
       plate.position.set(SHAFT_W / 2, py);
-      plate.rotation = inp.era <= 0 ? (f % 2 ? 0.035 : -0.025) : 0;
+      if (GFX.airy) plate.scale.set(1.06);
+      plate.rotation = !GFX.airy && inp.era <= 0 ? (f % 2 ? 0.035 : -0.025) : 0;
       plates.addChild(plate);
       // The level's name sprayed on the slab face under it, at the far end (skipped where a hall swallows the slab).
       const halls: [number, number][] = inp.buildings.filter(b => isHall(b.type) && b.position.floor === f)

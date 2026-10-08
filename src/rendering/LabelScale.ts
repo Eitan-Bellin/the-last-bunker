@@ -35,9 +35,20 @@ export interface LabelState {
   zoom: number;
   /** Bumped on every change: views compare it with their own stamp instead of being notified one by one. */
   rev: number;
+  /** [airy:B1] 0 (close, full painting) .. 1 (mid zoom, simplified: category colour, dim art, no lamp cones / dust). */
+  clarity: number;
 }
 
-export const labelState: LabelState = { size: LABEL_BASE_FONT, k: 1, mode: 'full', zoom: 1, rev: 0 };
+export const labelState: LabelState = { size: LABEL_BASE_FONT, k: 1, mode: 'full', zoom: 1, rev: 0, clarity: 0 };
+
+/** [airy:B1] Mid-zoom simplification: none from this zoom up, full from CLARITY_FULL_ZOOM down (the far map takes over below 0.42). */
+export const CLARITY_NONE_ZOOM = 0.95;
+export const CLARITY_FULL_ZOOM = 0.6;
+/** The pure part: how simplified the rooms are drawn at a zoom (smoothstep, 0..1). */
+export function clarityFor(zoom: number): number {
+  const t = Math.max(0, Math.min(1, (CLARITY_NONE_ZOOM - zoom) / (CLARITY_NONE_ZOOM - CLARITY_FULL_ZOOM)));
+  return t * t * (3 - 2 * t);
+}
 
 let textK = 1;
 let lastZoom = -1;
@@ -79,7 +90,10 @@ export function updateLabelScale(zoom: number, now: number): boolean {
   const size = labelWorldSize(zoom, textK);
   const mode = labelModeFor(zoom, labelState.mode);
   labelState.zoom = Math.max(0.05, zoom);
-  if (size === labelState.size && mode === labelState.mode) return false;
+  const clarity = clarityFor(zoom);
+  const clarityMoved = Math.abs(clarity - labelState.clarity) > 0.004;
+  if (clarityMoved) labelState.clarity = clarity;
+  if (size === labelState.size && mode === labelState.mode) return clarityMoved;
   labelState.size = size;
   labelState.k = size / LABEL_BASE_FONT;
   labelState.mode = mode;

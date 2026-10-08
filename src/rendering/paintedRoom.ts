@@ -5,6 +5,7 @@ import { ROOM_H } from './layout';
 import { hGradient, vGradient } from './draw';
 import { crisisLight } from './crisisLight'; // gfx-p0 crisis
 import { GFX } from './gfxFeatures';
+import { labelState } from './LabelScale'; // [airy:B1]
 import type { Animator, RoomVisual } from './roomArt';
 import { viewport } from '../utils/viewport'; // [perf] window size without forcing layout
 
@@ -88,11 +89,12 @@ function addLight(layer: Container, spot: LightSpot, W: number, H: number, mirro
     layer.addChild(beam);
   }
   const flicker = spot.flicker ?? 0;
+  const calm = GFX.airy ? (tame < 0.9 ? 0.6 : 0.85) : 1;
   const bw = beam ? beam.width : 0;
   const bx = x;
   return (t) => {
     const w = flicker > 0 ? 1 - flicker * 0.35 * (1 - wobble(t, seed) * 1.4) : 1;
-    glow.alpha = Math.max(0.15, Math.min(1, w)) * 0.85 * tame;
+    glow.alpha = Math.max(0.15, Math.min(1, w)) * 0.85 * tame * calm; // [airy:B5] a bright painting already carries its lamp light
     if (cone) cone.alpha = glow.alpha * 0.36;
     if (beam) {
       const on = GFX.beams;
@@ -1061,7 +1063,8 @@ export function buildPaintedRoom(
         boost.tint = art.tint;
         boost.alpha = boostK * Math.min(1, level);
       }
-      lights.alpha = Math.max(0, power * f);
+      // [airy:B1] Mid zoom: the lamp cones, beams, glows and dust fade out (the room's trade colour carries the read instead).
+      lights.alpha = Math.max(0, power * f) * (GFX.airy ? 1 - 0.8 * labelState.clarity : 1);
       // gfx-p0 rooms: painted motion follows the room light; off-screen rooms skip the work entirely.
       fxLayer.alpha = Math.min(1, 0.35 + 0.65 * level);
       const vis = onScreen(container, W, H);
