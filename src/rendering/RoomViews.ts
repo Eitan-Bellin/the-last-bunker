@@ -17,6 +17,7 @@ import { depthGains } from './structure';
 import type { RuinVisual } from './ruinArt';
 import { LABEL_BASE_FONT, LABEL_FLOOR_SCREEN_PX, labelState } from './LabelScale'; // [plan4:ST-12]
 import { SURFACE_FLOOR } from '../core/GameState'; // plan4:ST-16
+import { pressMs } from '../utils/a11y'; // plan4:AC-13
 import { buildSurfaceBlock } from './surfaceRow'; // plan4:ST-16
 
 // [plan4 X-1] Split out of BunkerRenderer.ts with no change in behaviour: the room views (build queue, look rebuilds, name tags),
@@ -318,7 +319,7 @@ export class RoomViews {
         if (host.isDragging() || host.carrying()) return;
         longFired = true;
         host.onBuildingLongPress(b.id);
-      }, LONG_PRESS_MS);
+      }, pressMs(LONG_PRESS_MS)); // plan4:AC-13 relaxed timing holds longer
     });
     root.on('pointerup', stopPress);
     root.on('pointerupoutside', stopPress);

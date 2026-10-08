@@ -18,7 +18,7 @@ const srv = await serve(dist);
 const c = await launch();
 let failed = 0;
 const check = (name, ok, extra = '') => { console.log(`${ok ? 'ok  ' : 'FAIL'} ${name}${extra ? '  ' + extra : ''}`); if (!ok) failed++; };
-const key = async (k) => { await c.send('Input.dispatchKeyEvent', { type: 'keyDown', key: k, text: k.length === 1 ? k : undefined }); await c.send('Input.dispatchKeyEvent', { type: 'keyUp', key: k }); await sleep(500); };
+const key = async (k) => { await c.send('Input.dispatchKeyEvent', { type: 'keyDown', key: k, text: k.length === 1 ? k : undefined }); await c.send('Input.dispatchKeyEvent', { type: 'keyUp', key: k }); await sleep(800); };
 try {
   await c.send('Page.enable'); await c.send('Runtime.enable');
   await c.send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });

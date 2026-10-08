@@ -9,6 +9,7 @@ import { hashString } from './draw';
 import { occupancy } from './occupancy';
 import { DOOR_H, DOOR_W, openingsOfFloor } from './openings';
 import { LIP, PIPES_H, PIPES_Y, depthGains, type KitState } from './structure';
+import { reducedMotion, statusTint } from '../utils/a11y'; // plan4:AC-2/AC-6
 import { bulkheadLeafTexture, fanTexture, sealedSignTexture, stairsTexture, strapsTexture, ventTexture } from './infraArt';
 import type { Animated } from './world';
 
@@ -326,15 +327,15 @@ export class InfraLayer implements Animated {
     d.sign.visible = d.state === 'sealed' && d.p > 0.95;
     if (closedish) {
       // Red, breathing slowly (never a hard flash).
-      const breathe = instant || gfxLevel() === 'low' ? 0.6 : 0.5 + 0.5 * Math.sin(t * 1.6 + d.x * 0.01);
-      d.lamp.tint = 0xff4a38;
+      const breathe = instant || gfxLevel() === 'low' || reducedMotion() ? 0.6 /* plan4:AC-2 steady */ : 0.5 + 0.5 * Math.sin(t * 1.6 + d.x * 0.01);
+      d.lamp.tint = statusTint('bad'); // plan4:AC-6 (the leaf pose and the SEALED sign carry the state too)
       d.lamp.alpha = 0.7 + 0.3 * breathe;
-      d.glow.tint = 0xff3a28;
+      d.glow.tint = statusTint('bad');
       d.glow.alpha = d.state === 'sealed' ? 0.5 : 0.22 + 0.2 * breathe;
     } else {
-      d.lamp.tint = 0x58d070;
+      d.lamp.tint = statusTint('ok');
       d.lamp.alpha = 0.75;
-      d.glow.tint = 0x58d070;
+      d.glow.tint = statusTint('ok');
       d.glow.alpha = 0.1;
     }
   }
@@ -446,18 +447,18 @@ export class InfraLayer implements Animated {
       if (want !== d.state) d.state = want;
       const target = want === 'open' ? 0 : 1;
       if (d.p !== target) {
-        d.p = low ? target : target > d.p ? Math.min(target, d.p + dt / TURN_S) : Math.max(target, d.p - dt / TURN_S);
+        d.p = low || reducedMotion() ? target : /* plan4:AC-2 quick cut */ target > d.p ? Math.min(target, d.p + dt / TURN_S) : Math.max(target, d.p - dt / TURN_S);
       }
       this.poseDoor(d, t);
     }
     for (const s of this.sections) {
       if (!s.glow || s.y1 < VIEW.y0 - 40 || s.y0 > VIEW.y1 + 40) continue;
-      s.glow.alpha = low ? 0.3 : 0.2 + 0.16 * (0.5 + 0.5 * Math.sin(t * 1.3 + s.ph));
+      s.glow.alpha = low || reducedMotion() ? 0.3 : /* plan4:AC-2 */ 0.2 + 0.16 * (0.5 + 0.5 * Math.sin(t * 1.3 + s.ph));
     }
     for (const f of this.fans) {
       if (f.y1 < VIEW.y0 - 40 || f.y0 > VIEW.y1 + 40) continue;
       // The fan turns with the power (a dead bunker coasts to a stop); a few turns a second at full power.
-      f.angle += dt * (power > 0.3 ? 5.5 * power : 0.4);
+      f.angle += reducedMotion() ? 0 : dt * (power /* plan4:AC-2 fans stand still */ > 0.3 ? 5.5 * power : 0.4);
       f.s.rotation = f.angle;
     }
     for (const l of this.lines) l.g.visible = !(l.y1 < VIEW.y0 - 40 || l.y0 > VIEW.y1 + 40);

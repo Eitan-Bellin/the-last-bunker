@@ -51,3 +51,22 @@ tab buttons 171x37, "?" 29x34, "assign" 45x34. Menu: small buttons 49x34 ("open"
 ## What is still open (not in this wave's scope)
 AC-3 contrast tokens (`--text-dim`, tier chips), UX-5 hit areas of the HUD buttons and the People sheet, AC-12 per-button sizes outside the
 Accessibility tab, and the modal `inert` fallback on browsers without `inert` (uses `aria-hidden`).
+
+## Wave 3 (Access agent, same tool, now with 14 more scenes and a ::after hit-area rule)
+
+New scenes: structure list, room panel with the "Doors and exits" card (a closed and a sealed door), Command panel (Safety card), placement bar, relocate dialog,
+check-in, what's new, gesture tip, depth ruler (woken). `--aids` runs with zoom buttons, large targets, one-hand mode, high contrast and captions all on.
+The tool now counts a control whose invisible `::after` hit area reaches 44 px (the HUD chips), which removed 7 false positives.
+
+| Run | Targets | Contrast | Names | Alt | Overflow | Dialog actions |
+|---|---|---|---|---|---|---|
+| Start of wave 3, old scenes (9 configs) | 18 | 25 | 0 | 0 | 0 | 0 |
+| First pass with the new scenes (390x844 @1.1) | 29 | 27 | 0 | 0 | 0 | 0 |
+| After fixes, same configuration | 2 | 2 | 0 | 0 | 0 | 0 |
+| Final, all 9 configurations, all 21 scenes | 0 | 0 | 0 | 0 | 0 | 0 |
+| `--aids` (390x844 @1.1) | 0 | 2 (disabled primary button in high contrast; fixed afterwards, not re-run) | 0 | 0 | 0 | 0 |
+
+Fixes: buttons are 44 px boxes (`.btn`, tabs, sliders, coupon field); small buttons reach 44 through `::after`; locked / finished research and achievements keep full-strength
+text (dashed frame, dimmed icon only); price chips on gold buttons sit on a dark chip; the arrival "!" pulse dips less; goal counters use a lighter amber; build menu cards are
+named (`aria-labelledby`), `aria-disabled` when they cannot be picked, and a locked card is a group (it holds its own button); cost chips no longer show a doubled tick.
+Known approximations: the measurement of text over translucent HUD layers uses the page colour; real device contrast is [V].

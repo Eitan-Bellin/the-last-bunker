@@ -69,7 +69,10 @@
   for (const e of document.querySelectorAll(INTERACTIVE)) {
     if (seen.has(e) || !visible(e)) continue; seen.add(e);
     const r = e.getBoundingClientRect();
-    if (r.width < 43.5 || r.height < 43.5) out.targets.push({ sel: sel(e), w: Math.round(r.width), h: Math.round(r.height), text: accName(e).slice(0, 30) });
+    // A control drawn small can reach 44 px with an invisible ::after hit area (the HUD chips do): that counts, as it does for a finger.
+    const pse = getComputedStyle(e, '::after');
+    const slop = pse.content !== 'none' && pse.position === 'absolute' && parseFloat(pse.width) >= 43 && parseFloat(pse.height) >= 43;
+    if ((r.width < 43.5 || r.height < 43.5) && !slop) out.targets.push({ sel: sel(e), w: Math.round(r.width), h: Math.round(r.height), text: accName(e).slice(0, 30) });
     if (!accName(e)) out.noName.push({ sel: sel(e), w: Math.round(r.width), h: Math.round(r.height) });
   }
   for (const e of document.querySelectorAll('img, svg[role=img], [role=img]')) {

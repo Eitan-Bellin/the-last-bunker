@@ -1,6 +1,7 @@
 import { Container } from 'pixi.js';
 import type { GameState } from '../core/GameState';
 import { GFX } from './gfxFeatures';
+import { reducedMotion } from '../utils/a11y'; // plan4:AC-2
 import { ROOM_H, SLOT_W, floorIndexAt, slotX } from './geom';
 import { depthGains } from './structure'; // plan4:polish
 import { getDef } from '../data/buildingDefs'; // plan4:polish
@@ -141,7 +142,7 @@ export class Walkers {
       if (s) this.cancel(s, true); // the plan changed on the way: the old placement takes over
       return false;
     }
-    if (!GFX.walkers || this.active >= MAX_WALKERS || zoom < WALK_MIN_ZOOM) return false;
+    if (!GFX.walkers || reducedMotion() || this.active >= MAX_WALKERS || zoom < WALK_MIN_ZOOM) return false; // plan4:AC-2 reduced motion: people appear at their destination
     if (!fromView || !toView || fromView === toView) return false;
     const c = person.container;
     if (c.parent !== fromView.people || !c.visible || person.isLifted) return false;

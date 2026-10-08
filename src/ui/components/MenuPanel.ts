@@ -414,9 +414,8 @@ export class MenuPanel {
 
   /**
    * [plan4:AC-1] The accessibility tab. Every control writes through utils/a11y.ts (the single source), which applies it to the page.
-   * Still to come, and therefore not shown yet (each needs its own implementation before a switch for it is honest):
-   * flash budget (flash), contrast (contrast), colour-blind modes (colorMode), popup density (popups), sound captions (captions),
-   * screen-reader announcements (announce), power saver (powerSaver). [plan4:AC-12] One-hand mode and large touch targets are live
+   * Not shown on purpose: powerSaver (the field is kept for a later wave; a switch before it does something would be a lie).
+   * Everything else in the A11ySettings block has a row here. [plan4:AC-12] One-hand mode and large touch targets are live
    * (styles/touch.css keys off data-onehand / data-large on <html>).
    */
   private renderA11y(): HTMLElement {
@@ -483,6 +482,15 @@ export class MenuPanel {
     };
     const captionsRow = toggleRow('[[note]]', 'a11y.captions', a.captions, v => setA11y({ captions: v }));
     const announceRow = toggleRow('[[eye]]', 'a11y.announce', a.announce, v => setA11y({ announce: v }));
+    // [plan4:AC-3/AC-1/AC-13] High contrast, popup density, relaxed timing, floating zoom buttons.
+    const contrastRow = cycleRow('[[eye]]', 'a11y.contrast', ['normal', 'high'] as const, a.contrast, 'a11y.contrast', v => setA11y({ contrast: v }));
+    const popupsRow = cycleRow('[[note]]', 'a11y.popups', ['all', 'important', 'off'] as const, a.popups, 'a11y.popups', v => setA11y({ popups: v }));
+    const timingRow = cycleRow('[[clock]]', 'a11y.timing', ['normal', 'relaxed'] as const, a.timing, 'a11y.timing', v => setA11y({ timing: v }));
+    const zoomRow = toggleRow('[[hand]]', 'a11y.zoomButtons', a.zoomButtons, v => setA11y({ zoomButtons: v }));
+    // [plan4:AC-16] The accessibility statement (a static page next to the game: public/accessibility.html).
+    const statementRow = el('div', 'bp-row');
+    statementRow.append(el('span', '', `[[eye]] ${i18n.t('a11y.statement')}`),
+      button(i18n.t('a11y.statementOpen'), 'btn-small', () => { uiSound('click'); window.open(new URL('accessibility.html', document.baseURI).href, '_blank', 'noopener'); }));
     // [plan4:AC-11] The list view: the bunker as floors and rooms.
     const listRow = el('div', 'bp-row');
     listRow.append(el('span', '', `[[build]] ${i18n.t('structure.openList')}`),
@@ -492,7 +500,10 @@ export class MenuPanel {
       textRow, motionRow, el('div', 'bp-hint', i18n.t('a11y.motionHint')),
       flashRow, el('div', 'bp-hint', i18n.t('a11y.flashHint')), colorRow, el('div', 'bp-hint', i18n.t('a11y.colorHint')),
       captionsRow, el('div', 'bp-hint', i18n.t('a11y.captionsHint')), announceRow, el('div', 'bp-hint', i18n.t('a11y.announceHint')),
-      oneHandRow, el('div', 'bp-hint', i18n.t('a11y.oneHandHint')), largeRow, el('div', 'bp-hint', i18n.t('a11y.largeTargetsHint')));
+      contrastRow, el('div', 'bp-hint', i18n.t('a11y.contrastHint')), popupsRow, el('div', 'bp-hint', i18n.t('a11y.popupsHint')),
+      oneHandRow, el('div', 'bp-hint', i18n.t('a11y.oneHandHint')), largeRow, el('div', 'bp-hint', i18n.t('a11y.largeTargetsHint')),
+      zoomRow, el('div', 'bp-hint', i18n.t('a11y.zoomButtonsHint')), timingRow, el('div', 'bp-hint', i18n.t('a11y.timingHint')),
+      statementRow, el('div', 'bp-hint', i18n.t('a11y.statementHint')));
     box.appendChild(card);
     return box;
   }
