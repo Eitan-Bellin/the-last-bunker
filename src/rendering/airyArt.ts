@@ -2,6 +2,7 @@ import { Rectangle, Texture } from 'pixi.js';
 import type { Grid } from './occupancy';
 import { cellAt } from './occupancy';
 import { slotX } from './geom';
+import { straddles, voidBoundaries } from './voids'; // [airy2:D3]
 
 /**
  * [airy:A2,A3,A4] Small helpers of the spacious-bunker pass (flag `airy`): the pier layout of a floor and the walkway-ledge texture.
@@ -31,17 +32,22 @@ export function piersOfFloor(grid: Grid, f: number, airy: boolean): Pier[] {
   const row = grid[f];
   if (!row) return out;
   const ew = grid.ext[f]?.w ?? 0;
+  const voids = airy ? new Set(voidBoundaries(grid)) : null; // [airy2:D3] east of the shaft the bulkheads are the global voids
   let last = -ew;
   for (let i = 1; i < row.length; i++) {
     const sl = i - ew;
     if (sl === 0) { last = 0; continue; } // the shaft stands between the last west slot and slot 0
     const a = row[i - 1], b = row[i];
+    if (voids && sl > 0 && voids.has(sl)) {
+      if (!straddles(grid, f, sl)) out.push({ x: slotX(sl), tier: 2 });
+      continue;
+    }
     if (!(a || b)) continue;
     let tier: 0 | 1 | 2;
     if (a?.key !== b?.key) tier = 1;
     else if (airy && a && b && a.id !== b.id) tier = 0;
     else continue;
-    if (airy) {
+    if (airy && sl < 0) {
       const run = sl - last;
       if ((tier === 1 && run >= 3) || run >= 5) {
         tier = 2;
@@ -51,6 +57,17 @@ export function piersOfFloor(grid: Grid, f: number, airy: boolean): Pier[] {
     out.push({ x: slotX(sl), tier });
   }
   return out;
+}
+
+/** [airy2:D1] The cluster a world x sits in: between the bulkheads (tier 2 piers) of its floor, or the ends `lo` / `hi` of the floor's rooms. */
+export function clusterSpan(piers: readonly Pier[], x: number, lo: number, hi: number): [number, number] {
+  let a = lo, b = hi;
+  for (const p of piers) {
+    if (p.tier !== 2) continue;
+    if (p.x <= x) a = Math.max(a, p.x);
+    else b = Math.min(b, p.x);
+  }
+  return [a, b];
 }
 
 /** Signature piece: what `piersOfFloor` reads of a slot (key plus the building id, so a second room of the same kind next door redraws the seam). */

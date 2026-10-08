@@ -15,8 +15,17 @@ export const ROOM_H = 100;
  * so the taller pitch moves nothing that is stored.
  */
 export const SLAB_CLASSIC = 16;
-export const SLAB = GFX.airy ? 28 : SLAB_CLASSIC;
+export const SLAB = GFX.airy ? 44 : SLAB_CLASSIC; // [airy2:D1] the corridor band: deck 30 + beam 7 + soffit 7
 export const FLOOR_H = ROOM_H + SLAB;
+/**
+ * [airy2:D1] The front corridor (the walkway in front of each floor's rooms), measured from `floorTop(f) + ROOM_H` (the room's floor line) downward: a deck that
+ * recedes (CORR_DECK deep), the beam face of the slab edge (CORR_BEAM) and the soffit under it. People travelling between rooms walk on the lane CORR_LANE below the
+ * floor line; the railing stands on the deck's front edge and is CORR_RAIL tall.
+ */
+export const CORR_DECK = 30;
+export const CORR_BEAM = 7;
+export const CORR_RAIL = 14;
+export const CORR_LANE = 13;
 export const SHAFT_W = 58;
 export const SHAFT_GAP = 6;
 export const ROOMS_X = SHAFT_W + SHAFT_GAP;
