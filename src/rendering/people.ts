@@ -715,6 +715,11 @@ export class Person implements CrowdMember {
     return false;
   }
 
+  /** [plan4:GP-6] Is this person gesturing at a neighbour at time t? (The tour mode looks for someone talking.) */
+  isTalking(t: number): boolean {
+    return this.talkingTo(t);
+  }
+
   /** Mood and health show on the face (and posture). */
   setCondition(happiness: number, health: number): void {
     const mood: Mood = happiness >= 65 ? 'happy' : happiness < 35 ? 'sad' : 'neutral';

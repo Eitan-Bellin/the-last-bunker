@@ -296,6 +296,8 @@
   "settings.notifyIosHint": "There are no notifications in the iPhone browser, because a web page cannot run in the background. They are planned for the app version.",
   "share.menu": "Share your bunker",
   "share.hint": "A picture of your bunker, with no personal details.",
+  "share.send": "Share",
+  "share.download": "Save picture",
   "share.make": "Make picture",
   "share.making": "Making the picture…",
   "share.shareTitle": "The Last Bunker",

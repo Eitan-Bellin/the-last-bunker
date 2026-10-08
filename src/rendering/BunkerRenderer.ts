@@ -8,7 +8,7 @@ import type { EraDef } from '../data/eras';
 import type { BuildingInstance, BuildingType, GameState, Position, Ruin, SurvivorState } from '../core/GameState';
 import { effectiveLevel, isDistrict, roomFloors, roomSlots } from '../data/buildingDefs';
 import { i18n } from '../i18n/I18nManager';
-import { BASE_EAST, BUILDING_W, districtXAt, FLOOR_H, ROOM_H, SHAFT_GAP, SLOT_W, TOPSOIL, buildingH, buildingX, extentsFor, floorExtent, floorIndexAt, floorTop, slotX, ROOMS_X, type Ext } from './layout';
+import { BASE_EAST, BUILDING_W, districtXAt, FLOOR_H, ROOM_H, SHAFT_GAP, SHAFT_W, SLOT_W, TOPSOIL, buildingH, buildingX, extentsFor, floorExtent, floorIndexAt, floorTop, slotX, ROOMS_X, type Ext } from './layout';
 import { hashString, seeded } from './draw';
 import { PEOPLE_STYLE, Person, ROOM_ACTIVITY, type Activity, type Lane } from './people';
 import { crowdFor, restCountFor, settleCrowds } from './workSpots'; // gfx-p0 people
@@ -1617,6 +1617,25 @@ export class BunkerRenderer {
         this.bursts.splice(i, 1);
       }
     }
+  }
+
+  /**
+   * [plan4:GP-6] Tour stops that only the scene knows: the world position of someone chatting with a neighbour right now (null when nobody is;
+   * `pick` rotates which one), and of the lift car (null when the shaft has no car API, i.e. the flat fallback shaft).
+   */
+  talkingSpot(pick = 0): { x: number; y: number } | null {
+    const found: { x: number; y: number }[] = [];
+    for (const p of this.people.values()) {
+      if (!p.container.parent || !p.container.visible || !p.isTalking(this.time)) continue;
+      const w = this.worldContainer.toLocal(p.container.getGlobalPosition());
+      found.push({ x: w.x, y: w.y - 24 });
+    }
+    return found.length ? found[pick % found.length] : null;
+  }
+
+  liftSpot(): { x: number; y: number } | null {
+    const lift = (this.shaft as Partial<ShaftAnimated> | null)?.lift;
+    return lift ? { x: SHAFT_W / 2, y: lift.carY() } : null;
   }
 
   /** Centers the camera on a world point and zooms in a little. */

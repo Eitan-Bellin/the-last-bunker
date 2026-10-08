@@ -73,6 +73,9 @@ export interface MenuActions {
   /** [plan4:UX-11] Forget which gesture tips were seen / play the opening story again (no change to the game). */
   showTipsAgain?: () => void;
   replayIntro?: () => void;
+  /** [plan4:GP-5/GP-6] Make the share picture / start the tour mode (the app closes the menu first). */
+  shareBunker?: () => void;
+  startTour?: () => void;
 }
 
 export class MenuPanel {
@@ -172,6 +175,28 @@ export class MenuPanel {
     return card;
   }
 
+  /** [plan4:GP-5] The "share your bunker" row (also shown on the Genesis tab, where the player looks back at the run). */
+  private shareRow(): HTMLElement | null {
+    if (!this.actions.shareBunker) return null;
+    const row = el('div', 'bp-row');
+    row.append(el('span', '', `[[upload]] ${i18n.t('share.menu')}`), button(i18n.t('share.make'), 'btn-small', () => { uiSound('click'); this.actions.shareBunker?.(); }));
+    return row;
+  }
+
+  /** [plan4:GP-5/GP-6] Share the bunker as a picture, and the tour mode (the camera wanders on a clean screen). */
+  private renderShareTourBlock(): HTMLElement {
+    const card = el('div', 'bp-card settings-share');
+    const share = this.shareRow();
+    if (share) card.append(share, el('div', 'bp-hint', i18n.t('share.hint')));
+    if (this.actions.startTour) {
+      const tour = el('div', 'bp-row');
+      tour.append(el('span', '', `[[walker]] ${i18n.t('tour.menu')}`), button(i18n.t('tour.start'), 'btn-small', () => { uiSound('click'); this.actions.startTour?.(); }));
+      card.append(tour, el('div', 'bp-hint', i18n.t('tour.hint')));
+    }
+    card.hidden = !share && !this.actions.startTour;
+    return card;
+  }
+
   private renderSettings(): HTMLElement {
     const box = el('div', 'bp');
     // [Q6/Q14] The book and the chronicle sit first: the questions a new player asks.
@@ -183,6 +208,7 @@ export class MenuPanel {
     guide.append(book, chron);
     box.appendChild(guide);
     box.appendChild(this.renderTipsBlock());
+    box.appendChild(this.renderShareTourBlock());
     const general = el('div', 'bp-card');
     const lang = el('div', 'bp-row');
     lang.append(el('span', '', `[[surface]] ${i18n.t('settings.language')}`),
@@ -483,6 +509,8 @@ export class MenuPanel {
       el('div', 'bp-hint', i18n.t('genesis.isotope')),
     );
     box.appendChild(head);
+    const share = this.shareRow(); // [plan4:GP-5]
+    if (share) { const sc = el('div', 'bp-card'); sc.append(share, el('div', 'bp-hint', i18n.t('share.hint'))); box.appendChild(sc); }
 
     const rebirth = el('div', 'bp-card');
     rebirth.appendChild(el('p', 'modal-body', i18n.t('genesis.explain')));

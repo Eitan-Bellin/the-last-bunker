@@ -125,6 +125,11 @@ export class NumberPopupManager {
     return this.active.length > 0;
   }
 
+  /** [plan4:GP-5] Hides or shows the numbers that are up right now (the share picture is taken without them). */
+  setVisible(on: boolean): void {
+    for (const p of this.active) p.line.visible = on;
+  }
+
   /** [perf] Is any popup inside this world rectangle? (A popup nobody can see does not need a smooth picture.) */
   anyIn(x0: number, y0: number, x1: number, y1: number): boolean {
     for (const p of this.active) if (p.x0 > x0 && p.x0 < x1 && p.y0 > y0 && p.y0 < y1) return true;

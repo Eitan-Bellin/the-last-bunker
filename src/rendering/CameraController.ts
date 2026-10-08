@@ -922,6 +922,25 @@ export class CameraController {
     this.updateTransform();
   }
 
+  /**
+   * [plan4:GP-5] The view as it is now (centre and zoom), and putting the camera at a view at once: no glide, and a clamped result
+   * (so no edge spring pulls it away while the share picture is being drawn). Pass y = -Infinity for "as high as the bounds allow".
+   */
+  get view(): { x: number; y: number; z: number } {
+    return { x: this.camX, y: this.camY, z: this.zoom };
+  }
+
+  setView(x: number, y: number, z: number): void {
+    this.cancelTour();
+    this.untouched = false;
+    this.stopCamera();
+    this.zoom = this.clampZoom(z);
+    this.camX = x;
+    this.camY = Number.isFinite(y) ? y : -1e9;
+    this.clampCamera();
+    this.updateTransform();
+  }
+
   /** Glides a floor into view (used when placing a room and after digging). */
   focusFloor(floor: number): void {
     this.focusTo(floor < 0 ? (ROW_X0 + ROW_X1) / 2 : this.camX, floorTop(floor) + ROOM_H / 2, this.zoom); // plan4:ST-16 the surface row is west of the shaft: the camera goes there
