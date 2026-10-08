@@ -9,7 +9,13 @@ import { BASE_EAST, floorExtent as stateFloorExtent, type BuildingType, type Gam
 /** Side-on cross-section of the bunker: floors stacked downward from the surface. */
 export const SLOT_W = 46;
 export const ROOM_H = 100;
-export const SLAB = 16;
+/**
+ * [airy:A3] Thickness of the slab between two floors. The airy pass (flag `airy`, default on) takes it from 16 to 28: the floors breathe, and the slab has room for a
+ * visible walkway ledge. It is a module constant (read once, like `?gx=`), so every consumer sees one value; floors are addressed by (floor, slot) in saves, never by y,
+ * so the taller pitch moves nothing that is stored.
+ */
+export const SLAB_CLASSIC = 16;
+export const SLAB = GFX.airy ? 28 : SLAB_CLASSIC;
 export const FLOOR_H = ROOM_H + SLAB;
 export const SHAFT_W = 58;
 export const SHAFT_GAP = 6;
