@@ -14,6 +14,11 @@ import { ResearchSystem } from '../systems/ResearchSystem';
 import { ExplorationSystem } from '../systems/ExplorationSystem';
 import { MetaSystem } from '../systems/MetaSystem';
 import { ObjectiveSystem } from '../systems/ObjectiveSystem';
+import { guideObjective } from '../systems/Guide';
+import { ChronicleSystem } from '../systems/ChronicleSystem';
+import { HomeSystem } from '../systems/HomeSystem';
+import { MAX_FLOORS } from '../data/zones';
+import { getScenario, scenarioUnlocked, type HomeSite } from '../data/scenarios';
 import { RestorationSystem } from '../systems/RestorationSystem';
 import { EraSystem } from '../systems/EraSystem';
 import { IncidentSystem } from '../systems/IncidentSystem';
@@ -21,6 +26,7 @@ import { FamilySystem } from '../systems/FamilySystem';
 import { StorySystem } from '../systems/StorySystem';
 import { SupplySystem } from '../systems/SupplySystem';
 import { RushSystem } from '../systems/RushSystem';
+import { DailySystem } from '../systems/DailySystem'; // [plan4:GP-1]
 import { ShopSystem, type ProjectBooster } from '../systems/ShopSystem';
 import { ProjectSystem } from '../systems/ProjectSystem'; // [LateGame B1]
 import { snapshot } from '../data/challenges'; // [LateGame B4]
@@ -38,7 +44,9 @@ import { OutpostSystem } from '../systems/OutpostSystem';
 import { difficultyOf, easier } from '../data/difficulty';
 import type { Difficulty } from './state/longGame';
 import { logCrash } from './crashGuard';
+import { markSavePending, markSaved } from './saveFlag'; // [plan4:UX-16]
 import { WASTE_TRACKED } from '../data/resources';
+import { hasFeature } from '../systems/ResearchSystem';
 
 const TICK_RATE = 10;
 const TICK_INTERVAL = 1000 / TICK_RATE;
@@ -52,7 +60,9 @@ const AUTO_SAVE_INTERVAL = 30_000;
  */
 const FRAME_ACTIVE_MS = 1000 / 60;
 /** How long after the last touch the picture stays at full speed (camera glides and flicks need it). */
-const ACTIVE_HOLD_MS = 1800;
+const ACTIVE_HOLD_MS = 600;
+/** How long after the camera stops the picture stays at its motion rate (the settle of a glide). */
+const MOTION_HOLD_MS = 500;
 const IDLE_AFTER_S = 30;
 const OFFLINE_EFFICIENCY = 0.8;
 /** Frames this far apart on the wall clock mean the device was asleep (not just slow). */
@@ -67,6 +77,21 @@ const AWAY_DOOR_MAX = 3;
 /** Away from home, word travels slower: newcomers come at half the usual pace. */
 const AWAY_ARRIVAL_SLOWDOWN = 2;
 /** Resources whose overflow the welcome-back report counts (power is meant to be spent at once). */
+
+/** A running away-simulation (see simulate / simulateSliced). */
+interface SimRun {
+  seconds: number;
+  efficiency: number;
+  before: Partial<Record<ResourceType, number>>;
+  arrivals: number;
+  missions: number;
+  research: string[];
+  wastedRaw: Partial<Record<ResourceType, number>>;
+  creditsBefore: number;
+  stepSize: number;
+  remaining: number;
+  off: (() => void)[];
+}
 
 export interface OfflineReport {
   seconds: number;
@@ -124,6 +149,8 @@ export class GameEngine {
   storySystem: StorySystem;
   supplySystem: SupplySystem;
   rushSystem: RushSystem;
+  /** [plan4:GP-1] Daily orders. */
+  dailySystem: DailySystem;
   shopSystem: ShopSystem;
   projectSystem: ProjectSystem; // [LateGame B1]
   /** [Long game] The Decision Inbox's own cards. */
@@ -135,6 +162,10 @@ export class GameEngine {
   threatSystem: ThreatSystem;
   contractSystem: ContractSystem;
   outpostSystem: OutpostSystem;
+  /** [Q14] The run's milestones. */
+  chronicleSystem: ChronicleSystem;
+  /** [P3-5] Earlier timelines' bunkers that send income home. */
+  homeSystem: HomeSystem;
   /** The step list, in order (see registerSystems). New systems add themselves with register(). */
   private systems: EngineSystem[] = [];
   /** Game seconds gathered toward the next run of the slow systems. */
@@ -187,6 +218,11 @@ export class GameEngine {
     this.eventSystem.setExploration(this.explorationSystem);
     this.metaSystem = new MetaSystem(this.stateManager, this.resourceSystem);
     this.objectiveSystem = new ObjectiveSystem(this.stateManager, this.resourceSystem);
+    this.objectiveSystem.guide = s => guideObjective(this, s); // [Q2]
+    this.chronicleSystem = new ChronicleSystem(this.stateManager); // [Q14]
+    this.homeSystem = new HomeSystem(this.stateManager, this.resourceSystem); // [P3-5]
+    // [P2-9] A new Act can widen the map (the outer rings are added around the old one).
+    bus.on('act:advance', () => this.explorationSystem.ensureMap());
     this.restorationSystem = new RestorationSystem(this.stateManager, this.rng, this.resourceSystem, this.buildingSystem);
     this.eraSystem = new EraSystem(this.stateManager);
     this.incidentSystem = new IncidentSystem(this.stateManager, this.rng, this.resourceSystem);
@@ -194,6 +230,7 @@ export class GameEngine {
     this.eventSystem.setIncidents(this.incidentSystem);
     this.supplySystem = new SupplySystem(this.stateManager, this.resourceSystem);
     this.rushSystem = new RushSystem(this.stateManager, this.researchSystem);
+    this.dailySystem = new DailySystem(this.stateManager, this.resourceSystem, this.rushSystem, { digBlock: st => this.buildingSystem.digBlock(st) }); // [plan4:GP-1]
     // [Economy A3] The big-projects system (Late-game agent) may feed on overflow; resolved lazily so build order doesn't matter.
     // [Economy A2] Credits shop; its project-boost item shows up once the Projects system offers boostStage().
     this.shopSystem = new ShopSystem(this.stateManager, this.resourceSystem, this.researchSystem, this.supplySystem);
@@ -211,11 +248,11 @@ export class GameEngine {
     this.incidentSystem.setBuildings(this.buildingSystem);
     this.inboxSystem = new InboxSystem(this.stateManager);
     this.digSystem = new DigSystem(this.stateManager, this.buildingSystem, this.populationSystem);
-    this.actSystem = new ActSystem(this.stateManager, this.buildingSystem);
+    this.actSystem = new ActSystem(this.stateManager, this.buildingSystem, this.inboxSystem);
     this.threatSystem = new ThreatSystem(this.stateManager);
     this.outpostSystem = new OutpostSystem(this.stateManager, this.resourceSystem, this.explorationSystem);
     this.contractSystem = new ContractSystem(this.stateManager, this.inboxSystem, this.resourceSystem, this.populationSystem);
-    this.foremanSystem = new ForemanSystem(this.stateManager, this.maintenanceSystem, this.projectSystem, this.populationSystem, this.digSystem);
+    this.foremanSystem = new ForemanSystem(this.stateManager, this.maintenanceSystem, this.projectSystem, this.populationSystem, this.digSystem, this.contractSystem, this.resourceSystem);
     this.awayDanger = new AwayDanger(this.stateManager, this.rng, this.eventSystem, this.incidentSystem, this.deathSystem);
     bus.on('survivor:died', (s: unknown) => this.deathSystem.onDeath(s as import('./GameState').SurvivorState));
     bus.on('survivor:died', (s: unknown) => this.familySystem.forget((s as { id: string }).id));
@@ -225,6 +262,11 @@ export class GameEngine {
       if (lore) this.restorationSystem.addLore(lore);
     });
     this.registerSystems();
+  }
+
+  /** [plan4:GP-2] The bunker is working through time away right now (events that fire then are not lived moments: no ceremonies for them). */
+  get awayRunning(): boolean {
+    return this.dailySystem.away;
   }
 
   /** Adds a system to the end of the step list (or replaces the one with the same name, keeping its place). */
@@ -284,6 +326,8 @@ export class GameEngine {
       { name: 'contracts', slow: true, online: () => this.contractSystem.update(), offline: () => this.contractSystem.update() },
       { name: 'outposts', online: dt => this.outpostSystem.update(dt), offline: (dt, eff) => this.outpostSystem.update(dt * eff) },
       { name: 'foreman', online: dt => this.foremanSystem.update(dt), offline: dt => this.foremanSystem.update(dt) },
+      // [P3-5] Earlier timelines' bunkers send income home, also while away.
+      { name: 'homes', online: dt => this.homeSystem.update(dt), offline: (dt, eff) => this.homeSystem.update(dt * eff) },
       { name: 'maintenance', online: dt => this.maintenanceSystem.update(dt), offline: (dt, eff) => this.maintenanceSystem.update(dt * eff) },
       // Card deadlines run on world time, so a safe default can be taken while the player is away.
       { name: 'inbox', slow: true, online: () => this.inboxSystem.update(), offline: () => this.inboxSystem.update() },
@@ -291,6 +335,8 @@ export class GameEngine {
       { name: 'objective', slow: true, online: () => this.objectiveSystem.update() },
       { name: 'era', slow: true, online: () => this.eraSystem.update() },
       { name: 'story', slow: true, online: () => this.storySystem.update() },
+      // [plan4:GP-1] Daily orders: the 04:00 turn-over and the counters online; away only dig, research and food move them (data/orders.ts `offline`).
+      { name: 'daily', slow: true, online: () => this.dailySystem.update(), offline: () => this.dailySystem.update() },
     ];
     for (const s of sys) this.register(s);
   }
@@ -332,7 +378,7 @@ export class GameEngine {
       this.recoveredFrom = loaded.recoveredFrom ?? null;
       this.recoveredAt = loaded.recoveredFrom ? (loaded.state.timestamp ?? null) : null;
       this.adoptState(loaded.state);
-      this.handleOfflineProgression();
+      await this.handleOfflineProgression();
       this.eraSystem.catchUp();
     } else {
       // A storage error or an unreadable save is not "no save": show something to look at, but never write over what may still be there.
@@ -351,6 +397,15 @@ export class GameEngine {
     this.metaSystem.applyStartBonuses(this.stateManager);
     for (let i = 0; i < 3 + (up['veteranSurvivors'] ?? 0) + (up['ksFounders'] ? 2 : 0); i++) {
       this.populationSystem.addSurvivor(this.stateManager, this.populationSystem.createSurvivor(this.rng));
+    }
+    // [P2-1] The Vanguard doctrine: veterans of the last timeline wake up here too (fresh ids, their skills kept).
+    for (const v of this.stateManager.state.prestige.vanguard ?? []) {
+      const s = this.populationSystem.createSurvivor(this.rng);
+      this.populationSystem.addSurvivor(this.stateManager, { ...s, name: v.name, portraitIndex: v.portraitIndex, stats: { ...v.stats }, traits: [...v.traits], mxp: v.mxp, spec: v.spec });
+    }
+    // Both carry-overs are for this timeline's start only.
+    if (this.stateManager.state.prestige.vanguard || this.stateManager.state.prestige.seedBank) {
+      this.stateManager.applyDeltas([{ path: 'prestige.vanguard', value: undefined }, { path: 'prestige.seedBank', value: undefined }]);
     }
 
     // The Remnant: one dry dormitory where the newcomers camp; the rest of Bunker 17 must be won back.
@@ -439,10 +494,11 @@ export class GameEngine {
 
   /** Project Genesis: start over, keeping isotope-7, prestige upgrades, achievements and the story. */
   async rebirth(): Promise<void> {
+    if (!this.metaSystem.canRebirth(this.stateManager.state)) return;
+    this.actSystem.ensureEnding(); // [P2-3] a pending ending choice is settled before the timeline closes
     const old = this.stateManager.state;
-    if (!this.metaSystem.canRebirth(old)) return;
     await this.keepPrevious();
-    const gain = this.metaSystem.rebirthGain(old);
+    const gain = this.metaSystem.rebirthGain(this.stateManager.state);
     const fresh = createInitialState();
     fresh.prestige = {
       ...old.prestige,
@@ -451,14 +507,23 @@ export class GameEngine {
       // Remember which chapters this timeline told (chapters finished before this field existed are in storyFlags).
       storySeen: [...new Set([...(old.prestige.storySeen ?? []), ...old.storyFlags.filter(f => f.startsWith('story:')).map(f => f.slice(6))])],
     };
+    // [P2-1] What the late doctrines carry over: a stocked start, or the most experienced workers.
+    if (hasFeature(old, 'seedBank')) fresh.prestige.seedBank = true;
+    if (hasFeature(old, 'vanguard')) {
+      fresh.prestige.vanguard = [...old.survivors].filter(s => !s.child).sort((a, b) => (b.mxp ?? 0) - (a.mxp ?? 0)).slice(0, 3)
+        .map(s => ({ name: s.name, portraitIndex: s.portraitIndex, stats: { ...s.stats }, traits: [...s.traits], mxp: s.mxp ?? 0, spec: s.spec }));
+    }
     fresh.resources.isotope7.amount = old.resources.isotope7.amount + gain;
     fresh.achievements = [...old.achievements];
-    fresh.storyFlags = old.storyFlags.filter(f => f.startsWith('event:radio') || f === 'intro:done');
+    // The "new system" cards (sys:*) were seen once: they are tips, not part of the timeline.
+    fresh.storyFlags = old.storyFlags.filter(f => f.startsWith('event:radio') || f === 'intro:done' || f.startsWith('sys:') || f.startsWith('tip:')); // plan4:UX-11 gesture tips were learned once, not per timeline
     // What was learned from the previous residents carries into the new timeline.
     fresh.lore = [...(old.lore ?? [])];
     fresh.settings = { ...old.settings };
     // The daily supply drop streak counts real days, not timelines.
     fresh.supplyDrop = { ...(old.supplyDrop ?? fresh.supplyDrop) };
+    // [plan4:GP-1] The streak and the blueprint pieces count real days, not timelines; today's orders are made again for the new bunker (their counters restart).
+    if (old.daily) fresh.daily = { ...fresh.daily, streak: old.daily.streak, lastClaim: old.daily.lastClaim, graceUsed: old.daily.graceUsed, frag: old.daily.frag };
     // [LateGame B4] the weekly challenge (and its cosmetics) runs on real weeks, not timelines.
     fresh.lateGame.weekly = { ...(old.lateGame?.weekly ?? fresh.lateGame.weekly), base: snapshot(fresh) };
     fresh.stats = { ...old.stats, totalPrestigeResets: old.stats.totalPrestigeResets + 1 };
@@ -473,6 +538,12 @@ export class GameEngine {
     if (old.longGame) {
       const m = old.longGame.meta;
       fresh.longGame.meta = { ...fresh.longGame.meta, difficulty: m.difficulty, diffLowest: m.difficulty, scenario: m.scenario, mutators: [...m.mutators], runIndex: m.runIndex + 1, worldT: m.worldT, actSince: m.worldT };
+      // [Q14] The Chronicle outlives the timeline: the earlier runs stay in the book.
+      fresh.longGame.chronicle = [...(old.longGame.chronicle ?? [])];
+      // [P3-5] The bunker just finished stays on as a home that sends part of the income to the new one.
+      const ending = old.storyFlags.find(f => f.startsWith('ending:'))?.slice(7);
+      const home: HomeSite = { scenario: m.scenario, act: Math.min(7, Math.max(1, m.act)), run: m.runIndex, ending };
+      fresh.longGame.meta.homes = [...(m.homes ?? []), home];
     }
     this.stateManager.loadState(fresh);
     this.rng.seed = fresh.randomSeed;
@@ -483,14 +554,15 @@ export class GameEngine {
     bus.emit('rebirth', gain);
   }
 
-  private handleOfflineProgression(): void {
+  private async handleOfflineProgression(): Promise<void> {
     const state = this.stateManager.state;
     const now = Date.now();
     const offlineMs = now - state.timestamp;
     if (offlineMs < 60_000) return;
 
     const offlineSeconds = Math.min(offlineMs / 1000, OFFLINE_MAX_SECONDS);
-    this.offlineReport = this.simulate(offlineSeconds, this.offlineEfficiency());
+    // [perf] In slices: the splash screen keeps moving, and the start does not freeze for 10 s on a mid-range phone after a day away.
+    this.offlineReport = await this.simulateSliced(offlineSeconds, this.offlineEfficiency());
     this.stateManager.applyDelta({ path: 'timestamp', value: now });
     bus.emit('offline:processed', this.offlineReport);
   }
@@ -501,36 +573,73 @@ export class GameEngine {
    * and notes the teams and research that finished, so the welcome-back screen has a story to tell.
    */
   simulate(seconds: number, efficiency: number): OfflineReport {
+    const run = this.simStart(seconds, efficiency);
+    try {
+      while (run.remaining > 0) this.simStep(run);
+    } finally {
+      this.simStop(run);
+    }
+    return this.simFinish(run);
+  }
+
+  /**
+   * [perf] The same simulation spread over many short slices, so the page stays alive while it runs: a day away is 1,440 steps, about
+   * 2 s of work on a desktop and 10 s on a mid-range phone, which used to freeze everything (and a phone may decide the page is dead).
+   * Each slice works for about `sliceMs` and then gives the browser a turn; the result is exactly that of `simulate`.
+   */
+  async simulateSliced(seconds: number, efficiency: number, sliceMs = 16): Promise<OfflineReport> {
+    const run = this.simStart(seconds, efficiency);
+    try {
+      while (run.remaining > 0) {
+        const t0 = performance.now();
+        do this.simStep(run); while (run.remaining > 0 && performance.now() - t0 < sliceMs);
+        // A message hop, not setTimeout(0): the browser may draw and handle touches between slices, and there is no 4 ms floor to wait out.
+        if (run.remaining > 0) await new Promise<void>(r => { const ch = new MessageChannel(); ch.port1.onmessage = () => { ch.port1.close(); r(); }; ch.port2.postMessage(0); });
+      }
+    } finally {
+      this.simStop(run);
+    }
+    return this.simFinish(run);
+  }
+
+  private simStart(seconds: number, efficiency: number): SimRun {
     const sm = this.stateManager;
     const before: Partial<Record<ResourceType, number>> = {};
     for (const [k, v] of Object.entries(sm.state.resources)) before[k as ResourceType] = v.amount;
     const arrivals = this.gatherAtDoor(seconds);
 
-    let missions = 0;
-    const research: string[] = [];
-    const offMission = bus.on('mission:complete', () => { missions++; });
-    const offResearch = bus.on('research:complete', (id: unknown) => { research.push(id as string); });
-    const wastedRaw: Partial<Record<ResourceType, number>> = {};
+    const run: SimRun = {
+      seconds, efficiency, before, arrivals, missions: 0, research: [], wastedRaw: {}, creditsBefore: 0,
+      // Short absences are simulated finely, long ones coarsely: the cost grows with the number of steps (and with the crowd).
+      stepSize: seconds > 300 ? OFFLINE_STEP_SECONDS : seconds > 60 ? 5 : 1,
+      remaining: seconds, off: [],
+    };
+    this.dailySystem.beginAway(); // [plan4:GP-1]
+    run.off.push(bus.on('mission:complete', () => { run.missions++; }));
+    run.off.push(bus.on('research:complete', (id: unknown) => { run.research.push(id as string); }));
     // [Economy A1] overflow is now converted/absorbed by ResourceSystem; count only this run's share.
     this.resourceSystem.overflowLog = {};
-    const creditsBefore = this.resourceSystem.creditsMade;
+    run.creditsBefore = this.resourceSystem.creditsMade;
+    this.offlineWaste = run.wastedRaw;
+    return run;
+  }
 
-    // Short absences are simulated finely, long ones coarsely: the cost grows with the number of steps (and with the crowd).
-    const stepSize = seconds > 300 ? OFFLINE_STEP_SECONDS : seconds > 60 ? 5 : 1;
-    let remaining = seconds;
-    this.offlineWaste = wastedRaw;
-    try {
-      while (remaining > 0) {
-        const step = Math.min(stepSize, remaining);
-        this.advance(step, 'offline', efficiency);
-        remaining -= step;
-      }
-    } finally {
-      this.offlineWaste = null;
-      offMission();
-      offResearch();
-    }
+  private simStep(run: SimRun): void {
+    const step = Math.min(run.stepSize, run.remaining);
+    this.advance(step, 'offline', run.efficiency);
+    run.remaining -= step;
+  }
 
+  private simStop(run: SimRun): void {
+    this.dailySystem.endAway(); // [plan4:GP-1]
+    this.offlineWaste = null;
+    for (const off of run.off) off();
+    run.off = [];
+  }
+
+  private simFinish(run: SimRun): OfflineReport {
+    const sm = this.stateManager;
+    const { seconds, before, arrivals, missions, research, wastedRaw, creditsBefore } = run;
     const gained: Partial<Record<ResourceType, number>> = {};
     for (const [k, v] of Object.entries(sm.state.resources)) {
       if (k === 'credits') continue; // reported separately as converted overflow
@@ -620,6 +729,26 @@ export class GameEngine {
     this.requestSave();
   }
 
+  /** [P3-5] The place the new timeline begins in (only while it has just begun, and only a site that is open to the player). */
+  setScenario(id: string): boolean {
+    const sm = this.stateManager;
+    const lg = sm.state.longGame;
+    if (!lg || lg.meta.act > 1 || !scenarioUnlocked(sm.state, id)) return false;
+    const def = getScenario(id);
+    if (def.id !== id) return false;
+    // The previous choice (if any) is undone first, so picking twice does not stack the start bonuses.
+    const prev = getScenario(lg.meta.scenario);
+    if (prev.id === def.id) return true;
+    sm.applyDelta({ path: 'longGame.meta.scenario', value: def.id });
+    if (def.start?.floors && !sm.state.storyFlags.includes('scenario:started')) {
+      sm.applyDelta({ path: 'currentFloors', value: Math.min(MAX_FLOORS, sm.state.currentFloors + def.start.floors) });
+    }
+    if (def.start?.stock && !sm.state.storyFlags.includes('scenario:started')) this.resourceSystem.gain(sm, def.start.stock);
+    if (def.start && !sm.state.storyFlags.includes('scenario:started')) sm.applyDelta({ path: 'storyFlags', value: [...sm.state.storyFlags, 'scenario:started'] });
+    this.requestSave();
+    return true;
+  }
+
   /** [P3] Passes a law (if a slot is free and it can be paid). */
   enactLaw(id: string): boolean {
     const sm = this.stateManager;
@@ -627,6 +756,7 @@ export class GameEngine {
     if (!lg || lg.policy.laws.includes(id) || lg.policy.laws.length >= lawSlots(sm.state) || !LAWS.some(l => l.id === id)) return false;
     if (!this.resourceSystem.spend(sm, lawCost(sm.state))) return false;
     sm.applyDelta({ path: 'longGame.policy.laws', value: [...lg.policy.laws, id] });
+    this.chronicleSystem.note('law', id);
     this.buildingSystem.recalculateMaxPopulation(sm);
     this.requestSave();
     return true;
@@ -667,6 +797,7 @@ export class GameEngine {
     this.loop(performance.now());
 
     window.addEventListener('pagehide', () => void this.autoSave());
+    document.addEventListener('freeze', () => void this.autoSave()); // [plan4:UX-16] page lifecycle: frozen in the background
 
     this.lastWall = Date.now();
     let hiddenAt = 0;
@@ -681,7 +812,7 @@ export class GameEngine {
       if (away < 2) return;
       // The frame loop may already have noticed the gap (a frame can run before this event): do not count it twice.
       if (Date.now() - this.lastWall < away * 1000 - 2000) return;
-      this.comeBack(away);
+      void this.comeBack(away);
     });
   }
 
@@ -689,8 +820,17 @@ export class GameEngine {
   private lastWall = 0;
 
   /** The player is back after `away` seconds: the bunker works through the gap, and the new "last seen" time is saved right away. */
-  private comeBack(away: number): void {
-    const report = this.simulate(Math.min(away, OFFLINE_MAX_SECONDS), away > 60 ? this.offlineEfficiency() : 1);
+  private async comeBack(away: number): Promise<void> {
+    if (this.catchingUp) return;
+    // [perf] Worked through in slices (the picture keeps moving); meanwhile the clock does not tick and nothing is saved, so a state
+    // that is half way through the absence is never written down.
+    this.catchingUp = true;
+    let report: OfflineReport;
+    try {
+      report = await this.simulateSliced(Math.min(away, OFFLINE_MAX_SECONDS), away > 60 ? this.offlineEfficiency() : 1);
+    } finally {
+      this.catchingUp = false;
+    }
     this.lastTickTime = performance.now();
     this.tickAccumulator = 0;
     this.lastWall = Date.now();
@@ -699,6 +839,9 @@ export class GameEngine {
     this.requestSave();
     if (away > 60) bus.emit('offline:processed', report);
   }
+
+  /** [perf] The away-simulation is running in slices (see comeBack). */
+  private catchingUp = false;
 
   stop(): void {
     this.running = false;
@@ -723,7 +866,7 @@ export class GameEngine {
     const slept = this.lastWall > 0 && wall - this.lastWall > SLEEP_GAP_MS && !document.hidden;
     const sleptFor = (wall - this.lastWall) / 1000;
     this.lastWall = wall;
-    if (slept) this.comeBack(sleptFor);
+    if (slept) void this.comeBack(sleptFor);
 
     const elapsed = Math.min(timestamp - this.lastTickTime, 1000);
     this.lastTickTime = timestamp;
@@ -732,7 +875,7 @@ export class GameEngine {
     this.idleSeconds = (Date.now() - this.lastInteraction) / 1000;
 
     // While a cinematic plays the world holds its breath: no ticks, no events.
-    if (this.paused) this.tickAccumulator = 0;
+    if (this.paused || this.catchingUp) this.tickAccumulator = 0;
     while (this.tickAccumulator >= TICK_INTERVAL) {
       this.tickAccumulator -= TICK_INTERVAL;
       this.tick();
@@ -776,7 +919,7 @@ export class GameEngine {
 
   /** Writes the game to storage. Never throws: a failed write is counted, logged, and reported to the player after the second miss. */
   private async autoSave(): Promise<void> {
-    if (this.saveBlocked) return;
+    if (this.saveBlocked || this.catchingUp) return; // [perf] never write a state that is half way through an absence
     // Another copy of the game started after this one: it owns the save now, and this one must not write over it.
     if (!stillOwner()) {
       this.saveBlocked = true;
@@ -784,7 +927,9 @@ export class GameEngine {
       return;
     }
     try {
+      markSavePending(); // [plan4:UX-16] synchronous note: a write the phone cuts off is noticed at the next start
       await this.saveManager.saveJson(this.currentJson());
+      markSaved();
       if (this.saveFailures > 0) bus.emit('save:recovered');
       this.saveFailures = 0;
     } catch (err) {
@@ -823,7 +968,30 @@ export class GameEngine {
   private pictureInterval(): number {
     const since = Date.now() - this.lastInteraction;
     const [active, calm, idle] = this.frameRates;
-    return 1000 / (since < ACTIVE_HOLD_MS ? active : this.isIdle ? idle : calm);
+    let fps = since < ACTIVE_HOLD_MS ? active : this.isIdle ? idle : calm;
+    // [perf] The camera moving (a drag, a glide, a zoom, a shake) is where smoothness shows: full rate for it, and a moment after.
+    if (performance.now() < this.motionUntil) fps = Math.max(fps, this.motionFps);
+    // Floating numbers, hearts and bursts are animated on the picture too: they would stutter at the idle rate.
+    if (this.fxBusy) fps = Math.max(fps, calm);
+    if (this.maxFps) fps = Math.min(fps, this.maxFps); // [plan4:GP-6] the tour mode's 20 fps
+    // Working through an absence (see comeBack) takes the time the pictures would: draw few of them meanwhile (8 a second).
+    if (this.catchingUp) return Math.max(1000 / fps, 125);
+    return 1000 / fps;
+  }
+
+  /** [perf] Picture rate while the camera moves (set from the quality profile each picture). */
+  motionFps = 60;
+  /** [perf] Until when (performance.now) the camera counts as moving; the app extends it each picture the camera is. */
+  motionUntil = 0;
+  /** [perf] Short animations (popups, bursts, incidents) are on screen: keep at least the watching rate. */
+  fxBusy = false;
+
+  /** [plan4:GP-6] Upper limit on pictures per second, whatever the graphics level says (the tour mode asks for 20); null = none. */
+  maxFps: number | null = null;
+
+  /** [perf] Called by the app each picture while the camera is in motion. */
+  noteCameraMotion(): void {
+    this.motionUntil = performance.now() + MOTION_HOLD_MS;
   }
 
   async forceSave(): Promise<void> {

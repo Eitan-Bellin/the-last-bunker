@@ -1,5 +1,5 @@
 import { i18n } from '../../i18n/I18nManager';
-import { vibrate } from '../../utils/haptics';
+import { haptic } from '../../utils/haptics';
 import { CHARACTERS, shownChoices, shownLines, type Chapter, type StoryEffect, type StoryLine } from '../../data/story';
 import type { ResourceType } from '../../core/GameState';
 import type { ChapterOutcome } from '../../systems/StorySystem';
@@ -184,7 +184,7 @@ export class StoryDialog {
         e.stopPropagation();
         if (!ok) return;
         opts.sfx('choice');
-        vibrate(12);
+        haptic('select');
         this.resolve(c.key);
       });
       box.appendChild(btn);

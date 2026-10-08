@@ -1,13 +1,16 @@
 import { ENDINGS } from '../../data/endings';
 import { SEASONS, nextSeason, seasonAt } from '../../data/seasons';
 import { ACTS } from '../../data/acts';
-import { vibrate } from '../../utils/haptics';
+import { haptic } from '../../utils/haptics';
+import { reducedMotion } from '../../utils/a11y'; // [plan4:GP-2]
+import { statusTint } from '../../utils/a11y';
+import { announce } from '../a11yDom';
 import { getProject } from '../../data/projects';
 import { getPartner } from '../../data/trade';
 import { WEEKLY_CREDITS } from '../../data/challenges';
 import { i18n } from '../../i18n/I18nManager';
 import { bus } from '../../core/EventBus';
-import { getDef } from '../../data/buildingDefs';
+import { getDef, isPowerPlant } from '../../data/buildingDefs';
 import { getResearch } from '../../data/research';
 import { ACHIEVEMENTS } from '../../data/achievements';
 import { RESOURCE_ICONS } from '../../ui/dom';
@@ -46,20 +49,24 @@ export class FeedbackController {
       }
       const name = getDef(b.type)?.name[i18n.currentLocale] ?? b.type;
       this.app.toasts.show(`[[check]] ${i18n.t('toast.buildingComplete', { name })}`, 'good');
-      if (b.type === 'generator' || b.type === 'reactor' || b.type === 'reactorHall') this.app.audio.play('engineStart');
-      else {
-        this.app.audio.play('complete');
-        setTimeout(() => this.app.audio.play('hiss', { volume: 0.6 }), 260);
-      }
+      announce(i18n.t('announce.built', { name }), 'polite'); // plan4:qa the key existed but nothing said it
+      // [plan4:GP-2] The sound and the buzz belong to the moment (the same event fires when an upgrade finishes: that is the level-up ceremony).
+      const upgraded = b.level > 1;
+      void this.app.ceremony.fire({
+        kind: upgraded ? 'roomLevel' : 'build', roomId: b.id, title: name,
+        sub: upgraded ? i18n.t('cer.roomLevel.sub', { n: b.level }) : i18n.t('cer.build.sub'),
+        sound: !upgraded && isPowerPlant(b.type) ? 'engineStart' : undefined, // [plan4:BL-8]
+      });
       const c = this.app.renderer.roomCenter(b);
-      this.app.popups.spawn(c.x, c.y, '[[check]]', 0x44ff88);
+      this.app.popups.spawn(c.x, c.y, '[[check]]', statusTint('ok'));
     });
+
+    bus.on('surface:open', () => { this.app.toasts.show(`[[sun]] ${i18n.t('toast.surfaceOpen')}`, 'good'); haptic('success'); }); // [plan4:ST-16] the gate-house yard is cleared
 
     bus.on('survivor:levelup', (s: unknown, stat: unknown) => {
       const survivor = s as SurvivorState;
-      this.app.audio.play('levelup');
-      const p = this.app.renderer.personPos(survivor.id);
-      if (p) this.app.renderer.floatIcons(p.x, p.y, 'star', 5, '#ffe27a');
+      // [plan4:GP-2] A little star over their head and a bell (the ceremony queue folds several at once into one).
+      void this.app.ceremony.fire({ kind: 'person', personId: survivor.id, title: this.app.localName(survivor.name), sub: i18n.t('cer.person.sub', { level: survivor.level }) });
       this.app.toasts.show(`[[star]] ${i18n.t('toast.levelUp', {
         name: this.app.localName(survivor.name),
         level: survivor.level,
@@ -69,14 +76,22 @@ export class FeedbackController {
     });
 
     bus.on('survivor:died', (s: unknown) => {
-      this.app.audio.play('error');
+      // [plan4:GP-2] A slow dimming, a candle and a line of remembrance; the memorial dialog waits behind it (dialog gate).
+      void this.app.ceremony.fire({ kind: 'death', personId: (s as SurvivorState).id, icon: '[[heart]]', title: i18n.t('cer.death', { name: this.app.localName((s as SurvivorState).name) }) });
       this.app.toasts.show(`[[skull]] ${i18n.t('toast.died', { name: this.app.localName((s as SurvivorState).name), ...this.app.gOf(s as SurvivorState) })}`, 'bad');
     });
 
     bus.on('research:complete', (id: unknown) => {
       const def = getResearch(id as string);
       if (!def) return;
-      this.app.audio.play(def.effects.some(e => e.type === 'unlock' || e.type === 'feature') ? 'unlock' : 'research');
+      // [plan4:GP-2] The laboratory warms up and a card says what the research opens.
+      const loc = i18n.currentLocale;
+      const opens = def.effects.flatMap(e => (e.type === 'unlock' ? [getDef(e.building)?.name[loc] ?? ''] : [])).filter(Boolean);
+      void this.app.ceremony.fire({
+        kind: 'research', icon: '[[research]]', title: def.name[loc] ?? def.name.en,
+        sub: [i18n.t('cer.research.sub'), opens.length ? i18n.t('cer.research.opens', { list: opens.join(', ') }) : ''].filter(Boolean).join(' · '),
+        sound: def.effects.some(e => e.type === 'unlock' || e.type === 'feature') ? 'unlock' : 'research',
+      });
       this.app.toasts.show(`[[research]] ${i18n.t('toast.researchDone', { name: def.name[i18n.currentLocale] ?? def.name.en })}`, 'good');
       this.app.engine.requestSave();
     });
@@ -85,6 +100,7 @@ export class FeedbackController {
       const a = ACHIEVEMENTS.find(x => x.id === id);
       if (!a) return;
       this.app.audio.play('achievement');
+      haptic('success');
       this.app.toasts.show(`[[trophy]] ${i18n.t('toast.achievement', { name: a.name[i18n.currentLocale] ?? a.name.en })}`, 'good');
       this.app.engine.requestSave();
     });
@@ -105,8 +121,11 @@ export class FeedbackController {
       this.app.audio.play(sound[inc.kind]);
       if (inc.kind !== 'breach') setTimeout(() => this.app.audio.play('alarm'), 400);
       this.app.renderer.shake(inc.kind === 'breach' ? 6 : 4, 0.5);
-      vibrate([40, 60, 40]);
+      haptic('warning');
       this.app.toasts.show(`[[${def.icon}]] ${i18n.t('incident.started', { name: def.name[i18n.currentLocale], room: this.app.roomName(inc.buildingId) })}`, 'bad');
+      // [plan4:AC-11] Said to a screen reader as an alert, with the floor (when the player turned announcements on).
+      const floor = this.app.state.buildings.find(b => b.id === inc.buildingId)?.position.floor ?? 0;
+      announce(i18n.t('announce.incident', { name: def.name[i18n.currentLocale], floor: floor + 1 }), 'assertive');
     });
     bus.on('incident:burnout', (i: unknown) => {
       const inc = i as Incident;
@@ -126,7 +145,7 @@ export class FeedbackController {
       const rect = this.app.renderer.roomRect(incident.buildingId);
       if (rect) {
         this.app.renderer.floatIcons(rect.x + rect.w / 2, rect.y + 40, 'star', 5, '#ffd27a');
-        this.app.popups.spawn(rect.x + rect.w / 2, rect.y + 30, `[[check]] ${def.name[i18n.currentLocale]}`, 0x7affb0);
+        this.app.popups.spawn(rect.x + rect.w / 2, rect.y + 30, `[[check]] ${def.name[i18n.currentLocale]}`, statusTint('ok'));
       }
       this.app.toasts.show(`[[check]] ${i18n.t(quick ? 'incident.fixedQuick' : 'incident.fixed', { name: def.name[i18n.currentLocale] })}`, 'good');
       this.app.engine.requestSave();
@@ -138,6 +157,7 @@ export class FeedbackController {
       this.app.audio.play('alarm');
       this.app.dangerPrompt = true;
       this.app.toasts.show(`[[armory]] ${i18n.t('danger.toast.raid', { time: i18n.formatDuration(raid.hitAt - this.app.state.stats.totalPlayTime) })}`, 'bad');
+      announce(i18n.t('announce.raid', { time: i18n.formatDuration(raid.hitAt - this.app.state.stats.totalPlayTime) }), 'assertive'); // plan4:qa
     });
     bus.on('raid:resolved', (r: unknown) => { this.app.raidResult = r as RaidResult; });
     bus.on('disaster:start', (d: unknown) => {
@@ -154,6 +174,7 @@ export class FeedbackController {
       const res = r as { kind: keyof typeof DISASTERS };
       const def = DISASTERS[res.kind];
       this.app.audio.play('error');
+      haptic('error');
       this.app.toasts.show(`[[${def.icon}]] ${i18n.t('danger.toast.struck', { name: def.name[i18n.currentLocale], text: def.struck[i18n.currentLocale] })}`, 'bad');
     });
     bus.on('family:couple', (c: unknown) => {
@@ -197,6 +218,7 @@ export class FeedbackController {
     bus.on('floor:dug', (floor: unknown) => {
       this.app.toasts.show(`[[pick]] ${i18n.t('dig.done', { n: (floor as number) + 1 })}`, 'good');
       this.app.renderer.focusFloor(floor as number);
+      void this.app.ceremony.fire({ kind: 'dig', floor: floor as number, icon: '[[pick]]', title: i18n.t('dig.done', { n: (floor as number) + 1 }) }); // [plan4:GP-2]
     });
 
     // [LateGame B1-B4] big projects, caravans, mastery, weekly challenge
@@ -273,15 +295,18 @@ export class FeedbackController {
       const act = ACTS[(n as number) - 1];
       if (!act) return;
       this.app.engine.requestSave();
+      // [plan4:GP-2] The camera steps back to show the whole bunker, the sting plays, then the title card opens (the ceremony's beat); closing the card
+      // takes the camera back to where the player had it. If the ceremony is off (reduced motion keeps the sound, a hidden page skips it) the card opens at once.
+      const cam = this.app.renderer.camera;
+      const back = { x: cam.camX, y: cam.camY, z: cam.zoom };
       const show = () => {
         if (this.app.storyOpen || this.app.modal.isVisible || document.querySelector('.era-banner')) { setTimeout(show, 1500); return; }
-        this.app.audio.play('era');
-        this.app.renderer.shake(4, 1);
         this.app.storyOpen = true;
         this.app.closeSheets();
-        showActBanner(act, () => { this.app.storyOpen = false; });
+        showActBanner(act, () => { this.app.storyOpen = false; if (!reducedMotion()) cam.focusTo(back.x, back.y, back.z); });
       };
-      setTimeout(show, 600);
+      this.app.renderer.shake(4, 1);
+      void this.app.ceremony.fire({ kind: 'act', beat: show });
     });
     // [P2] The turn of the seasons.
     bus.on('season:change', (id: unknown) => {
@@ -320,9 +345,19 @@ export class FeedbackController {
       setTimeout(show, 800);
     });
     // [P5] A new timeline: choose its hardships (if any) for more Legacy.
-    bus.on('rebirth', () => setTimeout(() => this.app.story.chooseMutators(), 1500));
-    bus.on('dig:start', () => {
-      this.app.toasts.show(`[[pick]] ${i18n.t('dig.started', { n: this.app.state.currentFloors + 1, t: i18n.formatDuration(this.app.state.longGame?.dig.total ?? 0) })}`, 'info');
+    // [P3-5] First where the next world begins, then the hardships.
+    bus.on('rebirth', () => setTimeout(() => this.app.story.chooseScenario(() => this.app.story.chooseMutators()), 1500));
+    bus.on('dig:start', (_floor: unknown, total: unknown) => {
+      this.app.toasts.show(`[[pick]] ${i18n.t('dig.started', { n: this.app.state.currentFloors + 1, t: i18n.formatDuration((total as number | undefined) ?? this.app.state.longGame?.dig.total ?? 0) })}`, 'info');
+    });
+    // [plan4:ST-3] Wings: the dig starts, and a step opens (the camera goes to the floor).
+    bus.on('wing:start', (floor: unknown, side: unknown, total: unknown) => {
+      this.app.toasts.show(`[[pick]] ${i18n.t('wing.started', { n: (floor as number) + 1, side: i18n.t(`wing.side.${side as string}`), t: i18n.formatDuration(total as number) })}`, 'info');
+    });
+    bus.on('wing:dug', (floor: unknown, side: unknown) => {
+      this.app.toasts.show(`[[pick]] ${i18n.t('wing.done', { n: (floor as number) + 1, side: i18n.t(`wing.side.${side as string}`) })}`, 'good');
+      this.app.renderer.focusFloor(floor as number);
+      void this.app.ceremony.fire({ kind: 'dig', floor: floor as number, side: side as 'w' | 'e', icon: '[[pick]]', title: i18n.t('wing.done', { n: (floor as number) + 1, side: i18n.t(`wing.side.${side as string}`) }) }); // [plan4:GP-2]
     });
   }
 }

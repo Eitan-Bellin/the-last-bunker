@@ -1,0 +1,91 @@
+/* [plan4:ST-12 #5] Depth ruler (a 28px strip at the screen edge) and the section chips above the nav. Touch devices only (DepthRuler.ts builds them).
+   z-index 12: above the world and the status HUD (10), below the sheets (20) and the nav (22). */
+.depth-ruler {
+  position: fixed;
+  top: calc(var(--hud-top-h, 150px) + 6px);
+  bottom: calc(var(--nav-h, 72px) + var(--obj-h, 0px) + var(--chips-h, 0px) + 10px);
+  right: env(safe-area-inset-right, 0px);
+  width: 18px; /* the invisible grab zone while the strip sleeps: narrow, so it hardly steals taps from the rooms behind */
+  z-index: 12;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+  pointer-events: auto;
+}
+.depth-ruler.on { width: 28px; }
+.depth-ruler.off { display: none; }
+:root[data-onehand="left"] .depth-ruler { right: auto; left: env(safe-area-inset-left, 0px); }
+
+.dr-track {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transition: opacity 0.25s;
+  background: rgba(14, 16, 18, 0.84);
+  border: 1px solid var(--border);
+  border-right: none;
+  border-radius: 8px 0 0 8px;
+  overflow: hidden;
+  font-size: calc(9px * min(var(--fs, 1), 1.3));
+  letter-spacing: -0.02em;
+  line-height: 1;
+  color: var(--text-secondary);
+}
+:root[data-onehand="left"] .dr-track { border-right: 1px solid var(--border); border-left: none; border-radius: 0 8px 8px 0; }
+.depth-ruler.on .dr-track { opacity: 1; }
+:root[data-motion="reduced"] .dr-track { transition: none; }
+
+.dr-ticks { position: absolute; inset: 0; }
+.dr-line { position: absolute; inset-inline: 0; height: 1px; background: rgba(232, 226, 210, 0.16); }
+/* A gallery (service floor): a short bright tick on the inner edge, a shape and not only a colour. */
+.dr-line.dr-gal { height: 2px; inset-inline: 0 auto; width: 10px; background: var(--positive); opacity: 0.8; }
+.dr-num { position: absolute; inset-inline: 0; text-align: center; transform: translateY(-50%); direction: ltr; }
+.dr-band { position: absolute; inset-inline: 0; background: rgba(255, 181, 71, 0.13); border-block: 1px solid rgba(255, 181, 71, 0.5); }
+.dr-cur {
+  position: absolute;
+  inset-inline: 1px;
+  height: 1.9em;
+  min-height: 18px;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  background: var(--accent);
+  color: #1a1206;
+  font-weight: 700;
+  direction: ltr;
+}
+
+.dr-chips {
+  position: fixed;
+  left: max(8px, env(safe-area-inset-left, 0px));
+  right: max(8px, env(safe-area-inset-right, 0px));
+  bottom: calc(var(--nav-h, 72px) + var(--obj-h, 0px) + 6px);
+  z-index: 12;
+  display: none;
+  justify-content: center;
+  gap: 8px;
+  pointer-events: none;
+}
+.dr-chips.on { display: flex; }
+.dr-chip {
+  pointer-events: auto;
+  min-height: var(--tap, 44px);
+  min-width: var(--tap, 44px);
+  padding: 4px 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border-radius: 22px;
+  border: 1px solid var(--border);
+  background: rgba(14, 16, 18, 0.9);
+  color: var(--text-primary);
+  font-size: calc(12px * min(var(--fs, 1), 1.3));
+  white-space: nowrap;
+}
+.dr-chip[hidden] { display: none; }
+.dr-chip.active { border: 2px solid var(--accent); color: var(--accent); font-weight: 700; }
+.dr-chip:active { transform: scale(0.96); }
+.dr-chip .chev { font-size: 1.3em; line-height: 1; }

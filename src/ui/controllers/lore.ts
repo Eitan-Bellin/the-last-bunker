@@ -17,6 +17,11 @@ export class LoreController {
     if (!this.loreQueue.includes(id)) this.loreQueue.push(id);
   }
 
+  /** [plan4:UX-10] A find is waiting for its dialog (the dialog queue asks, then calls flushLoreQueue when the gate is open). */
+  get hasQueued(): boolean {
+    return this.loreQueue.length > 0;
+  }
+
   /** Shows the next queued find once nothing else is on screen. */
   flushLoreQueue(): void {
     if (!this.loreQueue.length || this.app.modal.isVisible || this.app.storyOpen || this.app.introPlaying || this.app.loreReader.isVisible) return;

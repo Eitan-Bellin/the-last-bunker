@@ -3,6 +3,7 @@ import { i18n } from '../../i18n/I18nManager';
 import { LORE, getLore, type LoreEntry, type LoreKind } from '../../data/lore';
 import { getDef } from '../../data/buildingDefs';
 import { Sheet } from './Sheet';
+import { enhanceTabs } from '../a11yDom';
 import { button, el } from '../dom';
 import { CHAPTERS, CHARACTERS, type CharacterId } from '../../data/story';
 // [Economy A2] credits shop tab
@@ -16,7 +17,7 @@ const KIND_ICON: Record<LoreKind, string> = {
 
 /** The residents' story collected so far: notes, logs, tapes, photos and letters. */
 export class JournalPanel {
-  private sheet = new Sheet('journal-sheet');
+  private sheet = new Sheet('journal-sheet', 'journal');
   private signature = '';
 
   onRead: ((id: string) => void) | null = null;
@@ -63,6 +64,7 @@ export class JournalPanel {
         this.refresh(state);
       }));
     }
+    enhanceTabs(tabs, i18n.t('journal.title'));
     root.appendChild(tabs);
     if (this.tab === 'shop' && this.shop) {
       this.shopPanel.onBuy = id => this.onBuy?.(id);

@@ -1,0 +1,91 @@
+M1 research cycle (insulatedWiring requires batteryBanks)
+   lint exit=1 CAUGHT
+   'lint: 1 problem(s)\n - research cycle: insulatedWiring -> batteryBanks -> insulatedWiring'
+M2 act order (act-1 node requires an act-7 node)
+   lint exit=1 CAUGHT
+   'lint: 1 problem(s)\n - research cycle: batteryBanks -> seedGenetics -> dataCenter -> alloyCasting -> microfab -> advancedEngineering -> batteryBanks'
+M3 knowledge cost 9,999,999 on an act-1 research
+   lint exit=0 NOT CAUGHT
+   'lint OK (1455 keys per language)'
+M4 act-5 room cost: dataCenter data 142 -> 9,999,999 (above any cap)
+   lint exit=0 NOT CAUGHT
+   'lint OK (1455 keys per language)'
+M5 room reachable by nothing: gatePost needs flag that nothing sets
+   lint exit=0 NOT CAUGHT
+   'lint OK (1455 keys per language)'
+M6 research act beyond MAX_ACT (insulatedWiring act 9)
+   lint exit=0 NOT CAUGHT
+   'lint OK (1455 keys per language)'
+M7 a research cost in a resource no one produces before its act (act-2 node asks seedCores 5)
+   lint exit=0 NOT CAUGHT
+   'lint OK (1455 keys per language)'
+M8 shop item priced in 0 credits / dailyLimit unlimited blueprint
+   lint exit=0 NOT CAUGHT
+   'lint OK (1455 keys per language)'
+M9 daily order unreachable (need 0 -> 1e9)
+   lint exit=0 NOT CAUGHT
+   'lint OK (1455 keys per language)'
+M10 refIncome of act 3 x1000 (prices explode in act 3)
+   lint exit=0 NOT CAUGHT
+   'lint OK (1455 keys per language)'
+M11 Act goal impossible (Act 2 asks 9999 researches)
+   lint exit=0 NOT CAUGHT
+   'lint OK (1455 keys per language)'
+M12 project stage cost above any storage (radioMast scrap 99,999,999)
+   lint exit=0 NOT CAUGHT
+   'lint OK (1455 keys per language)'
+M13 district cost unaffordable (cave scrap 99,999)
+   lint exit=0 NOT CAUGHT
+   'lint OK (1455 keys per language)'
+M14 room with negative/zero production + no workers (generator power base 0) => could not apply: pattern not found in data/buildings.json: "power": {
+   "base": 6,
+M2b act order without cycle (act-2 leaf `sanitation` requires act-7 `genesisCalculus`)
+   lint exit=0 NOT CAUGHT
+   'lint OK (1455 keys per language)'
+M15 typo in requires id
+   lint exit=1 CAUGHT
+   'lint: 1 problem(s)\n - research sanitation: requires unknown waterFiltrationX'
+M16 two research nodes unlock the same room
+   lint exit=1 CAUGHT
+   'lint: 1 problem(s)\n - room garage: unlocked by 2 research nodes (motorPool, marketplace): only the first counts'
+M17 act room needs 1000x more of its own currency than the Act cap (componentsPlant components 490 -> 490000)
+   lint exit=0 NOT CAUGHT
+   'lint OK (1455 keys per language)'
+M18 upgrade cost steepness: storage costMultiplier 2 -> 60
+   lint exit=0 NOT CAUGHT
+   'lint OK (1455 keys per language)'
+M19 research time 10^9 s (act 3 node)
+   lint exit=0 NOT CAUGHT
+   'lint OK (1455 keys per language)'
+M20 Act-1 wall: waterPump baseCost materials 15 -> 5000 (storage cap 300 at start) => could not apply: pattern not found in data/buildings.json: "baseCost": {
+    "materials": 15
+  },
+  "costMultiplier": 1
+M21 Act-1 first dig cost: digSeconds all x1000
+   lint exit=0 NOT CAUGHT
+   'lint OK (1455 keys per language)'
+M22 Act-2 room upgrade over cap via maxLevel (generator maxLevel 10 -> 30) => could not apply: pattern not found in data/buildings.json: "maxLevel": 10,
+  "baseCost": {
+    "materials": 25
+  },
+M23 research time zero + cost zero (free tech)
+   lint exit=0 NOT CAUGHT
+   'lint OK (1455 keys per language)'
+M20 Act-1 wall: waterPump baseCost materials 15 -> 5000 (storage cap 300 at start)
+   lint exit=0 NOT CAUGHT
+   'lint OK (1455 keys per language)'
+M22 over-cap upgrade (generator maxLevel 10 -> 30) to see whether upgrade-vs-cap check looks past level 10
+   lint exit=0 NOT CAUGHT
+   'lint OK (1455 keys per language)'
+M24 build price: reactor baseCost materials 400 -> 40,000,000 (Act 1-2 caps 300/1.1M)
+   lint exit=1 CAUGHT
+   'lint: 12 problem(s)\n - Act 2: reactor level 1->2 costs 150000000 materials, more than 0.8 of storage 1120600\n - Act 2: reactor level 2->3 costs 465000000 materials, more than 0.8 of storage 1120600\n - Act 3: reactor level 1->2 costs 150000000 materials, more than 0.8 of storage 1680600\n - Act 3: reactor level 2->3 costs 465000000 materials, more than 0.8 of storage 1680600\n - Act 4: reactor level '
+M25 room unlock research removed for market (room then available from start / or unreachable?)
+   lint exit=0 NOT CAUGHT
+   'lint OK (1455 keys per language)'
+M26 maxCopies 0 on a room (can never be built)
+   lint exit=1 CAUGHT
+   'lint: 1 problem(s)\n - room library: maxCopies 0 must be an integer >= 1'
+M27 room needs a district-only floor: seedLab place.floors zone -> impossible adjacentTo (market adjacent to nonexistent type)
+   lint exit=0 NOT CAUGHT
+   'lint OK (1455 keys per language)'

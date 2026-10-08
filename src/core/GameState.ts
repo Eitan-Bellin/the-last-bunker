@@ -54,7 +54,37 @@ export type BuildingType =
   | 'lake'
   | 'metro'
   | 'atrium'
-  | 'reactorHall';
+  | 'reactorHall'
+  // [plan4:BL-9..14,19,33] first eight new rooms
+  | 'batteryBank'
+  | 'commons'
+  | 'library'
+  | 'recycler'
+  | 'condenser'
+  | 'mushroomFarm'
+  | 'gatePost'
+  | 'barracks'
+  // [plan4:BL-15..32] wave 2 (BL-27 bulkhead, BL-28 stairwell and BL-29 ventStack are added by the Rooms-Systems agent)
+  | 'quarantineWard'
+  | 'solarArray'
+  | 'windTurbine'
+  | 'watchtower'
+  | 'garage'
+  | 'decon'
+  | 'aquaculture'
+  | 'market'
+  | 'nursery'
+  | 'school'
+  | 'bathhouse'
+  | 'memorialHall'
+  // [plan4:BL-24,25,34..38] wave 3: two districts (dug, never placed) and the five Act rooms
+  | 'geothermal'
+  | 'oldVault'
+  | 'componentsPlant'
+  | 'alloyFoundry'
+  | 'dataCenter'
+  | 'forum'
+  | 'seedLab';
 
 export interface BuildingInstance {
   id: string;
@@ -91,6 +121,7 @@ export interface SurvivorState {
   happiness: number;
   assignedBuildingId: string | null;
   traits: string[];
+  /** [reserved: saved, not used yet] Gear for expeditions (balance plan, N19). */
   equipment: string[];
   isOnMission: boolean;
   /** Family (Sprint 6): partner, parents, and childhood. */
@@ -104,6 +135,8 @@ export interface SurvivorState {
   /** [LateGame B3] Mastery: seconds of work in a role (rank 1-5 derives from it), and the specialization chosen at rank 5. */
   mxp?: number;
   spec?: string;
+  /** [plan4:X-3] Seconds of schooling a child has had (reserved; optional, absent in older saves). */
+  schoolTime?: number;
 }
 
 export interface ResearchNode {
@@ -164,7 +197,12 @@ export interface ActiveMission {
 }
 
 export interface PrestigeState {
+  /** [P2-1] Set by Genesis for the next timeline only (the Seed Store doctrine): start with stock and two dug floors. */
+  seedBank?: boolean;
+  /** [P2-1] Set by Genesis for the next timeline only (the Vanguard doctrine): the veterans who cross over, as the people they were. */
+  vanguard?: { name: string; portraitIndex: number; stats: SurvivorStats; traits: string[]; mxp: number; spec?: string }[];
   rebirthCount: number;
+  /** [reserved: saved, not used yet] A layer above Genesis (balance plan, P3-7). */
   ascensionCount: number;
   transcendenceCount: number;
   totalIsotope7Earned: number;
@@ -173,12 +211,47 @@ export interface PrestigeState {
   storySeen?: string[];
 }
 
+/** [plan4:AC-1] Accessibility and comfort preferences. Read and applied only through utils/a11y.ts. */
+export interface A11ySettings {
+  /** auto = follow the system's reduced-motion setting. */
+  motion: 'auto' | 'reduced' | 'full';
+  /** safe = no flashes. */
+  flash: 'safe' | 'normal';
+  textScale: 1.0 | 1.1 | 1.25 | 1.4 | 1.6;
+  contrast: 'normal' | 'high';
+  colorMode: 'none' | 'deuter' | 'protan' | 'tritan';
+  haptics: 'off' | 'light' | 'strong';
+  oneHand: 'off' | 'right' | 'left';
+  largeTargets: boolean;
+  popups: 'all' | 'important' | 'off';
+  /** Visual captions for sounds. */
+  captions: boolean;
+  /** Screen-reader announcements. */
+  announce: boolean;
+  powerSaver: boolean;
+  /** iPhone: keep sound when the silent switch is on (audioSession 'playback' instead of 'ambient'). */
+  playInSilent: boolean;
+  /** [plan4:AC-13] relaxed = longer presses (500 ms instead of 260), a wider double-tap window and messages that stay twice as long. */
+  timing: 'normal' | 'relaxed';
+  /** [plan4:AC-13] Floating + / - / fit buttons for the camera, for anyone who cannot pinch. */
+  zoomButtons: boolean;
+}
+
+export function defaultA11y(): A11ySettings {
+  return {
+    motion: 'auto', flash: 'normal', textScale: 1.1, contrast: 'normal', colorMode: 'none', haptics: 'light', oneHand: 'off',
+    largeTargets: false, popups: 'all', captions: false, announce: false, powerSaver: false, playInSilent: false, timing: 'normal', zoomButtons: false,
+  };
+}
+
 export interface GameSettings {
   language: 'en' | 'he';
   musicVolume: number;
   sfxVolume: number;
   notificationsEnabled: boolean;
   autoSave: boolean;
+  /** [plan4:AC-1] Absent in older saves: migrateState fills it in. */
+  a11y: A11ySettings;
 }
 
 export interface GameStats {
@@ -189,6 +262,8 @@ export interface GameStats {
   totalMissionsCompleted: number;
   totalCrisesSurvived: number;
   totalPrestigeResets: number;
+  /** [plan4:BL-25] The fraction of a blueprint the pre-war vault has made so far (blueprints are whole numbers; whole ones move to the resource). migrateState fills 0. */
+  planDust: number;
 }
 
 export interface ActiveEvent {
@@ -231,7 +306,7 @@ export interface Incident {
 
 // ---- [Danger] raids, disasters, maintenance and mourning (LATEGAME-PLAN part C) ----
 
-export type DisasterKind = 'collapse' | 'deepFlood' | 'epidemic' | 'meltdown';
+export type DisasterKind = 'collapse' | 'deepFlood' | 'epidemic' | 'meltdown' | 'steam'; // [plan4:BL-24] steam = the geothermal vent bursting
 
 /** A disaster with a countdown: handle it before the deadline or it strikes. */
 export interface Disaster {
@@ -330,6 +405,42 @@ export interface Ruin {
   cost?: Partial<Record<ResourceType, number>>;
 }
 
+/**
+ * [plan4:X-3] The bunker's shape beyond the vertical shaft. Additive since save v7; every part defaults to "nothing built".
+ *  ext         per-floor side wings, keyed by floor index as a string: w = slots dug west of the shaft, e = slots east of it
+ *  doors       bulkhead state by door id
+ *  infra       corridors, stairs, ventilation shafts and similar: kind, floor, x slot (floors = how many floors it spans)
+ *  surfaceOpen the gate-house row above ground is open
+ */
+export interface LayoutState {
+  v: 1;
+  ext: Record<string, { w: number; e: number }>;
+  doors: Record<string, 'open' | 'closed' | 'sealed'>;
+  infra: Array<{ id: string; kind: string; floor: number; x: number; floors?: number; level?: number /* [plan4:ST-14] bulkhead level 1-3 */ }>;
+  surfaceOpen: boolean;
+}
+
+export function createLayout(): LayoutState {
+  return { v: 1, ext: {}, doors: {}, infra: [], surfaceOpen: false };
+}
+
+/** [plan4:X-2] Slots east of the shaft on a floor without a wing (the classic 12). */
+export const BASE_EAST = 12;
+
+/**
+ * [plan4:ST-16] The surface (gate-house) row is floor -1. Its slots are -11..-4: west of the shaft and clear of the portal's hill (slots -3..-1 stand under it;
+ * see store/plan-2026-10/4-redesign/S0-surface-survey.md). As an extent that is {w: 11, e: -3}: a room fits when x >= -11 and x + width <= -3.
+ */
+export const SURFACE_FLOOR = -1;
+export const SURFACE_EXT: { w: number; e: number } = { w: 11, e: -3 };
+
+/** [plan4:X-3] How far a floor reaches: the saved wing sizes, or no west wing and the classic 12 slots east. */
+export function floorExtent(state: Pick<GameState, 'layout'>, floor: number): { w: number; e: number } {
+  if (floor === -1) return { w: SURFACE_EXT.w, e: SURFACE_EXT.e }; // [plan4:ST-16] the gate-house row: slots -11..-4, west of the portal's hill (never saved)
+  const x = state.layout?.ext?.[String(floor)];
+  return x ? { w: x.w, e: x.e } : { w: 0, e: BASE_EAST };
+}
+
 export interface GameState {
   version: number;
   timestamp: number;
@@ -356,7 +467,10 @@ export interface GameState {
   achievements: string[];
   storyFlags: string[];
   currentFloors: number;
+  /** [plan4:X-3] Side wings, doors, infrastructure and the surface row (save v7; see LayoutState). */
+  layout: LayoutState;
   maxPopulation: number;
+  /** [reserved: saved, not used yet] */
   tensionValue: number;
   lastEventTime: number;
   randomSeed: number;
@@ -392,6 +506,40 @@ export interface GameState {
   activeProjectId: string | null;
   // [LateGame B1-B4] big projects, trade, weekly challenge (older saves start empty).
   lateGame: LateGameState;
+  /** [plan4:GP-1] Daily orders: today's three, the streak and the blueprint pieces (older saves start with none). */
+  daily: DailyState;
+}
+
+/** [plan4:GP-1] One of the day's orders: how far along (`p` of `need`), whether done, whether its reward was taken. `b` is the counter it started from (or its own clock). */
+export interface DailyOrder {
+  id: string;
+  p: number;
+  need: number;
+  done: boolean;
+  claimed: boolean;
+  b?: number;
+  /** What a gold order was paid in: credits or a quarter of a blueprint. */
+  r?: 'credits' | 'frag';
+}
+
+/** [plan4:GP-1] The daily orders: reset at 04:00 local time (not midnight, so night players are not cut off). */
+export interface DailyState {
+  /** Local day number of the orders below (days since 1970, the day starting at 04:00); -1 = none made yet. */
+  day: number;
+  orders: DailyOrder[];
+  /** Ids held in reserve for the one swap of the day. */
+  spare: string[];
+  swapped: boolean;
+  /** The day chest was taken. */
+  chest: boolean;
+  /** Days in a row with a claim, today included once something was claimed. */
+  streak: number;
+  /** Day number of the latest claim (-1 = never). */
+  lastClaim: number;
+  /** The one grace day of this streak is used up. */
+  graceUsed: boolean;
+  /** Pieces of a blueprint (0-3); the fourth makes one. */
+  frag: number;
 }
 
 /** Credits-shop bookkeeping: purchases today (price ramp resets at local midnight) and isotope bought this week. */
@@ -419,6 +567,15 @@ export interface LateGameState {
   trained: number;
   /** The player pressed "stop": no project is picked automatically until they choose one again. */
   projectsPaused?: boolean;
+  /** [P2-2] The design ('a' or 'b') the player chose for a project (absent = 'a'). */
+  designs?: Record<string, 'a' | 'b'>;
+  /** [Q1] Play seconds before which no story chapter may start (kept in the save: closing the game must not shorten the gap). */
+  storyUntil?: number;
+}
+
+/** [plan4:GP-1] No orders yet: the first ones are made once the guided half hour is over. */
+export function createDaily(): DailyState {
+  return { day: -1, orders: [], spare: [], swapped: false, chest: false, streak: 0, lastClaim: -1, graceUsed: false, frag: 0 };
 }
 
 export function createLateGame(): LateGameState {
@@ -430,15 +587,25 @@ export function createLateGame(): LateGameState {
   };
 }
 
-export const SAVE_VERSION = 5;
+/**
+ * v7 (plan 4): additive `layout` (side wings, doors, infrastructure, surface row); a v6 save is kept once as lastbunker_auto_v6 before it migrates.
+ * v6: the Chronicle (longGame.chronicle) and the standing orders added by the balance plan; a v5 save is kept once as lastbunker_auto_v5 before it migrates.
+ */
+export const SAVE_VERSION = 7;
 
 export function migrateState(saved: GameState): GameState {
   const fresh = createInitialState();
   const merged = { ...fresh, ...saved } as GameState;
   merged.stats = { ...fresh.stats, ...saved.stats };
+  // [plan4:AC-1] settings: older saves have no a11y block (the shallow merge above would otherwise drop the defaults).
+  merged.settings = { ...fresh.settings, ...saved.settings, a11y: { ...fresh.settings.a11y, ...(saved.settings?.a11y ?? {}) } };
   merged.resources = { ...fresh.resources, ...saved.resources };
   merged.version = fresh.version;
   merged.currentFloors = Math.max(saved.currentFloors ?? 1, fresh.currentFloors);
+  // [plan4:X-3] v7: no wings, doors or infrastructure yet; a partial layout keeps what it has.
+  merged.layout = { ...createLayout(), ...(saved.layout ?? {}), v: 1 };
+  // [plan4:ST-9] A save from before v7 is owed the one-time "the bunker can grow sideways" card (ui/controllers/whatsnew.ts shows it after the first half hour, Act II+).
+  if ((saved.version ?? 1) < 7 && !(merged.storyFlags ?? []).includes('whatsnew:v7')) merged.storyFlags = [...(merged.storyFlags ?? []), 'whatsnew:v7'];
   if ((saved.version ?? 1) < 4) {
     // Bunkers from before the restoration update were never ruined and have already been "entered".
     merged.ruins = [];
@@ -468,6 +635,10 @@ export function migrateState(saved: GameState): GameState {
   merged.lateGame.trade = { ...createLateGame().trade, ...merged.lateGame.trade };
   merged.lateGame.weekly = { ...createLateGame().weekly, ...merged.lateGame.weekly };
   if (!merged.resources.credits) merged.resources.credits = { ...fresh.resources.credits };
+  // [plan4:GP-1] Daily orders: additive (no version bump); a partial block keeps what it has.
+  merged.daily = { ...createDaily(), ...(saved.daily ?? {}) };
+  merged.daily.orders = Array.isArray(merged.daily.orders) ? merged.daily.orders : [];
+  merged.daily.spare = Array.isArray(merged.daily.spare) ? merged.daily.spare : [];
   // [Long game] v5: Act, difficulty, world clock and the empty slices of the newer systems.
   merged.longGame = migrateLongGame(saved.longGame, saved.era ?? 0, merged.stats.totalPlayTime ?? 0, merged.prestige?.rebirthCount ?? 0);
   return merged;
@@ -518,6 +689,7 @@ export function createInitialState(): GameState {
       sfxVolume: 1.0,
       notificationsEnabled: true,
       autoSave: true,
+      a11y: defaultA11y(),
     },
     stats: {
       totalPlayTime: 0,
@@ -527,10 +699,12 @@ export function createInitialState(): GameState {
       totalMissionsCompleted: 0,
       totalCrisesSurvived: 0,
       totalPrestigeResets: 0,
+      planDust: 0,
     },
     achievements: [],
     storyFlags: [],
     currentFloors: 3,
+    layout: createLayout(),
     maxPopulation: 0,
     tensionValue: 0,
     lastEventTime: now,
@@ -557,6 +731,7 @@ export function createInitialState(): GameState {
     shop: { day: null, bought: {}, week: null, weekBought: {} },
     activeProjectId: null,
     lateGame: createLateGame(),
+    daily: createDaily(), // [plan4:GP-1]
     longGame: createLongGame(),
   };
 }

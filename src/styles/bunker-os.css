@@ -29,7 +29,10 @@
   --border: rgba(110, 255, 160, 0.22);
   --text-primary: #dcffe6;
   --text-secondary: #86c79a;
-  --text-dim: #4f7d5c;
+  /* [plan4:AC-3] was #4f7d5c (4.0:1 on the screen green, 3.4:1 on cards): now 6.7:1 / 5.7:1, still the dimmest of the three text tones. */
+  --text-dim: #6fa57d;
+  /* Disabled and locked controls keep a readable colour (no opacity on text): 6:1 on the screen green, with a dashed edge as the non-colour cue. */
+  --text-disabled: #8a9890;
 }
 
 /* ---------- Steel plates (HUD) ---------- */
@@ -64,8 +67,8 @@
   box-shadow: 0 0 6px rgba(255, 181, 71, 0.6);
 }
 .resource-fill-bar.full { background: repeating-linear-gradient(90deg, #ffe27a 0 5px, transparent 5px 6px); }
-.resource-fill-bar.low { background: repeating-linear-gradient(90deg, #ff5a4a 0 5px, transparent 5px 6px); box-shadow: 0 0 6px rgba(255, 80, 60, 0.7); }
-.resource-item.empty { border-color: #ff5a4a; }
+.resource-fill-bar.low { background: repeating-linear-gradient(90deg, var(--bad, #ff5a4a) 0 5px, transparent 5px 6px); box-shadow: 0 0 6px rgba(255, 80, 60, 0.7); }
+.resource-item.empty { border-color: var(--bad, #ff5a4a); }
 
 .info-row { gap: 12px; }
 .info-item {
@@ -77,7 +80,7 @@
 .info-label { color: #b8ad96; }
 .info-arrival { margin-inline-start: 5px; color: #ffb547; font-variant-numeric: tabular-nums; font-size: 0.92em; }
 .info-arrival:empty { display: none; }
-.info-arrival.negative { color: #ff6a5a; animation: arrival-pulse 1.2s ease-in-out infinite; }
+.info-arrival.negative { color: var(--bad, #ff6a5a); animation: arrival-pulse 1.2s ease-in-out infinite; }
 @keyframes arrival-pulse { 50% { opacity: 0.45; } }
 
 .lang-btn {
@@ -156,7 +159,7 @@
 }
 .nav-btn:active::after { background: #ffb547; box-shadow: 0 0 6px #ffb547; }
 .nav-label { font-family: var(--font-title); font-size: calc(12.5px * var(--fs, 1)); letter-spacing: 0.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
-.nav-badge { background: #ff4a3a; box-shadow: 0 0 8px rgba(255, 74, 58, 0.8); }
+.nav-badge { background: #b3261e; color: #fff; box-shadow: 0 0 8px rgba(255, 74, 58, 0.8); } /* [plan4:AC-3] white on #ff4a3a was 3.3:1, on #b3261e it is 6.5:1 */
 
 /* ---------- CRT terminal panels ---------- */
 
@@ -218,7 +221,7 @@
 }
 .bp-section-title, .research-name, .build-item-name, .person-name, .ach-name { color: var(--phosphor); }
 .bp-hint, .build-item-desc, .build-meta { color: var(--text-secondary); }
-.bp-value.positive, .cost-chip.affordable, .positive-text, .gain-chip.positive { color: #7dff9e; }
+.bp-value.positive, .cost-chip.affordable, .positive-text, .gain-chip.positive { color: var(--ok, #7dff9e); }
 .cost-chip { background: rgba(0, 0, 0, 0.45); border: 1px solid rgba(110, 255, 160, 0.12); border-radius: 3px; }
 .zone-chip { background: rgba(110, 255, 160, 0.1); }
 
@@ -266,9 +269,9 @@
   position: relative;
   background:
     radial-gradient(ellipse at 50% -30%, rgba(255, 232, 180, 0.32), transparent 62%),
-    linear-gradient(180deg, #d4943c, #ad6a1e 58%, #8a5216);
+    linear-gradient(180deg, #d4943c, #bd7a26 58%, #b06b1c); /* [plan4:AC-3] the end stop was #8a5216: dark text on it was 2.9:1 */
   border-color: #3a2208;
-  color: #1c1004;
+  color: #120a02;
   font-weight: 800;
   text-shadow: 0 1px 0 rgba(255, 214, 150, 0.35);
   box-shadow: inset 0 1px 0 rgba(255, 228, 176, 0.5), inset 0 -2px 0 rgba(60, 30, 0, 0.55), 0 2px 10px rgba(255, 160, 50, 0.16);
@@ -287,6 +290,17 @@
   pointer-events: none;
 }
 .btn-primary:disabled::before { background: #5a3a14; box-shadow: none; }
+/* [plan4:AC-3] Disabled / locked: a grey plate with a dashed edge and readable text, instead of fading everything with opacity (2.5:1). */
+.btn:disabled, .btn-primary:disabled, .btn-secondary:disabled, .btn-danger:disabled {
+  opacity: 1;
+  background: linear-gradient(180deg, #26282b, #1b1c1e);
+  border: 1px dashed rgba(138, 152, 144, 0.6);
+  color: var(--text-disabled);
+  text-shadow: none;
+  box-shadow: none;
+}
+.nav-btn.locked { opacity: 1; color: var(--text-disabled); border-style: dashed; }
+.nav-btn.locked .nav-icon { filter: grayscale(1); opacity: 0.7; }
 .btn-primary .ic { filter: none; }
 .btn-secondary { background: linear-gradient(180deg, #2c3a30, #18241c); color: var(--text-primary); border-color: rgba(110, 255, 160, 0.25); }
 .btn-ghost { background: transparent; box-shadow: none; border-color: rgba(110, 255, 160, 0.25); color: var(--text-primary); }
@@ -318,7 +332,8 @@
 }
 .modal-title {
   font-family: var(--font-display);
-  font-size: calc(32px * var(--fs, 1));
+  /* [plan4:UX-3] 26px+ keeps Karantina legible at the default scale, and the cap stops the title eating a small screen at XL. */
+  font-size: min(calc(clamp(26px, 7vw, 30px) * var(--fs, 1)), 38px);
   font-weight: 700;
   letter-spacing: 0.04em;
   color: var(--phosphor);
@@ -339,7 +354,7 @@
   text-shadow: 0 0 6px rgba(110, 255, 160, 0.4);
   font-weight: 600;
 }
-.toast.good { border-color: rgba(125, 255, 158, 0.7); }
+.toast.good { border-color: var(--ok, #7dff9e); }
 .toast.bad { border-color: rgba(255, 90, 74, 0.8); color: #ffb3a8; text-shadow: 0 0 6px rgba(255, 90, 74, 0.4); }
 
 /* ---------- Surface map as a radar screen ---------- */
@@ -430,13 +445,62 @@
 @media (max-width: 374px) {
   .info-clock .info-icon { display: none; }
   .resource-value { font-size: calc(13px * var(--fs, 1)); }
-  .resource-rate { font-size: calc(9.5px * var(--fs, 1)); }
+  .resource-rate { font-size: calc(11px * var(--fs, 1)); } /* [plan4:AC-3] >= 11px */
 }
 
 /* Short screens (landscape phones): a slimmer console. */
 @media (max-height: 560px) {
   .nav-label { display: none; }
   .nav-btn { padding-block: 4px; }
+}
+
+/* ---------- plan 2026-10 M7: worn, brushed steel on the HUD plates and console buttons ---------- */
+
+.resource-item, .nav-btn, .lang-btn, .info-item { isolation: isolate; }
+.nav-btn, .lang-btn, .info-item { position: relative; }
+.resource-item::before, .nav-btn::before, .lang-btn::before, .info-item::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  background: var(--mat-steel, none) 0 0 / 128px 128px;
+  mix-blend-mode: overlay;
+  opacity: 0.55;
+  pointer-events: none;
+}
+.info-item::before { opacity: 0.3; }
+
+/* ---------- plan 2026-10 Q11/Q12: nothing clipped at 360 / 320 px, and a thinner HUD ---------- */
+
+/* "Show all resources" pill under the key row (only on phones, see HUD.ts). */
+.res-more {
+  display: none;
+  margin: 3px auto 0;
+  min-height: 18px;
+  padding: 0 12px;
+  border-radius: 9px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(0, 0, 0, 0.5);
+  color: #b8ad96;
+  font: 600 10px/16px 'Rubik', sans-serif;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  pointer-events: auto;
+}
+.res-more:active { transform: translateY(1px); }
+.hud-top.res-collapsible .res-more { display: block; min-height: 16px; margin-top: 2px; font-size: 9.5px; line-height: 14px; }
+.hud-top.res-collapsible { padding-bottom: 6px; }
+.hud-top.res-collapsible .info-row { margin-top: 3px; }
+
+/* The info row may never overflow on both sides (it used to centre its overflow and cut the first and last buttons). */
+.info-row { justify-content: safe center; }
+@media (max-width: 399px) {
+  /* Compact chips; when even so many are showing at once that they do not fit, the row wraps instead of clipping. */
+  .hud-top .info-row { gap: 3px; flex-wrap: wrap; justify-content: center; row-gap: 4px; }
+  .info-clock .info-icon { display: none; }
+  .hud-top .info-row .lang-btn { min-width: 30px; padding: 3px 5px; }
+  .info-item { padding: 2px 5px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

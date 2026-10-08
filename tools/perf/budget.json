@@ -1,0 +1,30 @@
+{
+  "_note": "A scenario marked \"pending\": true is measured and printed but never fails the gate (plan 4 X-4: the wide-floor f24w-* scenarios until wide layouts exist). The gate (node tools/perf/run.mjs --check) fails a build that goes more than 10% over a figure here. Only counts gate (draw calls, objects drawn, share of pictures in which a big render group rebuilt, JS allocation per picture, GPU texture MB, idle main-thread share, freeze lengths); milliseconds are reported, never gated. The limits below are what the build measured when the plan's quick wins and the medium phase landed (plus ~8% room); tighten them as the game gets lighter, never loosen one without saying why. Plan targets for comparison are in 'targets'.",
+  "scenarios": {
+    "f8-overview-medium":  { "floors": 8,  "people": 25, "camera": "overview", "quality": "medium", "maxDrawCalls": 420, "maxRenderables": 3800, "maxStructureChangedPct": 5, "maxAllocKBPerFrame": 520, "maxGpuTextureMB": 260 },
+    "f24-overview-medium": { "floors": 24, "people": 60, "camera": "overview", "quality": "medium", "maxDrawCalls": 730, "maxRenderables": 7100, "maxStructureChangedPct": 5, "maxAllocKBPerFrame": 600, "maxGpuTextureMB": 280 },
+    "f24-close-medium":    { "floors": 24, "people": 60, "camera": "close",    "quality": "medium", "maxDrawCalls": 440, "maxRenderables": 4400, "maxStructureChangedPct": 5, "maxAllocKBPerFrame": 430, "maxGpuTextureMB": 280 },
+    "f24-far-medium":      { "floors": 24, "people": 60, "camera": "far",      "quality": "medium", "maxDrawCalls": 220, "maxRenderables": 800,  "maxStructureChangedPct": 5, "maxAllocKBPerFrame": 2000, "maxGpuTextureMB": 290 },
+    "f24-close-low":       { "floors": 24, "people": 60, "camera": "close",    "quality": "low",    "maxDrawCalls": 420, "maxRenderables": 4000, "maxStructureChangedPct": 5, "maxAllocKBPerFrame": 430, "maxGpuTextureMB": 280 },
+    "f24-close-high":      { "floors": 24, "people": 60, "camera": "close",    "quality": "high",   "maxDrawCalls": 450, "maxRenderables": 4450, "maxStructureChangedPct": 5, "maxAllocKBPerFrame": 430, "maxGpuTextureMB": 280 },
+    "f24-idle-medium":     { "floors": 24, "people": 60, "camera": "overview", "quality": "medium", "mode": "idle", "maxDrawCalls": 720, "maxRenderables": 7100, "maxStructureChangedPct": 5, "maxAllocKBPerFrame": 1300, "maxGpuTextureMB": 280, "maxBusyPct": 12 },
+    "f24w-overview-medium": { "floors": 24, "people": 60, "camera": "overview", "quality": "medium", "fixture": "wide", "pending": true, "maxDrawCalls": 730, "maxRenderables": 7100, "maxStructureChangedPct": 5, "maxAllocKBPerFrame": 600, "maxGpuTextureMB": 280 },
+    "f24w-close-medium":    { "floors": 24, "people": 60, "camera": "close",    "quality": "medium", "fixture": "wide", "pending": true, "maxDrawCalls": 440, "maxRenderables": 4400, "maxStructureChangedPct": 5, "maxAllocKBPerFrame": 430, "maxGpuTextureMB": 280 },
+    "f24w-walk-close-medium": { "floors": 24, "people": 60, "camera": "close", "quality": "medium", "fixture": "wide-walk", "pending": true, "maxDrawCalls": 450, "maxRenderables": 4450, "maxStructureChangedPct": 5, "maxAllocKBPerFrame": 450, "maxGpuTextureMB": 280 },
+    "f24w-far-medium":      { "floors": 24, "people": 60, "camera": "far",      "quality": "medium", "fixture": "wide", "pending": true, "maxDrawCalls": 220, "maxRenderables": 800,  "maxStructureChangedPct": 5, "maxAllocKBPerFrame": 2000, "maxGpuTextureMB": 290 },
+    "audio-start":         { "kind": "audio", "maxReadyMs": 25000, "maxLongTaskMs": 2500, "maxLongTaskMax": 700, "maxPeakGainMB": 650 },
+    "offline-24h":         { "kind": "offline", "floors": 24, "people": 60, "hours": 24, "maxLongestMs": 150 }
+  },
+  "global": {
+    "_note": "jsGzKB = every .js file in dist/assets, gzipped (what the service worker keeps); initialJsGzKB = the scripts index.html loads plus their static imports (the first load). Plan 4 wave 3 (perf-wave3.md): the old 520 was measured on the pre-plan-4 build (521) and is NOT met any more: plan 4 added about 120 KB of rooms, art and layout code (642 KB at the start of wave 3), and wave 3 recovered 19 KB of the total (Pixi WebGPU/Canvas renderers dropped) and 81 KB of the first load (string tables, Bunker Book and sound recipes fetched on demand). The limits below are what the wave-3 build measured; tighten them when code is removed, never loosen without writing why here.",
+    "jsGzKB": 625,
+    "initialJsGzKB": 560
+  },
+  "targets": {
+    "_note": "From 3-mobile-performance.md (not yet met everywhere: overdraw, objects drawn, draw calls need the deferred M2/M5 work and a real device).",
+    "f24-close-medium": { "maxDrawCalls": 120, "maxRenderables": 1500, "maxAllocKBPerFrame": 100, "maxGpuTextureMB": 120 },
+    "f24-overview-medium": { "maxDrawCalls": 150, "maxRenderables": 1500, "maxAllocKBPerFrame": 100, "maxGpuTextureMB": 120 },
+    "idle": { "maxBusyPct": 5 },
+    "audio": { "maxReadyMs": 3000, "maxLongTaskMs": 50 }
+  }
+}

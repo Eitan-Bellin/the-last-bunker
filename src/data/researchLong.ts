@@ -1,4 +1,7 @@
 import type { ResearchDef } from './research';
+import { LATE_RESEARCH } from './researchLate';
+import { ROOM_RESEARCH } from './researchRooms'; // [plan4:BL-9..14,19,33]
+import { INFRA_RESEARCH } from './researchInfra'; // plan4:BL-27/28/29
 
 /**
  * [Long game P3] The deeper research tree: four doctrine forks (one choice each, the others close for this run) and
@@ -139,6 +142,14 @@ export const LONG_RESEARCH: ResearchDef[] = [
   },
   // ---- Act III nodes ----
   {
+    // [plan4:ST-3] A second dig slot: two crews, two digs (a floor and a wing, or two wings) at once.
+    id: 'parallelDig', branch: 'infrastructure', tier: 5, icon: '[[pick]]', act: 3,
+    name: { he: 'חפירה מקבילה', en: 'Parallel Digging' },
+    desc: { he: 'שתי חפירות במקביל: צוות שני חופר לצד הראשון', en: 'Two digs at once: a second crew works beside the first' },
+    cost: { knowledge: 600, materials: 200 }, time: 3600, requires: ['deepDrilling'],
+    effects: [{ type: 'feature', feature: 'parallelDig' }],
+  },
+  {
     id: 'assemblyTheory', branch: 'infrastructure', tier: 5, icon: '[[components]]', act: 3, eureka: { kind: 'specialized', n: 4 },
     name: { he: 'תורת ההרכבה', en: 'Assembly Theory' },
     desc: { he: 'רכיבים +25%', en: 'Components +25%' },
@@ -209,4 +220,9 @@ export const LONG_RESEARCH: ResearchDef[] = [
     cost: { knowledge: 5000, alloys: 120, components: 300 }, time: 57600, requires: ['temporalTheory'],
     effects: [{ type: 'resourceMult', resource: 'food', value: 0.15 }, { type: 'resourceMult', resource: 'knowledge', value: 0.1 }],
   },
+  // ---- [P2-1 / P2-8] The late tree: see researchLate.ts ----
+  ...LATE_RESEARCH,
+  // ---- [plan4] The unlocking nodes of the new rooms ----
+  ...ROOM_RESEARCH,
+  ...INFRA_RESEARCH, // plan4:BL-27/28/29
 ];

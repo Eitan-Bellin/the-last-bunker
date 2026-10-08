@@ -256,6 +256,23 @@ export class SaveManager {
     return r.ok && r.raw ? r.raw : null;
   }
 
+  /**
+   * [plan4:qa] Recovery from a save that reads fine but crashes the game at start: the main save is kept as the "corrupt copy" (for
+   * "copy my data") and removed, so the next start falls back to the freshest backup. With `everything` the backups go the same way
+   * (copied aside first) and the next start is a new game, for the case where the backup carries the same fault.
+   */
+  async setAsideForRecovery(everything: boolean): Promise<void> {
+    const main = await this.getRaw(AUTO_SAVE_KEY);
+    if (main.ok && main.raw) await set(CORRUPT_KEY, main.raw);
+    await del(AUTO_SAVE_KEY);
+    if (!everything) return;
+    for (const kind of Object.keys(BACKUP_KEYS) as BackupKind[]) {
+      const r = await this.getRaw(BACKUP_KEYS[kind]);
+      if (r.ok && r.raw) await set(`${CORRUPT_KEY}_${kind}`, r.raw);
+      await del(BACKUP_KEYS[kind]);
+    }
+  }
+
   async deleteSave(slot: 'auto' | number): Promise<void> {
     const key = slot === 'auto' ? AUTO_SAVE_KEY : `${SAVE_SLOT_PREFIX}${slot}`;
     await del(key);

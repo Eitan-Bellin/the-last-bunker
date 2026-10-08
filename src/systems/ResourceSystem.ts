@@ -4,7 +4,7 @@ import { hasFeature } from './ResearchSystem';
 import { seasonEffects } from '../data/seasons';
 import type { BuildingInstance, GameState, ResourceType, ResourceState } from '../core/GameState';
 import type { StateManager, StateDelta } from '../core/StateManager';
-import { getDef, effectiveLevel, levelMultiplier, workforceMultiplier } from '../data/buildingDefs';
+import { getDef, effectiveLevel, levelMultiplier, shapeFactor, synergyTable, workforceMultiplier } from '../data/buildingDefs';
 import { researchBuildingMult, researchCapBonus, researchResourceMult } from './ResearchSystem';
 import { chainFactor, chainInputs, inputFed, inputRate } from '../data/chains';
 import { incidentBlocks } from '../data/incidents';
@@ -13,6 +13,9 @@ import { BASE_CAPS, OVERFLOW_CREDITS, POWER_FLOOR, TICKED_RESOURCES } from '../d
 import { modifierBreakdown, modifierProduct, prepareModifiers, registerModifier } from './modifiers';
 import { difficultyOf } from '../data/difficulty';
 import { actCapBonus } from '../data/pricing';
+import { TUNING } from '../data/tuning';
+import { scenarioOf } from '../data/scenarios';
+import { infraPowerDraw } from './InfraSystem'; // plan4:ST-14/15
 
 const EMERGENCY_EFFICIENCY = 0.25;
 const FOOD_PER_SURVIVOR = 0.08;
@@ -45,6 +48,10 @@ registerModifier({
   mult: ({ resource }) => (resource === 'power' ? 1 : moraleNow),
 });
 registerModifier({ id: 'echo', mult: ({ state }) => prestigeMultiplier(state) });
+// [P3-5] The scenario's own rules (what grows well in this place and what does not).
+registerModifier({ id: 'scenario', mult: ({ state, resource }) => scenarioOf(state).output?.[resource] ?? 1 });
+// [P2-1] The Technocracy doctrine: every room +5%.
+registerModifier({ id: 'technocracy', mult: ({ state }) => (hasFeature(state, 'technocracy') ? 1.05 : 1) });
 // [P3] Laws in force.
 registerModifier({ id: 'laws', mult: ({ state, resource }) => (state.longGame?.policy.laws.length ? lawOutput(state, resource) : 1) });
 // [P2] The season leans on food, water or materials.
@@ -60,6 +67,23 @@ registerModifier({
 });
 // [P5] Lean Years mutator.
 registerModifier({ id: 'mutators', mult: ({ state, resource }) => (resource === 'food' && hasMutator(state, 'leanYears') ? 0.85 : 1) });
+// [plan4:BL-1] Neighbour pairs (SYNERGIES, doc 02 section 2.5): 'output' lifts everything a room makes (mushroom farm by the pump), 'knowledge' only
+// knowledge (library by the laboratory), 'powerLoss' a power plant's output (generator by a battery bank loses less on the way).
+// The table is built once per update (prepare), not per room and resource.
+let synergyNow: ReturnType<typeof synergyTable> = new Map();
+registerModifier({
+  id: 'synergy',
+  prepare: state => { synergyNow = synergyTable(state); },
+  mult: ({ building, resource }) => {
+    const row = synergyNow.get(building.id);
+    if (!row) return 1;
+    return 1 + (row.output ?? 0) + (resource === 'knowledge' ? row.knowledge ?? 0 : 0) + (resource === 'power' ? row.powerLoss ?? 0 : 0);
+  },
+});
+/** [plan4:BL-1] The share of a chain input a room does not use because of a neighbour (recycler by the workshop: 20% less materials). */
+function inputSaving(b: BuildingInstance, resource: ResourceType): number {
+  return resource === 'materials' ? synergyNow.get(b.id)?.inputMult ?? 0 : 0;
+}
 // [Long game] A room that is changing its role produces nothing until the work is done.
 registerModifier({ id: 'retool', mult: ({ state, building }) => (retooling(state, building) ? 0 : 1) });
 
@@ -111,6 +135,8 @@ export class ResourceSystem {
       if (p && !incidentBlocks(state, b)) powerProd += this.powerOutput(state, b, level);
     }
 
+    powerDemand += infraPowerDraw(state); // [plan4:ST-14/15] shut doors 0.2 each, stairwell lights, vent fans
+
     const storedPower = state.resources.power.amount;
     const supplyRatio = storedPower > 0.01 || powerProd >= powerDemand
       ? 1
@@ -142,7 +168,7 @@ export class ResourceSystem {
     for (const b of state.buildings) {
       if (effectiveLevel(b) <= 0 || incidentBlocks(state, b)) continue;
       for (const input of chainInputs(b)) {
-        if (inputFed(state, input)) consumption[input.resource] = (consumption[input.resource] ?? 0) + inputRate(input, b);
+        if (inputFed(state, input)) consumption[input.resource] = (consumption[input.resource] ?? 0) + inputRate(input, b) * (1 - inputSaving(b, input.resource));
       }
       const spec = specOf(b);
       // [Long game] Tier-2 roles grow with the room's level, slow down when starved, and stop while the room retools.
@@ -153,6 +179,14 @@ export class ResourceSystem {
     }
 
     const deltas: StateDelta[] = [];
+    // [plan4:BL-25] The pre-war vault makes blueprints: whole numbers and not a ticked resource, so the fraction builds up in stats.planDust and each whole plan moves over.
+    const plans = production.blueprints ?? 0;
+    if (plans > 0) {
+      const dust = (state.stats.planDust ?? 0) + plans * dt;
+      const whole = Math.floor(dust);
+      deltas.push({ path: 'stats.planDust', value: dust - whole });
+      if (whole > 0) deltas.push({ path: 'resources.blueprints.amount', value: (state.resources.blueprints?.amount ?? 0) + whole });
+    }
     for (const rt of TICKED_RESOURCES) {
       const res = state.resources[rt];
       const prod = production[rt] ?? 0;
@@ -189,7 +223,8 @@ export class ResourceSystem {
     }
     if (left <= 0) return;
     log.converted += left;
-    this.pendingCredits += left * (OVERFLOW_CREDITS[rt] ?? 0);
+    // [Q10] From Act IV the overflow is worth a quarter: credits piled up (median 126K a return) with nothing worth buying.
+    this.pendingCredits += left * (OVERFLOW_CREDITS[rt] ?? 0) * ((state.longGame?.meta.act ?? 1) >= TUNING.overflowDecayAct ? TUNING.overflowDecay : 1);
   }
 
   private flushCredits(state: GameState, deltas: StateDelta[]): void {
@@ -241,7 +276,7 @@ export class ResourceSystem {
       add(src, b.type, v);
       if (v > 0 && (!top || v > top.v)) top = { b, v };
       if (!incidentBlocks(state, b)) for (const input of chainInputs(b)) {
-        if (input.resource === r && inputFed(state, input)) add(snk, b.type, inputRate(input, b));
+        if (input.resource === r && inputFed(state, input)) add(snk, b.type, inputRate(input, b) * (1 - inputSaving(b, input.resource)));
       }
     }
     if (r === 'food' || r === 'water') {
@@ -278,14 +313,15 @@ export class ResourceSystem {
   private powerOutput(state: GameState, b: BuildingInstance, level: number): number {
     const p = getDef(b.type)?.production?.power;
     if (!p) return 0;
-    return p.base * levelMultiplier(p, level) * this.roomFactor(state, b) * modifierProduct({ state, building: b, resource: 'power', powerRatio: 1 });
+    return p.base * levelMultiplier(p, level) * this.roomFactor(state, b) * modifierProduct({ state, building: b, resource: 'power', powerRatio: 1 })
+      * shapeFactor(getDef(b.type), state.stats.totalPlayTime); // [plan4:BL-8] solar follows the sun, wind the gusts; 1 for every other room
   }
 
   private computeOutput(state: GameState, b: BuildingInstance, powerRatio: number): Partial<Record<ResourceType, number>> {
     const def = getDef(b.type);
     const level = effectiveLevel(b);
     if (!def?.production || level <= 0 || incidentBlocks(state, b)) return {};
-    const room = this.roomFactor(state, b);
+    const room = this.roomFactor(state, b) * shapeFactor(def, state.stats.totalPlayTime); // [plan4:BL-8] weather shape: 1 unless the def has one
     const out: Partial<Record<ResourceType, number>> = {};
     for (const [r, entry] of Object.entries(def.production)) {
       if (r === 'power') continue;

@@ -12,6 +12,11 @@ import { ERAS } from '../../src/data/eras';
 import { specsFor } from '../../src/data/specializations';
 import { expeditionEvent } from '../../src/data/expeditionEvents';
 import { bunkerDefense } from '../../src/systems/EventSystem'; // [Danger bot]
+import { childCapacityOf } from '../../src/data/roomEffects'; // [plan4:BL-26/30] the bot puts children in the nursery and the school
+import {
+  buildColumn, buildDoor, closeEmergencyDoors, columnBlock, columnCost, doorBlock, doorCost, fireCodeFloors, infraUnlocked, openAllDoors, roomEdgeBoundaries, troubleOn,
+} from '../../src/systems/InfraSystem'; // [plan4:ST-14/15]
+import { infraOfKind, shutDoorCount } from '../../src/systems/doors'; // [plan4:ST-14/15]
 
 /**
  * Balance simulator core (NICE4), shared by the Node runner (tools/sim/run.mjs) and the browser page
@@ -52,6 +57,8 @@ export interface SimOptions {
   rebirths?: number;
   /** Return the final game state as save JSON (`finalSave`), e.g. to test save migrations on real games. */
   dumpSave?: boolean;
+  /** [plan4:GP-1] The player's use of the daily orders: 'half' (default) finishes and takes 1 order one day and 2 the next (1.5 of 3), richest first, 'full' all three and the chest every day, 'off' ignores them. */
+  daily?: 'off' | 'half' | 'full';
   onProgress?: (fraction: number, label: string) => void;
   /** Lets a browser page breathe between chunks. */
   yieldFn?: () => Promise<void>;
@@ -103,6 +110,8 @@ export interface SimResult {
   lastProgress: Milestone; stallWallH: number; stallPlayH: number;
   objectivesDone: number;
   supplyDrops: number;
+  /** [plan4:GP-1] Daily orders the bot took, by reward kind, and what they paid. */
+  daily?: { days: number; orders: number; chests: number; credits: number; rush: number; frags: number; blueprints: number; streakEnd: number };
   /** [LateGame] project stages finished, caravans home/lost, weekly challenges won, trainings and the final rank counts. */
   lateGame?: { stages: number; caravansOk: number; caravansLost: number; weekly: number; trained: number; rank5: number; projectsDone: number };
   final: Record<string, unknown>;
@@ -300,6 +309,7 @@ export async function runSim(o: SimOptions): Promise<SimResult> {
     offline: [] as OfflineEntry[],
     lastProgressKey: '', lastProgress: { play: 0, wall: 0 },
     objectivesDone: 0, supplyDrops: 0,
+    daily: { days: 0, orders: 0, chests: 0, credits: 0, rush: 0, frags: 0, blueprints: 0, streakEnd: 0 },
     projectStages: 0, caravans: { ok: 0, lost: 0 }, weeklyDone: 0, // [LateGame]
     bot: { actions: {} as Record<string, number>, pulledForRuins: 0, journalReads: 0, queuedResearch: 0, longTrips: 0 },
   };
@@ -441,6 +451,11 @@ export async function runSim(o: SimOptions): Promise<SimResult> {
       if (!ds || !((reacts && ds.answerMemorial('ceremony', e.resourceSystem)) || ds.answerMemorial('carryOn', e.resourceSystem))) break;
     }
     if (!reacts) return;
+    // [plan4:ST-14] Trouble (a fire, an epidemic, a raid on the way): shut the doors around it; when it is over, open them again (shut doors draw power).
+    if (infraUnlocked(state(), 'bulkhead')) {
+      if (troubleOn(state())) { if (closeEmergencyDoors(sm) > 0) acted('doors'); }
+      else if (shutDoorCount(state()) > 0 && openAllDoors(sm) > 0) acted('doors');
+    }
     const d = (state() as unknown as { danger: DangerLike }).danger;
     // A raid is coming: post guards, and pay the toll if the door still looks too weak.
     const freshRaid = !!d.raid && !noticed.has(`raid:${d.raid.hitAt}`);
@@ -536,6 +551,38 @@ export async function runSim(o: SimOptions): Promise<SimResult> {
     const supply = (e as unknown as Loose).supplySystem;
     const ready = fn(supply, 'isReady'), claim = fn(supply, 'claim');
     if (ready && claim && ready(state()) && claim()) { R.supplyDrops++; acted('supplyDrop'); }
+    dailyOrders();
+  };
+
+  /**
+   * [plan4:GP-1] A player who "completes 1.5 of 3": the orders' own progress is switched off (they are played by hand) and, once a day, the
+   * bot finishes and takes the first one or two (alternating days). Gold is taken as a piece of a blueprint, the choice that helps progress
+   * most, so this is the upper bound of what the daily orders can move. 'full' takes all three and the chest every day (a stress run).
+   */
+  let dailyDay = -2;
+  const dailyOrders = () => {
+    const mode = o.daily ?? 'half';
+    const sys = (e as unknown as Loose).dailySystem as Loose | undefined;
+    if (!sys || mode === 'off') return;
+    sys.progressEnabled = false;
+    const d = (state() as unknown as { daily?: { day: number; orders: { id: string; done: boolean; claimed: boolean }[]; streak: number } }).daily;
+    if (!d || d.orders.length === 0 || d.day === dailyDay) return;
+    dailyDay = d.day;
+    R.daily!.days++;
+    const quota = mode === 'full' ? d.orders.length : Math.min(d.orders.length, d.day % 2 === 0 ? 1 : 2);
+    const before = { cr: state().resources.credits?.amount ?? 0, rush: state().rush ?? 0, bp: state().resources.blueprints?.amount ?? 0 };
+    // The player picks the richest errands first: pickOrders puts the easy, medium and "new" (gold) orders in that order, so gold is index 2.
+    const order = d.orders.map((_, i) => i).reverse();
+    for (const i of order.slice(0, quota)) {
+      fn(sys, 'forceComplete')?.(i);
+      const c = fn(sys, 'claim')?.(i, 'frag') as { frag: number } | null | undefined;
+      if (c) { R.daily!.orders++; R.daily!.frags += c.frag; acted('dailyOrder'); }
+    }
+    if (mode === 'full' && fn(sys, 'claimChest')?.()) { R.daily!.chests++; acted('dailyChest'); }
+    R.daily!.credits += (state().resources.credits?.amount ?? 0) - before.cr;
+    R.daily!.rush += (state().rush ?? 0) - before.rush;
+    R.daily!.blueprints += (state().resources.blueprints?.amount ?? 0) - before.bp;
+    R.daily!.streakEnd = (state() as unknown as { daily: { streak: number } }).daily.streak;
   };
 
   /** Puts hands on a started ruin that has none: an idle survivor, else someone pulled off a room job. */
@@ -557,6 +604,10 @@ export async function runSim(o: SimOptions): Promise<SimResult> {
     }
   };
 
+  /** [plan4:BL-15..32] Research nodes that only unlock a wave 2 room. */
+  const WAVE2_ROOMS = ['quarantineWard', 'solarArray', 'windTurbine', 'watchtower', 'garage', 'decon', 'aquaculture', 'market', 'nursery', 'school', 'bathhouse', 'memorialHall',
+    'geothermal', 'oldVault', 'componentsPlant', 'alloyFoundry', 'dataCenter', 'forum', 'seedLab']; // plan4:BL-24,25,34..38 wave 3 nodes ride along (the districts' nodes too)
+  const lateRoomNode = new Set(researchData.RESEARCH.filter(r => r.effects.some(x => x.type === 'unlock' && WAVE2_ROOMS.includes(x.building))).map(r => r.id));
   const startResearch = () => {
     const ids = [...researchData.RESEARCH.map(r => r.id)];
     const refinements = (researchData as unknown as Loose).REFINEMENTS as { id: string }[] | undefined;
@@ -574,8 +625,10 @@ export async function runSim(o: SimOptions): Promise<SimResult> {
     const onPath = (id: string) => { const f = all.find(r => r.id === id)?.fork; return !f || chosen.has(id); };
     // Main tree first (cheapest), endless refinements only when nothing else is open; fill the queue if there is one.
     for (let i = 0; i < 6; i++) {
+      // [plan4:BL-15..32] A wave 2 room's node is researched after the main tree (like a Refinement, but before one): the rooms are a choice, not the road to the next Act.
+      const rank = (id: string) => (refIds.has(id) ? 2 : lateRoomNode.has(id) ? 1 : 0);
       const next = ids.filter(id => onPath(id) && e.researchSystem.canStart(state(), id))
-        .sort((a, b) => Number(refIds.has(a)) - Number(refIds.has(b)) || costK(a) - costK(b))[0];
+        .sort((a, b) => rank(a) - rank(b) || costK(a) - costK(b))[0];
       if (!next) break;
       const hadActive = !!e.researchSystem.activeId(state());
       if (!e.researchSystem.start(sm, next)) break;
@@ -594,7 +647,29 @@ export async function runSim(o: SimOptions): Promise<SimResult> {
     return null;
   };
 
+  /** [plan4] The rooms of the redesign's first wave: the bot builds them last and upgrades them last (core rooms carry the Act goals). */
+  const NEW_ROOMS: BuildingType[] = ['batteryBank', 'commons', 'library', 'recycler', 'condenser', 'mushroomFarm', 'gatePost', 'barracks',
+    // [plan4:BL-15..32] wave 2
+    'quarantineWard', 'solarArray', 'windTurbine', 'watchtower', 'garage', 'decon', 'aquaculture', 'market', 'nursery', 'school', 'bathhouse', 'memorialHall',
+    // [plan4:BL-34..38] wave 3
+    'componentsPlant', 'alloyFoundry', 'dataCenter', 'forum', 'seedLab'];
+  const hallsStillFit = (type: BuildingType, pos: { x: number; y: number; floor: number }) => {
+    const s = state();
+    const fake = { id: 'b_fake', type, level: 1, position: pos, assignedSurvivorIds: [], constructionProgress: 0, constructionTotal: 1, isConstructing: true, specialization: null };
+    const after = { ...s, buildings: [...s.buildings, fake] } as GameState;
+    // A hall is two levels tall: it often has no spot until the next floor is dug, so judge it with that floor counted in (when the Act lets it come).
+    const block = e.buildingSystem.digBlock(s);
+    const extra = block === 'act' || block === 'max' ? 0 : 1;
+    for (const hall of ['atrium', 'reactorHall'] as BuildingType[]) {
+      if (!isBuildingUnlocked(s, hall) || s.buildings.some(b => b.type === hall)) continue;
+      const spot = (st: GameState) => { const g = { ...st, currentFloors: st.currentFloors + extra } as GameState; return allowedFloors(hall, g.currentFloors).some(f => !!e.buildingSystem.findFreeSpot(hall, f, g)); };
+      if (spot(s) && !spot(after)) return false;
+    }
+    return true;
+  };
   let noSpaceFor: BuildingType | null = null;
+  /** [plan4:ST-3] Rooms standing when the last wing step was started: the next step waits until something was built in the room it made. */
+  let roomsAtLastWing = -1;
   const build = () => {
     const s = state();
     const want: BuildingType[] = [];
@@ -609,21 +684,99 @@ export async function runSim(o: SimOptions): Promise<SimResult> {
     const capBlocked = Object.entries(dig).some(([r, v]) => v > (s.resources[r as ResourceType]?.cap ?? Infinity));
     if (capBlocked) want.push('storage');
     want.push('workshop', 'laboratory', 'canteen', 'storage', 'radioTower', 'medbay', 'hydroponics', 'waterPurifier', 'armory', 'trainingRoom', 'reactor', 'atrium', 'reactorHall');
+    // [plan4:BL-9..14,19,33] The first eight new rooms come last (core rooms first), and only once their research is done AND their Act has come:
+    // isBuildingUnlocked covers the research; the copy limit is the smaller of the bot's own and the room's maxCopies (placeBlock enforces maxCopies too).
+    const act = (s as unknown as { longGame?: { meta: { act: number } } }).longGame?.meta.act ?? 1;
+    const pop = s.survivors.length;
+    const newRoomLimit: Partial<Record<BuildingType, number>> = {};
+    const wantNew = (type: BuildingType, fromAct: number, limit: number, when = true) => {
+      if (act < fromAct || !when) return;
+      newRoomLimit[type] = limit;
+      want.push(type);
+    };
+    wantNew('commons', 2, 1);
+    wantNew('mushroomFarm', 2, act >= 4 ? 3 : 2, net('food') < 2 || act >= 3);
+    wantNew('condenser', 2, act >= 4 ? 2 : 1, net('water') < 1.5 || act >= 3);
+    wantNew('batteryBank', 2, act >= 4 ? 2 : 1);
+    wantNew('library', 2, act >= 4 ? 2 : 1);
+    wantNew('gatePost', 2, act >= 4 ? 2 : 1);
+    wantNew('recycler', 3, 1, s.resources.scrap.amount < s.resources.scrap.cap * 0.6);
+    wantNew('barracks', 3, act >= 5 ? 2 : 1, pop >= s.maxPopulation - 3);
+    // [plan4:BL-15..32] wave 2 rooms: each one when its Act has come and the bunker has a use for it (research and the room's own rules - surface row, lake, flag - decide the rest).
+    const kids = s.survivors.filter(x => x.child).length;
+    wantNew('nursery', 2, 1, kids > 0);
+    wantNew('school', 3, 1, kids > 1);
+    wantNew('bathhouse', 2, 1, pop >= 20);
+    wantNew('memorialHall', 2, 1);
+    wantNew('quarantineWard', 3, 1, pop >= 30);
+    wantNew('garage', 3, 1);
+    wantNew('decon', 3, 1);
+    wantNew('aquaculture', 3, 1);
+    wantNew('market', 3, 1);
+    // [plan4:ST-16] The surface row (open from Act II): panels while power is thin, a turbine once the gusts are worth a room, a lookout against raids.
+    // findSpot walks allowedFloors, which for these is floor -1 only (a gate post takes floor 0 first, then the row).
+    wantNew('solarArray', 2, act >= 4 ? 3 : 2, net('power') < 3 || act >= 3);
+    wantNew('windTurbine', 3, act >= 5 ? 3 : 1, net('power') < 3 || act >= 4);
+    wantNew('watchtower', 3, act >= 5 ? 2 : 1);
+    // [plan4:BL-34..38] The Act rooms: one each, in the Act that introduces the currency (research, the Act's price and the spot are the only other gates).
+    wantNew('componentsPlant', 3, 1);
+    wantNew('alloyFoundry', 4, 1);
+    wantNew('dataCenter', 5, 1);
+    wantNew('forum', 6, 1);
+    wantNew('seedLab', 7, 1);
     noSpaceFor = null;
     for (const type of want) {
       if (!BUILDABLE_TYPES.includes(type) || !isBuildingUnlocked(s, type)) continue;
       const count = s.buildings.filter(b => b.type === type).length;
-      const limit = type === 'quarters' ? 8 : CORE.includes(type) ? 4 : isHall(type) ? 1 : 2;
-      if (count >= limit) continue;
+      const limit = newRoomLimit[type] ?? (type === 'quarters' ? 8 : CORE.includes(type) ? 4 : isHall(type) ? 1 : 2);
+      if (count >= Math.min(limit, getDef(type)?.maxCopies ?? Infinity)) continue;
       const cost = e.buildingSystem.getBuildCost(type, s);
       if (!e.resourceSystem.canAfford(s, cost)) continue;
       const pos = findSpot(type);
-      if (!pos) { noSpaceFor = noSpaceFor ?? type; continue; }
+      if (!pos) { if (!NEW_ROOMS.includes(type)) noSpaceFor = noSpaceFor ?? type; continue; } // [plan4] a new room with no fitting spot (no deep floor yet) must not trigger digging
+      // [plan4] A new room never takes the last spot a hall (atrium, reactor hall: blueprint-gated, built when the blueprints come) could still use.
+      if (NEW_ROOMS.includes(type) && !hallsStillFit(type, pos)) continue;
       e.resourceSystem.spend(sm, cost);
       if (e.buildingSystem.placeBuilding(type, pos, sm)) { mark(`built ${type}`); acted('build'); }
       break;
     }
     return capBlocked;
+  };
+
+  /**
+   * [plan4:ST-14/15] The safety works: an emergency stairwell for every deep floor under the fire code, a couple of vent stacks for a crowded bunker,
+   * and bulkhead doors beside the rooms that burn. Only out of a surplus (what is left after paying stays at 30% of storage).
+   */
+  const infraBuild = () => {
+    const s = state();
+    const act = (s as unknown as { longGame?: { meta: { act: number } } }).longGame?.meta.act ?? 1;
+    const surplus = (cost: Record<string, number>) => Object.entries(cost).every(([r, v]) => { const x = s.resources[r as ResourceType]; return !x || x.amount - v >= 0.3 * x.cap; });
+    if (infraUnlocked(s, 'stairwell')) {
+      const bad = fireCodeFloors(s);
+      if (bad.length) {
+        const cost = columnCost(s, 'stairwell', 1);
+        const tries = [Math.min(bad[0] + 1, s.currentFloors - 1), bad[0]];
+        const f = tries.find(t => columnBlock(s, 'stairwell', t, 1) === null);
+        if (f !== undefined && surplus(cost) && e.resourceSystem.canAfford(s, cost) && buildColumn(sm, e.resourceSystem, 'stairwell', f, 1) === null) { mark('first stairwell'); acted('infra'); return; }
+      }
+    }
+    if (infraUnlocked(s, 'ventStack') && s.survivors.length >= 16 && infraOfKind(s, 'ventStack').length < (act >= 5 ? 3 : 2)) {
+      const cost = columnCost(s, 'ventStack', 1);
+      let f = -1;
+      for (let t = s.currentFloors - 1; t >= 0 && f < 0; t--) if (columnBlock(s, 'ventStack', t, 1) === null) f = t;
+      if (f >= 0 && surplus(cost) && e.resourceSystem.canAfford(s, cost) && buildColumn(sm, e.resourceSystem, 'ventStack', f, 1) === null) { mark('first vent stack'); acted('infra'); return; }
+    }
+    if (infraUnlocked(s, 'bulkhead') && act >= 3 && infraOfKind(s, 'bulkhead').length < (act >= 4 ? 4 : 2)) {
+      const cost = doorCost();
+      if (!surplus(cost) || !e.resourceSystem.canAfford(s, cost)) return;
+      const hot = new Set(['generator', 'reactor', 'batteryBank', 'recycler', 'reactorHall']);
+      for (const b of s.buildings) {
+        if (b.isConstructing || !hot.has(b.type)) continue;
+        for (const x of roomEdgeBoundaries(b)) {
+          if (doorBlock(s, b.position.floor, x) === null && buildDoor(sm, e.resourceSystem, b.position.floor, x) === null) { mark('first bulkhead'); acted('infra'); return; }
+        }
+      }
+    }
   };
 
   const upgrade = (capBlocked: boolean) => {
@@ -636,7 +789,7 @@ export async function runSim(o: SimOptions): Promise<SimResult> {
       if (st) { e.resourceSystem.spend(sm, e.buildingSystem.getUpgradeCost(st)); e.buildingSystem.upgradeBuilding(st.id, sm); acted('upgrade'); return; }
     }
     if (s.resources.materials.amount > s.resources.materials.cap * 0.7) {
-      const up = [...s.buildings].filter(canUp).sort((a, b) => a.level - b.level)[0];
+      const up = [...s.buildings].filter(canUp).sort((a, b) => Number(NEW_ROOMS.includes(a.type)) - Number(NEW_ROOMS.includes(b.type)) || a.level - b.level)[0]; // [plan4] new rooms last
       if (up) { e.resourceSystem.spend(sm, e.buildingSystem.getUpgradeCost(up)); e.buildingSystem.upgradeBuilding(up.id, sm); acted('upgrade'); mark('first upgrade'); }
     }
   };
@@ -690,6 +843,22 @@ export async function runSim(o: SimOptions): Promise<SimResult> {
     // Older engines dig only when crowded; with Acts the bot digs as deep as the Act allows (the Act goals ask for depth).
     const digSys = (e as unknown as Loose).digSystem as Loose | undefined;
     const crowded = s.buildings.length / Math.max(1, s.currentFloors) > 4.5 || noSpaceFor !== null || !!digSys;
+    // [plan4:ST-3/ST-5] No place for a wanted room: widen a wing when that makes room cheaper (per slot) than a new floor, or when no floor can be dug
+    // (the Act's depth cap). A new floor is 12 slots, a wing step 2. Feature-detected: older engines have no wings.
+    const wingStep = fn(bsys, 'digWing'), wingList = fn(bsys, 'wingOptions');
+    if (wingStep && wingList && noSpaceFor !== null && s.buildings.length > roomsAtLastWing) {
+      const price = (c: Record<string, number>) => Object.values(c).reduce((a, v) => a + v, 0);
+      const blockNow = e.buildingSystem.digBlock ? e.buildingSystem.digBlock(s) : null;
+      const floorPerSlot = blockNow === 'act' || blockNow === 'max' ? Infinity : price(e.buildingSystem.digCost(s)) / 12;
+      const zone = allowedFloors(noSpaceFor, s.currentFloors);
+      const opts = (wingList(s) as { floor: number; side: 'w' | 'e'; cost: Record<string, number>; block: string | null }[])
+        // Only out of a surplus (like upgrades): what is left after paying must stay at 40% of storage, so a wing never starves the next floor or Act.
+        .filter(w => w.block === null && zone.includes(w.floor)
+          && Object.entries(w.cost).every(([r, v]) => { const x = s.resources[r as ResourceType]; return !x || x.amount - v >= 0.4 * x.cap; }))
+        .sort((a, b) => price(a.cost) - price(b.cost) || (a.side === 'e' ? 0 : 1) - (b.side === 'e' ? 0 : 1) || a.floor - b.floor);
+      const w = opts[0];
+      if (w && price(w.cost) / 2 < floorPerSlot && wingStep(sm, w.floor, w.side)) { roomsAtLastWing = s.buildings.length; mark('first wing'); acted('wing'); }
+    }
     if (crowded && e.buildingSystem.canDig(s) && e.resourceSystem.canAfford(s, e.buildingSystem.digCost(s))) {
       e.resourceSystem.spend(sm, e.buildingSystem.digCost(s));
       e.buildingSystem.dig(sm);
@@ -730,6 +899,12 @@ export async function runSim(o: SimOptions): Promise<SimResult> {
       const b = rooms.find(x => producesShort(x.type)) ?? rooms[0];
       if (b) e.populationSystem.assignSurvivorToBuilding(sm, sv.id, b.id);
       else if (r) e.restorationSystem.assign(r.id, sv.id);
+    }
+    // [plan4:BL-26/30] Children go to a nursery or school that has room (never into a crew place).
+    for (const kid of state().survivors) {
+      if (!kid.child || kid.assignedBuildingId) continue;
+      const home = state().buildings.find(x => !x.isConstructing && childCapacityOf(x) > 0 && e.populationSystem.canAssign(state(), x.id, true));
+      if (home) e.populationSystem.assignSurvivorToBuilding(sm, kid.id, home.id);
     }
   };
 
@@ -860,6 +1035,7 @@ export async function runSim(o: SimOptions): Promise<SimResult> {
       startResearch();
       shopBuy();
       const capBlocked = build();
+      infraBuild(); // [plan4:ST-14/15]
       upgrade(capBlocked);
       specializeAndDig();
       ruinsAndStaff();
@@ -1035,7 +1211,7 @@ export async function runSim(o: SimOptions): Promise<SimResult> {
     },
     offline: R.offline, lastProgress: R.lastProgress,
     stallWallH: fmtH(wall - R.lastProgress.wall), stallPlayH: fmtH(play() - R.lastProgress.play),
-    objectivesDone: R.objectivesDone, supplyDrops: R.supplyDrops,
+    objectivesDone: R.objectivesDone, supplyDrops: R.supplyDrops, daily: R.daily,
     lateGame: {
       stages: R.projectStages, caravansOk: R.caravans.ok, caravansLost: R.caravans.lost, weekly: R.weeklyDone,
       trained: (s as unknown as { lateGame?: { trained?: number } }).lateGame?.trained ?? 0,

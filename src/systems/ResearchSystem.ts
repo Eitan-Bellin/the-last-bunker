@@ -70,8 +70,23 @@ export function hasFeature(state: GameState, feature: string): boolean {
   return completedDefs(state).some(r => r.effects.some(e => e.type === 'feature' && e.feature === feature));
 }
 
-/** A building is available when it has no research requirement or its unlocking research is done. */
+/**
+ * A building is available when it has no research requirement or its unlocking research is done, and (plan4 BL-2) its
+ * story flag is set when the def asks for one (`place.needsFlag`: a room that opens by an event, like the memorial hall).
+ * A type with both needs both. Only the FIRST research node with an `unlock` effect for a type counts (RESEARCH.find),
+ * so every type must have exactly one unlocking node (tools/sim/lint.ts checks it).
+ */
+/**
+ * [plan4:qa] Whether a story flag a room asks for is set. The memorial hall's flag normally comes from the first remembered death, but a
+ * player who loses nobody (Settler, or a careful Warden run) would never get it: from era 3 on it opens anyway.
+ */
+export function storyFlagMet(state: GameState, flag: string): boolean {
+  return state.storyFlags.includes(flag) || (flag === 'memorial:first' && state.era >= 3);
+}
+
 export function isBuildingUnlocked(state: GameState, type: BuildingType): boolean {
+  const flag = getDef(type)?.place?.needsFlag;
+  if (flag && !storyFlagMet(state, flag)) return false;
   const unlocking = RESEARCH.find(r => r.effects.some(e => e.type === 'unlock' && e.building === type));
   return !unlocking || isResearched(state, unlocking.id);
 }

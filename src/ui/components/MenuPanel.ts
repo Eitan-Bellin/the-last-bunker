@@ -9,8 +9,14 @@ import { Sheet } from './Sheet';
 import { button, el } from '../dom';
 import { uiSound } from '../../audio/uiSound';
 import type { BackupInfo, BackupKind } from '../../core/SaveManager';
+import { getA11y, setA11y } from '../../utils/a11y';
+import { haptic } from '../../utils/haptics';
+import { enhanceTabs } from '../a11yDom';
+import { isIosBrowserTab } from '../../utils/platform'; // [plan4:UX-15]
+import { lastExportAt, markExported } from '../pwa';
+import { markPopupsChosen, popupMode } from './NumberPopup';
 
-export type MenuTab = 'settings' | 'stats' | 'achievements' | 'genesis';
+export type MenuTab = 'settings' | 'a11y' | 'stats' | 'achievements' | 'genesis';
 
 /** Genesis checklist (research, survivors, era): shown wherever the rebirth button or its lock appears. */
 export function genesisRequirements(state: GameState, meta: MetaSystem): HTMLElement {
@@ -53,6 +59,8 @@ export interface MenuActions {
   /** Music and effects volume, 0..1. */
   getLevels: () => { music: number; fx: number };
   setLevels: (music: number, fx: number) => void;
+  /** [plan4:AC-11] Opens the list view of the bunker. */
+  openStructure: () => void;
   /** Text size: current label and cycling to the next. */
   textSize: () => string;
   cycleTextSize: () => void;
@@ -60,10 +68,20 @@ export interface MenuActions {
   persistLabel: () => string;
   /** Checks a coupon code and opens the coupon sheet when it is right. */
   redeemCoupon: (code: string) => boolean;
+  /** [Q6] Opens the Bunker Book. */
+  openBook: () => void;
+  /** [Q14] Opens the Chronicle (the run's milestones). */
+  openChronicle: () => void;
+  /** [plan4:UX-11] Forget which gesture tips were seen / play the opening story again (no change to the game). */
+  showTipsAgain?: () => void;
+  replayIntro?: () => void;
+  /** [plan4:GP-5/GP-6] Make the share picture / start the tour mode (the app closes the menu first). */
+  shareBunker?: () => void;
+  startTour?: () => void;
 }
 
 export class MenuPanel {
-  private sheet = new Sheet('menu-sheet');
+  private sheet = new Sheet('menu-sheet', 'menu');
   private engine: GameEngine;
   private actions: MenuActions;
   private tab: MenuTab = 'settings';
@@ -107,6 +125,7 @@ export class MenuPanel {
       meta.canRebirth(state), this.tab === 'stats' ? Math.floor(state.stats.totalPlayTime / 5) : 0,
       this.tab === 'genesis' ? meta.rebirthGain(state) : 0, this.actions.isSoundOn(), this.actions.graphics(), this.actions.brightness(), this.actions.textSize(), this.actions.persistLabel(),
       this.backups?.map(b => `${b.kind}${b.timestamp}`).join(',') ?? 'loading',
+      this.tab === 'a11y' ? JSON.stringify(getA11y()) : '',
       this.tab === 'genesis' ? meta.rebirthRequirements(state).map(r => r.current).join(',') : '',
     ].join('|');
     if (sig === this.signature) return;
@@ -120,6 +139,7 @@ export class MenuPanel {
     const tabs = el('div', 'tab-row');
     const tabDefs: { id: MenuTab; icon: string }[] = [
       { id: 'settings', icon: '[[settings]]' },
+      { id: 'a11y', icon: '[[eye]]' },
       { id: 'stats', icon: '[[chart]]' },
       { id: 'achievements', icon: '[[trophy]]' },
       { id: 'genesis', icon: '[[isotope7]]' },
@@ -131,17 +151,93 @@ export class MenuPanel {
         this.refresh(this.engine.stateManager.state);
       }));
     }
+    // [plan4:AC-8] ARIA tabs: tablist / tab / tabpanel, arrow keys.
+    const panel = el('div');
+    panel.id = 'menu-tabpanel';
+    enhanceTabs(tabs, i18n.t('menu.title'), panel);
     root.appendChild(tabs);
 
-    if (this.tab === 'settings') root.appendChild(this.renderSettings());
-    if (this.tab === 'stats') root.appendChild(this.renderStats(state));
-    if (this.tab === 'achievements') root.appendChild(this.renderAchievements(state));
-    if (this.tab === 'genesis') root.appendChild(this.renderGenesis(state));
+    if (this.tab === 'settings') panel.appendChild(this.renderSettings());
+    if (this.tab === 'a11y') panel.appendChild(this.renderA11y());
+    if (this.tab === 'stats') panel.appendChild(this.renderStats(state));
+    if (this.tab === 'achievements') panel.appendChild(this.renderAchievements(state));
+    if (this.tab === 'genesis') panel.appendChild(this.renderGenesis(state));
+    root.appendChild(panel);
     this.sheet.body.replaceChildren(root);
+  }
+
+  /**
+   * [plan4:UX-21, UX-24] Two phone-comfort settings, as a block of their own: how many floating numbers, and the battery saver.
+   * Both live in the a11y block (one source), but are shown here with the graphics settings they belong with.
+   */
+  private comfortRows(): HTMLElement[] {
+    const a = getA11y();
+    const redraw = () => { this.signature = ''; this.refresh(this.engine.stateManager.state); };
+    const order = ['all', 'important', 'off'] as const;
+    const mode = popupMode();
+    const popups = el('div', 'bp-row');
+    popups.append(el('span', '', `[[sparkle]] ${i18n.t('settings.popups')}`),
+      button(i18n.t(`settings.popups.${mode}`), 'btn-small', () => {
+        uiSound('switch');
+        markPopupsChosen(); // a phone's default ("important") no longer overrules the player
+        setA11y({ popups: order[(order.indexOf(mode) + 1) % order.length] });
+        redraw();
+      }));
+    const saver = el('div', 'bp-row');
+    saver.append(el('span', '', `[[battery]] ${i18n.t('settings.powerSaver')}`),
+      button(i18n.t(a.powerSaver ? 'settings.on' : 'settings.off'), 'btn-small', () => {
+        uiSound('switch');
+        setA11y({ powerSaver: !a.powerSaver });
+        redraw();
+      }));
+    return [popups, el('div', 'bp-hint', i18n.t('settings.popupsHint')), saver, el('div', 'bp-hint', i18n.t('settings.powerSaverHint'))];
+  }
+
+  /** [plan4:UX-11] Learning aids, as a block of their own: the gesture tips again, and the opening story again. */
+  private renderTipsBlock(): HTMLElement {
+    const card = el('div', 'bp-card settings-learn');
+    const tips = button(`[[hand]] ${i18n.t('settings.tipsAgain')}`, 'btn-secondary learn-btn', () => { uiSound('click'); this.actions.showTipsAgain?.(); });
+    const intro = button(`[[flashlight]] ${i18n.t('settings.introAgain')}`, 'btn-secondary learn-btn', () => { uiSound('click'); this.actions.replayIntro?.(); });
+    if (!this.actions.showTipsAgain) tips.hidden = true;
+    if (!this.actions.replayIntro) intro.hidden = true;
+    card.append(tips, intro);
+    return card;
+  }
+
+  /** [plan4:GP-5] The "share your bunker" row (also shown on the Genesis tab, where the player looks back at the run). */
+  private shareRow(): HTMLElement | null {
+    if (!this.actions.shareBunker) return null;
+    const row = el('div', 'bp-row');
+    row.append(el('span', '', `[[upload]] ${i18n.t('share.menu')}`), button(i18n.t('share.make'), 'btn-small', () => { uiSound('click'); this.actions.shareBunker?.(); }));
+    return row;
+  }
+
+  /** [plan4:GP-5/GP-6] Share the bunker as a picture, and the tour mode (the camera wanders on a clean screen). */
+  private renderShareTourBlock(): HTMLElement {
+    const card = el('div', 'bp-card settings-share');
+    const share = this.shareRow();
+    if (share) card.append(share, el('div', 'bp-hint', i18n.t('share.hint')));
+    if (this.actions.startTour) {
+      const tour = el('div', 'bp-row');
+      tour.append(el('span', '', `[[walker]] ${i18n.t('tour.menu')}`), button(i18n.t('tour.start'), 'btn-small', () => { uiSound('click'); this.actions.startTour?.(); }));
+      card.append(tour, el('div', 'bp-hint', i18n.t('tour.hint')));
+    }
+    card.hidden = !share && !this.actions.startTour;
+    return card;
   }
 
   private renderSettings(): HTMLElement {
     const box = el('div', 'bp');
+    // [Q6/Q14] The book and the chronicle sit first: the questions a new player asks.
+    const guide = el('div', 'bp-card');
+    const book = el('div', 'bp-row');
+    book.append(el('span', '', `[[question]] ${i18n.t('book.title')}`), button(i18n.t('book.open'), 'btn-small', () => { uiSound('click'); this.actions.openBook(); }));
+    const chron = el('div', 'bp-row');
+    chron.append(el('span', '', `[[journal]] ${i18n.t('chronicle.title')}`), button(i18n.t('book.open'), 'btn-small', () => { uiSound('click'); this.actions.openChronicle(); }));
+    guide.append(book, chron);
+    box.appendChild(guide);
+    box.appendChild(this.renderTipsBlock());
+    box.appendChild(this.renderShareTourBlock());
     const general = el('div', 'bp-card');
     const lang = el('div', 'bp-row');
     lang.append(el('span', '', `[[surface]] ${i18n.t('settings.language')}`),
@@ -165,6 +261,8 @@ export class MenuPanel {
       input.value = String(Math.round(value * 100));
       input.className = 'vol-slider';
       input.setAttribute('aria-label', i18n.t(labelKey));
+      // [plan4:UX-4] Dragging the thumb must not be taken over by the sheet's pull-down-to-close.
+      input.setAttribute('data-no-pulldown', '');
       // No redraw while dragging: replacing the slider under the finger would end the drag.
       input.addEventListener('input', () => onInput(Number(input.value) / 100));
       input.addEventListener('change', () => uiSound('switch'));
@@ -208,39 +306,31 @@ export class MenuPanel {
         this.refresh(this.engine.stateManager.state);
       }));
     const notifyHint = el('div', 'bp-hint', i18n.t('settings.notifyWebHint'));
+    // [plan4:UX-15] Safari in a tab on an iPhone cannot keep this promise (the page is suspended in seconds): no switch, an honest line instead.
+    // Android, desktop and the home-screen app keep the switch as it was.
+    const iosTab = isIosBrowserTab();
+    if (iosTab) {
+      notify.replaceChildren(el('span', '', `[[bell]] ${i18n.t('settings.notifications')}`), el('span', 'bp-value', i18n.t('settings.notifyUnsupported')));
+      notifyHint.textContent = i18n.t('settings.notifyIosHint');
+    }
     const diag = el('div', 'bp-row');
     diag.append(el('span', '', `[[chart]] ${i18n.t('settings.diagnostics')}`),
       button(i18n.t('settings.diagnosticsCopy'), 'btn-small', () => { uiSound('switch'); this.actions.copyDiagnostics(); }));
-    general.append(lang, sound, music, fx, gfx, gfxHint, bright, textSize, notify, notifyHint, diag);
+    // [plan4:qa] The privacy page was only reachable by typing its address: link it from the settings next to the diagnostics.
+    const privacy = el('div', 'bp-row');
+    privacy.append(el('span', '', `[[eye]] ${i18n.t('settings.privacy')}`),
+      button(i18n.t('settings.privacyOpen'), 'btn-small', () => { uiSound('click'); window.open(new URL('privacy.html', document.baseURI).href, '_blank', 'noopener'); }));
+    general.append(lang, sound, music, fx, gfx, gfxHint, ...this.comfortRows(), bright, textSize, notify, notifyHint, diag, privacy);
     box.appendChild(general);
 
-    const coupon = el('div', 'bp-card');
-    coupon.appendChild(el('div', 'bp-section-title', `[[gift]] ${i18n.t('coupon.code')}`));
-    const codeRow = el('div', 'btn-row');
-    const code = el('input', 'coupon-code');
-    code.type = 'text';
-    code.autocomplete = 'off';
-    code.spellcheck = false;
-    code.placeholder = i18n.t('coupon.placeholder');
-    code.setAttribute('aria-label', i18n.t('coupon.code'));
-    const redeem = () => {
-      if (!code.value.trim()) return;
-      if (this.actions.redeemCoupon(code.value)) code.value = '';
-      else {
-        uiSound('cancel');
-        code.classList.add('bad');
-        setTimeout(() => code.classList.remove('bad'), 900);
-      }
-    };
-    code.addEventListener('keydown', e => { if (e.key === 'Enter') redeem(); });
-    codeRow.append(code, button(i18n.t('coupon.redeem'), 'btn-small', redeem));
-    coupon.appendChild(codeRow);
-    box.appendChild(coupon);
+    const coupon = this.renderCouponBlock(); // [plan4:GP-12] only with ?debug
+    if (coupon) box.appendChild(coupon);
 
     const saves = el('div', 'bp-card');
     saves.appendChild(el('div', 'bp-section-title', `[[save]] ${i18n.t('settings.save')}`));
     const area = el('textarea', 'save-area');
     area.placeholder = i18n.t('settings.pasteHere');
+    area.setAttribute('aria-label', i18n.t('settings.save')); // [plan4:AC-8]
     const row = el('div', 'btn-row');
     row.append(
       button(i18n.t('settings.export'), 'btn-small', async () => {
@@ -249,6 +339,7 @@ export class MenuPanel {
         area.select();
         try {
           await navigator.clipboard.writeText(data);
+          markExported(); // [plan4:UX-13]
           area.placeholder = i18n.t('settings.copied');
         } catch {
           // clipboard blocked; the text stays selected in the box for manual copy
@@ -263,7 +354,11 @@ export class MenuPanel {
     saves.append(area, row);
     const persist = el('div', 'bp-row');
     persist.append(el('span', '', `[[lock]] ${i18n.t('settings.persist')}`), el('span', 'bp-value', this.actions.persistLabel()));
-    saves.append(persist, el('div', 'bp-hint', i18n.t('settings.persistHint')));
+    // [plan4:UX-13] When the last backup was made on this phone (Safari may clear a site's data after a while unused).
+    const lastExport = lastExportAt();
+    const when = lastExport ? new Date(lastExport).toLocaleDateString(i18n.currentLocale === 'he' ? 'he-IL' : 'en-GB', { dateStyle: 'medium' }) : '';
+    saves.append(persist, el('div', 'bp-hint', i18n.t('settings.persistHint')),
+      el('div', 'bp-hint', lastExport ? i18n.t('settings.lastBackup', { when }) : i18n.t('settings.lastBackupNever')));
     box.appendChild(saves);
 
     const backupCard = el('div', 'bp-card');
@@ -288,6 +383,132 @@ export class MenuPanel {
     const danger = el('div', 'bp-card');
     danger.appendChild(button(`[[warning]] ${i18n.t('settings.newGame')}`, 'btn-ghost danger-btn', () => this.actions.newGame()));
     box.appendChild(danger);
+    return box;
+  }
+
+  /**
+   * [plan4:GP-12] The coupon code entry is a developer/tester tool: it is shown only on a page opened with ?debug (the code is BUNKER17;
+   * the sheet it opens is unchanged). Players never see it; app.ts also refuses the code without ?debug.
+   */
+  private renderCouponBlock(): HTMLElement | null {
+    if (!new URLSearchParams(location.search).has('debug')) return null;
+    const coupon = el('div', 'bp-card');
+    coupon.appendChild(el('div', 'bp-section-title', `[[gift]] ${i18n.t('coupon.code')}`));
+    const codeRow = el('div', 'btn-row');
+    const code = el('input', 'coupon-code');
+    code.type = 'text';
+    code.autocomplete = 'off';
+    code.spellcheck = false;
+    code.placeholder = i18n.t('coupon.placeholder');
+    code.setAttribute('aria-label', i18n.t('coupon.code'));
+    const redeem = () => {
+      if (!code.value.trim()) return;
+      if (this.actions.redeemCoupon(code.value)) code.value = '';
+      else {
+        uiSound('cancel');
+        code.classList.add('bad');
+        setTimeout(() => code.classList.remove('bad'), 900);
+      }
+    };
+    code.addEventListener('keydown', e => { if (e.key === 'Enter') redeem(); });
+    codeRow.append(code, button(i18n.t('coupon.redeem'), 'btn-small', redeem));
+    coupon.appendChild(codeRow);
+    return coupon;
+  }
+
+  /**
+   * [plan4:AC-1] The accessibility tab. Every control writes through utils/a11y.ts (the single source), which applies it to the page.
+   * Not shown on purpose: powerSaver (the field is kept for a later wave; a switch before it does something would be a lie).
+   * Everything else in the A11ySettings block has a row here. [plan4:AC-12] One-hand mode and large touch targets are live
+   * (styles/touch.css keys off data-onehand / data-large on <html>).
+   */
+  private renderA11y(): HTMLElement {
+    const box = el('div', 'bp');
+    const a = getA11y();
+    const redraw = () => { this.signature = ''; this.refresh(this.engine.stateManager.state); };
+    const card = el('div', 'bp-card a11y-card');
+    card.appendChild(el('div', 'bp-section-title', `[[eye]] ${i18n.t('a11y.title')}`));
+
+    const cycleRow = <T extends string>(icon: string, labelKey: string, order: readonly T[], value: T, optKey: string, onPick: (v: T) => void): HTMLElement => {
+      const row = el('div', 'bp-row');
+      row.append(el('span', '', `${icon} ${i18n.t(labelKey)}`),
+        button(i18n.t(`${optKey}.${value}`), 'btn-small', () => {
+          uiSound('switch');
+          onPick(order[(order.indexOf(value) + 1) % order.length]);
+          redraw();
+        }));
+      return row;
+    };
+
+    const hapticsRow = cycleRow('[[hand]]', 'a11y.haptics', ['off', 'light', 'strong'] as const, a.haptics, 'a11y.haptics', v => {
+      setA11y({ haptics: v });
+      haptic('success'); // a sample of the new strength (nothing when it was just turned off)
+    });
+    const silentRow = el('div', 'bp-row');
+    silentRow.append(el('span', '', `[[sound]] ${i18n.t('a11y.playInSilent')}`),
+      button(i18n.t(a.playInSilent ? 'settings.on' : 'settings.off'), 'btn-small', () => {
+        uiSound('switch');
+        setA11y({ playInSilent: !a.playInSilent });
+        redraw();
+      }));
+    const textRow = el('div', 'bp-row');
+    textRow.append(el('span', '', `[[note]] ${i18n.t('settings.textSize')}`),
+      button(this.actions.textSize(), 'btn-small', () => {
+        uiSound('switch');
+        this.actions.cycleTextSize();
+        redraw();
+      }));
+    const motionRow = cycleRow('[[sparkle]]', 'a11y.motion', ['auto', 'reduced', 'full'] as const, a.motion, 'a11y.motion', v => setA11y({ motion: v }));
+
+    // [plan4:AC-12] One-hand mode: which thumb; large targets: every touch target at least 52 px.
+    const oneHandRow = cycleRow('[[hand]]', 'a11y.oneHand', ['off', 'right', 'left'] as const, a.oneHand, 'a11y.oneHand', v => setA11y({ oneHand: v }));
+    const largeRow = el('div', 'bp-row');
+    largeRow.append(el('span', '', `[[hand]] ${i18n.t('a11y.largeTargets')}`),
+      button(i18n.t(a.largeTargets ? 'settings.on' : 'settings.off'), 'btn-small', () => {
+        uiSound('switch');
+        setA11y({ largeTargets: !a.largeTargets });
+        redraw();
+      }));
+
+    // [plan4:AC-5/AC-6] Flash budget switch and the three colour-vision modes.
+    const flashRow = cycleRow('[[sparkle]]', 'a11y.flash', ['normal', 'safe'] as const, a.flash, 'a11y.flash', v => setA11y({ flash: v }));
+    const colorRow = cycleRow('[[eye]]', 'a11y.color', ['none', 'deuter', 'protan', 'tritan'] as const, a.colorMode, 'a11y.color', v => setA11y({ colorMode: v }));
+
+    // [plan4:AC-9/AC-11] Captions for sounds, and announcements for a screen reader.
+    const toggleRow = (icon: string, key: string, on: boolean, set: (v: boolean) => void): HTMLElement => {
+      const row = el('div', 'bp-row');
+      row.append(el('span', '', `${icon} ${i18n.t(key)}`), button(i18n.t(on ? 'settings.on' : 'settings.off'), 'btn-small', () => {
+        uiSound('switch');
+        set(!on);
+        redraw();
+      }));
+      return row;
+    };
+    const captionsRow = toggleRow('[[note]]', 'a11y.captions', a.captions, v => setA11y({ captions: v }));
+    const announceRow = toggleRow('[[eye]]', 'a11y.announce', a.announce, v => setA11y({ announce: v }));
+    // [plan4:AC-3/AC-1/AC-13] High contrast, popup density, relaxed timing, floating zoom buttons.
+    const contrastRow = cycleRow('[[eye]]', 'a11y.contrast', ['normal', 'high'] as const, a.contrast, 'a11y.contrast', v => setA11y({ contrast: v }));
+    const popupsRow = cycleRow('[[note]]', 'a11y.popups', ['all', 'important', 'off'] as const, a.popups, 'a11y.popups', v => setA11y({ popups: v }));
+    const timingRow = cycleRow('[[clock]]', 'a11y.timing', ['normal', 'relaxed'] as const, a.timing, 'a11y.timing', v => setA11y({ timing: v }));
+    const zoomRow = toggleRow('[[hand]]', 'a11y.zoomButtons', a.zoomButtons, v => setA11y({ zoomButtons: v }));
+    // [plan4:AC-16] The accessibility statement (a static page next to the game: public/accessibility.html).
+    const statementRow = el('div', 'bp-row');
+    statementRow.append(el('span', '', `[[eye]] ${i18n.t('a11y.statement')}`),
+      button(i18n.t('a11y.statementOpen'), 'btn-small', () => { uiSound('click'); window.open(new URL('accessibility.html', document.baseURI).href, '_blank', 'noopener'); }));
+    // [plan4:AC-11] The list view: the bunker as floors and rooms.
+    const listRow = el('div', 'bp-row');
+    listRow.append(el('span', '', `[[build]] ${i18n.t('structure.openList')}`),
+      button(i18n.t('structure.open'), 'btn-small', () => { uiSound('click'); this.actions.openStructure(); }));
+
+    card.append(listRow, el('div', 'bp-hint', i18n.t('structure.openListHint')), hapticsRow, el('div', 'bp-hint', i18n.t('a11y.hapticsHint')), silentRow, el('div', 'bp-hint', i18n.t('a11y.playInSilentHint')),
+      textRow, motionRow, el('div', 'bp-hint', i18n.t('a11y.motionHint')),
+      flashRow, el('div', 'bp-hint', i18n.t('a11y.flashHint')), colorRow, el('div', 'bp-hint', i18n.t('a11y.colorHint')),
+      captionsRow, el('div', 'bp-hint', i18n.t('a11y.captionsHint')), announceRow, el('div', 'bp-hint', i18n.t('a11y.announceHint')),
+      contrastRow, el('div', 'bp-hint', i18n.t('a11y.contrastHint')), popupsRow, el('div', 'bp-hint', i18n.t('a11y.popupsHint')),
+      oneHandRow, el('div', 'bp-hint', i18n.t('a11y.oneHandHint')), largeRow, el('div', 'bp-hint', i18n.t('a11y.largeTargetsHint')),
+      zoomRow, el('div', 'bp-hint', i18n.t('a11y.zoomButtonsHint')), timingRow, el('div', 'bp-hint', i18n.t('a11y.timingHint')),
+      statementRow, el('div', 'bp-hint', i18n.t('a11y.statementHint')));
+    box.appendChild(card);
     return box;
   }
 
@@ -337,6 +558,8 @@ export class MenuPanel {
       el('div', 'bp-hint', i18n.t('genesis.isotope')),
     );
     box.appendChild(head);
+    const share = this.shareRow(); // [plan4:GP-5]
+    if (share) { const sc = el('div', 'bp-card'); sc.append(share, el('div', 'bp-hint', i18n.t('share.hint'))); box.appendChild(sc); }
 
     const rebirth = el('div', 'bp-card');
     rebirth.appendChild(el('p', 'modal-body', i18n.t('genesis.explain')));

@@ -1,4 +1,5 @@
 import { MUTATORS } from '../../data/mutators';
+import { SCENARIOS, scenarioUnlocked } from '../../data/scenarios';
 import { el } from '../../ui/dom';
 import { hideSplash } from '../../ui/splash';
 import { DIFFICULTIES } from '../../data/difficulty';
@@ -95,6 +96,48 @@ export class StoryController {
         this.app.engine.requestSave();
         this.app.toasts.show(`[[flashlight]] ${i18n.t('intro.firstHint')}`, 'info');
       },
+    });
+  }
+
+  /**
+   * [plan4:UX-11] "Watch the intro again" (Settings): the opening panels once more, over a paused game. It changes nothing in the save
+   * (no flags, no toast, no difficulty question) and gives the game back exactly as it was, paused or not.
+   */
+  replayIntro(): void {
+    if (this.app.introPlaying) return;
+    const wasPaused = this.app.engine.paused;
+    this.app.introPlaying = true;
+    this.app.engine.paused = true;
+    document.body.classList.add('intro-active');
+    playIntro({
+      play: (sfx) => this.app.audio.play(sfx),
+      onDone: () => {
+        this.app.introPlaying = false;
+        this.app.engine.paused = wasPaused;
+        document.body.classList.remove('intro-active');
+      },
+    });
+  }
+
+  /** [P3-5] After a Genesis: where the next timeline begins (the bunker just finished stays on as a home). */
+  chooseScenario(then: () => void): void {
+    const locale = i18n.currentLocale;
+    const state = this.app.state;
+    this.app.modal.show({
+      icon: '[[surface]]',
+      title: i18n.t('scenario.title'),
+      body: i18n.t('scenario.body'),
+      actions: SCENARIOS.filter(s => scenarioUnlocked(state, s.id)).map(s => ({
+        label: `${s.icon} ${s.name[locale]}`,
+        className: s.id === 'bunker17' ? 'btn-secondary' : 'btn-primary',
+        detail: el('span', 'difficulty-desc', `${s.tagline[locale]} · ${s.rules[locale]}`),
+        onClick: () => {
+          this.app.engine.setScenario(s.id);
+          this.app.modal.hide();
+          this.app.audio.play('click');
+          then();
+        },
+      })),
     });
   }
 

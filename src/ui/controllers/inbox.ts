@@ -1,6 +1,6 @@
 import { i18n } from '../../i18n/I18nManager';
 import { bus } from '../../core/EventBus';
-import { el, costRow } from '../../ui/dom';
+import { button, el, costRow } from '../../ui/dom';
 import { Sheet } from '../../ui/components/Sheet';
 import { eventDeadline, type EventExpired } from '../../systems/EventSystem';
 import { inboxKind } from '../../systems/InboxSystem';
@@ -14,9 +14,17 @@ interface Entry {
   key: string;
   icon: string;
   title: string;
+  /** [Q4] What it asks and what it pays, under the title. */
+  detail?: string;
+  /** [Q4] How much it is worth (richest first among cards of the same urgency). */
+  value?: number;
+  /** [Q4] A contract that costs nothing the bunker would miss. */
+  safe?: boolean;
   /** Seconds left before the safe default is taken (null = it waits). */
   left: number | null;
   urgent: boolean;
+  /** [plan4:GP-1] Shown in place of the time left (the daily orders card: "1/3"). */
+  tag?: string;
   open: () => void;
 }
 
@@ -94,23 +102,36 @@ export class InboxController {
       if (!def) continue;
       out.push({
         key: `item:${item.id}`, icon: def.icon, title: i18n.t(def.title, this.params(item)),
+        detail: def.preview?.(item, i18n.currentLocale), value: def.value?.(item),
+        safe: item.kind === 'contract' && this.app.engine.contractSystem.isSafe(state, item),
         left: item.deadline === null ? null : Math.max(0, item.deadline - worldT), urgent: item.urgent,
         open: () => this.openItem(item.id),
       });
     }
-    // Most pressing first: urgent, then the nearest deadline, then the rest in arrival order.
-    return out.sort((a, b) => Number(b.urgent) - Number(a.urgent) || (a.left ?? Infinity) - (b.left ?? Infinity));
+    // [plan4:GP-1] The daily orders: one card, always (the badge counts it only while something can be taken).
+    const daily = this.app.daily.inboxEntry(state);
+    if (daily) {
+      const s = this.app.engine.dailySystem.summary(state);
+      out.push({ key: 'daily', icon: '[[target]]', title: i18n.t('daily.title'), detail: `${daily.title} · ${daily.detail}`, tag: `${s.done}/${s.n}`, value: Infinity, left: null, urgent: false, open: () => this.app.daily.show() });
+    }
+    // [Q4] Most pressing first: urgent, then whatever lapses within the hour, then the richest, then the nearest deadline.
+    const soon = (e: Entry) => e.left !== null && e.left < 3600;
+    return out.sort((a, b) => Number(b.urgent) - Number(a.urgent) || Number(soon(b)) - Number(soon(a))
+      || (b.value ?? 0) - (a.value ?? 0) || (a.left ?? Infinity) - (b.left ?? Infinity));
   }
 
   /** Called a few times a second: keeps the HUD count and the open list current, and announces new cards once. */
   refresh(state: GameState): void {
     const deferring = this.defers(state);
     const list = deferring ? this.entries(state) : [];
-    if (list.length !== this.lastCount) {
-      this.lastCount = list.length;
-      this.app.hud.setInbox(deferring, list.length);
+    // [plan4:GP-1] The daily orders card is a standing card: it counts on the badge only while a reward waits, and is never announced.
+    const waiting = list.filter(e => e.key !== 'daily' || this.app.engine.dailySystem.summary(state).claimable > 0).length;
+    if (waiting !== this.lastCount) {
+      this.lastCount = waiting;
+      this.app.hud.setInbox(deferring, waiting);
     }
     for (const e of list) {
+      if (e.key === 'daily') continue;
       if (this.seen.has(e.key)) continue;
       this.seen.add(e.key);
       this.app.audio.play('paper');
@@ -128,7 +149,7 @@ export class InboxController {
   }
 
   show(): void {
-    this.sheet ??= new Sheet('inbox-sheet');
+    this.sheet ??= new Sheet('inbox-sheet', 'inbox');
     this.sheet.setTitle(`[[inbox]] ${i18n.t('inbox.title')}`);
     this.render(this.entries(this.app.state));
     this.sheet.show();
@@ -139,7 +160,7 @@ export class InboxController {
   private render(list: Entry[]): void {
     if (!this.sheet) return;
     // Rebuild only when the cards change; the time left is updated in place.
-    const key = list.map(e => e.key).join('|');
+    const key = list.map(e => `${e.key}${e.safe ? '+' : ''}${e.tag ?? ''}`).join('|');
     if (key !== this.renderedKey) {
       this.renderedKey = key;
       const body = this.sheet.body;
@@ -148,10 +169,26 @@ export class InboxController {
         body.appendChild(el('p', 'inbox-empty', i18n.t('inbox.empty')));
         return;
       }
+      // [Q4] One tap for every contract that costs nothing the bunker would miss.
+      const safeCount = list.filter(e => e.safe).length;
+      if (safeCount >= 2) {
+        body.appendChild(button(i18n.t('contract.acceptSafe', { n: safeCount }), 'btn-primary btn-small inbox-all', () => {
+          const n = this.app.engine.contractSystem.acceptSafe();
+          if (n > 0) {
+            this.app.engine.requestSave();
+            this.app.audio.play('click');
+            this.app.toasts.show(`[[cart]] ${i18n.t('contract.safeTaken', { n })}`, 'good');
+          }
+        }));
+      }
       for (const e of list) {
         const card = el('button', `inbox-card${e.urgent ? ' urgent' : ''}`);
         card.dataset.key = e.key;
-        card.append(el('span', 'inbox-icon', e.icon), el('span', 'inbox-title', e.title), el('span', 'inbox-left'));
+        const main = el('span', 'inbox-title');
+        main.appendChild(el('span', 'inbox-name', e.title));
+        if (e.detail) main.appendChild(el('span', 'inbox-detail', e.detail));
+        if (e.safe) main.appendChild(el('span', 'inbox-safe', i18n.t('contract.safe')));
+        card.append(el('span', 'inbox-icon', e.icon), main, el('span', 'inbox-left'));
         card.addEventListener('click', () => {
           this.app.audio.play('click');
           this.sheet?.hide();
@@ -163,7 +200,7 @@ export class InboxController {
     for (const e of list) {
       const left = this.sheet.body.querySelector<HTMLElement>(`.inbox-card[data-key="${e.key}"] .inbox-left`);
       if (!left) continue;
-      const text = e.left === null ? i18n.t('inbox.waits') : i18n.t('inbox.left', { t: i18n.formatDuration(e.left) });
+      const text = e.tag ?? (e.left === null ? i18n.t('inbox.waits') : i18n.t('inbox.left', { t: i18n.formatDuration(e.left) }));
       if (left.textContent !== text) left.textContent = text;
       left.classList.toggle('soon', e.left !== null && e.left < 120);
     }

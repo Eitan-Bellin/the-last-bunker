@@ -1,5 +1,7 @@
 import type { BuildingType, Ruin } from '../core/GameState';
-import { roomSlots } from '../data/buildingDefs';
+import { getDef, roomSlots } from '../data/buildingDefs';
+import { composedDistrictTypes, composedMeta, composedSpec, composedTypes, hasComposedSpec, type ComposeTier } from '../rendering/roomComposer'; // [plan4:BL-6]
+import '../rendering/roomSpecs'; // [plan4:BL-6] registers the composed room specs (side effect)
 
 /**
  * Registry of every painted asset in the game.
@@ -23,7 +25,9 @@ export interface LightSpot {
 export type FxKind = 'drip' | 'smoke' | 'steam' | 'sparks' | 'blink' | 'pulse' | 'bubbles' | 'screen'
   // gfx-p0 rooms: painted motion for every painting.
   | 'stream' | 'mist' | 'leaf' | 'ripple' | 'flame' | 'tube' | 'twinkle' | 'weld' | 'ecg' | 'radar'
-  | 'needle' | 'reel' | 'fan' | 'moth' | 'haze';
+  | 'needle' | 'reel' | 'fan' | 'moth' | 'haze'
+  // [plan4:BL-6] composed rooms: a scrolling conveyor belt and a turbine rotor.
+  | 'belt' | 'rotor';
 
 /** A spot in the painting that gets a live effect layered on top. */
 export interface FxSpot {
@@ -47,6 +51,10 @@ export interface FxSpot {
   amp?: number;
   /** Screens: false = no rolling scan band (lit meters, dials). */
   band?: boolean;
+  /** [plan4:BL-6] Moves only while the room is staffed (paintedRoom reads `roomWorking`); always on when nobody reports staffing. */
+  work?: boolean;
+  /** [plan4:BL-6] Count (rotor blades, belt dashes). */
+  n?: number;
 }
 
 export interface ArtEntry {
@@ -58,6 +66,8 @@ export interface ArtEntry {
   focusY?: number;
   lights?: LightSpot[];
   fx?: FxSpot[];
+  /** [plan4:BL-6] The picture already carries its lamp light (a composed room): live glows are tamed and the baked cone is not drawn twice. */
+  baked?: boolean;
 }
 
 /** Visual tier of a room: 0 = salvaged and rusty, 1 = restored, 2 = advanced. */
@@ -425,15 +435,40 @@ const HALL_FX: Record<string, FxSpot[]> = {
   ],
 };
 
+/** [plan4:BL-6] Width in slots of a composed room: the building definition once the type exists, else the spec's own. */
+function composedSlots(type: string): number {
+  return getDef(type as BuildingType) ? roomSlots(type as BuildingType) : composedSpec(type)?.slots ?? 2;
+}
+
+/**
+ * [plan4:BL-6] A room key (`rooms/<type>-<tier>`) that can be composed in code (rendering/roomComposer.ts). `painted` = a painting exists for the
+ * type (it is in PAINTED_TYPES), so the bake is only the fallback when the file is missing (tier C falls back to B).
+ * [plan4:BL-7] A composed district is `districts/<type>-<tier>` (the painted caves keep their single `districts/<type>` key and are never composed).
+ */
+export function composedKey(key: string): { type: string; tier: ComposeTier; slots: number; painted: boolean } | null {
+  const m = /^(rooms|districts)\/(\w+)-([012])$/.exec(key);
+  if (!m || !hasComposedSpec(m[2]) || !!composedSpec(m[2])?.district !== (m[1] === 'districts')) return null;
+  return { type: m[2], tier: Number(m[3]) as ComposeTier, slots: composedSlots(m[2]), painted: (PAINTED_TYPES as string[]).includes(m[2]) };
+}
+
 function roomEntry(type: BuildingType, tier: RoomTier): ArtEntry {
   const key = `${type}-${tier}`;
+  const comp = hasComposedSpec(type) ? composedMeta(type, tier, composedSlots(type)) : null;
   return {
     key: `rooms/${key}`,
     kind: 'room',
-    out: roomSlots(type) === 3 ? WIDE_OUT : NARROW_OUT,
-    lights: ROOM_LIGHTS[key],
-    fx: ROOM_FX[key],
+    out: composedSlots(type) === 3 ? WIDE_OUT : NARROW_OUT,
+    // [plan4:BL-6] hand-placed lights and effects (a painting) win; a composed room brings its own, aligned with its bake.
+    lights: ROOM_LIGHTS[key] ?? comp?.lights,
+    fx: ROOM_FX[key] ?? comp?.fx,
+    baked: !ROOM_LIGHTS[key] && !!comp ? true : undefined,
   };
+}
+
+/** [plan4:BL-7] A composed district's picture: its own lights and effects (aligned with the bake), the district frame of paintedRoom. */
+function districtEntry(type: string, tier: RoomTier): ArtEntry {
+  const comp = composedMeta(type, tier, composedSlots(type));
+  return { key: `districts/${type}-${tier}`, kind: 'district', out: DISTRICT_OUT, lights: comp?.lights, fx: comp?.fx, baked: true };
 }
 
 export const PAINTED_TYPES: BuildingType[] = [
@@ -443,6 +478,11 @@ export const PAINTED_TYPES: BuildingType[] = [
 
 /** Room paintings that exist on disk: every room type in all three tiers. */
 const AVAILABLE_ROOMS: [BuildingType, RoomTier][] = PAINTED_TYPES.flatMap(t => [[t, 0], [t, 1], [t, 2]] as [BuildingType, RoomTier][]);
+/** [plan4:BL-6] Room types drawn in code (no painting yet): every one gets the three tiers under the usual keys. */
+const COMPOSED_ROOMS: [BuildingType, RoomTier][] = composedTypes().filter(t => !(PAINTED_TYPES as string[]).includes(t))
+  .flatMap(t => [[t, 0], [t, 1], [t, 2]] as [BuildingType, RoomTier][]);
+/** [plan4:BL-7] Composed districts, three looks each. */
+const COMPOSED_DISTRICTS: [string, RoomTier][] = composedDistrictTypes().flatMap(t => [[t, 0], [t, 1], [t, 2]] as [string, RoomTier][]);
 
 /** Ruin paintings: generic ruins in both widths, plus wrecked versions of the rooms found at the start. */
 export const RUIN_KEYS = [
@@ -459,10 +499,26 @@ function ruinEntry(key: string): ArtEntry {
 export const PORTRAIT_COUNT = 14;
 
 /** Natural spaces found when digging sideways: each is a wide cavern painting. */
-export const DISTRICT_KEYS = ['cave', 'lake', 'metro'] as const;
+export const DISTRICT_KEYS = ['cave', 'lake', 'metro', 'geothermal', 'oldVault'] as const; // [plan4:BL-7] the last two are drawn in code (roomSpecsD.ts)
 export type DistrictArt = typeof DISTRICT_KEYS[number];
+/**
+ * [plan4:BL-7] Districts that have a painting on disk (`districts/<kind>.webp`); the other kinds are composed, three looks each
+ * (`districts/<kind>-<tier>`). public/art/districts/geothermal.webp and oldVault.webp are NOT paintings in this sense: they are a still of the
+ * tier 1 bake, only for the "district found" card of ui/controllers/dig.ts (it loads `districts/<kind>.webp`); a real painting replaces them
+ * and the kind joins this list.
+ */
+export const PAINTED_DISTRICTS: readonly string[] = ['cave', 'lake', 'metro'];
 /** District paintings are twice as wide as tall (6 slots × one floor, with headroom). */
 export const DISTRICT_OUT: [number, number] = [960, 484];
+/**
+ * [plan4:BL-24,25] The Act districts borrow a classic cavern painting until their own is painted: geothermal the crystal cave, the pre-war vault the
+ * metro station. To give one a painting of its own, add its key to DISTRICT_KEYS (the exact key wins over the alias) and drop the file in art/districts.
+ */
+export const DISTRICT_ART_ALIAS: Partial<Record<string, DistrictArt>> = { geothermal: 'cave', oldVault: 'metro' };
+/** The painting file name (art/districts/<name>.webp) a district uses. */
+export function districtArtName(kind: string): string {
+  return (DISTRICT_KEYS as readonly string[]).includes(kind) ? kind : DISTRICT_ART_ALIAS[kind] ?? kind;
+}
 
 /** Two-floor halls, painted tall. */
 export const HALL_KEYS = ['atrium', 'reactorHall'] as const;
@@ -502,12 +558,13 @@ export function portraitKey(index: number): string {
 }
 
 export const ART: ArtEntry[] = [
-  ...AVAILABLE_ROOMS.map(([t, tier]) => roomEntry(t, tier)),
+  ...[...AVAILABLE_ROOMS, ...COMPOSED_ROOMS].map(([t, tier]) => roomEntry(t, tier)),
   ...RUIN_KEYS.map(ruinEntry),
   ...[1, 2, 3].map(i => ({ key: `story/intro-${i}`, kind: 'story' as const, out: [720, 963] as [number, number] })),
   ...[0, 1, 2, 3].map(i => ({ key: `backdrops/surface-${i}`, kind: 'backdrop' as const, out: [1400, 706] as [number, number] })),
   ...Array.from({ length: PORTRAIT_COUNT }, (_, i) => ({ key: portraitKey(i), kind: 'portrait' as const, out: [256, 256] as [number, number] })),
-  ...DISTRICT_KEYS.map(k => ({ key: `districts/${k}`, kind: 'district' as const, out: DISTRICT_OUT })),
+  ...DISTRICT_KEYS.filter(k => PAINTED_DISTRICTS.includes(k)).map(k => ({ key: `districts/${k}`, kind: 'district' as const, out: DISTRICT_OUT })),
+  ...COMPOSED_DISTRICTS.map(([t, tier]) => districtEntry(t, tier)), // [plan4:BL-7]
   ...HALL_KEYS.map(k => ({ key: `halls/${k}`, kind: 'hall' as const, out: HALL_OUT, fx: HALL_FX[k] })),
   { key: 'backdrops/rock', kind: 'backdrop', out: [472, 840], focusY: 0 },
   ...BIOME_ART.map(k => ({ key: `biomes/${k}`, kind: 'biome' as const, out: [840, 472] as [number, number] })),
@@ -529,7 +586,13 @@ export function roomArtKey(type: BuildingType, tier: RoomTier): string | null {
 
 /** Painting for any building type, including districts and halls (which have one look). */
 export function buildingArtKey(type: BuildingType, tier: RoomTier): string | null {
-  if ((DISTRICT_KEYS as readonly string[]).includes(type)) return `districts/${type}`;
+  // [plan4:BL-7] a composed district has three looks (its own key per tier); a painted one has one. [plan4:BL-24,25] A district with
+  // neither falls back to the cavern painting it borrows (DISTRICT_ART_ALIAS) until someone paints it.
+  if ((DISTRICT_KEYS as readonly string[]).includes(type) || DISTRICT_ART_ALIAS[type]) {
+    if (PAINTED_DISTRICTS.includes(type)) return `districts/${type}`;
+    if (composedSpec(type)) return `districts/${type}-${tier}`;
+    return `districts/${districtArtName(type)}`;
+  }
   if ((HALL_KEYS as readonly string[]).includes(type)) return `halls/${type}`;
   return roomArtKey(type, tier);
 }

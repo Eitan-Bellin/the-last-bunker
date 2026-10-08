@@ -1,0 +1,54 @@
+=== casual · 100 d · seeds 1 · think 10s · src #f6bb02458ae3 (newest change 2026-10-08T09:23:39.751Z) ===
+
+Milestones (wall time)            reached  median   [min – max]       online(med)
+  era 1 restoration                 1/1    0h07m  [0h07m – 0h07m]     0h07m
+  era 2 colony                      1/1    0h25m  [0h25m – 0h25m]     0h25m
+  era 3 undercity                   1/1   12d03h  [12d03h – 12d03h]   9h41m
+  all ruins cleared                 1/1    0h12m  [0h12m – 0h12m]     0h12m
+  first expedition back             1/1    0h14m  [0h14m – 0h14m]     0h14m
+  floor B4                          1/1    0h17m  [0h17m – 0h17m]     0h17m
+  floor B5                          1/1    3h40m  [3h40m – 3h40m]     0h50m
+  floor B6                          1/1    1d13h  [1d13h – 1d13h]     1h45m
+  floor B7                          1/1    2d00h  [2d00h – 2d00h]     2h10m
+  floor B8                          1/1    4d13h  [4d13h – 4d13h]     4h00m
+  population 10                     1/1    0h25m  [0h25m – 0h25m]     0h25m
+  population 20                     1/1    1d18h  [1d18h – 1d18h]     1h45m
+  population 30                     1/1    2d00h  [2d00h – 2d00h]     1h55m
+  population 40                     1/1   12d03h  [12d03h – 12d03h]   9h41m
+  population 50                     1/1   12d03h  [12d03h – 12d03h]   9h44m
+  research temporalTheory           1/1    1d13h  [1d13h – 1d13h]     1h45m
+  GENESIS available                 1/1   81d18h  [81d18h – 81d18h]   2d13h
+  first death                     0/1
+  story static                      1/1    0h04m  [0h04m – 0h04m]     0h04m
+  story deep                        1/1    0h25m  [0h25m – 0h25m]     0h25m
+  story toll                        1/1    0h30m  [0h30m – 0h30m]     0h30m
+  story clan                        1/1    1d03h  [1d03h – 1d03h]     1h30m
+  story maya                        1/1    1d13h  [1d13h – 1d13h]     1h35m
+  story terminus                    1/1    1d18h  [1d18h – 1d18h]     1h47m
+  story winter                      1/1    2d00h  [2d00h – 2d00h]     1h55m
+  story genesis                     1/1    2d00h  [2d00h – 2d00h]     2h00m
+  story trail                       1/1    6d03h  [6d03h – 6d03h]     5h10m
+  story platform                    1/1   12d03h  [12d03h – 12d03h]   9h42m
+  story fever                       1/1   27d03h  [27d03h – 27d03h]   20h55m
+  story ashStorm                    1/1   28d13h  [28d13h – 28d13h]   21h56m
+  story railLine                    1/1   30d00h  [30d00h – 30d00h]   22h56m
+  story gate                        1/1   44d00h  [44d00h – 44d00h]   1d09h
+  story noaDemand                   1/1   45d03h  [45d03h – 45d03h]   1d10h
+  story sunriseGate                 1/1   46d18h  [46d18h – 46d18h]   1d11h
+  story firstVote                   1/1   62d00h  [62d00h – 62d00h]   1d22h
+  story gideonSeat                  1/1   63d03h  [63d03h – 63d03h]   1d23h
+  story arkChapter                  1/1   80d00h  [80d00h – 80d00h]   2d12h
+  story decision                    1/1   81d18h  [81d18h – 81d18h]   2d13h
+
+ seed  era1    era2    era3    B4      B6      genesis(iso)    pop  res  fl lv   dead famine  idle  stall  chap  wasted/ret
+    1  0h07m   0h25m   12d03h  0h17m   1d13h   81d18h(1911)    190  172  24 693     0  0h00m   59%     6h  20/20       0
+
+End state (median [min–max]): era 3 · floors 24 [24–24] · pop 190 [190–190] · research 172 [172–172] · room levels 693 · explored 468 · objective step 17
+Genesis available in 1/1 runs; payout at unlock 1911 · payout estimate at end 2115 [2115–2115]
+Danger: deaths 0 [0–0] · injuries 396 · famine 0h00m · thirst 0h00m (online)
+Late game: project stages 66 (projects done 14) · caravans home 300 lost 63 · weekly 8 · trainings 1396 · rank-5 workers 190
+Pace: idle share 59% [59%–59%] · gaps ≥5 min 191 · last progress 6 h before the end (wall; online 0.2 h) · story 20/20 chapters
+At cap (online share, median): food 92% · water 89% · power 98% · materials 41% · knowledge 72% · scrap 55% · medicine 93%
+Offline: 400 returns, 0 brought nothing · median gain per return: nothing · median wasted: nothing · wasted share 0%
+         door arrivals 32 · teams home 262 · research done 129 · returns to a starving bunker 0
+Newcomers accepted 157 · refused (no bed/food) 0

@@ -1,13 +1,24 @@
 /* Touch comfort, text size, volume sliders, the save-protection overlay. Loaded last. */
 
-/* Text size: every font-size in the stylesheets is `calc(Npx * var(--fs))`. The play field's own HUD keeps its size so it still fits a narrow phone. */
-:root { --fs: 1.1; }
-.hud-top, .hud-bottom, .objective, .hud-banner { --fs: 1; }
+/* Text size: every font-size in the stylesheets is `calc(Npx * var(--fs))`.
+   [plan4:UX-5] The HUD used to freeze --fs at 1 (so "Text size" did nothing for the most-read text: values 14px, rates 10px, chips 12px).
+   It now follows the setting up to 1.3 (--fs-hud): past that the plates, not the font, give way (2x2 resources from 1.25, wrapping chips). */
+:root { --fs: 1.1; --fs-hud: min(var(--fs), 1.3); --tap: 44px; --chip-h: 32px; }
+.hud-top, .hud-bottom, .objective, .hud-banner { --fs: var(--fs-hud); }
+/* [plan4:AC-12] "Large touch targets" (Accessibility tab, data-large="on" on <html>): every target is at least 52px. */
+:root[data-large="on"] { --tap: 52px; }
 
 /* Small HUD buttons (the daily crate, the journal) were 29x21 px: bigger to hit with a thumb. */
-.info-row .lang-btn { min-height: 32px; min-width: 34px; display: inline-flex; align-items: center; justify-content: center; }
-.era-chip { min-height: 32px; display: inline-flex; align-items: center; }
+.info-row .lang-btn { min-height: var(--chip-h); min-width: 34px; display: inline-flex; align-items: center; justify-content: center; }
+.era-chip { min-height: var(--chip-h); display: inline-flex; align-items: center; }
 .btn-small { min-height: 34px; }
+
+/* [plan4:UX-4] The field classes below set their own small sizes; fields stay at 16px+ (no focus-zoom on iOS) and selectable. */
+input.coupon-code, input.coupon-amount, input.book-search, textarea.save-area {
+  font-size: max(16px, calc(13px * var(--fs, 1)));
+  -webkit-user-select: text;
+  user-select: text;
+}
 
 /* Keyboard focus: visible, but only for the keyboard. */
 button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
@@ -68,7 +79,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px
 
 /* The menu's four tabs must all fit a 360 px phone: they keep the base size whatever the text-size setting. */
 .tab-row { --fs: 1; }
-.tab { padding-inline: 8px; }
+.tab { padding-inline: 8px; min-height: var(--tap); } /* a real 44px box: the row scrolls (overflow-x), which would clip a ::after hit area */
 
 /* A story scene already seen in an earlier timeline can be skipped. */
 .story-skip { position: fixed; top: max(14px, env(safe-area-inset-top)); inset-inline-end: 14px; z-index: 5; opacity: 0.85; }
@@ -98,6 +109,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px
 /* [Long game] Act card and Foreman orders */
 .act-card .act-name { font-weight: 700; font-size: 1.1em; }
 .act-limits { font-size: 0.85em; opacity: 0.8; margin: 4px 0 8px; }
+.act-limits.wing-hl { opacity: 1; outline: 2px solid var(--amber); outline-offset: 3px; border-radius: 4px; } /* [plan4:ST-9] */
 .foreman { margin-top: 12px; }
 .foreman-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 6px 0; }
 .foreman-text { flex: 1; min-width: 0; }
@@ -110,7 +122,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px
 
 /* [P3] Doctrine and Eureka tags */
 .doctrine-tag { color: #ffd27a; }
-.eureka-on { color: #7affb0; }
+.eureka-on { color: var(--ok, #7affb0); }
 
 /* [Long game UX] Next up */
 .next-up .next-row { margin: 4px 0; line-height: 1.35; }
@@ -122,3 +134,232 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px
 
 /* Beds the Act's limit holds back (room panel) */
 .bp-note.warning { margin: 4px 0 6px; font-size: 0.85em; line-height: 1.35; color: var(--warning); }
+
+/* [plan4:AC-3] High contrast (Accessibility tab, data-contrast="high" on <html>, set by utils/a11y.ts): white text, 2px edges,
+   and no see-through plates, so text never sits on whatever the scene happens to show behind it. */
+:root[data-contrast="high"] {
+  --text-primary: #ffffff;
+  --text-secondary: #e0f7e8;
+  --text-dim: #c4e2cd;
+  --text-disabled: #b9c4be;
+  --border: rgba(170, 255, 195, 0.95);
+  --bg-card: #0f2418;
+  --bg-card-hi: #17361f;
+}
+:root[data-contrast="high"] .sheet,
+:root[data-contrast="high"] .modal { background: #050b07; }
+:root[data-contrast="high"] .hud-top { background: #060709; }
+:root[data-contrast="high"] .resource-item,
+:root[data-contrast="high"] .info-item,
+:root[data-contrast="high"] .toast { background: #1c1d20; }
+:root[data-contrast="high"] .btn,
+:root[data-contrast="high"] .tab,
+:root[data-contrast="high"] .bp-card,
+:root[data-contrast="high"] .modal,
+:root[data-contrast="high"] .resource-item,
+:root[data-contrast="high"] .info-item,
+:root[data-contrast="high"] .nav-btn { border-width: 2px; border-color: var(--border); }
+:root[data-contrast="high"] .btn-primary { color: #000; }
+:root[data-contrast="high"] .resource-value { color: #fff; }
+
+/* [plan4:UX-1] "Tap to enable sound": icon + text (never colour alone), a 44px target above the console. Hidden unless the audio context is blocked. */
+.sound-chip {
+  position: fixed;
+  inset-inline: 0;
+  margin-inline: auto;
+  width: max-content;
+  max-width: calc(100% - 32px);
+  bottom: calc(var(--nav-h, 72px) + var(--obj-h, 0px) + 12px); /* [plan4:UX-5] above the nav and the objective strip */
+  z-index: 35;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 8px 16px;
+  border-radius: 22px;
+  border: 1px solid var(--amber, #ffb547);
+  background: #1c1d20;
+  color: #ffe3b0;
+  font-size: calc(14px * var(--fs, 1));
+  font-weight: 600;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.6);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(6px);
+  transition: opacity 0.18s, transform 0.18s;
+}
+.sound-chip.show { opacity: 1; pointer-events: auto; transform: none; }
+
+/* =====================================================================================================================================
+   [plan4:UX-5..UX-9, AC-12] HUD scale, 44px targets, thumb reach, safe areas, landscape, one-hand and large-target modes.
+   This block is last on purpose: it re-states a few earlier rules (bunker-os.css, style.css) with the same specificity.
+   ===================================================================================================================================== */
+
+/* ---------- UX-5: resources follow the text size ---------- */
+
+/* A plate is a real 44px tall box (it clips its own fill bar with overflow:hidden, so a ::after hit area would be cut off). */
+.resource-item { min-height: var(--tap); }
+/* From text size 1.25 (HUD.ts adds .fs-big) four across no longer fit: two by two, as wide as they like, wrapping onto more rows. */
+.hud-top.fs-big .resource-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.hud-top.fs-big .resource-item { padding-inline: 10px; }
+/* The numbers keep their line even when a long one (1.23M, -12.5/s) meets a narrow plate: the rate drops to a second line. */
+.resource-item { flex-wrap: wrap; align-content: center; row-gap: 0; }
+.resource-rate { white-space: nowrap; }
+.hud-top .resource-row > .resource-item > .resource-value { min-width: 0; }
+
+/* The chips row wraps (it used to clip or force a tiny font) and every chip is 32px high with a 44px hit area. */
+.hud-top .info-row { flex-wrap: wrap; justify-content: center; row-gap: 4px; }
+.info-row .lang-btn, .era-chip, .info-tap, .btn-small, .res-more { position: relative; }
+.info-tap { min-height: var(--chip-h); cursor: pointer; }
+.hud-top .info-row .lang-btn { min-width: var(--chip-h); } /* icon-only chips: 32 + 2 x 6 of hit area = 44 wide too */
+.info-row .lang-btn::after, .era-chip::after, .info-tap::after, .btn-small::after {
+  content: '';
+  position: absolute;
+  /* -1px: the box is positioned from the padding edge, inside the 1px border, so the hit area would be 2px short */
+  inset: calc((var(--tap) - var(--chip-h)) / -2 - 1px);
+}
+/* "Show all resources" pill: visually 24px, its hit area reaches 44px (the 10px above overlaps the plates' fill bars, which is fine). */
+.hud-top .res-more, .hud-top.res-collapsible .res-more {
+  min-height: 24px;
+  padding: 0 14px;
+  font-size: calc(11px * var(--fs, 1));
+  line-height: 22px;
+}
+.res-more::after { content: ''; position: absolute; inset: calc((var(--tap) - 24px) / -2 - 1px) -7px; }
+.hud-top.res-collapsible .info-row { margin-top: 4px; }
+
+/* Nav keys: always a full-size target, even when the labels fold away on a short screen. */
+.nav-btn { min-height: var(--tap); }
+.nav-label { font-size: calc(12.5px * var(--fs, 1)); }
+.nav-btn.nav-menu { flex-basis: max(46px, var(--tap)); max-width: none; min-width: var(--tap); }
+
+/* Sheet plates (the close and the ?): 44x44. The title keeps clear of both. */
+.sheet-close, .sheet-help { width: var(--tap); height: var(--tap); margin-bottom: calc(var(--tap) * -1); }
+.sheet-close .ic, .sheet-help .ic { width: 20px; height: 20px; }
+.sheet-title { padding-inline: calc(var(--tap) + 8px); }
+
+/* ---------- UX-5 reach: the objective (the main call to action) sits just above the nav; the top stays a status row ---------- */
+
+.objective {
+  position: fixed;
+  left: max(8px, env(safe-area-inset-left));
+  right: max(8px, env(safe-area-inset-right));
+  bottom: calc(var(--nav-h, 72px) + 8px);
+  margin: 0 auto;
+  width: fit-content;
+  min-height: var(--tap);
+  /* The tape was a fixed 12px font in a 6px-padded strip; it now grows with the text, wrapping to two lines if it must. */
+  padding-block: 8px;
+}
+.objective-text { min-width: 0; }
+
+/* Toasts: a little wider, a critical one clearly red. */
+.toast { max-width: min(90%, 420px); }
+.toast.critical { color: #ffd5cf; background-color: #2a0f0c; }
+.toast-msg { overflow-wrap: anywhere; }
+/* The nav console lives on <body> (UX-8), so the intro hiding #hud has to hide it too. */
+body.intro-active .hud-bottom { visibility: hidden; }
+
+/* ---------- UX-6: safe areas on the sides (landscape notch, rounded corners) ---------- */
+
+.hud-top {
+  padding-left: max(8px, env(safe-area-inset-left));
+  padding-right: max(8px, env(safe-area-inset-right));
+}
+.hud-bottom {
+  padding-left: max(6px, env(safe-area-inset-left));
+  padding-right: max(6px, env(safe-area-inset-right));
+}
+.hud-banner { max-width: calc(100% - 16px - env(safe-area-inset-left) - env(safe-area-inset-right)); }
+
+/* ---------- UX-6: landscape on a phone (touch, under 500px tall) ----------
+   A card asks to turn the phone upright; "continue anyway" (html[data-rotate-ok], set by viewportUi.ts) hides it. Behind it the layout is
+   already the compact one: resources and chips in a column on the left, the nav console as a column on the right. */
+
+.rotate-card { display: none; }
+@media (pointer: coarse) and (orientation: landscape) and (max-height: 499px) {
+  :root { --col-l: min(250px, 38vw); --col-r: calc(76px + env(safe-area-inset-right)); }
+  .rotate-card {
+    position: fixed;
+    inset: 0;
+    z-index: 99000;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 16px max(24px, env(safe-area-inset-right)) 16px max(24px, env(safe-area-inset-left));
+    background: rgba(7, 12, 9, 0.96);
+    color: var(--text-primary);
+    text-align: center;
+  }
+  :root:not([data-rotate-ok]) .rotate-card { display: flex; }
+  .rotate-icon { font-size: 34px; color: var(--accent); line-height: 1; }
+  .rotate-title { font-size: calc(20px * var(--fs, 1)); font-weight: 700; color: var(--accent); }
+  .rotate-text { max-width: 420px; line-height: 1.4; color: var(--text-secondary); font-size: calc(14px * var(--fs, 1)); }
+  .rotate-card .btn { margin-top: 6px; min-width: 200px; }
+
+  #hud { padding-left: var(--col-l); padding-right: var(--col-r); }
+  .hud-top {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: var(--col-l);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    touch-action: pan-y;
+    padding-top: max(6px, env(safe-area-inset-top));
+    padding-bottom: max(6px, env(safe-area-inset-bottom));
+    background: linear-gradient(to right, rgba(6, 7, 9, 0.94) 80%, transparent);
+  }
+  .hud-top .resource-row, .hud-top.fs-big .resource-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .hud-top .info-row { margin-top: 6px; }
+  .hud-bottom {
+    top: 0;
+    bottom: 0;
+    left: auto;
+    right: 0;
+    width: var(--col-r);
+    flex-direction: column;
+    justify-content: center;
+    gap: 6px;
+    padding: max(6px, env(safe-area-inset-top)) max(6px, env(safe-area-inset-right)) max(6px, env(safe-area-inset-bottom)) 6px;
+    border-top: none;
+    border-left: 2px solid #0a0b0c;
+  }
+  .nav-btn, .nav-btn.nav-menu { flex: 0 1 auto; max-width: none; width: 100%; min-width: 0; }
+  .objective { left: calc(var(--col-l) + 8px); right: calc(var(--col-r) + 8px); bottom: max(8px, env(safe-area-inset-bottom)); }
+  .toast-stack { top: 8px; padding-left: var(--col-l); padding-right: var(--col-r); }
+  .sound-chip { bottom: max(8px, env(safe-area-inset-bottom)); }
+}
+
+/* ---------- UX-7: dvh for the story / surface cards is in style.css and story.css; the keyboard inset is set by viewportUi.ts ---------- */
+
+/* ---------- AC-12: one-hand mode (data-onehand="left|right", from the Accessibility tab) ----------
+   The close plate goes to the thumb's side of the sheet (and the ? to the far side); the objective strip leans to the same side; the
+   chips of the status row stay read-only information at the top, as before. Physical left/right on purpose: a thumb has no "start". */
+:root[data-onehand="right"] .sheet-close { margin-left: auto; margin-right: -8px; }
+:root[data-onehand="right"] .sheet-help { margin-right: auto; margin-left: -8px; }
+:root[data-onehand="left"] .sheet-close { margin-right: auto; margin-left: -8px; }
+:root[data-onehand="left"] .sheet-help { margin-left: auto; margin-right: -8px; }
+:root[data-onehand="right"] .objective { margin-left: auto; margin-right: 0; }
+:root[data-onehand="left"] .objective { margin-right: auto; margin-left: 0; }
+
+/* ---------- AC-12: large touch targets (data-large="on": --tap is 52px, set at the top of this file) ----------
+   Real minimum sizes for boxes that can grow; the chips (::after) already scale with --tap. 8px between neighbours. */
+:root[data-large="on"] .btn,
+:root[data-large="on"] .btn-small,
+:root[data-large="on"] .tab,
+:root[data-large="on"] .nav-btn,
+:root[data-large="on"] .resource-item,
+:root[data-large="on"] .objective,
+:root[data-large="on"] .team-chip,
+:root[data-large="on"] .worker-pick,
+:root[data-large="on"] .build-item,
+:root[data-large="on"] .req-row,
+:root[data-large="on"] .coupon-code,
+:root[data-large="on"] .coupon-amount { min-height: var(--tap); }
+:root[data-large="on"] .nav-btn, :root[data-large="on"] .nav-btn.nav-menu { min-width: var(--tap); }
+:root[data-large="on"] .info-row, :root[data-large="on"] .modal-actions, :root[data-large="on"] .btn-row, :root[data-large="on"] .person-actions { gap: 8px; }
+:root[data-large="on"] .hud-top .info-row { row-gap: 8px; }
+:root[data-large="on"] .vol-slider { height: var(--tap); }

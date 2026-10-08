@@ -37,6 +37,17 @@ html, body {
   touch-action: none;
 }
 
+/* [plan4:UX-4] Text fields: the html/body user-select:none is inherited by inputs in WebKit and blocks typing. 16px+ stops iOS zooming
+   the page when a field is focused (which is why maximum-scale used to be needed; it is gone from the viewport so players can zoom). */
+input, textarea, select {
+  -webkit-user-select: text;
+  user-select: text;
+  font-size: max(16px, 1em);
+}
+/* Never let iOS inflate text on rotation; and no long-press "save image" sheet over the portraits and icons. */
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+img { -webkit-touch-callout: none; }
+
 button {
   font-family: inherit;
   color: inherit;
@@ -102,8 +113,9 @@ button {
 .resource-icon { font-size: calc(14px * var(--fs, 1)); }
 .resource-value { font-weight: 700; font-size: calc(13px * var(--fs, 1)); }
 .resource-rate {
-  font-size: calc(10px * var(--fs, 1));
-  color: var(--text-dim);
+  font-size: calc(11px * var(--fs, 1));
+  /* [plan4:AC-3] was --text-dim: 2.8:1 on the steel plate. */
+  color: var(--text-secondary);
   margin-inline-start: auto;
   unicode-bidi: isolate;
   font-variant-numeric: tabular-nums;
@@ -189,8 +201,10 @@ button {
   padding: 6px 0;
   padding-bottom: max(6px, env(safe-area-inset-bottom));
   border-top: 1px solid var(--border);
-  backdrop-filter: blur(10px);
-  z-index: 15;
+  /* [perf] no backdrop-filter: a blur over the live canvas is a GPU pass every picture (96% opaque anyway) */
+  /* [plan4:UX-8] 22: above the bottom sheets (20), so the nav stays visible and tappable with a sheet open; below the surface map (25),
+     toasts (30) and dialogs (40). HUD.ts puts the console on <body> so this z-index competes with the sheets at all. */
+  z-index: 22;
 }
 
 .nav-btn {
@@ -207,7 +221,7 @@ button {
   transition: background 0.2s, transform 0.1s;
 }
 .nav-btn:active { background: var(--accent-glow); color: var(--accent); transform: scale(0.95); }
-.nav-btn.locked { opacity: 0.45; }
+.nav-btn.locked { opacity: 1; }
 .nav-icon { font-size: calc(22px * var(--fs, 1)); position: relative; }
 .nav-label { font-size: calc(11px * var(--fs, 1)); }
 .nav-badge {
@@ -299,11 +313,15 @@ body.placement-mode #game-canvas { cursor: crosshair; }
 .sheet {
   background: var(--bg-panel);
   border-radius: 18px 18px 0 0;
-  padding: 8px 16px 16px;
-  padding-bottom: max(16px, env(safe-area-inset-bottom));
+  /* [plan4:UX-6] side padding clears the notch / rounded corners in landscape */
+  padding: 8px max(16px, env(safe-area-inset-right)) 16px max(16px, env(safe-area-inset-left));
   width: 100%;
   max-width: 520px;
   max-height: 72vh;
+  /* [plan4:UX-8] The nav console stays visible above the sheet's bottom edge, so the content must end above it (--nav-h is measured by
+     HUD.ts and already includes the home-bar safe area). With the keyboard up (--kb-inset, viewportUi.ts) the sheet is lifted by the
+     overlay's padding and the nav no longer needs room. */
+  padding-bottom: calc(max(0px, var(--nav-h, 72px) - var(--kb-inset, 0px)) + 12px);
   overflow-y: auto;
   overscroll-behavior: contain;
   touch-action: pan-y;
@@ -313,6 +331,12 @@ body.placement-mode #game-canvas { cursor: crosshair; }
   transition: transform 0.28s cubic-bezier(0.2, 0.9, 0.3, 1);
 }
 .sheet-overlay.open .sheet { transform: translateY(0); }
+/* [plan4:UX-7] dvh follows the browser bars (100vh on iOS Safari is the tallest state, so a 72vh sheet could reach under the toolbar). */
+@supports (height: 100dvh) {
+  .sheet { max-height: min(78dvh, calc(100dvh - var(--kb-inset, 0px) - 16px)); }
+}
+/* [plan4:UX-7] The keyboard lifts the sheet (iOS keeps the layout viewport full height). */
+.sheet-overlay { padding-bottom: var(--kb-inset, 0px); }
 
 .sheet-handle {
   width: 40px;
@@ -346,7 +370,7 @@ body.placement-mode #game-canvas { cursor: crosshair; }
   transition: transform 0.1s, border-color 0.2s;
 }
 .build-item:active { border-color: var(--accent); transform: scale(0.98); }
-.build-item.disabled { opacity: 0.45; }
+.build-item.disabled { filter: grayscale(0.7) brightness(0.8); } /* [plan4:AC-3] a filter, not opacity: text keeps its contrast */
 
 .build-icon {
   flex-shrink: 0;
@@ -440,7 +464,8 @@ body.placement-mode #game-canvas { cursor: crosshair; }
   align-items: center;
   justify-content: center;
   z-index: 40;
-  padding: 20px;
+  /* [plan4:UX-3] Keep clear of the notch, the home bar and rounded corners. */
+  padding: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.2s;
@@ -458,13 +483,29 @@ body.placement-mode #game-canvas { cursor: crosshair; }
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
   transform: scale(0.92);
   transition: transform 0.22s cubic-bezier(0.2, 1.4, 0.4, 1);
+  /* [plan4:UX-3] A dialog never grows past the screen (small phone, landscape, big text): the text scrolls, the buttons stay in reach.
+     html/body are overflow:hidden, so a dialog taller than the screen used to push its buttons out of reach (Genesis choices could lock). */
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 80px);
+  overflow: hidden;
 }
+@supports (height: 100dvh) {
+  .modal { max-height: calc(100dvh - max(12px, env(safe-area-inset-top)) - max(12px, env(safe-area-inset-bottom)) - 24px); }
+}
+/* Icon, title, text (and the choices beyond the last button) scroll together; touch-action is needed because the page itself is touch-action:none. */
+.modal-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; touch-action: pan-y; }
+.modal-body { min-height: 0; }
 .modal-overlay.open .modal { transform: scale(1); }
 .modal-icon { font-size: calc(44px * var(--fs, 1)); margin-bottom: 6px; }
 .modal-title { font-size: calc(19px * var(--fs, 1)); font-weight: 700; color: var(--accent); margin-bottom: 8px; }
 .modal-body { font-size: calc(14px * var(--fs, 1)); line-height: 1.5; color: var(--text-primary); margin-bottom: 14px; }
 .modal-sub { font-size: calc(12px * var(--fs, 1)); color: var(--text-secondary); margin-bottom: 8px; }
 .modal-actions { display: flex; flex-direction: column; gap: 8px; }
+/* The last (main) button stays pinned under the scrolling part; a very tall pinned group may scroll on its own, never push the text away. */
+.modal > .modal-actions { flex: 0 0 auto; max-height: 45vh; overflow-y: auto; overscroll-behavior: contain; touch-action: pan-y; padding: 8px 4px max(2px, env(safe-area-inset-bottom)); margin-inline: -4px; }
+.modal-scroll > .modal-actions { margin-bottom: 8px; }
+@supports (height: 100dvh) { .modal > .modal-actions { max-height: 45dvh; } }
 .modal-actions .btn { display: flex; justify-content: space-between; align-items: center; gap: 10px; text-align: start; }
 .modal-actions .btn:only-child { justify-content: center; }
 .gains-list { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; margin-bottom: 14px; }
@@ -476,7 +517,8 @@ body.placement-mode #game-canvas { cursor: crosshair; }
 
 .toast-stack {
   position: fixed;
-  top: calc(max(8px, env(safe-area-inset-top)) + 160px);
+  /* [plan4:UX-5] just under the measured status row (HUD.ts publishes --hud-top-h); 150px until the first measurement */
+  top: calc(var(--hud-top-h, 150px) + 6px);
   inset-inline: 0;
   display: flex;
   flex-direction: column;
@@ -498,9 +540,14 @@ body.placement-mode #game-canvas { cursor: crosshair; }
   transform: translateY(-8px);
   transition: opacity 0.25s, transform 0.25s;
 }
-.toast.in { opacity: 1; transform: translateY(0); }
 .toast.good { border-color: rgba(77, 255, 143, 0.6); }
-.toast.bad { border-color: rgba(255, 85, 85, 0.7); }
+.toast.bad, .toast.critical { border-color: rgba(255, 85, 85, 0.7); }
+.toast.critical { border-width: 2px; }
+/* [plan4:UX-9] The player can swipe a toast away (Toast.ts moves it with --dx); the counter shows merged repeats ("x3"). */
+.toast { pointer-events: auto; touch-action: none; transform: translate(var(--dx, 0px), -8px); }
+.toast.in { opacity: 1; transform: translate(var(--dx, 0px), 0); }
+.toast.dragging { transition: none; }
+.toast-count { margin-inline-start: 8px; font-weight: 700; font-variant-numeric: tabular-nums; opacity: 0.85; unicode-bidi: isolate; }
 
 ::-webkit-scrollbar { width: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
@@ -528,7 +575,7 @@ body.placement-mode #game-canvas { cursor: crosshair; }
 .research-card.available { border-color: rgba(77, 255, 143, 0.35); }
 .research-card.active { border-color: rgba(255, 181, 71, 0.7); box-shadow: 0 0 12px rgba(255, 181, 71, 0.22); }
 .research-card.done { opacity: 0.6; }
-.research-card.locked { opacity: 0.55; }
+.research-card.locked { filter: grayscale(0.7) brightness(0.8); }
 .research-name { font-weight: 700; font-size: calc(13px * var(--fs, 1)); }
 .tier-chip { font-size: calc(10px * var(--fs, 1)); font-weight: 700; color: var(--text-secondary); background: rgba(0, 0, 0, 0.3); border-radius: 6px; padding: 1px 6px; }
 .research-done { font-size: calc(12px * var(--fs, 1)); font-weight: 600; color: var(--positive); }
@@ -551,7 +598,8 @@ body.placement-mode #game-canvas { cursor: crosshair; }
   background: radial-gradient(ellipse at 50% 40%, #2a2418 0%, #14110c 60%, #0a0907 100%);
   display: flex;
   flex-direction: column;
-  padding: max(10px, env(safe-area-inset-top)) 10px max(10px, env(safe-area-inset-bottom));
+  /* [plan4:UX-6] all four sides: in landscape the notch is on the left or right */
+  padding: max(10px, env(safe-area-inset-top)) max(10px, env(safe-area-inset-right)) max(10px, env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left));
   gap: 8px;
   opacity: 0;
   pointer-events: none;
@@ -563,13 +611,17 @@ body.placement-mode #game-canvas { cursor: crosshair; }
 .surface-header .sheet-title { margin: 0; }
 .surface-close { position: absolute; inset-inline-end: 0; font-size: calc(16px * var(--fs, 1)); }
 .surface-missions { display: flex; flex-direction: column; gap: 6px; max-height: 22vh; overflow-y: auto; }
+@supports (height: 100dvh) { .surface-missions { max-height: 22dvh; } .surface-card { max-height: 42dvh; } }
 .mission-row { background: rgba(0, 0, 0, 0.35); border: 1px solid var(--border); border-radius: var(--radius); padding: 6px 10px; display: flex; flex-direction: column; gap: 4px; }
 .mission-name { font-size: calc(12px * var(--fs, 1)); font-weight: 600; }
 .surface-map { flex: 1; min-height: 0; overflow: auto; display: flex; align-items: safe center; justify-content: safe center; touch-action: pan-x pan-y; }
-.surface-map svg { width: 100%; max-width: 620px; min-width: 460px; height: auto; max-height: 100%; }
+.surface-map .map-wrap { position: relative; width: 100%; max-width: 620px; min-width: min(460px, 100%); max-height: 100%; border-radius: 10px; overflow: hidden; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06), 0 6px 18px rgba(0, 0, 0, 0.5); }
+.surface-map .map-paint { position: absolute; inset: 0; width: 100%; height: 100%; }
+.surface-map svg { position: relative; display: block; width: 100%; height: 100%; }
 .surface-map .hex { cursor: pointer; }
 .surface-map .hex polygon { transition: filter 0.15s; }
-.surface-map .hex:hover polygon { filter: brightness(1.25); }
+/* [plan4:UX-7] hover only where there is a real hover: on a phone a tap left the last hex highlighted (sticky :hover). */
+@media (hover: hover) { .surface-map .hex:hover polygon { stroke: rgba(255, 255, 255, 0.55); stroke-width: 1.5; } }
 .surface-map .hex.fog { cursor: default; }
 .hex-icon { font-size: calc(13px * var(--fs, 1)); pointer-events: none; }
 .hex-q { font-size: calc(11px * var(--fs, 1)); font-weight: 700; fill: rgba(255, 255, 255, 0.55); pointer-events: none; }
@@ -625,11 +677,11 @@ body.placement-mode #game-canvas { cursor: crosshair; }
   border: 1px solid rgba(255, 212, 71, 0.45);
   background:
     linear-gradient(90deg, rgba(255, 212, 71, 0.18) var(--obj-progress, 0%), transparent var(--obj-progress, 0%)),
-    rgba(16, 16, 34, 0.88);
+    rgba(16, 16, 34, 0.92);
   font-size: calc(12px * var(--fs, 1));
   cursor: pointer;
   text-align: start;
-  backdrop-filter: blur(6px);
+  /* [perf] no backdrop-filter (see the nav bar) */
 }
 [dir="rtl"] .objective {
   background:
@@ -687,6 +739,6 @@ body.placement-mode #game-canvas { cursor: crosshair; }
 }
 .coupon-code { flex: 1; min-width: 0; letter-spacing: 0.08em; text-transform: uppercase; }
 .coupon-amount { width: 76px; text-align: center; }
-.coupon-code.bad { border-color: #ff6b6b; animation: coupon-shake 0.3s; }
+.coupon-code.bad { border-color: var(--bad, #ff6b6b); animation: coupon-shake 0.3s; }
 @keyframes coupon-shake { 25% { transform: translateX(-4px); } 75% { transform: translateX(4px); } }
 .coupon-sheet .btn-row { align-items: center; }

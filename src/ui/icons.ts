@@ -131,6 +131,9 @@ export const ICON_SVG = {
     + '<path d="M7.6 14a4.8 4.8 0 0 0 8.8 0" stroke="#000" stroke-opacity=".5" stroke-width="1.7" fill="none" stroke-linecap="round"/>',
   sad: '<circle cx="12" cy="12" r="9.6"/><circle cx="8.8" cy="10" r="1.4" ' + CUT + '/><circle cx="15.2" cy="10" r="1.4" ' + CUT + '/>'
     + '<path d="M7.8 17a4.8 4.8 0 0 1 8.4 0" stroke="#000" stroke-opacity=".5" stroke-width="1.7" fill="none" stroke-linecap="round"/>',
+  // [plan4:AC-7] The middle of the three morale faces (happy / neutral / sad): a flat mouth.
+  neutral: '<circle cx="12" cy="12" r="9.6"/><circle cx="8.8" cy="10" r="1.4" ' + CUT + '/><circle cx="15.2" cy="10" r="1.4" ' + CUT + '/>'
+    + '<path d="M8 15.6h8" stroke="#000" stroke-opacity=".5" stroke-width="1.7" fill="none" stroke-linecap="round"/>',
   heart: '<path d="M12 21s-8.6-5.2-8.6-11.3A4.9 4.9 0 0 1 12 6.8a4.9 4.9 0 0 1 8.6 2.9C20.6 15.8 12 21 12 21z"/>',
   trophy: '<path d="M6.5 3h11v6.2a5.5 5.5 0 0 1-11 0z"/><path d="M6.5 5H3.2v2.2a4 4 0 0 0 3.6 4M17.5 5h3.3v2.2a4 4 0 0 1-3.6 4" ' + S + ' stroke-width="1.6"/>'
     + '<rect x="10.8" y="14.5" width="2.4" height="3.5" opacity=".6"/><rect x="7" y="18" width="10" height="3.2" rx=".8"/>',
@@ -247,6 +250,63 @@ export const ICON_SVG = {
   arrowLeft: '<path d="M10.5 4.5 3 12l7.5 7.5 1.7-1.7-4.6-4.6H21v-2.4H7.6l4.6-4.6z"/>',
   arrowRight: '<path d="M13.5 4.5 21 12l-7.5 7.5-1.7-1.7 4.6-4.6H3v-2.4h13.4l-4.6-4.6z"/>',
   hand: '<path d="M9 11V4.2a1.6 1.6 0 0 1 3.2 0V10h.4V3.2a1.6 1.6 0 0 1 3.2 0V10h.4V5a1.6 1.6 0 0 1 3.2 0v9.2c0 4.3-3 7.8-7.4 7.8-2.6 0-4.4-1.2-5.8-3.3L3 13.2a1.7 1.7 0 0 1 2.6-2.1L9 14.3z"/>',
+  // [plan4:BL-9..14,19,33] the first eight new rooms
+  batteryBank: '<rect x="2" y="7" width="18" height="12" rx="1.6" opacity=".6"/><rect x="20" y="10.4" width="2.2" height="5.2" rx=".8"/>'
+    + '<rect x="4" y="9" width="3.6" height="8" rx=".6"/><rect x="9" y="9" width="3.6" height="8" rx=".6"/>'
+    + '<path d="M16.2 9.2h1.8l-1.1 3.3h1.8l-3.4 4.8.9-4h-1.5z" ' + CUT + '/>',
+  commons: '<path d="M3.5 11.5a3.2 3.2 0 0 1 3.2-3.2h10.6a3.2 3.2 0 0 1 3.2 3.2v2.4h-17z" opacity=".6"/><rect x="2" y="12.6" width="20" height="5.4" rx="1.8"/>'
+    + '<rect x="4" y="17.6" width="2.2" height="3" rx=".6"/><rect x="17.8" y="17.6" width="2.2" height="3" rx=".6"/>'
+    + '<path d="M12 4.2c1.3-1.5 3.6-.3 2.6 1.5L12 8.2 9.4 5.7c-1-1.8 1.3-3 2.6-1.5z"/>',
+  library: '<rect x="3" y="3.5" width="4.6" height="17" rx=".9"/><rect x="8.6" y="5.6" width="4.6" height="14.9" rx=".9" opacity=".6"/>'
+    + '<path d="M14.6 6.6 18.8 5.5l3.5 13.6-4.2 1.1z"/><path d="M4.4 7.4h1.8M4.4 16.4h1.8M9.9 9.2h1.8" stroke="#000" stroke-opacity=".5" stroke-width="1.3"/>',
+  recycler: '<path d="M5 12A7 7 0 0 1 15.5 5.94" ' + S + ' stroke-width="2.2"/><path d="M16.9 3.5 18.44 7.64 14.1 8.4Z"/>'
+    + '<path d="M19 12A7 7 0 0 1 8.5 18.06" ' + S + ' stroke-width="2.2" opacity=".6"/><path d="M7.1 20.5 5.56 16.36 9.9 15.6Z" opacity=".6"/>'
+    + '<circle cx="12" cy="12" r="2"/>',
+  condenser: '<rect x="3" y="3" width="18" height="11.4" rx="1.8" opacity=".6"/><path d="M5.6 6.4h12.8M5.6 9h12.8M5.6 11.6h12.8" stroke="#000" stroke-opacity=".5" stroke-width="1.5"/>'
+    + '<path d="M12 21.6c-2 0-3.3-1.3-3.3-3 0-1.7 3.3-4.6 3.3-4.6s3.3 2.9 3.3 4.6c0 1.7-1.3 3-3.3 3z"/>',
+  mushroomFarm: '<path d="M2.4 12.6a9.6 8.2 0 0 1 19.2 0z"/><path d="M9.4 12.6h5.2l-.6 7.2a1 1 0 0 1-1 .9h-2a1 1 0 0 1-1-.9z" opacity=".6"/>'
+    + '<circle cx="7.6" cy="9.6" r="1.3" ' + CUT + '/><circle cx="13.6" cy="7.4" r="1.7" ' + CUT + '/><circle cx="17.6" cy="10.2" r="1" ' + CUT + '/>',
+  gatePost: '<path d="M12 2.4l8 2.7v6.1c0 5-3.4 8.7-8 10.4-4.6-1.7-8-5.4-8-10.4V5.1z"/>'
+    + '<path d="M8.6 8.4v8M12 7.4v9.4M15.4 8.4v8M7.6 11.4h8.8" stroke="#000" stroke-opacity=".5" stroke-width="1.5" fill="none"/>',
+  barracks: '<rect x="3" y="3" width="2" height="18" rx=".5"/><rect x="19" y="3" width="2" height="18" rx=".5"/>'
+    + '<rect x="3" y="8.4" width="18" height="2.6" rx=".8" opacity=".6"/><rect x="3" y="16" width="18" height="2.6" rx=".8" opacity=".6"/>'
+    + '<rect x="5.6" y="5.6" width="5.2" height="2.6" rx="1.1"/><rect x="5.6" y="13.2" width="5.2" height="2.6" rx="1.1"/>',
+  // [plan4:BL-15..32] wave 2 rooms
+  quarantineWard: '<rect x="3" y="3" width="18" height="18" rx="2.2" opacity=".6"/><rect x="9.6" y="6" width="4.8" height="12" rx="1"/><rect x="6" y="9.6" width="12" height="4.8" rx="1"/>'
+    + '<path d="M3 12h3M18 12h3" stroke="#000" stroke-opacity=".5" stroke-width="1.6"/>',
+  solarArray: '<path d="M3.6 8.4h16.8l1.8 8.6H1.8z"/><path d="M8.2 8.4 7 17M12 8.4V17M15.8 8.4 17 17M2.7 12.7h18.6" stroke="#000" stroke-opacity=".5" stroke-width="1.3" fill="none"/>'
+    + '<path d="M12 17v4M8 21.4h8" ' + S + ' stroke-width="1.9"/><circle cx="19" cy="3.8" r="1.9"/>',
+  windTurbine: '<path d="M11 10.6h2L14 22h-4z" opacity=".6"/><circle cx="12" cy="9.2" r="1.7"/>'
+    + '<path d="M12 7.5C11.4 4.8 11.6 3 12 1.8c.4 1.2.6 3 0 5.7zM13.5 10.1c2.6-.6 4.2-.4 5.4.1-.9.9-2.5 1.7-5.1 1.9zM10.5 10.1c-2.6-.6-4.2-.4-5.4.1.9.9 2.5 1.7 5.1 1.9z"/>',
+  watchtower: '<path d="M7.4 11h9.2l1.4 11h-12z" opacity=".6"/><rect x="5" y="6" width="14" height="5" rx="1"/>'
+    + '<path d="M7.4 6V3.6h9.2V6" ' + S + ' stroke-width="1.7"/><rect x="9.6" y="7.3" width="4.8" height="2.4" rx=".6" ' + CUT + '/><path d="M9 14.5l6 4M15 14.5l-6 4" stroke="#000" stroke-opacity=".5" stroke-width="1.3"/>',
+  garage: '<path d="M2 9.6 12 3.4l10 6.2V21H2z" opacity=".6"/><rect x="5" y="11.4" width="14" height="9.6" rx=".8"/>'
+    + '<path d="M5.6 14.2h12.8M5.6 16.6h12.8M5.6 19h12.8" stroke="#000" stroke-opacity=".5" stroke-width="1.2"/>',
+  decon: '<path d="M2.6 21.4V10.6a9.4 9.4 0 0 1 18.8 0v10.8z" opacity=".6"/><path d="M6.6 21.4V11.2a5.4 5.4 0 0 1 10.8 0v10.2z" ' + CUT + '/>'
+    + '<path d="M12 8.4c-1 1.3-1.6 2-1.6 2.9a1.6 1.6 0 0 0 3.2 0c0-.9-.6-1.6-1.6-2.9zM8.6 14c-.7.9-1.1 1.4-1.1 2a1.1 1.1 0 0 0 2.2 0c0-.6-.4-1.1-1.1-2zM15.4 14c-.7.9-1.1 1.4-1.1 2a1.1 1.1 0 0 0 2.2 0c0-.6-.4-1.1-1.1-2z"/>',
+  aquaculture: '<path d="M2.6 12.8c2.6-3.8 6.2-5.6 10.2-5.6 3 0 5.6 1 7.6 2.8l1.8-2v7.6l-1.8-2c-2 1.8-4.6 2.8-7.6 2.8-4 0-7.6-1.8-10.2-5.6z"/>'
+    + '<circle cx="8" cy="11.4" r="1.2" ' + CUT + '/><path d="M2 20.6c2-1.6 3.6-1.6 5.6 0s3.6 1.6 5.6 0 3.6-1.6 5.6 0" ' + S + ' stroke-width="1.8" opacity=".7"/>',
+  market: '<path d="M2.6 8.2 4.6 3h14.8l2 5.2z"/><path d="M4.4 8.2v2.4a2.4 2.4 0 0 0 4.8 0 2.4 2.4 0 0 0 4.8 0 2.4 2.4 0 0 0 4.8 0V8.2" opacity=".6"/>'
+    + '<rect x="4" y="12.6" width="2" height="8.4" rx=".6"/><rect x="18" y="12.6" width="2" height="8.4" rx=".6"/><rect x="3" y="16.6" width="18" height="2.6" rx=".8"/>',
+  nursery: '<path d="M2 12.4h20v3.2H2z" opacity=".6"/><rect x="2" y="9.4" width="2.4" height="11.6" rx=".7"/><rect x="19.6" y="9.4" width="2.4" height="11.6" rx=".7"/>'
+    + '<circle cx="12" cy="8.2" r="4.4"/><circle cx="10.6" cy="8" r=".9" ' + CUT + '/><circle cx="13.4" cy="8" r=".9" ' + CUT + '/><rect x="4.4" y="17.2" width="15.2" height="2.6" rx=".8"/>',
+  school: '<path d="M2.4 4h19.2v13H2.4z" opacity=".6"/><path d="M5 6.6h14v7.8H5z" ' + CUT + '/><path d="M7.4 9.4h5.6M7.4 12h8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>'
+    + '<path d="M6 17v4M18 17v4M9 21h6" ' + S + ' stroke-width="1.9"/>',
+  bathhouse: '<rect x="3" y="2.5" width="18" height="3" rx="1.2"/><path d="M12 5.5v2.8" ' + S + ' stroke-width="1.7"/><path d="M7 8.4h10l-2 2.4H9z"/>'
+    + '<path d="M8.4 13.6v2.6M12 13.2v4M15.6 13.6v2.6" ' + S + ' stroke-width="1.8" opacity=".7"/>'
+    + '<path d="M5 20.6c.8-1.2.8-2 0-3M19 20.6c.8-1.2.8-2 0-3M12 22c.8-1.2.8-2 0-3" ' + S + ' stroke-width="1.4" opacity=".6"/>',
+  memorialHall: '<path d="M12 2.4c2.4 2.6 3.4 4.4 3.4 6.6a3.4 3.4 0 0 1-6.8 0c0-1.2.6-2 1.4-3 .2.8.6 1.2 1 1.4.4-1.6.8-3.4 1-5z"/>'
+    + '<rect x="9.8" y="12.4" width="4.4" height="4.4" rx=".6" opacity=".6"/><path d="M3 21h18" ' + S + ' stroke-width="2.4"/>'
+    + '<path d="M5 16.8h14v4.2H5z" opacity=".6"/><path d="M7.6 18.2v1.4M10.2 18.2v1.4M12.8 18.2v1.4M15.4 18.2v1.4" stroke="#000" stroke-opacity=".5" stroke-width="1.1"/>',
+  // [plan4:BL-24,25,34..38] wave 3: the two Act districts and the five Act rooms
+  geothermal: '<path d="M1.8 21.4 7.2 12h9.6l5.4 9.4z" opacity=".6"/><path d="M8.6 10.2c-1.2-1.8 1.2-3 0-5.2M12.4 10.2c-1.2-1.8 1.2-3 0-5.2M16.2 10.2c-1.2-1.8 1.2-3 0-5.2" ' + S + ' stroke-width="1.7"/>'
+    + '<path d="M12 21.4v-4.4l-2.2-2.2M12 17l2.4-1.8" stroke="#000" stroke-opacity=".55" stroke-width="1.5" fill="none" stroke-linecap="round"/>',
+  oldVault: '<circle cx="12" cy="12" r="10" opacity=".6"/><circle cx="12" cy="12" r="6.6" ' + CUT + '/><path d="M12 6.6v10.8M6.6 12h10.8M8.2 8.2l7.6 7.6M15.8 8.2l-7.6 7.6" ' + S + ' stroke-width="1.5"/><circle cx="12" cy="12" r="2.3"/>',
+  componentsPlant: '<path d="M2.4 21.4V10.4l5.4 3.3v-3.3l5.4 3.3v-3.3l5.4 3.3V3.6h3.2v17.8z"/><rect x="4.6" y="16" width="2.4" height="2.4" rx=".4" ' + CUT + '/><rect x="10" y="16" width="2.4" height="2.4" rx=".4" ' + CUT + '/><rect x="15.4" y="16" width="2.4" height="2.4" rx=".4" ' + CUT + '/>',
+  alloyFoundry: '<path d="M4.6 3.6h14.8l-2.2 6.8a5.2 5.2 0 0 1-10.4 0z"/><path d="M8.6 6.4h6.8" stroke="#000" stroke-opacity=".5" stroke-width="1.6" stroke-linecap="round"/><path d="M12 15.6v3.2" ' + S + ' stroke-width="2.2"/><rect x="6.4" y="19" width="11.2" height="3" rx=".8" opacity=".6"/>',
+  dataCenter: '<rect x="3.6" y="2.8" width="16.8" height="5.2" rx="1"/><rect x="3.6" y="9.4" width="16.8" height="5.2" rx="1" opacity=".6"/><rect x="3.6" y="16" width="16.8" height="5.2" rx="1"/><circle cx="7" cy="5.4" r=".9" ' + CUT + '/><circle cx="7" cy="12" r=".9" ' + CUT + '/><circle cx="7" cy="18.6" r=".9" ' + CUT + '/><path d="M10.4 5.4h7M10.4 12h7M10.4 18.6h7" stroke="#000" stroke-opacity=".5" stroke-width="1.2" stroke-linecap="round"/>',
+  forum: '<path d="M2.4 9.2 12 3l9.6 6.2z"/><rect x="4.2" y="10.6" width="2.6" height="8" rx=".5" opacity=".6"/><rect x="8.5" y="10.6" width="2.6" height="8" rx=".5" opacity=".6"/><rect x="12.9" y="10.6" width="2.6" height="8" rx=".5" opacity=".6"/><rect x="17.2" y="10.6" width="2.6" height="8" rx=".5" opacity=".6"/><rect x="2.4" y="19.6" width="19.2" height="2.2" rx=".7"/>',
+  seedLab: '<path d="M12 21v-7" ' + S + ' stroke-width="1.8"/><path d="M12 14.2c-4.5 0-6.2-3-6.2-6.2 4.2 0 6.2 1.8 6.2 6.2zM12 14.2c0-3.6 2.2-6.2 6.6-6.6 0 4-2.1 6.6-6.6 6.6z"/><rect x="3.6" y="19" width="16.8" height="2.8" rx="1" opacity=".6"/>',
 } as const;
 
 export type IconName = keyof typeof ICON_SVG;
@@ -276,7 +336,7 @@ export function tok(name: IconName): string {
 export const ICON_COLORS: Partial<Record<IconName, string>> = {
   food: '#e8a24a', water: '#4fb6ff', power: '#ffd23f', materials: '#c98a5a', medicine: '#ff6b6b',
   knowledge: '#b48cff', scrap: '#a7b0ba', blueprints: '#6fa8ff', isotope7: '#8dff5a', credits: '#f0c75e', star: '#ffd23f',
-  heart: '#ff5f6d', happy: '#ffd23f', sad: '#8aa0b8', check: '#5ee38a', close: '#ff6b6b', warning: '#ffb547',
+  heart: '#ff5f6d', happy: '#ffd23f', neutral: '#ffd23f', sad: '#8aa0b8', check: '#5ee38a', close: '#ff6b6b', warning: '#ffb547',
   pick: '#d9a441', skull: '#e0e0e0', strength: '#ff8a5a', intelligence: '#ffe27a', agility: '#7ae0ff',
   charisma: '#ff9ad5', endurance: '#9ad08a',
 };

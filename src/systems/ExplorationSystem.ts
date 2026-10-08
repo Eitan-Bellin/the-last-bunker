@@ -6,10 +6,11 @@ import type { PopulationSystem } from './PopulationSystem';
 import { bus } from '../core/EventBus';
 import { SeededRandom as Rng } from '../core/Random';
 import {
-  BIOMES, FOOT_RADIUS, HEX_NEIGHBORS, LONG_TRIP_LOOT, LONG_TRIP_TIME, MAP_RADIUS, POIS, baseTripSeconds, distanceLootMult, hexDistance,
+  BIOMES, FOOT_RADIUS, HEX_NEIGHBORS, LONG_TRIP_LOOT, LONG_TRIP_TIME, MAP_RADIUS, mapRadiusFor, POIS, baseTripSeconds, distanceLootMult, hexDistance,
   type BiomeId,
 } from '../data/surface';
 import { hasFeature } from './ResearchSystem';
+import { cargoMult, expeditionTeamsBonus, returnSafetyMult } from '../data/roomEffects'; // [plan4:BL-8]
 import { eventsFor, expeditionEvent } from '../data/expeditionEvents';
 import { specTotal } from '../data/specializations';
 import { metroSpeedup } from '../data/districts';
@@ -17,6 +18,7 @@ import type { ActiveMission, JournalEntry } from '../core/GameState';
 import { projectExpeditionSpeed } from '../data/projects'; // [LateGame B1]
 import { CARAVAN_CREW, CARGO_TIERS, TRADE_VALUE, ambushChance, cargoValue, getPartner, partnerOpen, relationLevel, tradeRate, specialKey, type CargoTier } from '../data/trade'; // [LateGame B2]
 import { MASTERY_STEPS } from '../data/mastery'; // [LateGame B3]
+import { scenarioOf } from '../data/scenarios';
 
 /** Seconds the team waits for an answer before taking the cautious option. */
 export const ANSWER_TIMEOUT = 180;
@@ -29,7 +31,7 @@ export function hexKey(q: number, r: number): string {
 
 /** Teams that can be out at once: two from the start, one more per "Scout teams" Genesis upgrade. */
 export function maxTeams(state: GameState): number {
-  return 2 + (state.prestige.upgrades['scoutTeams'] ?? 0);
+  return 2 + (state.prestige.upgrades['scoutTeams'] ?? 0) + expeditionTeamsBonus(state); // [plan4:BL-8] a motor pool adds teams
 }
 
 const POI_POOL = ['supermarket', 'pharmacy', 'hardware', 'junkyard', 'library', 'survivorCamp', 'militaryDepot', 'abandonedLab', 'crashSite'];
@@ -94,13 +96,14 @@ export class ExplorationSystem {
   private extendMap(): void {
     const map = this.sm.state.explorationMap;
     const radius = map.reduce((m, h) => Math.max(m, hexDistance(h.x, h.y)), 0);
-    if (radius >= MAP_RADIUS) return;
+    const target = mapRadiusFor(this.sm.state.longGame?.meta.act ?? 1);
+    if (radius >= target) return;
     const rnd = new Rng(((this.sm.state.createdAt + 7919) % 2147483647) || 54321);
     const added: ExplorationHex[] = [];
-    for (let q = -MAP_RADIUS; q <= MAP_RADIUS; q++) {
-      for (let r = -MAP_RADIUS; r <= MAP_RADIUS; r++) {
+    for (let q = -target; q <= target; q++) {
+      for (let r = -target; r <= target; r++) {
         const d = hexDistance(q, r);
-        if (d <= radius || d > MAP_RADIUS) continue;
+        if (d <= radius || d > target) continue;
         const hex = makeHex(rnd, q, r);
         // Cells next to an explored edge hex are already in sight.
         const seen = d === radius + 1 && HEX_NEIGHBORS.some(([dq, dr]) => map.some(h => h.x === q + dq && h.y === r + dr && h.explored));
@@ -121,6 +124,7 @@ export class ExplorationSystem {
     if (long) t *= LONG_TRIP_TIME;
     if (hasFeature(state, 'vehicles')) t *= 0.5;
     t *= metroSpeedup(state);
+    if (hasFeature(state, 'surveyDrones')) t *= 0.8; // [P2-8]
     t /= projectExpeditionSpeed(state); // [LateGame B1] the metro tunnel project
     return Math.round(t);
   }
@@ -318,7 +322,7 @@ export class ExplorationSystem {
 
     const injuries: MissionReport['injuries'] = [];
     const geiger = hasFeature(state, 'geiger') ? 0.7 : 1;
-    const injuryChance = (success ? biome.danger * 0.08 : 0.6 + biome.danger * 0.08) + (mission.injuryMod ?? 0);
+    const injuryChance = ((success ? biome.danger * 0.08 : 0.6 + biome.danger * 0.08) + (mission.injuryMod ?? 0)) * returnSafetyMult(state); // [plan4:BL-8] the decon chamber
     const xpGain = 40 * Math.max(1, biome.danger);
     const survivors = this.sm.state.survivors.map(s => {
       if (!mission.survivorIds.includes(s.id)) return s;
@@ -393,6 +397,8 @@ export class ExplorationSystem {
     const p = getPartner(partnerId);
     let t = p?.seconds ?? 7200;
     if (hasFeature(state, 'vehicles')) t *= 0.75;
+    if (hasFeature(state, 'tradeRoads')) t *= 0.75; // [P2-8]
+    t *= scenarioOf(state).caravans ?? 1; // [P3-5]
     t /= projectExpeditionSpeed(state);
     return Math.round(t);
   }
@@ -436,7 +442,7 @@ export class ExplorationSystem {
     let recruitName: string | null = null;
     const injured: string[] = [];
     if (!ambushed && p) {
-      const back = cargoValue(cargo) * tradeRate(levelBefore);
+      const back = cargoValue(cargo) * tradeRate(levelBefore) * cargoMult(state); // [plan4:BL-8] garage and market
       for (const [r, share] of Object.entries(p.goods) as [ResourceType, number][]) {
         const unit = TRADE_VALUE[r] ?? 1;
         const exact = (back * share) / unit;
@@ -453,7 +459,7 @@ export class ExplorationSystem {
         this.population.addSurvivor(this.sm, s);
         recruitName = s.name;
       }
-    } else if (this.rng.chance(0.4)) {
+    } else if (this.rng.chance(0.4 * returnSafetyMult(state))) {
       // The ambush: the cargo is gone and one of the pair is hurt.
       injured.push(this.rng.pick(mission.survivorIds));
     }

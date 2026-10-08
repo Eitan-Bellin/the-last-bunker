@@ -1,0 +1,269 @@
+{
+ "census": {
+  "sizes": {
+   "11": 3,
+   "15.4": 4,
+   "12.1": 8,
+   "13.2": 5,
+   "13.8": 4
+  },
+  "notes": [
+   "small 11 span.nav-badge:2",
+   "small 11 span.nav-badge:47",
+   "small 11 span.nav-badge:!"
+  ]
+ },
+ "surface": {
+  "open": true,
+  "hexCount": 331,
+  "hexTabindex": null,
+  "hexRole": null,
+  "hexLabel": null,
+  "active": "button.nav-btn:שטח",
+  "hudInert": false,
+  "canvasInert": false,
+  "navInert": false
+ },
+ "surfaceTabs": [
+  "button.nav-btn.nav-menu[תפריט]:",
+  "button.btn.btn-small[סגירה]:",
+  "button.btn.btn-primary:הראו לי",
+  "button.btn.btn-secondary:הבנתי",
+  "button.btn.btn-primary:הראו לי",
+  "button.btn.btn-secondary:הבנתי",
+  "button.btn.btn-primary:הראו לי",
+  "button.btn.btn-secondary:הבנתי"
+ ],
+ "surfaceAfterEsc": true,
+ "sheetOpen": true,
+ "escModal": {
+  "sheet": false,
+  "modal": true
+ },
+ "toggles": [
+  {
+   "label": "רשימת חדרים",
+   "btn": "פתח",
+   "aria": null,
+   "pressed": null,
+   "role": null
+  },
+  {
+   "label": "משוב רטט",
+   "btn": "עדין",
+   "aria": null,
+   "pressed": null,
+   "role": null
+  },
+  {
+   "label": "קול גם במצב שקט",
+   "btn": "כבוי",
+   "aria": null,
+   "pressed": null,
+   "role": null
+  },
+  {
+   "label": "גודל טקסט",
+   "btn": "רגיל",
+   "aria": null,
+   "pressed": null,
+   "role": null
+  },
+  {
+   "label": "הפחתת תנועה",
+   "btn": "אוטומטי (לפי המערכת)",
+   "aria": null,
+   "pressed": null,
+   "role": null
+  },
+  {
+   "label": "הבזקים",
+   "btn": "רגיל",
+   "aria": null,
+   "pressed": null,
+   "role": null
+  },
+  {
+   "label": "ראיית צבעים",
+   "btn": "רגילה",
+   "aria": null,
+   "pressed": null,
+   "role": null
+  },
+  {
+   "label": "כתוביות לצלילים",
+   "btn": "כבוי",
+   "aria": null,
+   "pressed": null,
+   "role": null
+  },
+  {
+   "label": "הכרזות לקורא מסך",
+   "btn": "כבוי",
+   "aria": null,
+   "pressed": null,
+   "role": null
+  },
+  {
+   "label": "ניגודיות",
+   "btn": "רגילה",
+   "aria": null,
+   "pressed": null,
+   "role": null
+  },
+  {
+   "label": "מספרים צפים",
+   "btn": "הכול",
+   "aria": null,
+   "pressed": null,
+   "role": null
+  },
+  {
+   "label": "מצב יד אחת",
+   "btn": "כבוי",
+   "aria": null,
+   "pressed": null,
+   "role": null
+  },
+  {
+   "label": "כפתורי מגע גדולים",
+   "btn": "כבוי",
+   "aria": null,
+   "pressed": null,
+   "role": null
+  },
+  {
+   "label": "כפתורי זום",
+   "btn": "כבוי",
+   "aria": null,
+   "pressed": null,
+   "role": null
+  },
+  {
+   "label": "קצב ומגע",
+   "btn": "רגיל",
+   "aria": null,
+   "pressed": null,
+   "role": null
+  },
+  {
+   "label": "הצהרת נגישות",
+   "btn": "פתחו",
+   "aria": null,
+   "pressed": null,
+   "role": null
+  }
+ ],
+ "pixel": [
+  {
+   "t": "11.8K",
+   "fs": "15.4px",
+   "med": 9.13,
+   "worst": 7.92
+  },
+  {
+   "t": "⁦+255⁩",
+   "fs": "12.1px",
+   "med": 10.37,
+   "worst": 9.24
+  },
+  {
+   "t": "12.7K",
+   "fs": "15.4px",
+   "med": 9.13,
+   "worst": 7.93
+  },
+  {
+   "t": "⁦+216⁩",
+   "fs": "12.1px",
+   "med": 10.37,
+   "worst": 9.37
+  },
+  {
+   "t": "1.1K",
+   "fs": "15.4px",
+   "med": 8.99,
+   "worst": 7.93
+  },
+  {
+   "t": "⁦+2912⁩",
+   "fs": "12.1px",
+   "med": 10.37,
+   "worst": 9.23
+  },
+  {
+   "t": "2.3M",
+   "fs": "15.4px",
+   "med": 9.1,
+   "worst": 7.93
+  },
+  {
+   "t": "⁦+52⁩",
+   "fs": "12.1px",
+   "med": 10.42,
+   "worst": 9.37
+  },
+  {
+   "t": "▾ 5",
+   "fs": "12.1px",
+   "med": 8.35,
+   "worst": 8.22
+  },
+  {
+   "t": "IV·86%",
+   "fs": "12.1px",
+   "med": 13.69,
+   "worst": 13.04
+  },
+  {
+   "t": "110/110",
+   "fs": "13.2px",
+   "med": 14.34,
+   "worst": 13.62
+  },
+  {
+   "t": "!",
+   "fs": "12.144px",
+   "med": 4.98,
+   "worst": 4.86
+  },
+  {
+   "t": "94%",
+   "fs": "13.2px",
+   "med": 12.71,
+   "worst": 12.4
+  },
+  {
+   "t": "07:02",
+   "fs": "13.2px",
+   "med": 15.47,
+   "worst": 14.94
+  },
+  {
+   "t": "0/3",
+   "fs": "13.2px",
+   "med": 10.07,
+   "worst": 8.65
+  },
+  {
+   "t": "3",
+   "fs": "11px",
+   "med": 6.54,
+   "worst": 6.54
+  },
+  {
+   "t": "שדרגו עוד 4 חדרי",
+   "fs": "13.2px",
+   "med": 13.66,
+   "worst": 8.2
+  },
+  {
+   "t": "2/6",
+   "fs": "12.1px",
+   "med": 9.26,
+   "worst": 8.93
+  }
+ ],
+ "pixelWorst": [],
+ "pixelN": 18
+}

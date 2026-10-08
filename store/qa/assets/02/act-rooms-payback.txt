@@ -1,0 +1,37 @@
+
+componentsPlant (currency components, Act 3, refIncome 400/h)
+  L1: 29.2 components/h (7% of Act ref income) cumulative cost{components:490 materials:39200} -> payback on own-currency cost 17h
+  L2: 64.2 components/h (16% of Act ref income) cumulative cost{components:490 materials:186705} -> payback on own-currency cost 8h
+  L3: 92.2 components/h (23% of Act ref income) cumulative cost{components:2723 materials:365339} -> payback on own-currency cost 30h
+  L4: 118.2 components/h (30% of Act ref income) cumulative cost{components:5427 materials:906171 alloys:2028} -> payback on own-currency cost 46h
+  L5: 142.8 components/h (36% of Act ref income) cumulative cost{components:9459 materials:1712571 alloys:3238 data:2268} -> payback on own-currency cost 66h
+
+alloyFoundry (currency alloys, Act 4, refIncome 120/h)
+  L1: 11.7 alloys/h (10% of Act ref income) cumulative cost{alloys:168 materials:44800 components:224} -> payback on own-currency cost 14h
+  L2: 25.7 alloys/h (21% of Act ref income) cumulative cost{alloys:168 materials:192305 components:224} -> payback on own-currency cost 7h
+  L3: 36.9 alloys/h (31% of Act ref income) cumulative cost{alloys:168 materials:370939 components:2457} -> payback on own-currency cost 5h
+  L4: 47.3 alloys/h (39% of Act ref income) cumulative cost{alloys:2196 materials:911771 components:5161} -> payback on own-currency cost 46h
+  L5: 57.1 alloys/h (48% of Act ref income) cumulative cost{alloys:3406 materials:1718171 components:9193 data:2268} -> payback on own-currency cost 60h
+
+dataCenter (currency data, Act 5, refIncome 90/h)
+  L1: 5.8 data/h (6% of Act ref income) cumulative cost{data:142 materials:50400 components:252 alloys:76} -> payback on own-currency cost 24h
+  L2: 12.8 data/h (14% of Act ref income) cumulative cost{data:142 materials:197905 components:252 alloys:76} -> payback on own-currency cost 11h
+  L3: 18.4 data/h (20% of Act ref income) cumulative cost{data:142 materials:376539 components:2485 alloys:76} -> payback on own-currency cost 8h
+  L4: 23.6 data/h (26% of Act ref income) cumulative cost{data:142 materials:917371 components:5189 alloys:2104} -> payback on own-currency cost 6h
+  L5: 28.6 data/h (32% of Act ref income) cumulative cost{data:2410 materials:1723771 components:9221 alloys:3314} -> payback on own-currency cost 84h
+
+forum (currency influence, Act 6, refIncome 60/h)
+  L1: 3.9 influence/h (6% of Act ref income) cumulative cost{influence:105 materials:56000 components:280 alloys:84 data:63} -> payback on own-currency cost 27h
+  L2: 8.6 influence/h (14% of Act ref income) cumulative cost{influence:105 materials:203505 components:280 alloys:84 data:63} -> payback on own-currency cost 12h
+  L3: 12.3 influence/h (20% of Act ref income) cumulative cost{influence:105 materials:382139 components:2513 alloys:84 data:63} -> payback on own-currency cost 9h
+  L4: 15.8 influence/h (26% of Act ref income) cumulative cost{influence:105 materials:922971 components:5217 alloys:2112 data:63} -> payback on own-currency cost 7h
+  L5: 19.0 influence/h (32% of Act ref income) cumulative cost{influence:105 materials:1729371 components:9249 alloys:3322 data:2331} -> payback on own-currency cost 6h
+
+seedLab (currency seedCores, Act 7, refIncome 20/h)
+  L1: 2.4 seedCores/h (12% of Act ref income) cumulative cost{seedCores:42 materials:67200 components:336 alloys:101 data:76 influence:50} -> payback on own-currency cost 17h
+  L2: 5.3 seedCores/h (27% of Act ref income) cumulative cost{seedCores:42 materials:214705 components:336 alloys:101 data:76 influence:50} -> payback on own-currency cost 8h
+  L3: 7.7 seedCores/h (38% of Act ref income) cumulative cost{seedCores:42 materials:393339 components:2569 alloys:101 data:76 influence:50} -> payback on own-currency cost 5h
+  L4: 9.8 seedCores/h (49% of Act ref income) cumulative cost{seedCores:42 materials:934171 components:5273 alloys:2129 data:76 influence:50} -> payback on own-currency cost 4h
+  L5: 11.9 seedCores/h (60% of Act ref income) cumulative cost{seedCores:42 materials:1740571 components:9305 alloys:3339 data:2344 influence:50} -> payback on own-currency cost 4h
+
+workshop specs at act 3: foundry,assemblyLine,salvageYard

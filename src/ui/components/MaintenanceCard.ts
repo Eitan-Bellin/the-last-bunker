@@ -16,7 +16,7 @@ export function maintenanceCard(engine: GameEngine, state: GameState, b: Buildin
   const row = el('div', 'bp-row');
   row.append(el('span', '', `[[pick]] ${i18n.t('maintenance.title')}`), el('span', `bp-value ${wear >= 50 ? 'negative' : ''}`, `${i18n.t('maintenance.wear')} ${wear}%`));
   card.append(row, bar(wear, wear >= 50 ? 'danger' : 'accent'));
-  card.appendChild(el('div', 'bp-hint', i18n.t(b.type === 'reactor' ? 'maintenance.hintHot' : 'maintenance.hint')));
+  card.appendChild(el('div', 'bp-hint', i18n.t(b.type === 'reactor' ? 'maintenance.hintHot' : b.type === 'geothermal' ? 'maintenance.hintSteam' : 'maintenance.hint') /* plan4:BL-24 */));
   if (ms.needsIt(b)) {
     const cost = ms.cost(state, b);
     card.appendChild(costRow(state, cost));

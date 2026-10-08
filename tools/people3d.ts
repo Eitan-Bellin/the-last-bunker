@@ -10,7 +10,7 @@
  * Query: ?auto (render + save), ?only=man,child, ?ppm=80 (pixels per metre), ?sheet (save contact sheets only).
  */
 import {
-  ANIMS, ANIM_ORDER, ATTACHMENTS, BASE, BODIES, GROUP_K, Region, TINTED, attachPrims, bodyPrims, gearPrims, place, pose, point, sample,
+  ANIMS, ANIM_ORDER, SET_ANIMS, SET_ORDER, ATTACHMENTS, BASE, BODIES, GROUP_K, Region, TINTED, attachPrims, bodyPrims, gearPrims, place, pose, point, sample,
   type Body, type BodyId, type Prim, type V3,
 } from './people3d-rig';
 
@@ -18,7 +18,11 @@ const q = new URLSearchParams(location.search);
 const PPM = Number(q.get('ppm') ?? 80);
 const SS = 3;
 const MAXP = 64;
-const X0 = -0.95, X1 = 1.3, Y0 = -0.08, Y1 = 2.45;
+// ?set renders the set poses (plan 2026-10 M3): their pivot is the seat / mattress, so the frame reaches below it.
+const SET = q.has('set');
+const X0 = SET ? -1.05 : -0.95, X1 = 1.3, Y0 = SET ? -0.62 : -0.08, Y1 = SET ? 1.7 : 2.45;
+const AN = SET ? SET_ANIMS : ANIMS;
+const ORDER_ANIMS = SET ? SET_ORDER : ANIM_ORDER;
 const W = Math.round((X1 - X0) * PPM) * SS, H = Math.round((Y1 - Y0) * PPM) * SS;
 const OW = W / SS, OH = H / SS;
 const PIVOT_X = Math.round(-X0 * PPM), PIVOT_Y = Math.round(Y1 * PPM);
@@ -263,7 +267,7 @@ const bodyRegion = (a: number) => ORDER.indexOf(Math.round((a * 8) / 255) - 1 as
 interface FrameOut { layers: Img[]; head: [number, number, number] }
 
 function renderFrame(b: Body, animName: string, i: number): FrameOut {
-  const a = ANIMS[animName];
+  const a = AN[animName];
   const p = sample(a, b, i / a.frames);
   const bones = pose(b, p);
   const prims = place([...bodyPrims(b, p.g_N, p.g_F), ...gearPrims(a.gear ?? null, b)], bones);
@@ -372,7 +376,7 @@ async function run(): Promise<void> {
   const metaUrl = '/art/people/people.json';
   let meta: { v: number; ppm: number; ss: number; bodies: Record<string, unknown>; attach: { atlas: string; w: number; h: number; items: Record<string, Record<string, number[]>> } } =
     { v: 1, ppm: PPM, ss: SS, bodies: {}, attach: { atlas: 'people/attach.webp', w: 0, h: 0, items: {} } };
-  if (only) {
+  if (only && !SET) {
     try { const r = await fetch(metaUrl, { cache: 'no-store' }); if (r.ok) meta = await r.json(); } catch { /* fresh */ }
   }
   const t0 = performance.now();
@@ -381,13 +385,13 @@ async function run(): Promise<void> {
   for (const id of bodies) {
     const b = BODIES[id];
     const frames: Record<string, FrameOut[]> = {};
-    for (const an of ANIM_ORDER) {
+    for (const an of ORDER_ANIMS) {
       frames[an] = [];
-      for (let i = 0; i < ANIMS[an].frames; i++) frames[an].push(renderFrame(b, an, i));
+      for (let i = 0; i < AN[an].frames; i++) frames[an].push(renderFrame(b, an, i));
       await yieldNow();
       (window as unknown as { __progress: string }).__progress = `${id}/${an}`;
     }
-    for (const at of ATTACHMENTS) attachImgs.push({ body: id, id: at, img: renderAttachment(b, at) });
+    if (!SET) for (const at of ATTACHMENTS) attachImgs.push({ body: id, id: at, img: renderAttachment(b, at) });
     const all = Object.values(frames).flatMap(fs => fs.flatMap(f => f.layers));
     const area = all.reduce((s, i) => s + i.w * i.h, 0);
     const width = area > 3_000_000 ? 2048 : area > 900_000 ? 1536 : 1024;
@@ -397,8 +401,8 @@ async function run(): Promise<void> {
     const top = proj(point(rest.head, [0, 0.235 * b.headS, 0]));
     const hb = rest.head, h0 = proj(hb.t), h1 = proj(point(hb, [0, 0.1, 0]));
     const anims: Record<string, unknown> = {};
-    for (const an of ANIM_ORDER) {
-      const A = ANIMS[an];
+    for (const an of ORDER_ANIMS) {
+      const A = AN[an];
       anims[an] = {
         fps: A.fps,
         ...(A.stride ? { stride: A.stride } : {}),
@@ -408,21 +412,31 @@ async function run(): Promise<void> {
         })),
       };
     }
-    meta.bodies[id] = { atlas: `people/${id}.webp`, w: packed.w, h: packed.h, height: Math.round(-top[1]), headRef: Math.round(Math.atan2(h1[0] - h0[0], -(h1[1] - h0[1])) * 1000) / 1000, anims };
+    meta.bodies[id] = { atlas: `people/${id}${SET ? '-set' : ''}.webp`, w: packed.w, h: packed.h, height: Math.round(-top[1]), headRef: Math.round(Math.atan2(h1[0] - h0[0], -(h1[1] - h0[1])) * 1000) / 1000, anims };
     const canvasA = atlasCanvas(packed);
     log(`${id}: ${all.length} layer cells, ${packed.w}x${packed.h}, ${((performance.now() - t0) / 1000).toFixed(1)} s`);
-    if (auto) { const sz = await save(`people/${id}.webp`, canvasA); total += sz; log(`  saved ${(sz / 1024).toFixed(0)} KB`); }
+    if (auto) { const sz = await save(`people/${id}${SET ? '-set' : ''}.webp`, canvasA); total += sz; log(`  saved ${(sz / 1024).toFixed(0)} KB`); }
     // Contact sheet: every other frame of every animation in sample clothes.
-    const cols = 16, cw = Math.round(1.25 * PPM), ch = Math.round(2.55 * PPM);
-    const list = ANIM_ORDER.flatMap(an => frames[an].filter((_f, i) => i % 2 === 0).map(f => ({ an, f })));
+    const cols = SET ? 8 : 16, cw = Math.round((SET ? 2.4 : 1.25) * PPM), ch = Math.round((SET ? 2.45 : 2.55) * PPM);
+    const list = ORDER_ANIMS.flatMap(an => frames[an].filter((_f, i) => i % 2 === 0).map(f => ({ an, f })));
     const sheet = document.createElement('canvas');
     sheet.width = cols * cw; sheet.height = Math.ceil(list.length / cols) * ch;
     const sc = sheet.getContext('2d')!;
     sc.fillStyle = '#5a5248'; sc.fillRect(0, 0, sheet.width, sheet.height);
     const hair = attachImgs.filter(a => a.body === id && a.id === (id === 'woman' ? 'hair-long' : id === 'elder' ? 'hair-short' : id === 'child' ? 'hair-cropped' : 'hair-short')).map(a => a.img);
-    list.forEach(({ f }, k) => composite(sc, f, SAMPLE_TINT[id], (k % cols) * cw + cw * 0.4, Math.floor(k / cols) * ch + ch - 8, hair));
+    list.forEach(({ f }, k) => composite(sc, f, SAMPLE_TINT[id], (k % cols) * cw + cw * (SET ? 0.5 : 0.4), Math.floor(k / cols) * ch + (SET ? Math.round(1.75 * PPM) : ch - 8), hair));
     document.getElementById('outs')!.appendChild(sheet);
-    if (auto || q.has('sheet')) await saveStore(`store/compare/p1-people/sheet-${id}.png`, sheet);
+    if (auto || q.has('sheet')) await saveStore(SET ? `store/compare/p2-b/sheet-set-${id}.png` : `store/compare/p1-people/sheet-${id}.png`, sheet);
+  }
+  if (SET) {
+    // The set poses live in their own meta (the game merges them into each body's animations).
+    if (auto) {
+      const setMeta = { v: 1, ppm: PPM, bodies: meta.bodies };
+      await fetch('/__art/save/people/people-set.json', { method: 'POST', body: JSON.stringify(setMeta) });
+      log(`set poses saved, ${(total / 1024).toFixed(0)} KB, ${((performance.now() - t0) / 1000).toFixed(1)} s`);
+    }
+    (window as unknown as { __done: boolean }).__done = true;
+    return;
   }
   // Attachments atlas (all bodies rendered this run; keep earlier ones when only some bodies were redone).
   const packedA = pack(attachImgs.map(a => a.img), 512);

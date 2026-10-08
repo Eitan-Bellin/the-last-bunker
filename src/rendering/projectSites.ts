@@ -4,6 +4,7 @@ import { SHAFT_W, WALK_Y } from './layout';
 import { Smoke, groundY, mulColor } from './surfaceLife';
 import { mix } from './draw';
 import type { Lane } from './people';
+import { SlopArea } from './HitSlop'; // [plan4:ST-12]
 
 /**
  * Big projects on the surface. Every project has its own lot above the bunker: while it is being built the lot
@@ -522,7 +523,7 @@ export class ProjectSites {
     }
     root.eventMode = 'static';
     root.cursor = 'pointer';
-    root.hitArea = { contains: (x: number, y: number) => x >= -w / 2 - 12 && x <= w / 2 + 12 && y >= -h - 40 && y <= 4 };
+    root.hitArea = new SlopArea(-w / 2 - 12, -h - 40, w + 24, h + 44); // [plan4:ST-12 #4] at least 44 screen px
     root.on('pointertap', () => this.onTap?.(site.id));
     return rec;
   }
