@@ -481,21 +481,20 @@ export function buildShaft2(floors: number, era: number, onArrive?: () => void, 
   const beacons = new Container();
   beacons.blendMode = 'add';
   if (GFX.airy) {
-    const lines = new Graphics();
-    lines.rect(-2.2, TOP, 2.2, bottomY - TOP).fill({ color: 0xffd890, alpha: 0.38 });
-    lines.rect(SHAFT_W, TOP, 2.2, bottomY - TOP).fill({ color: 0xffd890, alpha: 0.38 });
-    lines.rect(0, TOP, 1.2, bottomY - TOP).fill({ color: 0xfff0d0, alpha: 0.4 });
-    lines.rect(SHAFT_W - 1.2, TOP, 1.2, bottomY - TOP).fill({ color: 0xfff0d0, alpha: 0.4 });
-    beacons.addChild(lines);
+    // (One Graphics for every bar and the halos first: the additive layer stays two batches, not three per level.)
+    const halos = new Container();
+    const bars = new Graphics();
+    bars.rect(-2.2, TOP, 2.2, bottomY - TOP).fill({ color: 0xffd890, alpha: 0.38 });
+    bars.rect(SHAFT_W, TOP, 2.2, bottomY - TOP).fill({ color: 0xffd890, alpha: 0.38 });
+    bars.rect(0, TOP, 1.2, bottomY - TOP).fill({ color: 0xfff0d0, alpha: 0.4 });
+    bars.rect(SHAFT_W - 1.2, TOP, 1.2, bottomY - TOP).fill({ color: 0xfff0d0, alpha: 0.4 });
     for (let f = 0; f < floors; f++) {
       const col = zoneColors[f];
       if (col === undefined) continue;
       const top = floorTop(f);
-      const bg = new Graphics();
       const y0 = top + HEADER_Y + HEADER_H, y1 = top + FLOOR_LIP;
-      for (const x of [1.2, SHAFT_W - 4.4]) bg.rect(x, y0, 3.2, y1 - y0).fill({ color: col, alpha: 0.8 });
-      bg.rect(1.2, top + HEADER_Y + HEADER_H - 1.5, SHAFT_W - 2.4, 2.4).fill({ color: col, alpha: 0.85 });
-      beacons.addChild(bg);
+      for (const x of [1.2, SHAFT_W - 4.4]) bars.rect(x, y0, 3.2, y1 - y0).fill({ color: col, alpha: 0.8 });
+      bars.rect(1.2, top + HEADER_Y + HEADER_H - 1.5, SHAFT_W - 2.4, 2.4).fill({ color: col, alpha: 0.85 });
       const halo = new Sprite(glow);
       halo.anchor.set(0.5);
       halo.tint = col;
@@ -503,8 +502,9 @@ export function buildShaft2(floors: number, era: number, onArrive?: () => void, 
       halo.width = SHAFT_W * 1.5;
       halo.height = (y1 - y0) * 1.1;
       halo.position.set(SHAFT_W / 2, (y0 + y1) / 2);
-      beacons.addChild(halo);
+      halos.addChild(halo);
     }
+    beacons.addChild(halos, bars);
   }
 
   // ---------- Pulley housing at the head of the shaft ----------

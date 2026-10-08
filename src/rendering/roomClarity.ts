@@ -3,7 +3,6 @@ import type { BuildingType } from '../core/GameState';
 import { isIcon } from '../ui/icons';
 import { iconSprite } from './richText';
 import { CATEGORY } from './cityMap';
-import { vGradient } from './draw';
 
 /**
  * [airy:B1/B4] The clarity layer of a room: what makes the bunker read as zones instead of one lump of equally busy paintings.
@@ -53,7 +52,8 @@ export function buildClarity(type: BuildingType, color: number, w: number, h: nu
   wash.alpha = 0;
   // The ceiling band: a solid stripe of the trade colour with a soft fall-off under it and a dark line that seats it on the ceiling.
   const band = new Graphics();
-  band.rect(0, 0, w, BAND_H + 12).fill(vGradient([[0, color, 0.4], [1, color, 0]]));
+  // (Stepped rects, not a gradient: a gradient is a texture of its own and every room would break the batch.)
+  for (let i = 0; i < 4; i++) band.rect(0, BAND_H + i * 3, w, 3).fill({ color, alpha: 0.28 - i * 0.07 });
   band.rect(0, 0, w, BAND_H).fill({ color, alpha: 0.92 });
   band.rect(0, BAND_H, w, 1.2).fill({ color: 0x000000, alpha: 0.55 });
   band.rect(0, 0, w, 1.2).fill({ color: 0xffffff, alpha: 0.3 });
@@ -72,12 +72,12 @@ export function buildClarity(type: BuildingType, color: number, w: number, h: nu
     plate.position.set(w / 2, h * 0.5);
     plate.visible = false;
     const pr = 6.4;
-    const chip = new Graphics();
-    chip.circle(0, 0, pr).fill({ color: 0x0a0e14, alpha: 0.78 }).stroke({ color, width: 1, alpha: 0.95 });
+    const px = Math.min(w - pr - 3, 11), py = BAND_H + pr + 2; // (in the band's own space, so the chip is part of its one Graphics)
+    band.circle(px, py, pr).fill({ color: 0x0a0e14, alpha: 0.78 }).stroke({ color, width: 1, alpha: 0.95 });
     const pi: Sprite = iconSprite(name, pr * 1.45, hex(lift(color, 0.25)));
     pi.anchor.set(0.5);
-    pin.addChild(chip, pi);
-    pin.position.set(Math.min(w - pr - 3, 11), BAND_Y + BAND_H + pr + 2);
+    pin.addChild(pi);
+    pin.position.set(px, BAND_Y + py);
   }
   under.addChild(wash, band, plate, pin);
   const shade = new Graphics();
@@ -94,7 +94,6 @@ export function applyClarity(c: RoomClarity, k: number): void {
   c.k = k;
   c.wash.alpha = 0.13 + 0.22 * k;
   c.band.alpha = 0.8 + 0.2 * k;
-  c.band.scale.y = 0.9 + 0.5 * k;
   const showPlate = k > 0.12;
   if (c.plate.visible !== showPlate) c.plate.visible = showPlate;
   if (showPlate) {
