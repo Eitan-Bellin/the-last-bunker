@@ -76,7 +76,9 @@ export function roomsChecks(games: { name: string; json: string }[]): { problems
       const room = entry.base * levelMultiplier(entry, L);
       const roleOut = (spec.extra?.[res as keyof typeof spec.extra] ?? 0) * L / 5;
       const ratio = room / roleOut;
-      if (!(ratio >= 1.4 && ratio <= 1.65)) fail(`${t} at level ${L} makes ${room.toFixed(5)} ${res}/s, ${ratio.toFixed(2)}x the ${role} role (expected about 1.5x)`);
+      // The plan's 1.5x (02-new-buildings.md BL-34..38) was a starting value: a room's output also gets staffing, morale and research multipliers that a role's
+      // `extra` does not, and at 1.5x the bot's 100-day Genesis came 23 days early (66 vs 89). The sim picked 0.45x nominal (Genesis day 82, seed 1, casual).
+      if (!(ratio >= 0.4 && ratio <= 0.5)) fail(`${t} at level ${L} makes ${room.toFixed(6)} ${res}/s, ${ratio.toFixed(2)}x the ${role} role (expected about 0.45x nominal, see the comment)`);
     }
     for (const i of spec.inputs ?? []) if (!(CHAIN_INPUTS[t] ?? []).some(x => x.resource === i.resource && x.base === i.base)) fail(`${t}: does not eat ${i.resource} like the ${role} role`);
     if (def.maxCopies !== 1 || def.maxLevel !== 5 || def.slots !== 3) fail(`${t}: expected 3 slots, 5 levels and 1 copy`);

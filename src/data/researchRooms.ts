@@ -149,7 +149,7 @@ export const ROOM_RESEARCH: ResearchDef[] = [
   {
     id: 'microfab', branch: 'infrastructure', tier: 5, icon: '[[componentsPlant]]', act: 3,
     name: { he: 'מיקרו־ייצור', en: 'Micro-fabrication' },
-    desc: { he: 'פותח: מפעל רכיבים – פי אחד וחצי רכיבים מפס הרכבה', en: 'Unlocks: Components Plant – one and a half times the components of an assembly line' },
+    desc: { he: 'פותח: מפעל רכיבים – רכיבים בלי לתפוס סדנה', en: 'Unlocks: Components Plant – components without tying up a workshop' },
     cost: { knowledge: 200, scrap: 100 }, time: 3600, requires: ['advancedEngineering'],
     effects: [{ type: 'unlock', building: 'componentsPlant' }],
   },
@@ -163,7 +163,7 @@ export const ROOM_RESEARCH: ResearchDef[] = [
   {
     id: 'alloyCasting', branch: 'infrastructure', tier: 6, icon: '[[alloyFoundry]]', act: 4,
     name: { he: 'יציקת סגסוגות', en: 'Alloy Casting' },
-    desc: { he: 'פותח: יצקת סגסוגות – פי אחד וחצי סגסוגות מכבשן קשת', en: 'Unlocks: Alloy Foundry – one and a half times the alloys of an arc furnace' },
+    desc: { he: 'פותח: יצקת סגסוגות – סגסוגות בלי לתפוס גנרטור', en: 'Unlocks: Alloy Foundry – alloys without tying up a generator' },
     cost: { knowledge: 260, scrap: 110 }, time: 4800, requires: ['microfab'],
     effects: [{ type: 'unlock', building: 'alloyFoundry' }],
   },
@@ -177,21 +177,21 @@ export const ROOM_RESEARCH: ResearchDef[] = [
   {
     id: 'dataCenter', branch: 'infrastructure', tier: 7, icon: '[[dataCenter]]', act: 5,
     name: { he: 'מרכז נתונים', en: 'Data Center' },
-    desc: { he: 'פותח: מרכז נתונים – פי אחד וחצי נתונים מכספת נתונים', en: 'Unlocks: Data Center – one and a half times the data of a data vault' },
+    desc: { he: 'פותח: מרכז נתונים – נתונים בלי לתפוס מעבדה', en: 'Unlocks: Data Center – data without tying up a laboratory' },
     cost: { knowledge: 320, scrap: 120 }, time: 6000, requires: ['alloyCasting'],
     effects: [{ type: 'unlock', building: 'dataCenter' }],
   },
   {
     id: 'civicForum', branch: 'society', tier: 8, icon: '[[forum]]', act: 6,
     name: { he: 'פורום אזרחי', en: 'Civic Forum' },
-    desc: { he: 'פותח: פורום האזרחים – פי אחד וחצי השפעה מאולם מועצה', en: 'Unlocks: Citizens\' Forum – one and a half times the influence of a council hall' },
+    desc: { he: 'פותח: פורום האזרחים – השפעה בלי לתפוס קפיטריה', en: 'Unlocks: Citizens\' Forum – influence without tying up a canteen' },
     cost: { knowledge: 380, scrap: 130 }, time: 7200, requires: ['leadership'],
     effects: [{ type: 'unlock', building: 'forum' }],
   },
   {
     id: 'seedGenetics', branch: 'survival', tier: 8, icon: '[[seedLab]]', act: 7,
     name: { he: 'גנטיקת זרעים', en: 'Seed Genetics' },
-    desc: { he: 'פותח: מעבדת זרעים – פי אחד וחצי ליבות זרע מכור זרעים', en: 'Unlocks: Seed Lab – one and a half times the seed cores of a seed forge' },
+    desc: { he: 'פותח: מעבדת זרעים – ליבות זרע בלי לתפוס כור', en: 'Unlocks: Seed Lab – seed cores without tying up a reactor' },
     cost: { knowledge: 450, scrap: 150 }, time: 9000, requires: ['dataCenter'],
     effects: [{ type: 'unlock', building: 'seedLab' }],
   },

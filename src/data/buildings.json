@@ -1658,8 +1658,8 @@
       "he": "מפעל רכיבים"
     },
     "description": {
-      "en": "A whole hall of presses and lathes that turns scrap into components, one and a half times what an assembly line can do.",
-      "he": "אולם שלם של מכבשים ומחרטות שהופך גרוטאות לרכיבים, פי אחד וחצי ממה שפס הרכבה מסוגל."
+      "en": "A whole hall of presses and lathes that turns scrap into components, without tying up a workshop.",
+      "he": "אולם שלם של מכבשים ומחרטות שהופך גרוטאות לרכיבים, בלי לתפוס סדנה."
     },
     "tier": 4,
     "size": {
@@ -1675,7 +1675,7 @@
     "constructionTime": 900,
     "production": {
       "components": {
-        "base": 0.009,
+        "base": 0.0027,
         "perLevel": 1.2
       }
     },
@@ -1694,8 +1694,8 @@
       "he": "יצקת סגסוגות"
     },
     "description": {
-      "en": "Roaring furnaces and moulds. Melts materials and scrap into alloys, one and a half times what an arc furnace makes.",
-      "he": "כבשנים רועמים ותבניות. מתיכה חומרים וגרוטאות לסגסוגות, פי אחד וחצי ממה שכבשן קשת מייצר."
+      "en": "Roaring furnaces and moulds. Melts materials and scrap into alloys, without tying up a generator.",
+      "he": "כבשנים רועמים ותבניות. מתיכה חומרים וגרוטאות לסגסוגות, בלי לתפוס גנרטור."
     },
     "tier": 4,
     "size": {
@@ -1712,7 +1712,7 @@
     "constructionTime": 1200,
     "production": {
       "alloys": {
-        "base": 0.0036,
+        "base": 0.00108,
         "perLevel": 1.2
       }
     },
@@ -1731,8 +1731,8 @@
       "he": "מרכז נתונים"
     },
     "description": {
-      "en": "Racks of old servers humming in the cold. Turns knowledge into data, one and a half times what a data vault does.",
-      "he": "מדפי שרתים ישנים שמזמזמים בקור. הופך ידע לנתונים, פי אחד וחצי ממה שכספת נתונים עושה."
+      "en": "Racks of old servers humming in the cold. Turns knowledge into data, without tying up a laboratory.",
+      "he": "מדפי שרתים ישנים שמזמזמים בקור. הופך ידע לנתונים, בלי לתפוס מעבדה."
     },
     "tier": 5,
     "size": {
@@ -1750,7 +1750,7 @@
     "constructionTime": 1500,
     "production": {
       "data": {
-        "base": 0.0018,
+        "base": 0.00054,
         "perLevel": 1.2
       }
     },
@@ -1769,8 +1769,8 @@
       "he": "פורום האזרחים"
     },
     "description": {
-      "en": "A round hall of benches where everyone has a say. Shared meals and open debate make influence, one and a half times a council hall.",
-      "he": "אולם עגול עם ספסלים שבו לכולם יש מילה. ארוחות משותפות ודיון פתוח יוצרים השפעה, פי אחד וחצי מאולם מועצה."
+      "en": "A round hall of benches where everyone has a say. Shared meals and open debate make influence, without tying up a canteen.",
+      "he": "אולם עגול עם ספסלים שבו לכולם יש מילה. ארוחות משותפות ודיון פתוח יוצרים השפעה, בלי לתפוס קפיטריה."
     },
     "tier": 5,
     "size": {
@@ -1789,7 +1789,7 @@
     "constructionTime": 1800,
     "production": {
       "influence": {
-        "base": 0.0012,
+        "base": 0.00036,
         "perLevel": 1.2
       }
     },
@@ -1808,8 +1808,8 @@
       "he": "מעבדת זרעים"
     },
     "description": {
-      "en": "Cold cabinets and gene readers deep below. Fuses alloys and data into seed cores, one and a half times what a seed forge does.",
-      "he": "ארונות קירור וקוראי גנים עמוק למטה. מתיכה סגסוגות ונתונים לליבות זרע, פי אחד וחצי ממה שכור זרעים עושה."
+      "en": "Cold cabinets and gene readers deep below. Fuses alloys and data into seed cores, without tying up a reactor.",
+      "he": "ארונות קירור וקוראי גנים עמוק למטה. מתיכה סגסוגות ונתונים לליבות זרע, בלי לתפוס כור."
     },
     "tier": 5,
     "size": {
@@ -1829,7 +1829,7 @@
     "constructionTime": 2400,
     "production": {
       "seedCores": {
-        "base": 0.00075,
+        "base": 0.000225,
         "perLevel": 1.2
       }
     },

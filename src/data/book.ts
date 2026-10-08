@@ -169,8 +169,8 @@ export const BOOK: BookEntry[] = [
     id: 'actRooms', icon: '[[componentsPlant]]', group: 'basics',
     title: { he: 'חדרי המערכות', en: 'Act rooms' },
     text: {
-      he: 'בכל מערכה מאוחרת נפתח חדר שמייצר את המטבע שלה, פי אחד וחצי ממה שחדר רגיל עם תפקיד נותן ברמה זהה: מפעל רכיבים, יצקת סגסוגות, מרכז נתונים, פורום האזרחים ומעבדת זרעים. מחירם בכמה שעות הכנסה של המערכה, ויש רק אחד מכל סוג. הם אוכלים אותם חומרים כמו התפקיד, אז דאגו להם. הם מופיעים בתפריט הבנייה תחת "חדרי מערכה".',
-      en: 'In each late Act a room opens that makes its currency, one and a half times what an ordinary room with the matching role gives at the same level: the components plant, alloy foundry, data center, citizens\' forum and seed lab. They cost a few hours of the Act\'s income, and you can have only one of each. They eat the same inputs as the role, so keep them stocked. They sit in the build menu under "Act rooms".',
+      he: 'בכל מערכה מאוחרת נפתח חדר שמייצר את המטבע שלה, בלי שיצטרכו לתפוס חדר רגיל בתפקיד: מפעל רכיבים, יצקת סגסוגות, מרכז נתונים, פורום האזרחים ומעבדת זרעים. מחירם בכמה שעות הכנסה של המערכה, ויש רק אחד מכל סוג. הם אוכלים אותם חומרים כמו התפקיד, אז דאגו להם. הם מופיעים בתפריט הבנייה תחת "חדרי מערכה".',
+      en: 'In each late Act a room opens that makes its currency, so no ordinary room has to be given the matching role: the components plant, alloy foundry, data center, citizens\' forum and seed lab. They cost a few hours of the Act\'s income, and you can have only one of each. They eat the same inputs as the role, so keep them stocked. They sit in the build menu under "Act rooms".',
     },
   },
   {
