@@ -256,3 +256,15 @@ export function towerTexture(): Texture {
     g.moveTo(51.8 * R, 88 * R); g.lineTo(54 * R, 92 * R); g.lineTo(49.6 * R, 92 * R); g.fill();
   });
 }
+
+/** The lower half of a tower storey (two flights up to a landing), for the top of a tower that ends under the roof. */
+export function towerStubTexture(): Texture {
+  const key = 'towerStub';
+  let t = cache.get(key);
+  if (!t) {
+    const full = towerTexture();
+    t = new Texture({ source: full.source, frame: new Rectangle(0, 72 * R, 54 * R, 72 * R) });
+    cache.set(key, t);
+  }
+  return t;
+}

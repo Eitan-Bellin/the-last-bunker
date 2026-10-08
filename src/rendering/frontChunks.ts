@@ -11,7 +11,7 @@ import { VIEW } from './perfFx';
 import type { Pier } from './airyArt';
 import { ANNEX_W, ANNEX_X, VOID_W, TOWER_W, hasAnnex, voidBoundaries } from './voids';
 import { PIER_AO, PIER_W, clusterSpan, pierKey, piersOfFloor } from './airyArt'; // [airy:A2]
-import { beamTexture, deckTexture, railTexture, seamBack, slotSlice, towerTexture } from './circulation'; // [airy2:D1]
+import { beamTexture, deckTexture, railTexture, seamBack, slotSlice, towerStubTexture, towerTexture } from './circulation'; // [airy2:D1]
 import { BASE_EAST, CORR_BEAM, CORR_DECK, CORR_LANE, CORR_RAIL, FLOOR_H, ROOMS_X, ROOM_H, SHAFT_GAP, SLAB, SLOT_W, TOPSOIL, floorAtY, floorH, floorTop, slotX, type Ext } from './layout';
 import {
   AO_CONTACT, AO_SIDE, COLUMN_SPILL_W, COLUMN_W, KIT_LIFT, LIP, PIPES_H, PIPES_Y, SLAB_DRAW,
@@ -467,12 +467,15 @@ export class FrontChunks implements Animated {
         const sx0 = (line.ext.w > 0 ? slotX(-line.ext.w) : 0) - 12 - (this.annex && line.y > TOPSOIL ? 37 : 0), sx1 = slotX(line.ext.e) + 12;
         for (const [x, x1] of gridSegments(sx0, sx1, SLOT_W, line.ext.w > 0)) {
           const w = x1 - x;
-          if (!mine((x + x1) / 2, line.ext) || inSpan(x, x1, line.spans)) continue;
-          add(slabTex, x, line.y, w, SLAB_DRAW, scale, x + w / 2, line.y + SLAB_DRAW / 2);
+          if (!mine((x + x1) / 2, line.ext)) continue;
+          // [airy2:D1] A hall swallows the slab, but its mezzanine gallery (the corridor of the level) still crosses it, in front of the hall.
+          const hall = inSpan(x, x1, line.spans);
+          if (hall && !(airy && line.y > TOPSOIL)) continue;
+          if (!hall) add(slabTex, x, line.y, w, SLAB_DRAW, scale, x + w / 2, line.y + SLAB_DRAW / 2);
           // The nosing catches the lamps of the room standing on it.
-          addLit(lip, x, line.y, w, 6, x + w / 2, line.y - 6, 1.5, 0.95);
+          if (!hall) addLit(lip, x, line.y, w, 6, x + w / 2, line.y - 6, 1.5, 0.95);
           // [plan4:ST-11] Slab variants: heavy girders under reactors and generators, perforated plate on the working and deep levels (the roof slab stays plain).
-          if (line.y > TOPSOIL && sty.slab === 1 && heavyTex) addLit(heavyTex, x, line.y, w, SLAB_DRAW, x + w / 2, line.y + SLAB_DRAW / 2, 1, 0.9, ovl1);
+          if (hall) { /* the gallery only */ } else if (line.y > TOPSOIL && sty.slab === 1 && heavyTex) addLit(heavyTex, x, line.y, w, SLAB_DRAW, x + w / 2, line.y + SLAB_DRAW / 2, 1, 0.9, ovl1);
           else if (line.y > TOPSOIL && sty.slab === 2 && perfTex) {
             for (let px = x; px < x1 - 0.5; px += SLOT_W / 2) addLit(perfTex, px, line.y, Math.min(SLOT_W / 2, x1 - px), SLAB_DRAW, px + SLOT_W / 4, line.y + SLAB_DRAW / 2, 1, 0.9, ovl1);
           }
@@ -773,26 +776,28 @@ export class FrontChunks implements Animated {
       spill.addChild(lg);
     };
     // [airy2:D3] A storey of the stair tower standing in front of the void.
-    const towerStorey = (x: number, f: number) => {
+    const towerStorey = (x: number, f: number, stub = false) => {
       const yb = floorTop(f) + ROOM_H;
-      const sp = new Sprite(towerTexture());
-      sp.position.set(x - TOWER_W / 2, yb + CORR_LANE);
+      const sp = new Sprite(stub ? towerStubTexture() : towerTexture());
+      const th = stub ? 72 : floorH(f);
+      sp.position.set(x - TOWER_W / 2, yb + CORR_LANE - (stub ? th : 0));
       sp.width = TOWER_W;
-      sp.height = floorH(f);
-      const ccx = x, ccy = yb + floorH(f) / 2;
+      sp.height = th;
+      const ccx = x, ccy = yb + (stub ? -th / 2 + CORR_LANE : floorH(f) / 2);
       const parts = lampParts(ccx, ccy, near, roomIndex);
       for (let i = 1; i < parts.length; i += 2) parts[i] *= 0.7;
       const node: Lit = { node: sp, base: Math.min(0.9, ambient * lift * 1.25), parts, y: ccy, mul };
       lit.push(node);
       sp.tint = mulTint(shadeAt(lightOf(node.base, node.parts, 1, flicker), ccy), mul);
       towerLayer.addChild(sp);
+      if (stub) return;
       // the caged lamp on the left post
       const lg = new Sprite(glow);
       lg.anchor.set(0.5);
       lg.tint = 0xffc070;
       lg.width = 34;
       lg.height = 34;
-      lg.position.set(x - TOWER_W / 2 + 5.7, yb + CORR_LANE + 58 * floorH(f) / 144);
+      lg.position.set(x - TOWER_W / 2 + 5.7, stub ? yb + CORR_LANE - th + (58 - 72) : yb + CORR_LANE + 58 * floorH(f) / 144);
       spill.addChild(lg);
       spills.push({ s: lg, a: 0.4, room: roomIndex() });
     };
@@ -906,6 +911,7 @@ export class FrontChunks implements Animated {
         if (this.annex && cx === 0) {
           voidShaft(ANNEX_X, f, ANNEX_W);
           if (f >= 1) towerStorey(ANNEX_X, f - 1);
+          else towerStorey(ANNEX_X, 0, true); // the top flights, up to a landing under the roof
         }
         // [airy2:D3] The stair tower is one tall stair through every floor, in front of the rock where there is one and in front of a bridging room where there is not. A storey
         // runs from the lane of floor f-1 to the lane of floor f, so it is drawn with floor f (in this chunk row, above the void strip of floor f-1 and under none of the next).

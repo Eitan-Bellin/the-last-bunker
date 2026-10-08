@@ -187,6 +187,16 @@ export function buildShaft2(floors: number, era: number, onArrive?: () => void, 
     spine.rect(0, TOP, SHAFT_W, bottomY - TOP).fill({ color: 0xffd9a0, alpha: 0.09 });
     spine.rect(0, TOP, SHAFT_W, bottomY - TOP).fill({ color: 0x504030, alpha: 0.1 });
     back.addChild(spine);
+    // [airy2:D4] The atrium: daylight falls down the shaft from the entrance in a pale cone that fades with depth.
+    const cone = new Sprite(softTexture('fadeV'));
+    cone.blendMode = 'add';
+    cone.tint = 0xd8ecff;
+    cone.alpha = 0.34;
+    cone.width = SHAFT_W - 10;
+    cone.height = Math.min(bottomY - TOP, 760);
+    cone.scale.y *= -1; // opaque at the top, fading with depth
+    cone.position.set(5, TOP + cone.height);
+    back.addChild(cone);
   }
 
   // Riser bundle (water, power, air) on the back wall, clamped at every level.
