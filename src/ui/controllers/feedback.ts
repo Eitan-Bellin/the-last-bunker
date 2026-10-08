@@ -49,6 +49,7 @@ export class FeedbackController {
       }
       const name = getDef(b.type)?.name[i18n.currentLocale] ?? b.type;
       this.app.toasts.show(`[[check]] ${i18n.t('toast.buildingComplete', { name })}`, 'good');
+      announce(i18n.t('announce.built', { name }), 'polite'); // plan4:qa the key existed but nothing said it
       // [plan4:GP-2] The sound and the buzz belong to the moment (the same event fires when an upgrade finishes: that is the level-up ceremony).
       const upgraded = b.level > 1;
       void this.app.ceremony.fire({
@@ -156,6 +157,7 @@ export class FeedbackController {
       this.app.audio.play('alarm');
       this.app.dangerPrompt = true;
       this.app.toasts.show(`[[armory]] ${i18n.t('danger.toast.raid', { time: i18n.formatDuration(raid.hitAt - this.app.state.stats.totalPlayTime) })}`, 'bad');
+      announce(i18n.t('announce.raid', { time: i18n.formatDuration(raid.hitAt - this.app.state.stats.totalPlayTime) }), 'assertive'); // plan4:qa
     });
     bus.on('raid:resolved', (r: unknown) => { this.app.raidResult = r as RaidResult; });
     bus.on('disaster:start', (d: unknown) => {
