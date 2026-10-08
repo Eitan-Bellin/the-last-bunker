@@ -4,6 +4,7 @@ import { isDistrict, isHall, roomSlots } from '../data/buildingDefs';
 import { ArtLibrary } from '../art/ArtLibrary';
 import { BASE_EAST, ROOMS_X, ROOM_H, SHAFT_GAP, SHAFT_W, SLAB, SLOT_W, floorTop, slotX } from './layout';
 import { hashString, seeded } from './draw';
+import { GFX } from './gfxFeatures';
 import { depthGains, type Grid, type WorldLamp } from './structure';
 
 /**
@@ -265,11 +266,13 @@ export function buildDecals(
     const spot = (surface: Surface, w: number, h: number): { x: number; y: number; w: number; h: number } | null => {
       switch (surface) {
         case 'slab': {
-          if (h > SLAB + 3) { w *= (SLAB + 2) / h; h = SLAB + 2; }
+          // [airy:A6] The airy slab is 28 tall with a walkway ledge on top and a conduit at the foot: decals sit in the band between them.
+          const hMax = GFX.airy ? 10 : SLAB + 2;
+          if (h > hMax + (GFX.airy ? 0 : 1)) { w *= hMax / h; h = hMax; }
           const lo = ew > 0 ? xFirst - 6 : -6, hi = xLast + 6;
           const x = lo + w / 2 + r() * (hi - lo - w);
           if (inSlabGap(x - w / 2, x + w / 2) || x - w / 2 < SHAFT_W + 2 && x + w / 2 > -2 && r() < 0.6) return null;
-          return { x, y: bottom + 6.5 + (r() - 0.5) * 2, w, h };
+          return { x, y: bottom + (GFX.airy ? 13.5 : 6.5) + (r() - 0.5) * 2, w, h };
         }
         case 'column': {
           if (w > 16) return null;
@@ -280,7 +283,7 @@ export function buildDecals(
           if (w > 22) { h *= 22 / w; w = 22; }
           const x = cols[Math.floor(r() * cols.length)];
           const side = x <= xFirst ? 1 : x >= xLast ? -1 : ew > 0 && x === -SHAFT_GAP ? -1 : ew > 0 && x === ROOMS_X ? 1 : r() < 0.5 ? -1 : 1;
-          return { x: x + side * (COLUMN_W / 2 + 1 + w / 2 + r() * 3), y: top + PIPES_BOTTOM + h / 2 - 1, w, h };
+          return { x: x + side * ((GFX.airy ? 7.5 : COLUMN_W / 2 + 1) + w / 2 + r() * 3), y: top + PIPES_BOTTOM + h / 2 - 1, w, h }; // [airy:A6] piers are 13 wide
         }
         case 'bay': {
           // One thing per open bay (two in a wide one), or every bay turns into a notice board.

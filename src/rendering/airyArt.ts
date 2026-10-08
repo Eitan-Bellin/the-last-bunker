@@ -1,4 +1,4 @@
-import { Texture } from 'pixi.js';
+import { Rectangle, Texture } from 'pixi.js';
 import type { Grid } from './occupancy';
 import { cellAt } from './occupancy';
 import { slotX } from './geom';
@@ -61,29 +61,32 @@ export function pierKey(grid: Grid, f: number, s: number): string {
 
 export const LEDGE_H = 8;
 const R = 4;
+const LEDGE_W = 46;
 let ledge: Texture | null = null;
+const slices = new Map<number, Texture>();
 
 /**
- * Walkway ledge along the front of a floor slab (23 x 8, tiles sideways): the lit grating top, a yellow-and-black safety edge, and the dark beam face under it
- * that the brackets hang from.
+ * Walkway ledge along the front of a floor slab (one slot wide, 46 x 8; the pattern repeats every 2.875 so slots join): the lit grating top, a yellow-and-black
+ * safety edge, and the dark beam face under it that the brackets hang from.
  */
 export function ledgeTexture(): Texture {
   if (ledge) return ledge;
   const c = document.createElement('canvas');
-  c.width = 23 * R;
+  c.width = LEDGE_W * R;
   c.height = LEDGE_H * R;
   const g = c.getContext('2d')!;
+  const P = 2.875;
   // Grating top: pale arris, then a dark mesh with lighter bars.
   g.fillStyle = 'rgba(206,204,192,0.96)';
   g.fillRect(0, 0, c.width, 1.1 * R);
   g.fillStyle = 'rgba(46,48,48,0.96)';
   g.fillRect(0, 1.1 * R, c.width, 2.7 * R);
   g.fillStyle = 'rgba(150,152,146,0.55)';
-  for (let x = 0.6; x < 23; x += 2.9) g.fillRect(x * R, 1.4 * R, 1.1 * R, 2.2 * R);
+  for (let x = 0.5; x < LEDGE_W; x += P) g.fillRect(x * R, 1.4 * R, 1.1 * R, 2.2 * R);
   // Safety stripe: alternating yellow and charcoal.
-  for (let x = 0, k = 0; x < 23; x += 2.875, k++) {
+  for (let x = 0, k = 0; x < LEDGE_W - 0.01; x += P, k++) {
     g.fillStyle = k % 2 ? 'rgba(26,24,20,0.97)' : 'rgba(217,164,65,0.95)';
-    g.fillRect(x * R, 3.8 * R, 2.875 * R, 1.1 * R);
+    g.fillRect(x * R, 3.8 * R, P * R, 1.1 * R);
   }
   // The beam face: dark steel with a faint top light and a shadow edge.
   const bf = g.createLinearGradient(0, 4.9 * R, 0, LEDGE_H * R);
@@ -95,4 +98,17 @@ export function ledgeTexture(): Texture {
   g.fillRect(0, (LEDGE_H - 0.8) * R, c.width, 0.8 * R);
   ledge = Texture.from(c);
   return ledge;
+}
+
+/** The first `w` units (rounded to a quarter) of the ledge, for a segment shorter than a slot (the slab ends); a full slot is the texture itself. */
+export function ledgeSlice(w: number): Texture {
+  const base = ledgeTexture();
+  if (w >= LEDGE_W - 0.01) return base;
+  const q = Math.max(1, Math.round(w * 4));
+  let t = slices.get(q);
+  if (!t) {
+    t = new Texture({ source: base.source, frame: new Rectangle(0, 0, (q / 4) * R, LEDGE_H * R) });
+    slices.set(q, t);
+  }
+  return t;
 }

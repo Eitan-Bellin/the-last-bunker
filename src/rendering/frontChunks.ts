@@ -8,7 +8,7 @@ import {
   ceilingPanelTexture, floorNumberTexture, floorStyles, heavySlabTexture, kindLight, latticeTexture, mulTint, perforatedSlabTexture, pipeColumnTexture, type FloorStyle,
 } from './floorIdentity';
 import { VIEW } from './perfFx';
-import { LEDGE_H, PIER_AO, PIER_W, ledgeTexture, pierKey, piersOfFloor } from './airyArt'; // [airy:A2]
+import { LEDGE_H, PIER_AO, PIER_W, ledgeSlice, pierKey, piersOfFloor } from './airyArt'; // [airy:A2]
 import { BASE_EAST, ROOMS_X, ROOM_H, SHAFT_GAP, SLAB, SLOT_W, TOPSOIL, floorAtY, floorTop, slotX, type Ext } from './layout';
 import {
   AO_CONTACT, AO_SIDE, COLUMN_SPILL_W, COLUMN_W, KIT_LIFT, LIP, PIPES_H, PIPES_Y, SLAB_DRAW,
@@ -470,11 +470,17 @@ export class FrontChunks implements Animated {
           // [airy:A3] The walkway ledge along the front of the floor: a grated edge with a safety stripe, on brackets (the roof slab has none).
           if (airy && line.y > TOPSOIL) {
             const ly = line.y + 1.5;
-            const lt = ledgeTexture();
-            add(lt, x, ly, w, LEDGE_H, LEDGE_H / lt.height, x + w / 2, ly + LEDGE_H / 2, 1.2, 1, ledgeLayer);
+            addLit(ledgeSlice(w), x, ly, w, LEDGE_H, x + w / 2, ly + LEDGE_H / 2, 1.2, 1, ledgeLayer); // plain sprites batch; a tiling sprite per slot would not
             const bc = woodAt(0x34363a, ly);
-            for (const bx of [x + 6, x1 - 6]) brackets.poly([bx - 2.5, ly + LEDGE_H, bx + 2.5, ly + LEDGE_H, bx - 2.5, ly + LEDGE_H + 9]).fill(bc);
+            for (const bx of [x + 6, x1 - 6]) brackets.poly([bx - 2.5, ly + LEDGE_H, bx + 2.5, ly + LEDGE_H, bx - 2.5, ly + LEDGE_H + 6]).fill(bc);
             brackets.rect(x, ly + LEDGE_H, w, 1.2).fill({ color: 0x000000, alpha: 0.35 });
+            // A conduit in the floor's paint colour runs along the foot of the slab (zones read from the slab too); the band between it and the ledge (floor line + 7 .. + 20) stays clear for the level stencil.
+            const cy = ly + LEDGE_H + 14;
+            const cc2 = woodAt(sty.band, cy);
+            brackets.rect(x, cy, w, 2.6).fill(cc2);
+            brackets.rect(x, cy, w, 0.8).fill({ color: 0xffffff, alpha: 0.28 });
+            brackets.rect(x, cy + 2.6, w, 1).fill({ color: 0x000000, alpha: 0.4 });
+            for (const bx of [x + 6, x1 - 6]) brackets.rect(bx - 1.4, cy - 1, 2.8, 4.6).fill(woodAt(0x2a2c2e, cy));
           }
         }
         // The slab ends bear into the casing walls: a soft dark where they enter.
