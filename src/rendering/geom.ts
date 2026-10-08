@@ -189,3 +189,10 @@ export function buildingH(type: BuildingType): number {
 
 /** Y of the walkable floor line inside a room (local to the room's top). */
 export const WALK_Y = ROOM_H - 7;
+
+/** Run and rise of one stair flight in the towers (a flight is 38 across and 36 high: 43 degrees), and how many flights make a floor. */
+export const FLIGHT_RUN = 38;
+export const FLIGHT_RISE = 36;
+export const FLIGHTS_PER_FLOOR = 4;
+/** Half the distance between the left and the right landing: where a person climbing zig-zags to. */
+export const TOWER_AMP = FLIGHT_RUN / 2;

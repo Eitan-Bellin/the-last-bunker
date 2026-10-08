@@ -1,11 +1,10 @@
 import type { GameState } from '../core/GameState';
 import { getDef } from '../data/buildingDefs';
 import { doorwayX } from './openings';
-import { CORR_LANE, ROOMS_X, ROOM_H, SHAFT_GAP, SHAFT_W, SLOT_W, floorTop, slotAtX, slotX, extentsFor } from './geom';
+import { CORR_LANE, FLIGHTS_PER_FLOOR, TOWER_AMP, ROOMS_X, ROOM_H, SHAFT_GAP, SHAFT_W, SLOT_W, floorTop, slotAtX, slotX, extentsFor } from './geom';
 import { GFX } from './gfxFeatures';
 import { occupancy } from './occupancy';
 import { ANNEX_X, hasAnnex, voidXs } from './voids';
-import { FLIGHTS_PER_FLOOR, TOWER_AMP } from './circulation';
 
 /**
  * [plan4:ST-18] Route planning for people walking between rooms, floors and the lift. Purely cosmetic (decision D4): nothing here

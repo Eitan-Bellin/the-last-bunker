@@ -1,5 +1,5 @@
 import { Rectangle, Texture } from 'pixi.js';
-import { CORR_BEAM, CORR_DECK, CORR_RAIL, SLOT_W } from './geom';
+import { CORR_BEAM, CORR_DECK, CORR_RAIL, FLIGHT_RISE, FLIGHT_RUN, FLIGHTS_PER_FLOOR, SLOT_W, TOWER_AMP } from './geom';
 
 /**
  * [airy2:D1] Art of the front corridor of a floor (flag `airy`): a walkway deck that recedes toward the rooms, the railing on its front edge and the beam face of the
@@ -156,12 +156,8 @@ export function beamTexture(): Texture {
   });
 }
 
-/** Run and rise of one stair flight in the towers (a flight is 38 across and 36 high: 43 degrees), and how many flights make a floor. */
-export const FLIGHT_RUN = 38;
-export const FLIGHT_RISE = 36;
-export const FLIGHTS_PER_FLOOR = 4;
-/** Half the distance between the left and the right landing: where a person climbing zig-zags to. */
-export const TOWER_AMP = FLIGHT_RUN / 2;
+// [airy2] FLIGHT_RUN, FLIGHT_RISE, FLIGHTS_PER_FLOOR and TOWER_AMP live in geom.ts (no pixi there: the headless route tests import routes.ts).
+export { FLIGHT_RUN, FLIGHT_RISE, FLIGHTS_PER_FLOOR, TOWER_AMP };
 
 /**
  * One storey of a stair tower (54 x 144, from the lane of a floor down to the lane of the next one): four flights that switch back, landings at both ends, steel

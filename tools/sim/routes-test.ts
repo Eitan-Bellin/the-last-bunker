@@ -2,6 +2,7 @@
 // closed doors, wings on both sides of the shaft, the surface row, and the trip-length cap. Run by routes-test.mjs.
 import { LANDING_X, LEG_LADDER, LEG_LIFT, LEG_STAIRS, LEG_WALK, Route, route, setDoorBlocked, lineY, entryX, type Stop } from '../../src/rendering/routes';
 import { ROOMS_X, slotX } from '../../src/rendering/geom';
+import { GFX } from '../../src/rendering/gfxFeatures';
 import { createInitialState, type GameState } from '../../src/core/GameState';
 
 export function routeChecks(): { problems: string[]; notes: string[] } {
@@ -13,6 +14,9 @@ export function routeChecks(): { problems: string[]; notes: string[] } {
   const r = new Route();
   const stop = (floor: number, x: number): Stop => ({ floor, x, y: lineY(floor) });
   const kinds = (): string => Array.from(r.kind.slice(0, r.n)).join('');
+  // [airy2] The classic planner rules below are checked with the spacious pass off (the corridor lane adds waypoints); the airy rules follow at the end.
+  const airyWas = GFX.airy;
+  GFX.airy = false;
 
   // Same floor, east side: a straight walk of two waypoints.
   setDoorBlocked(null);
@@ -52,7 +56,8 @@ export function routeChecks(): { problems: string[]; notes: string[] } {
   o = route(st, stop(1, ROOMS_X + 400), stop(2, ROOMS_X + 20), true, 0.9, r);
   if (!o || !Array.from(r.kind.slice(0, r.n)).includes(LEG_LIFT)) fail('a one-floor hop with a high roll should take the lift');
   o = route(st, stop(1, ROOMS_X + 400), stop(6, ROOMS_X + 20), false, 0.5, r);
-  if (!o || !Array.from(r.kind.slice(0, r.n)).includes(LEG_LADDER)) fail('a stairwell that does not reach floor 6 must not be used (ladder instead)');
+  // [airy2] The floors stand 44 taller (module constant, fixed at load), so a five-floor ladder climb can now exceed the trip cap and be refused (null): the stairwell must not be used either way.
+  if (o ? !Array.from(r.kind.slice(0, r.n)).includes(LEG_LADDER) || Array.from(r.kind.slice(0, r.n)).includes(LEG_STAIRS) : false) fail('a stairwell that does not reach floor 6 must not be used (ladder instead)');
 
   // A closed partition door between slots 4 and 5 of floor 2 stops the walk across it, not walks on other floors or other slots.
   setDoorBlocked((f, a, b) => f === 2 && a === 4 && b === 5);
@@ -77,6 +82,19 @@ export function routeChecks(): { problems: string[]; notes: string[] } {
 
   // Doorway side: the edge facing where the walker comes from.
   if (entryX(100, 92, 20) !== 104 || entryX(100, 92, 400) !== 188) fail('entryX picks the wrong doorway side');
+  // [airy2:D1] With the corridor on, a long walk steps out onto the lane of the front corridor, follows it, and steps back in.
+  GFX.airy = true;
+  setDoorBlocked(null);
+  o = route(st, stop(2, ROOMS_X + 20), stop(2, ROOMS_X + 300), true, 0.5, r);
+  if (!o || r.n < 4 || r.kind[r.n - 1] !== LEG_WALK) fail(`airy same floor: expected a lane walk of 4+ waypoints, got ${o ? r.n : 'null'}`);
+  else if (r.y[1] === r.y[0] || r.y[r.n - 1] !== r.y[0]) fail('airy same floor: the walk should leave the room line for the lane and end on the room line');
+  // Short hops stay in the room (no lane).
+  o = route(st, stop(2, ROOMS_X + 20), stop(2, ROOMS_X + 50), true, 0.5, r);
+  if (!o || r.n !== 2) fail('airy: a short walk (under 40 units) should stay a straight 2-waypoint walk');
+  // The lift still serves the other floors, and the plan never overflows the waypoint list.
+  o = route(st, stop(1, ROOMS_X + 200), stop(6, ROOMS_X + 90), true, 0.99, r);
+  if (!o || !Array.from(r.kind.slice(0, r.n)).includes(LEG_LIFT) || r.n > 16) fail(`airy lift trip: ${o ? kinds() : 'null'}`);
+  GFX.airy = airyWas;
   notes.push('routes: 20+ plans checked (same floor, wings, lift, stairs, ladder, doors, surface, length cap)');
   return { problems, notes };
 }
