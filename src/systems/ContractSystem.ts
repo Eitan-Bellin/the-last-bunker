@@ -75,7 +75,7 @@ export class ContractSystem {
       params: (item, locale) => this.cardParams(item, locale),
       preview: (item, locale) => {
         const p = this.cardParams(item, locale);
-        return `${p.ask}  →  ${p.reward}`;
+        return `${p.ask}  ${locale === 'he' ? '[[arrowLeft]]' : '[[arrowRight]]'}  ${p.reward}`; // [plan4:UX-22] arrow along the reading direction
       },
       value: item => Object.values((item.data as unknown as ContractData).reward).reduce((s, v) => s + (v ?? 0), 0),
     });

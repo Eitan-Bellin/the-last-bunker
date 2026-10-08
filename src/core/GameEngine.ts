@@ -44,6 +44,7 @@ import { OutpostSystem } from '../systems/OutpostSystem';
 import { difficultyOf, easier } from '../data/difficulty';
 import type { Difficulty } from './state/longGame';
 import { logCrash } from './crashGuard';
+import { markSavePending, markSaved } from './saveFlag'; // [plan4:UX-16]
 import { WASTE_TRACKED } from '../data/resources';
 import { hasFeature } from '../systems/ResearchSystem';
 
@@ -796,6 +797,7 @@ export class GameEngine {
     this.loop(performance.now());
 
     window.addEventListener('pagehide', () => void this.autoSave());
+    document.addEventListener('freeze', () => void this.autoSave()); // [plan4:UX-16] page lifecycle: frozen in the background
 
     this.lastWall = Date.now();
     let hiddenAt = 0;
@@ -925,7 +927,9 @@ export class GameEngine {
       return;
     }
     try {
+      markSavePending(); // [plan4:UX-16] synchronous note: a write the phone cuts off is noticed at the next start
       await this.saveManager.saveJson(this.currentJson());
+      markSaved();
       if (this.saveFailures > 0) bus.emit('save:recovered');
       this.saveFailures = 0;
     } catch (err) {

@@ -140,6 +140,8 @@ export class PostFX {
   private tone: Brightness = 'bright';
   private area: Rectangle | null = null;
   private msaa = false;
+  /** [plan4:UX-24] Battery saver (the a11y setting, set by the app every picture): Low effects, density and rates, and at most 24 pictures a second. */
+  powerSaver = false;
 
   constructor(app: Application, world: Container, grade?: ColorMatrixFilter, view?: () => PostView) {
     this.app = app;
@@ -176,6 +178,7 @@ export class PostFX {
 
   get quality(): QualityLevel {
     // Lite mode (the game was killed twice in an hour) means no bloom or grain until the player picks a level.
+    if (this.powerSaver) return 'low';
     return this.forced ?? (isLiteMode() ? 'low' : this.monitor.quality);
   }
 
@@ -195,6 +198,11 @@ export class PostFX {
     // Effects follow the live level. So do the picture rates, but only downwards: when the automatic monitor had to step down because
     // the device could not keep up, aiming for a lower rate is what actually cools it (it never raises a rate above the player's pick).
     const fps = base.fps.map((f, i) => Math.min(f, live.fps[i])) as [number, number, number];
+    if (this.powerSaver) {
+      // [plan4:UX-24] Cooler and longer-lived: Low's density, and no rate above 24 (the camera moving included).
+      const low = profileOf('low');
+      return { ...live, res: Math.min(base.res, low.res), fps: fps.map(f => Math.min(f, 24)) as [number, number, number], motion: Math.min(base.motion, live.motion, 24) };
+    }
     return { ...live, res: base.res, fps, motion: Math.min(base.motion, live.motion) };
   }
 

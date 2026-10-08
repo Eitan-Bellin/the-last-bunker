@@ -3,6 +3,7 @@ import type { GameEngine } from '../../core/GameEngine';
 import { i18n } from '../../i18n/I18nManager';
 import { CARAVAN_CREW, CARGO_TIERS, MAX_RELATION, ambushChance, dealsToNext, openPartners, relationLevel, specialKey } from '../../data/trade';
 import { RESOURCE_ICONS, button, el } from '../dom';
+import { flowArrow } from '../rtl'; // [plan4:UX-22]
 import { uiSound } from '../../audio/uiSound';
 
 const chips = (o: Partial<Record<ResourceType, number>>) => Object.entries(o).map(([r, v]) => `${RESOURCE_ICONS[r] ?? r}${v}`).join(' ');
@@ -49,7 +50,7 @@ export function renderTrade(engine: GameEngine, state: GameState, changed: () =>
     for (let n = 1; n <= lvl; n++) {
       const deal = p.specials[n - 1];
       if (state.lateGame.trade.specials.includes(specialKey(p.id, n))) continue;
-      card.appendChild(button(`[[gift]] ${chips(deal.cost)} → ${chips(deal.gain)}`, 'btn-small', () => {
+      card.appendChild(button(`[[gift]] ${chips(deal.cost)} ${flowArrow()} ${chips(deal.gain)}` /* [plan4:UX-22] */, 'btn-small', () => {
         if (ex.doSpecial(p.id, n)) { uiSound('click'); engine.requestSave(); changed(); }
       }, !ex.canSpecial(state, p.id, n)));
     }

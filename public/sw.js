@@ -3,7 +3,12 @@
 //  - Hashed build files (/assets/*): cache first, they never change under the same name.
 //  - Everything else here (paintings, art tables, icons): shown from the cache at once and re-checked in the background (one cheap conditional
 //    request per file per session), so a changed painting or table reaches players without anyone having to bump a version number.
+// [plan4:UX-14] Updates: a new worker WAITS instead of taking over under a running game; the page shows "new version, tap to refresh"
+// and then sends 'skipWaiting' (after saving). BUILD and PRECACHE are filled in by the vite plugin stampServiceWorker (vite.config.ts), so
+// every build gives this file new bytes, which is what makes the browser notice an update at all. In dev they keep their placeholders.
 const CACHE = 'lastbunker-v4';
+const BUILD = '__BUILD_ID__';
+const PRECACHE = /*__PRECACHE__*/[];
 const SHELL = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png', './favicon-64.png'];
 const NAVIGATE_TIMEOUT_MS = 4000;
 
@@ -22,15 +27,39 @@ async function precacheBuild(cache) {
 }
 
 self.addEventListener('install', (event) => {
-  event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(SHELL).then(() => precacheBuild(cache))).then(() => self.skipWaiting()));
+  event.waitUntil((async () => {
+    const cache = await caches.open(CACHE);
+    // 'reload' skips the browser's own HTTP cache: the saved page must be the one that names THIS build's files (the old ones are pruned).
+    await cache.addAll(SHELL.map((u) => new Request(u, { cache: 'reload' })));
+    // The build's own files are kept one by one: one that fails (a flaky connection) must not stop the worker from installing.
+    await Promise.all(PRECACHE.map((u) => cache.add(u).catch(() => undefined)));
+    await precacheBuild(cache); // plan4 perf: also every on-demand chunk listed in asset-manifest.json (string tables, Book, sounds)
+    // The very first install has no game to protect: take over at once. An update waits for the player's tap.
+    if (!self.registration.active) await self.skipWaiting();
+  })());
+});
+
+self.addEventListener('message', (event) => {
+  const data = event.data;
+  if (data === 'skipWaiting' || (data && data.type === 'skipWaiting')) self.skipWaiting();
+  // The page asks which build this worker carries (so it can tell a real update from the page's own code).
+  if (data && data.type === 'build' && event.ports && event.ports[0]) event.ports[0].postMessage(BUILD);
 });
 
 self.addEventListener('activate', (event) => {
-  event.waitUntil(
-    caches.keys()
-      .then((keys) => Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k))))
-      .then(() => self.clients.claim()),
-  );
+  event.waitUntil((async () => {
+    const keys = await caches.keys();
+    await Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k)));
+    // Build files of earlier versions are dead weight now (their names carry a hash).
+    if (PRECACHE.length) {
+      const cache = await caches.open(CACHE);
+      const keep = new Set(PRECACHE.map((u) => new URL(u, self.registration.scope).href));
+      for (const req of await cache.keys()) {
+        if (new URL(req.url).pathname.includes('/assets/') && !keep.has(req.url)) await cache.delete(req);
+      }
+    }
+    await self.clients.claim();
+  })());
 });
 
 const revalidated = new Set();

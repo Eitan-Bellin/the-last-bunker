@@ -13,6 +13,8 @@ import { getA11y, setA11y } from '../../utils/a11y';
 import { haptic } from '../../utils/haptics';
 import { enhanceTabs } from '../a11yDom';
 import { isIosBrowserTab } from '../../utils/platform'; // [plan4:UX-15]
+import { lastExportAt, markExported } from '../pwa';
+import { markPopupsChosen, popupMode } from './NumberPopup';
 
 export type MenuTab = 'settings' | 'a11y' | 'stats' | 'achievements' | 'genesis';
 
@@ -164,6 +166,33 @@ export class MenuPanel {
     this.sheet.body.replaceChildren(root);
   }
 
+  /**
+   * [plan4:UX-21, UX-24] Two phone-comfort settings, as a block of their own: how many floating numbers, and the battery saver.
+   * Both live in the a11y block (one source), but are shown here with the graphics settings they belong with.
+   */
+  private comfortRows(): HTMLElement[] {
+    const a = getA11y();
+    const redraw = () => { this.signature = ''; this.refresh(this.engine.stateManager.state); };
+    const order = ['all', 'important', 'off'] as const;
+    const mode = popupMode();
+    const popups = el('div', 'bp-row');
+    popups.append(el('span', '', `[[sparkle]] ${i18n.t('settings.popups')}`),
+      button(i18n.t(`settings.popups.${mode}`), 'btn-small', () => {
+        uiSound('switch');
+        markPopupsChosen(); // a phone's default ("important") no longer overrules the player
+        setA11y({ popups: order[(order.indexOf(mode) + 1) % order.length] });
+        redraw();
+      }));
+    const saver = el('div', 'bp-row');
+    saver.append(el('span', '', `[[battery]] ${i18n.t('settings.powerSaver')}`),
+      button(i18n.t(a.powerSaver ? 'settings.on' : 'settings.off'), 'btn-small', () => {
+        uiSound('switch');
+        setA11y({ powerSaver: !a.powerSaver });
+        redraw();
+      }));
+    return [popups, el('div', 'bp-hint', i18n.t('settings.popupsHint')), saver, el('div', 'bp-hint', i18n.t('settings.powerSaverHint'))];
+  }
+
   /** [plan4:UX-11] Learning aids, as a block of their own: the gesture tips again, and the opening story again. */
   private renderTipsBlock(): HTMLElement {
     const card = el('div', 'bp-card settings-learn');
@@ -287,7 +316,7 @@ export class MenuPanel {
     const diag = el('div', 'bp-row');
     diag.append(el('span', '', `[[chart]] ${i18n.t('settings.diagnostics')}`),
       button(i18n.t('settings.diagnosticsCopy'), 'btn-small', () => { uiSound('switch'); this.actions.copyDiagnostics(); }));
-    general.append(lang, sound, music, fx, gfx, gfxHint, bright, textSize, notify, notifyHint, diag);
+    general.append(lang, sound, music, fx, gfx, gfxHint, ...this.comfortRows(), bright, textSize, notify, notifyHint, diag);
     box.appendChild(general);
 
     const coupon = this.renderCouponBlock(); // [plan4:GP-12] only with ?debug
@@ -306,6 +335,7 @@ export class MenuPanel {
         area.select();
         try {
           await navigator.clipboard.writeText(data);
+          markExported(); // [plan4:UX-13]
           area.placeholder = i18n.t('settings.copied');
         } catch {
           // clipboard blocked; the text stays selected in the box for manual copy
@@ -320,7 +350,11 @@ export class MenuPanel {
     saves.append(area, row);
     const persist = el('div', 'bp-row');
     persist.append(el('span', '', `[[lock]] ${i18n.t('settings.persist')}`), el('span', 'bp-value', this.actions.persistLabel()));
-    saves.append(persist, el('div', 'bp-hint', i18n.t('settings.persistHint')));
+    // [plan4:UX-13] When the last backup was made on this phone (Safari may clear a site's data after a while unused).
+    const lastExport = lastExportAt();
+    const when = lastExport ? new Date(lastExport).toLocaleDateString(i18n.currentLocale === 'he' ? 'he-IL' : 'en-GB', { dateStyle: 'medium' }) : '';
+    saves.append(persist, el('div', 'bp-hint', i18n.t('settings.persistHint')),
+      el('div', 'bp-hint', lastExport ? i18n.t('settings.lastBackup', { when }) : i18n.t('settings.lastBackupNever')));
     box.appendChild(saves);
 
     const backupCard = el('div', 'bp-card');

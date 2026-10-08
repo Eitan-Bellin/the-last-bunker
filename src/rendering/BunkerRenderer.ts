@@ -465,6 +465,8 @@ export class BunkerRenderer {
       // The canvas itself is never multisampled (the world is drawn into the filter's texture, where the quality level
       // switches smoothing on or off); the pixel density starts at the level this session begins with and follows the setting.
       antialias: false,
+      // [plan4:UX-17] Medium and Low ask the system for the economical GPU (only matters where there are two, e.g. a MacBook).
+      powerPreference: startQuality() === 'high' ? 'high-performance' : 'low-power',
       resolution: targetResolution(startQuality()),
       autoDensity: true,
       autoStart: false,
@@ -1114,17 +1116,21 @@ export class BunkerRenderer {
 
   /** The GPU took the context away (app switch, memory pressure, driver reset); until it is back nothing is drawn. */
   private contextLost = false;
+  /** [plan4:UX-17] Told when the GPU context is lost (true) and when it is back (false). */
+  onContextChange: ((lost: boolean) => void) | null = null;
   private drawFails = 0;
 
   private watchContext(canvas: HTMLCanvasElement): void {
     canvas.addEventListener('webglcontextlost', ev => {
       ev.preventDefault();
       this.contextLost = true;
+      this.onContextChange?.(true); // [plan4:UX-17] the app shows a quiet "restoring graphics" note
       logCrash('gl-context-lost', 'WebGL context lost');
     });
     // Pixi's own listener (registered first) has already re-initialised the GL systems by now.
     canvas.addEventListener('webglcontextrestored', () => {
       this.contextLost = false;
+      this.onContextChange?.(false);
       // [perf] The paintings gave up their decoded copies once on the GPU (ArtLibrary.trimBitmaps): they are loaded again from the cache.
       ArtLibrary.reset();
       if (this.gfx2) for (const k of KIT_KEYS) ArtLibrary.get(k);

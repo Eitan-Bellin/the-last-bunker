@@ -6,6 +6,7 @@ import { applyTextSize } from './ui/textSize';
 import { hideSplash } from './ui/splash';
 import { installMaterials } from './ui/materials';
 import { prefetchLazyChunks, whenIdle } from './utils/lazy';
+import { initServiceWorker } from './ui/pwa';
 
 applyTextSize();
 
@@ -93,16 +94,14 @@ async function boot(): Promise<void> {
   await chooseDefaultLanguage();
   await loadLanguages();
   installMaterials(); // plan 2026-10 M7: the worn-steel texture of the HUD plates
-  await new GameApp().start();
+  const app = new GameApp();
+  // [plan4:UX-14] Service worker with the "new version, tap to refresh" chip (production builds only); the tap saves first.
+  initServiceWorker(() => app.engine.forceSave());
+  await app.start();
   prefetchOtherLanguage();
   prefetchLazyChunks();
 }
 
 boot().catch(failed);
 
-// Only in production builds: a dev-mode service worker would cache stale modules.
-if (import.meta.env.PROD && 'serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./sw.js').catch(console.error);
-  });
-}
+// (The service worker is registered by initServiceWorker in boot(): production builds only, because a dev-mode worker would cache stale modules.)

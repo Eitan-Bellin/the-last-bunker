@@ -1,5 +1,6 @@
 import { defineConfig, type Plugin } from 'vite';
-import { mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, readdirSync, writeFileSync, existsSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { dirname, join, normalize, resolve } from 'node:path';
 
 const RAW_DIR = resolve(import.meta.dirname, 'art-src');
@@ -104,6 +105,33 @@ function pixiWebglOnly(): Plugin {
 }
 
 /**
+ * [plan4:UX-14] After a production build: gives dist/sw.js a build id and the list of hashed build files to keep offline, and writes
+ * the same id into dist/index.html (<meta name="build">). A browser only installs a new service worker when sw.js changes byte for
+ * byte; before this it never changed, so the "new version" chip had nothing to react to. The page compares its own id with the one
+ * the waiting worker reports, so a worker that carries the very code the page already runs never raises the chip.
+ */
+function stampServiceWorker(): Plugin {
+  return {
+    name: 'stamp-service-worker',
+    apply: 'build',
+    writeBundle(options) {
+      const dist = options.dir ? resolve(options.dir) : resolve(import.meta.dirname, 'dist');
+      const swPath = join(dist, 'sw.js');
+      const htmlPath = join(dist, 'index.html');
+      if (!existsSync(swPath) || !existsSync(htmlPath)) return;
+      const assets = readdirSync(join(dist, 'assets')).sort();
+      const html = readFileSync(htmlPath, 'utf8');
+      const build = createHash('sha1').update(assets.join('|')).update(html).digest('hex').slice(0, 10);
+      const sw = readFileSync(swPath, 'utf8')
+        .replace("'__BUILD_ID__'", JSON.stringify(build))
+        .replace('/*__PRECACHE__*/[]', JSON.stringify(assets.map(f => `./assets/${f}`)));
+      writeFileSync(swPath, sw);
+      if (!html.includes('name="build"')) writeFileSync(htmlPath, html.replace('</head>', `  <meta name="build" content="${build}" />\n</head>`));
+    },
+  };
+}
+
+/**
  * Plan 4 wave 3 (perf): code split off the main chunk (string tables, the Bunker Book, the sound recipes) is fetched only when needed, so
  * a player who goes offline right after the first visit could be missing one of those files. This writes `asset-manifest.json`, the list of
  * every script and stylesheet of the build that the game can ask for, and the service worker (public/sw.js) puts them all in its cache when
@@ -126,7 +154,7 @@ function assetManifest(): Plugin {
 export default defineConfig(({ command }) => ({
   // Relative asset paths so the build works from any host or sub-folder (and as an installed PWA).
   base: './',
-  plugins: [artPipeline(), pixiWebglOnly(), assetManifest()],
+  plugins: [artPipeline(), pixiWebglOnly(), assetManifest(), stampServiceWorker()],
   // Production only: the string tables load as their own chunks (src/i18n/locales.ts). Dev and the Node test bundles keep them linked in.
   define: command === 'build' ? { __LAZY_LOCALES__: 'true' } : {},
   build: {
