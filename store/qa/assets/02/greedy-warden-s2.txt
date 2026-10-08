@@ -1,0 +1,41 @@
+=== greedy · 48 h online · seeds 2 · think 5s · src #f6bb02458ae3 (newest change 2026-10-08T09:23:39.751Z) ===
+
+Milestones (wall time)            reached  median   [min – max]       online(med)
+  era 1 restoration                 1/1    0h04m  [0h04m – 0h04m]     0h04m
+  era 2 colony                      1/1    0h31m  [0h31m – 0h31m]     0h31m
+  era 3 undercity                 0/1
+  all ruins cleared                 1/1    0h10m  [0h10m – 0h10m]     0h10m
+  first expedition back             1/1    0h17m  [0h17m – 0h17m]     0h17m
+  floor B4                          1/1    0h05m  [0h05m – 0h05m]     0h05m
+  floor B5                          1/1    0h27m  [0h27m – 0h27m]     0h27m
+  floor B6                          1/1    1d09h  [1d09h – 1d09h]     1d09h
+  floor B7                          1/1    1d14h  [1d14h – 1d14h]     1d14h
+  floor B8                          1/1    1d15h  [1d15h – 1d15h]     1d15h
+  population 10                     1/1    0h31m  [0h31m – 0h31m]     0h31m
+  population 20                     1/1    1d09h  [1d09h – 1d09h]     1d09h
+  population 30                     1/1    1d10h  [1d10h – 1d10h]     1d10h
+  population 40                   0/1
+  population 50                   0/1
+  research temporalTheory           1/1    9h29m  [9h29m – 9h29m]     9h29m
+  GENESIS available               0/1
+  first death                     0/1
+  story static                      1/1    0h04m  [0h04m – 0h04m]     0h04m
+  story deep                        1/1    0h28m  [0h28m – 0h28m]     0h28m
+  story toll                        1/1    0h32m  [0h32m – 0h32m]     0h32m
+  story clan                        1/1    1h30m  [1h30m – 1h30m]     1h30m
+  story trail                       1/1    8h48m  [8h48m – 8h48m]     8h48m
+  story maya                        1/1    1d09h  [1d09h – 1d09h]     1d09h
+  story terminus                    1/1    1d09h  [1d09h – 1d09h]     1d09h
+  story genesis                     1/1    1d09h  [1d09h – 1d09h]     1d09h
+  story winter                      1/1    1d10h  [1d10h – 1d10h]     1d10h
+
+ seed  era1    era2    era3    B4      B6      genesis(iso)    pop  res  fl lv   dead famine  idle  stall  chap  wasted/ret
+    2  0h04m   0h31m   —       0h05m   1d09h   —                38  104  8  97     0  0h00m   64%     0h  9/20       0
+
+End state (median [min–max]): era 2 · floors 8 [8–8] · pop 38 [38–38] · research 104 [104–104] · room levels 97 · explored 259 · objective step 17
+Genesis available in 0/1 runs; payout at unlock — · payout estimate at end 356 [356–356]
+Danger: deaths 0 [0–0] · injuries 205 · famine 0h00m · thirst 0h00m (online)
+Late game: project stages 6 (projects done 1) · caravans home 30 lost 8 · weekly 1 · trainings 382 · rank-5 workers 35
+Pace: idle share 64% [64%–64%] · gaps ≥5 min 143 · last progress 0.3 h before the end (wall; online 0.3 h) · story 9/20 chapters
+At cap (online share, median): food 77% · water 92% · power 66% · materials 44% · knowledge 43% · scrap 58% · medicine 93%
+Newcomers accepted 24 · refused (no bed/food) 0
