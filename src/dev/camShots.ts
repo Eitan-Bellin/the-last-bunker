@@ -1,7 +1,7 @@
 import { Rectangle } from 'pixi.js';
 import type { BunkerRenderer } from '../rendering/BunkerRenderer';
 import type { GameState } from '../core/GameState';
-import { BUILDING_W, ROOM_H, ROOMS_X, SHAFT_W, SLOT_W, buildingX, floorTop } from '../rendering/layout';
+import { BUILDING_W, ROOM_H, ROOMS_X, SHAFT_W, SLOT_W, buildingX, floorTop, slotX } from '../rendering/layout';
 import { ROW_X0, ROW_X1 } from '../rendering/surfaceRow'; // plan4:ST-16
 
 interface Cam {
@@ -29,8 +29,26 @@ const CAMS: Cam[] = [
   },
   { id: 'cam6-deep', at: s => ({ x: ROOMS_X + SLOT_W * 6, y: floorTop(Math.max(0, s.currentFloors - 2)) + ROOM_H / 2, z: 2 }) },
   // [plan4:ST-16] the surface (gate-house) row, once it is open (or its ruin before: null there, the entrance view cam3 shows it)
-  { id: 'cam7-surface', at: s => ({ x: s.layout?.surfaceOpen ? (ROW_X0 + ROW_X1) / 2 : -200, y: -60, z: s.layout?.surfaceOpen ? 1.05 : 1.8 }) },
+  { id: 'cam7-surface', at: s => ({ x: s.layout?.surfaceOpen ? (ROW_X0 + ROW_X1) / 2 : -170, y: -60, z: s.layout?.surfaceOpen ? 1.05 : 1.5 }) },
   { id: 'cam8-surface-close', at: s => (s.layout?.surfaceOpen ? { x: ROW_X0 + (ROW_X1 - ROW_X0) * 0.62, y: -55, z: 2.4 } : null) }, // plan4:ST-16 two rooms of the row up close
+  // [plan4:polish] a vent stack's exhaust on the surface (its mouth stands over the yard), and the end of a floor with a stairwell / vent stack column
+  {
+    id: 'cam9-vent', at: s => {
+      const v = (s.layout?.infra ?? []).find(i => i.kind === 'ventStack');
+      if (!v) return null;
+      let x = slotX(v.x) + SLOT_W / 2;
+      if (x > -110 && x < 176) x = x < 30 ? -128 : 184; // (as readInside places it)
+      return { x, y: -45, z: 2 };
+    },
+  },
+  // [plan4:polish] the first floors beside the shaft at walking zoom (an evacuation from a burning room is walked out toward the shaft)
+  { id: 'cam11-evac', at: s => ({ x: ROOMS_X + 60, y: floorTop(1) + ROOM_H / 2, z: 1.6 }) },
+  {
+    id: 'cam10-column-end', at: s => {
+      const c = (s.layout?.infra ?? []).find(i => i.kind === 'stairwell' || i.kind === 'ventStack');
+      return c ? { x: slotX(c.x) - 30, y: floorTop(c.floor) + ROOM_H, z: 2.4 } : null;
+    },
+  },
 ];
 
 /** Steps the renderer by hand, so shots work even in a background tab where requestAnimationFrame sleeps. */

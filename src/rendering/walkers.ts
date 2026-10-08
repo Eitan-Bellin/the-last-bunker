@@ -1,12 +1,14 @@
 import { Container } from 'pixi.js';
 import type { GameState } from '../core/GameState';
 import { GFX } from './gfxFeatures';
-import { ROOM_H, floorIndexAt } from './geom';
+import { ROOM_H, SLOT_W, floorIndexAt, slotX } from './geom';
+import { depthGains } from './structure'; // plan4:polish
+import { getDef } from '../data/buildingDefs'; // plan4:polish
 import { VIEW } from './perfFx';
 import type { Person } from './people';
 import type { LiftApi } from './shaft';
 import {
-  LADDER_SPEED, LANDING_X, LEG_LADDER, LEG_LIFT, LEG_STAIRS, LEG_WALK, STAIR_SPEED, WALK_SPEED, Route, entryX, route, type Stop,
+  LADDER_SPEED, LADDER_X, LANDING_X, LEG_LADDER, LEG_LIFT, LEG_STAIRS, LEG_WALK, STAIR_SPEED, WALK_SPEED, Route, entryX, route, type Stop,
 } from './routes';
 
 /**
@@ -34,6 +36,11 @@ const M_WALK = 0;
 const M_WAIT = 1;
 const M_RIDE = 2;
 const M_CLIMB = 3;
+/** [plan4:polish] An evacuee waiting at the exit until the room is safe again. */
+const M_HOLD = 4;
+/** [plan4:polish] At most this many people leave a burning room at once, and wait at the exit at most this long (seconds). */
+export const MAX_EVACUEES = 4;
+const HOLD_MAX = 60;
 
 /** What the walkers need to know about a room view (RoomView in RoomViews.ts). */
 export interface WalkView {
@@ -60,6 +67,8 @@ interface Slot {
   ticket: number;
   destId: string;
   endLocalX: number;
+  /** [plan4:polish] A fire or collapse evacuation (walks to the exit and waits there), not a move to another room. */
+  evac: boolean;
 }
 
 const colors = { shirt: 0, skin: 0, pants: 0 };
@@ -78,6 +87,15 @@ export class Walkers {
   private slots: Slot[] = [];
   private active = 0;
   private lift: LiftApi | null = null;
+  /** [plan4:polish] The power ratio (the walkers' light dims with it, like the people in the rooms). Set by the renderer once a picture. */
+  power = 1;
+  /** [plan4:polish] Rooms with a fire, a collapse or a meltdown on right now (ids); refreshHot fills it once a picture. */
+  private hot = new Set<string>();
+  private hotB = new Set<string>();
+  /** How many times each room has caught trouble (a new fire = a new epoch), so people who already left for one fire do not leave again when the hold times out. */
+  private epochs = new Map<string, number>();
+  private evacuees = 0;
+  private evacuated = new WeakMap<Person, string>();
   private from: Stop = { floor: 0, x: 0, y: 0 };
   private to: Stop = { floor: 0, x: 0, y: 0 };
 
@@ -86,7 +104,7 @@ export class Walkers {
     this.layer.isRenderGroup = true;
     this.layer.sortableChildren = true;
     for (let i = 0; i < MAX_WALKERS; i++) {
-      this.slots.push({ person: null, route: new Route(), leg: 0, mode: M_WALK, px: 0, py: 0, s: 0, len: 0, sx: 0, sy: 0, t: 0, ticket: 0, destId: '', endLocalX: 0 });
+      this.slots.push({ person: null, route: new Route(), leg: 0, mode: M_WALK, px: 0, py: 0, s: 0, len: 0, sx: 0, sy: 0, t: 0, ticket: 0, destId: '', endLocalX: 0, evac: false });
     }
   }
 
@@ -156,12 +174,90 @@ export class Walkers {
     }
     slot.person = person;
     slot.destId = toId;
+    slot.evac = false;
     slot.endLocalX = to.x - toView.root.x;
     slot.px = wx;
     slot.py = wy;
     slot.leg = 1;
     slot.ticket = 0;
     this.active++;
+    this.stats.started++;
+    person.beginTransit();
+    this.layer.addChild(c);
+    c.position.set(wx, wy);
+    this.beginLeg(slot);
+    return true;
+  }
+
+  /** [plan4:polish] Once a picture: which rooms are in trouble (a fire incident, or a collapse / meltdown disaster aimed at the room). No allocation. */
+  refreshHot(state: GameState): void {
+    const prev = this.hot, next = this.hotB;
+    next.clear();
+    for (const i of state.incidents ?? []) if (i.kind === 'fire' && i.buildingId) next.add(i.buildingId);
+    for (const d of state.danger?.disasters ?? []) if ((d.kind === 'collapse' || d.kind === 'meltdown') && d.buildingId) next.add(d.buildingId);
+    for (const id of next) if (!prev.has(id)) this.epochs.set(id, (this.epochs.get(id) ?? 0) + 1);
+    this.hot = next;
+    this.hotB = prev;
+  }
+
+  /** Whether a room is in trouble right now (evacuate only makes sense then). */
+  isHot(roomId: string): boolean {
+    return this.hot.has(roomId);
+  }
+
+  /** [plan4:polish] The light on a walker in the shaft and the corridors: the rooms' warm lamp-lit tint, dimmed with the power and the depth (people.ts / BunkerRenderer use the same numbers). */
+  private ambientAt(y: number): number {
+    const dg = depthGains(y - ROOM_H / 2);
+    const v = 0.9 * (0.62 + 0.38 * this.power) * 0.96;
+    const ch = (base: number, g: number) => Math.round(Math.min(255, base * v * g));
+    return (ch(255, dg[0]) << 16) | (ch(240, dg[1]) << 8) | ch(218, dg[2]);
+  }
+
+  /** [plan4:polish] The nearest way out on the person's floor: a stairwell (built column or an evacuation room), else the shaft's ladder. */
+  private exitFor(state: GameState, floor: number, wx: number): number {
+    let best = LADDER_X, bestD = Math.abs(LADDER_X - wx) + 40; // (the shaft is the fallback: a stairwell has to be clearly nearer to win)
+    const consider = (x: number): void => { const d = Math.abs(x - wx); if (d < bestD) { bestD = d; best = x; } };
+    for (const i of state.layout?.infra ?? []) {
+      if (i.kind === 'stairwell' && floor >= i.floor && floor <= i.floor + Math.max(1, i.floors ?? 1) - 1) consider(slotX(i.x) + SLOT_W / 2);
+    }
+    for (const b of state.buildings) {
+      if (b.position.floor === floor && !b.isConstructing && getDef(b.type)?.effects?.evacuation) consider(slotX(b.position.x) + SLOT_W / 2);
+    }
+    return best;
+  }
+
+  /**
+   * [plan4:polish] A fire or a collapse is on in the room (`hot`): `person`, standing in it, walks out to the nearest stairwell or the shaft and waits there until it
+   * is over, then comes back to the doorway. Cosmetic only (nothing the simulation reads changes). True when the walk started and the renderer must leave them alone.
+   */
+  evacuate(person: Person, view: WalkView, roomId: string, state: GameState, zoom: number): boolean {
+    if (!GFX.walkers || this.evacuees >= MAX_EVACUEES || this.active >= MAX_WALKERS || zoom < WALK_MIN_ZOOM) return false;
+    if (person.inTransit || person.isLifted || this.evacuated.get(person) === `${roomId}#${this.epochs.get(roomId) ?? 0}`) return false;
+    const c = person.container;
+    if (c.parent !== view.people || !c.visible) return false;
+    const wx = view.root.x + view.people.x + c.x;
+    const wy = view.root.y + view.people.y + c.y;
+    if (!this.inView(wx, wy)) return false;
+    const from = this.from, to = this.to;
+    from.floor = to.floor = floorIndexAt(wy);
+    from.x = wx;
+    from.y = to.y = wy;
+    to.x = this.exitFor(state, from.floor, wx);
+    const slot = this.free();
+    if (!slot) return false;
+    const r = route(state, from, to, false, 0, slot.route);
+    if (!r || r.n < 2) return false; // already there, or a shut door in the way: they stay
+    slot.person = person;
+    slot.destId = roomId;
+    slot.evac = true;
+    slot.endLocalX = entryX(view.root.x, view.width, to.x) - view.root.x;
+    slot.px = wx;
+    slot.py = wy;
+    slot.leg = 1;
+    slot.ticket = 0;
+    this.active++;
+    this.evacuees++;
+    this.evacuated.set(person, `${roomId}#${this.epochs.get(roomId) ?? 0}`);
     this.stats.started++;
     person.beginTransit();
     this.layer.addChild(c);
@@ -204,6 +300,11 @@ export class Walkers {
       s.len = k === LEG_STAIRS && fl > 0 ? fl * Math.hypot(r.amp[s.leg] * 2, Math.abs(y1 - y0) / fl) : Math.abs(y1 - y0) + Math.abs(x1 - x0);
       return;
     }
+    if (s.evac) {
+      s.mode = M_HOLD;
+      s.t = 0;
+      return;
+    }
     this.finish(s, false);
   }
 
@@ -216,6 +317,7 @@ export class Walkers {
     p.setRiding(false);
     p.endTransit(s.endLocalX, 0.5);
     if (p.container.parent === this.layer) this.layer.removeChild(p.container);
+    if (s.evac) { this.evacuees--; s.evac = false; }
     s.person = null;
     this.active--;
     if (cut) this.stats.cut++;
@@ -233,6 +335,7 @@ export class Walkers {
       p.abortTransit();
       if (!keepOut && p.container.parent === this.layer) this.layer.removeChild(p.container);
     }
+    if (s.evac) { this.evacuees--; s.evac = false; }
     s.person = null;
     this.active--;
     this.stats.cut++;
@@ -260,6 +363,7 @@ export class Walkers {
   private step(s: Slot, p: Person, dt: number, t: number): void {
     const r = s.route;
     const lift = this.lift;
+    if (s.mode !== M_RIDE) p.setAmbient(this.ambientAt(s.py)); // plan4:polish in transit they wear the light of where they are, not of the room they left
     switch (s.mode) {
       case M_WALK: {
         const tx = r.x[s.leg], ty = r.y[s.leg];
@@ -294,6 +398,12 @@ export class Walkers {
           s.mode = M_RIDE;
           s.t = 0;
         }
+        return;
+      }
+      case M_HOLD: {
+        s.t += dt;
+        p.stepTransit(dt, t, s.px, s.py, 0, 0, false);
+        if (!this.hot.has(s.destId) || s.t > HOLD_MAX) this.finish(s, false); // safe again (or long enough): back to the room's doorway
         return;
       }
       case M_RIDE: {

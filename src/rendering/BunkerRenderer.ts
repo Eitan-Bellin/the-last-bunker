@@ -886,6 +886,8 @@ export class BunkerRenderer {
 
   private renderPeople(state: GameState, dt: number): void {
     this.doorState = state; setDoorBlocked(this.doorBlockedFn); // plan4:ST-14/18 closed or sealed bulkheads stop walkers
+    this.walkers.power = state.powerRatio ?? 1; // plan4:polish
+    this.walkers.refreshHot(state); // plan4:polish rooms on fire or collapsing: their crew walks out
     this.walkers.update(dt, this.time, this.cam.zoom); // plan4:ST-18 (before the placement below, so a finished walk is placed this picture)
     const quarters = state.buildings.filter(b => b.type === 'quarters' && !(b.isConstructing && b.level === 1));
     const seen = new Set<string>();
@@ -949,6 +951,7 @@ export class BunkerRenderer {
         view.people.addChild(person.container);
         person.placeIn(roomId!, view.lane);
       }
+      if (!ruinView && this.walkers.isHot(roomId!) && this.walkers.evacuate(person, this.views.get(roomId!)!, roomId!, state, this.cam.zoom)) continue; // plan4:polish fire or collapse: out to the stairwell
       // gfx-p0 people: the room's crowd (work spots at the painted equipment, spacing, the lamp shadows fall from).
       const cv = view as unknown as { width: number; visualSig: string; height?: number };
       person.setCrowd(crowdFor(view.people, view.lane, cv.visualSig, cv.width, this.gfx2, cv.height ?? ROOM_H));
@@ -1055,6 +1058,7 @@ export class BunkerRenderer {
       this.utilitiesHolder.addChild(this.group(buildSignage({
         buildings: state.buildings, ruins: state.ruins, floors: this.floors, era: Math.max(0, this.surfaceEra),
         locale: i18n.currentLocale, rtl: i18n.isRTL, lamps, ambient: 0.5 - this.gloom * 0.35, memorial, exts,
+        infra: state.layout?.infra, // plan4:polish
       }), 'signage'));
       // [gfx2 wear] Wear decals in front of the structure (clear of the signage), then the atmosphere.
       const wearEra = Math.max(0, this.surfaceEra);
