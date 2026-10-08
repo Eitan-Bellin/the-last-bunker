@@ -60,7 +60,8 @@ export const LIP = 3;
 export const SLAB_DRAW = SLAB + LIP;
 export const COLUMN_W = 9;
 export const PIPES_Y = 1;
-export const PIPES_H = 11;
+/** [airy2:D1] A thinner bundle under airy, so the ceiling of the alcove shows below it. */
+export const PIPES_H = GFX.airy ? 6 : 11;
 /** Ambient occlusion: dark ramp beside every column, contact line where a room floor meets the slab lip. */
 export const AO_SIDE = 8;
 export const AO_CONTACT = 4;

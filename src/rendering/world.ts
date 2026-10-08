@@ -550,11 +550,12 @@ export function buildUtilities(buildings: BuildingInstance[], floors: number, pa
     }
     const inHall = (x: number) => halls.some(([h0, h1]) => x >= h0 && x <= h1);
     if (!painted) for (let x = ROOMS_X + 20; x < slotX(fe.e); x += 46) if (!inHall(x)) g.rect(x, top, 1.5, 11).fill(0x7a7f86);
-    for (const x of powerDrops) {
+    // [airy2:D1] The rooms have their own painted lamps and ceilings now: the black power drops with a yellow box and the water drops would only double them.
+    for (const x of GFX.airy && painted ? [] : powerDrops) {
       g.rect(x - 1, yP + 2, 2.5, DEPTH_TOP + 8).fill(0x151518);
       g.roundRect(x - 3, yP + DEPTH_TOP + 8, 7, 5, 1).fill(0xd9a441);
     }
-    for (const x of waterDrops) {
+    for (const x of GFX.airy && painted ? [] : waterDrops) {
       g.rect(x - 1.5, yW + 3, 3.5, DEPTH_TOP + 4).fill(painted ? 0x3e4a40 : 0x35587a);
       if (painted) g.rect(x - 1.5, yW + 3, 1, DEPTH_TOP + 4).fill({ color: 0xa0a890, alpha: 0.35 });
       g.roundRect(x - 3, yW + DEPTH_TOP + 6, 8, 4, 1).fill(painted ? 0x5a5e52 : 0x4a7aa8);

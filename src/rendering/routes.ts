@@ -1,7 +1,11 @@
 import type { GameState } from '../core/GameState';
 import { getDef } from '../data/buildingDefs';
 import { doorwayX } from './openings';
-import { ROOMS_X, ROOM_H, SHAFT_GAP, SHAFT_W, SLOT_W, floorTop, slotAtX, slotX } from './geom';
+import { CORR_LANE, ROOMS_X, ROOM_H, SHAFT_GAP, SHAFT_W, SLOT_W, floorTop, slotAtX, slotX, extentsFor } from './geom';
+import { GFX } from './gfxFeatures';
+import { occupancy } from './occupancy';
+import { voidXs } from './voids';
+import { FLIGHTS_PER_FLOOR, TOWER_AMP } from './circulation';
 
 /**
  * [plan4:ST-18] Route planning for people walking between rooms, floors and the lift. Purely cosmetic (decision D4): nothing here
@@ -18,7 +22,7 @@ export const LEG_LIFT = 1;
 export const LEG_STAIRS = 2;
 export const LEG_LADDER = 3;
 
-export const MAX_WP = 10;
+export const MAX_WP = 16;
 
 export class Route {
   n = 0;
@@ -68,6 +72,11 @@ export const LINE_OFF = ROOM_H - 8;
 
 export function lineY(floor: number, groundY = -8): number {
   return floor >= 0 ? floorTop(floor) + LINE_OFF : groundY;
+}
+
+/** [airy2:D1] The lane of the front corridor of a floor: where people walk between rooms (the room's floor line is at floorTop + ROOM_H, the lane sits CORR_LANE below it). */
+export function laneY(floor: number): number {
+  return floorTop(floor) + ROOM_H + CORR_LANE;
 }
 
 // --- Doors -----------------------------------------------------------------------------------------------------------------------
@@ -143,6 +152,22 @@ export function stairColumnX(state: GameState, lo: number, hi: number): number {
   return NaN;
 }
 
+/**
+ * [airy2:D3] The world x of the stair tower (the one standing in front of a cluster void) nearest to `nearX` that runs through every floor from lo to hi, or NaN when there
+ * is none (flag off, or the floors do not reach that far).
+ */
+export function towerColumnX(state: GameState, lo: number, hi: number, nearX: number): number {
+  if (!GFX.airy || lo < 0) return NaN;
+  const grid = occupancy(state.buildings, state.ruins ?? [], state.currentFloors, extentsFor(state, state.currentFloors));
+  let best = NaN, bestD = Infinity;
+  for (const x of voidXs(grid)) {
+    let ok = true;
+    for (let f = lo; f <= hi && ok; f++) ok = (grid.ext[f]?.e ?? 0) > Math.round((x - ROOMS_X) / SLOT_W);
+    if (ok && Math.abs(x - nearX) < bestD) { bestD = Math.abs(x - nearX); best = x; }
+  }
+  return best;
+}
+
 // --- Planning --------------------------------------------------------------------------------------------------------------------
 
 /** The route most callers can plan into when they copy the result straight away. */
@@ -158,13 +183,32 @@ function push(r: Route, kind: number, floor: number, x: number, y: number): void
   r.flights[i] = 0;
 }
 
-/** Adds a walk along the current floor to x (skipped when already there). False when a closed door is in the way. */
-function walkTo(r: Route, x: number): boolean {
+/**
+ * Adds a walk along the current floor to x (skipped when already there). False when a closed door is in the way. [airy2:D1] With the corridor on, a walk of any length
+ * steps out of the room onto the lane of the front corridor, follows it, and steps back in at the other end (`yEnd`: the line of the room, the tower's landing...).
+ */
+function walkTo(r: Route, x: number, yEnd?: number): boolean {
   const i = r.n - 1;
-  if (Math.abs(r.x[i] - x) < 0.5) return true;
-  if (walkBlocked(r.floor[i], r.x[i], x)) return false;
-  push(r, LEG_WALK, r.floor[i], x, r.y[i]);
-  r.seconds += Math.abs(x - r.x[i]) / WALK_SPEED;
+  const f = r.floor[i];
+  const y1 = yEnd ?? r.y[i];
+  if (Math.abs(r.x[i] - x) < 0.5 && Math.abs(r.y[i] - y1) < 0.5) return true;
+  if (walkBlocked(f, r.x[i], x)) return false;
+  const dx = x - r.x[i];
+  if (GFX.airy && f >= 0 && Math.abs(dx) > 40) {
+    const lane = laneY(f), s = dx > 0 ? 1 : -1, out = 7;
+    if (Math.abs(r.y[i] - lane) > 0.5) {
+      push(r, LEG_WALK, f, r.x[i] + s * out, lane);
+      r.seconds += Math.hypot(out, lane - r.y[i]) / WALK_SPEED;
+    }
+    const j = r.n - 1;
+    push(r, LEG_WALK, f, x - s * out, lane);
+    r.seconds += Math.abs(x - s * out - r.x[j]) / WALK_SPEED;
+    push(r, LEG_WALK, f, x, y1);
+    r.seconds += Math.hypot(out, lane - y1) / WALK_SPEED;
+    return true;
+  }
+  push(r, LEG_WALK, f, x, y1);
+  r.seconds += Math.abs(dx) / WALK_SPEED;
   return true;
 }
 
@@ -186,7 +230,22 @@ function hop(r: Route, state: GameState, toFloor: number, liftOk: boolean, rnd: 
     return true;
   }
   const stairX = n <= 6 ? stairColumnX(state, lo, hi) : NaN;
-  const useStairs = !Number.isNaN(stairX) && (!liftOk || (n <= 2 && rnd < 0.3));
+  // [airy2:D3] The tower in front of a cluster void is a stair of its own: four flights a floor, wide enough to watch.
+  const towerX = n <= 6 ? towerColumnX(state, lo, hi, r.x[i]) : NaN;
+  const useTower = !Number.isNaN(towerX) && (Number.isNaN(stairX) || Math.abs(towerX - r.x[i]) < Math.abs(stairX - r.x[i]));
+  const useStairs = (useTower || !Number.isNaN(stairX)) && (!liftOk || (n <= 2 && rnd < (useTower ? 0.4 : 0.3)));
+  if (useStairs && useTower) {
+    const amp = TOWER_AMP;
+    if (!walkTo(r, towerX - amp, laneY(from))) return false;
+    const y0 = r.y[r.n - 1];
+    push(r, LEG_STAIRS, toFloor, towerX - amp, laneY(toFloor));
+    const k = r.n - 1;
+    const fl = FLIGHTS_PER_FLOOR * n;
+    r.amp[k] = amp;
+    r.flights[k] = fl;
+    r.seconds += (fl * Math.hypot(amp * 2, Math.abs(r.y[k] - y0) / fl)) / STAIR_SPEED;
+    return true;
+  }
   if (useStairs) {
     const amp = SLOT_W * 0.32;
     if (!walkTo(r, stairX - amp)) return false;
