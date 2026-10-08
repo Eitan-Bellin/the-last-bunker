@@ -1,0 +1,7 @@
+BOOT minimal hud: true {"splash":false,"modal":"","body":"150\n0.00\n100\n0.00\n10\n0.00\n70\n0.00\n▾ 3\n0/0\n50%\n06:01\n שבצו עובדים בחווה ובמשאבה\n0/2 · \n \n25 \n25\nבנייה\nניצולים\nמחקר\nשטח\n פני השטח"} errors: 
+BOOT buildings:[null] hud: true {"splash":false,"modal":"","body":"0\n0\n0\n0\n0\n0\n0\n0\n0\n0\n0\n0\n0/0\n50%\n06:00\nבנייה\nניצולים\nמחקר\nשטח\n פני השטח\nהמשחק לא הצליח להיפתח.\nההתקדמות שלכם שמורה. נסו שוב.\nThe game could not start. Your progr"} errors: [error] [crashGuard] start: TypeError: Cannot read properties of null (reading 'id')
+    at uc.syncNextId (http://127.0.0.1:4310/assets/index-CltYMU_3.js:2:160889)
+    at oh.adoptState (http://127.0.0.1:4310/assets/index-CltYMU_3.js:2:430107)
+    at oh.init (http://127.0.0.1:4310/assets/index-CltYMU
+bomb: compressed chars 18828 decompressed bytes 41943096
+bomb importSave (sync, main thread): {"ok":true,"ms":793}

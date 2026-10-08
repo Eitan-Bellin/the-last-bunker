@@ -1,0 +1,10 @@
+B xss-names+hex {"ok":true} ms 16088 xss null newlogs: 
+  people panel after import: {"imgs":0,"hasText":true,"xss":null}
+  surface hex injection: {"hexes":993,"injectedAttr":1,"xss":2}
+A minimal {resources,buildings,survivors} {"ok":true} ms 23194 xss 2 newlogs: [error] [crashGuard] promise: TypeError: Failed to execute 'createRadialGradient' on 'CanvasRenderingContext2D': The provided double value is non-finite.
+    at Wk (http://127.0.0.1:4310/assets/index-CltYMU_3.js:135:195464)
+    at http://127.0.0.1:4310/assets/index-CltYMU_3.js:135:202031 | [pageerror] Failed to execute 'createRadialGradient' on 'CanvasRenderingContext2D': The provided double value is non-finite.
+  main save length after minimal import: 3071
+  logs all errors: [error] Failed to load resource: net::ERR_FAILED | [error] Error: <svg> attribute viewBox: Expected number, "NaN NaN NaN NaN". | [error] Error: <polygon> attribute points: Expected number, "NaN,-9.5 NaN,9.5…". | [error] [crashGuard] promise: TypeError: Failed to execute 'createRadialGradient' on 'CanvasRenderingContext2D': The provided double value is non-finite.
+    at Wk (http://127.0.0.1:4310/assets/index-CltYMU_3.js:135:195464)
+    at http://127.0.0.1:4310/assets/index-CltYMU_3.js:135:202031 | [pageerror] Failed to execute 'createRadialGradient' on 'CanvasRenderingContext2D': The provided double value is non-finite.
