@@ -84,3 +84,7 @@
 /* [plan4:UX-5 follow-up] Review on iPhone sizes: the full-size buttons (Upgrade, Start research, people tabs) measured 37-40px. A real
    44px box for all of them; the .btn-small family keeps its 34px look with the 44px ::after hit area from touch.css. */
 .btn:not(.btn-small) { min-height: var(--tap, 44px); }
+/* The volume sliders were 28px tall: the thumb is the touch target, so the control is a 44px band (the track stays centred). */
+.vol-slider { height: var(--tap, 44px); }
+/* A very narrow small button (the "?" help, 29px wide) got only 5px of hit area each side: widen the ::after to 44 whatever the width. */
+.btn-small::after { inset-inline: min(-5px, calc((var(--tap, 44px) - 100%) / -2 - 1px)); }
