@@ -48,8 +48,10 @@ export const SPECS_B: Record<string, RoomSpec> = {
       p.rect(14, yb + 7, 56, 1.2, 0xc8a02a, 0.8);
       p.stripes(14, yb + 8.2, 56, 0.8, 0xc8a02a, 0x1a1a1a, 3);
       if (p.tier === 0) p.stain(50, yb - 24, 9, 0x4a1a14, 0.18);
-      p.spot(0.46, 1, 'tend', 0.55);
-      p.spot(0.7, -1, 'tend', 0.5);
+      // [plan4:BL-7 quality pass] The two nurses used to stand 22 units apart both leaning right, and in the game they merged into one clump
+      // (seen at 390x844): one at each pod, facing each other across the screen.
+      p.spot(0.3, 1, 'tend', 0.55);
+      p.spot(0.74, -1, 'tend', 0.5);
     },
   },
 

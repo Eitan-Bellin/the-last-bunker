@@ -89,6 +89,13 @@ export interface RoomSpec {
   dim?: number;
   /** An open-air room of the surface row (solar field, mast, tower): a dusk sky and broken ground instead of walls, a ceiling and a floor. */
   outdoor?: boolean;
+  /**
+   * [plan4:BL-7] A district (a natural cavern at the east end of a floor, 4 slots): rock walls, a rough ceiling and an uneven floor instead of the
+   * steel-and-plaster shell, and the picture is keyed `districts/<type>-<tier>` instead of `rooms/...` (see composedKey in art/registry.ts).
+   */
+  district?: boolean;
+  /** [plan4:BL-7] Where people may walk in a district whose floor is not flat (the same fields as workSpots.ts' RoomDef): a ledge, a water edge. */
+  walk?: { range?: readonly [number, number]; dy?: number; block?: readonly (readonly [number, number])[] };
 }
 
 export interface ComposeResult {
@@ -104,6 +111,8 @@ export interface ComposedMeta {
   spots: ComposedSpot[];
   beds: { x: number; y: number; head: -1 | 1 }[];
   seats: { x: number; y: number; face: 1 | -1; kind: 'sit' | 'eat' }[];
+  /** [plan4:BL-7] The spec's `walk` (districts only). */
+  walk?: RoomSpec['walk'];
 }
 
 type Ctx2D = CanvasRenderingContext2D;
@@ -570,7 +579,9 @@ export class Painter {
 
 export type IconName =
   | 'bolt' | 'book' | 'cog' | 'drop' | 'mushroom' | 'shield' | 'cross' | 'sun' | 'wind' | 'tower' | 'wrench' | 'recycle' | 'coin'
-  | 'apple' | 'flame' | 'bio' | 'block' | 'cup' | 'chevrons' | 'fish' | 'truck' | 'steam' | 'bed' | 'eye' | 'star';
+  | 'apple' | 'flame' | 'bio' | 'block' | 'cup' | 'chevrons' | 'fish' | 'truck' | 'steam' | 'bed' | 'eye' | 'star'
+  // [plan4:BL-7] wave 3: data center, forum, seed lab, vault, geothermal vent
+  | 'chip' | 'columns' | 'leaf' | 'vault' | 'vent' | 'anvil';
 
 const ICONS: Record<IconName, (c: Ctx2D) => void> = {
   bolt: c => { c.beginPath(); c.moveTo(0.25, -1); c.lineTo(-0.55, 0.12); c.lineTo(-0.05, 0.12); c.lineTo(-0.3, 1); c.lineTo(0.6, -0.2); c.lineTo(0.08, -0.2); c.closePath(); c.fill(); },
@@ -611,6 +622,17 @@ const ICONS: Record<IconName, (c: Ctx2D) => void> = {
   steam: c => { c.lineWidth = 0.22; for (const x of [-0.55, 0, 0.55]) { c.beginPath(); c.moveTo(x, 0.9); c.bezierCurveTo(x - 0.3, 0.4, x + 0.3, 0.1, x, -0.4); c.bezierCurveTo(x - 0.2, -0.7, x + 0.1, -0.85, x, -1); c.stroke(); } },
   bed: c => { c.fillRect(-1, 0.1, 2, 0.4); c.fillRect(-1, -0.6, 0.25, 1.1); c.fillRect(0.75, 0.1, 0.25, 0.6); c.beginPath(); c.ellipse(-0.45, -0.05, 0.28, 0.2, 0, 0, Math.PI * 2); c.fill(); },
   eye: c => { c.beginPath(); c.moveTo(-1, 0); c.quadraticCurveTo(0, -0.95, 1, 0); c.quadraticCurveTo(0, 0.95, -1, 0); c.fill(); c.fillStyle = 'rgba(0,0,0,0.6)'; c.beginPath(); c.arc(0, 0, 0.32, 0, Math.PI * 2); c.fill(); },
+  chip: c => {
+    c.fillRect(-0.55, -0.55, 1.1, 1.1);
+    c.lineWidth = 0.18;
+    for (const k of [-0.33, 0, 0.33]) { c.beginPath(); c.moveTo(k, -0.55); c.lineTo(k, -0.95); c.moveTo(k, 0.55); c.lineTo(k, 0.95); c.moveTo(-0.55, k); c.lineTo(-0.95, k); c.moveTo(0.55, k); c.lineTo(0.95, k); c.stroke(); }
+    c.fillStyle = 'rgba(0,0,0,0.55)'; c.fillRect(-0.28, -0.28, 0.56, 0.56);
+  },
+  columns: c => { c.fillRect(-0.95, -0.9, 1.9, 0.28); c.fillRect(-0.95, 0.62, 1.9, 0.28); for (const x of [-0.7, -0.23, 0.23, 0.7]) c.fillRect(x - 0.1, -0.62, 0.2, 1.24); c.beginPath(); c.moveTo(-1, -0.9); c.lineTo(0, -1.15); c.lineTo(1, -0.9); c.closePath(); c.fill(); },
+  leaf: c => { c.beginPath(); c.moveTo(-0.85, 0.85); c.bezierCurveTo(-1, -0.3, -0.2, -0.95, 0.95, -0.9); c.bezierCurveTo(1, 0.2, 0.3, 0.9, -0.85, 0.85); c.closePath(); c.fill(); c.strokeStyle = 'rgba(0,0,0,0.5)'; c.lineWidth = 0.14; c.beginPath(); c.moveTo(-0.8, 0.8); c.lineTo(0.45, -0.45); c.stroke(); },
+  vault: c => { c.beginPath(); c.arc(0, 0, 0.95, 0, Math.PI * 2); c.fill(); c.fillStyle = 'rgba(0,0,0,0.6)'; c.beginPath(); c.arc(0, 0, 0.62, 0, Math.PI * 2); c.fill(); c.fillStyle = c.strokeStyle; for (let i = 0; i < 3; i++) { const a = (i / 3) * Math.PI * 2 - Math.PI / 2; c.fillRect(Math.cos(a) * 0.3 - 0.07, Math.sin(a) * 0.3 - 0.07, 0.14, 0.14); c.beginPath(); c.moveTo(0, 0); c.lineTo(Math.cos(a) * 0.55, Math.sin(a) * 0.55); c.lineWidth = 0.14; c.stroke(); } },
+  anvil: c => { c.beginPath(); c.moveTo(-1, -0.45); c.lineTo(0.55, -0.45); c.lineTo(1, -0.7); c.lineTo(1, -0.1); c.lineTo(0.45, -0.1); c.lineTo(0.35, 0.3); c.lineTo(0.7, 0.3); c.lineTo(0.7, 0.75); c.lineTo(-0.7, 0.75); c.lineTo(-0.7, 0.3); c.lineTo(-0.35, 0.3); c.lineTo(-0.3, -0.1); c.lineTo(-1, -0.1); c.closePath(); c.fill(); },
+  vent: c => { c.beginPath(); c.moveTo(-0.9, 0.95); c.lineTo(-0.35, -0.1); c.lineTo(0.35, -0.1); c.lineTo(0.9, 0.95); c.closePath(); c.fill(); c.lineWidth = 0.2; for (const x of [-0.4, 0.05, 0.5]) { c.beginPath(); c.moveTo(x, -0.3); c.bezierCurveTo(x - 0.3, -0.55, x + 0.3, -0.7, x, -1); c.stroke(); } },
   star: c => { c.beginPath(); for (let i = 0; i < 10; i++) { const a = (i / 10) * Math.PI * 2 - Math.PI / 2, r = i % 2 ? 0.45 : 1; c.lineTo(Math.cos(a) * r, Math.sin(a) * r); } c.closePath(); c.fill(); },
 };
 
@@ -724,6 +746,73 @@ function drawSky(p: Painter, spec: RoomSpec): void {
   p.polyG([W - 6, 0, W, 0, W, H, W - 6, H], 0, H, [[0, 0x2a2b2f], [1, 0x1c1d20]]);
   void spec;
   void tier;
+}
+
+/**
+ * [plan4:BL-7] The cavern variant of the shell (districts): a back wall of rock with strata and boulders, a jagged ceiling with stalactites,
+ * an uneven floor, side walls of broken rock. `pal.wall` is the rock, `pal.floor` the ground, `pal.accent` tints the strata.
+ * One draw, the same budget as the room shell; the spec then adds its own features (vents, a vault door, shelves) on top.
+ */
+function drawCavern(p: Painter, spec: RoomSpec): void {
+  if (p.dry) return;
+  const { W, H, inB } = p;
+  const rock = mute(spec.pal.wall, 0.2);
+  const ground = spec.pal.floor;
+  // Back wall: lit a little from above, sinking into darkness at the floor.
+  p.rectG(0, 0, W, inB + 4, [[0, shade(rock, 1.05)], [0.5, shade(rock, 0.85)], [1, shade(rock, 0.55)]]);
+  // Strata: long horizontal bands that wander a little, slightly lighter and darker alternately.
+  for (let i = 0; i < 9; i++) {
+    const y = 10 + i * 8.5 + p.vr() * 3;
+    const pts: number[] = [];
+    for (let x = 0; x <= W; x += 14) pts.push(x, y + Math.sin(x * 0.07 + i * 1.7) * 1.8 + p.vr() * 0.8);
+    const thick = 1.4 + p.vr() * 2.6;
+    const band: number[] = [...pts];
+    for (let k = pts.length - 2; k >= 0; k -= 2) band.push(pts[k], pts[k + 1] + thick);
+    p.poly(band, i % 2 ? mix(rock, spec.pal.accent, 0.16) : shade(rock, 0.62), 0.38);
+  }
+  // Boulders and chips of the wall: soft blobs, lit on the upper left.
+  for (let i = 0; i < 22; i++) {
+    const bx = p.vr() * W, by = 8 + p.vr() * (inB - 14), r = 3 + p.vr() * 9;
+    p.ell(bx, by, r, r * 0.7, shade(rock, 0.55 + p.vr() * 0.2), 0.45);
+    p.ell(bx - r * 0.25, by - r * 0.2, r * 0.6, r * 0.38, shade(rock, 1.15), 0.2);
+  }
+  p.speckle(0, 0, W, inB, 0x000000, 260, 0.35, 0.7);
+  p.speckle(0, 0, W, inB, mix(rock, 0xffffff, 0.35), 90, 0.22, 0.6);
+  for (let i = 0; i < 4; i++) p.crack(10 + p.vr() * (W - 20), 8 + p.vr() * 20, 24 + p.vr() * 14, 0.5);
+  // Ceiling: a heavy jagged mass with stalactites.
+  const ceil: number[] = [0, 0, W, 0];
+  for (let x = W; x >= 0; x -= 9) ceil.push(x, 7 + p.vr() * 9 + (x > W * 0.15 && x < W * 0.85 ? 0 : 5));
+  p.polyG(ceil, 0, 18, [[0, shade(rock, 0.28)], [1, shade(rock, 0.5)]]);
+  for (let i = 0; i < 9; i++) {
+    const sx = 14 + (i * (W - 28)) / 8 + (p.vr() - 0.5) * 8, len = 5 + p.vr() * 11, w = 2 + p.vr() * 2.4;
+    p.poly([sx - w, 9, sx + w, 9, sx + (p.vr() - 0.5) * 1.2, 9 + len], shade(rock, 0.4));
+    p.poly([sx - w, 9, sx - w * 0.1, 9, sx + (p.vr() - 0.5) * 1.2, 9 + len], shade(rock, 0.7), 0.7);
+  }
+  // Floor: packed earth and rubble, darker toward the back where it meets the wall, with a crooked edge.
+  const edge: number[] = [0, H, W, H];
+  for (let x = W; x >= 0; x -= 8) edge.push(x, inB - 1 + Math.sin(x * 0.11) * 1.6 + p.vr() * 2);
+  p.polyG(edge, inB - 3, H, [[0, shade(ground, 0.5)], [0.35, shade(ground, 0.8)], [1, shade(ground, 1.05)]]);
+  p.rectG(0, inB - 6, W, 8, [[0, 0x000000, 0], [1, 0x000000, 0.3]]);
+  p.speckle(0, inB, W, H - inB, 0x000000, 150, 0.4, 0.8);
+  p.speckle(0, inB, W, H - inB, mix(ground, 0xffffff, 0.3), 70, 0.25, 0.7);
+  for (let i = 0; i < 10; i++) p.ell(p.vr() * W, inB + 2 + p.vr() * (H - inB - 4), 1.2 + p.vr() * 3, 0.8 + p.vr() * 1.2, shade(ground, 0.55 + p.vr() * 0.5), 0.8);
+  // Side walls: broken rock closing in toward the viewer.
+  const left: number[] = [0, 0];
+  for (let y = 0; y <= H; y += 8) left.push(6 + p.vr() * 7 + (1 - Math.abs(y - H / 2) / (H / 2)) * 4, y);
+  left.push(0, H);
+  p.polyG(left, 0, H, [[0, shade(rock, 0.4)], [1, shade(rock, 0.22)]]);
+  const right: number[] = [W, 0];
+  for (let y = 0; y <= H; y += 8) right.push(W - 6 - p.vr() * 7 - (1 - Math.abs(y - H / 2) / (H / 2)) * 4, y);
+  right.push(W, H);
+  p.polyG(right, 0, H, [[0, shade(rock, 0.34)], [1, shade(rock, 0.2)]]);
+  // Wear by tier: raw caverns carry loose rubble; a developed one is swept, with only a few stones left.
+  const rubble = p.t(9, 4, 2);
+  for (let i = 0; i < rubble; i++) {
+    const rx = 12 + p.vr() * (W - 24), ry = inB + 3 + p.vr() * 9, r = 1.4 + p.vr() * 2.6;
+    p.shadow(rx, ry + 1, r, 0.3);
+    p.ell(rx, ry, r, r * 0.7, shade(ground, 0.7 + p.vr() * 0.4));
+    p.ell(rx - r * 0.2, ry - r * 0.25, r * 0.5, r * 0.3, 0xffffff, 0.12);
+  }
 }
 
 // ---------------------------------------------------------------- light pass and finish
@@ -849,7 +938,9 @@ export function registerRoomSpecs(specs: Record<string, RoomSpec>): void {
   if (!disabled) for (const [k, v] of Object.entries(specs)) SPEC_TABLE.set(k, v);
 }
 export const hasComposedSpec = (type: string): boolean => SPEC_TABLE.has(type);
-export const composedTypes = (): string[] => [...SPEC_TABLE.keys()];
+/** Room types drawn in code. [plan4:BL-7] Districts are listed apart (composedDistrictTypes): their pictures are `districts/...`, not `rooms/...`. */
+export const composedTypes = (): string[] => [...SPEC_TABLE].filter(([, v]) => !v.district).map(([k]) => k);
+export const composedDistrictTypes = (): string[] => [...SPEC_TABLE].filter(([, v]) => v.district).map(([k]) => k);
 export const composedSpec = (type: string): RoomSpec | undefined => SPEC_TABLE.get(type);
 
 const metaCache = new Map<string, ComposedMeta>();
@@ -862,6 +953,7 @@ export function composedMeta(type: string, tier: ComposeTier, slots: number): Co
   if (!spec) return null;
   const p = new Painter(type, slots * SLOT_W, tier, spec.pal, null);
   spec.build(p);
+  if (spec.walk) p.meta.walk = spec.walk;
   metaCache.set(key, p.meta);
   return p.meta;
 }
@@ -882,10 +974,12 @@ export function composeRoom(type: string, tier: ComposeTier, slots: number, stam
   const p = new Painter(type, W, tier, spec.pal, ctx);
   p.stampSource = stampSource ?? null;
   if (spec.outdoor) drawSky(p, spec);
+  else if (spec.district) drawCavern(p, spec);
   else drawShell(p, spec);
   spec.build(p);
   lightPass(p, spec, w, h);
   const m = finish(p, w, h);
+  if (spec.walk) p.meta.walk = spec.walk;
   metaCache.set(`${type}|${tier}|${slots}`, p.meta);
   return { canvas, lum: m.lum, rgb: m.rgb };
 }

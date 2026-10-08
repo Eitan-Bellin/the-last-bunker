@@ -1,6 +1,6 @@
 import type { BuildingType, Ruin } from '../core/GameState';
 import { getDef, roomSlots } from '../data/buildingDefs';
-import { composedMeta, composedSpec, composedTypes, hasComposedSpec, type ComposeTier } from '../rendering/roomComposer'; // [plan4:BL-6]
+import { composedDistrictTypes, composedMeta, composedSpec, composedTypes, hasComposedSpec, type ComposeTier } from '../rendering/roomComposer'; // [plan4:BL-6]
 import '../rendering/roomSpecs'; // [plan4:BL-6] registers the composed room specs (side effect)
 
 /**
@@ -443,11 +443,12 @@ function composedSlots(type: string): number {
 /**
  * [plan4:BL-6] A room key (`rooms/<type>-<tier>`) that can be composed in code (rendering/roomComposer.ts). `painted` = a painting exists for the
  * type (it is in PAINTED_TYPES), so the bake is only the fallback when the file is missing (tier C falls back to B).
+ * [plan4:BL-7] A composed district is `districts/<type>-<tier>` (the painted caves keep their single `districts/<type>` key and are never composed).
  */
 export function composedKey(key: string): { type: string; tier: ComposeTier; slots: number; painted: boolean } | null {
-  const m = /^rooms\/(\w+)-([012])$/.exec(key);
-  if (!m || !hasComposedSpec(m[1])) return null;
-  return { type: m[1], tier: Number(m[2]) as ComposeTier, slots: composedSlots(m[1]), painted: (PAINTED_TYPES as string[]).includes(m[1]) };
+  const m = /^(rooms|districts)\/(\w+)-([012])$/.exec(key);
+  if (!m || !hasComposedSpec(m[2]) || !!composedSpec(m[2])?.district !== (m[1] === 'districts')) return null;
+  return { type: m[2], tier: Number(m[3]) as ComposeTier, slots: composedSlots(m[2]), painted: (PAINTED_TYPES as string[]).includes(m[2]) };
 }
 
 function roomEntry(type: BuildingType, tier: RoomTier): ArtEntry {
@@ -464,6 +465,12 @@ function roomEntry(type: BuildingType, tier: RoomTier): ArtEntry {
   };
 }
 
+/** [plan4:BL-7] A composed district's picture: its own lights and effects (aligned with the bake), the district frame of paintedRoom. */
+function districtEntry(type: string, tier: RoomTier): ArtEntry {
+  const comp = composedMeta(type, tier, composedSlots(type));
+  return { key: `districts/${type}-${tier}`, kind: 'district', out: DISTRICT_OUT, lights: comp?.lights, fx: comp?.fx, baked: true };
+}
+
 export const PAINTED_TYPES: BuildingType[] = [
   'quarters', 'farm', 'generator', 'waterPump', 'workshop', 'medbay', 'canteen', 'laboratory',
   'radioTower', 'waterPurifier', 'trainingRoom', 'armory', 'reactor', 'hydroponics', 'storage',
@@ -474,6 +481,8 @@ const AVAILABLE_ROOMS: [BuildingType, RoomTier][] = PAINTED_TYPES.flatMap(t => [
 /** [plan4:BL-6] Room types drawn in code (no painting yet): every one gets the three tiers under the usual keys. */
 const COMPOSED_ROOMS: [BuildingType, RoomTier][] = composedTypes().filter(t => !(PAINTED_TYPES as string[]).includes(t))
   .flatMap(t => [[t, 0], [t, 1], [t, 2]] as [BuildingType, RoomTier][]);
+/** [plan4:BL-7] Composed districts, three looks each. */
+const COMPOSED_DISTRICTS: [string, RoomTier][] = composedDistrictTypes().flatMap(t => [[t, 0], [t, 1], [t, 2]] as [string, RoomTier][]);
 
 /** Ruin paintings: generic ruins in both widths, plus wrecked versions of the rooms found at the start. */
 export const RUIN_KEYS = [
@@ -490,8 +499,15 @@ function ruinEntry(key: string): ArtEntry {
 export const PORTRAIT_COUNT = 14;
 
 /** Natural spaces found when digging sideways: each is a wide cavern painting. */
-export const DISTRICT_KEYS = ['cave', 'lake', 'metro'] as const;
+export const DISTRICT_KEYS = ['cave', 'lake', 'metro', 'geothermal', 'oldVault'] as const; // [plan4:BL-7] the last two are drawn in code (roomSpecsD.ts)
 export type DistrictArt = typeof DISTRICT_KEYS[number];
+/**
+ * [plan4:BL-7] Districts that have a painting on disk (`districts/<kind>.webp`); the other kinds are composed, three looks each
+ * (`districts/<kind>-<tier>`). public/art/districts/geothermal.webp and oldVault.webp are NOT paintings in this sense: they are a still of the
+ * tier 1 bake, only for the "district found" card of ui/controllers/dig.ts (it loads `districts/<kind>.webp`); a real painting replaces them
+ * and the kind joins this list.
+ */
+export const PAINTED_DISTRICTS: readonly string[] = ['cave', 'lake', 'metro'];
 /** District paintings are twice as wide as tall (6 slots × one floor, with headroom). */
 export const DISTRICT_OUT: [number, number] = [960, 484];
 
@@ -538,7 +554,8 @@ export const ART: ArtEntry[] = [
   ...[1, 2, 3].map(i => ({ key: `story/intro-${i}`, kind: 'story' as const, out: [720, 963] as [number, number] })),
   ...[0, 1, 2, 3].map(i => ({ key: `backdrops/surface-${i}`, kind: 'backdrop' as const, out: [1400, 706] as [number, number] })),
   ...Array.from({ length: PORTRAIT_COUNT }, (_, i) => ({ key: portraitKey(i), kind: 'portrait' as const, out: [256, 256] as [number, number] })),
-  ...DISTRICT_KEYS.map(k => ({ key: `districts/${k}`, kind: 'district' as const, out: DISTRICT_OUT })),
+  ...DISTRICT_KEYS.filter(k => PAINTED_DISTRICTS.includes(k)).map(k => ({ key: `districts/${k}`, kind: 'district' as const, out: DISTRICT_OUT })),
+  ...COMPOSED_DISTRICTS.map(([t, tier]) => districtEntry(t, tier)), // [plan4:BL-7]
   ...HALL_KEYS.map(k => ({ key: `halls/${k}`, kind: 'hall' as const, out: HALL_OUT, fx: HALL_FX[k] })),
   { key: 'backdrops/rock', kind: 'backdrop', out: [472, 840], focusY: 0 },
   ...BIOME_ART.map(k => ({ key: `biomes/${k}`, kind: 'biome' as const, out: [840, 472] as [number, number] })),
@@ -560,7 +577,8 @@ export function roomArtKey(type: BuildingType, tier: RoomTier): string | null {
 
 /** Painting for any building type, including districts and halls (which have one look). */
 export function buildingArtKey(type: BuildingType, tier: RoomTier): string | null {
-  if ((DISTRICT_KEYS as readonly string[]).includes(type)) return `districts/${type}`;
+  // [plan4:BL-7] a composed district has three looks (its own key per tier); a painted one has one.
+  if ((DISTRICT_KEYS as readonly string[]).includes(type)) return PAINTED_DISTRICTS.includes(type) ? `districts/${type}` : composedSpec(type) ? `districts/${type}-${tier}` : null;
   if ((HALL_KEYS as readonly string[]).includes(type)) return `halls/${type}`;
   return roomArtKey(type, tier);
 }
