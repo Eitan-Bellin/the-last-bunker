@@ -50,7 +50,7 @@ log(`bundling ${args.src ?? 'src'} ...`);
 const { file: bundle, fingerprint } = await bundleSim({ src: args.src, tag: mode });
 log(`code ${fingerprint.src} #${fingerprint.hash}, newest change ${fingerprint.newestChange}; ${seeds.length} seed(s) on ${jobs} thread(s)`);
 
-const opts = seed => ({ mode, seed, hours, days, think, returnMode: args.return ?? 'restart', teams: args.teams ? Number(args.teams) : undefined, noDanger: !!args.nodanger, rebirths: args.rebirths ? Number(args.rebirths) : undefined, dumpSave: !!args['dump-save'], difficulty: args.difficulty });
+const opts = seed => ({ mode, seed, hours, days, think, returnMode: args.return ?? 'restart', teams: args.teams ? Number(args.teams) : undefined, noDanger: !!args.nodanger, rebirths: args.rebirths ? Number(args.rebirths) : undefined, dumpSave: !!args['dump-save'], difficulty: args.difficulty, daily: args.daily });
 const results = [];
 const failures = [];
 const queue = [...seeds];

@@ -46,6 +46,15 @@ export class SaveController {
           className: 'btn-primary',
           onClick: async () => {
             this.app.modal.hide();
+            // [plan4:GP-2] The run, told in five quiet lines (read from the bunker as it stands, before Genesis replaces it); a tap skips to the new world.
+            const st = this.app.state;
+            await this.app.ceremony.fire({
+              kind: 'genesis', icon: '[[isotope7]]', title: i18n.t('cer.gen.title'),
+              lines: [
+                i18n.t('cer.gen.pop', { n: st.survivors.length }), i18n.t('cer.gen.floors', { n: st.currentFloors }), i18n.t('cer.gen.rooms', { n: st.buildings.length }),
+                i18n.t('cer.gen.act', { n: st.longGame?.meta.act ?? 1 }), i18n.t('cer.gen.iso', { n: gain }),
+              ],
+            });
             await this.app.engine.rebirth();
             this.app.audio.play('achievement');
             this.app.toasts.show(`[[isotope7]] ${i18n.t('genesis.done', { n: gain })}`, 'good');

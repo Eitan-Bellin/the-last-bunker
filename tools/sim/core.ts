@@ -57,6 +57,8 @@ export interface SimOptions {
   rebirths?: number;
   /** Return the final game state as save JSON (`finalSave`), e.g. to test save migrations on real games. */
   dumpSave?: boolean;
+  /** [plan4:GP-1] The player's use of the daily orders: 'half' (default) finishes and takes 1 order one day and 2 the next (1.5 of 3), richest first, 'full' all three and the chest every day, 'off' ignores them. */
+  daily?: 'off' | 'half' | 'full';
   onProgress?: (fraction: number, label: string) => void;
   /** Lets a browser page breathe between chunks. */
   yieldFn?: () => Promise<void>;
@@ -108,6 +110,8 @@ export interface SimResult {
   lastProgress: Milestone; stallWallH: number; stallPlayH: number;
   objectivesDone: number;
   supplyDrops: number;
+  /** [plan4:GP-1] Daily orders the bot took, by reward kind, and what they paid. */
+  daily?: { days: number; orders: number; chests: number; credits: number; rush: number; frags: number; blueprints: number; streakEnd: number };
   /** [LateGame] project stages finished, caravans home/lost, weekly challenges won, trainings and the final rank counts. */
   lateGame?: { stages: number; caravansOk: number; caravansLost: number; weekly: number; trained: number; rank5: number; projectsDone: number };
   final: Record<string, unknown>;
@@ -305,6 +309,7 @@ export async function runSim(o: SimOptions): Promise<SimResult> {
     offline: [] as OfflineEntry[],
     lastProgressKey: '', lastProgress: { play: 0, wall: 0 },
     objectivesDone: 0, supplyDrops: 0,
+    daily: { days: 0, orders: 0, chests: 0, credits: 0, rush: 0, frags: 0, blueprints: 0, streakEnd: 0 },
     projectStages: 0, caravans: { ok: 0, lost: 0 }, weeklyDone: 0, // [LateGame]
     bot: { actions: {} as Record<string, number>, pulledForRuins: 0, journalReads: 0, queuedResearch: 0, longTrips: 0 },
   };
@@ -546,6 +551,38 @@ export async function runSim(o: SimOptions): Promise<SimResult> {
     const supply = (e as unknown as Loose).supplySystem;
     const ready = fn(supply, 'isReady'), claim = fn(supply, 'claim');
     if (ready && claim && ready(state()) && claim()) { R.supplyDrops++; acted('supplyDrop'); }
+    dailyOrders();
+  };
+
+  /**
+   * [plan4:GP-1] A player who "completes 1.5 of 3": the orders' own progress is switched off (they are played by hand) and, once a day, the
+   * bot finishes and takes the first one or two (alternating days). Gold is taken as a piece of a blueprint, the choice that helps progress
+   * most, so this is the upper bound of what the daily orders can move. 'full' takes all three and the chest every day (a stress run).
+   */
+  let dailyDay = -2;
+  const dailyOrders = () => {
+    const mode = o.daily ?? 'half';
+    const sys = (e as unknown as Loose).dailySystem as Loose | undefined;
+    if (!sys || mode === 'off') return;
+    sys.progressEnabled = false;
+    const d = (state() as unknown as { daily?: { day: number; orders: { id: string; done: boolean; claimed: boolean }[]; streak: number } }).daily;
+    if (!d || d.orders.length === 0 || d.day === dailyDay) return;
+    dailyDay = d.day;
+    R.daily!.days++;
+    const quota = mode === 'full' ? d.orders.length : Math.min(d.orders.length, d.day % 2 === 0 ? 1 : 2);
+    const before = { cr: state().resources.credits?.amount ?? 0, rush: state().rush ?? 0, bp: state().resources.blueprints?.amount ?? 0 };
+    // The player picks the richest errands first: pickOrders puts the easy, medium and "new" (gold) orders in that order, so gold is index 2.
+    const order = d.orders.map((_, i) => i).reverse();
+    for (const i of order.slice(0, quota)) {
+      fn(sys, 'forceComplete')?.(i);
+      const c = fn(sys, 'claim')?.(i, 'frag') as { frag: number } | null | undefined;
+      if (c) { R.daily!.orders++; R.daily!.frags += c.frag; acted('dailyOrder'); }
+    }
+    if (mode === 'full' && fn(sys, 'claimChest')?.()) { R.daily!.chests++; acted('dailyChest'); }
+    R.daily!.credits += (state().resources.credits?.amount ?? 0) - before.cr;
+    R.daily!.rush += (state().rush ?? 0) - before.rush;
+    R.daily!.blueprints += (state().resources.blueprints?.amount ?? 0) - before.bp;
+    R.daily!.streakEnd = (state() as unknown as { daily: { streak: number } }).daily.streak;
   };
 
   /** Puts hands on a started ruin that has none: an idle survivor, else someone pulled off a room job. */
@@ -1165,7 +1202,7 @@ export async function runSim(o: SimOptions): Promise<SimResult> {
     },
     offline: R.offline, lastProgress: R.lastProgress,
     stallWallH: fmtH(wall - R.lastProgress.wall), stallPlayH: fmtH(play() - R.lastProgress.play),
-    objectivesDone: R.objectivesDone, supplyDrops: R.supplyDrops,
+    objectivesDone: R.objectivesDone, supplyDrops: R.supplyDrops, daily: R.daily,
     lateGame: {
       stages: R.projectStages, caravansOk: R.caravans.ok, caravansLost: R.caravans.lost, weekly: R.weeklyDone,
       trained: (s as unknown as { lateGame?: { trained?: number } }).lateGame?.trained ?? 0,

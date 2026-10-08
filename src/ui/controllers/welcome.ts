@@ -293,6 +293,18 @@ export class WelcomeController {
         done(`[[gift]] ${i18n.t('checkin.crateDone')} ${got}`.trim());
       }));
     }
+    // [plan4:GP-1] Daily orders that are done and not yet taken (and the day chest): one tap takes them all, quietly (the card says what happened).
+    const daily = app.engine.dailySystem;
+    const dsum = daily.summary(state);
+    if (dsum.claimable > 0) {
+      cards.push(card('[[target]]', i18n.t('checkin.daily', { n: dsum.claimable }), i18n.t('daily.claimAll'), done => {
+        daily.claimAll(true);
+        if (daily.chestReady()) daily.claimChest(true);
+        app.engine.requestSave();
+        app.audio.play('coin');
+        done(`[[target]] ${i18n.t('checkin.dailyDone')}`);
+      }));
+    }
     const cs = app.engine.contractSystem;
     const safe = (state.longGame?.inbox.items ?? []).filter(i => i.kind === 'contract' && cs.isSafe(state, i)).length;
     if (safe > 0) {

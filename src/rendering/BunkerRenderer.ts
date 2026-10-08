@@ -1588,19 +1588,23 @@ export class BunkerRenderer {
     }
   }
 
-  /** Dust cloud when a ruin is cleared. */
-  burstAt(x: number, y: number, width: number): void {
-    // [plan4 perf] The plain motes go into the layer first and the additive ones after them: a blend change breaks the batch, so the old
-    // alternation (every third one additive) cost a draw call per mote (26 per cloud), this costs two.
-    for (const additive of [false, true]) {
-      for (let i = 0; i < 26; i++) {
-        if ((i % 3 === 0) !== additive) continue;
+  /**
+   * Dust cloud when a ruin is cleared. [plan4:GP-2] `count` < 26 is a small burst for the ceremonies.
+   * [plan4 perf] The plain motes go into the layer first and the additive ones after them: a blend change breaks the batch, so the old
+   * alternation (every third one additive) cost a draw call per mote, this costs two.
+   */
+  burstAt(x: number, y: number, width: number, count = 26): void {
+    const small = count < 26;
+    const isGlow = (i: number): boolean => (small ? i >= Math.ceil((count * 2) / 3) : i % 3 === 0);
+    for (const glow of [false, true]) {
+      for (let i = 0; i < count; i++) {
+        if (isGlow(i) !== glow) continue;
         const s = new Sprite(moteTexture());
         s.anchor.set(0.5);
-        s.tint = additive ? 0xffd27a : 0xc9bda6;
+        s.tint = glow ? 0xffd27a : 0xc9bda6;
         s.scale.set(0.6 + Math.random() * 1.1);
         s.position.set(x + (Math.random() - 0.5) * width * 0.8, y + (Math.random() - 0.5) * 20);
-        if (additive) s.blendMode = 'add';
+        if (glow) s.blendMode = 'add';
         this.fxLayer.addChild(s);
         this.bursts.push({ s, vx: (Math.random() - 0.5) * 60, vy: -10 - Math.random() * 40, life: 0, max: 1 + Math.random() * 1.2 });
       }

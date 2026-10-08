@@ -1,4 +1,5 @@
 import { haptic } from '../../utils/haptics';
+import { bus } from '../../core/EventBus'; // [plan4:GP-1]
 import { statusTint } from '../../utils/a11y';
 import { HUD } from '../../ui/HUD';
 import { i18n } from '../../i18n/I18nManager';
@@ -379,6 +380,7 @@ export class WorldController {
     haptic('tap');
     this.flyToHud(r, pos.x, pos.y, `+${amount}`);
     this.app.engine.notifyInteraction();
+    bus.emit('bubble:collected', buildingId); // [plan4:GP-1] the "collect 10 bubbles" order
   }
 
   /** A collected resource icon arcs up into its HUD counter, which then pulses. */

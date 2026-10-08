@@ -26,6 +26,7 @@ import { FamilySystem } from '../systems/FamilySystem';
 import { StorySystem } from '../systems/StorySystem';
 import { SupplySystem } from '../systems/SupplySystem';
 import { RushSystem } from '../systems/RushSystem';
+import { DailySystem } from '../systems/DailySystem'; // [plan4:GP-1]
 import { ShopSystem, type ProjectBooster } from '../systems/ShopSystem';
 import { ProjectSystem } from '../systems/ProjectSystem'; // [LateGame B1]
 import { snapshot } from '../data/challenges'; // [LateGame B4]
@@ -147,6 +148,8 @@ export class GameEngine {
   storySystem: StorySystem;
   supplySystem: SupplySystem;
   rushSystem: RushSystem;
+  /** [plan4:GP-1] Daily orders. */
+  dailySystem: DailySystem;
   shopSystem: ShopSystem;
   projectSystem: ProjectSystem; // [LateGame B1]
   /** [Long game] The Decision Inbox's own cards. */
@@ -226,6 +229,7 @@ export class GameEngine {
     this.eventSystem.setIncidents(this.incidentSystem);
     this.supplySystem = new SupplySystem(this.stateManager, this.resourceSystem);
     this.rushSystem = new RushSystem(this.stateManager, this.researchSystem);
+    this.dailySystem = new DailySystem(this.stateManager, this.resourceSystem, this.rushSystem, { digBlock: st => this.buildingSystem.digBlock(st) }); // [plan4:GP-1]
     // [Economy A3] The big-projects system (Late-game agent) may feed on overflow; resolved lazily so build order doesn't matter.
     // [Economy A2] Credits shop; its project-boost item shows up once the Projects system offers boostStage().
     this.shopSystem = new ShopSystem(this.stateManager, this.resourceSystem, this.researchSystem, this.supplySystem);
@@ -257,6 +261,11 @@ export class GameEngine {
       if (lore) this.restorationSystem.addLore(lore);
     });
     this.registerSystems();
+  }
+
+  /** [plan4:GP-2] The bunker is working through time away right now (events that fire then are not lived moments: no ceremonies for them). */
+  get awayRunning(): boolean {
+    return this.dailySystem.away;
   }
 
   /** Adds a system to the end of the step list (or replaces the one with the same name, keeping its place). */
@@ -325,6 +334,8 @@ export class GameEngine {
       { name: 'objective', slow: true, online: () => this.objectiveSystem.update() },
       { name: 'era', slow: true, online: () => this.eraSystem.update() },
       { name: 'story', slow: true, online: () => this.storySystem.update() },
+      // [plan4:GP-1] Daily orders: the 04:00 turn-over and the counters online; away only dig, research and food move them (data/orders.ts `offline`).
+      { name: 'daily', slow: true, online: () => this.dailySystem.update(), offline: () => this.dailySystem.update() },
     ];
     for (const s of sys) this.register(s);
   }
@@ -510,6 +521,8 @@ export class GameEngine {
     fresh.settings = { ...old.settings };
     // The daily supply drop streak counts real days, not timelines.
     fresh.supplyDrop = { ...(old.supplyDrop ?? fresh.supplyDrop) };
+    // [plan4:GP-1] The streak and the blueprint pieces count real days, not timelines; today's orders are made again for the new bunker (their counters restart).
+    if (old.daily) fresh.daily = { ...fresh.daily, streak: old.daily.streak, lastClaim: old.daily.lastClaim, graceUsed: old.daily.graceUsed, frag: old.daily.frag };
     // [LateGame B4] the weekly challenge (and its cosmetics) runs on real weeks, not timelines.
     fresh.lateGame.weekly = { ...(old.lateGame?.weekly ?? fresh.lateGame.weekly), base: snapshot(fresh) };
     fresh.stats = { ...old.stats, totalPrestigeResets: old.stats.totalPrestigeResets + 1 };
@@ -600,6 +613,7 @@ export class GameEngine {
       stepSize: seconds > 300 ? OFFLINE_STEP_SECONDS : seconds > 60 ? 5 : 1,
       remaining: seconds, off: [],
     };
+    this.dailySystem.beginAway(); // [plan4:GP-1]
     run.off.push(bus.on('mission:complete', () => { run.missions++; }));
     run.off.push(bus.on('research:complete', (id: unknown) => { run.research.push(id as string); }));
     // [Economy A1] overflow is now converted/absorbed by ResourceSystem; count only this run's share.
@@ -616,6 +630,7 @@ export class GameEngine {
   }
 
   private simStop(run: SimRun): void {
+    this.dailySystem.endAway(); // [plan4:GP-1]
     this.offlineWaste = null;
     for (const off of run.off) off();
     run.off = [];
