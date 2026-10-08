@@ -66,3 +66,21 @@
   -webkit-user-select: text;
   user-select: text;
 }
+
+/* [plan4:UX-18] Splash progress: a hairline under the title, moved by setSplashProgress(). */
+.splash-progress {
+  position: absolute;
+  inset-inline: 0;
+  margin-inline: auto;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 18vh);
+  width: min(60vw, 240px);
+  height: 3px;
+  border-radius: 2px;
+  background: rgba(241, 213, 138, 0.18);
+  overflow: hidden;
+}
+.splash-progress > i { display: block; height: 100%; width: 0; background: #f1d58a; transition: width 0.35s ease-out; }
+
+/* [plan4:UX-5 follow-up] Review on iPhone sizes: the full-size buttons (Upgrade, Start research, people tabs) measured 37-40px. A real
+   44px box for all of them; the .btn-small family keeps its 34px look with the 44px ::after hit area from touch.css. */
+.btn:not(.btn-small) { min-height: var(--tap, 44px); }

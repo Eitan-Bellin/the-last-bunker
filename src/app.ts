@@ -54,7 +54,7 @@ import { StructurePanel } from './ui/components/StructurePanel'; // [plan4:AC-11
 import { KeyboardShortcuts } from './ui/controllers/keyboard'; // [plan4:AC-10]
 import { setSoundChip } from './ui/soundChip';
 import { pwaDialogSources, setGraphicsNotice, startPhoneWatchers } from './ui/pwa'; // [plan4:UX-13]
-import { hideSplash } from './ui/splash';
+import { hideSplash, setSplashProgress } from './ui/splash';
 import { StoryDialog } from './ui/components/StoryDialog';
 import { DISASTERS } from './data/incidents';
 import { Notifier, type NotifyItem } from './ui/notifications';
@@ -282,14 +282,18 @@ export class GameApp {
     // [plan4:AC-9] Captions for the sounds that carry information (only when the player turned them on).
     const CAPTIONED = new Set(['warn', 'pulse', 'alarm', 'siren', 'door', 'thunder']);
     this.audio.onCue = name => { if (CAPTIONED.has(name)) showCaption(i18n.t(`caption.${name}`)); };
+    setSplashProgress(0.1);
     await Promise.all([this.renderer.init(canvas), preloadIcons(SCENE_ICONS).catch(() => undefined)]);
+    setSplashProgress(0.4); // [plan4:UX-18]
     await this.engine.init();
+    setSplashProgress(0.75);
     hydrateA11y(this.state.settings?.a11y); // [plan4:AC-1] a device with no preference of its own takes the save's
     this.state.settings.a11y = { ...getA11y() };
     // Decode the paintings of the rooms already built so the first frame shows art, not placeholders.
     // [perf] Only the rooms the first picture can show (the top of the bunker): the rest load when the camera comes near (renderRooms).
     const keys = this.state.buildings.filter(b => b.position.floor < 10).map(b => buildingArtKey(b.type, roomTier(b.level))).filter((k): k is string => !!k);
     await Promise.all([ArtLibrary.preload([...new Set([...keys, 'backdrops/rock'])]), ArtLibrary.loadMeta(), ArtLibrary.loadBalance()]).catch(() => undefined);
+    setSplashProgress(1);
 
     this.popups = new NumberPopupManager(this.renderer.worldContainer);
     this.ruler = new DepthRuler(this.renderer); // [plan4:ST-12 #5]
