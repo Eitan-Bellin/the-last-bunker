@@ -41,7 +41,8 @@ export class DailyController {
       if (!def) return;
       this.app.audio.play('collect');
       haptic('success');
-      this.app.toasts.show(`[[check]] ${i18n.t('daily.toast.done', { name: this.orderText(id as string, this.needOf(id as string)) })}`, 'good');
+      // With the sheet open the card itself turns into a Claim button: no toast over its title.
+      if (!this.isVisible) this.app.toasts.show(`[[check]] ${i18n.t('daily.toast.done', { name: this.orderText(id as string, this.needOf(id as string)) })}`, 'good');
       this.app.engine.requestSave();
     });
     bus.on('daily:new', (info: unknown) => {
@@ -212,6 +213,13 @@ export class DailyController {
     meta.append(el('span', `daily-tier tier-${tier}`, i18n.t(`daily.tier.${tier}`)), el('span', 'daily-reward', this.rewardText(tier)));
     main.appendChild(meta);
     top.appendChild(main);
+    // The swap sits in the top row (an own row for it made every card 50 px taller).
+    if (!o.done && this.sys.canSwap(i)) {
+      const swap = button(i18n.t('daily.swap'), 'btn-ghost btn-small daily-swap', () => { this.sys.swap(i); this.renderedKey = ''; this.render(); });
+      swap.title = i18n.t('daily.swapHint');
+      swap.setAttribute('aria-label', `${i18n.t('daily.swap')}: ${i18n.t('daily.swapHint')}`);
+      top.appendChild(swap);
+    }
     c.appendChild(top);
 
     const prog = el('div', 'daily-prog');
@@ -232,11 +240,6 @@ export class DailyController {
       }
     } else if (o.claimed) {
       row.appendChild(el('span', 'daily-taken', `[[check]] ${i18n.t('daily.claimed')}`));
-    } else if (this.sys.canSwap(i)) {
-      const swap = button(i18n.t('daily.swap'), 'btn-ghost btn-small daily-swap', () => { this.sys.swap(i); this.renderedKey = ''; this.render(); });
-      swap.title = i18n.t('daily.swapHint');
-      swap.setAttribute('aria-label', `${i18n.t('daily.swap')}: ${i18n.t('daily.swapHint')}`);
-      row.appendChild(swap);
     }
     if (row.childElementCount > 0) c.appendChild(row);
     // Keeps the bar honest on later refreshes without a rebuild.

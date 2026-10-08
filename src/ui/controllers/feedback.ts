@@ -2,6 +2,7 @@ import { ENDINGS } from '../../data/endings';
 import { SEASONS, nextSeason, seasonAt } from '../../data/seasons';
 import { ACTS } from '../../data/acts';
 import { haptic } from '../../utils/haptics';
+import { reducedMotion } from '../../utils/a11y'; // [plan4:GP-2]
 import { statusTint } from '../../utils/a11y';
 import { announce } from '../a11yDom';
 import { getProject } from '../../data/projects';
@@ -48,12 +49,13 @@ export class FeedbackController {
       }
       const name = getDef(b.type)?.name[i18n.currentLocale] ?? b.type;
       this.app.toasts.show(`[[check]] ${i18n.t('toast.buildingComplete', { name })}`, 'good');
-      haptic('success'); // [plan4:UX-2] the same event fires when an upgrade finishes
-      if (isPowerPlant(b.type)) this.app.audio.play('engineStart'); // [plan4:BL-8]
-      else {
-        this.app.audio.play('complete');
-        setTimeout(() => this.app.audio.play('hiss', { volume: 0.6 }), 260);
-      }
+      // [plan4:GP-2] The sound and the buzz belong to the moment (the same event fires when an upgrade finishes: that is the level-up ceremony).
+      const upgraded = b.level > 1;
+      void this.app.ceremony.fire({
+        kind: upgraded ? 'roomLevel' : 'build', roomId: b.id, title: name,
+        sub: upgraded ? i18n.t('cer.roomLevel.sub', { n: b.level }) : i18n.t('cer.build.sub'),
+        sound: !upgraded && isPowerPlant(b.type) ? 'engineStart' : undefined, // [plan4:BL-8]
+      });
       const c = this.app.renderer.roomCenter(b);
       this.app.popups.spawn(c.x, c.y, '[[check]]', statusTint('ok'));
     });
@@ -62,10 +64,8 @@ export class FeedbackController {
 
     bus.on('survivor:levelup', (s: unknown, stat: unknown) => {
       const survivor = s as SurvivorState;
-      this.app.audio.play('levelup');
-      haptic('success');
-      const p = this.app.renderer.personPos(survivor.id);
-      if (p) this.app.renderer.floatIcons(p.x, p.y, 'star', 5, '#ffe27a');
+      // [plan4:GP-2] A little star over their head and a bell (the ceremony queue folds several at once into one).
+      void this.app.ceremony.fire({ kind: 'person', personId: survivor.id, title: this.app.localName(survivor.name), sub: i18n.t('cer.person.sub', { level: survivor.level }) });
       this.app.toasts.show(`[[star]] ${i18n.t('toast.levelUp', {
         name: this.app.localName(survivor.name),
         level: survivor.level,
@@ -75,14 +75,22 @@ export class FeedbackController {
     });
 
     bus.on('survivor:died', (s: unknown) => {
-      this.app.audio.play('error');
+      // [plan4:GP-2] A slow dimming, a candle and a line of remembrance; the memorial dialog waits behind it (dialog gate).
+      void this.app.ceremony.fire({ kind: 'death', personId: (s as SurvivorState).id, icon: '[[heart]]', title: i18n.t('cer.death', { name: this.app.localName((s as SurvivorState).name) }) });
       this.app.toasts.show(`[[skull]] ${i18n.t('toast.died', { name: this.app.localName((s as SurvivorState).name), ...this.app.gOf(s as SurvivorState) })}`, 'bad');
     });
 
     bus.on('research:complete', (id: unknown) => {
       const def = getResearch(id as string);
       if (!def) return;
-      this.app.audio.play(def.effects.some(e => e.type === 'unlock' || e.type === 'feature') ? 'unlock' : 'research');
+      // [plan4:GP-2] The laboratory warms up and a card says what the research opens.
+      const loc = i18n.currentLocale;
+      const opens = def.effects.flatMap(e => (e.type === 'unlock' ? [getDef(e.building)?.name[loc] ?? ''] : [])).filter(Boolean);
+      void this.app.ceremony.fire({
+        kind: 'research', icon: '[[research]]', title: def.name[loc] ?? def.name.en,
+        sub: [i18n.t('cer.research.sub'), opens.length ? i18n.t('cer.research.opens', { list: opens.join(', ') }) : ''].filter(Boolean).join(' · '),
+        sound: def.effects.some(e => e.type === 'unlock' || e.type === 'feature') ? 'unlock' : 'research',
+      });
       this.app.toasts.show(`[[research]] ${i18n.t('toast.researchDone', { name: def.name[i18n.currentLocale] ?? def.name.en })}`, 'good');
       this.app.engine.requestSave();
     });
@@ -208,6 +216,7 @@ export class FeedbackController {
     bus.on('floor:dug', (floor: unknown) => {
       this.app.toasts.show(`[[pick]] ${i18n.t('dig.done', { n: (floor as number) + 1 })}`, 'good');
       this.app.renderer.focusFloor(floor as number);
+      void this.app.ceremony.fire({ kind: 'dig', floor: floor as number, icon: '[[pick]]', title: i18n.t('dig.done', { n: (floor as number) + 1 }) }); // [plan4:GP-2]
     });
 
     // [LateGame B1-B4] big projects, caravans, mastery, weekly challenge
@@ -284,15 +293,18 @@ export class FeedbackController {
       const act = ACTS[(n as number) - 1];
       if (!act) return;
       this.app.engine.requestSave();
+      // [plan4:GP-2] The camera steps back to show the whole bunker, the sting plays, then the title card opens (the ceremony's beat); closing the card
+      // takes the camera back to where the player had it. If the ceremony is off (reduced motion keeps the sound, a hidden page skips it) the card opens at once.
+      const cam = this.app.renderer.camera;
+      const back = { x: cam.camX, y: cam.camY, z: cam.zoom };
       const show = () => {
         if (this.app.storyOpen || this.app.modal.isVisible || document.querySelector('.era-banner')) { setTimeout(show, 1500); return; }
-        this.app.audio.play('era');
-        this.app.renderer.shake(4, 1);
         this.app.storyOpen = true;
         this.app.closeSheets();
-        showActBanner(act, () => { this.app.storyOpen = false; });
+        showActBanner(act, () => { this.app.storyOpen = false; if (!reducedMotion()) cam.focusTo(back.x, back.y, back.z); });
       };
-      setTimeout(show, 600);
+      this.app.renderer.shake(4, 1);
+      void this.app.ceremony.fire({ kind: 'act', beat: show });
     });
     // [P2] The turn of the seasons.
     bus.on('season:change', (id: unknown) => {
@@ -343,6 +355,7 @@ export class FeedbackController {
     bus.on('wing:dug', (floor: unknown, side: unknown) => {
       this.app.toasts.show(`[[pick]] ${i18n.t('wing.done', { n: (floor as number) + 1, side: i18n.t(`wing.side.${side as string}`) })}`, 'good');
       this.app.renderer.focusFloor(floor as number);
+      void this.app.ceremony.fire({ kind: 'dig', floor: floor as number, side: side as 'w' | 'e', icon: '[[pick]]', title: i18n.t('wing.done', { n: (floor as number) + 1, side: i18n.t(`wing.side.${side as string}`) }) }); // [plan4:GP-2]
     });
   }
 }

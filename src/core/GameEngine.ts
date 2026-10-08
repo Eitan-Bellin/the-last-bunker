@@ -263,6 +263,11 @@ export class GameEngine {
     this.registerSystems();
   }
 
+  /** [plan4:GP-2] The bunker is working through time away right now (events that fire then are not lived moments: no ceremonies for them). */
+  get awayRunning(): boolean {
+    return this.dailySystem.away;
+  }
+
   /** Adds a system to the end of the step list (or replaces the one with the same name, keeping its place). */
   register(sys: EngineSystem): void {
     const at = this.systems.findIndex(s => s.name === sys.name);

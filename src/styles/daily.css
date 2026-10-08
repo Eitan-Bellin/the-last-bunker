@@ -37,7 +37,7 @@
 .daily-actions .btn { min-height: var(--tap, 44px); min-width: 104px; }
 .daily-claim { flex: 1 1 120px; }
 .daily-taken { color: var(--ok, #7affb0); font-size: calc(13px * var(--fs, 1)); padding: 8px 4px; }
-.daily-swap { min-height: var(--tap, 44px); }
+.daily-top .daily-swap { flex: 0 0 auto; min-height: var(--tap, 44px); min-width: var(--tap, 44px); }
 .daily-all { width: 100%; min-height: var(--tap, 44px); }
 
 .daily-chest { flex-direction: row; align-items: center; justify-content: space-between; flex-wrap: wrap; }

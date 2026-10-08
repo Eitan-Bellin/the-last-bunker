@@ -70,6 +70,7 @@ import './styles/command.css';
 import './styles/buildmenu.css'; // [plan4:BL-39] before touch.css so its 44px rules still win
 import './styles/checkin.css'; // [plan4:Gameplay] dialog queue card, gesture tips, check-in screen
 import './styles/daily.css'; // [plan4:GP-1] daily orders
+import './styles/ceremony.css'; // [plan4:GP-2] key moments
 import './styles/touch.css'; // [plan4:UX-5] last again (its header says so): its 44px targets must beat the older sheet-help sizes in command.css
 import './styles/placement.css'; // [plan4:ST-19] the confirm bar and the chips over the ghost room
 import './styles/a11y.css'; // [plan4:AC-2] the accessibility layer, last of all: reduced motion, colour modes, focus rings
@@ -87,6 +88,7 @@ import { WelcomeController } from './ui/controllers/welcome';
 import { TipsController } from './ui/controllers/tips'; // [plan4:UX-11]
 import { PRODUCTION_POPUP_MS, WorldController } from './ui/controllers/world';
 import { DailyController } from './ui/controllers/daily'; // [plan4:GP-1]
+import { Ceremonies } from './ui/ceremony'; // [plan4:GP-2]
 
 /** Icons drawn inside the Pixi scene (plaques, signs, popups); rasterized once at startup. */
 const SCENE_ICONS: IconName[] = [
@@ -114,6 +116,8 @@ export class GameApp {
   readonly welcome = new WelcomeController(this);
   /** [plan4:GP-1] Daily orders: HUD chip, sheet, day chest. */
   readonly daily = new DailyController(this);
+  /** [plan4:GP-2] The key moments (build done, level-ups, research, Act, dig, death, Genesis). */
+  readonly ceremony = new Ceremonies(this);
   /** [plan4:UX-11] Gesture tips. */
   readonly tips = new TipsController(this);
   readonly world = new WorldController(this);

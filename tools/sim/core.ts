@@ -57,7 +57,7 @@ export interface SimOptions {
   rebirths?: number;
   /** Return the final game state as save JSON (`finalSave`), e.g. to test save migrations on real games. */
   dumpSave?: boolean;
-  /** [plan4:GP-1] The player's use of the daily orders: 'half' (default) finishes and takes 1 order one day and 2 the next (1.5 of 3), 'full' all three and the chest every day, 'off' ignores them. */
+  /** [plan4:GP-1] The player's use of the daily orders: 'half' (default) finishes and takes 1 order one day and 2 the next (1.5 of 3), richest first, 'full' all three and the chest every day, 'off' ignores them. */
   daily?: 'off' | 'half' | 'full';
   onProgress?: (fraction: number, label: string) => void;
   /** Lets a browser page breathe between chunks. */
@@ -571,7 +571,9 @@ export async function runSim(o: SimOptions): Promise<SimResult> {
     R.daily!.days++;
     const quota = mode === 'full' ? d.orders.length : Math.min(d.orders.length, d.day % 2 === 0 ? 1 : 2);
     const before = { cr: state().resources.credits?.amount ?? 0, rush: state().rush ?? 0, bp: state().resources.blueprints?.amount ?? 0 };
-    for (let i = 0; i < quota; i++) {
+    // The player picks the richest errands first: pickOrders puts the easy, medium and "new" (gold) orders in that order, so gold is index 2.
+    const order = d.orders.map((_, i) => i).reverse();
+    for (const i of order.slice(0, quota)) {
       fn(sys, 'forceComplete')?.(i);
       const c = fn(sys, 'claim')?.(i, 'frag') as { frag: number } | null | undefined;
       if (c) { R.daily!.orders++; R.daily!.frags += c.frag; acted('dailyOrder'); }

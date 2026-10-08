@@ -1344,5 +1344,20 @@
   "a11y.daily": "Daily orders",
   "checkin.daily": "Daily orders: {n} ready to collect",
   "checkin.dailyDone": "Orders collected",
-  "checkin.sugDaily": "Daily orders: {n} left"
+  "checkin.sugDaily": "Daily orders: {n} left",
+  "cer.tapSkip": "Tap to skip",
+  "cer.build.sub": "Construction complete",
+  "cer.roomLevel.sub": "Level {n}",
+  "cer.research.sub": "Research complete",
+  "cer.research.opens": "Unlocks: {list}",
+  "cer.person.sub": "Reached level {level}",
+  "cer.person.many": "{n} workers leveled up",
+  "cer.death": "We remember {name}",
+  "cer.deathMany": "We remember the {n} we lost",
+  "cer.gen.title": "A new beginning",
+  "cer.gen.pop": "{n} survivors alive",
+  "cer.gen.floors": "{n} floors dug",
+  "cer.gen.rooms": "{n} rooms built",
+  "cer.gen.act": "Reached Act {n}",
+  "cer.gen.iso": "{n} Isotope-7 pass to the next generation"
 }

@@ -1344,5 +1344,20 @@
   "a11y.daily": "הזמנות יום",
   "checkin.daily": "הזמנות יום: {n} מוכנות לאיסוף",
   "checkin.dailyDone": "ההזמנות נאספו",
-  "checkin.sugDaily": "הזמנות יום: נותרו {n}"
+  "checkin.sugDaily": "הזמנות יום: נותרו {n}",
+  "cer.tapSkip": "הקישו כדי לדלג",
+  "cer.build.sub": "הבנייה הסתיימה",
+  "cer.roomLevel.sub": "דרגה {n}",
+  "cer.research.sub": "המחקר הושלם",
+  "cer.research.opens": "נפתח: {list}",
+  "cer.person.sub": "עלייה לרמה {level}",
+  "cer.person.many": "{n} עובדים התקדמו ברמה",
+  "cer.death": "נזכור את {name}",
+  "cer.deathMany": "נזכור את {n} שאבדו",
+  "cer.gen.title": "התחלה חדשה",
+  "cer.gen.pop": "{n} ניצולים חיים",
+  "cer.gen.floors": "{n} קומות נחפרו",
+  "cer.gen.rooms": "{n} חדרים נבנו",
+  "cer.gen.act": "הגענו למערכה {n}",
+  "cer.gen.iso": "{n} איזוטופ-7 עוברים לדור הבא"
 }

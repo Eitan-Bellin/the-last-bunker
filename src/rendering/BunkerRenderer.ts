@@ -1588,15 +1588,20 @@ export class BunkerRenderer {
     }
   }
 
-  /** Dust cloud when a ruin is cleared. */
-  burstAt(x: number, y: number, width: number): void {
-    for (let i = 0; i < 26; i++) {
+  /**
+   * Dust cloud when a ruin is cleared. [plan4:GP-2] `count` < 26 is a small burst for the ceremonies: the plain motes come first and the
+   * glowing (additive) ones last, so the picture draws it in two batches instead of one per blend change.
+   */
+  burstAt(x: number, y: number, width: number, count = 26): void {
+    const small = count < 26;
+    for (let i = 0; i < count; i++) {
       const s = new Sprite(moteTexture());
       s.anchor.set(0.5);
-      s.tint = i % 3 === 0 ? 0xffd27a : 0xc9bda6;
+      const glow = small ? i >= Math.ceil((count * 2) / 3) : i % 3 === 0;
+      s.tint = glow ? 0xffd27a : 0xc9bda6;
       s.scale.set(0.6 + Math.random() * 1.1);
       s.position.set(x + (Math.random() - 0.5) * width * 0.8, y + (Math.random() - 0.5) * 20);
-      if (i % 3 === 0) s.blendMode = 'add';
+      if (glow) s.blendMode = 'add';
       this.fxLayer.addChild(s);
       this.bursts.push({ s, vx: (Math.random() - 0.5) * 60, vy: -10 - Math.random() * 40, life: 0, max: 1 + Math.random() * 1.2 });
     }
