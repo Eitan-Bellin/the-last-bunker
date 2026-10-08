@@ -1,0 +1,36 @@
+research (non-refinement) whose cost exceeds the cap in the first Act it can be researched (sample bunker of that Act, act forced to node act)
+  (tight) fission act 2: knowledge 1800 is 83% of cap 2175
+  (tight) geothermal act 2: knowledge 1800 is 83% of cap 2175
+  (tight) solarArray act 2: knowledge 1800 is 83% of cap 2175
+  (tight) archiveCrossing act 7: knowledge 9500 is 88% of cap 10800
+  (tight) seedCrossing act 7: knowledge 9500 is 88% of cap 10800
+  (tight) vanguardCrossing act 7: knowledge 9500 is 88% of cap 10800
+  (tight) newWorldForge act 7: knowledge 9000 is 83% of cap 10800
+  (tight) seedSynthesis act 7: knowledge 9000 is 83% of cap 10800
+  (tight) genesisCalculus act 7: knowledge 9500 is 88% of cap 10800
+walls: 0
+
+research knowledge cost in hours of knowledge production (sample rates)
+act 1: 24 nodes, knowledge total 1815 = 0.2h of knowledge income (9672/h in sample), research time sum 12.0h (serial)
+act 2: 24 nodes, knowledge total 15920 = 1.6h of knowledge income (9672/h in sample), research time sum 20.3h (serial)
+act 3: 23 nodes, knowledge total 36940 = 0.9h of knowledge income (40190/h in sample), research time sum 75.9h (serial)
+act 4: 14 nodes, knowledge total 64180 = 0.8h of knowledge income (80787/h in sample), research time sum 194.3h (serial)
+act 5: 9 nodes, knowledge total 48060 = 0.7h of knowledge income (71153/h in sample), research time sum 268.7h (serial)
+act 6: 8 nodes, knowledge total 58380 = 0.8h of knowledge income (71153/h in sample), research time sum 541.0h (serial)
+act 7: 8 nodes, knowledge total 64950 = 0.9h of knowledge income (71153/h in sample), research time sum 541.5h (serial)
+
+projects: stage cost vs act income (hours) and boost value
+vaultSeal act 1: 3 stages, crew work 8/14/20h, stage1 cost {"materials":9000,"scrap":40}
+radioMast act 2: 5 stages, crew work 6/6/6/6/6h, stage1 cost {"materials":4760000,"scrap":200}
+purifier act 2: 4 stages, crew work 4.5/4.5/4.5/4.5h, stage1 cost {"materials":4760000,"water":5000}
+greenhouse act 3: 5 stages, crew work 6/6/6/6/6h, stage1 cost {"components":16800,"materials":1344000,"food":4000,"knowledge":1500}
+metroTunnel act 3: 5 stages, crew work 9/9/9/9/9h, stage1 cost {"components":16800,"materials":1344000,"scrap":300}
+archive act 3: 4 stages, crew work 7.5/7.5/7.5/7.5h, stage1 cost {"components":16800,"materials":1344000,"knowledge":8000,"blueprints":3}
+wall act 4: 5 stages, crew work 6/6/6/6/6h, stage1 cost {"alloys":3780,"materials":1008000,"components":5040,"scrap":400}
+genesisCore act 7: 6 stages, crew work 10/10/10/10/10/10h, stage1 cost {"seedCores":630,"materials":1008000,"components":5040,"alloys":1512,"data":1134,"influence":756}
+deepFoundry act 4: 5 stages, crew work 8/8/8/8/8h, stage1 cost {"alloys":3780,"materials":1008000,"components":5040,"scrap":500}
+surfaceGate act 5: 5 stages, crew work 10/10/10/10/10h, stage1 cost {"data":2835,"materials":1208000,"components":5040,"alloys":1512}
+skyDome act 5: 5 stages, crew work 10/10/10/10/10h, stage1 cost {"data":2835,"materials":1008000,"components":5040,"alloys":1512,"food":20000}
+tradeLeague act 6: 5 stages, crew work 10/10/10/10/10h, stage1 cost {"influence":1890,"materials":1308000,"components":5040,"alloys":1512,"data":1134}
+constitution act 6: 4 stages, crew work 12/12/12/12h, stage1 cost {"influence":1890,"materials":1008000,"components":5040,"alloys":1512,"data":1134,"knowledge":20000}
+ark act 7: 5 stages, crew work 10/10/10/10/10h, stage1 cost {"seedCores":630,"materials":1008000,"components":5040,"alloys":4512,"data":2634,"influence":756}

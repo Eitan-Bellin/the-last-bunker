@@ -1,0 +1,33 @@
+== c-seed1.json act 2
+food: top sources farmx4=22.3/s, lakex1=1.8/s, hydroponicsx2=1.1/s | sinks people=3.0/s, canteen=0.3/s | modifiers(top producer) morale:1.37 researchResource:1.30 researchRoom:1.60 => product 2.84
+water: top sources waterPumpx3=9.4/s, lakex1=4.2/s | sinks people=3.0/s, hydroponics=0.3/s, medbay=0.2/s | modifiers(top producer) morale:1.37 researchResource:1.10 => product 1.50
+power: top sources generatorx3=93.1/s | sinks waterPump=10.0/s, laboratory=9.0/s, hydroponics=8.0/s | modifiers(top producer) researchResource:1.45 researchRoom:1.10 => product 1.59
+materials: top sources workshopx2=11.0/s, cavex1=2.1/s, metrox1=1.0/s | sinks  | modifiers(top producer) morale:1.37 researchResource:1.30 researchRoom:1.40 => product 2.49
+knowledge: top sources laboratoryx2=2.4/s, cavex1=0.3/s | sinks  | modifiers(top producer) morale:1.37 researchResource:1.35 => product 1.85
+== e10-seed1.json act 3
+food: top sources farmx4=138.1/s, hydroponicsx2=98.5/s, lakex1=8.1/s | sinks people=5.4/s, canteen=0.5/s, trainingRoom=0.2/s | modifiers(top producer) morale:1.48 laws:1.12 season:1.25 researchResource:1.92 => product 3.98
+water: top sources waterPurifierx2=82.1/s, waterPumpx3=56.3/s, lakex1=18.8/s | sinks people=5.2/s, hydroponics=0.6/s, medbay=0.2/s | modifiers(top producer) morale:1.48 laws:1.12 researchResource:2.00 => product 3.32
+power: top sources generatorx3=423.6/s | sinks quarters=25.0/s, hydroponics=24.0/s, waterPump=20.0/s | modifiers(top producer) laws:1.12 researchResource:1.95 researchRoom:1.10 => product 2.40
+materials: top sources workshopx2=25.7/s, cavex1=8.0/s, metrox1=4.2/s | sinks  | modifiers(top producer) morale:1.48 laws:1.12 season:1.10 researchResource:1.80 researchRoom:1.40 => product 4.60
+knowledge: top sources laboratoryx2=10.0/s, cavex1=1.2/s | sinks  | modifiers(top producer) morale:1.48 laws:1.12 researchResource:2.15 => product 3.57
+== e30-seed1.json act 4
+food: top sources farmx4=161.4/s, hydroponicsx2=90.2/s, lakex1=8.8/s | sinks people=9.2/s, canteen=0.6/s, trainingRoom=0.2/s | modifiers(top producer) morale:1.46 laws:1.12 season:0.88 researchResource:2.30 => product 3.29
+water: top sources waterPurifierx2=113.4/s, waterPumpx3=86.2/s, lakex1=28.2/s | sinks people=8.8/s, reactorHall=1.0/s, reactor=0.8/s | modifiers(top producer) morale:1.46 laws:1.12 researchResource:2.30 => product 3.76
+power: top sources reactorx2=1663.7/s, reactorHallx1=996.1/s, generatorx4=526.5/s | sinks quarters=32.0/s, hydroponics=28.0/s, waterPump=27.0/s | modifiers(top producer) laws:1.12 researchResource:2.20 => product 2.46
+materials: top sources workshopx2=37.8/s, cavex1=11.3/s, metrox1=5.7/s | sinks generator=2.5/s | modifiers(top producer) morale:1.46 laws:1.12 researchResource:2.15 researchRoom:1.40 => product 4.92
+knowledge: top sources laboratoryx2=20.7/s, cavex1=1.8/s | sinks  | modifiers(top producer) morale:1.46 laws:1.12 researchResource:2.55 researchRoom:1.30 => product 5.41
+== e55-seed1.json act 7
+food: top sources farmx4=283.0/s, hydroponicsx2=208.4/s, lakex1=16.1/s | sinks people=12.6/s, canteen=2.4/s, trainingRoom=0.3/s | modifiers(top producer) morale:1.45 technocracy:1.05 laws:1.12 researchResource:3.05 => product 5.21
+water: top sources waterPurifierx2=142.3/s, waterPumpx3=90.9/s, lakex1=30.9/s | sinks people=12.2/s, reactorHall=1.1/s, reactor=0.9/s | modifiers(top producer) morale:1.45 technocracy:1.05 laws:1.12 season:0.85 researchResource:2.45 => product 3.56
+power: top sources reactorHallx1=1249.9/s, reactorx2=1093.0/s, generatorx4=638.8/s | sinks quarters=41.0/s, hydroponics=40.0/s, waterPump=31.0/s | modifiers(top producer) technocracy:1.05 laws:1.12 researchResource:2.20 => product 2.59
+materials: top sources workshopx2=42.9/s, cavex1=13.7/s, metrox1=6.8/s | sinks generator=2.8/s | modifiers(top producer) morale:1.45 technocracy:1.05 laws:1.12 researchResource:2.15 researchRoom:1.40 => product 5.14
+knowledge: top sources laboratoryx2=16.8/s, cavex1=3.0/s | sinks laboratory=1.7/s | modifiers(top producer) morale:1.45 technocracy:1.05 laws:1.12 researchResource:3.50 researchRoom:1.30 => product 7.77
+== e10-seed1.json
+farm L6 workers=2: out=37.46/s; base 0.6 x levelMult 2.96 x workforce 2.36 x chain 1 x spec 1.4 x mods[morale:1.48 laws:1.12 season:1.25 researchResource:1.92 researchRoom:1.60] ; powerRatio 1
+farm L5 workers=2: out=30.71/s; base 0.6 x levelMult 2.62 x workforce 2.19 x chain 1 x spec 1.4 x mods[morale:1.48 laws:1.12 season:1.25 researchResource:1.92 researchRoom:1.60] ; powerRatio 1
+== e30-seed1.json
+farm L8 workers=2: out=37.71/s; base 0.6 x levelMult 3.61 x workforce 2.36 x chain 1 x spec 1.4 x mods[morale:1.46 laws:1.12 season:0.88 researchResource:2.30 researchRoom:1.60] ; powerRatio 1
+farm L8 workers=2: out=37.71/s; base 0.6 x levelMult 3.61 x workforce 2.36 x chain 1 x spec 1.4 x mods[morale:1.46 laws:1.12 season:0.88 researchResource:2.30 researchRoom:1.60] ; powerRatio 1
+== e55-seed1.json
+farm L10 workers=2: out=70.05/s; base 0.6 x levelMult 4.24 x workforce 2.36 x chain 1 x spec 1.4 x mods[morale:1.45 technocracy:1.05 laws:1.12 researchResource:3.05 researchRoom:1.60] ; powerRatio 1
+farm L9 workers=2: out=64.95/s; base 0.6 x levelMult 3.93 x workforce 2.36 x chain 1 x spec 1.4 x mods[morale:1.45 technocracy:1.05 laws:1.12 researchResource:3.05 researchRoom:1.60] ; powerRatio 1
