@@ -501,7 +501,12 @@ export const PORTRAIT_COUNT = 14;
 /** Natural spaces found when digging sideways: each is a wide cavern painting. */
 export const DISTRICT_KEYS = ['cave', 'lake', 'metro', 'geothermal', 'oldVault'] as const; // [plan4:BL-7] the last two are drawn in code (roomSpecsD.ts)
 export type DistrictArt = typeof DISTRICT_KEYS[number];
-/** [plan4:BL-7] Districts that have a painting on disk (`districts/<kind>.webp`); the other kinds are composed, three looks each (`districts/<kind>-<tier>`). */
+/**
+ * [plan4:BL-7] Districts that have a painting on disk (`districts/<kind>.webp`); the other kinds are composed, three looks each
+ * (`districts/<kind>-<tier>`). public/art/districts/geothermal.webp and oldVault.webp are NOT paintings in this sense: they are a still of the
+ * tier 1 bake, only for the "district found" card of ui/controllers/dig.ts (it loads `districts/<kind>.webp`); a real painting replaces them
+ * and the kind joins this list.
+ */
 export const PAINTED_DISTRICTS: readonly string[] = ['cave', 'lake', 'metro'];
 /** District paintings are twice as wide as tall (6 slots × one floor, with headroom). */
 export const DISTRICT_OUT: [number, number] = [960, 484];
