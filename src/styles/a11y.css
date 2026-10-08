@@ -194,10 +194,16 @@ canvas:focus-visible { outline-offset: -3px; }
 /* A price inside a gold button: dark chip, so the green / red numbers keep their contrast (they were 2.1:1 on the gold). */
 .btn-primary .cost-chip { background: rgba(0, 0, 0, 0.8); }
 /* The "people at the door" pulse dips to 45% opacity: that is 2.5:1 for a moment. A shallower dip keeps it readable. */
-@keyframes arrival-pulse { 50% { opacity: 0.8; } }
+@keyframes arrival-pulse { 50% { opacity: 0.92; } }
 
 /* ---- AC-12/AC-15: buttons are 44px boxes (cards of the room, doors, safety, command panels were 34-39px); small buttons keep their look and ---
    reach 44px through the ::after hit area (touch.css), which also needs a minimum width so a "?" does not become a sliver. */
 .btn:not(.btn-small) { min-height: var(--tap, 44px); }
 .tab-btn { min-height: var(--tap, 44px); }
 .btn-small { min-width: 36px; }
+
+/* The volume sliders were 28px high: a 44px touch box (the track inside stays thin). */
+.vol-slider { height: var(--tap, 44px); }
+input.coupon-code, input.coupon-amount { min-height: var(--tap, 44px); }
+/* The Command panel's goal counters (amber on a tinted plate was 3.96:1): a lighter amber. */
+.era-goal-count { color: #ffd27a; }
