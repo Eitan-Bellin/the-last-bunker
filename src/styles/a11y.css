@@ -207,3 +207,6 @@ canvas:focus-visible { outline-offset: -3px; }
 input.coupon-code, input.coupon-amount { min-height: var(--tap, 44px); }
 /* The Command panel's goal counters (amber on a tinted plate was 3.96:1): a lighter amber. */
 .era-goal-count { color: #ffd27a; }
+
+/* High contrast: the black text of a primary button is for its gold plate; a disabled one has a dark plate (it was 1.2:1). */
+:root[data-contrast="high"] .btn-primary:disabled, :root[data-contrast="high"] .btn-primary[aria-disabled="true"] { color: #fff; }
