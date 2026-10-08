@@ -316,7 +316,11 @@ export class MenuPanel {
     const diag = el('div', 'bp-row');
     diag.append(el('span', '', `[[chart]] ${i18n.t('settings.diagnostics')}`),
       button(i18n.t('settings.diagnosticsCopy'), 'btn-small', () => { uiSound('switch'); this.actions.copyDiagnostics(); }));
-    general.append(lang, sound, music, fx, gfx, gfxHint, ...this.comfortRows(), bright, textSize, notify, notifyHint, diag);
+    // [plan4:qa] The privacy page was only reachable by typing its address: link it from the settings next to the diagnostics.
+    const privacy = el('div', 'bp-row');
+    privacy.append(el('span', '', `[[eye]] ${i18n.t('settings.privacy')}`),
+      button(i18n.t('settings.privacyOpen'), 'btn-small', () => { uiSound('click'); window.open(new URL('privacy.html', document.baseURI).href, '_blank', 'noopener'); }));
+    general.append(lang, sound, music, fx, gfx, gfxHint, ...this.comfortRows(), bright, textSize, notify, notifyHint, diag, privacy);
     box.appendChild(general);
 
     const coupon = this.renderCouponBlock(); // [plan4:GP-12] only with ?debug

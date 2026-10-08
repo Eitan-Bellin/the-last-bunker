@@ -27,7 +27,8 @@ dist-ssr
 art-src/
 store/compare/
 store/screenshots/
-store/sim/
+store/sim/*
+!store/sim/saves-v6/
 store/gfx-audit/shots/
 
 # Personal save exports never go to the public repo

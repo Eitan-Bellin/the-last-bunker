@@ -1006,6 +1006,8 @@
   "zoom.in": "Zoom in",
   "zoom.out": "Zoom out",
   "zoom.fit": "Fit to screen",
+  "settings.privacy": "Privacy policy",
+  "settings.privacyOpen": "Open",
   "a11y.statement": "Accessibility statement",
   "a11y.statementHint": "What is supported, what is still missing, and how to report a problem.",
   "a11y.statementOpen": "Open",

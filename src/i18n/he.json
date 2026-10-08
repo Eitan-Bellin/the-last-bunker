@@ -1006,6 +1006,8 @@
   "zoom.in": "התקרבות",
   "zoom.out": "התרחקות",
   "zoom.fit": "תצוגה מלאה",
+  "settings.privacy": "מדיניות פרטיות",
+  "settings.privacyOpen": "פתחו",
   "a11y.statement": "הצהרת נגישות",
   "a11y.statementHint": "מה נתמך, מה עדיין חסר, ואיך מדווחים על בעיה.",
   "a11y.statementOpen": "פתחו",

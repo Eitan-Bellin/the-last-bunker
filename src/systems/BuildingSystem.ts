@@ -1,4 +1,4 @@
-import { hasFeature } from './ResearchSystem';
+import { hasFeature, storyFlagMet } from './ResearchSystem';
 import { BASE_EAST, SURFACE_FLOOR, createLayout, floorExtent, type GameState, type BuildingType, type BuildingInstance, type Position } from '../core/GameState';
 import type { StateManager } from '../core/StateManager';
 import { bus } from '../core/EventBus';
@@ -174,7 +174,7 @@ export class BuildingSystem {
     if (place?.floors === 'surface' || (place?.floors === 'entranceOrSurface' && pos.floor === SURFACE_FLOOR)) {
       if (pos.floor !== SURFACE_FLOOR || !state.layout?.surfaceOpen) return 'surface';
     } else if (pos.floor < 0 || pos.floor + levels > state.currentFloors) return 'floor';
-    if (place?.needsFlag && !state.storyFlags.includes(place.needsFlag)) return 'locked';
+    if (place?.needsFlag && !storyFlagMet(state, place.needsFlag)) return 'locked';
     if (def.maxCopies !== undefined && state.buildings.filter(b => b.type === type).length >= def.maxCopies) return 'copies';
     if (levels > 1 && crossesGallery(pos.floor, levels)) return 'floor'; // [plan4:ST-1] "needs a floor pair without a service gallery" (placement.hallGallery)
     const allowed = allowedFloors(type, state.currentFloors);

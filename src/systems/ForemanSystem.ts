@@ -186,10 +186,12 @@ export class ForemanSystem {
     for (const s of this.sm.state.survivors) {
       if (s.assignedBuildingId || s.child || s.isOnMission) continue;
       const st = this.sm.state;
-      const room = st.buildings
+      // [plan4:qa] Try every room with a free post, emptiest first: one the survivor cannot be put in (behind a sealed door, say) must not end the round.
+      const rooms = st.buildings
         .filter(b => !b.isConstructing && crewCount(st, b) < (getDef(b.type)?.maxWorkers ?? 0))
-        .sort((a, b) => ((getDef(b.type)?.maxWorkers ?? 0) - crewCount(st, b)) - ((getDef(a.type)?.maxWorkers ?? 0) - crewCount(st, a)))[0];
-      if (!room || !this.population.assignSurvivorToBuilding(this.sm, s.id, room.id)) break;
+        .sort((a, b) => ((getDef(b.type)?.maxWorkers ?? 0) - crewCount(st, b)) - ((getDef(a.type)?.maxWorkers ?? 0) - crewCount(st, a)));
+      if (rooms.length === 0) break;
+      if (!rooms.some(room => this.population.assignSurvivorToBuilding(this.sm, s.id, room.id))) continue;
       placed++;
     }
     if (placed) return { key: 'staffed', n: placed };

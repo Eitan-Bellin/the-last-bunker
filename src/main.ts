@@ -34,6 +34,20 @@ function showStartupError(): void {
   btn.style.cssText = 'padding:12px 28px;border-radius:10px;border:1px solid #c9a24a;background:#2a2418;color:#f1d58a;font:inherit;cursor:pointer';
   btn.onclick = () => location.reload();
   box.append(msg, btn);
+  // [plan4:qa] A save that loads but breaks the start used to be a dead end (Retry fails the same way every time). Two escape hatches, each
+  // keeps a copy of what it sets aside: restore the freshest backup, or start a new game.
+  const recover = (label: string, everything: boolean, ask: string): void => {
+    const b = document.createElement('button');
+    b.textContent = label;
+    b.style.cssText = 'padding:10px 22px;border-radius:10px;border:1px solid #555;background:#1b1b24;color:#cfc8bb;font:inherit;font-size:14px;cursor:pointer';
+    b.onclick = () => {
+      if (!window.confirm(ask)) return;
+      new SaveManager().setAsideForRecovery(everything).catch(console.error).finally(() => location.reload());
+    };
+    box.appendChild(b);
+  };
+  recover('שחזור מגיבוי · Restore backup', false, 'לשחזר מהגיבוי האחרון? העותק הנוכחי יישמר בצד.\nRestore the latest backup? The current save is kept aside.');
+  recover('משחק חדש · New game', true, 'להתחיל משחק חדש? כל הגיבויים יישמרו בצד ולא יימחקו.\nStart a new game? All saves are kept aside, not deleted.');
   document.body.appendChild(box);
 }
 

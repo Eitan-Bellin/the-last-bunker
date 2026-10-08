@@ -107,7 +107,9 @@ export function initServiceWorker(save: () => Promise<void>): void {
     showUpdateChip(() => void apply(w));
   };
 
-  window.addEventListener('load', () => {
+  // [plan4:qa] initServiceWorker is called after two awaits in main.ts, so on a repeat visit `load` has already fired and a listener never ran:
+  // register at once when the page is already loaded.
+  const registerWorker = (): void => {
     sw.register('./sw.js').then(reg => {
       if (reg.waiting && sw.controller) void offer(reg.waiting);
       reg.addEventListener('updatefound', () => {
@@ -122,7 +124,9 @@ export function initServiceWorker(save: () => Promise<void>): void {
       document.addEventListener('visibilitychange', () => { if (!document.hidden) check(); });
       window.setInterval(() => { if (!document.hidden) check(); }, 30 * 60_000);
     }).catch(console.error);
-  });
+  };
+  if (document.readyState === 'complete') registerWorker();
+  else window.addEventListener('load', registerWorker);
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
