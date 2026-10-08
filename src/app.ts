@@ -57,6 +57,7 @@ import { hideSplash } from './ui/splash';
 import { StoryDialog } from './ui/components/StoryDialog';
 import { DISASTERS } from './data/incidents';
 import { Notifier, type NotifyItem } from './ui/notifications';
+import type { TourMode } from './ui/tour'; // [plan4:GP-6] type only: the tour's code loads on first use
 import { arrivalGap, type RaidResult } from './systems/EventSystem';
 import { DialogQueue, type DialogSource } from './ui/dialogQueue'; // [plan4:UX-10]
 import { getChapter } from './data/story';
@@ -151,6 +152,8 @@ export class GameApp {
   dangerPrompt = false;
   raidResult: RaidResult | null = null;
   private notifier = new Notifier();
+  /** [plan4:GP-6] The running tour mode (made on first use; its code loads only then). */
+  private tour: TourMode | null = null;
 
   placementMode: BuildingType | null = null;
   private lastPanelRefresh = 0;
@@ -249,8 +252,10 @@ export class GameApp {
       openChronicle: () => this.chroniclePanel.show(this.state),
       showTipsAgain: () => { this.tips.reset(); this.toasts.show(`[[hand]] ${i18n.t('settings.tipsReset')}`, 'good'); }, // [plan4:UX-11]
       replayIntro: () => { this.closeSheets(); this.story.replayIntro(); },
+      shareBunker: () => this.shareBunker(), // [plan4:GP-5]
+      startTour: () => this.startTour(), // [plan4:GP-6]
       redeemCoupon: (code: string) => { // the coupon sheet: pick how much to skip or add
-        if (!couponValid(code)) return false;
+        if (!couponValid(code) || !new URLSearchParams(location.search).has('debug')) return false; // [plan4:GP-12] the code only works on a ?debug page
         this.closeSheets();
         this.couponPanel.show();
         return true;
@@ -522,6 +527,7 @@ export class GameApp {
   dialogGate(critical = false): boolean {
     const now = performance.now();
     if (this.placementMode) return false;
+    if (this.tour?.active) return false; // [plan4:GP-6] the tour is for watching: dialogs wait for the tap that ends it
     for (const [id, t] of this.pointersDown) if (now - t > 12000) this.pointersDown.delete(id); // a lost pointerup must not block forever
     if (this.pointersDown.size > 0) return false;
     if (now - this.lastGestureAt < 1200) return false;
@@ -1083,6 +1089,7 @@ export class GameApp {
     let lastBack = 0;
     history.pushState({ lastbunker: 1 }, '');
     window.addEventListener('popstate', () => {
+      if (this.tour?.active) { this.tour.stop(); history.pushState({ lastbunker: 1 }, ''); return; } // [plan4:GP-6] back ends the tour first
       if (this.modal.isVisible) {
         history.pushState({ lastbunker: 1 }, '');
         return;
@@ -1119,6 +1126,29 @@ export class GameApp {
     const wasOpen = this.structurePanel.isVisible;
     this.closeSheets();
     if (!wasOpen) this.structurePanel.show();
+  }
+
+  /** [plan4:GP-5] Makes the share picture (the menu closes first: an open sheet changes the camera's bounds). The code loads on first use. */
+  private shareBunker(): void {
+    this.closeSheets();
+    void import('./ui/share').then(m => m.shareBunker({
+      renderer: this.renderer, getState: () => this.state, modal: this.modal,
+      toast: (text, kind) => this.toasts.show(text, kind), wake: () => this.engine.notifyInteraction(),
+      hideNumbers: hide => this.popups.setVisible(!hide),
+    })).catch(err => { console.warn('[plan4:GP-5] share', err); this.toasts.show(`[[warning]] ${i18n.t('share.failed')}`, 'bad'); });
+  }
+
+  /** [plan4:GP-6] Starts the tour mode (camera tour on a clean screen, 20 fps, screen kept awake). */
+  private startTour(): void {
+    this.closeSheets();
+    void import('./ui/tour').then(m => {
+      this.tour ??= new m.TourMode({
+        renderer: this.renderer, getState: () => this.state,
+        setFrameCap: fps => { this.engine.maxFps = fps; },
+        interrupted: () => this.modal.isVisible || this.anyPanelOpen() || this.welcomeOpen || this.introPlaying || this.storyOpen || this.storyDialog.isVisible,
+      });
+      this.tour.start();
+    }).catch(err => console.warn('[plan4:GP-6] tour', err));
   }
 
   closeSheets(): void {

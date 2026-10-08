@@ -16,7 +16,9 @@ Restore the dead bunker room by room. Bring the generator back to life, drain th
 • Living residents with faces and names: they work, sleep, fall in love, raise children and grow old with your bunker.
 • Real crises inside your rooms: fires that spread, floods, blackouts, roach swarms and raider breaches. Every tap helps your crew.
 • A story told by memorable characters — the radio voice from Terminus, the Rust Clan's chief, a girl who comes home — with choices that change what happens next.
-• Dig deeper and sideways: crystal caves, an underground lake, an abandoned metro station, two-storey gardens and fusion halls.
+• Dig deeper and sideways: crystal caves, an underground lake, an abandoned metro station, two-storey gardens and fusion halls. Widen any floor with side wings, then divide the bunker with bulkhead doors and stairwells to slow fire and sickness.
+• Seven Acts, each a chapter of the bunker's growth with its own goals and its own big project, from a dead shelter to a city beneath the world.
+• Daily orders: every day a few short jobs to pick from, with small rewards for finishing them.
 • Send expeditions into a painted wasteland, decide what they do on the road, and read their travel log when they return.
 • Four eras, each with its own look and its own music — a soundtrack composed live that never repeats the same minute twice.
 • Plays offline. Your bunker keeps working while you are away.
@@ -42,7 +44,9 @@ Restore the dead bunker room by room. Bring the generator back to life, drain th
 • דיירים חיים עם פנים ושמות: הם עובדים, ישנים, מתאהבים, מגדלים ילדים וגדלים עם הבונקר.
 • משברים אמיתיים בתוך החדרים: שריפות שמתפשטות, הצפות, הפסקות חשמל, מכות ג׳וקים ופריצות שודדים. כל הקשה עוזרת לצוות.
 • סיפור שמסופר בידי דמויות בלתי נשכחות — הקול מהקשר במקלט "המסוף", ראש שבט החלודה, ילדה שחוזרת הביתה — עם בחירות שמשנות את ההמשך.
-• חפרו עמוק יותר וגם לצדדים: מערת גבישים, אגם תת־קרקעי, תחנת מטרו נטושה, גנים ואולמות היתוך בגובה שתי קומות.
+• חפרו עמוק יותר וגם לצדדים: מערת גבישים, אגם תת־קרקעי, תחנת מטרו נטושה, גנים ואולמות היתוך בגובה שתי קומות. הרחיבו כל קומה באגפים, וחלקו את הבונקר בדלתות מחיצה ובחדרי מדרגות כדי להאט אש ומחלות.
+• שבע תקופות, כל אחת פרק בצמיחת הבונקר עם יעדים ופרויקט גדול משלה: ממקלט מת ועד עיר מתחת לעולם.
+• הזמנות יום: בכל יום כמה משימות קצרות לבחירה, עם פרסים קטנים על השלמתן.
 • שלחו משלחות לשממה מצוירת, החליטו מה הן עושות בדרך, וקראו את יומן המסע כשהן חוזרות.
 • ארבעה עידנים, לכל אחד מראה ומוזיקה משלו — פסקול שמולחן בזמן אמת ולא חוזר על אותה דקה פעמיים.
 • עובד גם בלי אינטרנט. הבונקר ממשיך לעבוד גם כשאתם לא שם.

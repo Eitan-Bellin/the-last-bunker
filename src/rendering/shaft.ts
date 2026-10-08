@@ -54,6 +54,8 @@ export interface LiftApi {
   arrived(ticket: number): boolean;
   /** Steps out or gives up: frees the ticket and the seat. */
   release(ticket: number): void;
+  /** [plan4:GP-6] Where the car is right now: the world y of its centre (the tour mode follows it). */
+  carY(): number;
 }
 
 export type ShaftAnimated = Animated & { lift: LiftApi };
@@ -550,6 +552,7 @@ export function buildShaft2(floors: number, era: number, onArrive?: () => void, 
       if (tSeat[i] >= 0) showSeat(tSeat[i], false);
       tState[i] = 0; tSeat[i] = -1; tickets--;
     },
+    carY: () => car.y + CAR_H / 2,
   };
 
   /** The car's idle decision when walkers are on: carry riders, fetch the oldest waiting one, or (rarely) make a display trip. */

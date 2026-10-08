@@ -12,6 +12,7 @@ import type { BackupInfo, BackupKind } from '../../core/SaveManager';
 import { getA11y, setA11y } from '../../utils/a11y';
 import { haptic } from '../../utils/haptics';
 import { enhanceTabs } from '../a11yDom';
+import { isIosBrowserTab } from '../../utils/platform'; // [plan4:UX-15]
 
 export type MenuTab = 'settings' | 'a11y' | 'stats' | 'achievements' | 'genesis';
 
@@ -72,6 +73,9 @@ export interface MenuActions {
   /** [plan4:UX-11] Forget which gesture tips were seen / play the opening story again (no change to the game). */
   showTipsAgain?: () => void;
   replayIntro?: () => void;
+  /** [plan4:GP-5/GP-6] Make the share picture / start the tour mode (the app closes the menu first). */
+  shareBunker?: () => void;
+  startTour?: () => void;
 }
 
 export class MenuPanel {
@@ -171,6 +175,28 @@ export class MenuPanel {
     return card;
   }
 
+  /** [plan4:GP-5] The "share your bunker" row (also shown on the Genesis tab, where the player looks back at the run). */
+  private shareRow(): HTMLElement | null {
+    if (!this.actions.shareBunker) return null;
+    const row = el('div', 'bp-row');
+    row.append(el('span', '', `[[upload]] ${i18n.t('share.menu')}`), button(i18n.t('share.make'), 'btn-small', () => { uiSound('click'); this.actions.shareBunker?.(); }));
+    return row;
+  }
+
+  /** [plan4:GP-5/GP-6] Share the bunker as a picture, and the tour mode (the camera wanders on a clean screen). */
+  private renderShareTourBlock(): HTMLElement {
+    const card = el('div', 'bp-card settings-share');
+    const share = this.shareRow();
+    if (share) card.append(share, el('div', 'bp-hint', i18n.t('share.hint')));
+    if (this.actions.startTour) {
+      const tour = el('div', 'bp-row');
+      tour.append(el('span', '', `[[walker]] ${i18n.t('tour.menu')}`), button(i18n.t('tour.start'), 'btn-small', () => { uiSound('click'); this.actions.startTour?.(); }));
+      card.append(tour, el('div', 'bp-hint', i18n.t('tour.hint')));
+    }
+    card.hidden = !share && !this.actions.startTour;
+    return card;
+  }
+
   private renderSettings(): HTMLElement {
     const box = el('div', 'bp');
     // [Q6/Q14] The book and the chronicle sit first: the questions a new player asks.
@@ -182,6 +208,7 @@ export class MenuPanel {
     guide.append(book, chron);
     box.appendChild(guide);
     box.appendChild(this.renderTipsBlock());
+    box.appendChild(this.renderShareTourBlock());
     const general = el('div', 'bp-card');
     const lang = el('div', 'bp-row');
     lang.append(el('span', '', `[[surface]] ${i18n.t('settings.language')}`),
@@ -250,34 +277,21 @@ export class MenuPanel {
         this.refresh(this.engine.stateManager.state);
       }));
     const notifyHint = el('div', 'bp-hint', i18n.t('settings.notifyWebHint'));
+    // [plan4:UX-15] Safari in a tab on an iPhone cannot keep this promise (the page is suspended in seconds): no switch, an honest line instead.
+    // Android, desktop and the home-screen app keep the switch as it was.
+    const iosTab = isIosBrowserTab();
+    if (iosTab) {
+      notify.replaceChildren(el('span', '', `[[bell]] ${i18n.t('settings.notifications')}`), el('span', 'bp-value', i18n.t('settings.notifyUnsupported')));
+      notifyHint.textContent = i18n.t('settings.notifyIosHint');
+    }
     const diag = el('div', 'bp-row');
     diag.append(el('span', '', `[[chart]] ${i18n.t('settings.diagnostics')}`),
       button(i18n.t('settings.diagnosticsCopy'), 'btn-small', () => { uiSound('switch'); this.actions.copyDiagnostics(); }));
     general.append(lang, sound, music, fx, gfx, gfxHint, bright, textSize, notify, notifyHint, diag);
     box.appendChild(general);
 
-    const coupon = el('div', 'bp-card');
-    coupon.appendChild(el('div', 'bp-section-title', `[[gift]] ${i18n.t('coupon.code')}`));
-    const codeRow = el('div', 'btn-row');
-    const code = el('input', 'coupon-code');
-    code.type = 'text';
-    code.autocomplete = 'off';
-    code.spellcheck = false;
-    code.placeholder = i18n.t('coupon.placeholder');
-    code.setAttribute('aria-label', i18n.t('coupon.code'));
-    const redeem = () => {
-      if (!code.value.trim()) return;
-      if (this.actions.redeemCoupon(code.value)) code.value = '';
-      else {
-        uiSound('cancel');
-        code.classList.add('bad');
-        setTimeout(() => code.classList.remove('bad'), 900);
-      }
-    };
-    code.addEventListener('keydown', e => { if (e.key === 'Enter') redeem(); });
-    codeRow.append(code, button(i18n.t('coupon.redeem'), 'btn-small', redeem));
-    coupon.appendChild(codeRow);
-    box.appendChild(coupon);
+    const coupon = this.renderCouponBlock(); // [plan4:GP-12] only with ?debug
+    if (coupon) box.appendChild(coupon);
 
     const saves = el('div', 'bp-card');
     saves.appendChild(el('div', 'bp-section-title', `[[save]] ${i18n.t('settings.save')}`));
@@ -332,6 +346,36 @@ export class MenuPanel {
     danger.appendChild(button(`[[warning]] ${i18n.t('settings.newGame')}`, 'btn-ghost danger-btn', () => this.actions.newGame()));
     box.appendChild(danger);
     return box;
+  }
+
+  /**
+   * [plan4:GP-12] The coupon code entry is a developer/tester tool: it is shown only on a page opened with ?debug (the code is BUNKER17;
+   * the sheet it opens is unchanged). Players never see it; app.ts also refuses the code without ?debug.
+   */
+  private renderCouponBlock(): HTMLElement | null {
+    if (!new URLSearchParams(location.search).has('debug')) return null;
+    const coupon = el('div', 'bp-card');
+    coupon.appendChild(el('div', 'bp-section-title', `[[gift]] ${i18n.t('coupon.code')}`));
+    const codeRow = el('div', 'btn-row');
+    const code = el('input', 'coupon-code');
+    code.type = 'text';
+    code.autocomplete = 'off';
+    code.spellcheck = false;
+    code.placeholder = i18n.t('coupon.placeholder');
+    code.setAttribute('aria-label', i18n.t('coupon.code'));
+    const redeem = () => {
+      if (!code.value.trim()) return;
+      if (this.actions.redeemCoupon(code.value)) code.value = '';
+      else {
+        uiSound('cancel');
+        code.classList.add('bad');
+        setTimeout(() => code.classList.remove('bad'), 900);
+      }
+    };
+    code.addEventListener('keydown', e => { if (e.key === 'Enter') redeem(); });
+    codeRow.append(code, button(i18n.t('coupon.redeem'), 'btn-small', redeem));
+    coupon.appendChild(codeRow);
+    return coupon;
   }
 
   /**
@@ -465,6 +509,8 @@ export class MenuPanel {
       el('div', 'bp-hint', i18n.t('genesis.isotope')),
     );
     box.appendChild(head);
+    const share = this.shareRow(); // [plan4:GP-5]
+    if (share) { const sc = el('div', 'bp-card'); sc.append(share, el('div', 'bp-hint', i18n.t('share.hint'))); box.appendChild(sc); }
 
     const rebirth = el('div', 'bp-card');
     rebirth.appendChild(el('p', 'modal-body', i18n.t('genesis.explain')));

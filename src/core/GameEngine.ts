@@ -954,6 +954,7 @@ export class GameEngine {
     if (performance.now() < this.motionUntil) fps = Math.max(fps, this.motionFps);
     // Floating numbers, hearts and bursts are animated on the picture too: they would stutter at the idle rate.
     if (this.fxBusy) fps = Math.max(fps, calm);
+    if (this.maxFps) fps = Math.min(fps, this.maxFps); // [plan4:GP-6] the tour mode's 20 fps
     // Working through an absence (see comeBack) takes the time the pictures would: draw few of them meanwhile (8 a second).
     if (this.catchingUp) return Math.max(1000 / fps, 125);
     return 1000 / fps;
@@ -965,6 +966,9 @@ export class GameEngine {
   motionUntil = 0;
   /** [perf] Short animations (popups, bursts, incidents) are on screen: keep at least the watching rate. */
   fxBusy = false;
+
+  /** [plan4:GP-6] Upper limit on pictures per second, whatever the graphics level says (the tour mode asks for 20); null = none. */
+  maxFps: number | null = null;
 
   /** [perf] Called by the app each picture while the camera is in motion. */
   noteCameraMotion(): void {
