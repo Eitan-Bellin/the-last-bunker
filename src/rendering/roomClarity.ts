@@ -12,6 +12,8 @@ import { CATEGORY } from './cityMap';
  */
 
 const BAND_H = 9;
+/** Matches paintedRoom's PAINT_INSET: the wash covers the painting only. */
+const INSET = 4;
 /** The structure's ceiling pipe bundle covers the top of the painting: the band sits just under it. */
 const BAND_Y = 7;
 
@@ -48,7 +50,7 @@ export function buildClarity(type: BuildingType, color: number, w: number, h: nu
   const over = new Container();
   under.eventMode = over.eventMode = 'none';
   const wash = new Graphics();
-  wash.rect(0, 0, w, h).fill(color);
+  wash.rect(INSET, 0, w - 2 * INSET, h).fill(color);
   wash.alpha = 0;
   // The ceiling band: a solid stripe of the trade colour with a soft fall-off under it and a dark line that seats it on the ceiling.
   const band = new Graphics();

@@ -1,6 +1,6 @@
 import { Container, Graphics, Sprite, TilingSprite, type Texture } from 'pixi.js';
 import { ArtLibrary, glowTexture } from '../art/ArtLibrary';
-import { FLOOR_H, GALLERY_H, ROOM_H, SHAFT_W, floorAfterTravel, floorTop, galleryCount, galleryTop } from './layout';
+import { FLOOR_H, GALLERY_H, ROOM_H, SHAFT_W, SLAB, floorAfterTravel, floorTop, galleryCount, galleryTop } from './layout';
 import { seeded } from './draw';
 import { depthGains, kitState, softTexture, type KitState } from './structure';
 import type { Animated } from './world';
@@ -137,7 +137,7 @@ export function buildShaft2(floors: number, era: number, onArrive?: () => void, 
   const pipeTex = kit('pipes', st);
   // The wall in floor-high bands so the depth fog can darken it level by level.
   const bands: [number, number][] = [[TOP, floorTop(0)]];
-  for (let f = 0; f < floors; f++) bands.push([floorTop(f), floorTop(f) + ROOM_H + 16 + (floorTop(f + 1) - floorTop(f) - FLOOR_H)]); // [plan4:ST-1] a gallery under the floor is part of the band: the shaft passes through it
+  for (let f = 0; f < floors; f++) bands.push([floorTop(f), floorTop(f) + ROOM_H + SLAB + (floorTop(f + 1) - floorTop(f) - FLOOR_H)]); // [plan4:ST-1] a gallery under the floor is part of the band: the shaft passes through it
   for (const [y0, y1] of bands) {
     if (wallTex) {
       const w = new TilingSprite({ texture: wallTex, width: SHAFT_W, height: y1 - y0 });

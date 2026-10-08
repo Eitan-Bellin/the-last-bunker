@@ -988,6 +988,9 @@ function onScreen(c: Container, W: number, H: number): boolean {
  * A room drawn from a painting, with live layers on top: lamp glows and light cones placed on the
  * painted lamps, flicker and blackout when power is short, particles on painted props, dust motes.
  */
+/** [airy:B6] Per-side inset of the painting inside its room under `airy`. */
+const PAINT_INSET = 4;
+
 export function buildPaintedRoom(
   texture: Texture, entry: ArtEntry, W: number, openLeft: boolean, openRight: boolean, mirror: boolean, rnd: () => number,
   H: number = ROOM_H,
@@ -999,11 +1002,14 @@ export function buildPaintedRoom(
   const container = new Container();
   const art = new Sprite(texture);
   // Paintings are made at the slot's aspect, so a plain fit keeps the painted lamps under the live lights.
-  art.width = W;
+  // [airy:B6] With `airy` the painting is inset a little per side so the pier between rooms (structure) reads as a real gap, not an overlay on the picture.
+  const inset = GFX.airy ? PAINT_INSET : 0;
+  art.width = W - 2 * inset;
   art.height = H;
+  art.x = inset;
   if (mirror) {
     art.scale.x *= -1;
-    art.x = W;
+    art.x = W - inset;
   }
   // Exposure lift for dark paintings (tier 0 is painted around luma 0.14, which read as "the screen is dark" in
   // play). A tint can only darken, so the lift is the same painting added on top: colour × (1 + boostK), shadows
@@ -1011,11 +1017,12 @@ export function buildPaintedRoom(
   const boostK = Math.max(0, Math.min(0.85, 0.26 / Math.max(0.05, ArtLibrary.lumOf(entry.key) ?? 0.26) - 1));
   const boost = boostK > 0.02 ? new Sprite(texture) : null;
   if (boost) {
-    boost.width = W;
+    boost.width = W - 2 * inset;
     boost.height = H;
+    boost.x = inset;
     if (mirror) {
       boost.scale.x *= -1;
-      boost.x = W;
+      boost.x = W - inset;
     }
     boost.blendMode = 'add';
   }
