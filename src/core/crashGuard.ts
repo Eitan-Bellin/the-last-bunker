@@ -65,6 +65,9 @@ function probe(): Record<string, unknown> {
 const recent = new Map<string, number>();
 
 /** Records an error without ever throwing; the same message within 10 s only bumps the counter. */
+/** Repeats of a crash seen again within the throttle window, added to its count the next time it is written. */
+const skipped = new Map<string, number>();
+
 export function logCrash(kind: string, err: unknown, info?: Record<string, unknown>): void {
   try {
     const e = err as { message?: unknown; stack?: unknown } | null;
@@ -72,16 +75,16 @@ export function logCrash(kind: string, err: unknown, info?: Record<string, unkno
     const key = `${kind}|${msg}`;
     const now = Date.now();
     const last = recent.get(key) ?? 0;
+    // [plan4:qa] A system that fails on every tick used to read, parse and write the whole log ~30 times a second: inside the window only count in memory.
+    if (now - last < 10_000) { skipped.set(key, (skipped.get(key) ?? 0) + 1); return; }
     const log = read<CrashEntry[]>(LOG_KEY, []);
     const prev = log.find(x => x.kind === kind && x.msg === msg);
-    if (now - last < 10_000) {
-      if (prev) { prev.count++; write(LOG_KEY, log); }
-      return;
-    }
+    const extra = skipped.get(key) ?? 0;
+    skipped.delete(key);
     recent.set(key, now);
     if (recent.size > 200) recent.clear();
     if (prev) {
-      prev.count++;
+      prev.count += 1 + extra;
       prev.t = now;
     } else {
       log.push({
