@@ -1,10 +1,10 @@
-# בריף דרגה C: ציורי חדרים (Canva) ל-20 החדרים החדשים
+# בריף דרגה C: ציורי חדרים (Canva) ל-27 החדרים והמחוזות החדשים
 
-מסמך מצורף ל-`02-new-buildings.md` §4.5. נכתב על ידי סוכן Room-Art (גל 2). **הציורים אינם חוסמים כלום:** לכל חדר ברשימה כבר יש מראה מלא בקוד (דרגה A/B, `RoomComposer`, שלוש רמות) שמוצג תחת אותו מפתח `rooms/<type>-<tier>` כמו ציור. ציור שנוסף מחליף אותו; ציור שחסר או שנכשל בטעינה נופל חזרה אליו.
+מסמך מצורף ל-`02-new-buildings.md` §4.5. נכתב על ידי סוכן Room-Art (גל 2); גל 3 הוסיף 5 חדרי Act ושני מחוזות (§5.3). **הציורים אינם חוסמים כלום:** לכל חדר ברשימה כבר יש מראה מלא בקוד (דרגה A/B, `RoomComposer`, שלוש רמות) שמוצג תחת אותו מפתח `rooms/<type>-<tier>` כמו ציור. ציור שנוסף מחליף אותו; ציור שחסר או שנכשל בטעינה נופל חזרה אליו.
 
 ## 1. מה צריך לצייר (תקציר)
 
-* **20 סוגי חדר × 3 רמות = 60 ציורים.** סדר עדיפות להלן (§5): קודם החדרים שרואים הכי הרבה, בלי מורל/כוח (זולים לזיהוי), אחר כך שאר הסוגים. אפשר להתחיל מרמה 1 בלבד לכל סוג; רמות 0 ו-2 נופלות חזרה על הבייק עד שיש ציור.
+* **20 סוגי חדר × 3 רמות = 60 ציורים (+ גל 3: 5 חדרי Act × 3 = 15, ושני מחוזות, ציור יחיד לכל אחד, §5.3).** סדר עדיפות להלן (§5): קודם החדרים שרואים הכי הרבה, בלי מורל/כוח (זולים לזיהוי), אחר כך שאר הסוגים. אפשר להתחיל מרמה 1 בלבד לכל סוג; רמות 0 ו-2 נופלות חזרה על הבייק עד שיש ציור.
 * **גודל ופורמט:** חדר ברוחב **3 משבצות 720×522**, ברוחב **2 משבצות 480×522**, ברוחב **משבצת אחת 240×522** (מגדל תצפית, טורבינת רוח). ייצוא `.webp` (איכות ~82) לשם `public/art/rooms/<type>-<tier>.webp`. רמות: `0` הרוס/ממוחזר, `1` משוקם, `2` מתקדם.
 * **תבנית הבקשה (מ-§4.5, ללא שינוי):** *"חתך אופקי של חדר מחסה גרעיני אחרי אסון, סגנון ציור דיגיטלי, תאורת טונגסטן חמה, פינה כהה, פרטי חלודה, ללא אנשים, פרספקטיבה של חתך (קיר אחורי בעומק, רצפה בתחתית), **{תוכן החדר}**, גודל {720×522 | 480×522 | 240×522}, רמה {0/1/2}: {בסיסי/מצויד/מפואר}"* + **שלושה ציורי ייחוס מ-`public/art/rooms/` בכל בקשה** (ראו עוגני סגנון, §3).
 
@@ -96,6 +96,24 @@
 
 **אולם זיכרון `memorialHall` (2 · 480×522).** "a wall of small slate name plaques in rows (blank, unreadable marks), a ledge of lit candles, a stone pedestal with a small gold star, two dark red banners with a star, two low benches"; tiers: 0 names on cardboard scraps and few plaques; 1 most of the wall; 2 full wall plus an eternal-flame bowl in front. Dim: this is the darkest room, warm candle light only.
 
+### 5.3 גל 3: חמישה חדרי Act ושני מחוזות (BL-34..38, BL-24/25; אחרי גל 2)
+
+נוספו על ידי Room-Art בגל 3. כמו קודם: כבר יש מראה מלא בקוד (`roomSpecsC.ts` לחדרים, `roomSpecsD.ts` למחוזות), שלוש רמות, ואין חסימה. חדרי ה-Act ברוחב 3 משבצות (720×522). **המחוזות שונים:** רוחב 4 משבצות, ציור **960×484** (כמו `districts/cave`), בלי מסגרת פלדה (המשחק מצייר קצוות סלע). ציור מחוז הוא **יחיד** (כמו המערה והאגם): קובץ `public/art/districts/<type>.webp` והסוג ל-`PAINTED_DISTRICTS` ב-`src/art/registry.ts`; מאותו רגע הציור מחליף את שלוש רמות הבייק (`districts/<type>-0..2`, שנוצרים בקוד). לכן ציור המחוז צריך להתאים לרמה 1.
+
+**מפעל רכיבים `componentsPlant` (3 · 720×522).** "a short assembly line: a belt on four legs carrying cogs, boxes and flat parts, a ceiling-rail welding robot arm with a torch over the belt, a hydraulic press with a hazard-striped base and a round gauge at the end of the line, a wall of small colour-tagged parts drawers on the left, a pegboard of hand tools, open parts bins under the belt, a cog pictogram plate". Tiers: 0 mismatched drawers (some missing), rust streaks, bare bulbs, crates; 1 matching grey cabinet, tubes; 2 blue-steel cabinet, LED strip, a cyan control screen. *People:* spots at the belt start (`wrench`), the middle (`type`), the press (`hammer`). Live: belt, weld, sparks.
+
+**יצקת סגסוגות `alloyFoundry` (3 · 720×522).** "a big brick-and-steel furnace with an arched mouth full of white-orange fire under a tapering steel hood that runs up to the ceiling, a gantry rail with a hoist and a ladle of molten metal, three sand molds in a row on the floor (one with a glowing channel), a pyramid of silver cast bars, a water quench trough with steam, a tool wall of long tongs and a skimmer, an anvil pictogram plate". Dim: the furnace is the main light, the lamp is secondary. Tiers: 0 cracked brick with a cement patch; 1 riveted steel jacket; 2 clean steel with a small amber readout. Saturation exception: fire and molten metal only. *People:* `wrench` (furnace), `hammer` (molds), `wrench` (trough). Live: flame, haze, sparks, steam.
+
+**מרכז נתונים `dataCenter` (3 · 720×522).** "four tall server racks (two each side) with ten rack units each and rows of tiny green/amber/blue lights, cable ladder across the ceiling with bundles dropping into the racks, an operator desk in the middle with two small screens (one green bar graph, one cyan text), a wall exhaust fan in a grille, cyan-lit floor vents with a wisp of cold mist, a microchip pictogram plate". Cold white light (this is the one room lit blue-white, not tungsten: keep the warm accent only in the old bulbs of tier 0). Tiers: 0 empty bays, dangling red cable, a bulb; 1 full racks, tubes; 2 every bay full, cyan underglow, LED strips. *People:* three standing spots (`type`, `type`, `inspect`).
+
+**פורום האזרחים `forum` (3 · 720×522).** "a speaker's podium with a lit lamp and a small pitcher on a low dais, a big muted-red banner behind it with a columns (civic hall) pictogram, two long hanging banners, and on both sides three wide steps of wooden benches rising toward the walls, facing the podium; a small ballot box, a notice board with pinned paper". Tiers: 0 crates and planks as benches, tarp banners; 1 plain wood benches, red-and-teal banners; 2 cushioned purple-grey benches, brass podium. *People:* six seats on the steps (`sit`, three each side) and spots near the podium. Warm tungsten light only.
+
+**מעבדת זרעים `seedLab` (3 · 720×522).** "two tall steel racks of seed trays with young seedlings, each shelf under its own magenta-white grow light (the one saturated light allowed), a lab bench with petri dishes, a centrifuge and a microscope, a frosted cryo-storage cabinet with rows of seed vials and a wisp of cold vapour, a gene-sequencer panel with a green screen showing a small helix, a leaf pictogram plate, a board of seed packets". Tiers: 0 mismatched shelving, a crate, stains; 1 clean grey; 2 white and glass. *People:* `tend` at the racks, `type` at the bench, `tend` at the cabinet.
+
+**מערת קיטור `geothermal` (מחוז, 4 · 960×484).** "a wide dark volcanic cavern with a crater mound of dark rock in the middle and a glowing orange fissure in its top, steam rising, hair-line glowing cracks across the floor, stalagmites framing the sides, a rope line keeping people back; no sky". Tiers: 0 raw cavern, bare bulbs on cables, a barrel and a crate; 1 a steel dome capping the vent with a flanged pipe, a valve wheel, two pressure gauges on a manifold, a striped pressure tank, a heat exchanger, a ladder; 2 the same plus a lit turbine cabinet with a small rotor, an amber panel and a lamp row along a ceiling conduit. Saturation exception: lava glow and the amber panel. *People:* four spots (`tend`, `wrench`, `tend`, `wrench`) on flat ground. Live: a pulse on the fissure, steam (three plumes at tier 0).
+
+**כספת טרום-מלחמה `oldVault` (מחוז, 4 · 960×484).** "a concrete facade built into a rock cavern, in it a gigantic round vault door in a bolted steel ring with a spoked brass wheel, three hinges on the left, a pictogram plate (a round door with three bolts) above it; steel shelving of crates, strongboxes and rolled plans on both sides, a drafting table with plans on the right". Tiers: 0 the door sealed, rusted, shelves half empty and toppled; 1 the door ajar with warm light spilling out and a small screen on the right; 2 the door swung wide open: a lit room full of shelves behind it, polished brass wheel. Keep the door's circle at the same place in all tiers. *People:* four `inspect` / `type` spots.
+
 ## 6. קואורדינטות: איפה המנורות, האפקטים והאנשים (מהבייק, רמה 1)
 
 כל המספרים שברים של הציור (x מ-0 משמאל ל-1, y מ-0 למעלה ל-1). **מנורה** = מקור אור חי (הבוהק של `paintedRoom.ts` יושב עליה); **אפקט** = אנימציה חיה (`blink` נורית, `screen` מסך, `needle` מחוג, `fan` מאוורר, `belt` מסוע, `rotor` רוטור, `flame` להבה, `drip`/`stream`/`bubbles`/`steam`/`mist` חלקיקי מים; `work` = רק כשהחדר מאויש); **עבודה** = `[x, כיוון, פעילות, עומק]`; **מיטה/מושב** = מקומות שבהם אנשים שוכבים/יושבים. רמות 0 ו-2 זהות בפריסה (שינוי קל בפריטים).
@@ -122,8 +140,15 @@
 | `school` | 0.362,0.095,0.189 · 0.725,0.095,0.144 |  | [0.16, 1, inspect, 0.45] [0.46, -1, inspect, 0.7] | מושב 0.252,0.852 · מושב 0.404,0.852 · מושב 0.557,0.852 · מושב 0.709,0.852 |
 | `bathhouse` | 0.5,0.095,0.243 | stream*@0.239,0.406 · stream*@0.37,0.406 · stream*@0.5,0.406 · steam@0.37,0.59 · drip@0.239,0.41 · steam@0.739,0.75 | [0.5, 1, idle, 0.55] | מושב 0.326,0.78 · מושב 0.457,0.78 |
 | `memorialHall` | 0.5,0.095,0.175 | flame@0.217,0.536 · flame@0.304,0.536 · flame@0.391,0.536 · flame@0.609,0.536 · flame@0.696,0.536 · flame@0.783,0.536 | [0.5, 1, idle, 0.55] | מושב 0.315,0.92 · מושב 0.685,0.92 |
+| `componentsPlant` | 0.261,0.095,0.171 · 0.725,0.095,0.171 | weld*@0.575,0.57 · belt*@0.493,0.62 · needle@0.841,0.63 · blink*@0.768,0.63 · blink*@0.797,0.63 · sparks*@0.819,0.58 · screen*@0.417,0.417 | [0.27, 1, wrench, 0.4] [0.5, 1, type, 0.55] [0.84, -1, hammer, 0.25] |  |
+| `alloyFoundry` | 0.754,0.095,0.153 · 0.261,0.67,0.122 · 0.612,0.36,0.061 | flame*@0.261,0.7 · haze@0.261,0.25 · sparks*@0.319,0.65 · sparks*@0.612,0.36 · steam@0.507,0.87 · needle@0.478,0.4 · blink*@0.507,0.4 | [0.22, 1, wrench, 0.5] [0.45, 1, hammer, 0.35] [0.7, -1, wrench, 0.7] |  |
+| `dataCenter` | 0.333,0.095,0.162 · 0.71,0.095,0.162 | blink@0.133,0.295 · blink@0.278,0.295 · blink@0.677,0.295 · blink@0.807,0.295 · screen*@0.482,0.677 · screen*@0.569,0.681 · mist@0.377,0.89 · fan*@0.493,0.36 | [0.4, 1, type, 0.3] [0.6, 1, type, 0.5] [0.78, -1, inspect, 0.4] |  |
+| `forum` | 0.5,0.095,0.18 · 0.5,0.61,0.036 |  | [0.5, 1, 0.62] [0.4, 1, inspect, 0.7] [0.6, -1, 0.7] | מושב 0.145,0.68 · מושב 0.232,0.75 · מושב 0.319,0.82 · מושב 0.855,0.68 · מושב 0.768,0.75 · מושב 0.681,0.82 |
+| `seedLab` | 0.5,0.095,0.153 | pulse@0.196,0.4 · pulse@0.399,0.4 · blink*@0.601,0.616 · mist@0.83,0.7 · screen*@0.837,0.76 | [0.3, 1, tend, 0.55] [0.55, 1, type, 0.45] [0.84, -1, tend, 0.4] |  |
+| `geothermal` | 0.196,0.16,0.135 · 0.826,0.16,0.135 · 0.511,0.73,0.19 | pulse@0.511,0.73 · steam@0.511,0.69 · steam@0.467,0.71 · needle@0.342,0.51 · needle@0.408,0.51 · blink*@0.217,0.61 · blink*@0.685,0.79 | [0.18, 1, tend, 0.5] [0.36, 1, wrench, 0.45] [0.66, -1, tend, 0.65] [0.84, -1, wrench, 0.45] |  |
+| `oldVault` | 0.217,0.16,0.142 · 0.783,0.16,0.142 · 0.533,0.61,0.114 | twinkle@0.522,0.57 · twinkle@0.457,0.67 · screen*@0.791,0.627 · blink@0.87,0.65 | [0.18, 1, inspect, 0.5] [0.34, 1, inspect, 0.65] [0.66, -1, type, 0.5] [0.84, -1, inspect, 0.4] |  |
 
-(* = אפקט `work`.)
+(* = אפקט `work`. שבע השורות האחרונות הן גל 3 (חמישה חדרים ושני מחוזות): שם הציור `districts/<type>` ו-x/y שברים של 960×484.)
 
 ## 7. רשימת בדיקה למסירה
 
