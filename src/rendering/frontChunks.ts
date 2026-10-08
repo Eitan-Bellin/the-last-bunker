@@ -9,7 +9,7 @@ import {
 } from './floorIdentity';
 import { VIEW } from './perfFx';
 import type { Pier } from './airyArt';
-import { VOID_W, TOWER_W, voidBoundaries } from './voids';
+import { ANNEX_W, ANNEX_X, VOID_W, TOWER_W, hasAnnex, voidBoundaries } from './voids';
 import { PIER_AO, PIER_W, clusterSpan, pierKey, piersOfFloor } from './airyArt'; // [airy:A2]
 import { beamTexture, deckTexture, railTexture, seamBack, slotSlice, towerTexture } from './circulation'; // [airy2:D1]
 import { BASE_EAST, CORR_BEAM, CORR_DECK, CORR_LANE, CORR_RAIL, FLOOR_H, ROOMS_X, ROOM_H, SHAFT_GAP, SLAB, SLOT_W, TOPSOIL, floorAtY, floorH, floorTop, slotX, type Ext } from './layout';
@@ -101,6 +101,8 @@ export class FrontChunks implements Animated {
   private ambient = 0.5;
   private st: KitState = 'F';
   private globalSig = '';
+  /** [airy2:D3] The stair annex west of the shaft (airy, no west wing on any floor). */
+  private annex = false;
   /** [plan4:ST-11] The look of every floor (empty while the `floorId` switch is off: every floor then draws the plain way). */
   private styles: FloorStyle[] = [];
   /** [plan4:ST-11] The overlays (lattice, girders, panels) are for Medium and High only. */
@@ -141,6 +143,7 @@ export class FrontChunks implements Animated {
     this.ambient = ambient;
     this.st = st;
     // [plan4:ST-11] Floor identity: a kind per floor, so a change of the rooms may restyle a floor (the signature below carries each style's key).
+    this.annex = GFX.airy && hasAnnex(grid);
     this.styles = GFX.floorId ? floorStyles(buildings, floors) : [];
     this.full = gfxLevel() !== 'low';
     this.lampsByFloor = Array.from({ length: floors }, () => []);
@@ -152,7 +155,7 @@ export class FrontChunks implements Animated {
     this.roomIds = ids;
     this.roomIdx = new Map(ids.map((r, i) => [r, i]));
     this.flicker = new Array(ids.length + 1).fill(1);
-    const gsig = `${st}|${this.full ? 1 : 0}${GFX.openings ? 'o' : ''}${GFX.airy ? 'a' + voidBoundaries(grid).join('.') : ''}|${ambient.toFixed(3)}|${kitTex('pipes', st)?.uid}.${kitTex('slab', st)?.uid}.${kitTex('column', st)?.uid}`;
+    const gsig = `${st}|${this.full ? 1 : 0}${GFX.openings ? 'o' : ''}${GFX.airy ? 'a' + voidBoundaries(grid).join('.') + (this.annex ? 'x' : '') : ''}|${ambient.toFixed(3)}|${kitTex('pipes', st)?.uid}.${kitTex('slab', st)?.uid}.${kitTex('column', st)?.uid}`;
     const all = gsig !== this.globalSig;
     this.globalSig = gsig;
 
@@ -178,7 +181,7 @@ export class FrontChunks implements Animated {
         if (old) this.drop(old);
         const yTop = floorTop(fa) - 8, yBot = floorTop(fb - 1) + ROOM_H + SLAB + 8;
         want.set(key, {
-          cx, cy, x0: chunkX0(cx) - 30, x1: chunkX1(cx) + 30, y0: cy === 0 ? TOPSOIL - SLAB - 8 : yTop, y1: yBot, sig, container: null, parts: [],
+          cx, cy, x0: chunkX0(cx) - (cx === 0 && this.annex ? 60 : 30), x1: chunkX1(cx) + 30, y0: cy === 0 ? TOPSOIL - SLAB - 8 : yTop, y1: yBot, sig, container: null, parts: [],
           lit: [], spills: [], guides: [], markers: [], stamp: 0, shown: false, lastSeen: 0,
         });
       }
@@ -461,7 +464,7 @@ export class FrontChunks implements Animated {
       for (const line of lines) {
         const sty = styleOf(line.f);
         mul = sty.tint;
-        const sx0 = (line.ext.w > 0 ? slotX(-line.ext.w) : 0) - 12, sx1 = slotX(line.ext.e) + 12;
+        const sx0 = (line.ext.w > 0 ? slotX(-line.ext.w) : 0) - 12 - (this.annex && line.y > TOPSOIL ? 37 : 0), sx1 = slotX(line.ext.e) + 12;
         for (const [x, x1] of gridSegments(sx0, sx1, SLOT_W, line.ext.w > 0)) {
           const w = x1 - x;
           if (!mine((x + x1) / 2, line.ext) || inSpan(x, x1, line.spans)) continue;
@@ -477,24 +480,50 @@ export class FrontChunks implements Animated {
           if (airy && line.y > TOPSOIL) {
             const yb = line.y + LIP; // the room's floor line
             const dy = yb + 1;
-            const ccx = x + w / 2;
-            addLit(slotSlice(deckTexture(), w), x, dy, w, CORR_DECK, ccx, dy + CORR_DECK / 2, 1.3, 1.5, ledgeLayer);
-            // The cross seams lean toward the middle of the cluster (one-point perspective).
-            const [ca, cb] = clusterSpan(line.piers, ccx, line.lo, line.hi);
-            const vpx = (ca + cb) / 2;
-            for (let sx = x; sx < x1 - 0.5; sx += 11.5) {
-              const bx = seamBack(sx, vpx);
-              brackets.poly([bx - 0.3, dy + 4, bx + 0.3, dy + 4, sx + 0.55, dy + CORR_DECK - 1, sx - 0.55, dy + CORR_DECK - 1]).fill({ color: 0x0a0a0c, alpha: 0.42 });
-              brackets.poly([bx + 0.4, dy + 4, bx + 0.8, dy + 4, sx + 1.3, dy + CORR_DECK - 1, sx + 0.7, dy + CORR_DECK - 1]).fill({ color: 0xf0ecd8, alpha: 0.1 });
-            } // plain sprites batch; a tiling sprite per slot would not
-            addLit(slotSlice(beamTexture(), w), x, dy + CORR_DECK, w, CORR_BEAM, ccx, dy + CORR_DECK + CORR_BEAM / 2, 1.2, 1);
-            addLit(slotSlice(railTexture(), w), x, dy + CORR_DECK - CORR_RAIL, w, CORR_RAIL, ccx, dy + CORR_DECK - CORR_RAIL / 2, 1.2, 1.05, railLayer);
             const by = dy + CORR_DECK + CORR_BEAM;
             const bc = woodAt(0x34363a, by);
+            // Sub-slots of 46: the first segment (the shaft strip, and the annex west of it) is wider than a slot, and a stretched texture would stretch the perspective.
+            for (let sx = x; sx < x1 - 0.5; sx += SLOT_W) {
+              const sw = Math.min(SLOT_W, x1 - sx);
+              const ccx = sx + sw / 2;
+              addLit(slotSlice(deckTexture(), sw), sx, dy, sw, CORR_DECK, ccx, dy + CORR_DECK / 2, 1.3, 1.5, ledgeLayer);
+              // The cross seams lean toward the middle of the cluster (one-point perspective).
+              const [ca, cb] = clusterSpan(line.piers, ccx, line.lo, line.hi);
+              const vpx = (ca + cb) / 2;
+              for (let q = sx; q < sx + sw - 0.5; q += 11.5) {
+                const bx = seamBack(q, vpx);
+                brackets.poly([bx - 0.3, dy + 4, bx + 0.3, dy + 4, q + 0.55, dy + CORR_DECK - 1, q - 0.55, dy + CORR_DECK - 1]).fill({ color: 0x0a0a0c, alpha: 0.42 });
+                brackets.poly([bx + 0.4, dy + 4, bx + 0.8, dy + 4, q + 1.3, dy + CORR_DECK - 1, q + 0.7, dy + CORR_DECK - 1]).fill({ color: 0xf0ecd8, alpha: 0.1 });
+              }
+              addLit(slotSlice(beamTexture(), sw), sx, dy + CORR_DECK, sw, CORR_BEAM, ccx, dy + CORR_DECK + CORR_BEAM / 2, 1.2, 1);
+              addLit(slotSlice(railTexture(), sw), sx, dy + CORR_DECK - CORR_RAIL, sw, CORR_RAIL, ccx, dy + CORR_DECK - CORR_RAIL / 2, 1.2, 1.05, railLayer);
+              shade(drop, sx, by - 1, sw, 11, 0.5); // the beam throws its shadow on the soffit
+              // A lamp on a stanchion at the middle post of every slot: a caged bulb above the rail, its halo lights the deck.
+              if (sw > 40) {
+                const lx = ccx, lyb = dy + CORR_DECK - CORR_RAIL - 7;
+                brackets.rect(lx - 0.7, lyb, 1.4, 8).fill(woodAt(0x2a2c2e, by));
+                brackets.rect(lx - 2.2, lyb - 3.6, 4.4, 4).fill(woodAt(0x1c1c1e, by));
+                brackets.rect(lx - 1.5, lyb - 2.9, 3, 2.6).fill(0xe8b060);
+                const halo = new Sprite(glow);
+                halo.anchor.set(0.5);
+                halo.tint = 0xffc070;
+                halo.width = 40;
+                halo.height = 26;
+                halo.position.set(lx, lyb + 3);
+                spill.addChild(halo);
+                spills.push({ s: halo, a: 0.32, room: roomIndex() });
+                const pool = new Sprite(glow);
+                pool.anchor.set(0.5);
+                pool.tint = 0xffc070;
+                pool.width = 56;
+                pool.height = 16;
+                pool.position.set(lx, dy + 16);
+                spill.addChild(pool);
+                spills.push({ s: pool, a: 0.2, room: roomIndex() });
+              }
+            }
             for (const bx of [x + 6, x1 - 6]) brackets.poly([bx - 2.5, by, bx + 2.5, by, bx - 2.5, by + 5]).fill(bc);
-            const cy = by - 3.4;
-            void cy;
-            brackets.rect(x, by - 0.6, w, 1.2).fill({ color: 0x000000, alpha: 0.35 });
+            brackets.rect(x, by - 0.6, x1 - x, 1.2).fill({ color: 0x000000, alpha: 0.35 });
           }
         }
         // The slab ends bear into the casing walls: a soft dark where they enter.
@@ -699,11 +728,11 @@ export class FrontChunks implements Animated {
 
     // [airy2:D3] A void between two clusters: a shaft of cut rock the full height of the floor, concrete jambs with a shadow, strata, a cable and a warm far light; the
     // deck of the corridor bridges it (drawn above this layer). `last` extends it to the next floor's top, and floor 0's up to the roof.
-    const voidShaft = (x: number, f: number) => {
+    const voidShaft = (x: number, f: number, vw = VOID_W) => {
       const top = floorTop(f);
       const y0 = f === 0 ? TOPSOIL - SLAB - 4 : top - 1;
       const y1 = (f + 1 < this.floors ? floorTop(f + 1) : top + FLOOR_H) + 1;
-      const x0 = x - VOID_W / 2, w = VOID_W;
+      const x0 = x - vw / 2, w = vw;
       const g = new Graphics();
       const my = top + ROOM_H / 2;
       g.rect(x0, y0, w, y1 - y0).fill(woodAt(0x120f0c, my));
@@ -873,6 +902,11 @@ export class FrontChunks implements Animated {
           }
           if (!(airy && col.tier === 0) && !inSpan(x - 1, x + 1, below) && hr(f + 977, x) < 0.75) guide(x, floorY, idOn ? sty : undefined);
         }
+        // [airy2:D3] The stair annex beside the lift (chunk 0 draws it): the same rock shaft and tower as a void, cut into the casing west of the shaft.
+        if (this.annex && cx === 0) {
+          voidShaft(ANNEX_X, f, ANNEX_W);
+          if (f >= 1) towerStorey(ANNEX_X, f - 1);
+        }
         // [airy2:D3] The stair tower is one tall stair through every floor, in front of the rock where there is one and in front of a bridging room where there is not. A storey
         // runs from the lane of floor f-1 to the lane of floor f, so it is drawn with floor f (in this chunk row, above the void strip of floor f-1 and under none of the next).
         if (airy && f >= 1) for (const sl of voidBoundaries(grid)) {
@@ -908,6 +942,17 @@ export class FrontChunks implements Animated {
         pool.position.set(l.x, top + ROOM_H);
         spill.addChild(pool);
         spills.push({ s: pool, a: 0.2 * l.power, room });
+        if (airy) {
+          // [airy2:D1] The same lamp throws a second, wider pool on the deck of the corridor in front.
+          const dp = new Sprite(glow);
+          dp.anchor.set(0.5);
+          dp.tint = idOn ? kindLight(l.color, styleOf(f).light, 0.3) : l.color;
+          dp.width = Math.min(l.reach * 0.8, 110);
+          dp.height = 20;
+          dp.position.set(l.x, top + ROOM_H + 13);
+          spill.addChild(dp);
+          spills.push({ s: dp, a: 0.26 * l.power, room });
+        }
       }
     }
     ao.visible = root.visible = spill.visible = false;

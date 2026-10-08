@@ -1,6 +1,7 @@
 import { Container, Graphics, Rectangle } from 'pixi.js';
 import { BASE_EAST, ROOM_H, floorTop, slotX, type Ext } from './geom';
 import { richLine } from './richText';
+import { GFX } from './gfxFeatures';
 import { VIEW } from './perfFx';
 import { steelTag } from './signage';
 import type { WingOption } from './wingsApi';
@@ -48,11 +49,13 @@ export class WingSigns {
   /** The signs that exist: one per option, at the open end of its floor. Rebuilt only for options that changed. */
   set(options: readonly WingOption[], exts: readonly Ext[]): void {
     const keep = new Set<string>();
+    // [airy2:D3] With the stair annex beside the shaft (airy, no west wing anywhere) the sign moves out to the rock west of it.
+    const westX = GFX.airy && exts.length > 0 && exts.every(e => e.w === 0) ? -64 : -15;
     this.options = options.slice();
     for (const o of options) {
       const ext = exts[o.floor] ?? { w: 0, e: BASE_EAST };
       const key = `${o.floor}${o.side}`;
-      const x = o.side === 'e' ? slotX(ext.e) + 7 : ext.w > 0 ? slotX(-ext.w) - 7 : -15;
+      const x = o.side === 'e' ? slotX(ext.e) + 7 : ext.w > 0 ? slotX(-ext.w) - 7 : westX;
       const y = floorTop(o.floor) + ROOM_H * 0.4;
       const cost = Object.entries(o.cost).slice(0, 2).map(([k, v]) => `[[${ICON[k] ?? k}]] ${v}`).join('  ');
       const label = `${x}|${y}|+${o.steps}|${cost}|${o.block ?? ''}`;

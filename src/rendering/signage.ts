@@ -653,7 +653,7 @@ export function buildSignage(inp: SignageInput): Container {
         const st = new Sprite(stex);
         st.anchor.set(1, 0.44);
         st.scale.set(1 / SS);
-        const sy = top + ROOM_H + (GFX.airy ? 13.5 : 8.8); // [airy:B3] clear of the walkway ledge
+        const sy = top + ROOM_H + (GFX.airy ? 11 : 8.8); // [airy2:D1] painted on the deck, above the railing
         st.position.set(sx1, sy);
         st.alpha = 0.72;
         st.tint = lightTint(0.95, sy);
@@ -669,7 +669,7 @@ export function buildSignage(inp: SignageInput): Container {
           const ms = new Sprite(mtex);
           ms.anchor.set(0, 0.44);
           ms.scale.set(1 / SS);
-          const my = top + ROOM_H + (GFX.airy ? 13.5 : 8.8);
+          const my = top + ROOM_H + (GFX.airy ? 11 : 8.8);
           ms.position.set(mx0, my);
           ms.alpha = 0.85;
           ms.tint = lightTint(0.95, my);

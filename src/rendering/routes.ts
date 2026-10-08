@@ -4,7 +4,7 @@ import { doorwayX } from './openings';
 import { CORR_LANE, ROOMS_X, ROOM_H, SHAFT_GAP, SHAFT_W, SLOT_W, floorTop, slotAtX, slotX, extentsFor } from './geom';
 import { GFX } from './gfxFeatures';
 import { occupancy } from './occupancy';
-import { voidXs } from './voids';
+import { ANNEX_X, hasAnnex, voidXs } from './voids';
 import { FLIGHTS_PER_FLOOR, TOWER_AMP } from './circulation';
 
 /**
@@ -160,9 +160,11 @@ export function towerColumnX(state: GameState, lo: number, hi: number, nearX: nu
   if (!GFX.airy || lo < 0) return NaN;
   const grid = occupancy(state.buildings, state.ruins ?? [], state.currentFloors, extentsFor(state, state.currentFloors));
   let best = NaN, bestD = Infinity;
-  for (const x of voidXs(grid)) {
+  const xs = voidXs(grid);
+  if (hasAnnex(grid)) xs.push(ANNEX_X);
+  for (const x of xs) {
     let ok = true;
-    for (let f = lo; f <= hi && ok; f++) ok = (grid.ext[f]?.e ?? 0) > Math.round((x - ROOMS_X) / SLOT_W);
+    for (let f = lo; f <= hi && ok; f++) ok = x < 0 || (grid.ext[f]?.e ?? 0) > Math.round((x - ROOMS_X) / SLOT_W);
     if (ok && Math.abs(x - nearX) < bestD) { bestD = Math.abs(x - nearX); best = x; }
   }
   return best;
