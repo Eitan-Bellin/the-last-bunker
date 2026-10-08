@@ -6,6 +6,7 @@ import { MAX_RUIN_WORKERS, RUIN_KINDS, ruinCost } from '../data/ruins';
 import { effectiveLevel, getDef } from '../data/buildingDefs';
 import type { ResourceSystem } from './ResourceSystem';
 import type { BuildingSystem } from './BuildingSystem';
+import { pruneOrphanDoors } from './doors'; // [plan4:polish]
 
 export interface RuinClearedInfo {
   ruin: Ruin;
@@ -198,6 +199,8 @@ export class RestorationSystem {
         this.buildings.recalculateMaxPopulation(this.sm);
       }
     }
+
+    pruneOrphanDoors(this.sm); // [plan4:polish] a cleared ruin that does not come back leaves no door standing in the open
 
     // Workers stay on as the crew of the room they just restored (up to its capacity), the rest go idle.
     // M7: while another started ruin has no hands, the room keeps one crew member and the rest move on to it.

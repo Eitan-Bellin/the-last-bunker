@@ -26,6 +26,7 @@
 //   --lang en|he        language (default en).     --quality low|medium|high   starting quality (the shot itself pins high, like __compare).
 //   --text <n>          not supported yet (reserved for the text-size axis of QA-2).
 //   --frames <n>        frames rendered by hand before each shot (default 20).
+//   --repeat <n>        take each shot n times in a row and keep the last (long animations in short steps, see the code).
 //   --url <origin>      use an already running DEV server (e.g. http://localhost:5173) instead of starting Vite on a free port. Needed:
 //                       ?slot and __camPng exist in dev builds only, so a production `dist` cannot be shot with this tool.
 // Files: store/compare/<tag>/<source>/<WxH>/<camId>.png  (+ meta.json: git head, sizes, dpr, time).
@@ -248,7 +249,10 @@ async function shootSource(origin, source, size, tag) {
     const skipped = [];
     let n = 0;
     for (const id of ids) {
-      const r = await c.evalJs(`__camPng(${JSON.stringify(id)}, ${dpr}, ${+(flags.frames ?? 20)})`);
+      // [plan4:polish] --repeat n: the shot is taken n times in a row (frames each) and the last one kept: a long animation (smoke, a walk) is stepped in short
+      // evaluations, because one evaluation of hundreds of frames hangs on a software-GL machine.
+      let r = null;
+      for (let k = 0; k < Math.max(1, +(flags.repeat ?? 1)); k++) r = await c.evalJs(`__camPng(${JSON.stringify(id)}, ${dpr}, ${+(flags.frames ?? 20)})`);
       if (!r) { skipped.push(id); continue; }
       fs.writeFileSync(path.join(dir, `${r.id}.png`), Buffer.from(r.png, 'base64'));
       n++;

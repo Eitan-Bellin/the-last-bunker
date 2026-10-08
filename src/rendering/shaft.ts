@@ -329,6 +329,9 @@ export function buildShaft2(floors: number, era: number, onArrive?: () => void, 
   const seatBody: Graphics[] = [];
   const seatHead: Graphics[] = [];
   const seatLegs: Graphics[] = [];
+  /** [plan4:polish] Hair and the shading of the body, drawn over the tinted shapes: the riders were flat silhouettes. Shown with their seat. */
+  const seatTrim: Graphics[] = [];
+  const HAIR = [0x2a2018, 0x5a3a20, 0x8a8478, 0x1c1a1a];
   for (let i = 0; i < SEATS; i++) {
     const sx = 9 + i * 10.4, sy = CAR_H - 8 - (i & 1);
     const legs = new Graphics();
@@ -336,9 +339,18 @@ export function buildShaft2(floors: number, era: number, onArrive?: () => void, 
     legs.rect(0.2, -20, 3.4, 20).fill(0xffffff);
     const body = new Graphics();
     body.roundRect(-5, -37, 10, 18, 3).fill(0xffffff);
+    // Arms hang at the sides, in the shirt's colour.
+    body.roundRect(-6.6, -36, 2.6, 14, 1.2).fill(0xffffff);
+    body.roundRect(4, -36, 2.6, 14, 1.2).fill(0xffffff);
     const head = new Graphics();
     head.circle(0, -42, 4.3).fill(0xffffff);
-    for (const g of [legs, body, head]) {
+    const trim = new Graphics();
+    trim.arc(0, -42.6, 4.5, Math.PI * 1.05, Math.PI * 1.95).fill(HAIR[i % HAIR.length]); // hair cap
+    trim.rect(-1.1, -38.4, 2.2, 1.6).fill({ color: 0x000000, alpha: 0.22 }); // neck shadow
+    trim.roundRect(0.4, -36, 4.4, 17, 2).fill({ color: 0x000000, alpha: 0.2 }); // the side away from the lamp
+    trim.rect(-0.2, -20, 0.5, 20).fill({ color: 0x000000, alpha: 0.35 }); // gap between the legs
+    trim.rect(-5, -21, 10, 1.1).fill({ color: 0x20160c, alpha: 0.55 }); // belt
+    for (const g of [legs, body, head, trim]) {
       g.position.set(sx, sy);
       g.alpha = 0;
       car.addChild(g);
@@ -346,6 +358,7 @@ export function buildShaft2(floors: number, era: number, onArrive?: () => void, 
     seatLegs.push(legs);
     seatBody.push(body);
     seatHead.push(head);
+    seatTrim.push(trim);
   }
   car.x = CAR_X;
   const core = new Sprite(glow);
@@ -511,7 +524,7 @@ export function buildShaft2(floors: number, era: number, onArrive?: () => void, 
   const tDoneAt = new Float64Array(TICKETS);
   let seq = 0, nAboard = 0, tripTo = -1, dwell = 0, displayWait = 8, lastPower = 1, clock = 0, tickets = 0;
   const showSeat = (seat: number, on: boolean) => {
-    seatLegs[seat].alpha = seatBody[seat].alpha = seatHead[seat].alpha = on ? 1 : 0;
+    seatLegs[seat].alpha = seatBody[seat].alpha = seatHead[seat].alpha = seatTrim[seat].alpha = on ? 1 : 0;
   };
   const clearTickets = () => {
     for (let i = 0; i < TICKETS; i++) tState[i] = 0;

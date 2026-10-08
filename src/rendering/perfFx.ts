@@ -47,6 +47,8 @@ export function hashLayout(state: GameState): void {
   if (ext) for (const k in ext) he = mix(mix(mix(he, sh(k)), ext[k].w + 64), ext[k].e + 64);
   if (state.layout?.surfaceOpen) he = mix(he, 0x5f); // plan4:ST-16 the gate-house yard opening changes the world's west edge and the surface
   hu = mix(hu, he);
+  // plan4:polish A stairwell or vent stack moves the level-name stencil (signage.ts), so the columns are part of the utilities' look.
+  for (const i of state.layout?.infra ?? []) if (i.kind !== 'bulkhead') hu = mix(mix(mix(hu, sh(i.kind)), (i.floor + 8) * 128 + i.x + 64), i.floors ?? 1);
   LAYOUT.ext = he;
   LAYOUT.rooms = hr;
   LAYOUT.util = hu;

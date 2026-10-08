@@ -1,4 +1,6 @@
 import type { GameState } from '../core/GameState';
+import type { StateManager } from '../core/StateManager';
+import { roomFloors, roomSlots } from '../data/buildingDefs'; // [plan4:polish]
 
 /**
  * [plan4:ST-14/ST-15] The contract of the bunker's partition doors (bulkheads) and vertical infrastructure (stairwells, vent stacks).
@@ -119,4 +121,45 @@ export function infraOccupies(state: Pick<GameState, 'layout'>, floor: number, x
     if (floor >= s.top && floor <= s.bottom && i.x >= x && i.x < x + w) return true;
   }
   return false;
+}
+
+// ---- [plan4:polish] orphaned doors: a bulkhead belongs between rooms ----
+
+/**
+ * Doors (and their bulkhead items) that no longer stand on a room boundary: no room, hall half or ruin ends at the slot before the boundary or starts at it
+ * (the room was torn down or moved away), or a room now straddles it. Same rule as InfraSystem.doorBlock; a ruin counts as a room (a wrecked room comes back).
+ */
+export function orphanDoorKeys(state: Pick<GameState, 'layout' | 'buildings' | 'ruins'>): string[] {
+  const out: string[] = [];
+  const keys = new Set<string>(Object.keys(state.layout?.doors ?? {}));
+  for (const i of state.layout?.infra ?? []) if (i.kind === 'bulkhead') keys.add(doorKey(i.floor, i.x));
+  for (const k of keys) {
+    const [floor, x] = k.split(':').map(Number);
+    if (!Number.isFinite(floor) || !Number.isFinite(x)) continue;
+    const spans: { lo: number; hi: number }[] = [];
+    for (const b of state.buildings) {
+      if (floor < b.position.floor || floor > b.position.floor + roomFloors(b.type) - 1) continue;
+      spans.push({ lo: b.position.x, hi: b.position.x + roomSlots(b.type) - 1 });
+    }
+    for (const r of state.ruins ?? []) if (r.floor === floor) spans.push({ lo: r.x, hi: r.x + r.w - 1 });
+    const inside = spans.some(s => s.lo < x && s.hi >= x);
+    const hangs = spans.some(s => s.hi === x - 1 || s.lo === x);
+    if (inside || !hangs) out.push(k);
+  }
+  return out;
+}
+
+/** Removes every orphaned door (the state and the bulkhead item). Returns how many boundaries were cleaned. */
+export function pruneOrphanDoors(sm: StateManager): number {
+  const state = sm.state as GameState;
+  const orphans = orphanDoorKeys(state);
+  if (orphans.length === 0) return 0;
+  const gone = new Set(orphans);
+  if (state.layout.doors) {
+    const doors = { ...state.layout.doors };
+    for (const k of orphans) delete doors[k];
+    sm.applyDelta({ path: 'layout.doors', value: doors });
+  }
+  sm.applyDelta({ path: 'layout.infra', value: state.layout.infra.filter(i => !(i.kind === 'bulkhead' && gone.has(doorKey(i.floor, i.x)))) });
+  return orphans.length;
 }
