@@ -2,6 +2,8 @@ import { Container, Graphics, Sprite, type Texture } from 'pixi.js';
 import type { BuildingType } from '../core/GameState';
 import { DEPTH_BOTTOM, DEPTH_TOP, DEPTH_X, ROOM_H } from './layout';
 import { block, cylinder, mix, plant, shade, softGlow, vGradient } from './draw';
+import { GFX } from './gfxFeatures';
+import { buildShell } from './roomDepth'; // [airy2:C1]
 
 export type Animator = (t: number, power: number) => void;
 
@@ -879,7 +881,20 @@ export function buildPaintedConstruction(texture: Texture, W: number, H: number 
   for (let y = 8; y < H; y += 12) grid.rect(0, y, W, 1).fill({ color: 0x5ad8ff, alpha: 0.12 });
   grid.rect(2, 2, W - 4, H - 4).stroke({ color: 0x5ad8ff, width: 1, alpha: 0.6 });
   const scaffold = buildScaffold(W);
-  container.addChild(bg, ghost, grid, scaffold.container);
+  if (GFX.airy) {
+    // [airy2:C1] A room being built is already the deep box: the blueprint ghost is its back wall, the scaffold stands in front.
+    const shell = buildShell(W, H, false, false, []);
+    const back = new Container();
+    ghost.width = W;
+    ghost.height = H;
+    grid.clear();
+    for (let x = 8; x < W; x += 12) grid.rect(x, 0, 1, H).fill({ color: 0x5ad8ff, alpha: 0.12 });
+    for (let y = 8; y < H; y += 12) grid.rect(0, y, W, 1).fill({ color: 0x5ad8ff, alpha: 0.12 });
+    back.addChild(bg, ghost, grid);
+    shell.place(back, 0, 0);
+    shell.layer.tint = 0x6f86a0; // (a cold, half-lit shell)
+    container.addChild(shell.layer, back, shell.ao, scaffold.container);
+  } else container.addChild(bg, ghost, grid, scaffold.container);
   return {
     container,
     animate: (t, power) => {

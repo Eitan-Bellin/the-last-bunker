@@ -28,6 +28,7 @@ import { InfraLayer } from './infra'; // plan4:ST-14
 import { buildSurface2, mountSurface2, surface2Sig } from './surface2'; // [gfx2 surface]
 import { ROW_X0, buildSurfaceRuin, newInside, readInside } from './surfaceRow'; // plan4:ST-16
 import { roomFlicker, setRoomFxQuality } from './paintedRoom'; // gfx-p0 rooms: quality
+import { depthCam } from './roomDepth'; // [airy2:C2]
 import { lineWidth, richLine } from './richText';
 import { ArtLibrary } from '../art/ArtLibrary';
 import { artEntry, buildingArtKey, roomTier, ruinArtKey } from '../art/registry';
@@ -1238,6 +1239,30 @@ export class BunkerRenderer {
     VIEW.y0 = -wc.y / s - margin;
     VIEW.x1 = (this.app.screen.width - wc.x) / s + margin;
     VIEW.y1 = (this.app.screen.height - wc.y) / s + margin;
+    // [airy2:C2] The camera for the parallax layers (each room's back wall slides against its frame, the rock moves slower than the building).
+    depthCam.cx = (this.app.screen.width / 2 - wc.x) / s;
+    depthCam.cy = (this.app.screen.height / 2 - wc.y) / s;
+    depthCam.hw = this.app.screen.width / 2 / s;
+    depthCam.hh = this.app.screen.height / 2 / s;
+    depthCam.on = GFX.airy && s >= 0.45 && this.postfx?.quality !== 'low';
+    this.parallaxRock();
+  }
+
+  /**
+   * [airy2:C2] The far layer: the rock strata sit behind the building and shift a few units with the camera's x (a fraction of the pan, same direction),
+   * so panning slides the building over the rock instead of moving them as one sheet. The casing, rooms and everything in front stay put.
+   */
+  private rockLayer: Container | null = null;
+  private parallaxRock(): void {
+    const root = this.undergroundHolder.children[0] as Container | undefined;
+    const rock = root?.children[0] as Container | undefined; // world.ts buildUnderground: rockLayers is added last, at index 0
+    if (rock !== this.rockLayer) {
+      if (this.rockLayer && !this.rockLayer.destroyed) this.rockLayer.x = 0;
+      this.rockLayer = rock ?? null;
+    }
+    if (!rock) return;
+    const k = GFX.airy && depthCam.on ? Math.max(-14, Math.min(14, (depthCam.cx - BUILDING_W / 2) * 0.06)) : 0;
+    if (Math.abs(rock.x - k) > 0.05) rock.x = k;
   }
 
 

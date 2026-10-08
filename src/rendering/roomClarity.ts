@@ -3,6 +3,7 @@ import type { BuildingType } from '../core/GameState';
 import { isIcon } from '../ui/icons';
 import { iconSprite } from './richText';
 import { CATEGORY } from './cityMap';
+import { GFX } from './gfxFeatures';
 
 /**
  * [airy:B1/B4] The clarity layer of a room: what makes the bunker read as zones instead of one lump of equally busy paintings.
@@ -23,6 +24,11 @@ export function categoryColor(type: BuildingType, fallback: number): number {
 }
 
 const hex = (c: number): string => `#${c.toString(16).padStart(6, '0')}`;
+/** [airy2:C4] The trade colour mixed toward grey: the wash and the ceiling band carry the zone, not a candy-coloured room. */
+const muted = (c: number, k: number): number => {
+  const ch = (s: number) => Math.round(((c >> s) & 255) * (1 - k) + 128 * k);
+  return (ch(16) << 16) | (ch(8) << 8) | ch(0);
+};
 const lift = (c: number, k: number): number => {
   const ch = (s: number) => Math.round(((c >> s) & 255) * (1 - k) + 255 * k);
   return (ch(16) << 16) | (ch(8) << 8) | ch(0);
@@ -49,14 +55,15 @@ export function buildClarity(type: BuildingType, color: number, w: number, h: nu
   const under = new Container();
   const over = new Container();
   under.eventMode = over.eventMode = 'none';
+  const soft = GFX.airy ? muted(color, 0.5) : color; // [airy2:C4]
   const wash = new Graphics();
-  wash.rect(INSET, 0, w - 2 * INSET, h).fill(color);
+  wash.rect(INSET, 0, w - 2 * INSET, h).fill(soft);
   wash.alpha = 0;
   // The ceiling band: a solid stripe of the trade colour with a soft fall-off under it and a dark line that seats it on the ceiling.
   const band = new Graphics();
   // (Stepped rects, not a gradient: a gradient is a texture of its own and every room would break the batch.)
-  for (let i = 0; i < 4; i++) band.rect(0, BAND_H + i * 3, w, 3).fill({ color, alpha: 0.28 - i * 0.07 });
-  band.rect(0, 0, w, BAND_H).fill({ color, alpha: 0.92 });
+  for (let i = 0; i < 4; i++) band.rect(0, BAND_H + i * 3, w, 3).fill({ color: soft, alpha: 0.28 - i * 0.07 });
+  band.rect(0, 0, w, BAND_H).fill({ color: soft, alpha: 0.92 });
   band.rect(0, BAND_H, w, 1.2).fill({ color: 0x000000, alpha: 0.55 });
   band.rect(0, 0, w, 1.2).fill({ color: 0xffffff, alpha: 0.3 });
   band.y = BAND_Y;
@@ -94,8 +101,8 @@ export function buildClarity(type: BuildingType, color: number, w: number, h: nu
 export function applyClarity(c: RoomClarity, k: number): void {
   if (Math.abs(k - c.k) < 0.004) return;
   c.k = k;
-  c.wash.alpha = 0.13 + 0.22 * k;
-  c.band.alpha = 0.8 + 0.2 * k;
+  c.wash.alpha = GFX.airy ? 0.05 + 0.13 * k : 0.13 + 0.22 * k; // [airy2:C4] never above ~0.18
+  c.band.alpha = GFX.airy ? 0.55 + 0.25 * k : 0.8 + 0.2 * k;
   const showPlate = k > 0.12;
   if (c.plate.visible !== showPlate) c.plate.visible = showPlate;
   if (showPlate) {
