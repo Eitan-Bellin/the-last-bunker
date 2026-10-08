@@ -1,0 +1,10 @@
+import { mkEngine, run } from './lib.mjs';
+const { e, m, sm, det } = await mkEngine('e55-seed1.json');
+const s = sm.state; run(e, 3, 1); s.resources.food.amount = 0; s.resources.water.amount = 0; s.buildings = s.buildings.filter(b => !['commons','canteen','bathhouse','library'].includes(b.type));
+const pm = m.Projects.projectMorale(s);
+const p = s.survivors.find(x => !x.child);
+const listed = e.populationSystem.getMoraleFactors(s, p).reduce((a, f) => a + f.value, 0);
+const mood = e.populationSystem.sharedMood(s);
+const fast = e.populationSystem.fastTargetHappiness(s, p, mood);
+console.log('projectMorale', pm, 'UI list sum (clamped)', Math.max(0, Math.min(100, listed)), 'engine target', fast, 'listed raw', listed);
+det.restore();

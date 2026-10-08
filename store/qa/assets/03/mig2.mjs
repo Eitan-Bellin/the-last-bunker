@@ -1,0 +1,25 @@
+import { mod, SAVES } from './lib.mjs';
+import { readFileSync } from 'node:fs';
+const m = await mod();
+const raw = JSON.parse(readFileSync(SAVES + 'e30-seed1.json', 'utf8'));
+raw.longGame.dig = { floor: raw.currentFloors, paid: [], progress: 50, total: 500, crew: [] };
+delete raw.longGame.dig2;
+raw.timestamp = Date.now() - 3600_000;
+const crew = raw.survivors.slice(0, 3); crew.forEach(c => c.assignedBuildingId = 'p_dig');
+// add an active fire incident + raid pending + disaster
+raw.incidents = [{ id: 'i1', kind: 'fire', buildingId: raw.buildings[0].id, severity: 1, progress: 0, startedAt: 0 }];
+raw.danger.raid = { hitAt: raw.stats.totalPlayTime + 100, strength: 10 };
+raw.danger.disasters = [{ id: 'd_9', kind: 'collapse', buildingId: raw.buildings[1].id, startedAt: 0, deadline: raw.stats.totalPlayTime + 500 }];
+raw.researchQueue = []; 
+const e = new m.GameEngine();
+const det = m.installDeterminism(2);
+let stored = JSON.stringify(raw);
+e.saveManager = { loadSafe: async () => ({ status: 'ok', state: JSON.parse(stored) }), saveJson: async j => { stored = j; }, snapshotPrev: async () => true };
+await e.init();
+const s = e.stateManager.state;
+console.log('dig after init:', JSON.stringify(s.longGame.dig), 'dig2', JSON.stringify(s.longGame.dig2));
+for (let i = 0; i < 600; i++) e.advance(1, 'online');
+console.log('after 10min dig', JSON.stringify(s.longGame.dig).slice(0, 150), 'floors', s.currentFloors, 'incidents', s.incidents.length, 'raid', JSON.stringify(s.danger.raid), 'crew', s.survivors.filter(p => p.assignedBuildingId === 'p_dig').length);
+console.log('crashlog', localStorage.getItem('lastbunker_crashlog'));
+console.log('storyFlags whatsnew', s.storyFlags.filter(f => f.startsWith('whatsnew')));
+det.restore();
