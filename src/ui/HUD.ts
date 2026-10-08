@@ -225,7 +225,17 @@ export class HUD {
     this.inboxBtn.appendChild(this.inboxBadge);
     this.inboxBtn.addEventListener('click', () => this.onInbox?.());
 
-    infoRow.append(this.eraChip, pop, morale, clock, this.seasonBtn, this.supplyBtn, this.inboxBtn, journal);
+    // [plan4:GP-1] Daily orders: "done/total", a red dot while something can be taken. Hidden until the orders start.
+    this.dailyBtn = el('button', 'lang-btn daily-btn');
+    this.dailyBtn.style.display = 'none';
+    this.dailyText = el('span', 'daily-text');
+    this.dailyText.dir = 'ltr';
+    this.dailyBadge = el('span', 'nav-badge daily-dot');
+    this.dailyBadge.style.display = 'none';
+    this.dailyBtn.append(el('span', 'daily-ic', '[[target]]'), this.dailyText, this.dailyBadge);
+    this.dailyBtn.addEventListener('click', () => this.onDaily?.());
+
+    infoRow.append(this.eraChip, pop, morale, clock, this.seasonBtn, this.supplyBtn, this.dailyBtn, this.inboxBtn, journal);
     topBar.appendChild(infoRow);
     this.container.appendChild(topBar);
   }
@@ -243,6 +253,24 @@ export class HUD {
 
   private journalBadge!: HTMLElement;
   private supplyBtn!: HTMLButtonElement;
+  /** [plan4:GP-1] The daily orders chip. */
+  private dailyBtn!: HTMLButtonElement;
+  private dailyText!: HTMLElement;
+  private dailyBadge!: HTMLElement;
+  onDaily: (() => void) | null = null;
+
+  /** [plan4:GP-1] `claimable` > 0 shows the dot and lights the chip; `title` is the spoken name ("Daily orders: 1 of 3"). */
+  setDaily(visible: boolean, done: number, n: number, claimable: number, title: string): void {
+    this.dailyBtn.style.display = visible ? '' : 'none';
+    this.setText(this.dailyText, `${done}/${n}`);
+    this.dailyBadge.style.display = claimable > 0 ? '' : 'none';
+    this.setText(this.dailyBadge, String(claimable));
+    this.dailyBtn.classList.toggle('has-cards', claimable > 0);
+    if (this.dailyBtn.title !== title) {
+      this.dailyBtn.title = title;
+      this.dailyBtn.setAttribute('aria-label', title);
+    }
+  }
   onSupply: (() => void) | null = null;
 
   setSupply(ready: boolean, title: string): void {

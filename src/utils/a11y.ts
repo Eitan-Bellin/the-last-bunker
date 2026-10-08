@@ -47,6 +47,8 @@ export function sanitizeA11y(raw: unknown): A11ySettings {
     announce: bool(r.announce, d.announce),
     powerSaver: bool(r.powerSaver, d.powerSaver),
     playInSilent: bool(r.playInSilent, d.playInSilent),
+    timing: pick(r.timing, ['normal', 'relaxed'] as const, d.timing),
+    zoomButtons: bool(r.zoomButtons, d.zoomButtons),
   };
 }
 
@@ -152,6 +154,28 @@ export function subscribeA11y(fn: Listener): () => void {
   initA11y();
   listeners.add(fn);
   return () => { listeners.delete(fn); };
+}
+
+// ---------------------------------------------------------------------------------------------------------------------------------
+// [plan4:AC-13] Timing: one switch ("relaxed") stretches every time-limited touch the game asks for.
+// ---------------------------------------------------------------------------------------------------------------------------------
+/** Hold times (a finger resting on a survivor or a room): 260 ms by default, 500 ms when relaxed (a room's longer 450 ms becomes about 850). */
+export function pressMs(base: number): number {
+  return current.timing === 'relaxed' ? Math.round(base * 1.9) : base;
+}
+/** Windows for a second tap, and how long a message stays: doubled when relaxed. */
+export function relaxedMs(base: number): number {
+  return current.timing === 'relaxed' ? base * 2 : base;
+}
+
+/**
+ * [plan4:AC-1] Popup density ("all" / "important" / "off"). The floating "+5 food" production numbers are the busy ones; marks (a tick, a
+ * cross) and one-off loot lines are the important ones. Everything they say is also in the HUD and the toasts.
+ */
+export function popupWanted(text: string): boolean {
+  if (current.popups === 'all') return true;
+  if (current.popups === 'off') return false;
+  return !/^\+\d/.test(text.trim());
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------------

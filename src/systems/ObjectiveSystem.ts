@@ -22,6 +22,7 @@ export type ObjectiveAction =
   | { kind: 'ruins' }
   | { kind: 'command' }
   | { kind: 'genesis' }
+  | { kind: 'daily' } // [plan4:GP-1] the daily orders sheet
   | null;
 
 export interface Objective {

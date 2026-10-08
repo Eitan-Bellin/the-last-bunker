@@ -9,7 +9,7 @@ import { ResourceSystem } from '../../src/systems/ResourceSystem';
 import { BuildingSystem } from '../../src/systems/BuildingSystem';
 import { PopulationSystem } from '../../src/systems/PopulationSystem';
 import { IncidentSystem } from '../../src/systems/IncidentSystem';
-import { doorsBetween, getDoor, infraAt, isPassable, isSealedOff, setDoor, shutDoorCount } from '../../src/systems/doors';
+import { doorsBetween, getDoor, infraAt, isPassable, isSealedOff, orphanDoorKeys, setDoor, shutDoorCount } from '../../src/systems/doors';
 import {
   DOOR_DRAIN, buildColumn, buildDoor, closeEmergencyDoors, columnBlock, doorBlock, doorDefense, doorsOperable, emergencyDoorTargets, fireCodeFloors,
   infraPowerDraw, openAllDoors, setDoorState, upgradeDoor, breachSpeed,
@@ -120,6 +120,62 @@ export function infraChecks(games: { name: string; json: string }[]): { problems
     eq('door shut by the emergency button', getDoor(st, 2, 6), 'closed');
     eq('openAllDoors', openAllDoors(sm), 2);
     eq('all open', shutDoorCount(st), 0);
+  }
+
+  // ---- 2b. [plan4:polish] demolishing or moving a room takes its orphaned doors with it ----
+  {
+    const s = base();
+    const wg = roomSlots('generator'), wf = roomSlots('farm');
+    const xf = 1 + wg, xc = xf + wf + 1; // generator | farm | one empty slot | canteen
+    s.buildings = [room('b_1', 'generator', 1, 2), room('b_2', 'farm', xf, 2), room('b_3', 'canteen', xc, 2), room('b_4', 'workshop', 1, 3)];
+    const sm = new StateManager();
+    sm.loadState(s);
+    const rs = new ResourceSystem();
+    const bs = new BuildingSystem();
+    const st = (): GameState => sm.state as GameState;
+    const xw = 1 + roomSlots('workshop');
+    eq('door at the farm\'s east edge', buildDoor(sm, rs, 2, xf + wf), null);
+    eq('door at the generator/farm edge', buildDoor(sm, rs, 2, xf), null);
+    eq('door at the canteen edge', buildDoor(sm, rs, 2, xc), null);
+    eq('door on the workshop floor', buildDoor(sm, rs, 3, xw), null);
+    eq('four doors standing', Object.keys(st().layout.doors).length, 4);
+    eq('no orphans while the rooms stand', orphanDoorKeys(st()).length, 0);
+    // tearing the farm down: the generator/farm door still hangs on the generator; the farm's east door has nothing on either side now
+    eq('demolish the farm', bs.demolish(sm, 'b_2'), true);
+    eq('the farm\'s east door is gone', getDoor(st(), 2, xf + wf), undefined);
+    eq('the generator door stays: a room hangs on it', getDoor(st(), 2, xf), 'open');
+    eq('the canteen door stays', getDoor(st(), 2, xc), 'open');
+    eq('the other floor\'s door stays', getDoor(st(), 3, xw), 'open');
+    eq('its bulkhead item went with it', st().layout.infra.filter(i => i.kind === 'bulkhead' && i.floor === 2 && i.x === xf + wf).length, 0);
+    eq('the other bulkhead items stay', st().layout.infra.filter(i => i.kind === 'bulkhead').length, 3);
+    // tearing the generator down leaves the generator/farm door with nothing on either side
+    eq('demolish the generator', bs.demolish(sm, 'b_1'), true);
+    eq('the generator\'s door is gone', getDoor(st(), 2, xf), undefined);
+    eq('the canteen door still stands', getDoor(st(), 2, xc), 'open');
+    eq('no orphans left', orphanDoorKeys(st()).length, 0);
+    // moving a room away takes the door at its old edge along (the new spot is any valid one)
+    const mv = base();
+    mv.buildings = [room('b_1', 'generator', 1, 2)];
+    const sm2 = new StateManager();
+    sm2.loadState(mv);
+    const where = ((): { x: number; floor: number } | null => {
+      for (let f = 2; f < 14; f++) for (let x = 6; x <= 11; x++) if (bs.placeBlock('generator', { x, y: 0, floor: f }, mv) === null) return { x, floor: f };
+      return null;
+    })();
+    eq('door at the generator edge', buildDoor(sm2, rs, 2, 1 + wg), null);
+    if (!where) fail('no valid spot found for the relocate check');
+    else {
+      eq('relocate the generator', bs.relocate(sm2, 'b_1', { x: where.x, y: 0, floor: where.floor }), true);
+      eq('the old spot\'s door is gone after the move', getDoor(sm2.state as GameState, 2, 1 + wg), undefined);
+    }
+    // a wrecked room (a ruin) keeps its doors: the room comes back
+    const wr = base();
+    wr.ruins = [{ id: 'r_1', floor: 2, x: 3, w: 2, kind: 'wreck', restoresTo: 'farm', flooded: false, progress: 0, total: 100, started: false, lore: null } as GameState['ruins'][number]];
+    setDoor(wr, 2, 3, 'open');
+    wr.layout.infra = [...wr.layout.infra, { id: 'inf_1', kind: 'bulkhead', floor: 2, x: 3, level: 1 }];
+    eq('a ruin keeps the door', orphanDoorKeys(wr).length, 0);
+    wr.ruins = [];
+    eq('nothing at all: orphan', orphanDoorKeys(wr).join(','), '2:3');
   }
 
   // ---- 3. fire spread through a shut door (10%) ----

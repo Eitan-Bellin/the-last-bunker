@@ -8,7 +8,7 @@ import type { EraDef } from '../data/eras';
 import type { BuildingInstance, BuildingType, GameState, Position, Ruin, SurvivorState } from '../core/GameState';
 import { effectiveLevel, isDistrict, roomFloors, roomSlots } from '../data/buildingDefs';
 import { i18n } from '../i18n/I18nManager';
-import { BASE_EAST, BUILDING_W, districtXAt, FLOOR_H, ROOM_H, SHAFT_GAP, SLOT_W, TOPSOIL, buildingH, buildingX, extentsFor, floorExtent, floorIndexAt, floorTop, slotX, ROOMS_X, type Ext } from './layout';
+import { BASE_EAST, BUILDING_W, districtXAt, FLOOR_H, ROOM_H, SHAFT_GAP, SHAFT_W, SLOT_W, TOPSOIL, buildingH, buildingX, extentsFor, floorExtent, floorIndexAt, floorTop, slotX, ROOMS_X, type Ext } from './layout';
 import { hashString, seeded } from './draw';
 import { PEOPLE_STYLE, Person, ROOM_ACTIVITY, type Activity, type Lane } from './people';
 import { crowdFor, restCountFor, settleCrowds } from './workSpots'; // gfx-p0 people
@@ -37,7 +37,7 @@ import { SlopArea, hitState } from './HitSlop'; // [plan4:ST-12]
 import { PostFX, startQuality, targetResolution } from './postfx';
 import { isLiteMode, logCrash } from '../core/crashGuard';
 import { isTouchDevice } from '../utils/device';
-import { statusTint } from '../utils/a11y';
+import { statusTint, pressMs } from '../utils/a11y';
 import { coneTexture } from '../art/ArtLibrary';
 import { buildRuinVisual } from './ruinArt';
 import { iconSprite } from './richText';
@@ -465,6 +465,8 @@ export class BunkerRenderer {
       // The canvas itself is never multisampled (the world is drawn into the filter's texture, where the quality level
       // switches smoothing on or off); the pixel density starts at the level this session begins with and follows the setting.
       antialias: false,
+      // [plan4:UX-17] Medium and Low ask the system for the economical GPU (only matters where there are two, e.g. a MacBook).
+      powerPreference: startQuality() === 'high' ? 'high-performance' : 'low-power',
       resolution: targetResolution(startQuality()),
       autoDensity: true,
       autoStart: false,
@@ -811,7 +813,7 @@ export class BunkerRenderer {
         this.cam.pointerDown = false;
         this.movePersonTo(e.global.x, e.global.y);
         this.onPersonLift?.(survivorId); // [plan4:UX-20] haptic impact on the lift
-      }, 260);
+      }, pressMs(260)); // plan4:AC-13
     });
     person.container.on('pointerup', () => {
       if (!this.drag && !this.cam.isDragging) this.onPersonTap?.(survivorId);
@@ -886,6 +888,8 @@ export class BunkerRenderer {
 
   private renderPeople(state: GameState, dt: number): void {
     this.doorState = state; setDoorBlocked(this.doorBlockedFn); // plan4:ST-14/18 closed or sealed bulkheads stop walkers
+    this.walkers.power = state.powerRatio ?? 1; // plan4:polish
+    this.walkers.refreshHot(state); // plan4:polish rooms on fire or collapsing: their crew walks out
     this.walkers.update(dt, this.time, this.cam.zoom); // plan4:ST-18 (before the placement below, so a finished walk is placed this picture)
     const quarters = state.buildings.filter(b => b.type === 'quarters' && !(b.isConstructing && b.level === 1));
     const seen = new Set<string>();
@@ -949,6 +953,7 @@ export class BunkerRenderer {
         view.people.addChild(person.container);
         person.placeIn(roomId!, view.lane);
       }
+      if (!ruinView && this.walkers.isHot(roomId!) && this.walkers.evacuate(person, this.views.get(roomId!)!, roomId!, state, this.cam.zoom)) continue; // plan4:polish fire or collapse: out to the stairwell
       // gfx-p0 people: the room's crowd (work spots at the painted equipment, spacing, the lamp shadows fall from).
       const cv = view as unknown as { width: number; visualSig: string; height?: number };
       person.setCrowd(crowdFor(view.people, view.lane, cv.visualSig, cv.width, this.gfx2, cv.height ?? ROOM_H));
@@ -1055,6 +1060,7 @@ export class BunkerRenderer {
       this.utilitiesHolder.addChild(this.group(buildSignage({
         buildings: state.buildings, ruins: state.ruins, floors: this.floors, era: Math.max(0, this.surfaceEra),
         locale: i18n.currentLocale, rtl: i18n.isRTL, lamps, ambient: 0.5 - this.gloom * 0.35, memorial, exts,
+        infra: state.layout?.infra, // plan4:polish
       }), 'signage'));
       // [gfx2 wear] Wear decals in front of the structure (clear of the signage), then the atmosphere.
       const wearEra = Math.max(0, this.surfaceEra);
@@ -1114,17 +1120,21 @@ export class BunkerRenderer {
 
   /** The GPU took the context away (app switch, memory pressure, driver reset); until it is back nothing is drawn. */
   private contextLost = false;
+  /** [plan4:UX-17] Told when the GPU context is lost (true) and when it is back (false). */
+  onContextChange: ((lost: boolean) => void) | null = null;
   private drawFails = 0;
 
   private watchContext(canvas: HTMLCanvasElement): void {
     canvas.addEventListener('webglcontextlost', ev => {
       ev.preventDefault();
       this.contextLost = true;
+      this.onContextChange?.(true); // [plan4:UX-17] the app shows a quiet "restoring graphics" note
       logCrash('gl-context-lost', 'WebGL context lost');
     });
     // Pixi's own listener (registered first) has already re-initialised the GL systems by now.
     canvas.addEventListener('webglcontextrestored', () => {
       this.contextLost = false;
+      this.onContextChange?.(false);
       // [perf] The paintings gave up their decoded copies once on the GPU (ArtLibrary.trimBitmaps): they are loaded again from the cache.
       ArtLibrary.reset();
       if (this.gfx2) for (const k of KIT_KEYS) ArtLibrary.get(k);
@@ -1588,17 +1598,26 @@ export class BunkerRenderer {
     }
   }
 
-  /** Dust cloud when a ruin is cleared. */
-  burstAt(x: number, y: number, width: number): void {
-    for (let i = 0; i < 26; i++) {
-      const s = new Sprite(moteTexture());
-      s.anchor.set(0.5);
-      s.tint = i % 3 === 0 ? 0xffd27a : 0xc9bda6;
-      s.scale.set(0.6 + Math.random() * 1.1);
-      s.position.set(x + (Math.random() - 0.5) * width * 0.8, y + (Math.random() - 0.5) * 20);
-      if (i % 3 === 0) s.blendMode = 'add';
-      this.fxLayer.addChild(s);
-      this.bursts.push({ s, vx: (Math.random() - 0.5) * 60, vy: -10 - Math.random() * 40, life: 0, max: 1 + Math.random() * 1.2 });
+  /**
+   * Dust cloud when a ruin is cleared. [plan4:GP-2] `count` < 26 is a small burst for the ceremonies.
+   * [plan4 perf] The plain motes go into the layer first and the additive ones after them: a blend change breaks the batch, so the old
+   * alternation (every third one additive) cost a draw call per mote, this costs two.
+   */
+  burstAt(x: number, y: number, width: number, count = 26): void {
+    const small = count < 26;
+    const isGlow = (i: number): boolean => (small ? i >= Math.ceil((count * 2) / 3) : i % 3 === 0);
+    for (const glow of [false, true]) {
+      for (let i = 0; i < count; i++) {
+        if (isGlow(i) !== glow) continue;
+        const s = new Sprite(moteTexture());
+        s.anchor.set(0.5);
+        s.tint = glow ? 0xffd27a : 0xc9bda6;
+        s.scale.set(0.6 + Math.random() * 1.1);
+        s.position.set(x + (Math.random() - 0.5) * width * 0.8, y + (Math.random() - 0.5) * 20);
+        if (glow) s.blendMode = 'add';
+        this.fxLayer.addChild(s);
+        this.bursts.push({ s, vx: (Math.random() - 0.5) * 60, vy: -10 - Math.random() * 40, life: 0, max: 1 + Math.random() * 1.2 });
+      }
     }
   }
 
@@ -1617,6 +1636,25 @@ export class BunkerRenderer {
         this.bursts.splice(i, 1);
       }
     }
+  }
+
+  /**
+   * [plan4:GP-6] Tour stops that only the scene knows: the world position of someone chatting with a neighbour right now (null when nobody is;
+   * `pick` rotates which one), and of the lift car (null when the shaft has no car API, i.e. the flat fallback shaft).
+   */
+  talkingSpot(pick = 0): { x: number; y: number } | null {
+    const found: { x: number; y: number }[] = [];
+    for (const p of this.people.values()) {
+      if (!p.container.parent || !p.container.visible || !p.isTalking(this.time)) continue;
+      const w = this.worldContainer.toLocal(p.container.getGlobalPosition());
+      found.push({ x: w.x, y: w.y - 24 });
+    }
+    return found.length ? found[pick % found.length] : null;
+  }
+
+  liftSpot(): { x: number; y: number } | null {
+    const lift = (this.shaft as Partial<ShaftAnimated> | null)?.lift;
+    return lift ? { x: SHAFT_W / 2, y: lift.carY() } : null;
   }
 
   /** Centers the camera on a world point and zooms in a little. */

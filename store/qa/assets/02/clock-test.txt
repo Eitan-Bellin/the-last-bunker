@@ -1,0 +1,32 @@
+##### TZ=UTC  Date sanity: Wed Jun 10 2026 12:00:00 GMT+0000 (Coordinated Universal Time)
+E1a supply, toggling D / D-1 x20 after the real claim: claims=21, rush=42, blueprints=0, last streak=2
+E1b supply, +1 day x14: claims=14, rush=34, blueprints=2, streak=14
+   back to the real day: claim possible=true (stored day 2026-6-10 vs today 2026-6-10)
+E2 shop blueprint (limit 3/day): same-day buys=3; after toggling D-1/D five times total=18, blueprints=18
+   shop isotope (limit 5/week): bought 5 by toggling days (weekly counter resets when the Sunday changes, day toggle within week => limit holds)
+   toggling a week apart: 11 isotope in 12 tries
+E3 daily, 12 consecutive +1-day clock steps (3 orders+chest each): d0:streak1 d1:streak2 d2:streak3 d3:streak4 d4:streak5 d5:streak6 d6:streak7 d7:streak8 d8:streak9 d9:streak10 d10:streak11 d11:streak12; credits=4455, rush=12
+E3b clock +10y: new orders=true; back to +12d: new orders=false; +40d: false; +10y+1d: true; stored day index=24265 vs real-day idx=20626; streak shown=1
+E3c 30 forward steps: 30 order sets, credits=11745, rush=30, resources food=5000
+E4 DST transition days (day-of-year at noon offset change): none
+E5 flying east 16h (local 04:00 next day): new orders=true
+
+##### TZ=Asia/Jerusalem  Date sanity: Wed Jun 10 2026 12:00:00 GMT+0300 (Israel Daylight Time)
+E1a supply, toggling D / D-1 x20 after the real claim: claims=21, rush=42, blueprints=0, last streak=2
+E1b supply, +1 day x14: claims=14, rush=34, blueprints=2, streak=14
+   back to the real day: claim possible=true (stored day 2026-6-10 vs today 2026-6-10)
+E2 shop blueprint (limit 3/day): same-day buys=3; after toggling D-1/D five times total=18, blueprints=18
+   shop isotope (limit 5/week): bought 5 by toggling days (weekly counter resets when the Sunday changes, day toggle within week => limit holds)
+   toggling a week apart: 11 isotope in 12 tries
+E3 daily, 12 consecutive +1-day clock steps (3 orders+chest each): d0:streak1 d1:streak2 d2:streak3 d3:streak4 d4:streak5 d5:streak6 d6:streak7 d7:streak8 d8:streak9 d9:streak10 d10:streak11 d11:streak12; credits=4455, rush=12
+E3b clock +10y: new orders=true; back to +12d: new orders=false; +40d: false; +10y+1d: true; stored day index=24265 vs real-day idx=20626; streak shown=1
+E3c 30 forward steps: 30 order sets, credits=11745, rush=30, resources food=5000
+E4 DST transition days (day-of-year at noon offset change): 86,298
+  transition day 86: 0d 23:59(wall 23:59)=idx0  1d 0:30(wall 00:30)=idx0  1d 2:30(wall 03:30)=idx0  1d 3:30(wall 03:30)=idx0  1d 3:59(wall 03:59)=idx0  1d 4:00(wall 04:00)=idx0  1d 4:30(wall 04:30)=idx0  1d 5:00(wall 05:00)=idx1  1d 5:30(wall 05:30)=idx1
+     nextResetAt from local 01:00 = Fri Mar 27 2026 04:00:00 GMT+0300 (Israel Daylight Time); dayIndex(nr-1)=20538, dayIndex(nr)=20538 => MISMATCH (HUD countdown vs real turn)
+     actual turn of dayIndex at Fri Mar 27 2026 05:00:00 GMT+0300 (Israel Daylight Time) (nextResetAt says Fri Mar 27 2026 04:00:00 GMT+0300 (Israel Daylight Time), diff 60 min)
+  transition day 298: 0d 23:59(wall 23:59)=idx0  1d 0:30(wall 00:30)=idx0  1d 2:30(wall 02:30)=idx0  1d 3:30(wall 03:30)=idx1  1d 3:59(wall 03:59)=idx1  1d 4:00(wall 04:00)=idx1  1d 4:30(wall 04:30)=idx1  1d 5:00(wall 05:00)=idx1  1d 5:30(wall 05:30)=idx1
+     nextResetAt from local 01:00 = Sun Oct 25 2026 04:00:00 GMT+0200 (Israel Standard Time); dayIndex(nr-1)=20751, dayIndex(nr)=20751 => MISMATCH (HUD countdown vs real turn)
+     actual turn of dayIndex at Sun Oct 25 2026 03:00:00 GMT+0200 (Israel Standard Time) (nextResetAt says Sun Oct 25 2026 04:00:00 GMT+0200 (Israel Standard Time), diff -60 min)
+E5 flying east 16h (local 04:00 next day): new orders=true
+

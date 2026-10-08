@@ -1,4 +1,5 @@
 import { haptic } from '../../utils/haptics';
+import { bus } from '../../core/EventBus'; // [plan4:GP-1]
 import { statusTint } from '../../utils/a11y';
 import { HUD } from '../../ui/HUD';
 import { i18n } from '../../i18n/I18nManager';
@@ -17,6 +18,7 @@ import { RELOCATE_SECONDS, relocateBlock, relocateCost, stateWithout } from '../
 import { SLOT_W, buildingH, floorTop, slotX } from '../../rendering/geom';
 import type { IconName } from '../../ui/icons';
 import type { GameApp } from '../../app';
+import { popupMode } from '../components/NumberPopup'; // [plan4:UX-21]
 
 /** A bubble is worth two minutes of the room's output (NICE1), so a tap still matters after the first hour. */
 const BUBBLE_SECONDS = 120;
@@ -379,6 +381,7 @@ export class WorldController {
     haptic('tap');
     this.flyToHud(r, pos.x, pos.y, `+${amount}`);
     this.app.engine.notifyInteraction();
+    bus.emit('bubble:collected', buildingId); // [plan4:GP-1] the "collect 10 bubbles" order
   }
 
   /** A collected resource icon arcs up into its HUD counter, which then pulses. */
@@ -478,7 +481,8 @@ export class WorldController {
   }
 
   spawnProductionPopups(): void {
-    if (document.hidden) return;
+    // [plan4:UX-21] The routine numbers only in the "all" mode; bubbles, events and upgrades have their own, always shown popups.
+    if (document.hidden || popupMode() !== 'all') return;
     const state = this.app.state;
     let shown = 0;
     for (const b of state.buildings) {

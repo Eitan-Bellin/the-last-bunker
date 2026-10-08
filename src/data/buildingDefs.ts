@@ -100,12 +100,14 @@ export const BUILDABLE_TYPES: BuildingType[] = [
   'batteryBank', 'commons', 'library', 'recycler', 'condenser', 'mushroomFarm', 'gatePost', 'barracks',
   // [plan4:BL-15..32] wave 2 rooms
   'quarantineWard', 'solarArray', 'windTurbine', 'watchtower', 'garage', 'decon', 'aquaculture', 'market', 'nursery', 'school', 'bathhouse', 'memorialHall',
+  // [plan4:BL-34..38] wave 3: the five Act rooms (1.5x the matching role); the districts geothermal and oldVault are dug, so they are in DISTRICT_KINDS
+  'componentsPlant', 'alloyFoundry', 'dataCenter', 'forum', 'seedLab',
 ];
 // [plan4:ST-16] the surface row's rooms (a no-op for those a merge already listed above)
 for (const t of SURFACE_TYPES) if (!BUILDABLE_TYPES.includes(t)) BUILDABLE_TYPES.push(t);
 
 /** Natural caverns reached by tunnelling sideways (not built from the menu). */
-export const DISTRICT_KINDS: BuildingType[] = ['cave', 'lake', 'metro'];
+export const DISTRICT_KINDS: BuildingType[] = ['cave', 'lake', 'metro', 'geothermal', 'oldVault']; // [plan4:BL-24,25]
 /** Rooms that rise through two levels. */
 export const HALL_KINDS: BuildingType[] = ['atrium', 'reactorHall'];
 export const DISTRICT_SLOTS = 4;

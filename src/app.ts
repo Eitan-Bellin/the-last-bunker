@@ -48,15 +48,17 @@ import { genderOf, genderOfName } from './data/portraits';
 import { ensurePersistentStorage, getPersistStatus } from './core/SaveManager';
 import { claimOwnership, onSuperseded } from './core/singleInstance';
 import { currentTextSize, cycleTextSize } from './ui/textSize';
-import { getA11y, hydrateA11y, subscribeA11y } from './utils/a11y';
+import { getA11y, hydrateA11y, setA11y, subscribeA11y } from './utils/a11y';
 import { showCaption } from './ui/a11yDom';
 import { StructurePanel } from './ui/components/StructurePanel'; // [plan4:AC-11]
 import { KeyboardShortcuts } from './ui/controllers/keyboard'; // [plan4:AC-10]
 import { setSoundChip } from './ui/soundChip';
-import { hideSplash } from './ui/splash';
+import { pwaDialogSources, setGraphicsNotice, startPhoneWatchers } from './ui/pwa'; // [plan4:UX-13]
+import { hideSplash, setSplashProgress } from './ui/splash';
 import { StoryDialog } from './ui/components/StoryDialog';
 import { DISASTERS } from './data/incidents';
 import { Notifier, type NotifyItem } from './ui/notifications';
+import type { TourMode } from './ui/tour'; // [plan4:GP-6] type only: the tour's code loads on first use
 import { arrivalGap, type RaidResult } from './systems/EventSystem';
 import { DialogQueue, type DialogSource } from './ui/dialogQueue'; // [plan4:UX-10]
 import { getChapter } from './data/story';
@@ -69,8 +71,11 @@ import './styles/depth.css';
 import './styles/command.css';
 import './styles/buildmenu.css'; // [plan4:BL-39] before touch.css so its 44px rules still win
 import './styles/checkin.css'; // [plan4:Gameplay] dialog queue card, gesture tips, check-in screen
+import './styles/daily.css'; // [plan4:GP-1] daily orders
+import './styles/ceremony.css'; // [plan4:GP-2] key moments
 import './styles/touch.css'; // [plan4:UX-5] last again (its header says so): its 44px targets must beat the older sheet-help sizes in command.css
 import './styles/placement.css'; // [plan4:ST-19] the confirm bar and the chips over the ghost room
+import './styles/pwa.css'; // [plan4:UX-13] update chip, home-screen card, copy box
 import './styles/a11y.css'; // [plan4:AC-2] the accessibility layer, last of all: reduced motion, colour modes, focus rings
 import { FeedbackController } from './ui/controllers/feedback';
 import { InboxController } from './ui/controllers/inbox';
@@ -85,6 +90,8 @@ import { WhatsNewController } from './ui/controllers/whatsnew'; // [plan4:ST-9]
 import { WelcomeController } from './ui/controllers/welcome';
 import { TipsController } from './ui/controllers/tips'; // [plan4:UX-11]
 import { PRODUCTION_POPUP_MS, WorldController } from './ui/controllers/world';
+import { DailyController } from './ui/controllers/daily'; // [plan4:GP-1]
+import { Ceremonies } from './ui/ceremony'; // [plan4:GP-2]
 
 /** Icons drawn inside the Pixi scene (plaques, signs, popups); rasterized once at startup. */
 const SCENE_ICONS: IconName[] = [
@@ -110,6 +117,10 @@ export class GameApp {
   readonly events = new EventController(this);
   readonly story = new StoryController(this);
   readonly welcome = new WelcomeController(this);
+  /** [plan4:GP-1] Daily orders: HUD chip, sheet, day chest. */
+  readonly daily = new DailyController(this);
+  /** [plan4:GP-2] The key moments (build done, level-ups, research, Act, dig, death, Genesis). */
+  readonly ceremony = new Ceremonies(this);
   /** [plan4:UX-11] Gesture tips. */
   readonly tips = new TipsController(this);
   readonly world = new WorldController(this);
@@ -151,6 +162,8 @@ export class GameApp {
   dangerPrompt = false;
   raidResult: RaidResult | null = null;
   private notifier = new Notifier();
+  /** [plan4:GP-6] The running tour mode (made on first use; its code loads only then). */
+  private tour: TourMode | null = null;
 
   placementMode: BuildingType | null = null;
   private lastPanelRefresh = 0;
@@ -183,6 +196,8 @@ export class GameApp {
     setUiSound((name, volume) => this.audio.play(name, { volume }));
     // [plan4:UX-1] "tap to enable sound" chip while the context is suspended/interrupted; [plan4:AC-1] audio and the save follow the a11y source.
     this.audio.onBlockedChange = setSoundChip;
+    this.renderer.onContextChange = setGraphicsNotice; // [plan4:UX-17]
+    startPhoneWatchers(); // [plan4:UX-24] notices a 30 Hz rhythm (iOS Low Power Mode) so the battery-saver card can be offered
     this.audio.setPlayInSilent(getA11y().playInSilent);
     subscribeA11y(a => {
       this.audio.setPlayInSilent(a.playInSilent);
@@ -249,8 +264,10 @@ export class GameApp {
       openChronicle: () => this.chroniclePanel.show(this.state),
       showTipsAgain: () => { this.tips.reset(); this.toasts.show(`[[hand]] ${i18n.t('settings.tipsReset')}`, 'good'); }, // [plan4:UX-11]
       replayIntro: () => { this.closeSheets(); this.story.replayIntro(); },
+      shareBunker: () => this.shareBunker(), // [plan4:GP-5]
+      startTour: () => this.startTour(), // [plan4:GP-6]
       redeemCoupon: (code: string) => { // the coupon sheet: pick how much to skip or add
-        if (!couponValid(code)) return false;
+        if (!couponValid(code) || !new URLSearchParams(location.search).has('debug')) return false; // [plan4:GP-12] the code only works on a ?debug page
         this.closeSheets();
         this.couponPanel.show();
         return true;
@@ -278,14 +295,18 @@ export class GameApp {
     // [plan4:AC-9] Captions for the sounds that carry information (only when the player turned them on).
     const CAPTIONED = new Set(['warn', 'pulse', 'alarm', 'siren', 'door', 'thunder']);
     this.audio.onCue = name => { if (CAPTIONED.has(name)) showCaption(i18n.t(`caption.${name}`)); };
+    setSplashProgress(0.1);
     await Promise.all([this.renderer.init(canvas), preloadIcons(SCENE_ICONS).catch(() => undefined)]);
+    setSplashProgress(0.4); // [plan4:UX-18]
     await this.engine.init();
+    setSplashProgress(0.75);
     hydrateA11y(this.state.settings?.a11y); // [plan4:AC-1] a device with no preference of its own takes the save's
     this.state.settings.a11y = { ...getA11y() };
     // Decode the paintings of the rooms already built so the first frame shows art, not placeholders.
     // [perf] Only the rooms the first picture can show (the top of the bunker): the rest load when the camera comes near (renderRooms).
     const keys = this.state.buildings.filter(b => b.position.floor < 10).map(b => buildingArtKey(b.type, roomTier(b.level))).filter((k): k is string => !!k);
     await Promise.all([ArtLibrary.preload([...new Set([...keys, 'backdrops/rock'])]), ArtLibrary.loadMeta(), ArtLibrary.loadBalance()]).catch(() => undefined);
+    setSplashProgress(1);
 
     this.popups = new NumberPopupManager(this.renderer.worldContainer);
     this.ruler = new DepthRuler(this.renderer); // [plan4:ST-12 #5]
@@ -425,8 +446,8 @@ export class GameApp {
   private copyDiagnostics(): void {
     const text = crashReport();
     const done = () => this.toasts.show(`[[save]] ${i18n.t('toast.diagnosticsCopied')}`, 'good');
-    if (navigator.clipboard?.writeText) navigator.clipboard.writeText(text).then(done, () => window.prompt('Diagnostics', text));
-    else window.prompt('Diagnostics', text);
+    if (navigator.clipboard?.writeText) navigator.clipboard.writeText(text).then(done, () => this.saves.showCopyCode(text, 'save.copy.diagTitle')); // [plan4:UX-16] no more window.prompt
+    else this.saves.showCopyCode(text, 'save.copy.diagTitle');
   }
 
   /** The picture keeps failing: rebuild the scene first; if it still fails, save and reload (at most twice in 5 minutes). */
@@ -455,6 +476,7 @@ export class GameApp {
     }
     // Each part is guarded on its own: a throwing panel must not stop the picture or the dialogs behind it.
     this.renderer.frameTarget = this.engine.frameTargetMs;
+    if (this.renderer.postfx) this.renderer.postfx.powerSaver = getA11y().powerSaver; // [plan4:UX-24]
     const fps = this.renderer.postfx?.profile.fps;
     if (fps) this.engine.frameRates = fps;
     // [perf] 60 only while the camera moves; short animations keep the watching rate.
@@ -522,6 +544,7 @@ export class GameApp {
   dialogGate(critical = false): boolean {
     const now = performance.now();
     if (this.placementMode) return false;
+    if (this.tour?.active) return false; // [plan4:GP-6] the tour is for watching: dialogs wait for the tap that ends it
     for (const [id, t] of this.pointersDown) if (now - t > 12000) this.pointersDown.delete(id); // a lost pointerup must not block forever
     if (this.pointersDown.size > 0) return false;
     if (now - this.lastGestureAt < 1200) return false;
@@ -554,6 +577,15 @@ export class GameApp {
     const memorialN = () => st().danger?.memorialQueue?.length ?? 0;
     const asking = () => this.engine.explorationSystem.waitingMission();
     // [Long game] After the first era events, questions and reports wait in the Decision Inbox; emergencies and the story still open by themselves.
+    // [plan4:UX-13] The two lowest sources: "Add to Home Screen" (iPhone Safari) and the weekly backup reminder.
+    const pwa = pwaDialogSources({
+      modal: this.modal,
+      powerSaverOn: () => getA11y().powerSaver,
+      enablePowerSaver: () => { setA11y({ powerSaver: true }); this.toasts.show(`[[battery]] ${i18n.t('power.on')}`, 'good'); },
+      playSeconds: () => st().stats.totalPlayTime,
+      exportBackup: () => this.saves.exportFile(),
+      snooze: (id, ms) => this.dialogs.snooze(id, ms),
+    });
     return [
       {
         id: 'welcome', priority: 100, snoozeMs: 60_000, critical: true, icon: '[[door]]',
@@ -627,6 +659,7 @@ export class GameApp {
         open: () => this.dig.showDistrictFound(this.districtFoundQueue.shift()!),
         label: () => { const d = districtDef(this.districtFoundQueue[0] ?? ''); return d ? i18n.t('district.found', { name: d.name[i18n.currentLocale] }) : ''; },
       },
+      ...pwa,
     ];
   }
 
@@ -669,6 +702,7 @@ export class GameApp {
     }
     this.hud.setJournalUnread(state.loreUnread?.length ?? 0);
     this.hud.setSupply(this.engine.supplySystem.isReady(state), i18n.t('supply.title'));
+    this.daily.refresh(state); // [plan4:GP-1]
     this.danger.updateIncidentBanner();
     // [plan4:UX-11] The gesture tips (pinch, double tap, hold a survivor, wings), once each; the old drag toast is the "hold" tip now.
     this.tips.update(performance.now());
@@ -735,6 +769,7 @@ export class GameApp {
     else if (action.kind === 'dig') this.dig.confirmDig();
     else if (action.kind === 'command') this.eraPanel.show(state);
     else if (action.kind === 'genesis') this.menuPanel.show('genesis');
+    else if (action.kind === 'daily') this.daily.show(); // [plan4:GP-1]
     else if (action.kind === 'ruins') {
       const rs = this.engine.restorationSystem;
       const target = state.ruins.find(r => r.started) ?? state.ruins.find(r => rs.canStart(state, r)) ?? state.ruins[0];
@@ -1034,6 +1069,7 @@ export class GameApp {
 
     this.feedback.install();
     this.inbox.install();
+    this.daily.install(); // [plan4:GP-1]
     this.watchGestures(); // [plan4:UX-10]
     this.tips.install(); // [plan4:UX-11]
 
@@ -1072,7 +1108,7 @@ export class GameApp {
   anyPanelOpen(): boolean {
     return this.buildMenu.isVisible || this.buildingPanel.isVisible || this.peoplePanel.isVisible || this.researchPanel.isVisible
       || this.surfacePanel.isVisible || this.menuPanel.isVisible || this.ruinPanel.isVisible || this.journal.isVisible
-      || this.eraPanel.isVisible || this.projectsPanel.isVisible || this.helpPanel.isVisible || this.chroniclePanel.isVisible || this.loreReader.isVisible || this.inbox.isVisible || this.resourceSheet.isVisible;
+      || this.eraPanel.isVisible || this.projectsPanel.isVisible || this.helpPanel.isVisible || this.chroniclePanel.isVisible || this.loreReader.isVisible || this.inbox.isVisible || this.resourceSheet.isVisible || this.daily.isVisible;
   }
 
   /**
@@ -1083,6 +1119,7 @@ export class GameApp {
     let lastBack = 0;
     history.pushState({ lastbunker: 1 }, '');
     window.addEventListener('popstate', () => {
+      if (this.tour?.active) { this.tour.stop(); history.pushState({ lastbunker: 1 }, ''); return; } // [plan4:GP-6] back ends the tour first
       if (this.modal.isVisible) {
         history.pushState({ lastbunker: 1 }, '');
         return;
@@ -1121,6 +1158,29 @@ export class GameApp {
     if (!wasOpen) this.structurePanel.show();
   }
 
+  /** [plan4:GP-5] Makes the share picture (the menu closes first: an open sheet changes the camera's bounds). The code loads on first use. */
+  private shareBunker(): void {
+    this.closeSheets();
+    void import('./ui/share').then(m => m.shareBunker({
+      renderer: this.renderer, getState: () => this.state, modal: this.modal,
+      toast: (text, kind) => this.toasts.show(text, kind), wake: () => this.engine.notifyInteraction(),
+      hideNumbers: hide => this.popups.setVisible(!hide),
+    })).catch(err => { console.warn('[plan4:GP-5] share', err); this.toasts.show(`[[warning]] ${i18n.t('share.failed')}`, 'bad'); });
+  }
+
+  /** [plan4:GP-6] Starts the tour mode (camera tour on a clean screen, 20 fps, screen kept awake). */
+  private startTour(): void {
+    this.closeSheets();
+    void import('./ui/tour').then(m => {
+      this.tour ??= new m.TourMode({
+        renderer: this.renderer, getState: () => this.state,
+        setFrameCap: fps => { this.engine.maxFps = fps; },
+        interrupted: () => this.modal.isVisible || this.anyPanelOpen() || this.welcomeOpen || this.introPlaying || this.storyOpen || this.storyDialog.isVisible,
+      });
+      this.tour.start();
+    }).catch(err => console.warn('[plan4:GP-6] tour', err));
+  }
+
   closeSheets(): void {
     this.buildMenu.hide();
     this.buildingPanel.hide();
@@ -1137,6 +1197,7 @@ export class GameApp {
     this.couponPanel.hide();
     this.inbox.hide();
     this.resourceSheet.hide();
+    this.daily.hide(); // [plan4:GP-1]
   }
 
   // ---- [Danger] raid warnings, disasters, memorials (LATEGAME-PLAN part C) ----

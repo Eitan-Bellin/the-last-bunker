@@ -8,7 +8,7 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "check": "tsc --noEmit && node tools/sim/smoke.mjs && node tools/sim/lint.mjs",
-    "check:full": "npm run check && node tools/sim/migrate-test.mjs store/sim/saves-v6"
+    "check:full": "npm run check && node tools/sim/migrate-test.mjs store/sim/saves-v6 && node tools/sim/placement-test.mjs && node tools/sim/infra-test.mjs && node tools/sim/routes-test.mjs && node tools/sim/rooms-test.mjs && node tools/sim/openings-test.mjs && node tools/sim/daily-test.mjs && node tools/sim/foreman-test.mjs"
   },
   "devDependencies": {
     "@types/howler": "^2.2.13",

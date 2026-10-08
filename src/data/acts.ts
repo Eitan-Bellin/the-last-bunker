@@ -6,7 +6,7 @@ import { relationLevel } from './trade';
  * The long game's Acts (long-game plan, section 5): the run's chapters. Eras stay the bunker's look and story beats;
  * Acts set how far the bunker may grow (room level, people, floors) and what it must achieve to move on. Each Act
  * ends with its charter: big projects (src/data/projects.ts, `charter`) built in stages with resources and crew.
- * Release 1 has Acts I-IV; Genesis opens when Act IV is complete.
+ * There are seven Acts (ACTS below, MAX_ACT); Genesis opens when the last Act is complete. [plan4:GP-12]
  */
 /** [Q2] What kind of work a goal is, so the guide (src/systems/Guide.ts) can say what blocks it and where to go. */
 export type GoalKind = 'era' | 'ruins' | 'research' | 'dig' | 'levels' | 'pop' | 'outposts' | 'influence' | 'seedVault';

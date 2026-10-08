@@ -298,6 +298,15 @@ export const ICON_SVG = {
   memorialHall: '<path d="M12 2.4c2.4 2.6 3.4 4.4 3.4 6.6a3.4 3.4 0 0 1-6.8 0c0-1.2.6-2 1.4-3 .2.8.6 1.2 1 1.4.4-1.6.8-3.4 1-5z"/>'
     + '<rect x="9.8" y="12.4" width="4.4" height="4.4" rx=".6" opacity=".6"/><path d="M3 21h18" ' + S + ' stroke-width="2.4"/>'
     + '<path d="M5 16.8h14v4.2H5z" opacity=".6"/><path d="M7.6 18.2v1.4M10.2 18.2v1.4M12.8 18.2v1.4M15.4 18.2v1.4" stroke="#000" stroke-opacity=".5" stroke-width="1.1"/>',
+  // [plan4:BL-24,25,34..38] wave 3: the two Act districts and the five Act rooms
+  geothermal: '<path d="M1.8 21.4 7.2 12h9.6l5.4 9.4z" opacity=".6"/><path d="M8.6 10.2c-1.2-1.8 1.2-3 0-5.2M12.4 10.2c-1.2-1.8 1.2-3 0-5.2M16.2 10.2c-1.2-1.8 1.2-3 0-5.2" ' + S + ' stroke-width="1.7"/>'
+    + '<path d="M12 21.4v-4.4l-2.2-2.2M12 17l2.4-1.8" stroke="#000" stroke-opacity=".55" stroke-width="1.5" fill="none" stroke-linecap="round"/>',
+  oldVault: '<circle cx="12" cy="12" r="10" opacity=".6"/><circle cx="12" cy="12" r="6.6" ' + CUT + '/><path d="M12 6.6v10.8M6.6 12h10.8M8.2 8.2l7.6 7.6M15.8 8.2l-7.6 7.6" ' + S + ' stroke-width="1.5"/><circle cx="12" cy="12" r="2.3"/>',
+  componentsPlant: '<path d="M2.4 21.4V10.4l5.4 3.3v-3.3l5.4 3.3v-3.3l5.4 3.3V3.6h3.2v17.8z"/><rect x="4.6" y="16" width="2.4" height="2.4" rx=".4" ' + CUT + '/><rect x="10" y="16" width="2.4" height="2.4" rx=".4" ' + CUT + '/><rect x="15.4" y="16" width="2.4" height="2.4" rx=".4" ' + CUT + '/>',
+  alloyFoundry: '<path d="M4.6 3.6h14.8l-2.2 6.8a5.2 5.2 0 0 1-10.4 0z"/><path d="M8.6 6.4h6.8" stroke="#000" stroke-opacity=".5" stroke-width="1.6" stroke-linecap="round"/><path d="M12 15.6v3.2" ' + S + ' stroke-width="2.2"/><rect x="6.4" y="19" width="11.2" height="3" rx=".8" opacity=".6"/>',
+  dataCenter: '<rect x="3.6" y="2.8" width="16.8" height="5.2" rx="1"/><rect x="3.6" y="9.4" width="16.8" height="5.2" rx="1" opacity=".6"/><rect x="3.6" y="16" width="16.8" height="5.2" rx="1"/><circle cx="7" cy="5.4" r=".9" ' + CUT + '/><circle cx="7" cy="12" r=".9" ' + CUT + '/><circle cx="7" cy="18.6" r=".9" ' + CUT + '/><path d="M10.4 5.4h7M10.4 12h7M10.4 18.6h7" stroke="#000" stroke-opacity=".5" stroke-width="1.2" stroke-linecap="round"/>',
+  forum: '<path d="M2.4 9.2 12 3l9.6 6.2z"/><rect x="4.2" y="10.6" width="2.6" height="8" rx=".5" opacity=".6"/><rect x="8.5" y="10.6" width="2.6" height="8" rx=".5" opacity=".6"/><rect x="12.9" y="10.6" width="2.6" height="8" rx=".5" opacity=".6"/><rect x="17.2" y="10.6" width="2.6" height="8" rx=".5" opacity=".6"/><rect x="2.4" y="19.6" width="19.2" height="2.2" rx=".7"/>',
+  seedLab: '<path d="M12 21v-7" ' + S + ' stroke-width="1.8"/><path d="M12 14.2c-4.5 0-6.2-3-6.2-6.2 4.2 0 6.2 1.8 6.2 6.2zM12 14.2c0-3.6 2.2-6.2 6.6-6.6 0 4-2.1 6.6-6.6 6.6z"/><rect x="3.6" y="19" width="16.8" height="2.8" rx="1" opacity=".6"/>',
 } as const;
 
 export type IconName = keyof typeof ICON_SVG;

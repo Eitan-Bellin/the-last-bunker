@@ -1,4 +1,5 @@
 import type { GameApp } from '../../app';
+import { ZoomButtons } from '../components/ZoomButtons'; // [plan4:AC-13] installed here: this is where the camera keys live
 
 /**
  * [plan4:AC-10] Keyboard shortcuts for desktop players and external keyboards on a tablet:
@@ -29,6 +30,7 @@ export class KeyboardShortcuts {
 
   install(): void {
     document.addEventListener('keydown', e => this.onKey(e));
+    new ZoomButtons(this.app).install();
   }
 
   private typing(e: KeyboardEvent): boolean {
@@ -50,6 +52,8 @@ export class KeyboardShortcuts {
     const app = this.app;
     if (app.modal.isVisible || app.introPlaying || document.body.classList.contains('intro-active')) return;
     const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+    // [plan4:AC-10] Escape also leaves placing a room (the confirm bar has a cancel button; this is its key). An open panel closes first (Sheet.ts).
+    if (k === 'Escape' && app.placementMode && !this.sheetOpen()) { e.preventDefault(); app.world.cancelPlacement(); return; }
     // Panels: the same handler the bottom navigation uses (it toggles, closes what is open, cancels a placement).
     const nav = k === 'b' ? 'build' : k === 'p' ? 'people' : k === 'r' ? 'research' : null;
     if (nav) { e.preventDefault(); app.hud.onNav?.(nav); return; }

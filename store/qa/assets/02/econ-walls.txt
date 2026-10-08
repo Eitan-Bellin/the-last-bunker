@@ -1,0 +1,879 @@
+
+===== c-seed1.json: act 2 era 2 floors 6 pop 38 bld 31 =====
+caps: food:4950 water:3375 power:400 materials:1123000 medicine:195 knowledge:2175 scrap:1050 components:1425 alloys:570 data:150 influence:90 seedCores:30
+amount: food:4950 water:3375 power:400 materials:112301 medicine:195 knowledge:2175 scrap:1050 components:0 alloys:0 data:0 influence:0 seedCores:0
+net/h : food:78571 water:36607 power:86905 materials:50821 medicine:1639 knowledge:9672 scrap:3297 components:0 alloys:0 data:0 influence:0 seedCores:0
+-- build (next copy) --
+quarters         unlocked=Y have=4 cost{materials:315} afford=now
+canteen          unlocked=Y have=2 cost{materials:127 food:37} afford=now
+medbay           unlocked=Y have=2 cost{materials:130} afford=now
+radioTower       unlocked=Y have=2 cost{materials:320 scrap:40} afford=now
+trainingRoom     unlocked=Y have=0 cost{materials:90} afford=now
+armory           unlocked=Y have=0 cost{materials:100 scrap:25} afford=now
+farm             unlocked=Y have=4 cost{materials:132} afford=now
+waterPump        unlocked=Y have=3 cost{materials:51} afford=now
+hydroponics      unlocked=Y have=2 cost{materials:389 scrap:65} afford=now
+waterPurifier    unlocked=Y have=0 cost{materials:100 scrap:15} afford=now
+generator        unlocked=Y have=3 cost{materials:123} afford=now
+workshop         unlocked=Y have=2 cost{materials:44} afford=now
+laboratory       unlocked=Y have=2 cost{materials:181} afford=now
+reactor          unlocked=Y have=0 cost{materials:400 scrap:80 blueprints:1} afford=now
+storage          unlocked=Y have=2 cost{materials:140} afford=now
+atrium           unlocked=Y have=0 cost{materials:650 scrap:120 blueprints:1} afford=now
+reactorHall      unlocked=Y have=0 cost{materials:1200 scrap:300 blueprints:2} afford=now
+batteryBank      unlocked=n have=0/3 cost{materials:120 scrap:25} afford=now
+commons          unlocked=n have=0/2 cost{materials:70 food:10} afford=now
+library          unlocked=n have=0/2 cost{materials:110 scrap:10} afford=now
+recycler         unlocked=n have=0/2 cost{materials:200 scrap:20} afford=now
+condenser        unlocked=n have=0/3 cost{materials:110 scrap:20} afford=now
+mushroomFarm     unlocked=n have=0/3 cost{materials:90 scrap:10} afford=now
+gatePost         unlocked=n have=0/2 cost{materials:120 scrap:30} afford=now
+barracks         unlocked=n have=0/2 cost{materials:200 scrap:40} afford=now
+quarantineWard   unlocked=n have=0/1 cost{materials:150 scrap:20 medicine:6} afford=now
+solarArray       unlocked=n have=0/4 cost{materials:100 scrap:30} afford=now
+windTurbine      unlocked=n have=0/4 cost{materials:140 scrap:40} afford=now
+watchtower       unlocked=n have=0/2 cost{materials:80 scrap:20} afford=now
+garage           unlocked=n have=0/1 cost{materials:220 scrap:50} afford=now
+decon            unlocked=n have=0/1 cost{materials:140 scrap:30} afford=now
+aquaculture      unlocked=n have=0/1 cost{materials:260 scrap:40} afford=now
+market           unlocked=n have=0/1 cost{materials:240 scrap:30} afford=now
+nursery          unlocked=n have=0/2 cost{materials:80 food:20} afford=now
+school           unlocked=n have=0/1 cost{materials:180 knowledge:20} afford=now
+bathhouse        unlocked=n have=0/2 cost{materials:90 scrap:10} afford=now
+memorialHall     unlocked=n have=0/1 cost{materials:100} afford=now
+componentsPlant  unlocked=n have=0/1 cost{components:490 materials:39200} afford=WALL(components)
+alloyFoundry     unlocked=n have=0/1 cost{alloys:168 materials:44800 components:224} afford=WALL(alloys)
+dataCenter       unlocked=n have=0/1 cost{data:142 materials:50400 components:252 alloys:76} afford=WALL(data)
+forum            unlocked=n have=0/1 cost{influence:105 materials:56000 components:280 alloys:84 data:63} afford=WALL(influence)
+seedLab          unlocked=n have=0/1 cost{seedCores:42 materials:67200 components:336 alloys:101 data:76 influence:50} afford=WALL(seedCores)
+-- upgrades of existing rooms (next level) --
+upg quarters L3 -> cost{materials:73752} afford=now
+upg generator L3 -> cost{materials:73752} afford=now
+upg waterPump L3 -> cost{materials:73752} afford=now
+upg farm L3 -> cost{materials:73752} afford=now
+upg quarters L3 -> cost{materials:73752} afford=now
+upg canteen L3 -> cost{materials:73752} afford=now
+-- research not done --
+(78 open)
+-- dig / wings / districts / projects --
+dig next: {materials:336000 scrap:85} afford=4.4h(materials)
+wing B1: {materials:84000} afford=now
+wing B11: {materials:146917} afford=0.7h(materials)
+wing B24: {materials:560000} afford=8.8h(materials)
+WALLS: 
+  build forum #1: influence 105 > cap 90
+  build seedLab #1: seedCores 42 > cap 30
+  research commune: knowledge 3500 > cap 2175
+  research meritocracy: knowledge 3500 > cap 2175
+  research militia: knowledge 3500 > cap 2175
+  research fortress: knowledge 3000 > cap 2175
+  research rangers: knowledge 3000 > cap 2175
+  research diplomacy: knowledge 3000 > cap 2175
+  research assemblyTheory: knowledge 3200 > cap 2175
+  research medicalCenter: knowledge 3000 > cap 2175
+  research schools: knowledge 3500 > cap 2175
+  research cartography: knowledge 3000 > cap 2175
+  research armorPlating: knowledge 3000 > cap 2175
+  research metallurgy: knowledge 4500 > cap 2175
+  research gridAutomation: knowledge 4500 > cap 2175
+  research bunkerDoctrine: knowledge 4500 > cap 2175
+  research heritage: knowledge 5000 > cap 2175
+  research seedVault: knowledge 5000 > cap 2175
+  research foundryDoctrine: knowledge 6000 > cap 2175
+  research deepMining: knowledge 6000 > cap 2175
+  research precisionCraft: knowledge 6500 > cap 2175
+  research quarryEngines: knowledge 5500 > cap 2175
+  research closedLoopWater: knowledge 5200 > cap 2175
+  research fieldMedicine: knowledge 5500 > cap 2175
+  research surveyDrones: knowledge 5500 > cap 2175
+  research isolationism: knowledge 7000 > cap 2175
+  research isolationism: data 200 > cap 150
+  research expansionism: knowledge 7000 > cap 2175
+  research expansionism: data 200 > cap 150
+  research merchantRepublic: knowledge 7000 > cap 2175
+  research merchantRepublic: data 200 > cap 150
+  research dataLattice: knowledge 6500 > cap 2175
+  research dataLattice: data 250 > cap 150
+  research skyGreenhouses: knowledge 6500 > cap 2175
+  research skyGreenhouses: data 200 > cap 150
+  research rapidResponse: knowledge 6500 > cap 2175
+  research rapidResponse: data 200 > cap 150
+  research archivesOfAges: knowledge 7000 > cap 2175
+  research archivesOfAges: data 250 > cap 150
+  research republic: knowledge 8500 > cap 2175
+  research republic: influence 150 > cap 90
+  research republic: data 200 > cap 150
+  research technocracy: knowledge 8500 > cap 2175
+  research technocracy: influence 150 > cap 90
+  research technocracy: data 250 > cap 150
+  research confederation: knowledge 8500 > cap 2175
+  research confederation: influence 150 > cap 90
+  research confederation: data 200 > cap 150
+  research civicHalls: knowledge 8000 > cap 2175
+  research civicHalls: influence 120 > cap 90
+  research tradeRoads: knowledge 8000 > cap 2175
+  research tradeRoads: influence 100 > cap 90
+  research peoplesFarms: knowledge 8000 > cap 2175
+  research peoplesFarms: influence 100 > cap 90
+  research shieldNetwork: knowledge 8500 > cap 2175
+  research shieldNetwork: influence 120 > cap 90
+  research archiveCrossing: knowledge 9500 > cap 2175
+  research archiveCrossing: seedCores 40 > cap 30
+  research archiveCrossing: influence 150 > cap 90
+  research seedCrossing: knowledge 9500 > cap 2175
+  research seedCrossing: seedCores 40 > cap 30
+  research seedCrossing: influence 150 > cap 90
+  research vanguardCrossing: knowledge 9500 > cap 2175
+  research vanguardCrossing: seedCores 40 > cap 30
+  research vanguardCrossing: influence 150 > cap 90
+  research newWorldForge: knowledge 9000 > cap 2175
+  research seedSynthesis: knowledge 9000 > cap 2175
+  research seedSynthesis: influence 120 > cap 90
+  research lastCensus: knowledge 8500 > cap 2175
+  research lastCensus: influence 150 > cap 90
+  research genesisCalculus: knowledge 9500 > cap 2175
+  research genesisCalculus: seedCores 35 > cap 30
+  research genesisCalculus: data 300 > cap 150
+  project radioMast stage 1: materials 4760000 > cap 1123000
+  project radioMast stage 2: materials 5140800 > cap 1123000
+  project radioMast stage 3: materials 5521600 > cap 1123000
+  project radioMast stage 4: materials 5902400 > cap 1123000
+  project radioMast stage 5: materials 6283200 > cap 1123000
+  project purifier stage 1: materials 4760000 > cap 1123000
+  project purifier stage 1: water 5000 > cap 3375
+  project purifier stage 2: materials 5140800 > cap 1123000
+  project purifier stage 2: water 5000 > cap 3375
+  project purifier stage 3: materials 5521600 > cap 1123000
+  project purifier stage 3: water 5000 > cap 3375
+  project purifier stage 4: materials 5902400 > cap 1123000
+  project purifier stage 4: water 5000 > cap 3375
+  project greenhouse stage 1: components 16800 > cap 1425
+  project greenhouse stage 1: materials 1344000 > cap 1123000
+  project greenhouse stage 2: components 18144 > cap 1425
+  project greenhouse stage 2: materials 1451520 > cap 1123000
+  project greenhouse stage 3: components 19488 > cap 1425
+  project greenhouse stage 3: materials 1559040 > cap 1123000
+  project greenhouse stage 4: components 20832 > cap 1425
+  project greenhouse stage 4: materials 1666560 > cap 1123000
+  project greenhouse stage 5: components 22176 > cap 1425
+  project greenhouse stage 5: materials 1774080 > cap 1123000
+  project metroTunnel stage 1: components 16800 > cap 1425
+  project metroTunnel stage 1: materials 1344000 > cap 1123000
+  project metroTunnel stage 2: components 18144 > cap 1425
+  project metroTunnel stage 2: materials 1451520 > cap 1123000
+  project metroTunnel stage 3: components 19488 > cap 1425
+  project metroTunnel stage 3: materials 1559040 > cap 1123000
+  project metroTunnel stage 4: components 20832 > cap 1425
+  project metroTunnel stage 4: materials 1666560 > cap 1123000
+  project metroTunnel stage 5: components 22176 > cap 1425
+  project metroTunnel stage 5: materials 1774080 > cap 1123000
+  project archive stage 1: components 16800 > cap 1425
+  project archive stage 1: materials 1344000 > cap 1123000
+  project archive stage 1: knowledge 8000 > cap 2175
+  project archive stage 2: components 18144 > cap 1425
+  project archive stage 2: materials 1451520 > cap 1123000
+  project archive stage 2: knowledge 8000 > cap 2175
+  project archive stage 3: components 19488 > cap 1425
+  project archive stage 3: materials 1559040 > cap 1123000
+  project archive stage 3: knowledge 8000 > cap 2175
+  project archive stage 4: components 20832 > cap 1425
+  project archive stage 4: materials 1666560 > cap 1123000
+  project archive stage 4: knowledge 8000 > cap 2175
+  project wall stage 1: alloys 3780 > cap 570
+  project wall stage 1: components 5040 > cap 1425
+  project wall stage 2: alloys 4082 > cap 570
+  project wall stage 2: components 5443 > cap 1425
+  project wall stage 3: alloys 4385 > cap 570
+  project wall stage 3: materials 1169280 > cap 1123000
+  project wall stage 3: components 5846 > cap 1425
+  project wall stage 4: alloys 4687 > cap 570
+  project wall stage 4: materials 1249920 > cap 1123000
+  project wall stage 4: components 6250 > cap 1425
+  project wall stage 5: alloys 4990 > cap 570
+  project wall stage 5: materials 1330560 > cap 1123000
+  project wall stage 5: components 6653 > cap 1425
+  project genesisCore stage 1: seedCores 630 > cap 30
+  project genesisCore stage 1: components 5040 > cap 1425
+  project genesisCore stage 1: alloys 1512 > cap 570
+  project genesisCore stage 1: data 1134 > cap 150
+  project genesisCore stage 1: influence 756 > cap 90
+  project genesisCore stage 2: seedCores 725 > cap 30
+  project genesisCore stage 2: materials 1159200 > cap 1123000
+  project genesisCore stage 2: components 5796 > cap 1425
+  project genesisCore stage 2: alloys 1739 > cap 570
+  project genesisCore stage 2: data 1304 > cap 150
+  project genesisCore stage 2: influence 869 > cap 90
+  project genesisCore stage 3: seedCores 819 > cap 30
+  project genesisCore stage 3: materials 1310400 > cap 1123000
+  project genesisCore stage 3: components 6552 > cap 1425
+  project genesisCore stage 3: alloys 1966 > cap 570
+  project genesisCore stage 3: data 1474 > cap 150
+  project genesisCore stage 3: influence 983 > cap 90
+  project genesisCore stage 4: seedCores 914 > cap 30
+  project genesisCore stage 4: materials 1461600 > cap 1123000
+  project genesisCore stage 4: components 7308 > cap 1425
+  project genesisCore stage 4: alloys 2192 > cap 570
+  project genesisCore stage 4: data 1644 > cap 150
+  project genesisCore stage 4: influence 1096 > cap 90
+  project genesisCore stage 5: seedCores 1008 > cap 30
+  project genesisCore stage 5: materials 1612800 > cap 1123000
+  project genesisCore stage 5: components 8064 > cap 1425
+  project genesisCore stage 5: alloys 2419 > cap 570
+  project genesisCore stage 5: data 1814 > cap 150
+  project genesisCore stage 5: influence 1210 > cap 90
+  project genesisCore stage 6: seedCores 1103 > cap 30
+  project genesisCore stage 6: materials 1764000 > cap 1123000
+  project genesisCore stage 6: components 8820 > cap 1425
+  project genesisCore stage 6: alloys 2646 > cap 570
+  project genesisCore stage 6: data 1985 > cap 150
+  project genesisCore stage 6: influence 1323 > cap 90
+  project deepFoundry stage 1: alloys 3780 > cap 570
+  project deepFoundry stage 1: components 5040 > cap 1425
+  project deepFoundry stage 2: alloys 4082 > cap 570
+  project deepFoundry stage 2: components 5443 > cap 1425
+  project deepFoundry stage 3: alloys 4385 > cap 570
+  project deepFoundry stage 3: materials 1169280 > cap 1123000
+  project deepFoundry stage 3: components 5846 > cap 1425
+  project deepFoundry stage 4: alloys 4687 > cap 570
+  project deepFoundry stage 4: materials 1249920 > cap 1123000
+  project deepFoundry stage 4: components 6250 > cap 1425
+  project deepFoundry stage 5: alloys 4990 > cap 570
+  project deepFoundry stage 5: materials 1330560 > cap 1123000
+  project deepFoundry stage 5: components 6653 > cap 1425
+  project surfaceGate stage 1: data 2835 > cap 150
+  project surfaceGate stage 1: materials 1208000 > cap 1123000
+  project surfaceGate stage 1: components 5040 > cap 1425
+  project surfaceGate stage 1: alloys 1512 > cap 570
+  project surfaceGate stage 2: data 3062 > cap 150
+  project surfaceGate stage 2: materials 1288640 > cap 1123000
+  project surfaceGate stage 2: components 5443 > cap 1425
+  project surfaceGate stage 2: alloys 1633 > cap 570
+  project surfaceGate stage 3: data 3289 > cap 150
+  project surfaceGate stage 3: materials 1369280 > cap 1123000
+  project surfaceGate stage 3: components 5846 > cap 1425
+  project surfaceGate stage 3: alloys 1754 > cap 570
+  project surfaceGate stage 4: data 3515 > cap 150
+  project surfaceGate stage 4: materials 1449920 > cap 1123000
+  project surfaceGate stage 4: components 6250 > cap 1425
+  project surfaceGate stage 4: alloys 1875 > cap 570
+  project surfaceGate stage 5: data 3742 > cap 150
+  project surfaceGate stage 5: materials 1530560 > cap 1123000
+  project surfaceGate stage 5: components 6653 > cap 1425
+  project surfaceGate stage 5: alloys 1996 > cap 570
+  project skyDome stage 1: data 2835 > cap 150
+  project skyDome stage 1: components 5040 > cap 1425
+  project skyDome stage 1: alloys 1512 > cap 570
+  project skyDome stage 1: food 20000 > cap 4950
+  project skyDome stage 2: data 3062 > cap 150
+  project skyDome stage 2: components 5443 > cap 1425
+  project skyDome stage 2: alloys 1633 > cap 570
+  project skyDome stage 2: food 20000 > cap 4950
+  project skyDome stage 3: data 3289 > cap 150
+  project skyDome stage 3: materials 1169280 > cap 1123000
+  project skyDome stage 3: components 5846 > cap 1425
+  project skyDome stage 3: alloys 1754 > cap 570
+  project skyDome stage 3: food 20000 > cap 4950
+  project skyDome stage 4: data 3515 > cap 150
+  project skyDome stage 4: materials 1249920 > cap 1123000
+  project skyDome stage 4: components 6250 > cap 1425
+  project skyDome stage 4: alloys 1875 > cap 570
+  project skyDome stage 4: food 20000 > cap 4950
+  project skyDome stage 5: data 3742 > cap 150
+  project skyDome stage 5: materials 1330560 > cap 1123000
+  project skyDome stage 5: components 6653 > cap 1425
+  project skyDome stage 5: alloys 1996 > cap 570
+  project skyDome stage 5: food 20000 > cap 4950
+  project tradeLeague stage 1: influence 1890 > cap 90
+  project tradeLeague stage 1: materials 1308000 > cap 1123000
+  project tradeLeague stage 1: components 5040 > cap 1425
+  project tradeLeague stage 1: alloys 1512 > cap 570
+  project tradeLeague stage 1: data 1134 > cap 150
+  project tradeLeague stage 2: influence 2041 > cap 90
+  project tradeLeague stage 2: materials 1388640 > cap 1123000
+  project tradeLeague stage 2: components 5443 > cap 1425
+  project tradeLeague stage 2: alloys 1633 > cap 570
+  project tradeLeague stage 2: data 1225 > cap 150
+  project tradeLeague stage 3: influence 2192 > cap 90
+  project tradeLeague stage 3: materials 1469280 > cap 1123000
+  project tradeLeague stage 3: components 5846 > cap 1425
+  project tradeLeague stage 3: alloys 1754 > cap 570
+  project tradeLeague stage 3: data 1315 > cap 150
+  project tradeLeague stage 4: influence 2344 > cap 90
+  project tradeLeague stage 4: materials 1549920 > cap 1123000
+  project tradeLeague stage 4: components 6250 > cap 1425
+  project tradeLeague stage 4: alloys 1875 > cap 570
+  project tradeLeague stage 4: data 1406 > cap 150
+  project tradeLeague stage 5: influence 2495 > cap 90
+  project tradeLeague stage 5: materials 1630560 > cap 1123000
+  project tradeLeague stage 5: components 6653 > cap 1425
+  project tradeLeague stage 5: alloys 1996 > cap 570
+  project tradeLeague stage 5: data 1497 > cap 150
+  project constitution stage 1: influence 1890 > cap 90
+  project constitution stage 1: components 5040 > cap 1425
+  project constitution stage 1: alloys 1512 > cap 570
+  project constitution stage 1: data 1134 > cap 150
+  project constitution stage 1: knowledge 20000 > cap 2175
+  project constitution stage 2: influence 2041 > cap 90
+  project constitution stage 2: components 5443 > cap 1425
+  project constitution stage 2: alloys 1633 > cap 570
+  project constitution stage 2: data 1225 > cap 150
+  project constitution stage 2: knowledge 20000 > cap 2175
+  project constitution stage 3: influence 2192 > cap 90
+  project constitution stage 3: materials 1169280 > cap 1123000
+  project constitution stage 3: components 5846 > cap 1425
+  project constitution stage 3: alloys 1754 > cap 570
+  project constitution stage 3: data 1315 > cap 150
+  project constitution stage 3: knowledge 20000 > cap 2175
+  project constitution stage 4: influence 2344 > cap 90
+  project constitution stage 4: materials 1249920 > cap 1123000
+  project constitution stage 4: components 6250 > cap 1425
+  project constitution stage 4: alloys 1875 > cap 570
+  project constitution stage 4: data 1406 > cap 150
+  project constitution stage 4: knowledge 20000 > cap 2175
+  project ark stage 1: seedCores 630 > cap 30
+  project ark stage 1: components 5040 > cap 1425
+  project ark stage 1: alloys 4512 > cap 570
+  project ark stage 1: data 2634 > cap 150
+  project ark stage 1: influence 756 > cap 90
+  project ark stage 2: seedCores 680 > cap 30
+  project ark stage 2: components 5443 > cap 1425
+  project ark stage 2: alloys 4633 > cap 570
+  project ark stage 2: data 2725 > cap 150
+  project ark stage 2: influence 816 > cap 90
+  project ark stage 3: seedCores 731 > cap 30
+  project ark stage 3: materials 1169280 > cap 1123000
+  project ark stage 3: components 5846 > cap 1425
+  project ark stage 3: alloys 4754 > cap 570
+  project ark stage 3: data 2815 > cap 150
+  project ark stage 3: influence 877 > cap 90
+  project ark stage 4: seedCores 781 > cap 30
+  project ark stage 4: materials 1249920 > cap 1123000
+  project ark stage 4: components 6250 > cap 1425
+  project ark stage 4: alloys 4875 > cap 570
+  project ark stage 4: data 2906 > cap 150
+  project ark stage 4: influence 937 > cap 90
+  project ark stage 5: seedCores 832 > cap 30
+  project ark stage 5: materials 1330560 > cap 1123000
+  project ark stage 5: components 6653 > cap 1425
+  project ark stage 5: alloys 4996 > cap 570
+  project ark stage 5: data 2997 > cap 150
+  project ark stage 5: influence 998 > cap 90
+
+===== e10-seed1.json: act 3 era 3 floors 8 pop 65 bld 41 =====
+caps: food:9000 water:6900 power:700 materials:1688800 medicine:500 knowledge:7700 scrap:6400 components:12100 alloys:1480 data:200 influence:120 seedCores:40
+amount: food:9000 water:6900 power:700 materials:1688800 medicine:500 knowledge:7700 scrap:6400 components:0 alloys:0 data:0 influence:0 seedCores:0
+net/h : food:859327 water:544170 power:812024 materials:136208 medicine:10121 knowledge:40190 scrap:8881 components:324 alloys:0 data:0 influence:0 seedCores:0
+-- build (next copy) --
+quarters         unlocked=Y have=8 cost{materials:3306} afford=now
+canteen          unlocked=Y have=2 cost{materials:127 food:37} afford=now
+medbay           unlocked=Y have=2 cost{materials:130} afford=now
+radioTower       unlocked=Y have=2 cost{materials:320 scrap:40} afford=now
+trainingRoom     unlocked=Y have=2 cost{materials:325} afford=now
+armory           unlocked=Y have=2 cost{materials:361 scrap:91} afford=now
+farm             unlocked=Y have=4 cost{materials:132} afford=now
+waterPump        unlocked=Y have=3 cost{materials:51} afford=now
+hydroponics      unlocked=Y have=2 cost{materials:389 scrap:65} afford=now
+waterPurifier    unlocked=Y have=2 cost{materials:324 scrap:49} afford=now
+generator        unlocked=Y have=3 cost{materials:123} afford=now
+workshop         unlocked=Y have=2 cost{materials:44} afford=now
+laboratory       unlocked=Y have=2 cost{materials:181} afford=now
+reactor          unlocked=Y have=0 cost{materials:400 scrap:80 blueprints:1} afford=now
+storage          unlocked=Y have=2 cost{materials:140} afford=now
+atrium           unlocked=Y have=0 cost{materials:650 scrap:120 blueprints:1} afford=now
+reactorHall      unlocked=Y have=0 cost{materials:1200 scrap:300 blueprints:2} afford=now
+batteryBank      unlocked=n have=0/3 cost{materials:180 scrap:38} afford=now
+commons          unlocked=n have=0/2 cost{materials:105 food:15} afford=now
+library          unlocked=n have=0/2 cost{materials:165 scrap:15} afford=now
+recycler         unlocked=n have=0/2 cost{materials:300 scrap:30} afford=now
+condenser        unlocked=n have=0/3 cost{materials:165 scrap:30} afford=now
+mushroomFarm     unlocked=n have=0/3 cost{materials:135 scrap:15} afford=now
+gatePost         unlocked=n have=0/2 cost{materials:180 scrap:45} afford=now
+barracks         unlocked=n have=0/2 cost{materials:300 scrap:60} afford=now
+quarantineWard   unlocked=n have=0/1 cost{materials:225 scrap:30 medicine:9} afford=now
+solarArray       unlocked=n have=0/4 cost{materials:150 scrap:45} afford=now
+windTurbine      unlocked=n have=0/4 cost{materials:210 scrap:60} afford=now
+watchtower       unlocked=n have=0/2 cost{materials:120 scrap:30} afford=now
+garage           unlocked=n have=0/1 cost{materials:330 scrap:75} afford=now
+decon            unlocked=n have=0/1 cost{materials:210 scrap:45} afford=now
+aquaculture      unlocked=n have=0/1 cost{materials:390 scrap:60} afford=now
+market           unlocked=n have=0/1 cost{materials:360 scrap:45} afford=now
+nursery          unlocked=n have=0/2 cost{materials:120 food:30} afford=now
+school           unlocked=n have=0/1 cost{materials:270 knowledge:30} afford=now
+bathhouse        unlocked=n have=0/2 cost{materials:135 scrap:15} afford=now
+memorialHall     unlocked=n have=0/1 cost{materials:150} afford=now
+componentsPlant  unlocked=n have=0/1 cost{components:490 materials:39200} afford=1.5h(components)
+alloyFoundry     unlocked=n have=0/1 cost{alloys:168 materials:44800 components:224} afford=WALL(alloys)
+dataCenter       unlocked=n have=0/1 cost{data:142 materials:50400 components:252 alloys:76} afford=WALL(data)
+forum            unlocked=n have=0/1 cost{influence:105 materials:56000 components:280 alloys:84 data:63} afford=WALL(influence)
+seedLab          unlocked=n have=0/1 cost{seedCores:42 materials:67200 components:336 alloys:101 data:76 influence:50} afford=WALL(seedCores)
+-- upgrades of existing rooms (next level) --
+upg quarters L6 -> cost{components:1943 materials:155412} afford=6.0h(components)
+upg generator L6 -> cost{components:1943 materials:155412} afford=6.0h(components)
+upg waterPump L6 -> cost{components:1943 materials:155412} afford=6.0h(components)
+upg farm L6 -> cost{components:1943 materials:155412} afford=6.0h(components)
+upg quarters L6 -> cost{components:1943 materials:155412} afford=6.0h(components)
+upg canteen L6 -> cost{components:1943 materials:155412} afford=6.0h(components)
+-- research not done --
+(71 open)
+-- dig / wings / districts / projects --
+dig next: {components:2222 materials:177744 scrap:125} afford=6.9h(components)
+wing B1: {components:420 materials:33600} afford=1.3h(components)
+wing B11: {components:735 materials:58767} afford=2.3h(components)
+wing B24: {components:2800 materials:224000} afford=8.6h(components)
+WALLS: 
+  build seedLab #1: seedCores 42 > cap 40
+  upgrade cave L3->4: alloys 2028 > cap 1480
+  upgrade lake L3->4: alloys 2028 > cap 1480
+  upgrade metro L3->4: alloys 2028 > cap 1480
+  research dataLattice: data 250 > cap 200
+  research archivesOfAges: data 250 > cap 200
+  research republic: knowledge 8500 > cap 7700
+  research republic: influence 150 > cap 120
+  research technocracy: knowledge 8500 > cap 7700
+  research technocracy: influence 150 > cap 120
+  research technocracy: data 250 > cap 200
+  research confederation: knowledge 8500 > cap 7700
+  research confederation: influence 150 > cap 120
+  research civicHalls: knowledge 8000 > cap 7700
+  research tradeRoads: knowledge 8000 > cap 7700
+  research peoplesFarms: knowledge 8000 > cap 7700
+  research shieldNetwork: knowledge 8500 > cap 7700
+  research archiveCrossing: knowledge 9500 > cap 7700
+  research archiveCrossing: influence 150 > cap 120
+  research seedCrossing: knowledge 9500 > cap 7700
+  research seedCrossing: influence 150 > cap 120
+  research vanguardCrossing: knowledge 9500 > cap 7700
+  research vanguardCrossing: influence 150 > cap 120
+  research newWorldForge: knowledge 9000 > cap 7700
+  research seedSynthesis: knowledge 9000 > cap 7700
+  research lastCensus: knowledge 8500 > cap 7700
+  research lastCensus: influence 150 > cap 120
+  research genesisCalculus: knowledge 9500 > cap 7700
+  research genesisCalculus: data 300 > cap 200
+  project radioMast stage 1: materials 4760000 > cap 1688800
+  project radioMast stage 2: materials 5140800 > cap 1688800
+  project radioMast stage 3: materials 5521600 > cap 1688800
+  project radioMast stage 4: materials 5902400 > cap 1688800
+  project radioMast stage 5: materials 6283200 > cap 1688800
+  project purifier stage 1: materials 4760000 > cap 1688800
+  project purifier stage 2: materials 5140800 > cap 1688800
+  project purifier stage 3: materials 5521600 > cap 1688800
+  project purifier stage 4: materials 5902400 > cap 1688800
+  project greenhouse stage 1: components 16800 > cap 12100
+  project greenhouse stage 2: components 18144 > cap 12100
+  project greenhouse stage 3: components 19488 > cap 12100
+  project greenhouse stage 4: components 20832 > cap 12100
+  project greenhouse stage 5: components 22176 > cap 12100
+  project greenhouse stage 5: materials 1774080 > cap 1688800
+  project metroTunnel stage 1: components 16800 > cap 12100
+  project metroTunnel stage 2: components 18144 > cap 12100
+  project metroTunnel stage 3: components 19488 > cap 12100
+  project metroTunnel stage 4: components 20832 > cap 12100
+  project metroTunnel stage 5: components 22176 > cap 12100
+  project metroTunnel stage 5: materials 1774080 > cap 1688800
+  project archive stage 1: components 16800 > cap 12100
+  project archive stage 1: knowledge 8000 > cap 7700
+  project archive stage 2: components 18144 > cap 12100
+  project archive stage 2: knowledge 8000 > cap 7700
+  project archive stage 3: components 19488 > cap 12100
+  project archive stage 3: knowledge 8000 > cap 7700
+  project archive stage 4: components 20832 > cap 12100
+  project archive stage 4: knowledge 8000 > cap 7700
+  project wall stage 1: alloys 3780 > cap 1480
+  project wall stage 2: alloys 4082 > cap 1480
+  project wall stage 3: alloys 4385 > cap 1480
+  project wall stage 4: alloys 4687 > cap 1480
+  project wall stage 5: alloys 4990 > cap 1480
+  project genesisCore stage 1: seedCores 630 > cap 40
+  project genesisCore stage 1: alloys 1512 > cap 1480
+  project genesisCore stage 1: data 1134 > cap 200
+  project genesisCore stage 1: influence 756 > cap 120
+  project genesisCore stage 2: seedCores 725 > cap 40
+  project genesisCore stage 2: alloys 1739 > cap 1480
+  project genesisCore stage 2: data 1304 > cap 200
+  project genesisCore stage 2: influence 869 > cap 120
+  project genesisCore stage 3: seedCores 819 > cap 40
+  project genesisCore stage 3: alloys 1966 > cap 1480
+  project genesisCore stage 3: data 1474 > cap 200
+  project genesisCore stage 3: influence 983 > cap 120
+  project genesisCore stage 4: seedCores 914 > cap 40
+  project genesisCore stage 4: alloys 2192 > cap 1480
+  project genesisCore stage 4: data 1644 > cap 200
+  project genesisCore stage 4: influence 1096 > cap 120
+  project genesisCore stage 5: seedCores 1008 > cap 40
+  project genesisCore stage 5: alloys 2419 > cap 1480
+  project genesisCore stage 5: data 1814 > cap 200
+  project genesisCore stage 5: influence 1210 > cap 120
+  project genesisCore stage 6: seedCores 1103 > cap 40
+  project genesisCore stage 6: materials 1764000 > cap 1688800
+  project genesisCore stage 6: alloys 2646 > cap 1480
+  project genesisCore stage 6: data 1985 > cap 200
+  project genesisCore stage 6: influence 1323 > cap 120
+  project deepFoundry stage 1: alloys 3780 > cap 1480
+  project deepFoundry stage 2: alloys 4082 > cap 1480
+  project deepFoundry stage 3: alloys 4385 > cap 1480
+  project deepFoundry stage 4: alloys 4687 > cap 1480
+  project deepFoundry stage 5: alloys 4990 > cap 1480
+  project surfaceGate stage 1: data 2835 > cap 200
+  project surfaceGate stage 1: alloys 1512 > cap 1480
+  project surfaceGate stage 2: data 3062 > cap 200
+  project surfaceGate stage 2: alloys 1633 > cap 1480
+  project surfaceGate stage 3: data 3289 > cap 200
+  project surfaceGate stage 3: alloys 1754 > cap 1480
+  project surfaceGate stage 4: data 3515 > cap 200
+  project surfaceGate stage 4: alloys 1875 > cap 1480
+  project surfaceGate stage 5: data 3742 > cap 200
+  project surfaceGate stage 5: alloys 1996 > cap 1480
+  project skyDome stage 1: data 2835 > cap 200
+  project skyDome stage 1: alloys 1512 > cap 1480
+  project skyDome stage 1: food 20000 > cap 9000
+  project skyDome stage 2: data 3062 > cap 200
+  project skyDome stage 2: alloys 1633 > cap 1480
+  project skyDome stage 2: food 20000 > cap 9000
+  project skyDome stage 3: data 3289 > cap 200
+  project skyDome stage 3: alloys 1754 > cap 1480
+  project skyDome stage 3: food 20000 > cap 9000
+  project skyDome stage 4: data 3515 > cap 200
+  project skyDome stage 4: alloys 1875 > cap 1480
+  project skyDome stage 4: food 20000 > cap 9000
+  project skyDome stage 5: data 3742 > cap 200
+  project skyDome stage 5: alloys 1996 > cap 1480
+  project skyDome stage 5: food 20000 > cap 9000
+  project tradeLeague stage 1: influence 1890 > cap 120
+  project tradeLeague stage 1: alloys 1512 > cap 1480
+  project tradeLeague stage 1: data 1134 > cap 200
+  project tradeLeague stage 2: influence 2041 > cap 120
+  project tradeLeague stage 2: alloys 1633 > cap 1480
+  project tradeLeague stage 2: data 1225 > cap 200
+  project tradeLeague stage 3: influence 2192 > cap 120
+  project tradeLeague stage 3: alloys 1754 > cap 1480
+  project tradeLeague stage 3: data 1315 > cap 200
+  project tradeLeague stage 4: influence 2344 > cap 120
+  project tradeLeague stage 4: alloys 1875 > cap 1480
+  project tradeLeague stage 4: data 1406 > cap 200
+  project tradeLeague stage 5: influence 2495 > cap 120
+  project tradeLeague stage 5: alloys 1996 > cap 1480
+  project tradeLeague stage 5: data 1497 > cap 200
+  project constitution stage 1: influence 1890 > cap 120
+  project constitution stage 1: alloys 1512 > cap 1480
+  project constitution stage 1: data 1134 > cap 200
+  project constitution stage 1: knowledge 20000 > cap 7700
+  project constitution stage 2: influence 2041 > cap 120
+  project constitution stage 2: alloys 1633 > cap 1480
+  project constitution stage 2: data 1225 > cap 200
+  project constitution stage 2: knowledge 20000 > cap 7700
+  project constitution stage 3: influence 2192 > cap 120
+  project constitution stage 3: alloys 1754 > cap 1480
+  project constitution stage 3: data 1315 > cap 200
+  project constitution stage 3: knowledge 20000 > cap 7700
+  project constitution stage 4: influence 2344 > cap 120
+  project constitution stage 4: alloys 1875 > cap 1480
+  project constitution stage 4: data 1406 > cap 200
+  project constitution stage 4: knowledge 20000 > cap 7700
+  project ark stage 1: seedCores 630 > cap 40
+  project ark stage 1: alloys 4512 > cap 1480
+  project ark stage 1: data 2634 > cap 200
+  project ark stage 1: influence 756 > cap 120
+  project ark stage 2: seedCores 680 > cap 40
+  project ark stage 2: alloys 4633 > cap 1480
+  project ark stage 2: data 2725 > cap 200
+  project ark stage 2: influence 816 > cap 120
+  project ark stage 3: seedCores 731 > cap 40
+  project ark stage 3: alloys 4754 > cap 1480
+  project ark stage 3: data 2815 > cap 200
+  project ark stage 3: influence 877 > cap 120
+  project ark stage 4: seedCores 781 > cap 40
+  project ark stage 4: alloys 4875 > cap 1480
+  project ark stage 4: data 2906 > cap 200
+  project ark stage 4: influence 937 > cap 120
+  project ark stage 5: seedCores 832 > cap 40
+  project ark stage 5: alloys 4996 > cap 1480
+  project ark stage 5: data 2997 > cap 200
+  project ark stage 5: influence 998 > cap 120
+
+===== e30-seed1.json: act 4 era 3 floors 14 pop 110 bld 46 =====
+caps: food:11000 water:11900 power:950 materials:2251800 medicine:700 knowledge:10200 scrap:7400 components:16400 alloys:5440 data:200 influence:120 seedCores:40
+amount: food:11000 water:11899 power:950 materials:2251800 medicine:700 knowledge:10200 scrap:7400 components:1683 alloys:4356 data:0 influence:0 seedCores:0
+net/h : food:901441 water:777734 power:10515112 materials:188138 medicine:15169 knowledge:80787 scrap:10217 components:518 alloys:138 data:0 influence:0 seedCores:0
+-- build (next copy) --
+quarters         unlocked=Y have=8 cost{materials:3306} afford=now
+canteen          unlocked=Y have=2 cost{materials:127 food:37} afford=now
+medbay           unlocked=Y have=2 cost{materials:130} afford=now
+radioTower       unlocked=Y have=2 cost{materials:320 scrap:40} afford=now
+trainingRoom     unlocked=Y have=2 cost{materials:325} afford=now
+armory           unlocked=Y have=2 cost{materials:361 scrap:91} afford=now
+farm             unlocked=Y have=4 cost{materials:132} afford=now
+waterPump        unlocked=Y have=3 cost{materials:51} afford=now
+hydroponics      unlocked=Y have=2 cost{materials:389 scrap:65} afford=now
+waterPurifier    unlocked=Y have=2 cost{materials:324 scrap:49} afford=now
+generator        unlocked=Y have=4 cost{materials:209} afford=now
+workshop         unlocked=Y have=2 cost{materials:44} afford=now
+laboratory       unlocked=Y have=2 cost{materials:181} afford=now
+reactor          unlocked=Y have=2 cost{materials:2500 scrap:500 blueprints:7} afford=now
+storage          unlocked=Y have=2 cost{materials:140} afford=now
+atrium           unlocked=Y have=1 cost{materials:1560 scrap:288 blueprints:3} afford=now
+reactorHall      unlocked=Y have=1 cost{materials:3000 scrap:750 blueprints:5} afford=now
+batteryBank      unlocked=n have=0/3 cost{materials:264 scrap:56} afford=now
+commons          unlocked=n have=0/2 cost{materials:154 food:22} afford=now
+library          unlocked=n have=0/2 cost{materials:243 scrap:22} afford=now
+recycler         unlocked=n have=0/2 cost{materials:441 scrap:44} afford=now
+condenser        unlocked=n have=0/3 cost{materials:243 scrap:44} afford=now
+mushroomFarm     unlocked=n have=0/3 cost{materials:199 scrap:22} afford=now
+gatePost         unlocked=n have=0/2 cost{materials:264 scrap:66} afford=now
+barracks         unlocked=n have=0/2 cost{materials:441 scrap:88} afford=now
+quarantineWard   unlocked=n have=0/1 cost{materials:330 scrap:44 medicine:14} afford=now
+solarArray       unlocked=n have=0/4 cost{materials:221 scrap:66} afford=now
+windTurbine      unlocked=n have=0/4 cost{materials:308 scrap:88} afford=now
+watchtower       unlocked=n have=0/2 cost{materials:176 scrap:44} afford=now
+garage           unlocked=n have=0/1 cost{materials:485 scrap:111} afford=now
+decon            unlocked=n have=0/1 cost{materials:308 scrap:66} afford=now
+aquaculture      unlocked=n have=0/1 cost{materials:572 scrap:88} afford=now
+market           unlocked=n have=0/1 cost{materials:528 scrap:66} afford=now
+nursery          unlocked=n have=0/2 cost{materials:176 food:44} afford=now
+school           unlocked=n have=0/1 cost{materials:397 knowledge:44} afford=now
+bathhouse        unlocked=n have=0/2 cost{materials:199 scrap:22} afford=now
+memorialHall     unlocked=n have=0/1 cost{materials:221} afford=now
+componentsPlant  unlocked=n have=0/1 cost{components:490 materials:39200} afford=now
+alloyFoundry     unlocked=n have=0/1 cost{alloys:168 materials:44800 components:224} afford=now
+dataCenter       unlocked=n have=0/1 cost{data:142 materials:50400 components:252 alloys:76} afford=WALL(data)
+forum            unlocked=n have=0/1 cost{influence:105 materials:56000 components:280 alloys:84 data:63} afford=WALL(influence)
+seedLab          unlocked=n have=0/1 cost{seedCores:42 materials:67200 components:336 alloys:101 data:76 influence:50} afford=WALL(seedCores)
+-- upgrades of existing rooms (next level) --
+upg storage L9 -> cost{data:2268 materials:806400 components:4032 alloys:1210} afford=WALL(data)
+upg storage L9 -> cost{data:2268 materials:806400 components:4032 alloys:1210} afford=WALL(data)
+upg quarters L8 -> cost{alloys:1764 materials:470524 components:2353} afford=1.3h(components)
+upg generator L8 -> cost{alloys:1764 materials:470524 components:2353} afford=1.3h(components)
+upg waterPump L8 -> cost{alloys:1764 materials:470524 components:2353} afford=1.3h(components)
+upg farm L8 -> cost{alloys:1764 materials:470524 components:2353} afford=1.3h(components)
+-- research not done --
+(61 open)
+-- dig / wings / districts / projects --
+dig next: {data:1156 materials:411133 components:2056 alloys:617 scrap:245} afford=WALL(data)
+wing B1: {alloys:126 materials:33600 components:168} afford=now
+wing B11: {alloys:220 materials:58767 components:294} afford=now
+wing B24: {alloys:840 materials:224000 components:1120} afford=now
+WALLS: 
+  build seedLab #1: seedCores 42 > cap 40
+  upgrade storage L9->10: data 2268 > cap 200
+  upgrade storage L9->10: data 2268 > cap 200
+  upgrade cave L4->5: data 2268 > cap 200
+  upgrade lake L4->5: data 2268 > cap 200
+  upgrade metro L4->5: data 2268 > cap 200
+  upgrade reactor L5->6: scrap 7813 > cap 7400
+  upgrade reactor L5->6: scrap 7813 > cap 7400
+  upgrade atrium L4->5: data 2268 > cap 200
+  research dataLattice: data 250 > cap 200
+  research archivesOfAges: data 250 > cap 200
+  research republic: influence 150 > cap 120
+  research technocracy: influence 150 > cap 120
+  research technocracy: data 250 > cap 200
+  research confederation: influence 150 > cap 120
+  research archiveCrossing: influence 150 > cap 120
+  research seedCrossing: influence 150 > cap 120
+  research vanguardCrossing: influence 150 > cap 120
+  research lastCensus: influence 150 > cap 120
+  research genesisCalculus: data 300 > cap 200
+  dig: data 1156 > cap 200
+  project radioMast stage 1: materials 4760000 > cap 2251800
+  project radioMast stage 2: materials 5140800 > cap 2251800
+  project radioMast stage 3: materials 5521600 > cap 2251800
+  project radioMast stage 4: materials 5902400 > cap 2251800
+  project radioMast stage 5: materials 6283200 > cap 2251800
+  project purifier stage 1: materials 4760000 > cap 2251800
+  project purifier stage 2: materials 5140800 > cap 2251800
+  project purifier stage 3: materials 5521600 > cap 2251800
+  project purifier stage 4: materials 5902400 > cap 2251800
+  project greenhouse stage 1: components 16800 > cap 16400
+  project greenhouse stage 2: components 18144 > cap 16400
+  project greenhouse stage 3: components 19488 > cap 16400
+  project greenhouse stage 4: components 20832 > cap 16400
+  project greenhouse stage 5: components 22176 > cap 16400
+  project metroTunnel stage 1: components 16800 > cap 16400
+  project metroTunnel stage 2: components 18144 > cap 16400
+  project metroTunnel stage 3: components 19488 > cap 16400
+  project metroTunnel stage 4: components 20832 > cap 16400
+  project metroTunnel stage 5: components 22176 > cap 16400
+  project archive stage 1: components 16800 > cap 16400
+  project archive stage 2: components 18144 > cap 16400
+  project archive stage 3: components 19488 > cap 16400
+  project archive stage 4: components 20832 > cap 16400
+  project genesisCore stage 1: seedCores 630 > cap 40
+  project genesisCore stage 1: data 1134 > cap 200
+  project genesisCore stage 1: influence 756 > cap 120
+  project genesisCore stage 2: seedCores 725 > cap 40
+  project genesisCore stage 2: data 1304 > cap 200
+  project genesisCore stage 2: influence 869 > cap 120
+  project genesisCore stage 3: seedCores 819 > cap 40
+  project genesisCore stage 3: data 1474 > cap 200
+  project genesisCore stage 3: influence 983 > cap 120
+  project genesisCore stage 4: seedCores 914 > cap 40
+  project genesisCore stage 4: data 1644 > cap 200
+  project genesisCore stage 4: influence 1096 > cap 120
+  project genesisCore stage 5: seedCores 1008 > cap 40
+  project genesisCore stage 5: data 1814 > cap 200
+  project genesisCore stage 5: influence 1210 > cap 120
+  project genesisCore stage 6: seedCores 1103 > cap 40
+  project genesisCore stage 6: data 1985 > cap 200
+  project genesisCore stage 6: influence 1323 > cap 120
+  project surfaceGate stage 1: data 2835 > cap 200
+  project surfaceGate stage 2: data 3062 > cap 200
+  project surfaceGate stage 3: data 3289 > cap 200
+  project surfaceGate stage 4: data 3515 > cap 200
+  project surfaceGate stage 5: data 3742 > cap 200
+  project skyDome stage 1: data 2835 > cap 200
+  project skyDome stage 1: food 20000 > cap 11000
+  project skyDome stage 2: data 3062 > cap 200
+  project skyDome stage 2: food 20000 > cap 11000
+  project skyDome stage 3: data 3289 > cap 200
+  project skyDome stage 3: food 20000 > cap 11000
+  project skyDome stage 4: data 3515 > cap 200
+  project skyDome stage 4: food 20000 > cap 11000
+  project skyDome stage 5: data 3742 > cap 200
+  project skyDome stage 5: food 20000 > cap 11000
+  project tradeLeague stage 1: influence 1890 > cap 120
+  project tradeLeague stage 1: data 1134 > cap 200
+  project tradeLeague stage 2: influence 2041 > cap 120
+  project tradeLeague stage 2: data 1225 > cap 200
+  project tradeLeague stage 3: influence 2192 > cap 120
+  project tradeLeague stage 3: data 1315 > cap 200
+  project tradeLeague stage 4: influence 2344 > cap 120
+  project tradeLeague stage 4: data 1406 > cap 200
+  project tradeLeague stage 5: influence 2495 > cap 120
+  project tradeLeague stage 5: data 1497 > cap 200
+  project constitution stage 1: influence 1890 > cap 120
+  project constitution stage 1: data 1134 > cap 200
+  project constitution stage 1: knowledge 20000 > cap 10200
+  project constitution stage 2: influence 2041 > cap 120
+  project constitution stage 2: data 1225 > cap 200
+  project constitution stage 2: knowledge 20000 > cap 10200
+  project constitution stage 3: influence 2192 > cap 120
+  project constitution stage 3: data 1315 > cap 200
+  project constitution stage 3: knowledge 20000 > cap 10200
+  project constitution stage 4: influence 2344 > cap 120
+  project constitution stage 4: data 1406 > cap 200
+  project constitution stage 4: knowledge 20000 > cap 10200
+  project ark stage 1: seedCores 630 > cap 40
+  project ark stage 1: data 2634 > cap 200
+  project ark stage 1: influence 756 > cap 120
+  project ark stage 2: seedCores 680 > cap 40
+  project ark stage 2: data 2725 > cap 200
+  project ark stage 2: influence 816 > cap 120
+  project ark stage 3: seedCores 731 > cap 40
+  project ark stage 3: data 2815 > cap 200
+  project ark stage 3: influence 877 > cap 120
+  project ark stage 4: seedCores 781 > cap 40
+  project ark stage 4: data 2906 > cap 200
+  project ark stage 4: influence 937 > cap 120
+  project ark stage 5: seedCores 832 > cap 40
+  project ark stage 5: data 2997 > cap 200
+  project ark stage 5: influence 998 > cap 120
+
+===== e55-seed1.json: act 7 era 3 floors 20 pop 190 bld 46 =====
+caps: food:12600 water:13500 power:1150 materials:2814200 medicine:860 knowledge:10800 scrap:8200 components:20400 alloys:6760 data:3350 influence:2220 seedCores:740
+amount: food:12600 water:13500 power:1150 materials:2814200 medicine:860 knowledge:10800 scrap:8200 components:16924 alloys:2539 data:1314 influence:1612 seedCores:1
+net/h : food:1772010 water:894523 power:9522717 materials:218288 medicine:18747 knowledge:65198 scrap:12628 components:583 alloys:126 data:91 influence:58 seedCores:11
+-- build (next copy) --
+quarters         unlocked=Y have=8 cost{materials:3306} afford=now
+canteen          unlocked=Y have=2 cost{materials:127 food:37} afford=now
+medbay           unlocked=Y have=2 cost{materials:130} afford=now
+radioTower       unlocked=Y have=2 cost{materials:320 scrap:40} afford=now
+trainingRoom     unlocked=Y have=2 cost{materials:325} afford=now
+armory           unlocked=Y have=2 cost{materials:361 scrap:91} afford=now
+farm             unlocked=Y have=4 cost{materials:132} afford=now
+waterPump        unlocked=Y have=3 cost{materials:51} afford=now
+hydroponics      unlocked=Y have=2 cost{materials:389 scrap:65} afford=now
+waterPurifier    unlocked=Y have=2 cost{materials:324 scrap:49} afford=now
+generator        unlocked=Y have=4 cost{materials:209} afford=now
+workshop         unlocked=Y have=2 cost{materials:44} afford=now
+laboratory       unlocked=Y have=2 cost{materials:181} afford=now
+reactor          unlocked=Y have=2 cost{materials:2500 scrap:500 blueprints:7} afford=now
+storage          unlocked=Y have=2 cost{materials:140} afford=now
+atrium           unlocked=Y have=1 cost{materials:1560 scrap:288 blueprints:3} afford=now
+reactorHall      unlocked=Y have=1 cost{materials:3000 scrap:750 blueprints:5} afford=now
+batteryBank      unlocked=n have=0/3 cost{materials:600 scrap:125} afford=now
+commons          unlocked=n have=0/2 cost{materials:350 food:50} afford=now
+library          unlocked=n have=0/2 cost{materials:550 scrap:50} afford=now
+recycler         unlocked=n have=0/2 cost{materials:1000 scrap:100} afford=now
+condenser        unlocked=n have=0/3 cost{materials:550 scrap:100} afford=now
+mushroomFarm     unlocked=n have=0/3 cost{materials:450 scrap:50} afford=now
+gatePost         unlocked=n have=0/2 cost{materials:600 scrap:150} afford=now
+barracks         unlocked=n have=0/2 cost{materials:1000 scrap:200} afford=now
+quarantineWard   unlocked=n have=0/1 cost{materials:750 scrap:100 medicine:30} afford=now
+solarArray       unlocked=n have=0/4 cost{materials:500 scrap:150} afford=now
+windTurbine      unlocked=n have=0/4 cost{materials:700 scrap:200} afford=now
+watchtower       unlocked=n have=0/2 cost{materials:400 scrap:100} afford=now
+garage           unlocked=n have=0/1 cost{materials:1100 scrap:250} afford=now
+decon            unlocked=n have=0/1 cost{materials:700 scrap:150} afford=now
+aquaculture      unlocked=n have=0/1 cost{materials:1300 scrap:200} afford=now
+market           unlocked=n have=0/1 cost{materials:1200 scrap:150} afford=now
+nursery          unlocked=n have=0/2 cost{materials:400 food:100} afford=now
+school           unlocked=n have=0/1 cost{materials:900 knowledge:100} afford=now
+bathhouse        unlocked=n have=0/2 cost{materials:450 scrap:50} afford=now
+memorialHall     unlocked=n have=0/1 cost{materials:500} afford=now
+componentsPlant  unlocked=n have=0/1 cost{components:490 materials:39200} afford=now
+alloyFoundry     unlocked=n have=0/1 cost{alloys:168 materials:44800 components:224} afford=now
+dataCenter       unlocked=n have=0/1 cost{data:142 materials:50400 components:252 alloys:76} afford=now
+forum            unlocked=n have=0/1 cost{influence:105 materials:56000 components:280 alloys:84 data:63} afford=now
+seedLab          unlocked=n have=0/1 cost{seedCores:42 materials:67200 components:336 alloys:101 data:76 influence:50} afford=3.8h(seedCores)
+-- upgrades of existing rooms (next level) --
+-- research not done --
+(47 open)
+-- dig / wings / districts / projects --
+dig next: {seedCores:560 materials:896000 components:4480 alloys:1344 data:1008 influence:672 scrap:365} afford=51.8h(seedCores)
+wing B1: {seedCores:21 materials:33600 components:168 alloys:50 data:38 influence:25} afford=1.9h(seedCores)
+wing B11: {seedCores:37 materials:58767 components:294 alloys:88 data:66 influence:44} afford=3.4h(seedCores)
+wing B24: {seedCores:140 materials:224000 components:1120 alloys:336 data:252 influence:168} afford=12.9h(seedCores)
+WALLS: 
+  upgrade reactorHall L4->5: scrap 11719 > cap 8200
+  project radioMast stage 1: materials 4760000 > cap 2814200
+  project radioMast stage 2: materials 5140800 > cap 2814200
+  project radioMast stage 3: materials 5521600 > cap 2814200
+  project radioMast stage 4: materials 5902400 > cap 2814200
+  project radioMast stage 5: materials 6283200 > cap 2814200
+  project purifier stage 1: materials 4760000 > cap 2814200
+  project purifier stage 2: materials 5140800 > cap 2814200
+  project purifier stage 3: materials 5521600 > cap 2814200
+  project purifier stage 4: materials 5902400 > cap 2814200
+  project greenhouse stage 4: components 20832 > cap 20400
+  project greenhouse stage 5: components 22176 > cap 20400
+  project metroTunnel stage 4: components 20832 > cap 20400
+  project metroTunnel stage 5: components 22176 > cap 20400
+  project archive stage 4: components 20832 > cap 20400
+  project genesisCore stage 3: seedCores 819 > cap 740
+  project genesisCore stage 4: seedCores 914 > cap 740
+  project genesisCore stage 5: seedCores 1008 > cap 740
+  project genesisCore stage 6: seedCores 1103 > cap 740
+  project surfaceGate stage 4: data 3515 > cap 3350
+  project surfaceGate stage 5: data 3742 > cap 3350
+  project skyDome stage 1: food 20000 > cap 12600
+  project skyDome stage 2: food 20000 > cap 12600
+  project skyDome stage 3: food 20000 > cap 12600
+  project skyDome stage 4: data 3515 > cap 3350
+  project skyDome stage 4: food 20000 > cap 12600
+  project skyDome stage 5: data 3742 > cap 3350
+  project skyDome stage 5: food 20000 > cap 12600
+  project tradeLeague stage 4: influence 2344 > cap 2220
+  project tradeLeague stage 5: influence 2495 > cap 2220
+  project constitution stage 1: knowledge 20000 > cap 10800
+  project constitution stage 2: knowledge 20000 > cap 10800
+  project constitution stage 3: knowledge 20000 > cap 10800
+  project constitution stage 4: influence 2344 > cap 2220
+  project constitution stage 4: knowledge 20000 > cap 10800
+  project ark stage 4: seedCores 781 > cap 740
+  project ark stage 5: seedCores 832 > cap 740
+
+act | caps(materials, act currency) | first-copy build cost of rooms (materials) ratio to cap
+Act 1: caps food:300 materials:600 knowledge:200 scrap:400 components:400 alloys:160 data:200 influence:120 seedCores:40
+  cost>80% cap: atrium#1 materials 650 vs cap 600 | reactorHall#1 materials 1200 vs cap 600 | solarArray#4 materials 584 vs cap 600 | windTurbine#3 materials 560 vs cap 600 | windTurbine#4 materials 1120 vs cap 600 | componentsPlant#1 components 490 vs cap 400 | componentsPlant#1 materials 39200 vs cap 600 | alloyFoundry#1 alloys 168 vs cap 160 | alloyFoundry#1 materials 44800 vs cap 600 | dataCenter#1 materials 50400 vs cap 600 | forum#1 influence 105 vs cap 120 | forum#1 materials 56000 vs cap 600 | seedLab#1 seedCores 42 vs cap 40 | seedLab#1 materials 67200 vs cap 600 | seedLab#1 components 336 vs cap 400
+Act 2: caps food:300 materials:1120600 knowledge:200 scrap:400 components:400 alloys:160 data:200 influence:120 seedCores:40
+  cost>80% cap: componentsPlant#1 components 490 vs cap 400 | alloyFoundry#1 alloys 168 vs cap 160 | forum#1 influence 105 vs cap 120 | seedLab#1 seedCores 42 vs cap 40 | seedLab#1 components 336 vs cap 400
+Act 3: caps food:300 materials:1680600 knowledge:200 scrap:400 components:8800 alloys:160 data:200 influence:120 seedCores:40
+  cost>80% cap: windTurbine#4 scrap 480 vs cap 400 | alloyFoundry#1 alloys 168 vs cap 160 | forum#1 influence 105 vs cap 120 | seedLab#1 seedCores 42 vs cap 40
+Act 4: caps food:300 materials:2240600 knowledge:200 scrap:400 components:11600 alloys:3520 data:200 influence:120 seedCores:40
+  cost>80% cap: solarArray#4 scrap 385 vs cap 400 | windTurbine#3 scrap 352 vs cap 400 | windTurbine#4 scrap 704 vs cap 400 | forum#1 influence 105 vs cap 120 | seedLab#1 seedCores 42 vs cap 40
+Act 5: caps food:300 materials:2520600 knowledge:200 scrap:400 components:13000 alloys:3940 data:3035 influence:120 seedCores:40
+  cost>80% cap: solarArray#4 scrap 525 vs cap 400 | windTurbine#3 scrap 480 vs cap 400 | windTurbine#4 scrap 960 vs cap 400 | forum#1 influence 105 vs cap 120 | seedLab#1 seedCores 42 vs cap 40
+Act 6: caps food:300 materials:2800600 knowledge:200 scrap:400 components:14400 alloys:4360 data:3350 influence:2220 seedCores:40
+  cost>80% cap: batteryBank#3 scrap 324 vs cap 400 | solarArray#3 scrap 389 vs cap 400 | solarArray#4 scrap 700 vs cap 400 | windTurbine#3 scrap 640 vs cap 400 | windTurbine#4 scrap 1280 vs cap 400 | seedLab#1 seedCores 42 vs cap 40
+Act 7: caps food:300 materials:2800600 knowledge:200 scrap:400 components:14400 alloys:4360 data:3350 influence:2220 seedCores:740
+  cost>80% cap: batteryBank#3 scrap 405 vs cap 400 | condenser#3 scrap 325 vs cap 400 | barracks#2 scrap 380 vs cap 400 | solarArray#3 scrap 486 vs cap 400 | solarArray#4 scrap 875 vs cap 400 | windTurbine#2 scrap 400 vs cap 400 | windTurbine#3 scrap 800 vs cap 400 | windTurbine#4 scrap 1600 vs cap 400

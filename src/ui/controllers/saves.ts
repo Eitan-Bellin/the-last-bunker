@@ -4,6 +4,9 @@ import { el } from '../../ui/dom';
 import type { BackupInfo, BackupKind } from '../../core/SaveManager';
 import { hideSplash } from '../../ui/splash';
 import type { GameApp } from '../../app';
+import { shareFile } from '../../utils/platform'; // [plan4:UX-16]
+import { markExported } from '../../ui/pwa';
+import { lastSaveWasInterrupted } from '../../core/saveFlag';
 
 /** Saving and the save menu: new game, Genesis, import/export, backups, and save problems at start. */
 export class SaveController {
@@ -46,6 +49,15 @@ export class SaveController {
           className: 'btn-primary',
           onClick: async () => {
             this.app.modal.hide();
+            // [plan4:GP-2] The run, told in five quiet lines (read from the bunker as it stands, before Genesis replaces it); a tap skips to the new world.
+            const st = this.app.state;
+            await this.app.ceremony.fire({
+              kind: 'genesis', icon: '[[isotope7]]', title: i18n.t('cer.gen.title'),
+              lines: [
+                i18n.t('cer.gen.pop', { n: st.survivors.length }), i18n.t('cer.gen.floors', { n: st.currentFloors }), i18n.t('cer.gen.rooms', { n: st.buildings.length }),
+                i18n.t('cer.gen.act', { n: st.longGame?.meta.act ?? 1 }), i18n.t('cer.gen.iso', { n: gain }),
+              ],
+            });
             await this.app.engine.rebirth();
             this.app.audio.play('achievement');
             this.app.toasts.show(`[[isotope7]] ${i18n.t('genesis.done', { n: gain })}`, 'good');
@@ -111,21 +123,68 @@ export class SaveController {
     });
   }
 
-  /** Writes the save to a file the player keeps outside the browser's storage. */
-  exportFile(): void {
+  /**
+   * Writes the save to a file the player keeps outside the browser's storage.
+   * [plan4:UX-16] On a phone the system share sheet ("Save to Files", AirDrop, Mail) is the reliable way: a download link does nothing
+   * useful in a home-screen app. Where there is no share sheet (a laptop) it is a plain download, and if even that is impossible the
+   * code is shown in a box to copy (no more window.prompt, which was English only).
+   */
+  async exportFile(): Promise<void> {
     const data = this.app.engine.exportState();
     const d = new Date();
     const stamp = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-    const blob = new Blob([data], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `last-bunker-save-${stamp}.txt`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 10_000);
+    const name = `last-bunker-save-${stamp}.txt`;
+    const shared = await shareFile(new File([data], name, { type: 'text/plain' }), i18n.t('settings.exportShareTitle'));
+    if (shared === 'cancelled') return;
+    if (shared === 'unsupported') {
+      try {
+        const url = URL.createObjectURL(new Blob([data], { type: 'text/plain' }));
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = name;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 10_000);
+      } catch {
+        this.showCopyCode(data);
+        return;
+      }
+    }
+    markExported();
     this.app.toasts.show(i18n.t('settings.exportedFile'), 'good');
+  }
+
+  /** The save as text in a box the player can select and copy by hand (and a Copy button where the clipboard works). */
+  showCopyCode(raw: string, titleKey = 'save.copy.title', onClose?: () => void): void {
+    const box = el('div', 'copy-code-wrap');
+    box.appendChild(el('p', 'modal-body', i18n.t('save.copy.body')));
+    const area = el('textarea', 'copy-code');
+    area.readOnly = true;
+    area.value = raw;
+    area.setAttribute('aria-label', i18n.t(titleKey));
+    area.addEventListener('focus', () => area.select());
+    box.appendChild(area);
+    this.app.modal.show({
+      icon: '[[save]]',
+      title: i18n.t(titleKey),
+      body: box,
+      actions: [
+        {
+          label: i18n.t('save.copy.button'),
+          className: 'btn-primary',
+          onClick: () => {
+            area.focus();
+            area.select();
+            area.setSelectionRange(0, raw.length); // iOS needs the explicit range
+            const done = () => { markExported(); this.app.toasts.show(i18n.t('settings.copied'), 'good'); };
+            if (navigator.clipboard?.writeText) navigator.clipboard.writeText(raw).then(done, () => undefined);
+            else if (document.execCommand?.('copy')) done();
+          },
+        },
+        { label: i18n.t('save.copy.close'), className: 'btn-secondary', onClick: () => { this.app.modal.hide(); onClose?.(); } },
+      ],
+    });
   }
 
   importFile(): void {
@@ -166,7 +225,8 @@ export class SaveController {
         });
         return;
       }
-      this.app.modal.show({
+      // [plan4:UX-16] A function, so the copy box can come back to this dialog when it is closed (the player still has to choose).
+      const showCorrupt = (): void => this.app.modal.show({
         icon: '[[warning]]',
         title: i18n.t('save.problem.corrupt.title'),
         body: i18n.t('save.problem.corrupt.body'),
@@ -178,8 +238,8 @@ export class SaveController {
             onClick: () => {
               void this.app.engine.saveManager.corruptCopy().then(raw => {
                 if (raw && navigator.clipboard?.writeText) {
-                  navigator.clipboard.writeText(raw).then(() => this.app.toasts.show(i18n.t('save.problem.copied'), 'good'), () => window.prompt('Save data', raw));
-                } else if (raw) window.prompt('Save data', raw);
+                  navigator.clipboard.writeText(raw).then(() => this.app.toasts.show(i18n.t('save.problem.copied'), 'good'), () => this.showCopyCode(raw, 'save.copy.title', showCorrupt));
+                } else if (raw) this.showCopyCode(raw, 'save.copy.title', showCorrupt);
               });
             },
           },
@@ -194,6 +254,7 @@ export class SaveController {
           },
         ],
       });
+      showCorrupt();
     });
   }
 
@@ -225,6 +286,8 @@ export class SaveController {
     bus.on('save:failed', () => this.app.toasts.show(`[[warning]] ${i18n.t('save.failed')}`, 'critical'));
     bus.on('save:recovered', () => this.app.toasts.show(`[[save]] ${i18n.t('save.recoveredOk')}`, 'good'));
     bus.on('save:superseded', () => this.showSuperseded());
+    // [plan4:UX-16] The last session asked for a save that never reached storage (the phone froze or closed the page): say so, once.
+    if (lastSaveWasInterrupted()) window.setTimeout(() => this.app.toasts.show(`[[warning]] ${i18n.t('save.lostMoments')}`, 'bad'), 3500);
   }
 
   /** The game was opened in another window after this one: this one stops saving, so it cannot overwrite the newer progress. */

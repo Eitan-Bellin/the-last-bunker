@@ -6,6 +6,7 @@ import { MAX_RUIN_WORKERS, RUIN_KINDS, ruinCost } from '../data/ruins';
 import { effectiveLevel, getDef } from '../data/buildingDefs';
 import type { ResourceSystem } from './ResourceSystem';
 import type { BuildingSystem } from './BuildingSystem';
+import { pruneOrphanDoors } from './doors'; // [plan4:polish]
 
 export interface RuinClearedInfo {
   ruin: Ruin;
@@ -199,6 +200,8 @@ export class RestorationSystem {
       }
     }
 
+    pruneOrphanDoors(this.sm); // [plan4:polish] a cleared ruin that does not come back leaves no door standing in the open
+
     // Workers stay on as the crew of the room they just restored (up to its capacity), the rest go idle.
     // M7: while another started ruin has no hands, the room keeps one crew member and the rest move on to it.
     const restored = buildingId ? this.sm.state.buildings.find(b => b.id === buildingId) : undefined;
@@ -206,6 +209,8 @@ export class RestorationSystem {
     const capacity = restored ? Math.min(getDef(restored.type)?.maxWorkers ?? 0, waiting.length > 0 ? 1 : Infinity) : 0;
     const crew = workers.slice(0, capacity);
     for (const id of workers) this.unassign(id);
+    // [plan4:qa] A survivor who left on a mission while assigned to this ruin is not in `workers` (those skip isOnMission) and would stay assigned to a ruin that no longer exists.
+    if (this.sm.state.survivors.some(x => x.assignedBuildingId === ruin.id)) this.sm.applyDelta({ path: 'survivors', value: this.sm.state.survivors.map(x => (x.assignedBuildingId === ruin.id ? { ...x, assignedBuildingId: null } : x)) });
     const spare = workers.filter(id => !crew.includes(id));
     for (const r of waiting) {
       while (spare.length > 0 && this.workers(this.sm.state, r.id).length < MAX_RUIN_WORKERS) this.assign(r.id, spare.shift()!);

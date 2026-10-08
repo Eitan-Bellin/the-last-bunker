@@ -15,8 +15,9 @@ import { lineWidth, richLine } from './richText';
 import { steelTag, tagLamp } from './signage';
 import { depthGains } from './structure';
 import type { RuinVisual } from './ruinArt';
-import { labelState } from './LabelScale'; // [plan4:ST-12]
+import { LABEL_BASE_FONT, LABEL_FLOOR_SCREEN_PX, labelState } from './LabelScale'; // [plan4:ST-12]
 import { SURFACE_FLOOR } from '../core/GameState'; // plan4:ST-16
+import { pressMs } from '../utils/a11y'; // plan4:AC-13
 import { buildSurfaceBlock } from './surfaceRow'; // plan4:ST-16
 
 // [plan4 X-1] Split out of BunkerRenderer.ts with no change in behaviour: the room views (build queue, look rebuilds, name tags),
@@ -42,6 +43,16 @@ export interface RoomView {
   /** [plan4:ST-12] The tag's two looks: name + stars + lamps (full), colour chip + lamps (icon-only); LabelScale picks one by zoom. */
   labelFull?: Container;
   labelMini?: Container;
+  /** [plan4:polish] Fitting the tag to its room: widths of the full / icon tags (tag units, drawn at LABEL_BASE_FONT), the part of the full width that is not text, an ellipsis builder, the built short tag and the width budget it was built for. */
+  labelFullW?: number;
+  labelMiniW?: number;
+  labelFixedW?: number;
+  labelShort?: Container;
+  labelShortW?: number;
+  labelShortBudget?: number;
+  mkShort?: (n: number) => { c: Container; w: number };
+  /** The row (0 = on the room, 1.. = stacked above) layoutRows put the tag in. */
+  labelRow?: number;
   progress: Graphics | null;
   visualSig: string;
   labelSig: string;
@@ -160,6 +171,7 @@ export class RoomViews {
         if (view.root.x !== bx || view.root.y !== by) {
           view.root.position.set(bx, by);
           view.label.position.set(bx + view.width / 2, by - SLAB / 2);
+          this.rowsDirty = true; // plan4:polish
           view.layoutH = undefined;
         }
       }
@@ -307,7 +319,7 @@ export class RoomViews {
         if (host.isDragging() || host.carrying()) return;
         longFired = true;
         host.onBuildingLongPress(b.id);
-      }, LONG_PRESS_MS);
+      }, pressMs(LONG_PRESS_MS)); // plan4:AC-13 relaxed timing holds longer
     });
     root.on('pointerup', stopPress);
     root.on('pointerupoutside', stopPress);
@@ -338,37 +350,53 @@ export class RoomViews {
     // A specialized room wears its role's emblem instead of the row of stars.
     const spec = specOf(b);
     const badge = spec ? ` [[crown]] ${spec.name[i18n.currentLocale]}` : stars;
-    const text = richLine(`${name}${badge}`, nameStyle, 8, i18n.isRTL, Math.min(window.devicePixelRatio, 2) * 2);
-    const textW = lineWidth(text);
     const pipCount = def.maxWorkers;
     const pipsW = pipCount > 0 ? pipCount * 7 + 6 : 0;
-    const width = textW + pipsW + 14;
-    const bg = new Graphics();
-    if (gfx2) {
-      // [gfx2 signage] A screwed-on steel tag with a soft drop shadow (signage.ts).
-      steelTag(bg, -width / 2, -7.5, width, 15);
-    } else {
-      bg.roundRect(-width / 2, -7.5, width, 15, 4).fill({ color: 0x14141e, alpha: 0.9 });
-      bg.roundRect(-width / 2, -7.5, width, 15, 4).stroke({ color: 0xd9a441, alpha: 0.5, width: 1 });
-    }
-    text.x = -pipsW / 2;
-    const full = new Container();
-    full.addChild(bg, text);
-    if (pipCount > 0) {
-      const pips = new Graphics();
-      const startX = text.x + textW / 2 + 8;
-      for (let i = 0; i < pipCount; i++) {
-        const filled = i < b.assignedSurvivorIds.length;
-        // [gfx2 signage] Worker pips as small indicator lamps.
-        if (gfx2) { tagLamp(pips, startX + i * 7, 0, filled); continue; }
-        pips.circle(startX + i * 7, 0, 2.4).fill(filled ? 0x4dff8f : 0x3a3a4a);
-        if (!filled) pips.circle(startX + i * 7, 0, 2.4).stroke({ color: 0xff6b6b, width: 0.8 });
+    // [plan4:polish] The tag is built by a function so the same look can be rebuilt with a shortened name (ellipsis) when a room is too narrow for it.
+    const buildTag = (str: string): { c: Container; w: number } => {
+      const text = richLine(str, nameStyle, 8, i18n.isRTL, Math.min(window.devicePixelRatio, 2) * 2);
+      const textW = lineWidth(text);
+      const width = textW + pipsW + 14;
+      const bg = new Graphics();
+      if (gfx2) {
+        // [gfx2 signage] A screwed-on steel tag with a soft drop shadow (signage.ts).
+        steelTag(bg, -width / 2, -7.5, width, 15);
+      } else {
+        bg.roundRect(-width / 2, -7.5, width, 15, 4).fill({ color: 0x14141e, alpha: 0.9 });
+        bg.roundRect(-width / 2, -7.5, width, 15, 4).stroke({ color: 0xd9a441, alpha: 0.5, width: 1 });
       }
-      full.addChild(pips);
-    }
+      text.x = -pipsW / 2;
+      const c = new Container();
+      c.addChild(bg, text);
+      if (pipCount > 0) {
+        const pips = new Graphics();
+        const startX = text.x + textW / 2 + 8;
+        for (let i = 0; i < pipCount; i++) {
+          const filled = i < b.assignedSurvivorIds.length;
+          // [gfx2 signage] Worker pips as small indicator lamps.
+          if (gfx2) { tagLamp(pips, startX + i * 7, 0, filled); continue; }
+          pips.circle(startX + i * 7, 0, 2.4).fill(filled ? 0x4dff8f : 0x3a3a4a);
+          if (!filled) pips.circle(startX + i * 7, 0, 2.4).stroke({ color: 0xff6b6b, width: 0.8 });
+        }
+        c.addChild(pips);
+      }
+      return { c, w: width };
+    };
+    const built = buildTag(`${name}${badge}`);
+    const full = built.c;
+    const width = built.w;
+    // [plan4:polish] What styleLabel needs to fit the tag to its room: the tag's width, and a way to rebuild it with the first n letters of the name + an ellipsis.
+    const nameChars = Array.from(name);
+    view.labelFullW = width;
+    view.labelFixedW = pipsW + 14;
+    view.labelShort = undefined;
+    view.labelShortW = 0;
+    view.labelShortBudget = -1;
+    view.mkShort = (n: number) => buildTag(`${nameChars.slice(0, n).join('').trimEnd()}…`);
     // [plan4:ST-12] Icon-only look for a far camera: the room's colour chip and the worker lamps, no text.
     const mini = new Container();
     const miniW = 18 + pipsW;
+    view.labelMiniW = miniW;
     const mbg = new Graphics();
     if (gfx2) steelTag(mbg, -miniW / 2, -7.5, miniW, 15);
     else {
@@ -392,6 +420,7 @@ export class RoomViews {
     view.label.addChild(full, mini);
     view.labelFull = full;
     view.labelMini = mini;
+    this.rowsDirty = true; // [plan4:polish]
     this.styleLabel(view);
     if (b.isConstructing) {
       view.progress = new Graphics();
@@ -400,17 +429,84 @@ export class RoomViews {
     }
   }
 
-  /** [plan4:ST-12] Puts the shared screen-space size and look (LabelScale) on one tag. */
+  /**
+   * [plan4:ST-12] Puts the shared screen-space size and look (LabelScale) on one tag.
+   * [plan4:polish] And fits it to its room: a tag never outgrows the room it names. Too wide at the shared size -> it shrinks, down to the readability
+   * floor (10 px on the glass); still too wide and the room has two slots or more -> the name is cut with an ellipsis at that floor; a one-slot room
+   * keeps the whole name and layoutRows staggers it above its neighbours' tags instead.
+   */
   private styleLabel(v: RoomView): void {
-    v.label.scale.set(labelState.k);
+    let k = labelState.k;
     const icon = labelState.mode !== 'full';
-    if (v.labelFull) v.labelFull.visible = !icon;
+    let shortOn = false;
+    if (!icon && v.labelFullW) {
+      const fit = v.width - 2;
+      const kFloor = LABEL_FLOOR_SCREEN_PX / (LABEL_BASE_FONT * labelState.zoom);
+      if (v.labelFullW * k > fit) {
+        const kFit = fit / v.labelFullW;
+        if (kFit >= kFloor) k = kFit;
+        else {
+          k = Math.min(k, Math.max(kFloor, kFit));
+          if (v.width >= 2 * SLOT_W - 1 && v.mkShort && this.fitShort(v, fit / k)) shortOn = true;
+        }
+      }
+    }
+    v.label.scale.set(k);
+    if (v.labelFull) v.labelFull.visible = !icon && !shortOn;
+    if (v.labelShort) v.labelShort.visible = !icon && shortOn;
     if (v.labelMini) v.labelMini.visible = icon;
+  }
+
+  /** [plan4:polish] Builds (or reuses) the ellipsis tag that fits `budget` tag units; false when not even a few letters fit. */
+  private fitShort(v: RoomView, budget: number): boolean {
+    if (!v.mkShort || !v.labelFullW) return false;
+    if (v.labelShort && Math.abs(budget - (v.labelShortBudget ?? -1)) < budget * 0.03) return true;
+    const fixed = v.labelFixedW ?? 14;
+    const room = budget - fixed;
+    if (room < 22) return false; // a letter or two: not worth showing, the whole name staggers instead
+    // A first guess of the letters that fit (about 6 units a letter at the tag's font), then correct by measuring.
+    let n = Math.max(2, Math.floor(room / 6));
+    let t = v.mkShort(n);
+    for (let i = 0; i < 8 && t.w > budget && n > 2; i++) { t.c.destroy({ children: true }); n--; t = v.mkShort(n); }
+    if (t.w > budget) { t.c.destroy({ children: true }); return false; }
+    if (v.labelShort) { v.label.removeChild(v.labelShort); v.labelShort.destroy({ children: true }); }
+    v.labelShort = t.c;
+    v.labelShortW = t.w;
+    v.labelShortBudget = budget;
+    v.label.addChild(t.c);
+    return true;
+  }
+
+  /** [plan4:polish] Tags that would still overlap their neighbours' (one-slot rooms in a row) go up a row each: left to right, first row with room, three at most. */
+  private rowsDirty = true;
+  private layoutRows(): void {
+    this.rowsDirty = false;
+    const byFloor = new Map<number, RoomView[]>();
+    for (const v of this.views.values()) {
+      if (!v.label.visible || labelState.mode !== 'full') { if (v.labelRow) { v.labelRow = 0; v.label.y = v.root.y - SLAB / 2; } continue; }
+      const list = byFloor.get(v.root.y);
+      if (list) list.push(v); else byFloor.set(v.root.y, [v]);
+    }
+    for (const list of byFloor.values()) {
+      list.sort((a, b) => a.label.x - b.label.x);
+      const ends: number[] = [];
+      for (const v of list) {
+        const w = (v.labelFull?.visible ? v.labelFullW : v.labelShort?.visible ? v.labelShortW : v.labelMiniW) ?? 0;
+        const half = (w * v.label.scale.x) / 2;
+        let row = 0;
+        while (row < 2 && ends[row] !== undefined && v.label.x - half < ends[row] + 2) row++;
+        ends[row] = v.label.x + half;
+        const y = v.root.y - SLAB / 2 - row * (15 * v.label.scale.x + 2);
+        if (v.label.y !== y) v.label.y = y;
+        v.labelRow = row;
+      }
+    }
   }
 
   /** [plan4:ST-12] The zoom changed (LabelScale, at most 10 Hz): every tag follows. */
   applyLabelScale(): void {
     for (const v of this.views.values()) this.styleLabel(v);
+    this.rowsDirty = true; // [plan4:polish]
   }
 
   /** Painting balance × depth fog × a small per-room variation, so neighbours never look copy-pasted. */
@@ -476,8 +572,9 @@ export class RoomViews {
       if (v.visualHolder.visible !== shown) { v.visualHolder.visible = shown; v.people.visible = shown; }
       // The name tag goes with its room (it used to be drawn for all 119 rooms: 43% of the draw calls).
       const lv = !!v.labelOn && seen && labelState.mode !== 'hidden';
-      if (v.label.visible !== lv) v.label.visible = lv;
+      if (v.label.visible !== lv) { v.label.visible = lv; this.rowsDirty = true; } // plan4:polish
     }
+    if (this.rowsDirty) this.layoutRows(); // [plan4:polish]
     for (const v of this.ruinViews.values()) {
       const r = v.root;
       const seen = r.x < x1 && r.x + v.width > x0 && r.y < y1 && r.y + ROOM_H > y0;

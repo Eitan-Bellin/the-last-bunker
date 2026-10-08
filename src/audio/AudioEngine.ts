@@ -1,11 +1,17 @@
 import { normalize, renderLoop, renderOneShot, renderSegment, type Builder } from './dsp';
-import {
-  EXPEDITION_SECONDS, LOOP_SECONDS, LOOP_TAIL, colonyTheme, darkTheme, expeditionPulse, remnantTheme, shelterTheme, undercityTheme,
-} from './music';
-import { SFX, type Sfx } from './sfx';
+import type { Sfx } from './sfx';
 import { AMBIENCE, AMBIENCE_SECONDS, type AmbienceKey } from './ambience';
-import { BEDS, BED_SECONDS, ERA_BEDS, type BedKey } from './beds';
+import { ERA_BEDS, type BedKey } from './bedKeys';
 import { isLiteMode } from '../core/crashGuard';
+import { lazyChunk } from '../utils/lazy';
+
+/**
+ * Plan 4 wave 3 (perf): the effect, music-theme and era-bed recipes (audio/synth.ts, about 11 KB gzipped) are a chunk of their own.
+ * It is requested at the first touch (the same moment the context is created, in `start()`), and fetched earlier when the page is idle
+ * after start; nothing is composed before it has arrived.
+ */
+const loadSynth = lazyChunk(() => import('./synth'));
+type Synth = typeof import('./synth');
 
 export type ZoomMix = 'far' | 'mid' | 'close';
 
@@ -32,12 +38,14 @@ const LOOP_RATE = 32000;
 const MUSIC_RATE = 24000;
 
 /** One theme per era: Remnant, Restoration, Colony, Undercity. */
-const ERA_THEMES: { build: Builder; reverb: number }[] = [
-  { build: remnantTheme, reverb: 1.0 },
-  { build: shelterTheme, reverb: 0.95 },
-  { build: colonyTheme, reverb: 0.8 },
-  { build: undercityTheme, reverb: 0.95 },
-];
+function eraThemes(s: Synth): { build: Builder; reverb: number }[] {
+  return [
+    { build: s.remnantTheme, reverb: 1.0 },
+    { build: s.shelterTheme, reverb: 0.95 },
+    { build: s.colonyTheme, reverb: 0.8 },
+    { build: s.undercityTheme, reverb: 0.95 },
+  ];
+}
 
 /** Target peaks keep UI ticks subtle and story moments big. */
 const SFX_PEAK: Partial<Record<Sfx, number>> = {
@@ -87,6 +95,9 @@ export class AudioEngine {
   private ambBus: GainNode | null = null;
   private enabled: boolean;
   private sfx = new Map<Sfx, AudioBuffer>();
+  /** The sound recipes, once fetched (see loadSynth above); the render jobs run only after it is set. */
+  private synth: Synth | null = null;
+  private synthLoad: Promise<void> | null = null;
   private ambience = new Map<AmbienceKey, AmbienceVoice>();
   private mood: MusicMood = 'shelter';
   private era = 0;
@@ -309,7 +320,9 @@ export class AudioEngine {
     const Ctor = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
     if (!Ctor) return;
     this.applyAudioSession();
-    this.ctx = new Ctor();
+    this.synthLoad = loadSynth().then(s => { this.synth = s; }, () => undefined); // a failed fetch leaves the game silent until the next start
+    const ctx = new Ctor(); // still synchronous, inside the touch
+    this.ctx = ctx;
     this.ctx.onstatechange = () => this.onContextState();
     this.master = this.ctx.createGain();
     this.master.gain.value = 0.9;
@@ -328,7 +341,7 @@ export class AudioEngine {
     this.musicBus = this.bus(MUSIC_LEVEL, this.musicOut);
     this.sfxBus = this.bus(SFX_LEVEL, this.fxOut);
     this.ambBus = this.bus(AMBIENCE_LEVEL, this.fxOut);
-    this.queueInitial();
+    void this.synthLoad.then(() => { if (this.ctx === ctx) this.queueInitial(); });
   }
 
   // ───────────────────────────── [perf] staged synthesis ─────────────────────────────
@@ -363,6 +376,7 @@ export class AudioEngine {
     this.pumping = true;
     try {
       while (this.jobs.length && this.ctx) {
+        if (!this.synth && this.synthLoad) await this.synthLoad; // the recipes are not here yet: nothing can be composed
         const job = this.jobs[0];
         await this.quiet(job.prio < 20);
         // A more urgent job may have arrived while waiting.
@@ -385,6 +399,7 @@ export class AudioEngine {
   private static readonly FIRST_SFX: Sfx[] = ['click', 'open', 'tab', 'switch', 'modalOpen', 'confirm', 'cancel', 'collect', 'place', 'build', 'error', 'notify', 'assign', 'unassign', 'whoosh', 'coin', 'complete', 'type'];
 
   private queueInitial(): void {
+    const SFX = this.synth!.SFX;
     const names = Object.keys(SFX) as Sfx[];
     for (const name of AudioEngine.FIRST_SFX) this.enqueueSfx(name, 0);
     for (const name of names) if (!AudioEngine.FIRST_SFX.includes(name)) this.enqueueSfx(name, 20);
@@ -403,6 +418,7 @@ export class AudioEngine {
   private enqueueSfx(name: Sfx, prio: number): void {
     if (this.sfx.has(name)) return;
     this.enqueue(`sfx:${name}`, prio, async () => {
+      const SFX = this.synth!.SFX;
       const def = SFX[name];
       // The seed is the effect's place in the list (as it always was), so the sound is the same whatever order they are rendered in.
       const seed = 100 + (Object.keys(SFX) as Sfx[]).indexOf(name);
@@ -415,7 +431,7 @@ export class AudioEngine {
     if (this.ambience.has(key)) return;
     this.enqueue(`amb:${key}`, prio, async () => {
       const keys = Object.keys(AMBIENCE);
-      const buffer = await renderLoop(AMBIENCE_SECONDS, 2, AMBIENCE[key], 100 + Object.keys(SFX).length + keys.indexOf(key), 0.7, this.light ? 16000 : LOOP_RATE);
+      const buffer = await renderLoop(AMBIENCE_SECONDS, 2, AMBIENCE[key], 100 + Object.keys(this.synth!.SFX).length + keys.indexOf(key), 0.7, this.light ? 16000 : LOOP_RATE);
       this.startAmbience(key, normalize(buffer, key === 'base' ? 0.18 : 0.3));
     });
   }
@@ -424,6 +440,7 @@ export class AudioEngine {
     if (this.beds.has(key)) return;
     this.enqueue(`bed:${key}`, prio, async () => {
       const keys: BedKey[] = [...ERA_BEDS, 'city']; // the order the seeds were first handed out in
+      const { BEDS, BED_SECONDS, SFX } = this.synth!;
       const buffer = await renderLoop(BED_SECONDS, 2, BEDS[key], 100 + Object.keys(SFX).length + Object.keys(AMBIENCE).length + keys.indexOf(key), 0.85, this.light ? 16000 : LOOP_RATE);
       this.startBed(key, normalize(buffer, key === 'city' ? 0.22 : 0.26));
     });
@@ -431,12 +448,14 @@ export class AudioEngine {
 
   private async renderDark(): Promise<void> {
     if (this.darkGain || !this.ctx) return;
+    const { LOOP_SECONDS, LOOP_TAIL, darkTheme } = this.synth!;
     const dark = await renderLoop(LOOP_SECONDS, LOOP_TAIL, darkTheme, 13, 1.0, MUSIC_RATE);
     this.darkGain = this.loopLayer(normalize(dark, 0.6), this.mood === 'dark' ? 1 : 0);
   }
 
   private async renderPulse(): Promise<void> {
     if (this.expeditionGain || !this.ctx) return;
+    const { EXPEDITION_SECONDS, expeditionPulse } = this.synth!;
     const pulse = await renderLoop(EXPEDITION_SECONDS, 2, expeditionPulse, 17, 0.6, MUSIC_RATE);
     this.expeditionGain = this.loopLayer(normalize(pulse, 0.35), this.expedition ? 1 : 0);
   }
@@ -493,7 +512,9 @@ export class AudioEngine {
   }
 
   private async renderTheme(lane: ThemeLane): Promise<AudioBuffer> {
-    const theme = ERA_THEMES[Math.min(ERA_THEMES.length - 1, lane.era)];
+    const { LOOP_SECONDS, LOOP_TAIL } = this.synth!;
+    const themes = eraThemes(this.synth!);
+    const theme = themes[Math.min(themes.length - 1, lane.era)];
     const buffer = await renderSegment(LOOP_SECONDS, LOOP_TAIL, theme.build, lane.seed++ * 7919, theme.reverb, MUSIC_RATE);
     return normalize(buffer, 0.6);
   }
@@ -510,6 +531,7 @@ export class AudioEngine {
       lane.sources = lane.sources.filter(s => s !== src);
       src.disconnect();
     };
+    const { LOOP_SECONDS } = this.synth!;
     const startsAt = lane.nextStart;
     lane.nextStart += LOOP_SECONDS;
     // Compose the next segment ~25 s before this one ends.

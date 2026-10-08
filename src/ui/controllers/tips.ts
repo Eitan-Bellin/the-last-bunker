@@ -2,6 +2,7 @@ import { i18n } from '../../i18n/I18nManager';
 import { el } from '../dom';
 import type { GameApp } from '../../app';
 import type { GameState } from '../../core/GameState';
+import { relaxedMs } from '../../utils/a11y'; // plan4:AC-13
 
 /**
  * [plan4:UX-11] Gesture tips: each one shows once, at the moment it is useful, as a small card above the nav (never a dialog, never over a gesture).
@@ -138,7 +139,7 @@ export class TipsController {
     this.card = card;
     requestAnimationFrame(() => card.classList.add('in'));
     this.app.audio.play('paper');
-    this.hideTimer = window.setTimeout(() => this.hide(), SHOW_MS);
+    this.hideTimer = window.setTimeout(() => this.hide(), relaxedMs(SHOW_MS)); // plan4:AC-13
   }
 
   hide(): void {

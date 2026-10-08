@@ -33,6 +33,15 @@ npm run build && npx cap sync ios
 npx cap open ios
 ```
 
+## What the code already does for the native shell (plan 4, UX-12)
+
+- `src/utils/platform.ts` is the one place that asks where the game runs: `isNative()` (Capacitor injects `window.Capacitor`; no package is imported by the web build), `isIOS()`, `isStandalone()`, `nativePlugin('Haptics')`, `shareFile()`.
+- Haptics (`utils/haptics.ts`) use `Capacitor.Plugins.Haptics` when it exists; nothing to change in code, only `npm i @capacitor/haptics`.
+- The service worker is not registered inside the shell (`initServiceWorker` in `ui/pwa.ts` returns early on `isNative()`).
+- Notifications: on iPhone outside the shell the switch is hidden (`webNotificationsHonest()`); when the shell is added, implement a `NotifyBackend` with `@capacitor/local-notifications` in `ui/notifications.ts` (the `NotifyBackend` interface is already there) and it will show the switch again.
+- Save sharing: the web build uses `navigator.share({files})`; in the shell use `@capacitor/share` + `@capacitor/filesystem` inside `shareFile()`.
+- A home-screen PWA on iOS has its own, empty storage: the install card tells players to export a backup first and import it in the app.
+
 ## Store assets
 
 - Listing text (Hebrew + English): `store/listing.md`

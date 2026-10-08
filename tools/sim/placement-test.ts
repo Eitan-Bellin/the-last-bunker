@@ -6,8 +6,9 @@ import { bestSpot, placeEffects, spotForTap, validSpots } from '../../src/system
 import { RELOCATE_COST_SHARE, RELOCATE_SECONDS, relocateBlock, relocateCost, stateWithout } from '../../src/systems/relocate';
 import { StateManager } from '../../src/core/StateManager';
 import { bus } from '../../src/core/EventBus';
-import { BUILDABLE_TYPES, getDef, roomSlots } from '../../src/data/buildingDefs';
-import { migrateState, type BuildingInstance, type GameState } from '../../src/core/GameState';
+import { BUILDABLE_TYPES, getDef, isDistrict, roomSlots } from '../../src/data/buildingDefs';
+import { DISTRICTS, availableDistricts } from '../../src/data/districts'; // plan4:BL-24,25
+import { floorExtent, migrateState, type BuildingInstance, type BuildingType, type GameState } from '../../src/core/GameState';
 
 const rich = (s: GameState): void => { for (const r of Object.values(s.resources)) r.amount = r.cap; };
 
@@ -37,6 +38,35 @@ export function placementChecks(games: { name: string; json: string }[]): { prob
       if (anyCompound && fx.compound === 0) fail(`${g.name}: bestSpot(${type}) has no compound neighbour although a spot with one exists`);
     }
     notes.push(`${g.name}: bestSpot checked for ${checked} room types`);
+
+    // ---- [plan4:BL-24,25] districts: each kind can be dug on its own floor once the world allows it, stands at the end of that floor, is never a valid room spot and never moves ----
+    {
+      const world = JSON.parse(JSON.stringify(base)) as GameState;
+      world.currentFloors = 12;
+      world.storyFlags = [...new Set([...world.storyFlags, 'districts:unlocked'])];
+      world.buildings = world.buildings.filter(b => !isDistrict(b.type));
+      world.longGame.meta.act = 7;
+      for (const d of DISTRICTS) if (d.needsResearch) (world.research as Record<string, unknown>)[d.needsResearch] = { id: d.needsResearch, completed: true, progress: 0, active: false };
+      const sm = new StateManager();
+      sm.loadState(world);
+      let dug = 0;
+      for (let guard = 0; guard < 8; guard++) {
+        const next = availableDistricts(sm.state)[0];
+        if (!next) break;
+        const b = bs.digDistrict(sm, next.kind);
+        if (!b) { fail(`${g.name}: digDistrict(${next.kind}) refused an available district`); break; }
+        dug++;
+        if (b.position.floor !== next.floor || b.position.x !== floorExtent(sm.state, next.floor).e) fail(`${g.name}: ${next.kind} was dug at floor ${b.position.floor} slot ${b.position.x}, expected floor ${next.floor} at the end of the floor`);
+        if (validSpots(next.kind as BuildingType, sm.state, bs).length) fail(`${g.name}: ${next.kind} has valid placement spots (a district is dug, never placed)`);
+        if (bs.placeBlock(next.kind as BuildingType, { x: 0, y: 0, floor: next.floor }, sm.state) === null) fail(`${g.name}: ${next.kind} can be placed like a room`);
+        const done = { ...b, isConstructing: false };
+        if (relocateBlock(sm.state, done) !== 'district') fail(`${g.name}: ${next.kind} can be moved`);
+      }
+      const floors = sm.state.buildings.filter(b => isDistrict(b.type)).map(b => b.position.floor);
+      if (new Set(floors).size !== floors.length) fail(`${g.name}: two districts share a floor (${floors})`);
+      if (dug !== DISTRICTS.length) fail(`${g.name}: ${dug} of ${DISTRICTS.length} districts could be dug in a deep Act VII world`);
+      notes.push(`${g.name}: ${dug} districts dug on floors ${floors.sort((a, b) => a - b).join(',')}`);
+    }
 
     // ---- [plan4:ST-16] the surface row: closed = no spot; open = spots on floor -1 only inside slots -11..-4; best spot valid; a tap on the row answers; building fills it ----
     {
@@ -80,14 +110,14 @@ export function placementChecks(games: { name: string; json: string }[]): { prob
     }
 
     // ---- spotForTap: a tap on a valid slot gives that slot; on an occupied one the reason ----
-    const occ = base.buildings.find(b => b.position.floor >= 0 && !!getDef(b.type) && b.type !== 'cave' && b.type !== 'lake' && b.type !== 'metro');
+    const occ = base.buildings.find(b => b.position.floor >= 0 && !!getDef(b.type) && !isDistrict(b.type)); // plan4:BL-24,25 every district, not just the first three
     if (occ) {
       const t = spotForTap('storage', occ.position.floor, occ.position.x, base, bs);
       if (t.block === null && bs.placeBlock('storage', t.pos, base) !== null) fail(`${g.name}: spotForTap returned a block-free spot that is not valid`);
     }
 
     // ---- relocate ----
-    const cands = base.buildings.filter(b => !b.isConstructing && b.position.floor >= 0 && !['cave', 'lake', 'metro'].includes(b.type));
+    const cands = base.buildings.filter(b => !b.isConstructing && b.position.floor >= 0 && !isDistrict(b.type)); // plan4:BL-24,25
     const movable = (b: BuildingInstance): boolean => validSpots(b.type, stateWithout(base, b.id), bs).some(p => p.x !== b.position.x || p.floor !== b.position.floor);
     const crewed = cands.filter(b => b.assignedSurvivorIds.length > 0).find(movable) ?? cands.find(movable) ?? cands[0];
     if (!crewed) { notes.push(`${g.name}: no room to relocate`); continue; }
@@ -141,7 +171,7 @@ export function placementChecks(games: { name: string; json: string }[]): { prob
       const unchanged = (why: string): void => { if (JSON.stringify(sm.state) !== snap) fail(`${g.name}: ${why} changed the state although it was refused`); };
       if (bs.relocate(sm, b.id, { ...b.position })) fail(`${g.name}: relocate to its own spot returned true`);
       unchanged('relocate to the same spot');
-      const other = sm.state.buildings.find(x => x.id !== b.id && x.position.floor >= 0 && !['cave', 'lake', 'metro'].includes(x.type));
+      const other = sm.state.buildings.find(x => x.id !== b.id && x.position.floor >= 0 && !isDistrict(x.type)); // plan4:BL-24,25
       if (other && bs.relocate(sm, b.id, { ...other.position })) fail(`${g.name}: relocate onto another room returned true`);
       unchanged('relocate onto another room');
       if (bs.relocate(sm, b.id, { x: 99, y: 0, floor: b.position.floor })) fail(`${g.name}: relocate out of bounds returned true`);
@@ -162,11 +192,11 @@ export function placementChecks(games: { name: string; json: string }[]): { prob
         const poorSnap = JSON.stringify(poor.sm.state);
         if (bs.relocate(poor.sm, poor.b.id, to) || JSON.stringify(poor.sm.state) !== poorSnap) fail(`${g.name}: relocate without the resources changed something`);
       }
-      const cav = sm.state.buildings.find(x => ['cave', 'lake', 'metro'].includes(x.type));
+      const cav = sm.state.buildings.find(x => isDistrict(x.type));
       if (cav && (relocateBlock(sm.state, cav) !== 'district' || bs.relocate(sm, cav.id, { x: 0, y: 0, floor: cav.position.floor }))) fail(`${g.name}: a cavern can be moved`);
     }
     // Wide rooms: the width in slots decides whether a spot fits (no overlap with a neighbour after the move).
-    const wide = base.buildings.find(b => !b.isConstructing && roomSlots(b.type) >= 3 && b.position.floor >= 0 && !['cave', 'lake', 'metro'].includes(b.type));
+    const wide = base.buildings.find(b => !b.isConstructing && roomSlots(b.type) >= 3 && b.position.floor >= 0 && !isDistrict(b.type)); // plan4:BL-24,25
     if (wide) {
       const sm = new StateManager();
       sm.loadState(JSON.parse(JSON.stringify(base)) as GameState);
@@ -174,7 +204,7 @@ export function placementChecks(games: { name: string; json: string }[]): { prob
       const to = validSpots(w.type, stateWithout(sm.state, w.id), bs).find(p => p.x !== w.position.x || p.floor !== w.position.floor);
       if (to && !bs.relocate(sm, w.id, to)) fail(`${g.name}: relocate of the ${roomSlots(w.type)}-slot ${w.type} to a valid spot failed`);
       for (const a of sm.state.buildings) for (const b of sm.state.buildings) {
-        if (a.id >= b.id || a.position.floor !== b.position.floor || ['cave', 'lake', 'metro'].includes(a.type) || ['cave', 'lake', 'metro'].includes(b.type)) continue;
+        if (a.id >= b.id || a.position.floor !== b.position.floor || isDistrict(a.type) || isDistrict(b.type)) continue;
         if (a.position.x < b.position.x + roomSlots(b.type) && a.position.x + roomSlots(a.type) > b.position.x) fail(`${g.name}: ${a.type} and ${b.type} overlap after a move`);
       }
     }

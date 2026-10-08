@@ -525,7 +525,17 @@ export function buildGateHouseRuin(): Container {
   // Shadowed side of the corner column and the fallen edge: a darker band along the broken top.
   g.poly([x0, -2, x0, -66, x0 + 9, -66, x0 + 9, -2]).fill({ color: 0x000000, alpha: 0.22 });
   // Courses of poured concrete: faint horizontal seams.
-  for (let y = -12; y > -62; y -= 13) g.rect(x0, y, W * 0.78, 1.1).fill({ color: 0x1c1a16, alpha: 0.32 });
+  // [plan4:polish] A seam stops where the wall's broken top drops below it (it used to run on in the air past the collapse).
+  const wallTopAt = (x: number): number => {
+    const t = Math.max(0, Math.min(1, (x - x0) / W)) * (top.length - 1);
+    const i = Math.min(top.length - 2, Math.floor(t));
+    return top[i][1] + (top[i + 1][1] - top[i][1]) * (t - i);
+  };
+  for (let y = -12; y > -62; y -= 13) {
+    let xe = x0;
+    while (xe < x0 + W * 0.78 && wallTopAt(xe + 2) <= y - 1) xe += 2;
+    if (xe > x0) g.rect(x0, y, xe - x0, 1.1).fill({ color: 0x1c1a16, alpha: 0.32 });
+  }
   // Two window holes (one frame still standing) with soot licking up from them.
   for (const [wx, wy, ww, wh] of [[x0 + 16, -50, 15, 13], [x0 + 52, -38, 14, 12]] as [number, number, number, number][]) {
     g.rect(wx - 2, wy - 11, ww + 4, 11).fill(vGradient([[0, 0x000000, 0], [1, 0x000000, 0.4]])); // soot above the opening, inside the wall

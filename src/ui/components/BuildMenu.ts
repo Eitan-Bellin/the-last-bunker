@@ -11,7 +11,7 @@ import { recommendedRooms } from '../../systems/BuildAdvice';
 import { Sheet } from './Sheet';
 import { ArtLibrary } from '../../art/ArtLibrary';
 import { buildingArtKey } from '../../art/registry';
-import { BUILDING_ICONS, RESOURCE_ICONS, el } from '../dom';
+import { BUILDING_ICONS, RESOURCE_ICONS, el, rateText } from '../dom';
 
 /** What one card needs to know about a room right now. */
 interface Entry {
@@ -133,7 +133,7 @@ export class BuildMenu {
     const locale = i18n.currentLocale;
     const all = this.entries(state);
     // Only categories that have a buildable room get a chip.
-    const present = BUILD_CATEGORIES.filter(c => all.some(e => buildCategoryOf(e.type) === c.id));
+    const present = BUILD_CATEGORIES.filter(c => all.some(e => buildCategoryOf(e.type) === c.id && (c.id !== 'act' || e.unlocked))); // plan4:BL-34..38 the Act chip shows once an Act room is open
     if (this.category !== 'all' && !present.some(c => c.id === this.category)) this.category = 'all';
 
     // A search looks through every category (a typed word means the player knows what they want).
@@ -224,7 +224,7 @@ export class BuildMenu {
   /** The room's main results as short chips with an icon (a number alone would not say what it is). */
   private outputs(def: BuildingDef): string[] {
     const out: string[] = [];
-    for (const [r, p] of Object.entries(def.production ?? {})) out.push(`${RESOURCE_ICONS[r] ?? ''} \u2066${i18n.formatRate(p.base)}/s\u2069`); // LRI..PDI: "+0.9/s" keeps its order in right-to-left text
+    for (const [r, p] of Object.entries(def.production ?? {})) out.push(`${RESOURCE_ICONS[r] ?? ''} \u2066${p.base < 0.005 ? rateText(p.base) : `${i18n.formatRate(p.base)}/s`}\u2069`); // plan4:BL-25 a trickle shows per hour; // LRI..PDI: "+0.9/s" keeps its order in right-to-left text
     const fx = def.effects;
     if (fx?.morale) out.push(`[[happy]] +${fx.morale.base}${fx.moraleKind && fx.moraleKind !== 'base' ? ` ${i18n.t(`morale.channel.${fx.moraleKind}`)}` : ''}`);
     if (fx?.maxPopulation) out.push(`[[quarters]] +${fx.maxPopulation.base}`);
@@ -260,8 +260,12 @@ export class BuildMenu {
     const { def, type } = e;
     const full = e.count >= e.max;
     const card = el('div', `bm-card${e.unlocked ? '' : ' locked'}${e.unlocked && (!e.affordable || full) ? ' disabled' : ''}`);
-    card.setAttribute('role', 'button');
-    card.tabIndex = 0;
+    // [plan4:AC-8] A room you can build is a button named by the room; a locked one holds its own "what opens it" button, so it is a group
+    // (a button inside a button is invalid), and a card that cannot be picked now says so (the grey look was the only sign).
+    const pickable = e.unlocked && !full && e.affordable;
+    card.setAttribute('role', e.unlocked ? 'button' : 'group');
+    if (e.unlocked) card.tabIndex = 0;
+    if (e.unlocked && !pickable) card.setAttribute('aria-disabled', 'true');
 
     const thumb = el('div', 'build-icon build-thumb bm-thumb');
     const art = buildingArtKey(type, 0);
@@ -276,7 +280,10 @@ export class BuildMenu {
 
     const info = el('div', 'build-info bm-info');
     const head = el('div', 'bm-head');
-    head.appendChild(el('div', 'build-item-name', def.name[locale] ?? def.name.en));
+    const nameEl = el('div', 'build-item-name', def.name[locale] ?? def.name.en);
+    nameEl.id = `bm-name-${type}`; // [plan4:AC-8] the card's accessible name
+    card.setAttribute('aria-labelledby', nameEl.id);
+    head.appendChild(nameEl);
     const slots = roomSlots(type);
     const dots = el('span', 'bm-dots');
     dots.setAttribute('role', 'img');
@@ -284,7 +291,10 @@ export class BuildMenu {
     for (let i = 0; i < slots; i++) dots.appendChild(el('span', 'bm-dot'));
     head.appendChild(dots);
     info.appendChild(head);
-    info.appendChild(el('div', 'build-item-desc', def.description[locale] ?? def.description.en));
+    const descEl = el('div', 'build-item-desc', def.description[locale] ?? def.description.en);
+    descEl.id = `bm-desc-${type}`;
+    card.setAttribute('aria-describedby', descEl.id);
+    info.appendChild(descEl);
 
     const outs = this.outputs(def);
     if (outs.length) {

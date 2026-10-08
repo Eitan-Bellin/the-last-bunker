@@ -56,7 +56,11 @@ export interface SeasonState {
   startedAt: number;
 }
 
-/** [Society lane] Laws, political capital and the factions inside the bunker. */
+/**
+ * [Society lane] Laws, political capital and the factions inside the bunker.
+ * [plan4:GP-12] The fields marked [reserved] here and in WorldState are checked: nothing reads or writes them (only their zero defaults).
+ * They stay in the type because saves already hold them; removing them would change the save format for no gain.
+ */
 export interface PolicyState {
   laws: string[];
   /** [reserved: saved, not used yet] Political capital (the Council; see the balance plan, N4). */
@@ -101,6 +105,8 @@ export interface InboxState {
 /** [UX lane] Standing orders that take routine off the player's hands. */
 export interface ForemanState {
   orders: Record<string, unknown>;
+  /** [plan4:GP-8] Door keys ("floor:x") the 'sealOnAlarm' order shut and has not yet opened again (optional: absent in older saves). */
+  sealed?: string[];
 }
 
 /** [Q14] One line of the Chronicle (src/systems/ChronicleSystem.ts). */

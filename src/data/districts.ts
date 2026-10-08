@@ -7,12 +7,11 @@ import type { IconName } from '../ui/icons';
  *
  * [plan4:ST-8] Data-driven: the sign, the choice card (ui/controllers/dig.ts) and the sim bot all read `availableDistricts`.
  * To add a district kind (BL-24 geothermal, BL-25 oldVault) it is enough to: add an entry to DISTRICTS (floor = the level index it opens on,
- * `needsFlag` / `minAct` for its gate, no `after` so it is offered next to the others), add its definition to data/buildings.json, add the type to
- * `BuildingType` (core/GameState.ts), to `DISTRICT_KINDS` (data/buildingDefs.ts) and its painting key to `DISTRICT_KEYS` (art/registry.ts).
+ * `needsFlag` / `minAct` / `needsResearch` for its gate, no `after` so it is offered next to the others), add its definition to data/buildings.json, add the type to
+ * `BuildingType` (core/GameState.ts), to `DISTRICT_KINDS` (data/buildingDefs.ts) and its painting key to `DISTRICT_KEYS` (art/registry.ts; or, until it is painted, `DISTRICT_ART_ALIAS` borrows another cavern: geothermal and oldVault do).
  * `tools/sim/lint.ts` fails if any of these lists disagree.
  */
-export type DistrictKind = 'cave' | 'lake' | 'metro';
-// [plan4:ST-8] A new kind is added to this union as well (e.g. | 'geothermal' | 'oldVault').
+export type DistrictKind = 'cave' | 'lake' | 'metro' | 'geothermal' | 'oldVault'; // [plan4:BL-24,25] the two Act districts
 
 export interface DistrictDef {
   kind: DistrictKind;
@@ -25,6 +24,8 @@ export interface DistrictDef {
   needsFlag?: string;
   /** Lowest Act (longGame.meta.act). */
   minAct?: number;
+  /** [plan4:BL-24,25] Research node that must be finished (the node that also carries the room's `unlock`). */
+  needsResearch?: string;
   cost: Partial<Record<ResourceType, number>>;
   name: Record<'he' | 'en', string>;
   find: Record<'he' | 'en', string>;
@@ -58,6 +59,26 @@ export const DISTRICTS: DistrictDef[] = [
       en: 'A whole platform, a derailed car and rusty signs. The tunnels run under the entire city. Expeditions will travel faster.',
     },
   },
+  // [plan4:BL-24,25] The two Act districts: no `after`, so they are offered beside the classic ones once their research is done and their Act has come.
+  // Floors (levels, 0 = B1): the vault opens on B6 (index 5), the vent on B7 (index 6); 02-new-buildings.md asks for "floor >= 5 / >= 6".
+  {
+    kind: 'geothermal', icon: 'fire', floor: 6, minAct: 4, needsResearch: 'geothermalVents',
+    cost: { materials: 900, scrap: 180, blueprints: 1 },
+    name: { he: 'מערת קיטור', en: 'Geothermal Vent' },
+    find: {
+      he: 'הסלע חם מתחת לידיים. סדקים אדומים בקיר, וקיטור שנפלט בשריקה. כאן אפשר לקבל חשמל בלי דלק, אם נזהרים.',
+      en: 'The rock is hot under the hands. Red cracks in the wall and steam hissing out. Here there is power without fuel, if we are careful.',
+    },
+  },
+  {
+    kind: 'oldVault', icon: 'vault', floor: 5, minAct: 5, needsResearch: 'vaultSurvey',
+    cost: { materials: 1000, scrap: 200 },
+    name: { he: 'כספת טרום־מלחמה', en: 'Pre-War Vault' },
+    find: {
+      he: 'דלת פלדה עצומה, עבה כמו קיר, ומאחוריה מגירות ארוכות. כולן מלאות תוכניות ישנות. מישהו שמר כאן את מה שהעולם הישן ידע.',
+      en: 'A huge steel door, as thick as a wall, and long drawers behind it. All of them full of old plans. Someone kept here what the old world knew.',
+    },
+  },
 ];
 
 export const DISTRICT_TYPES: BuildingType[] = DISTRICTS.map(d => d.kind);
@@ -80,6 +101,7 @@ export function availableDistricts(state: GameState): DistrictDef[] {
     && (!d.after || state.buildings.some(b => b.type === d.after))
     && (!d.needsFlag || state.storyFlags.includes(d.needsFlag))
     && (d.minAct === undefined || act >= d.minAct)
+    && (!d.needsResearch || !!state.research?.[d.needsResearch]?.completed) // plan4:BL-24,25
     && !state.buildings.some(b => b.position.floor === d.floor && DISTRICT_TYPES.includes(b.type)));
 }
 

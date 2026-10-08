@@ -1,0 +1,15 @@
+/* [plan4:GP-5] "Share your bunker": the veil shown while the picture is made, and the preview in the dialog.
+   Sizes go through --fs (Text size XL); nothing here animates, so reduced motion needs no special case. */
+.share-veil {
+  position: fixed; inset: 0; z-index: 100000;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--bg-dark, #0b0c0e); color: var(--text-primary, #e8e2d2);
+  font-size: calc(18px * var(--fs, 1)); padding: 0 16px; text-align: center;
+}
+.share-body { display: flex; flex-direction: column; align-items: center; gap: 8px; margin: 0 0 8px; }
+/* The picture is 4:5; the dialog keeps room for its three buttons (a short phone still shows them). */
+.share-preview {
+  display: block; width: auto; max-width: 100%; max-height: min(46vh, 420px); aspect-ratio: 1080 / 1350;
+  object-fit: contain; border-radius: 10px; border: 1px solid var(--border, rgba(255, 255, 255, 0.12));
+  background: #0b0c0e;
+}

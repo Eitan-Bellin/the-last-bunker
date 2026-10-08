@@ -3,6 +3,7 @@ import { RESOURCE_ICONS, costRow, el } from '../../ui/dom';
 import { floorExtent, type ResourceType } from '../../core/GameState';
 import { availableDistricts, districtDef, nextDistrict, type DistrictDef, type DistrictKind } from '../../data/districts';
 import { maxEast, maxWest, wingOptions } from '../../data/wings';
+import { districtArtName } from '../../art/registry'; // plan4:BL-24,25
 import type { GameApp } from '../../app';
 
 /** Digging new floors and breaking through to districts. */
@@ -208,7 +209,7 @@ export class DigController {
     const locale = i18n.currentLocale;
     const body = el('div', 'modal-result');
     const img = el('img', 'biome-art');
-    img.src = `${import.meta.env.BASE_URL}art/districts/${kind}.webp`;
+    img.src = `${import.meta.env.BASE_URL}art/districts/${districtArtName(kind)}.webp`;
     img.alt = '';
     body.append(img, el('p', 'modal-body', d.find[locale]));
     this.app.audio.play('era');

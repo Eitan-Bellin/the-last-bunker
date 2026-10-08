@@ -12,7 +12,11 @@ export type LabelMode = 'full' | 'icon' | 'hidden';
 /** Font size the room tags are drawn at (RoomViews.nameStyle); the tag container is scaled by size / BASE. */
 export const LABEL_BASE_FONT = 10;
 export const LABEL_SCREEN_PX = 11;
-export const LABEL_MIN_WORLD = 8;
+// [plan4:polish] was 8: zoomed in past 1.4 the tags then grew with the zoom (18 px on the glass at 2.3x) and long names spilled over the next room.
+// 3.2 keeps them at their 11 screen px up to the camera's 3x zoom limit (and a little beyond).
+export const LABEL_MIN_WORLD = 3.2;
+/** [plan4:polish] The smallest a tag may be drawn on the glass when it has to shrink to fit its room (the readability floor). */
+export const LABEL_FLOOR_SCREEN_PX = 10;
 export const LABEL_MAX_WORLD = 22;
 export const LABEL_ICON_ZOOM = 0.7;
 export const LABEL_HIDE_ZOOM = 0.45;
@@ -27,11 +31,13 @@ export interface LabelState {
   /** Scale to give a tag container drawn at LABEL_BASE_FONT. */
   k: number;
   mode: LabelMode;
+  /** [plan4:polish] The camera zoom the state was computed for (the tags fit themselves to their room with it). */
+  zoom: number;
   /** Bumped on every change: views compare it with their own stamp instead of being notified one by one. */
   rev: number;
 }
 
-export const labelState: LabelState = { size: LABEL_BASE_FONT, k: 1, mode: 'full', rev: 0 };
+export const labelState: LabelState = { size: LABEL_BASE_FONT, k: 1, mode: 'full', zoom: 1, rev: 0 };
 
 let textK = 1;
 let lastZoom = -1;
@@ -72,6 +78,7 @@ export function updateLabelScale(zoom: number, now: number): boolean {
   lastAt = now;
   const size = labelWorldSize(zoom, textK);
   const mode = labelModeFor(zoom, labelState.mode);
+  labelState.zoom = Math.max(0.05, zoom);
   if (size === labelState.size && mode === labelState.mode) return false;
   labelState.size = size;
   labelState.k = size / LABEL_BASE_FONT;

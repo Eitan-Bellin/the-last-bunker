@@ -23,6 +23,8 @@ interface Entry {
   /** Seconds left before the safe default is taken (null = it waits). */
   left: number | null;
   urgent: boolean;
+  /** [plan4:GP-1] Shown in place of the time left (the daily orders card: "1/3"). */
+  tag?: string;
   open: () => void;
 }
 
@@ -106,6 +108,12 @@ export class InboxController {
         open: () => this.openItem(item.id),
       });
     }
+    // [plan4:GP-1] The daily orders: one card, always (the badge counts it only while something can be taken).
+    const daily = this.app.daily.inboxEntry(state);
+    if (daily) {
+      const s = this.app.engine.dailySystem.summary(state);
+      out.push({ key: 'daily', icon: '[[target]]', title: i18n.t('daily.title'), detail: `${daily.title} · ${daily.detail}`, tag: `${s.done}/${s.n}`, value: Infinity, left: null, urgent: false, open: () => this.app.daily.show() });
+    }
     // [Q4] Most pressing first: urgent, then whatever lapses within the hour, then the richest, then the nearest deadline.
     const soon = (e: Entry) => e.left !== null && e.left < 3600;
     return out.sort((a, b) => Number(b.urgent) - Number(a.urgent) || Number(soon(b)) - Number(soon(a))
@@ -116,11 +124,14 @@ export class InboxController {
   refresh(state: GameState): void {
     const deferring = this.defers(state);
     const list = deferring ? this.entries(state) : [];
-    if (list.length !== this.lastCount) {
-      this.lastCount = list.length;
-      this.app.hud.setInbox(deferring, list.length);
+    // [plan4:GP-1] The daily orders card is a standing card: it counts on the badge only while a reward waits, and is never announced.
+    const waiting = list.filter(e => e.key !== 'daily' || this.app.engine.dailySystem.summary(state).claimable > 0).length;
+    if (waiting !== this.lastCount) {
+      this.lastCount = waiting;
+      this.app.hud.setInbox(deferring, waiting);
     }
     for (const e of list) {
+      if (e.key === 'daily') continue;
       if (this.seen.has(e.key)) continue;
       this.seen.add(e.key);
       this.app.audio.play('paper');
@@ -149,7 +160,7 @@ export class InboxController {
   private render(list: Entry[]): void {
     if (!this.sheet) return;
     // Rebuild only when the cards change; the time left is updated in place.
-    const key = list.map(e => `${e.key}${e.safe ? '+' : ''}`).join('|');
+    const key = list.map(e => `${e.key}${e.safe ? '+' : ''}${e.tag ?? ''}`).join('|');
     if (key !== this.renderedKey) {
       this.renderedKey = key;
       const body = this.sheet.body;
@@ -189,7 +200,7 @@ export class InboxController {
     for (const e of list) {
       const left = this.sheet.body.querySelector<HTMLElement>(`.inbox-card[data-key="${e.key}"] .inbox-left`);
       if (!left) continue;
-      const text = e.left === null ? i18n.t('inbox.waits') : i18n.t('inbox.left', { t: i18n.formatDuration(e.left) });
+      const text = e.tag ?? (e.left === null ? i18n.t('inbox.waits') : i18n.t('inbox.left', { t: i18n.formatDuration(e.left) }));
       if (left.textContent !== text) left.textContent = text;
       left.classList.toggle('soon', e.left !== null && e.left < 120);
     }

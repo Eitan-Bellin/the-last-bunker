@@ -32,6 +32,13 @@ export const CHAIN_INPUTS: Partial<Record<BuildingType, ChainInput[]>> = {
   garage: [{ resource: 'scrap', base: 0.02, perLevel: 0.3, boost: true }],
   decon: [{ resource: 'water', base: 0.1, perLevel: 0.3 }],
   bathhouse: [{ resource: 'water', base: 0.08, perLevel: 0.3 }],
+  // [plan4:BL-34..38] The Act rooms eat what the matching role eats (specializations.ts: assemblyLine, arcFurnace, dataVault, councilHall, seedForge), so a plant is
+  // the same chain with a better output; a starved input slows the whole room as everywhere else.
+  componentsPlant: [{ resource: 'scrap', base: 0.05, perLevel: 0.3 }, { resource: 'materials', base: 0.1, perLevel: 0.3 }],
+  alloyFoundry: [{ resource: 'materials', base: 0.4, perLevel: 0.4 }, { resource: 'scrap', base: 0.04, perLevel: 0.3 }],
+  dataCenter: [{ resource: 'knowledge', base: 0.3, perLevel: 0.3 }],
+  forum: [{ resource: 'food', base: 0.3, perLevel: 0.3 }],
+  seedLab: [{ resource: 'alloys', base: 0.006, perLevel: 0.2 }, { resource: 'data', base: 0.004, perLevel: 0.2 }],
 };
 
 export const STARVED_FACTOR = 0.35;

@@ -29,6 +29,9 @@ export async function checkMigration(json: string): Promise<MigrateCheck> {
     if (m.longGame && (!m.longGame.dig2 || m.longGame.dig2.floor !== null || (m.longGame.dig.kind ?? 'floor') !== 'floor')) problems.push('dig2 / dig.kind not defaulted');
     // [plan4:X-3] v7: an older save gets the empty layout (no wings, doors, infrastructure; surface row closed).
     if (!old.layout && (!m.layout || m.layout.v !== 1 || Object.keys(m.layout.ext).length || Object.keys(m.layout.doors).length || m.layout.infra.length || m.layout.surfaceOpen)) problems.push('layout not defaulted');
+    // [plan4:GP-1] The daily orders block exists after migration (additive field, SAVE_VERSION unchanged); a save that had one keeps it.
+    if (!m.daily || !Array.isArray(m.daily.orders) || !Array.isArray(m.daily.spare) || typeof m.daily.streak !== 'number') problems.push('daily not defaulted');
+    if (old.daily && JSON.stringify(old.daily.orders ?? []) !== JSON.stringify(m.daily?.orders)) problems.push('daily orders changed by migration');
     // Nothing the player has may be taken away.
     if (m.buildings.length !== old.buildings.length) problems.push(`buildings ${old.buildings.length} -> ${m.buildings.length}`);
     if (m.survivors.length !== old.survivors.length) problems.push(`survivors ${old.survivors.length} -> ${m.survivors.length}`);

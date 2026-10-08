@@ -31,6 +31,15 @@ jobs:
       - run: npx tsc --noEmit
       - run: node tools/sim/smoke.mjs
       - run: node tools/sim/lint.mjs
+      # Plan 4 regression tests (they read the sample saves in store/sim/saves-v6, which are tracked on purpose).
+      - run: node tools/sim/migrate-test.mjs store/sim/saves-v6
+      - run: node tools/sim/placement-test.mjs
+      - run: node tools/sim/infra-test.mjs
+      - run: node tools/sim/routes-test.mjs
+      - run: node tools/sim/rooms-test.mjs
+      - run: node tools/sim/openings-test.mjs
+      - run: node tools/sim/daily-test.mjs
+      - run: node tools/sim/foreman-test.mjs
       - run: npx vite build
       # Performance regression check (tools/perf/run.mjs, budget in tools/perf/budget.json): draw calls, objects drawn, allocation per
       # picture, texture memory. It reports but does not block the deploy (a headless runner can be flaky); remove `continue-on-error`

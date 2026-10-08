@@ -39,6 +39,12 @@ const ROOM_ZONE: Partial<Record<BuildingType, SignZone>> = {
   generator: 'engineering', workshop: 'engineering', reactor: 'engineering', reactorHall: 'engineering',
   medbay: 'science', laboratory: 'science', radioTower: 'science',
   armory: 'security', trainingRoom: 'security', storage: 'security',
+  // [plan4:BL-13] every room of waves 1-3 (a deep level is named after what stands on it; districts are skipped by signZone)
+  batteryBank: 'engineering', recycler: 'engineering', condenser: 'agri', mushroomFarm: 'agri', aquaculture: 'agri',
+  commons: 'living', nursery: 'living', bathhouse: 'living', memorialHall: 'living', market: 'living', forum: 'living',
+  library: 'science', school: 'science', quarantineWard: 'science', decon: 'science', dataCenter: 'science', seedLab: 'science',
+  gatePost: 'security', barracks: 'security', watchtower: 'security',
+  garage: 'engineering', solarArray: 'engineering', windTurbine: 'engineering', componentsPlant: 'engineering', alloyFoundry: 'engineering',
 };
 
 /**
@@ -572,6 +578,8 @@ export interface SignageInput {
   memorial?: string;
   /** [plan4:ST-4] How far each floor reaches (default: the classic 12 east of the shaft). */
   exts?: readonly Ext[];
+  /** [plan4:polish] Stairwell and vent stack columns (layout.infra): the level name is sprayed clear of them. */
+  infra?: readonly { kind: string; floor: number; x: number; floors?: number }[];
 }
 
 /** Floor-plate keys this layer asks ArtLibrary for (so the renderer can request them early). */
@@ -619,8 +627,15 @@ export function buildSignage(inp: SignageInput): Container {
       const skey = `stencil|${text}|${paint}|${wear}`;
       const stex = cachedTexture(skey, () => paintStencil(text, paint, wear, hashString(skey), inp.rtl));
       const sw = stex.width / SS;
-      const sx1 = slotX(grid.ext[f].e) - 16, sx0 = sx1 - sw;
-      if (!halls.some(([a, b]) => sx1 > a && sx0 < b)) {
+      let sx1 = slotX(grid.ext[f].e) - 16, sx0 = sx1 - sw;
+      // [plan4:polish] A stairwell or vent stack at the end of the floor stands over the slab: the name moves west of it (and of any column it then meets).
+      const cols = (inp.infra ?? [])
+        .filter(i => i.kind !== 'bulkhead' && f >= i.floor && f < i.floor + Math.max(1, i.floors ?? 1))
+        .map(i => [slotX(i.x), slotX(i.x) + SLOT_W] as [number, number])
+        .sort((a, b) => b[0] - a[0]);
+      let moved = false;
+      for (const [c0, c1] of cols) if (sx1 > c0 - 3 && sx0 < c1 + 3) { sx1 = c0 - 6; sx0 = sx1 - sw; moved = true; }
+      if ((!moved || sx0 >= ROOMS_X) && !halls.some(([a, b]) => sx1 > a && sx0 < b)) {
         const st = new Sprite(stex);
         st.anchor.set(1, 0.44);
         st.scale.set(1 / SS);

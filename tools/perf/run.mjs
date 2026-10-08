@@ -27,11 +27,36 @@ const check = !!arg('check', false);
 const dpr = +arg('dpr', 2.75);
 
 const gz = f => zlib.gzipSync(fs.readFileSync(f)).length;
+/**
+ * Script and style sizes of a build (gzipped, KB = 1024 bytes). `jsGzKB` is every .js file in assets/ (what a visitor downloads over time
+ * and the service worker keeps); `initialJsGzKB` is what the first screen needs: the scripts named in index.html and everything they
+ * import statically (plan 4 wave 3: string tables, the Bunker Book and the sound recipes are chunks fetched later). `chunks` lists each file.
+ */
 function bundleStats() {
   const dir = path.join(dist, 'assets');
+  const files = fs.existsSync(dir) ? fs.readdirSync(dir) : [];
+  const size = {};
   let js = 0, css = 0;
-  for (const f of fs.existsSync(dir) ? fs.readdirSync(dir) : []) { if (f.endsWith('.js')) js += gz(path.join(dir, f)); else if (f.endsWith('.css')) css += gz(path.join(dir, f)); }
-  return { jsGzKB: Math.round(js / 1024), cssGzKB: Math.round(css / 1024) };
+  for (const f of files) {
+    if (f.endsWith('.js')) { size[f] = gz(path.join(dir, f)); js += size[f]; } else if (f.endsWith('.css')) css += gz(path.join(dir, f));
+  }
+  // Initial set: <script type=module src>, <link rel=modulepreload>, then static `import ... from "./x.js"` / `import "./x.js"` (dynamic import() has parentheses and is skipped).
+  const initial = new Set();
+  const queue = [];
+  const html = fs.existsSync(path.join(dist, 'index.html')) ? fs.readFileSync(path.join(dist, 'index.html'), 'utf8') : '';
+  for (const m of html.matchAll(/(?:src|href)="[^"]*?assets\/([^"]+\.js)"/g)) queue.push(m[1]);
+  while (queue.length) {
+    const f = queue.pop();
+    if (initial.has(f) || !(f in size)) continue;
+    initial.add(f);
+    const code = fs.readFileSync(path.join(dir, f), 'utf8');
+    for (const m of code.matchAll(/(?:\bfrom|\bimport)\s*["']\.\/([^"']+\.js)["']/g)) queue.push(m[1]);
+  }
+  let init = 0;
+  for (const f of initial) init += size[f];
+  const kb = n => Math.round(n / 1024);
+  const chunks = Object.fromEntries(Object.entries(size).sort((a, b) => b[1] - a[1]).map(([f, n]) => [f.replace(/-[\w-]{8}\.js$/, '.js'), { gzKB: Math.round(n / 102.4) / 10, initial: initial.has(f) }]));
+  return { jsGzKB: kb(js), initialJsGzKB: kb(init), cssGzKB: kb(css), chunks };
 }
 
 const yMid = floors => Math.round(70 + Math.min(12, floors / 2) * 116);
@@ -222,11 +247,13 @@ try {
     }
   }
   const g = budget.global || {};
-  if (g.jsGzKB && results.bundle.jsGzKB > g.jsGzKB * 1.1) failures.push(`bundle js ${results.bundle.jsGzKB} KB gz > ${g.jsGzKB}`);
+  if (g.jsGzKB && results.bundle.jsGzKB > g.jsGzKB * 1.1) failures.push(`bundle js (all chunks) ${results.bundle.jsGzKB} KB gz > ${g.jsGzKB}`);
+  if (g.initialJsGzKB && results.bundle.initialJsGzKB > g.initialJsGzKB * 1.1) failures.push(`bundle js (first load) ${results.bundle.initialJsGzKB} KB gz > ${g.initialJsGzKB}`);
 } finally { close(); }
 
 if (outFile) { fs.mkdirSync(path.dirname(outFile), { recursive: true }); fs.writeFileSync(outFile, JSON.stringify(results, null, 1)); }
-console.log(`bundle: js ${results.bundle.jsGzKB} KB gz, css ${results.bundle.cssGzKB} KB gz`);
+console.log(`bundle: js ${results.bundle.jsGzKB} KB gz in all chunks, ${results.bundle.initialJsGzKB} KB gz needed for the first load, css ${results.bundle.cssGzKB} KB gz`);
+if (arg('chunks', false)) for (const [f, v] of Object.entries(results.bundle.chunks)) console.log(`   ${String(v.gzKB).padStart(7)} KB  ${f}${v.initial ? '' : '  (lazy)'}`);
 if (pendingNotes.length) console.log('\nPENDING (reported, not gating):\n  ' + pendingNotes.join('\n  '));
 if (failures.length) { console.log('\nOVER BUDGET:\n  ' + failures.join('\n  ')); if (check) process.exit(1); } else console.log('\nwithin budget');
 process.exit(0);

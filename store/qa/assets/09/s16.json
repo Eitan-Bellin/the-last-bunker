@@ -1,0 +1,250 @@
+{
+ "tag": "s16",
+ "when": "2026-10-08T10:22:33.123Z",
+ "viewports": [
+  [
+   375,
+   667
+  ]
+ ],
+ "scales": [
+  1.6
+ ],
+ "totals": {
+  "targets": 0,
+  "contrast": 0,
+  "noName": 0,
+  "noAlt": 0,
+  "overflow": 0,
+  "modals": 0
+ },
+ "perConfig": [
+  {
+   "cfg": "375x667 @1.6",
+   "counts": {
+    "targets": 0,
+    "contrast": 0,
+    "noName": 0,
+    "noAlt": 0,
+    "overflow": 0,
+    "modals": 0
+   },
+   "approxContrast": 0
+  }
+ ],
+ "unique": {
+  "targets": [],
+  "contrast": [],
+  "noName": [],
+  "noAlt": [],
+  "overflow": [],
+  "modals": []
+ },
+ "raw": [
+  {
+   "w": 375,
+   "h": 667,
+   "scale": 1.6,
+   "scenes": {
+    "dialog-0": {
+     "targets": [],
+     "contrast": [],
+     "noName": [],
+     "noAlt": [],
+     "overflow": [],
+     "modals": [],
+     "docOverflow": false
+    },
+    "dialog-1": {
+     "targets": [],
+     "contrast": [],
+     "noName": [],
+     "noAlt": [],
+     "overflow": [],
+     "modals": [],
+     "docOverflow": false
+    },
+    "dialog-2": {
+     "targets": [],
+     "contrast": [],
+     "noName": [],
+     "noAlt": [],
+     "overflow": [],
+     "modals": [],
+     "docOverflow": false
+    },
+    "hud": {
+     "targets": [],
+     "contrast": [],
+     "noName": [],
+     "noAlt": [],
+     "overflow": [],
+     "modals": [],
+     "docOverflow": false
+    },
+    "sheet-build": {
+     "targets": [],
+     "contrast": [],
+     "noName": [],
+     "noAlt": [],
+     "overflow": [],
+     "modals": [],
+     "docOverflow": false
+    },
+    "sheet-people": {
+     "targets": [],
+     "contrast": [],
+     "noName": [],
+     "noAlt": [],
+     "overflow": [],
+     "modals": [],
+     "docOverflow": false
+    },
+    "sheet-research": {
+     "targets": [],
+     "contrast": [],
+     "noName": [],
+     "noAlt": [],
+     "overflow": [],
+     "modals": [],
+     "docOverflow": false
+    },
+    "sheet-surface": {
+     "targets": [],
+     "contrast": [],
+     "noName": [],
+     "noAlt": [],
+     "overflow": [],
+     "modals": [],
+     "docOverflow": false
+    },
+    "menu-settings": {
+     "targets": [],
+     "contrast": [],
+     "noName": [],
+     "noAlt": [],
+     "overflow": [],
+     "modals": [],
+     "docOverflow": false
+    },
+    "menu-a11y": {
+     "targets": [],
+     "contrast": [],
+     "noName": [],
+     "noAlt": [],
+     "overflow": [],
+     "modals": [],
+     "docOverflow": false
+    },
+    "menu-stats": {
+     "targets": [],
+     "contrast": [],
+     "noName": [],
+     "noAlt": [],
+     "overflow": [],
+     "modals": [],
+     "docOverflow": false
+    },
+    "menu-achievements": {
+     "targets": [],
+     "contrast": [],
+     "noName": [],
+     "noAlt": [],
+     "overflow": [],
+     "modals": [],
+     "docOverflow": false
+    },
+    "menu-genesis": {
+     "targets": [],
+     "contrast": [],
+     "noName": [],
+     "noAlt": [],
+     "overflow": [],
+     "modals": [],
+     "docOverflow": false
+    },
+    "structure-list": {
+     "targets": [],
+     "contrast": [],
+     "noName": [],
+     "noAlt": [],
+     "overflow": [],
+     "modals": [],
+     "docOverflow": false
+    },
+    "room-panel-doors": {
+     "targets": [],
+     "contrast": [],
+     "noName": [],
+     "noAlt": [],
+     "overflow": [],
+     "modals": [],
+     "docOverflow": false
+    },
+    "command-safety": {
+     "targets": [],
+     "contrast": [],
+     "noName": [],
+     "noAlt": [],
+     "overflow": [],
+     "modals": [],
+     "docOverflow": false
+    },
+    "placement-bar": {
+     "targets": [],
+     "contrast": [],
+     "noName": [],
+     "noAlt": [],
+     "overflow": [],
+     "modals": [],
+     "docOverflow": false
+    },
+    "relocate-dialog": {
+     "targets": [],
+     "contrast": [],
+     "noName": [],
+     "noAlt": [],
+     "overflow": [],
+     "modals": [],
+     "docOverflow": false
+    },
+    "checkin": {
+     "targets": [],
+     "contrast": [],
+     "noName": [],
+     "noAlt": [],
+     "overflow": [],
+     "modals": [],
+     "docOverflow": false
+    },
+    "whatsnew": {
+     "targets": [],
+     "contrast": [],
+     "noName": [],
+     "noAlt": [],
+     "overflow": [],
+     "modals": [],
+     "docOverflow": false
+    },
+    "gesture-tip": {
+     "targets": [],
+     "contrast": [],
+     "noName": [],
+     "noAlt": [],
+     "overflow": [],
+     "modals": [],
+     "docOverflow": false
+    },
+    "depth-ruler": {
+     "targets": [],
+     "contrast": [],
+     "noName": [],
+     "noAlt": [],
+     "overflow": [],
+     "modals": [],
+     "docOverflow": false
+    }
+   }
+  }
+ ]
+}

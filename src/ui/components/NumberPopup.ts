@@ -1,7 +1,27 @@
 import { Container, TextStyle } from 'pixi.js';
 import { richLine } from '../../rendering/richText';
 import { popupScale } from '../../rendering/LabelScale'; // [plan4:ST-12]
-import { statusTint } from '../../utils/a11y';
+import { statusTint, getA11y } from '../../utils/a11y';
+import { isIOS } from '../../utils/platform';
+import { isTouchDevice } from '../../utils/device';
+
+/**
+ * [plan4:UX-21] How many floating numbers the player wants: all, only the important ones (bubbles, events, upgrades: everything except
+ * the routine "+6 food" that every room throws every few seconds), or none. A phone that never chose gets "important": eight rooms
+ * popping at once on a small screen is mostly noise. The choice itself lives in the a11y block; "chosen" only remembers that the
+ * player picked, so the iPhone default does not overrule them.
+ */
+const CHOSEN_KEY = 'lastbunker_popups_chosen';
+export function popupsChosen(): boolean {
+  try { return localStorage.getItem(CHOSEN_KEY) === '1'; } catch { return false; }
+}
+export function markPopupsChosen(): void {
+  try { localStorage.setItem(CHOSEN_KEY, '1'); } catch { /* the default applies again next start */ }
+}
+export function popupMode(): 'all' | 'important' | 'off' {
+  const m = getA11y().popups;
+  return m === 'all' && isIOS() && !popupsChosen() ? 'important' : m;
+}
 
 interface PopupInstance {
   line: Container;
@@ -45,7 +65,9 @@ function styleFor(color: number): TextStyle {
 /** Seconds a popup lives, how far it rises (world units), how many may be on screen. */
 const LIFE = 1.5;
 const RISE = 40;
-const MAX_ON_SCREEN = 12;
+const MAX_ON_SCREEN_DESKTOP = 12;
+/** [plan4:UX-21] On a phone at most 6 at a time. */
+const maxOnScreen = (): number => (isTouchDevice() ? 6 : MAX_ON_SCREEN_DESKTOP);
 /** Lines kept for reuse: production waves repeat the same "+6.5 [food]" every few seconds (no new text textures). */
 const POOL_MAX = 48;
 const NUM = /^\+(\d+(?:\.\d+)?)(.*)$/;
@@ -77,7 +99,9 @@ export class NumberPopupManager {
   }
 
   spawn(x: number, y: number, value: string, color: number = statusTint('ok')): void {
-    if (blockedAt?.(x, y)) return;
+    const mode = popupMode(); // plan4:AC-1 + UX-21 one density rule: the player's choice, or "important" by default on an iPhone
+    if (blockedAt?.(x, y) || mode === 'off') return;
+    if (mode === 'important' && /^\+\d/.test(value.trim())) return; // the routine "+6 food" numbers every room throws
     const spot = `${Math.round(x)}|${Math.round(y)}|${color}`;
     // Merge into a popup still being read at the same spot: "+6 [food]" + "+6 [food]" -> "+12 [food]".
     for (const p of this.active) {
@@ -112,7 +136,7 @@ export class NumberPopupManager {
     // Over the cap: the oldest leave early (quick fade) rather than piling up.
     let live = 0;
     for (const q of this.active) if (q.kill === 0) live++;
-    for (let i = 0; live > MAX_ON_SCREEN && i < this.active.length; i++) {
+    for (let i = 0; live > maxOnScreen() && i < this.active.length; i++) {
       if (this.active[i].kill === 0) {
         this.active[i].kill = 0.001;
         live--;
@@ -123,6 +147,11 @@ export class NumberPopupManager {
   /** [perf] Popups are on screen (the engine keeps a smoother picture while they animate). */
   get busy(): boolean {
     return this.active.length > 0;
+  }
+
+  /** [plan4:GP-5] Hides or shows the numbers that are up right now (the share picture is taken without them). */
+  setVisible(on: boolean): void {
+    for (const p of this.active) p.line.visible = on;
   }
 
   /** [perf] Is any popup inside this world rectangle? (A popup nobody can see does not need a smooth picture.) */

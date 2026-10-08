@@ -76,7 +76,15 @@ export type BuildingType =
   | 'nursery'
   | 'school'
   | 'bathhouse'
-  | 'memorialHall';
+  | 'memorialHall'
+  // [plan4:BL-24,25,34..38] wave 3: two districts (dug, never placed) and the five Act rooms
+  | 'geothermal'
+  | 'oldVault'
+  | 'componentsPlant'
+  | 'alloyFoundry'
+  | 'dataCenter'
+  | 'forum'
+  | 'seedLab';
 
 export interface BuildingInstance {
   id: string;
@@ -223,12 +231,16 @@ export interface A11ySettings {
   powerSaver: boolean;
   /** iPhone: keep sound when the silent switch is on (audioSession 'playback' instead of 'ambient'). */
   playInSilent: boolean;
+  /** [plan4:AC-13] relaxed = longer presses (500 ms instead of 260), a wider double-tap window and messages that stay twice as long. */
+  timing: 'normal' | 'relaxed';
+  /** [plan4:AC-13] Floating + / - / fit buttons for the camera, for anyone who cannot pinch. */
+  zoomButtons: boolean;
 }
 
 export function defaultA11y(): A11ySettings {
   return {
     motion: 'auto', flash: 'normal', textScale: 1.1, contrast: 'normal', colorMode: 'none', haptics: 'light', oneHand: 'off',
-    largeTargets: false, popups: 'all', captions: false, announce: false, powerSaver: false, playInSilent: false,
+    largeTargets: false, popups: 'all', captions: false, announce: false, powerSaver: false, playInSilent: false, timing: 'normal', zoomButtons: false,
   };
 }
 
@@ -250,6 +262,8 @@ export interface GameStats {
   totalMissionsCompleted: number;
   totalCrisesSurvived: number;
   totalPrestigeResets: number;
+  /** [plan4:BL-25] The fraction of a blueprint the pre-war vault has made so far (blueprints are whole numbers; whole ones move to the resource). migrateState fills 0. */
+  planDust: number;
 }
 
 export interface ActiveEvent {
@@ -292,7 +306,7 @@ export interface Incident {
 
 // ---- [Danger] raids, disasters, maintenance and mourning (LATEGAME-PLAN part C) ----
 
-export type DisasterKind = 'collapse' | 'deepFlood' | 'epidemic' | 'meltdown';
+export type DisasterKind = 'collapse' | 'deepFlood' | 'epidemic' | 'meltdown' | 'steam'; // [plan4:BL-24] steam = the geothermal vent bursting
 
 /** A disaster with a countdown: handle it before the deadline or it strikes. */
 export interface Disaster {
@@ -492,6 +506,40 @@ export interface GameState {
   activeProjectId: string | null;
   // [LateGame B1-B4] big projects, trade, weekly challenge (older saves start empty).
   lateGame: LateGameState;
+  /** [plan4:GP-1] Daily orders: today's three, the streak and the blueprint pieces (older saves start with none). */
+  daily: DailyState;
+}
+
+/** [plan4:GP-1] One of the day's orders: how far along (`p` of `need`), whether done, whether its reward was taken. `b` is the counter it started from (or its own clock). */
+export interface DailyOrder {
+  id: string;
+  p: number;
+  need: number;
+  done: boolean;
+  claimed: boolean;
+  b?: number;
+  /** What a gold order was paid in: credits or a quarter of a blueprint. */
+  r?: 'credits' | 'frag';
+}
+
+/** [plan4:GP-1] The daily orders: reset at 04:00 local time (not midnight, so night players are not cut off). */
+export interface DailyState {
+  /** Local day number of the orders below (days since 1970, the day starting at 04:00); -1 = none made yet. */
+  day: number;
+  orders: DailyOrder[];
+  /** Ids held in reserve for the one swap of the day. */
+  spare: string[];
+  swapped: boolean;
+  /** The day chest was taken. */
+  chest: boolean;
+  /** Days in a row with a claim, today included once something was claimed. */
+  streak: number;
+  /** Day number of the latest claim (-1 = never). */
+  lastClaim: number;
+  /** The one grace day of this streak is used up. */
+  graceUsed: boolean;
+  /** Pieces of a blueprint (0-3); the fourth makes one. */
+  frag: number;
 }
 
 /** Credits-shop bookkeeping: purchases today (price ramp resets at local midnight) and isotope bought this week. */
@@ -523,6 +571,11 @@ export interface LateGameState {
   designs?: Record<string, 'a' | 'b'>;
   /** [Q1] Play seconds before which no story chapter may start (kept in the save: closing the game must not shorten the gap). */
   storyUntil?: number;
+}
+
+/** [plan4:GP-1] No orders yet: the first ones are made once the guided half hour is over. */
+export function createDaily(): DailyState {
+  return { day: -1, orders: [], spare: [], swapped: false, chest: false, streak: 0, lastClaim: -1, graceUsed: false, frag: 0 };
 }
 
 export function createLateGame(): LateGameState {
@@ -582,6 +635,10 @@ export function migrateState(saved: GameState): GameState {
   merged.lateGame.trade = { ...createLateGame().trade, ...merged.lateGame.trade };
   merged.lateGame.weekly = { ...createLateGame().weekly, ...merged.lateGame.weekly };
   if (!merged.resources.credits) merged.resources.credits = { ...fresh.resources.credits };
+  // [plan4:GP-1] Daily orders: additive (no version bump); a partial block keeps what it has.
+  merged.daily = { ...createDaily(), ...(saved.daily ?? {}) };
+  merged.daily.orders = Array.isArray(merged.daily.orders) ? merged.daily.orders : [];
+  merged.daily.spare = Array.isArray(merged.daily.spare) ? merged.daily.spare : [];
   // [Long game] v5: Act, difficulty, world clock and the empty slices of the newer systems.
   merged.longGame = migrateLongGame(saved.longGame, saved.era ?? 0, merged.stats.totalPlayTime ?? 0, merged.prestige?.rebirthCount ?? 0);
   return merged;
@@ -642,6 +699,7 @@ export function createInitialState(): GameState {
       totalMissionsCompleted: 0,
       totalCrisesSurvived: 0,
       totalPrestigeResets: 0,
+      planDust: 0,
     },
     achievements: [],
     storyFlags: [],
@@ -673,6 +731,7 @@ export function createInitialState(): GameState {
     shop: { day: null, bought: {}, week: null, weekBought: {} },
     activeProjectId: null,
     lateGame: createLateGame(),
+    daily: createDaily(), // [plan4:GP-1]
     longGame: createLongGame(),
   };
 }

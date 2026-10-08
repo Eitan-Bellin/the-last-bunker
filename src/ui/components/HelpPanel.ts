@@ -1,7 +1,11 @@
 import { i18n } from '../../i18n/I18nManager';
-import { BOOK, BOOK_GROUPS, HELP_TOPICS, getBookEntry } from '../../data/book';
+import { lazyChunk } from '../../utils/lazy';
 import { Sheet } from './Sheet';
 import { el } from '../dom';
+
+/** Plan 4 wave 3 (perf): the book's text is its own chunk (about 10 KB gzipped), fetched when the book is first opened (or when the page is idle after start). */
+const loadBook = lazyChunk(() => import('../../data/book'));
+type Book = typeof import('../../data/book');
 
 /**
  * [Q6] The Bunker Book: the game's own words in two or three sentences each, grouped, searchable. Opened from the Menu, from
@@ -10,6 +14,7 @@ import { el } from '../dom';
 export class HelpPanel {
   private sheet = new Sheet('help-sheet');
   private entries = new Map<string, HTMLDetailsElement>();
+  private book: Book | null = null;
 
   constructor() {
     this.sheet.onClose = () => undefined;
@@ -25,9 +30,15 @@ export class HelpPanel {
 
   /** Opens the book; `topic` is an entry id or a panel name (see HELP_TOPICS). */
   show(topic?: string): void {
-    this.render();
+    if (this.book) { this.open(this.book, topic); return; }
+    // First use: the chunk is normally already there (fetched when the page went idle); otherwise this waits for it.
+    loadBook().then(book => { this.book = book; this.open(book, topic); }).catch(() => undefined);
+  }
+
+  private open(book: Book, topic?: string): void {
+    this.render(book);
     this.sheet.show();
-    const id = topic ? (getBookEntry(topic) ? topic : HELP_TOPICS[topic]) : undefined;
+    const id = topic ? (book.getBookEntry(topic) ? topic : book.HELP_TOPICS[topic]) : undefined;
     const target = id ? this.entries.get(id) : undefined;
     if (target) {
       target.open = true;
@@ -35,7 +46,7 @@ export class HelpPanel {
     }
   }
 
-  private render(): void {
+  private render({ BOOK, BOOK_GROUPS }: Book): void {
     const locale = i18n.currentLocale;
     this.sheet.setTitle(`[[question]] ${i18n.t('book.title')}`);
     this.entries.clear();
