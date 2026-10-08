@@ -1583,5 +1583,266 @@
     "maxWorkers": 0,
     "powerConsumption": 1,
     "color": "#5A8AA0"
+  },
+  "geothermal": {
+    "name": {
+      "en": "Geothermal Vent",
+      "he": "מערת קיטור"
+    },
+    "description": {
+      "en": "A crack in the deep rock that breathes hot steam. Turbines turn it into steady power with no fuel, but a worn vent can burst.",
+      "he": "סדק בסלע העמוק שנושף קיטור חם. טורבינות הופכות אותו לחשמל יציב בלי דלק, אבל פיר שחוק עלול להתפוצץ."
+    },
+    "tier": 4,
+    "size": {
+      "w": 4,
+      "h": 1
+    },
+    "maxLevel": 5,
+    "baseCost": {
+      "materials": 900,
+      "scrap": 180
+    },
+    "costMultiplier": 2.2,
+    "constructionTime": 600,
+    "production": {
+      "power": {
+        "base": 8,
+        "perLevel": 0.5
+      }
+    },
+    "optimalStat": "endurance",
+    "statBonusPerPoint": 0.05,
+    "baseEfficiency": 0.4,
+    "maxWorkers": 3,
+    "powerConsumption": 0,
+    "color": "#B0502A"
+  },
+  "oldVault": {
+    "name": {
+      "en": "Pre-War Vault",
+      "he": "כספת טרום־מלחמה"
+    },
+    "description": {
+      "en": "A sealed vault from before the war, full of drawers of old plans. A crew sorts them and copies the blueprints we can use.",
+      "he": "כספת אטומה מלפני המלחמה, מלאה במגירות של תוכניות ישנות. צוות ממיין אותן ומעתיק את התוכניות שאפשר להשתמש בהן."
+    },
+    "tier": 4,
+    "size": {
+      "w": 4,
+      "h": 1
+    },
+    "maxLevel": 5,
+    "baseCost": {
+      "materials": 1000,
+      "scrap": 200
+    },
+    "costMultiplier": 2.2,
+    "constructionTime": 600,
+    "production": {
+      "blueprints": {
+        "base": 0.00005,
+        "perLevel": 0.5
+      }
+    },
+    "optimalStat": "intelligence",
+    "statBonusPerPoint": 0.05,
+    "baseEfficiency": 0.25,
+    "maxWorkers": 3,
+    "powerConsumption": 1,
+    "color": "#8A8A6A"
+  },
+  "componentsPlant": {
+    "name": {
+      "en": "Components Plant",
+      "he": "מפעל רכיבים"
+    },
+    "description": {
+      "en": "A whole hall of presses and lathes that turns scrap into components, without tying up a workshop.",
+      "he": "אולם שלם של מכבשים ומחרטות שהופך גרוטאות לרכיבים, בלי לתפוס סדנה."
+    },
+    "tier": 4,
+    "size": {
+      "w": 3,
+      "h": 1
+    },
+    "maxLevel": 5,
+    "baseCost": {
+      "components": 490,
+      "materials": 39200
+    },
+    "costMultiplier": 2.2,
+    "constructionTime": 900,
+    "production": {
+      "components": {
+        "base": 0.0027,
+        "perLevel": 1.2
+      }
+    },
+    "slots": 3,
+    "maxCopies": 1,
+    "optimalStat": "agility",
+    "statBonusPerPoint": 0.05,
+    "baseEfficiency": 0.3,
+    "maxWorkers": 3,
+    "powerConsumption": 4,
+    "color": "#B07A3A"
+  },
+  "alloyFoundry": {
+    "name": {
+      "en": "Alloy Foundry",
+      "he": "יצקת סגסוגות"
+    },
+    "description": {
+      "en": "Roaring furnaces and moulds. Melts materials and scrap into alloys, without tying up a generator.",
+      "he": "כבשנים רועמים ותבניות. מתיכה חומרים וגרוטאות לסגסוגות, בלי לתפוס גנרטור."
+    },
+    "tier": 4,
+    "size": {
+      "w": 3,
+      "h": 1
+    },
+    "maxLevel": 5,
+    "baseCost": {
+      "alloys": 168,
+      "materials": 44800,
+      "components": 224
+    },
+    "costMultiplier": 2.2,
+    "constructionTime": 1200,
+    "production": {
+      "alloys": {
+        "base": 0.00108,
+        "perLevel": 1.2
+      }
+    },
+    "slots": 3,
+    "maxCopies": 1,
+    "optimalStat": "strength",
+    "statBonusPerPoint": 0.05,
+    "baseEfficiency": 0.3,
+    "maxWorkers": 3,
+    "powerConsumption": 5,
+    "color": "#C0522A"
+  },
+  "dataCenter": {
+    "name": {
+      "en": "Data Center",
+      "he": "מרכז נתונים"
+    },
+    "description": {
+      "en": "Racks of old servers humming in the cold. Turns knowledge into data, without tying up a laboratory.",
+      "he": "מדפי שרתים ישנים שמזמזמים בקור. הופך ידע לנתונים, בלי לתפוס מעבדה."
+    },
+    "tier": 5,
+    "size": {
+      "w": 3,
+      "h": 1
+    },
+    "maxLevel": 5,
+    "baseCost": {
+      "data": 142,
+      "materials": 50400,
+      "components": 252,
+      "alloys": 76
+    },
+    "costMultiplier": 2.2,
+    "constructionTime": 1500,
+    "production": {
+      "data": {
+        "base": 0.00054,
+        "perLevel": 1.2
+      }
+    },
+    "slots": 3,
+    "maxCopies": 1,
+    "optimalStat": "intelligence",
+    "statBonusPerPoint": 0.05,
+    "baseEfficiency": 0.3,
+    "maxWorkers": 3,
+    "powerConsumption": 6,
+    "color": "#4A7AA8"
+  },
+  "forum": {
+    "name": {
+      "en": "Citizens' Forum",
+      "he": "פורום האזרחים"
+    },
+    "description": {
+      "en": "A round hall of benches where everyone has a say. Shared meals and open debate make influence, without tying up a canteen.",
+      "he": "אולם עגול עם ספסלים שבו לכולם יש מילה. ארוחות משותפות ודיון פתוח יוצרים השפעה, בלי לתפוס קפיטריה."
+    },
+    "tier": 5,
+    "size": {
+      "w": 3,
+      "h": 1
+    },
+    "maxLevel": 5,
+    "baseCost": {
+      "influence": 105,
+      "materials": 56000,
+      "components": 280,
+      "alloys": 84,
+      "data": 63
+    },
+    "costMultiplier": 2.2,
+    "constructionTime": 1800,
+    "production": {
+      "influence": {
+        "base": 0.00036,
+        "perLevel": 1.2
+      }
+    },
+    "slots": 3,
+    "maxCopies": 1,
+    "optimalStat": "charisma",
+    "statBonusPerPoint": 0.05,
+    "baseEfficiency": 0.3,
+    "maxWorkers": 3,
+    "powerConsumption": 3,
+    "color": "#B08A4A"
+  },
+  "seedLab": {
+    "name": {
+      "en": "Seed Lab",
+      "he": "מעבדת זרעים"
+    },
+    "description": {
+      "en": "Cold cabinets and gene readers deep below. Fuses alloys and data into seed cores, without tying up a reactor.",
+      "he": "ארונות קירור וקוראי גנים עמוק למטה. מתיכה סגסוגות ונתונים לליבות זרע, בלי לתפוס כור."
+    },
+    "tier": 5,
+    "size": {
+      "w": 3,
+      "h": 1
+    },
+    "maxLevel": 5,
+    "baseCost": {
+      "seedCores": 42,
+      "materials": 67200,
+      "components": 336,
+      "alloys": 101,
+      "data": 76,
+      "influence": 50
+    },
+    "costMultiplier": 2.2,
+    "constructionTime": 2400,
+    "production": {
+      "seedCores": {
+        "base": 0.000225,
+        "perLevel": 1.2
+      }
+    },
+    "slots": 3,
+    "maxCopies": 1,
+    "place": {
+      "floors": "deep"
+    },
+    "optimalStat": "intelligence",
+    "statBonusPerPoint": 0.05,
+    "baseEfficiency": 0.3,
+    "maxWorkers": 3,
+    "powerConsumption": 6,
+    "color": "#5AA05A"
   }
 }

@@ -40,6 +40,8 @@ export const AMBIENCE_FOR: Partial<Record<BuildingType, AmbienceKey>> = {
   // [plan4:BL-15..32]
   quarantineWard: 'medical', solarArray: 'air', windTurbine: 'air', watchtower: 'air', garage: 'workshop', decon: 'water',
   aquaculture: 'water', market: 'kitchen', nursery: 'base', school: 'base', bathhouse: 'water', memorialHall: 'air',
+  // [plan4:BL-24,25,34..38]
+  geothermal: 'reactor', oldVault: 'air', componentsPlant: 'workshop', alloyFoundry: 'workshop', dataCenter: 'electronics', forum: 'kitchen', seedLab: 'electronics',
 };
 
 function loopNoise(ctx: OfflineAudioContext, dest: AudioNode, color: 'white' | 'pink' | 'brown', type: BiquadFilterType, freq: number, q: number, level: number, seed: number): void {

@@ -39,6 +39,12 @@ const ROOM_ZONE: Partial<Record<BuildingType, SignZone>> = {
   generator: 'engineering', workshop: 'engineering', reactor: 'engineering', reactorHall: 'engineering',
   medbay: 'science', laboratory: 'science', radioTower: 'science',
   armory: 'security', trainingRoom: 'security', storage: 'security',
+  // [plan4:BL-13] every room of waves 1-3 (a deep level is named after what stands on it; districts are skipped by signZone)
+  batteryBank: 'engineering', recycler: 'engineering', condenser: 'agri', mushroomFarm: 'agri', aquaculture: 'agri',
+  commons: 'living', nursery: 'living', bathhouse: 'living', memorialHall: 'living', market: 'living', forum: 'living',
+  library: 'science', school: 'science', quarantineWard: 'science', decon: 'science', dataCenter: 'science', seedLab: 'science',
+  gatePost: 'security', barracks: 'security', watchtower: 'security',
+  garage: 'engineering', solarArray: 'engineering', windTurbine: 'engineering', componentsPlant: 'engineering', alloyFoundry: 'engineering',
 };
 
 /**

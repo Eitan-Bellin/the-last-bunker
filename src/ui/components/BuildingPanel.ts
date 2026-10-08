@@ -6,7 +6,7 @@ import { roomEffect, childCapacityOf } from '../../data/roomEffects'; // [plan4:
 import { Sheet } from './Sheet';
 import { genderOf, portraitFor, portraitUrl } from '../../data/portraits';
 import { bunkerDefense } from '../../systems/EventSystem';
-import { BUILDING_ICONS, RESOURCE_ICONS, STAT_ICONS, bar, button, costRow, el, setBar, setRich } from '../dom';
+import { BUILDING_ICONS, RESOURCE_ICONS, STAT_ICONS, bar, button, costRow, el, rateText, setBar, setRich } from '../dom';
 import { INCIDENTS, quickFixCost } from '../../data/incidents';
 import { boostReserve, chainInputs, inputFed, inputRate } from '../../data/chains';
 import { roomPowerDraw } from '../../systems/ResourceSystem';
@@ -528,7 +528,7 @@ export class BuildingPanel {
     const output = this.engine.resourceSystem.getBuildingOutput(state, b);
     for (const [r, elv] of this.outputValues) {
       const v = output[r as ResourceType] ?? 0;
-      elv.textContent = `${i18n.formatRate(v)} ${i18n.t('resources.perSecond')}`;
+      elv.textContent = rateText(v); // plan4:BL-25 a trickle (blueprints) shows per hour
     }
     if (this.efficiencyEl) {
       this.efficiencyEl.textContent = `${Math.round(workforceMultiplier(state, b) * 100)}%`;

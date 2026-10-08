@@ -57,6 +57,14 @@ export const PALETTES: Record<BuildingType, Palette> & Record<string, Palette> =
   school: { wall: 0x625a4c, floor: 0x4c4238, accent: 0xe8e0c0, light: 0xffe6b0 },
   bathhouse: { wall: 0x748480, floor: 0x586460, accent: 0x6ad0d8, light: 0xe8fff0 },
   memorialHall: { wall: 0x4e4850, floor: 0x3e3a3e, accent: 0xe8a850, light: 0xffc880 },
+  // [plan4:BL-24,25,34..38] fallback palettes of the wave 3 rooms (the Room-Art agent paints their real looks; the two districts normally use a borrowed cavern painting, see art/registry.ts DISTRICT_ART_ALIAS)
+  geothermal: { wall: 0x4a3028, floor: 0x362420, accent: 0xff7a3a, light: 0xffc890 },
+  oldVault: { wall: 0x4e4e44, floor: 0x3a3a32, accent: 0xc8c070, light: 0xf0e8b0 },
+  componentsPlant: { wall: 0x544a3c, floor: 0x3e362c, accent: 0xffa040, light: 0xffd49a },
+  alloyFoundry: { wall: 0x56382c, floor: 0x40281f, accent: 0xff6a2a, light: 0xffb078 },
+  dataCenter: { wall: 0x2e4258, floor: 0x24323f, accent: 0x5ab8ff, light: 0xb8e0ff },
+  forum: { wall: 0x6a5a40, floor: 0x4e4230, accent: 0xffc860, light: 0xffe6a8 },
+  seedLab: { wall: 0x2e5448, floor: 0x24403a, accent: 0x7affb0, light: 0xc8ffe0 },
 };
 
 interface Ctx {

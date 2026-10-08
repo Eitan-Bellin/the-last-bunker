@@ -510,6 +510,15 @@ export type DistrictArt = typeof DISTRICT_KEYS[number];
 export const PAINTED_DISTRICTS: readonly string[] = ['cave', 'lake', 'metro'];
 /** District paintings are twice as wide as tall (6 slots × one floor, with headroom). */
 export const DISTRICT_OUT: [number, number] = [960, 484];
+/**
+ * [plan4:BL-24,25] The Act districts borrow a classic cavern painting until their own is painted: geothermal the crystal cave, the pre-war vault the
+ * metro station. To give one a painting of its own, add its key to DISTRICT_KEYS (the exact key wins over the alias) and drop the file in art/districts.
+ */
+export const DISTRICT_ART_ALIAS: Partial<Record<string, DistrictArt>> = { geothermal: 'cave', oldVault: 'metro' };
+/** The painting file name (art/districts/<name>.webp) a district uses. */
+export function districtArtName(kind: string): string {
+  return (DISTRICT_KEYS as readonly string[]).includes(kind) ? kind : DISTRICT_ART_ALIAS[kind] ?? kind;
+}
 
 /** Two-floor halls, painted tall. */
 export const HALL_KEYS = ['atrium', 'reactorHall'] as const;
@@ -577,8 +586,13 @@ export function roomArtKey(type: BuildingType, tier: RoomTier): string | null {
 
 /** Painting for any building type, including districts and halls (which have one look). */
 export function buildingArtKey(type: BuildingType, tier: RoomTier): string | null {
-  // [plan4:BL-7] a composed district has three looks (its own key per tier); a painted one has one.
-  if ((DISTRICT_KEYS as readonly string[]).includes(type)) return PAINTED_DISTRICTS.includes(type) ? `districts/${type}` : composedSpec(type) ? `districts/${type}-${tier}` : null;
+  // [plan4:BL-7] a composed district has three looks (its own key per tier); a painted one has one. [plan4:BL-24,25] A district with
+  // neither falls back to the cavern painting it borrows (DISTRICT_ART_ALIAS) until someone paints it.
+  if ((DISTRICT_KEYS as readonly string[]).includes(type) || DISTRICT_ART_ALIAS[type]) {
+    if (PAINTED_DISTRICTS.includes(type)) return `districts/${type}`;
+    if (composedSpec(type)) return `districts/${type}-${tier}`;
+    return `districts/${districtArtName(type)}`;
+  }
   if ((HALL_KEYS as readonly string[]).includes(type)) return `halls/${type}`;
   return roomArtKey(type, tier);
 }

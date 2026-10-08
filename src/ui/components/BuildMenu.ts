@@ -11,7 +11,7 @@ import { recommendedRooms } from '../../systems/BuildAdvice';
 import { Sheet } from './Sheet';
 import { ArtLibrary } from '../../art/ArtLibrary';
 import { buildingArtKey } from '../../art/registry';
-import { BUILDING_ICONS, RESOURCE_ICONS, el } from '../dom';
+import { BUILDING_ICONS, RESOURCE_ICONS, el, rateText } from '../dom';
 
 /** What one card needs to know about a room right now. */
 interface Entry {
@@ -133,7 +133,7 @@ export class BuildMenu {
     const locale = i18n.currentLocale;
     const all = this.entries(state);
     // Only categories that have a buildable room get a chip.
-    const present = BUILD_CATEGORIES.filter(c => all.some(e => buildCategoryOf(e.type) === c.id));
+    const present = BUILD_CATEGORIES.filter(c => all.some(e => buildCategoryOf(e.type) === c.id && (c.id !== 'act' || e.unlocked))); // plan4:BL-34..38 the Act chip shows once an Act room is open
     if (this.category !== 'all' && !present.some(c => c.id === this.category)) this.category = 'all';
 
     // A search looks through every category (a typed word means the player knows what they want).
@@ -224,7 +224,7 @@ export class BuildMenu {
   /** The room's main results as short chips with an icon (a number alone would not say what it is). */
   private outputs(def: BuildingDef): string[] {
     const out: string[] = [];
-    for (const [r, p] of Object.entries(def.production ?? {})) out.push(`${RESOURCE_ICONS[r] ?? ''} \u2066${i18n.formatRate(p.base)}/s\u2069`); // LRI..PDI: "+0.9/s" keeps its order in right-to-left text
+    for (const [r, p] of Object.entries(def.production ?? {})) out.push(`${RESOURCE_ICONS[r] ?? ''} \u2066${p.base < 0.005 ? rateText(p.base) : `${i18n.formatRate(p.base)}/s`}\u2069`); // plan4:BL-25 a trickle shows per hour; // LRI..PDI: "+0.9/s" keeps its order in right-to-left text
     const fx = def.effects;
     if (fx?.morale) out.push(`[[happy]] +${fx.morale.base}${fx.moraleKind && fx.moraleKind !== 'base' ? ` ${i18n.t(`morale.channel.${fx.moraleKind}`)}` : ''}`);
     if (fx?.maxPopulation) out.push(`[[quarters]] +${fx.maxPopulation.base}`);

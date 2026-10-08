@@ -41,7 +41,7 @@ export const INCIDENTS: Record<IncidentKind, IncidentDef> = {
     kind: 'fire', icon: 'fire', color: 0xff7a2a, stat: 'endurance',
     rooms: { generator: 3, reactor: 2, reactorHall: 2, workshop: 2, canteen: 2, laboratory: 1.5, armory: 1, storage: 1, metro: 0.5,
       batteryBank: 2.5, recycler: 1.5, commons: 0.5, library: 1, condenser: 0.5,
-      garage: 1 }, // [plan4:BL-9..13,20] batteries burn, the recycler runs hot, the motor pool is full of fuel and oil
+      garage: 1, geothermal: 0.5, dataCenter: 1.5, componentsPlant: 1, alloyFoundry: 2 }, // [plan4:BL-9..13,20,24,34..36] batteries burn, the recycler runs hot, the motor pool is full of fuel and oil, the vent leaks steam, servers and furnaces overheat
     quickFix: { water: 25 }, harm: 0.35,
     name: { he: 'שריפה', en: 'Fire' },
     desc: { he: 'להבות אוכלות את החדר. היא תתפשט לחדר הסמוך אם לא תכבו אותה.', en: 'Flames are eating the room. It will spread next door if nobody puts it out.' },
@@ -161,6 +161,15 @@ export const DISASTERS: Record<DisasterKind, DisasterDef> = {
     struck: { he: 'הכור הותך ונסגר ליום. עובדים נפגעו מקרינה.', en: 'The reactor melted down and is shut for a day. Workers were hurt by radiation.' },
     saved: { he: 'הכור קורר והסכנה חלפה.', en: 'The reactor was cooled and the danger passed.' },
   },
+  // [plan4:BL-24] A worn geothermal vent (level 3+, wear 40%+) can burst: the same shape as the meltdown (a shut room, hurt workers), its own words and price.
+  steam: {
+    kind: 'steam', icon: 'fire', color: 0xe8e4da, countdown: 1200, crew: 2,
+    name: { he: 'התפרצות קיטור', en: 'Steam Burst' },
+    desc: { he: 'הלחץ במערת הקיטור עולה והצנרת חורקת. צוות מנוסה וגרוטאות יכולים לשחרר את הלחץ לפני שהיא תתפוצץ.', en: 'The pressure in the vent is climbing and the pipes groan. A skilled crew and scrap can release it before it bursts.' },
+    handleLabel: { he: 'שחררו את הלחץ', en: 'Release the pressure' },
+    struck: { he: 'המערה התפוצצה. הקיטור שרף את מי שהיה בסביבה, והמערה נסגרה ליום.', en: 'The vent burst. The steam scalded those nearby and the vent is shut for a day.' },
+    saved: { he: 'הצוות שחרר את הלחץ בזמן. המערה שקטה.', en: 'The crew released the pressure in time. The vent is quiet.' },
+  },
 };
 
 export const DISASTER_KINDS = Object.keys(DISASTERS) as DisasterKind[];
@@ -176,6 +185,7 @@ export function disasterCost(state: GameState, kind: DisasterKind): Record<strin
       return { medicine: Math.max(5, Math.min(Math.round(cap * 0.6), Math.ceil(state.survivors.length * 0.4))) };
     }
     case 'meltdown': return { scrap: 40 * mult, knowledge: 20 * mult };
+    case 'steam': return { scrap: 30 * mult, materials: 40 * mult }; // plan4:BL-24
   }
 }
 

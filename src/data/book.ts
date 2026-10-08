@@ -164,6 +164,23 @@ export const BOOK: BookEntry[] = [
       en: 'Solar panels give power only by day, and a wind turbine gives it by the wind: sometimes plenty, sometimes almost none. They need no fuel and never short out. A battery bank keeps the surplus for the hours with nothing. Both stand on the roof, so watch the dark hours.',
     },
   },
+  // [plan4:BL-24,25,34..38] wave 3
+  {
+    id: 'actRooms', icon: '[[componentsPlant]]', group: 'basics',
+    title: { he: 'חדרי המערכות', en: 'Act rooms' },
+    text: {
+      he: 'בכל מערכה מאוחרת נפתח חדר שמייצר את המטבע שלה, בלי שיצטרכו לתפוס חדר רגיל בתפקיד: מפעל רכיבים, יצקת סגסוגות, מרכז נתונים, פורום האזרחים ומעבדת זרעים. מחירם בכמה שעות הכנסה של המערכה, ויש רק אחד מכל סוג. הם אוכלים אותם חומרים כמו התפקיד, אז דאגו להם. הם מופיעים בתפריט הבנייה תחת "חדרי מערכה".',
+      en: 'In each late Act a room opens that makes its currency, so no ordinary room has to be given the matching role: the components plant, alloy foundry, data center, citizens\' forum and seed lab. They cost a few hours of the Act\'s income, and you can have only one of each. They eat the same inputs as the role, so keep them stocked. They sit in the build menu under "Act rooms".',
+    },
+  },
+  {
+    id: 'actDistricts', icon: '[[geothermal]]', group: 'basics',
+    title: { he: 'מערת קיטור וכספת טרום־מלחמה', en: 'Steam vent and pre-war vault' },
+    text: {
+      he: 'שני מחוזות חדשים נפתחים בחפירה לצד, אחרי מחקר ומערכה מתאימים: מערת קיטור (מערכה IV) נותנת חשמל בלי דלק, אבל מערה שחוקה עלולה להתפוצץ, אז תחזקו אותה. כספת טרום־מלחמה (מערכה V) מייצרת תוכניות לאט, אחת כמה שעות כשהיא מאוישת. בחפירה אפשר לבחור בין המחוזות הפנויים.',
+      en: 'Two new districts open by tunnelling sideways, after the right research and Act: the geothermal vent (Act IV) gives power with no fuel, but a worn vent can burst, so keep it maintained. The pre-war vault (Act V) makes blueprints slowly, one every few hours when it is staffed. When you dig, you can choose between the districts on offer.',
+    },
+  },
   // ---- people and work ----
   {
     id: 'mastery', icon: '[[medal]]', group: 'people',
@@ -283,8 +300,8 @@ export const BOOK: BookEntry[] = [
     id: 'disasters', icon: '[[warning]]', group: 'world',
     title: { he: 'תקלות ואסונות', en: 'Incidents and disasters' },
     text: {
-      he: 'שריפה, הצפה, קריסה: מופיעים עם אזהרה. אפשר לטפל מהר (תיקון קצר) או לשבץ צוות. תחזוקה שוטפת של חדרים מקטינה את הסיכוי.',
-      en: 'Fire, flood, cave-in: they come with a warning. You can fix them fast (a quick repair) or assign a team. Regular servicing of rooms lowers the odds.',
+      he: 'שריפה, הצפה, קריסה, התפרצות קיטור: מופיעים עם אזהרה. אפשר לטפל מהר (תיקון קצר) או לשבץ צוות. תחזוקה שוטפת של חדרים מקטינה את הסיכוי.',
+      en: 'Fire, flood, cave-in, steam burst: they come with a warning. You can fix them fast (a quick repair) or assign a team. Regular servicing of rooms lowers the odds.',
     },
   },
   {
