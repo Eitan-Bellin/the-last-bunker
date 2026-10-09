@@ -77,14 +77,21 @@ export function playIntro(opts: { play: (s: 'siren' | 'wind' | 'door' | 'click')
   const titleCard = () => {
     caption.classList.remove('in');
     const title = el('div', 'intro-title');
+    // [ux-wp6: retention R12] The long goal, said once at the very start: seven Acts, then Genesis, and four endings.
+    const goal = el('div', 'intro-title-sub intro-title-goal', i18n.t('wp6.intro.goal'));
+    goal.style.letterSpacing = 'normal';
+    goal.style.marginTop = '18px';
+    goal.style.maxWidth = '30em';
+    goal.style.marginInline = 'auto';
     title.append(
       el('div', 'intro-title-main', i18n.t('intro.title')),
       el('div', 'intro-title-sub', i18n.t('intro.day')),
+      goal,
     );
     stage.replaceChildren(title);
     void title.offsetWidth;
     title.classList.add('in');
-    timer = window.setTimeout(finish, 3200);
+    timer = window.setTimeout(finish, 4600);
   };
 
   /** A torch beam wanders over the dark bunker, then the darkness lifts. */
