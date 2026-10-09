@@ -8,7 +8,7 @@ import { Sheet } from './Sheet';
 import { RESOURCE_ICONS, bar, button, costRow, el, setBar, setRich } from '../dom';
 import { ACTS, actOf, type ActDef } from '../../data/acts';
 import { FOREMAN_ACT, FOREMAN_ORDERS, type ForemanSystem } from '../../systems/ForemanSystem';
-import { actFraction, actRequirements, pickRequirement, type Requirement } from '../../systems/Guide';
+import { actEta, actFraction, actRequirements, nowStep, type Requirement } from '../../systems/Guide';
 import type { ObjectiveAction } from '../../systems/ObjectiveSystem';
 import { resourceDef } from '../../data/resources';
 import { getScenario, homeShare, type HomeSite } from '../../data/scenarios';
@@ -32,6 +32,8 @@ interface ReqRow {
   bar: HTMLElement;
   label: HTMLElement;
   hint: HTMLElement;
+  /** [ux-wp1 C1] The era goal's own steps, one line each. */
+  subs: HTMLElement;
   /** What a tap does now (changes as the requirement's next step changes). */
   action: ObjectiveAction;
 }
@@ -65,6 +67,8 @@ export class EraPanel {
   private nowMeta: HTMLElement | null = null;
   private nowGo: HTMLButtonElement | null = null;
   private nowAction: ObjectiveAction = null;
+  /** [ux-wp1 M2] "This Act ends in ~X at today's rates". */
+  private nowEta: HTMLElement | null = null;
   private forecastBox: HTMLElement | null = null;
   private endingBars: { id: string; bar: HTMLElement; label: HTMLElement }[] = [];
   private pctLabel: HTMLElement | null = null;
@@ -129,23 +133,37 @@ export class EraPanel {
       const row = this.reqRows[i];
       if (!row) return;
       setBar(row.bar, r.fraction * 100);
-      row.label.textContent = r.done ? '✓' : r.progress[1] > 1 ? `${r.progress[0]}/${r.progress[1]}` : '';
+      // [ux-wp1 P15] "0/6 · 2 in progress": work already running counts where the player can see it.
+      const count = r.progress[1] > 1 ? `${r.progress[0]}/${r.progress[1]}` : '';
+      row.label.textContent = r.done ? '✓' : (r.pending ?? 0) > 0 ? `${count}${count ? ' · ' : ''}${i18n.t('wp1.inProgress', { n: r.pending ?? 0 })}` : count;
       setLine(row.hint, r.done ? '' : r.text);
+      this.refreshSubs(row.subs, r.done ? undefined : r.subs);
       row.row.classList.toggle('done', r.done);
       row.action = r.action;
     });
-    const pick = pickRequirement(reqs);
+    // [ux-wp1 A1] The same step as the bottom card and the check-in: the tutorial's while it lasts, then the Act's.
+    const pick = nowStep(engine, state);
     if (this.nowText) {
       if (pick) {
-        setLine(this.nowText, pick.text);
+        setLine(this.nowText, `${pick.icon} ${pick.text}`);
         this.nowAction = pick.action;
-        setLine(this.nowMeta, pick.title);
+        setLine(this.nowMeta, pick.tutorial ? i18n.t('wp1.tutorialThen', { act: act.name[i18n.currentLocale] }) : pick.title);
       } else {
         setLine(this.nowText, i18n.t(act.id >= ACTS.length ? 'guide.genesis' : 'command.actDone'));
         this.nowAction = act.id >= ACTS.length ? { kind: 'genesis' } : null;
         setLine(this.nowMeta, '');
       }
       if (this.nowGo) this.nowGo.style.display = this.nowAction ? '' : 'none';
+    }
+    if (this.nowEta) {
+      // [ux-wp1 M2] When the Act should end at today's rates (a lower bound when some step can't be timed).
+      const e = actEta(reqs);
+      const what = e.slowest ? e.slowest.title : '';
+      const text = e.seconds >= 60 && e.slowest
+        ? i18n.t(e.known ? 'wp1.actEta' : 'wp1.actEtaMin', { t: i18n.formatDuration(e.seconds), what })
+        : '';
+      setLine(this.nowEta, text ? `[[clock]] ${text}` : '');
+      this.nowEta.style.display = text ? '' : 'none';
     }
     if (this.pctLabel) this.pctLabel.textContent = `${Math.floor(Math.min(0.99, actFraction(engine, state, act)) * 100)}%`;
     this.refreshWings(state);
@@ -172,8 +190,19 @@ export class EraPanel {
     this.nowText = el('div', 'now-text');
     this.nowMeta = el('div', 'bp-hint now-meta');
     this.nowGo = button(i18n.t('command.go'), 'btn-primary btn-small now-go', () => this.onGo?.(this.nowAction));
-    card.append(this.nowText, this.nowMeta, this.nowGo);
+    this.nowEta = el('div', 'bp-hint now-eta');
+    card.append(this.nowText, this.nowMeta, this.nowEta, this.nowGo);
     return card;
+  }
+
+  /** [ux-wp1 C1] The era's steps under its Act goal: "✓ Restore the generator", "• Clear 6 areas 4/6". */
+  private refreshSubs(box: HTMLElement, subs: Requirement['subs']): void {
+    const lines = (subs ?? []).map(s => `${s.done ? '✓' : '•'} ${s.text}${!s.done && s.count ? ` ${s.count}` : ''}`);
+    const sig = lines.join('|');
+    if (box.dataset.sig === sig) return;
+    box.dataset.sig = sig;
+    box.replaceChildren(...lines.map((l, i) => el('div', `req-sub${subs![i].done ? ' done' : ''}`, l)));
+    box.style.display = lines.length ? '' : 'none';
   }
 
   /** [Long game] The Act card: its name, what it allows, and every requirement with its own next step. */
@@ -209,8 +238,10 @@ export class EraPanel {
       top.append(el('span', 'era-goal-text', `${r.icon} ${r.title}`), label);
       const b = bar(0, 'accent');
       const hint = el('div', 'bp-hint req-hint');
-      row.append(top, b, hint);
-      const entry: ReqRow = { id: r.id, row, bar: b, label, hint, action: r.action };
+      const subs = el('div', 'bp-hint req-subs');
+      subs.style.display = 'none';
+      row.append(top, b, hint, subs);
+      const entry: ReqRow = { id: r.id, row, bar: b, label, hint, subs, action: r.action };
       row.addEventListener('click', () => { if (entry.action) this.onGo?.(entry.action); });
       card.appendChild(row);
       this.reqRows.push(entry);
@@ -391,6 +422,7 @@ export class EraPanel {
     const state = this.lastState;
     const longGame = !!state && this.longGame(state);
     this.nowText = this.nowMeta = this.nowGo = null;
+    this.nowEta = null;
     this.forecastBox = null;
     this.pctLabel = null;
     this.endingBars = [];

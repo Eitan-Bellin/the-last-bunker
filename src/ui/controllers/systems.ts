@@ -4,6 +4,8 @@ import type { GameApp } from '../../app';
 import { RESEARCH } from '../../data/research';
 import { lawSlots } from '../../data/laws';
 import { seasonsActive } from '../../data/seasons';
+import { actOf } from '../../data/acts';
+import { getProject } from '../../data/projects';
 import type { SpotKey } from '../HUD';
 
 /** One system a run meets along the way: a card says what it is, once, and the button to use it glows for a moment. */
@@ -34,6 +36,17 @@ const tier2 = (id: string, from: number, resource: string): SystemCard => ({
  * long version. Each card shows once per save (flag `sys:<id>`, kept across Genesis).
  */
 const CARDS: SystemCard[] = [
+  {
+    // [ux-wp1 F5] The tutorial is over: from here the Act leads. Says what Act I asks for and where the guide lives.
+    id: 'act1', icon: '[[flag]]', spot: 'era', book: 'act', title: 'wp1.act1.title', body: 'wp1.act1.body',
+    ready: (s, app) => act(s) === 1 && app.engine.objectiveSystem.tutorialDone(s),
+    params: s => {
+      const a = actOf(s);
+      const locale = i18n.currentLocale;
+      const charter = a.charter.map(id => getProject(id)?.name[locale]).filter((n): n is string => !!n);
+      return { act: a.name[locale], goals: [...a.goals.map(g => g.text[locale]), ...charter].join(' · ') };
+    },
+  },
   { id: 'inbox', icon: '[[inbox]]', ready: s => act(s) >= 2, spot: 'inbox', book: 'inbox' },
   { id: 'foreman', icon: '[[worker]]', ready: s => act(s) >= 2, spot: 'era', book: 'foreman' },
   { id: 'contracts', icon: '[[cart]]', ready: (_s, app) => app.engine.contractSystem.active(app.state), spot: 'inbox', book: 'contracts' },

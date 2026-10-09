@@ -9,6 +9,12 @@ import type { PopulationSystem } from './PopulationSystem';
 /** Crew members of a project are stored on the survivor like ruin crews: assignedBuildingId = `p_<project id>`. */
 export const crewKey = (id: string) => `p_${id}`;
 
+/**
+ * [ux-wp1 E1] Less than one unit left counts as paid. Overflow feeds a stage in fractions and hand delivery moves whole units, so a stage
+ * could stop at 8999.56/9000: nothing listed as missing, Deliver greyed out, and the stage stuck until the stores overflowed again.
+ */
+const PAID_SLACK = 1;
+
 /** Part of each store that a hand delivery leaves alone, so a project can never starve the bunker. */
 const RESERVE: Partial<Record<ResourceType, number>> = {
   food: 0.4, water: 0.4, medicine: 0.5, materials: 0.1, knowledge: 0.1, scrap: 0.1,
@@ -62,10 +68,19 @@ export class ProjectSystem {
     return Math.min(1, w.length / stage.crew) * masteryMultiplier(w);
   }
 
+  /** [ux-wp1 E1] Every resource of the current stage is delivered (to within PAID_SLACK). */
+  paidUp(state: GameState, id: string): boolean {
+    const stage = this.stageOf(state, id);
+    if (!stage) return true;
+    const paid = this.progressOf(state, id).paid;
+    return (Object.entries(stage.cost) as [ResourceType, number][]).every(([r, v]) => v - (paid[r] ?? 0) < PAID_SLACK);
+  }
+
   /** How much of the stage's resources has been delivered, 0..1. */
   paidFraction(state: GameState, id: string): number {
     const stage = this.stageOf(state, id);
     if (!stage) return 1;
+    if (this.paidUp(state, id)) return 1;
     const paid = this.progressOf(state, id).paid;
     let have = 0;
     let need = 0;
@@ -190,7 +205,7 @@ export class ProjectSystem {
     const paid = this.progressOf(state, id).paid;
     for (const [r, v] of Object.entries(stage.cost) as [ResourceType, number][]) {
       const left = v - (paid[r] ?? 0);
-      if (left > 0.5) out[r] = left;
+      if (left >= PAID_SLACK) out[r] = Math.ceil(left);
     }
     return out;
   }
@@ -208,8 +223,12 @@ export class ProjectSystem {
     const state = this.sm.state;
     const given: Partial<Record<ResourceType, number>> = {};
     if (state.activeProjectId !== id) return given;
-    for (const [r, left] of Object.entries(this.missing(state, id)) as [ResourceType, number][]) {
-      const amount = Math.floor(this.deliverable(this.sm.state, r, left));
+    const stage = this.stageOf(state, id);
+    for (const r of Object.keys(this.missing(state, id)) as ResourceType[]) {
+      // [ux-wp1 E1] The exact remainder (fractions too) goes in when the store covers it; otherwise whole units.
+      const left = (stage?.cost[r] ?? 0) - (this.progressOf(this.sm.state, id).paid[r] ?? 0);
+      const can = this.deliverable(this.sm.state, r, left);
+      const amount = can >= left ? left : Math.floor(can);
       if (amount < 1) continue;
       this.sm.applyDelta({ path: `resources.${r}.amount`, value: this.sm.state.resources[r].amount - amount });
       this.absorb(this.sm.state, r, amount);
@@ -260,7 +279,7 @@ export class ProjectSystem {
       prog = { ...prog, work: Math.min(need, prog.work + dt * sp) };
       this.sm.applyDelta({ path: `lateGame.projects.${id}`, value: prog });
     }
-    if (prog.work >= need - 1e-6 && this.paidFraction(this.sm.state, id) >= 0.999999) this.finishStage(def);
+    if (prog.work >= need - 1e-6 && this.paidUp(this.sm.state, id)) this.finishStage(def);
   }
 
   private finishStage(def: ProjectDef): void {

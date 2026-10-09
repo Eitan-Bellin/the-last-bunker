@@ -5,7 +5,7 @@ import { bus } from '../core/EventBus';
 import { RESEARCH, REFINEMENTS, refinementResearch } from '../data/research';
 import { getDef } from '../data/buildingDefs';
 import { MAX_FLOORS } from '../data/zones';
-import { refinementLevel, researchCount } from './ResearchSystem';
+import { isBuildingUnlocked, refinementLevel, researchCount } from './ResearchSystem';
 import { COSMETICS, WEEKLY_CREDITS, challengeProgress, getChallenge, pickChallenge, snapshot, weekKey, type ChallengeDef } from '../data/challenges'; // [LateGame B4]
 
 export type ObjectiveAction =
@@ -18,7 +18,13 @@ export type ObjectiveAction =
   // [Q2] Where the guide sends the player (see src/systems/Guide.ts).
   | { kind: 'projects' }
   | { kind: 'dig' }
-  | { kind: 'rooms' }
+  /**
+   * [ux-wp1] With a type: that kind of room (upgrade one, or build one when none can go up). With `open`: show a room of that type
+   * even when none can go up (the Council Hall is a canteen specialty, not an upgrade).
+   */
+  | { kind: 'rooms'; type?: BuildingType; open?: boolean }
+  /** [ux-wp1] Widen a floor when no room fits anywhere: that wing's dig when given, else the wing line in the Command panel. */
+  | { kind: 'wing'; floor?: number; side?: 'w' | 'e' }
   | { kind: 'ruins' }
   | { kind: 'command' }
   | { kind: 'genesis' }
@@ -36,6 +42,8 @@ export interface Objective {
   skipIf?: (s: GameState) => boolean;
   /** Relative goals: the counter whose value is saved as the baseline when the step begins. */
   metric?: (s: GameState) => number;
+  /** [ux-wp1] When where to go depends on the state (research first, then build): replaces `action` when present. */
+  actionFor?: (s: GameState) => ObjectiveAction;
 }
 
 const has = (s: GameState, t: BuildingType) => s.buildings.some(b => b.type === t);
@@ -116,7 +124,7 @@ const ONBOARDING: Objective[] = [
     progress: s => [Math.min(1, s.stats.totalMissionsCompleted), 1],
   },
   {
-    id: 'pop5', icon: '[[people]]', reward: { food: 40 }, action: null,
+    id: 'pop5', icon: '[[people]]', reward: { food: 40 }, action: { kind: 'people' },
     text: { he: 'הגיעו ל־5 ניצולים (קבלו נוודים או מצאו מחנות)', en: 'Reach 5 survivors (accept wanderers or find camps)' },
     progress: s => [Math.min(5, s.survivors.length), 5],
   },
@@ -126,12 +134,13 @@ const ONBOARDING: Objective[] = [
     progress: s => bool(ready(s, 'canteen')),
   },
   {
-    id: 'upgrade', icon: '[[up]]', reward: { materials: 50 }, action: null,
+    id: 'upgrade', icon: '[[up]]', reward: { materials: 50 }, action: { kind: 'rooms' },
     text: { he: 'שדרגו חדר כלשהו לרמה 3 (המראה שלו ישתנה)', en: 'Upgrade any room to level 3 (it will look restored)' },
     progress: s => bool(s.buildings.some(b => b.level >= 3)),
   },
   {
     id: 'radio', icon: '[[radioTower]]', reward: { knowledge: 30 }, action: { kind: 'research' },
+    actionFor: s => (isBuildingUnlocked(s, 'radioTower') ? { kind: 'build', type: 'radioTower' } : { kind: 'research' }), // [ux-wp1] B6
     text: { he: 'בנו חדר רדיו (דורש מחקר)', en: 'Build a Radio Room (needs research)' },
     progress: s => bool(has(s, 'radioTower')),
   },
@@ -141,6 +150,18 @@ const ONBOARDING: Objective[] = [
     progress: s => [Math.min(5, researched(s)), 5],
   },
 ];
+
+/**
+ * [ux-wp1 F2] In a long-game run the tutorial ends with the canteen: the last three steps (a level 3 room, the radio room, five researches)
+ * only repeated Act I's own goals and kept the Act (and its charter project) out of sight for hours. Their rewards are paid at once
+ * when the tutorial ends there (TAIL_REWARD), and the step jumps past them, so later step numbers (and old saves) mean what they did.
+ * Bunkers from before the long game keep the full list.
+ */
+const TUTORIAL_END = ONBOARDING.findIndex(o => o.id === 'upgrade');
+const TAIL_REWARD: Partial<Record<ResourceType, number>> = ONBOARDING.slice(TUTORIAL_END).reduce((sum, o) => {
+  for (const [r, v] of Object.entries(o.reward) as [ResourceType, number][]) sum[r] = (sum[r] ?? 0) + v;
+  return sum;
+}, {} as Partial<Record<ResourceType, number>>);
 
 /** Objective ids of the onboarding before the restoration update, for migrating old saves. */
 const LEGACY_IDS = ['farm', 'pump', 'staff', 'generator', 'workshop', 'lab', 'hazmat', 'expedition', 'pop5', 'canteen', 'upgrade', 'radio', 'research5'];
@@ -177,7 +198,7 @@ function dynamicObjective(i: number, step: number): Objective {
       // Arrivals and births both count; the head count itself can dip when people die or leave.
       const n = Math.min(2 + tier, 10);
       return {
-        id: `dyn-pop-${tier}`, icon: '[[people]]', reward: { food: 40 * tier, water: 40 * tier }, action: null,
+        id: `dyn-pop-${tier}`, icon: '[[people]]', reward: { food: 40 * tier, water: 40 * tier }, action: { kind: 'people' },
         text: { he: `קבלו עוד ${n} ניצולים לבונקר`, en: `Welcome ${n} more survivors` },
         ...relative(s => s.stats.totalSurvivorsRecruited, () => n),
       };
@@ -194,7 +215,7 @@ function dynamicObjective(i: number, step: number): Objective {
     case 2: {
       const n = Math.min(3 + tier * 2, 20);
       return {
-        id: `dyn-levels-${tier}`, icon: '[[up]]', reward: { materials: 80 * tier }, action: null,
+        id: `dyn-levels-${tier}`, icon: '[[up]]', reward: { materials: 80 * tier }, action: { kind: 'rooms' },
         text: { he: `הוסיפו עוד ${n} רמות חדרים (בנייה או שדרוג)`, en: `Add ${n} more room levels (build or upgrade)` },
         ...relative(totalLevels, () => n),
         skipIf: bunkerMaxed,
@@ -223,12 +244,35 @@ export class ObjectiveSystem {
     this.resources = resources;
   }
 
+  /** [ux-wp1] A long-game run (the guide leads after the tutorial); older bunkers keep the full tutorial and the endless tasks. */
+  private longRun(state: GameState): boolean {
+    return !!state.longGame && !state.longGame.meta.legacy && !!this.guide;
+  }
+
+  /** [ux-wp1] How many tutorial steps this run has (shorter in a long-game run, see TUTORIAL_END). */
+  tutorialLength(state: GameState): number {
+    return this.longRun(state) ? TUTORIAL_END : ONBOARDING.length;
+  }
+
+  /** [ux-wp1 A1] True while the bottom card shows a tutorial step: the Command panel and the check-in show that same step first. */
+  inTutorial(state: GameState): boolean {
+    return (state.tutorialStep ?? 0) < this.tutorialLength(state);
+  }
+
+  /** [ux-wp1 F5] True once the tutorial is over (the "From here: Act I" card waits for this). */
+  tutorialDone(state: GameState): boolean {
+    return (state.tutorialStep ?? 0) >= ONBOARDING.length;
+  }
+
   current(state: GameState): Objective {
     const step = state.tutorialStep ?? 0;
-    if (step < ONBOARDING.length) return ONBOARDING[step];
+    if (step < this.tutorialLength(state)) {
+      const o = ONBOARDING[step];
+      return o.actionFor ? { ...o, action: o.actionFor(state) } : o;
+    }
     // [Q2] The guide answers "what do I do now and why"; the endless generic tasks only fill in when it has no step.
     const guided = this.guide?.(state);
-    return guided ?? dynamicObjective(step - ONBOARDING.length, step);
+    return guided ?? dynamicObjective(Math.max(0, step - ONBOARDING.length), step);
   }
 
   /** Maps a tutorial step saved under the old onboarding list onto the current list. */
@@ -271,6 +315,14 @@ export class ObjectiveSystem {
   update(): void {
     this.updateWeekly();
     const state = this.sm.state;
+    // [ux-wp1 F2] A long-game run whose tutorial just ended at the canteen: pay the skipped steps' rewards and step past them.
+    const at = state.tutorialStep ?? 0;
+    if (this.longRun(state) && at >= TUTORIAL_END && at < ONBOARDING.length) {
+      this.resources.gain(this.sm, TAIL_REWARD);
+      this.sm.applyDelta({ path: 'tutorialStep', value: ONBOARDING.length });
+      bus.emit('tutorial:done');
+      return;
+    }
     const obj = this.current(state);
     // A guide step is a pointer, not a task: the Act itself finishes it (no reward, the tutorial step stays put).
     if (obj.id.startsWith('guide:')) return;
