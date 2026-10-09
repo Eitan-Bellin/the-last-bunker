@@ -47,6 +47,9 @@ function eraThemes(s: Synth): { build: Builder; reverb: number }[] {
   ];
 }
 
+/** [ux-wp3] How many sounds the list had before rankUp/tick were added at its end: room and bed loops keep the seeds they always had. */
+const SFX_SEED_COUNT = 60;
+
 /** Target peaks keep UI ticks subtle and story moments big. */
 const SFX_PEAK: Partial<Record<Sfx, number>> = {
   click: 0.3, open: 0.32, collect: 0.45, mission: 0.5, place: 0.6, build: 0.6, research: 0.55,
@@ -58,6 +61,7 @@ const SFX_PEAK: Partial<Record<Sfx, number>> = {
   unlock: 0.55, reveal: 0.4, depart: 0.5, elevator: 0.35, hiss: 0.35, type: 0.12, warn: 0.4, pulse: 0.45,
   thunder: 0.7, cheer: 0.45, steam: 0.35, engineStart: 0.6, powerUp: 0.5, drill: 0.5, crumble: 0.4, drip: 0.3,
   confirm: 0.45, cancel: 0.3,
+  rankUp: 0.38, tick: 0.28, // [ux-wp3]
 };
 
 interface AmbienceVoice {
@@ -431,7 +435,7 @@ export class AudioEngine {
     if (this.ambience.has(key)) return;
     this.enqueue(`amb:${key}`, prio, async () => {
       const keys = Object.keys(AMBIENCE);
-      const buffer = await renderLoop(AMBIENCE_SECONDS, 2, AMBIENCE[key], 100 + Object.keys(this.synth!.SFX).length + keys.indexOf(key), 0.7, this.light ? 16000 : LOOP_RATE);
+      const buffer = await renderLoop(AMBIENCE_SECONDS, 2, AMBIENCE[key], 100 + SFX_SEED_COUNT + keys.indexOf(key), 0.7, this.light ? 16000 : LOOP_RATE);
       this.startAmbience(key, normalize(buffer, key === 'base' ? 0.18 : 0.3));
     });
   }
@@ -441,7 +445,7 @@ export class AudioEngine {
     this.enqueue(`bed:${key}`, prio, async () => {
       const keys: BedKey[] = [...ERA_BEDS, 'city']; // the order the seeds were first handed out in
       const { BEDS, BED_SECONDS, SFX } = this.synth!;
-      const buffer = await renderLoop(BED_SECONDS, 2, BEDS[key], 100 + Object.keys(SFX).length + Object.keys(AMBIENCE).length + keys.indexOf(key), 0.85, this.light ? 16000 : LOOP_RATE);
+      const buffer = await renderLoop(BED_SECONDS, 2, BEDS[key], 100 + SFX_SEED_COUNT + Object.keys(AMBIENCE).length + keys.indexOf(key), 0.85, this.light ? 16000 : LOOP_RATE);
       this.startBed(key, normalize(buffer, key === 'city' ? 0.22 : 0.26));
     });
   }
@@ -664,7 +668,11 @@ export class AudioEngine {
     g.linearRampToValueAtTime(this.musicLevel, t + seconds);
   }
 
+  /** [ux-wp3 D2/F4] Says which sounds to skip right now (the app silences the game's sounds while it catches up on time away). */
+  mute: ((name: Sfx) => boolean) | null = null;
+
   play(name: Sfx, opts: { pan?: number; volume?: number } = {}): void {
+    if (this.mute?.(name)) return;
     this.onCue?.(name);
     if (!this.enabled || !this.ctx || this.ctx.state !== 'running') return;
     const buffer = this.sfx.get(name);
@@ -684,6 +692,8 @@ export class AudioEngine {
     p.pan.value = opts.pan ?? 0;
     src.connect(g).connect(p).connect(this.sfxBus!);
     src.start();
+    // [ux-wp3 F3] A quiet reminder alarm (volume under one half) does not push the music down: only the real announcement does.
+    if (name === 'alarm' && (opts.volume ?? 1) < 0.5) return;
     if (name === 'event' || name === 'achievement' || name === 'door' || name === 'lore' || name === 'restore' || name === 'alarm'
       || name === 'heart' || name === 'baby' || name === 'unlock' || name === 'cheer' || name === 'engineStart') this.duck(2.5);
     if (name === 'thunder') this.duck(4);

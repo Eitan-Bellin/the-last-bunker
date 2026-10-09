@@ -62,6 +62,20 @@ self.addEventListener('activate', (event) => {
   })());
 });
 
+// [ux-wp3 B5] Tapping a notification ("the expedition is back") brings the game to the front, or opens it when it is closed.
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  event.waitUntil((async () => {
+    const scope = self.registration.scope;
+    const wins = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    const mine = wins.find((c) => c.url.startsWith(scope)) || wins[0];
+    if (mine && 'focus' in mine) {
+      try { await mine.focus(); return; } catch (err) { /* not allowed to focus: open a window instead */ }
+    }
+    if (self.clients.openWindow) await self.clients.openWindow(scope);
+  })());
+});
+
 const revalidated = new Set();
 
 function store(req, res) {

@@ -42,6 +42,22 @@ export function griefFor(state: GameState, id: string, now = Date.now()): number
   return sum;
 }
 
+/**
+ * [ux-wp3 W1] The cause of a death as the player should hear it: `kind` names the sentence (wp3.cause.<kind>), `disaster` the
+ * disaster's kind when there was one. A death from failing health is told as hunger or thirst when the stores were empty.
+ */
+export function deathCause(state: GameState, cause: string | undefined): { kind: 'raid' | 'disaster' | 'away' | 'hunger' | 'thirst' | 'wounds' | 'other'; disaster?: string } {
+  if (!cause) return { kind: 'other' };
+  if (cause === 'raid' || cause === 'away' || cause === 'hunger' || cause === 'thirst' || cause === 'wounds') return { kind: cause };
+  if (cause.startsWith('disaster:')) return { kind: 'disaster', disaster: cause.slice('disaster:'.length) };
+  if (cause === 'health') {
+    if ((state.resources.water?.amount ?? 1) <= 0) return { kind: 'thirst' };
+    if ((state.resources.food?.amount ?? 1) <= 0) return { kind: 'hunger' };
+    return { kind: 'wounds' };
+  }
+  return { kind: 'other' };
+}
+
 export class DeathSystem {
   private sm: StateManager;
 
@@ -66,13 +82,16 @@ export class DeathSystem {
   }
 
   /** Called for every death (raid, disaster, hunger): the memorial, the mourning and the breather. */
-  onDeath(s: SurvivorState, now = Date.now()): void {
+  onDeath(s: SurvivorState, now = Date.now(), cause?: string): void {
     const state = this.sm.state;
     const d = state.danger;
     const job = s.assignedBuildingId ? state.buildings.find(b => b.id === s.assignedBuildingId)?.type ?? null : null;
     const fallen: Fallen = {
       id: s.id, name: s.name, portraitIndex: s.portraitIndex, portrait: s.portrait, child: s.child, job, level: s.level, at: now,
     };
+    // [ux-wp3 W1] Kept with the memorial ("health" is resolved now, while the empty store that caused it is still empty).
+    const told = deathCause(state, cause);
+    if (told.kind !== 'other') fallen.cause = told.kind === 'disaster' ? `disaster:${told.disaster}` : told.kind;
     const times = [...d.deathTimes.filter(t => now - t < DAY_MS), now];
     // A first answer before the player chooses: the long mourning of simply carrying on.
     const grief: Grief[] = [...d.grief.filter(g => g.until > now), { value: MOURN_ALL, from: now, until: now + 2 * DAY_MS, ids: null, tag: s.id }];

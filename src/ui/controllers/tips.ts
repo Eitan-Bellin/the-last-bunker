@@ -42,6 +42,8 @@ const TIPS: TipDef[] = [
 const GAP_MS = 40_000;
 const SHOW_MS = 14_000;
 const CHECK_MS = 700;
+/** [ux-wp3 C1] A tip put away for a dialog or a sheet comes back this long after the screen is calm again (not the full gap). */
+const RETRY_MS = 8_000;
 
 export class TipsController {
   private app: GameApp;
@@ -50,6 +52,8 @@ export class TipsController {
   private lastTipAt = -Infinity;
   private lastCheck = 0;
   private card: HTMLElement | null = null;
+  /** [ux-wp3 C1] The tip on screen (marked seen only once it was read: dismissed, or left up for its whole time). */
+  private cardDef: TipDef | null = null;
   private hideTimer = 0;
   private downs: { t: number; x: number; y: number }[] = [];
 
@@ -108,9 +112,15 @@ export class TipsController {
 
   /** Called every frame; looks about twice a second. Shows at most one tip, and only in a calm moment. */
   update(now: number): void {
+    const app = this.app;
+    // [ux-wp3 C1] A dialog, a sheet, a story card came up over the tip: put it away unread, it comes back later.
+    if (this.card && (app.modal.isVisible || app.anyPanelOpen() || app.storyOpen || app.welcomeOpen || app.introPlaying || app.placementMode
+      || app.loreReader.isVisible || app.storyDialog.isVisible)) {
+      this.defer();
+      return;
+    }
     if (now - this.lastCheck < CHECK_MS) return;
     this.lastCheck = now;
-    const app = this.app;
     const s = app.state;
     if (this.card || now - this.lastTipAt < GAP_MS) return;
     if (!s.storyFlags.includes('intro:done') || app.introPlaying || app.storyOpen || app.modal.isVisible || app.welcomeOpen) return;
@@ -120,7 +130,8 @@ export class TipsController {
   }
 
   private show(def: TipDef): void {
-    this.mark(def.flag);
+    // [ux-wp3 C1] Not marked seen here: a tip covered by a dialog a second later must not be lost for good.
+    this.cardDef = def;
     this.lastTipAt = performance.now();
     const card = el('div', `gesture-tip tip-${def.ghost}`);
     card.setAttribute('role', 'status');
@@ -129,9 +140,9 @@ export class TipsController {
     ghost.append(el('b', 'tip-trail'), el('i', 'tip-f1'), el('i', 'tip-f2'), el('u', 'tip-ring'));
     const text = el('p', 'tip-text', i18n.t(def.textKey));
     const more = el('button', 'btn btn-secondary tip-btn', i18n.t('tip.more'));
-    more.addEventListener('click', () => { this.hide(); this.app.openBook('touch'); });
+    more.addEventListener('click', () => { this.hide(true); this.app.openBook('touch'); });
     const ok = el('button', 'btn btn-primary tip-btn', i18n.t('tip.ok'));
-    ok.addEventListener('click', () => this.hide());
+    ok.addEventListener('click', () => this.hide(true));
     const row = el('div', 'tip-actions');
     row.append(more, ok);
     card.append(ghost, text, row);
@@ -139,14 +150,25 @@ export class TipsController {
     this.card = card;
     requestAnimationFrame(() => card.classList.add('in'));
     this.app.audio.play('paper');
-    this.hideTimer = window.setTimeout(() => this.hide(), relaxedMs(SHOW_MS)); // plan4:AC-13
+    this.hideTimer = window.setTimeout(() => this.hide(true), relaxedMs(SHOW_MS)); // plan4:AC-13 (up for its whole time, nothing over it: read)
   }
 
-  hide(): void {
+  /** [ux-wp3 C1] Puts the tip away unread (something else took the screen): it shows again in a calm moment. */
+  defer(): void {
+    if (!this.card) return;
+    this.hide(false);
+    this.lastTipAt = performance.now() - GAP_MS + RETRY_MS;
+  }
+
+  /** `read`: the player saw it through (a button, or the whole time on screen), so it is marked seen. */
+  hide(read = true): void {
     window.clearTimeout(this.hideTimer);
     const card = this.card;
+    const def = this.cardDef;
     this.card = null;
+    this.cardDef = null;
     if (!card) return;
+    if (read && def) this.mark(def.flag);
     card.classList.remove('in');
     this.lastTipAt = performance.now();
     window.setTimeout(() => card.remove(), 300);

@@ -8,7 +8,9 @@ export type Sfx =
   | 'heart' | 'baby' | 'story' | 'radio' | 'choice'
   | 'tab' | 'switch' | 'whoosh' | 'modalOpen' | 'notify' | 'assign' | 'unassign' | 'coin' | 'unlock' | 'reveal'
   | 'depart' | 'elevator' | 'hiss' | 'type' | 'warn' | 'pulse' | 'thunder' | 'cheer' | 'steam' | 'engineStart'
-  | 'powerUp' | 'drill' | 'crumble' | 'drip' | 'confirm' | 'cancel';
+  | 'powerUp' | 'drill' | 'crumble' | 'drip' | 'confirm' | 'cancel'
+  // [ux-wp3] Added at the end (the seeds of the older sounds are their place in this list): a person's level-up, a countdown tick.
+  | 'rankUp' | 'tick';
 
 /** Air-raid siren: a detuned saw/sine pair gliding up, holding, and sinking, with a slow wobble. */
 const siren: Builder = (ctx, out, wet) => {
@@ -798,6 +800,24 @@ export const SFX: Record<Sfx, SfxDef> = {
       o.connect(g).connect(out);
       o.start(0);
       o.stop(0.3);
+    },
+  },
+  // [ux-wp3 D1/F5] A person got better at their work: two soft wooden knocks rising, then a small warm bell (not the shop's coin).
+  rankUp: {
+    seconds: 1.1, reverb: 0.45,
+    build: (ctx, out, wet) => {
+      metalHit(ctx, out, 0, 700, 0.07, 0.08);
+      metalHit(ctx, out, 0.09, 940, 0.07, 0.08);
+      fmBell(ctx, out, 0.17, midi(79), 0.05, 0.6, 2.01, 0.9);
+      fmBell(ctx, wet, 0.17, midi(84), 0.025, 0.8, 2.01, 0.9);
+    },
+  },
+  // [ux-wp3 F3] The last seconds before a raid or a disaster: a dry clock tick.
+  tick: {
+    seconds: 0.25, reverb: 0.15,
+    build: (ctx, out) => {
+      noiseHit(ctx, out, 0, 0.018, 0.35, 'bandpass', 2400, 4, 'white', 231);
+      metalHit(ctx, out, 0, 1800, 0.04, 0.05);
     },
   },
 };

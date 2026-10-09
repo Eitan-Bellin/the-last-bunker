@@ -254,7 +254,7 @@ export class GameEngine {
     this.contractSystem = new ContractSystem(this.stateManager, this.inboxSystem, this.resourceSystem, this.populationSystem);
     this.foremanSystem = new ForemanSystem(this.stateManager, this.maintenanceSystem, this.projectSystem, this.populationSystem, this.digSystem, this.contractSystem, this.resourceSystem);
     this.awayDanger = new AwayDanger(this.stateManager, this.rng, this.eventSystem, this.incidentSystem, this.deathSystem);
-    bus.on('survivor:died', (s: unknown) => this.deathSystem.onDeath(s as import('./GameState').SurvivorState));
+    bus.on('survivor:died', (s: unknown, cause: unknown) => this.deathSystem.onDeath(s as import('./GameState').SurvivorState, Date.now(), cause as string | undefined)); // ux-wp3 W1: the cause is kept
     bus.on('survivor:died', (s: unknown) => this.familySystem.forget((s as { id: string }).id));
     // Digging deeper turns up more of the previous residents' story.
     bus.on('floor:dug', (floor: unknown) => {

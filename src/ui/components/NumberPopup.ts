@@ -98,10 +98,14 @@ export class NumberPopupManager {
     this.parent = parent;
   }
 
-  spawn(x: number, y: number, value: string, color: number = statusTint('ok')): void {
+  /**
+   * `important` [ux-wp3 F10]: a reward the player earned (ruin loot, a bubble, an event) shows even in the "important" mode, where the
+   * routine "+N" production numbers are hidden. Without it the old guess applies (a text that starts with "+digit" is routine).
+   */
+  spawn(x: number, y: number, value: string, color: number = statusTint('ok'), important = false): void {
     const mode = popupMode(); // plan4:AC-1 + UX-21 one density rule: the player's choice, or "important" by default on an iPhone
     if (blockedAt?.(x, y) || mode === 'off') return;
-    if (mode === 'important' && /^\+\d/.test(value.trim())) return; // the routine "+6 food" numbers every room throws
+    if (mode === 'important' && !important && /^\+\d/.test(value.trim())) return; // the routine "+6 food" numbers every room throws
     const spot = `${Math.round(x)}|${Math.round(y)}|${color}`;
     // Merge into a popup still being read at the same spot: "+6 [food]" + "+6 [food]" -> "+12 [food]".
     for (const p of this.active) {

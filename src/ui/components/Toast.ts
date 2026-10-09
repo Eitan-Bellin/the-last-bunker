@@ -19,6 +19,8 @@ const DURATION_MS: Record<ToastKind, number> = { info: 3200, good: 3000, bad: 50
 const MAX_VISIBLE = 3;
 const MAX_QUEUED = 6;
 const FADE_MS = 300;
+/** [ux-wp3 D2] Messages kept back while the bunker works through time away (the welcome report tells that story). */
+const MAX_HELD = 40;
 /** A sideways drag past this (px), or a quick flick, dismisses the toast. */
 const SWIPE_PX = 60;
 const SWIPE_SPEED = 0.5;
@@ -36,6 +38,13 @@ export class Toasts {
   private stack: HTMLDivElement;
   private visible: Entry[] = [];
   private queue: Entry[] = [];
+  /**
+   * [ux-wp3 D2/F4] While this says yes (the away catch-up is running) nothing but a `critical` message is shown: the dozens of
+   * "X levelled up" / "Y finished" lines from the hours away are not lived moments. They are kept (deduplicated, counted) for the
+   * return screen to summarise if it wants them (`takeHeld`).
+   */
+  hold: (() => boolean) | null = null;
+  private held: { text: string; kind: ToastKind; count: number }[] = [];
 
   constructor() {
     this.stack = el('div', 'toast-stack');
@@ -43,6 +52,12 @@ export class Toasts {
   }
 
   show(text: string, kind: ToastKind = 'info'): void {
+    if (kind !== 'critical' && this.hold?.()) {
+      const same = this.held.find(h => h.text === text && h.kind === kind);
+      if (same) same.count++;
+      else if (this.held.length < MAX_HELD) this.held.push({ text, kind, count: 1 });
+      return;
+    }
     // The same message again right after itself (a tap spammed on a button that says "not enough") is one toast with a counter,
     // not a wall of copies: compare with the newest one, waiting or showing.
     const last = this.queue[this.queue.length - 1] ?? this.visible[this.visible.length - 1];
@@ -75,6 +90,13 @@ export class Toasts {
       for (let i = 1; i < this.queue.length; i++) if (RANK[this.queue[i].kind] < RANK[this.queue[worst].kind]) worst = i;
       this.queue.splice(worst, 1);
     }
+  }
+
+  /** [ux-wp3 D2] The messages held back during the last catch-up (and forgets them). For the welcome-back report. */
+  takeHeld(): { text: string; kind: ToastKind; count: number }[] {
+    const out = this.held;
+    this.held = [];
+    return out;
   }
 
   private display(e: Entry): void {

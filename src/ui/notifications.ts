@@ -57,7 +57,11 @@ class WebBackend implements NotifyBackend {
       void (navigator.serviceWorker?.getRegistration?.() ?? Promise.resolve(undefined))
         .then(async reg => {
           if (reg) await reg.showNotification(title, opts);
-          else new Notification(title, opts);
+          else {
+            // [ux-wp3 B5] Desktop: a tap on the notice brings the game's tab to the front.
+            const n = new Notification(title, opts);
+            n.onclick = () => { window.focus(); n.close(); };
+          }
         })
         .catch(() => undefined);
     }, Math.max(0, at - Date.now()));

@@ -331,6 +331,8 @@ export interface Fallen {
   level: number;
   /** Wall-clock ms. */
   at: number;
+  /** [ux-wp3 W1] How they died (raid, disaster:<kind>, away, hunger, thirst, wounds); absent in older saves. */
+  cause?: string;
 }
 
 /** A mood penalty (or bonus) with wall-clock bounds; ids = null means the whole bunker. */

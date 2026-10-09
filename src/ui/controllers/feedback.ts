@@ -27,7 +27,19 @@ import type { IncidentResolved } from '../../systems/IncidentSystem';
 import type { ChildBorn, CoupleFormed } from '../../systems/FamilySystem';
 import type { Incident } from '../../core/GameState';
 import { type RaidResult } from '../../systems/EventSystem';
+import { deathCause } from '../../systems/DeathSystem'; // [ux-wp3 W1]
 import type { GameApp } from '../../app';
+
+/** [ux-wp3 W1] The cause of a death in words (null when unknown: the old sentence is used). Also used by the memorial. */
+export function causeText(state: import('../../core/GameState').GameState, cause: string | undefined, g: Record<string, string | number>): string | null {
+  const c = deathCause(state, cause);
+  if (c.kind === 'other') return null;
+  const what = c.disaster ? DISASTERS[c.disaster as keyof typeof DISASTERS]?.name[i18n.currentLocale] ?? c.disaster : '';
+  return i18n.t(`wp3.cause.${c.kind}`, { what, ...g });
+}
+
+/** [ux-wp3 D1] Survivor level-up toasts fold into one line per this window. */
+const LEVEL_TOAST_GAP_MS = 60_000;
 
 /** What the player sees and hears when something happens in the bunker: toasts, sounds, little bursts over the rooms. */
 export class FeedbackController {
@@ -35,6 +47,31 @@ export class FeedbackController {
 
   constructor(app: GameApp) {
     this.app = app;
+  }
+
+  /** [ux-wp3 D1/F5] Level-up toasts: at most one a minute; the ones in between become one line ("3 people levelled up"). */
+  private levelShownAt = -Infinity;
+  private levelWaiting: string[] = [];
+  private levelTimer = 0;
+
+  private levelToast(text: string): void {
+    if (this.app.engine.awayRunning) return; // [ux-wp3 D2] the hours away are told by the welcome report, not by a pile of level-ups
+    const now = performance.now();
+    if (!this.levelTimer && now - this.levelShownAt >= LEVEL_TOAST_GAP_MS) {
+      this.levelShownAt = now;
+      this.app.toasts.show(text, 'good');
+      return;
+    }
+    this.levelWaiting.push(text);
+    if (this.levelTimer) return;
+    this.levelTimer = window.setTimeout(() => {
+      this.levelTimer = 0;
+      const list = this.levelWaiting;
+      this.levelWaiting = [];
+      if (!list.length) return;
+      this.levelShownAt = performance.now();
+      this.app.toasts.show(list.length === 1 ? list[0] : `[[star]] ${i18n.t('wp3.levelUps', { n: list.length })}`, 'good');
+    }, Math.max(1000, LEVEL_TOAST_GAP_MS - (now - this.levelShownAt)));
   }
 
   install(): void {
@@ -67,18 +104,21 @@ export class FeedbackController {
       const survivor = s as SurvivorState;
       // [plan4:GP-2] A little star over their head and a bell (the ceremony queue folds several at once into one).
       void this.app.ceremony.fire({ kind: 'person', personId: survivor.id, title: this.app.localName(survivor.name), sub: i18n.t('cer.person.sub', { level: survivor.level }) });
-      this.app.toasts.show(`[[star]] ${i18n.t('toast.levelUp', {
+      this.levelToast(`[[star]] ${i18n.t('toast.levelUp', {
         name: this.app.localName(survivor.name),
         level: survivor.level,
         stat: i18n.t(`stats.${stat as keyof SurvivorStats}`),
         ...this.app.gOf(survivor),
-      })}`, 'good');
+      })}`);
     });
 
-    bus.on('survivor:died', (s: unknown) => {
+    bus.on('survivor:died', (s: unknown, cause: unknown) => {
       // [plan4:GP-2] A slow dimming, a candle and a line of remembrance; the memorial dialog waits behind it (dialog gate).
       void this.app.ceremony.fire({ kind: 'death', personId: (s as SurvivorState).id, icon: '[[heart]]', title: i18n.t('cer.death', { name: this.app.localName((s as SurvivorState).name) }) });
-      this.app.toasts.show(`[[skull]] ${i18n.t('toast.died', { name: this.app.localName((s as SurvivorState).name), ...this.app.gOf(s as SurvivorState) })}`, 'bad');
+      // [ux-wp3 W1] How they died, said with it ("fell defending the bunker from raiders", "died of thirst").
+      const sv = s as SurvivorState;
+      const why = causeText(this.app.state, cause as string | undefined, this.app.gOf(sv));
+      this.app.toasts.show(`[[skull]] ${why ? i18n.t('wp3.died', { name: this.app.localName(sv.name), cause: why }) : i18n.t('toast.died', { name: this.app.localName(sv.name), ...this.app.gOf(sv) })}`, 'bad');
     });
 
     bus.on('research:complete', (id: unknown) => {
@@ -99,8 +139,9 @@ export class FeedbackController {
     bus.on('achievement', (id: unknown) => {
       const a = ACHIEVEMENTS.find(x => x.id === id);
       if (!a) return;
-      this.app.audio.play('achievement');
-      haptic('success');
+      // [ux-wp3 F15] A badge card with the count; the ceremony brings the sound and the buzz (a hidden page gets the toast only).
+      const got = this.app.state.achievements?.length ?? 0;
+      void this.app.ceremony.fire({ kind: 'achievement', icon: '[[trophy]]', title: a.name[i18n.currentLocale] ?? a.name.en, sub: i18n.t('wp3.cer.achievement', { n: got, all: ACHIEVEMENTS.length }) });
       this.app.toasts.show(`[[trophy]] ${i18n.t('toast.achievement', { name: a.name[i18n.currentLocale] ?? a.name.en })}`, 'good');
       this.app.engine.requestSave();
     });
@@ -159,7 +200,12 @@ export class FeedbackController {
       this.app.toasts.show(`[[armory]] ${i18n.t('danger.toast.raid', { time: i18n.formatDuration(raid.hitAt - this.app.state.stats.totalPlayTime) })}`, 'bad');
       announce(i18n.t('announce.raid', { time: i18n.formatDuration(raid.hitAt - this.app.state.stats.totalPlayTime) }), 'assertive'); // plan4:qa
     });
-    bus.on('raid:resolved', (r: unknown) => { this.app.raidResult = r as RaidResult; });
+    bus.on('raid:resolved', (r: unknown) => {
+      const res = r as RaidResult;
+      this.app.raidResult = res;
+      // [ux-wp3 F2] The raiders at the gate: siren, the camera at the entrance, the impact. The result dialog waits behind it (gate).
+      if (res.key !== 'tribute') void this.app.ceremony.fire({ kind: 'raid', win: res.key === 'hidden' ? undefined : res.key === 'win' || res.key === 'winCaptive' });
+    });
     bus.on('disaster:start', (d: unknown) => {
       const def = DISASTERS[(d as { kind: keyof typeof DISASTERS }).kind];
       this.app.audio.play('alarm');
@@ -224,12 +270,16 @@ export class FeedbackController {
     // [LateGame B1-B4] big projects, caravans, mastery, weekly challenge
     bus.on('project:stage', (id: unknown, stage: unknown) => {
       const def = getProject(id as string);
-      this.app.audio.play('complete');
+      // [ux-wp3 R4] A stage of a charter project gets its moment at the lot (sound and buzz come with it).
+      const all = def?.stages.length ?? 0;
+      if ((stage as number) < all) void this.app.ceremony.fire({ kind: 'project', projectId: id as string, icon: '[[build]]', sound: 'complete', title: def?.name[i18n.currentLocale] ?? '', sub: i18n.t('wp3.cer.projectStage', { n: stage as number, all }) });
       this.app.toasts.show(`[[build]] ${i18n.t('proj.stageDone', { name: def?.name[i18n.currentLocale] ?? '', n: stage as number, all: def?.stages.length ?? 0 })}`, 'good');
       this.app.engine.requestSave();
     });
     bus.on('project:done', (id: unknown) => {
       const def = getProject(id as string);
+      // [ux-wp3 R4] The whole project: the bigger moment (the last stage's own moment folds into this one).
+      void this.app.ceremony.fire({ kind: 'project', projectId: id as string, icon: '[[trophy]]', title: def?.name[i18n.currentLocale] ?? '', sub: i18n.t('wp3.cer.projectDone') });
       this.app.toasts.show(`[[trophy]] ${i18n.t('proj.done', { name: def?.name[i18n.currentLocale] ?? '' })}`, 'good');
     });
     bus.on('caravan:complete', (r: unknown) => {
@@ -259,7 +309,7 @@ export class FeedbackController {
       const c = this.app.renderer.ruinCenter(ruin);
       this.app.audio.play('debris');
       const lootText = (Object.entries(loot) as [ResourceType, number][]).map(([r, v]) => `+${v} ${RESOURCE_ICONS[r] ?? ''}`);
-      lootText.forEach((t, i) => setTimeout(() => this.app.popups.spawn(c.x + (i - (lootText.length - 1) / 2) * 30, c.y, t, 0xffd27a), i * 160));
+      lootText.forEach((t, i) => setTimeout(() => this.app.popups.spawn(c.x + (i - (lootText.length - 1) / 2) * 30, c.y, t, 0xffd27a, true), i * 160)); // [ux-wp3 F10] loot is never "routine"
       if (buildingId) {
         const b = this.app.state.buildings.find(x => x.id === buildingId);
         const name = b ? getDef(b.type)?.name[i18n.currentLocale] ?? '' : '';
