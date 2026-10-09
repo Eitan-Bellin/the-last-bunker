@@ -92,6 +92,7 @@ import { TipsController } from './ui/controllers/tips'; // [plan4:UX-11]
 import { PRODUCTION_POPUP_MS, WorldController } from './ui/controllers/world';
 import { DailyController } from './ui/controllers/daily'; // [plan4:GP-1]
 import { Ceremonies } from './ui/ceremony'; // [plan4:GP-2]
+import { missingOr } from './ui/missing'; // [ux-wp3 A1]
 
 /** Icons drawn inside the Pixi scene (plaques, signs, popups); rasterized once at startup. */
 const SCENE_ICONS: IconName[] = [
@@ -820,7 +821,7 @@ export class GameApp {
     if (!r) return;
     if (!rs.canStart(state, r)) {
       this.audio.play('error');
-      this.toasts.show(rs.blockReason(state, r) ? i18n.t('ruin.needsPump') : i18n.t('toast.notEnough'), 'bad');
+      this.toasts.show(rs.blockReason(state, r) ? i18n.t('ruin.needsPump') : missingOr(state, rs.cost(r) as Record<string, number>), 'bad'); // [ux-wp3 A1] what is missing, how much, when
       return;
     }
     const idle = rs.pickIdle(state, 2).length;
@@ -1031,7 +1032,7 @@ export class GameApp {
       if (!b) return;
       const cost = this.engine.buildingSystem.getUpgradeCost(b);
       if (!this.engine.resourceSystem.spend(this.engine.stateManager, cost)) {
-        this.toasts.show(i18n.t('toast.notEnough'), 'bad');
+        this.toasts.show(missingOr(this.state, cost), 'bad'); // [ux-wp3 A1]
         this.audio.play('error');
         return;
       }
@@ -1213,7 +1214,7 @@ export class GameApp {
     const cost = bs.specCost();
     if (!bs.canSpecialize(this.state, buildingId) || !this.engine.resourceSystem.spend(this.engine.stateManager, cost)) {
       this.audio.play('error');
-      this.toasts.show(i18n.t('toast.notEnough'), 'bad');
+      this.toasts.show(missingOr(this.state, cost), 'bad'); // [ux-wp3 A1]
       return;
     }
     bs.specialize(this.engine.stateManager, buildingId, specId);
@@ -1225,7 +1226,7 @@ export class GameApp {
     const bs = this.engine.buildingSystem;
     if (!bs.canRetool(this.state, buildingId, specId) || !this.engine.resourceSystem.spend(this.engine.stateManager, bs.retoolCost())) {
       this.audio.play('error');
-      this.toasts.show(i18n.t('toast.notEnough'), 'bad');
+      this.toasts.show(missingOr(this.state, bs.retoolCost()), 'bad'); // [ux-wp3 A1]
       return;
     }
     bs.retool(this.engine.stateManager, buildingId, specId);

@@ -4,7 +4,8 @@ import { haptic } from '../../utils/haptics';
 import { i18n } from '../../i18n/I18nManager';
 import { costRow, el } from '../../ui/dom';
 import { portraitFor, portraitUrl } from '../../data/portraits';
-import { INCIDENTS, DISASTERS, disasterCost } from '../../data/incidents';
+import { INCIDENTS, DISASTERS, disasterCost, quickFixCost } from '../../data/incidents';
+import { missingOr } from '../missing'; // [ux-wp3 A1]
 import { CEREMONY_COST } from '../../systems/DeathSystem';
 import { bunkerDefense, defenseParts, raidTribute, type RaidResult } from '../../systems/EventSystem';
 import { announce } from '../a11yDom';
@@ -76,7 +77,7 @@ export class DangerController {
                 this.app.engine.notifyInteraction();
                 this.app.engine.requestSave();
                 this.app.audio.play('fixed');
-              } else this.app.toasts.show(i18n.t('toast.notEnough'), 'bad');
+              } else this.app.toasts.show(missingOr(this.app.state, disasterCost(this.app.state, dz.kind)), 'bad'); // [ux-wp3 A1]
               this.app.modal.hide();
             },
           },
@@ -177,7 +178,7 @@ export class DangerController {
     this.app.audio.play('error');
     const answer = (choice: 'ceremony' | 'carryOn') => {
       if (!this.app.engine.deathSystem.answerMemorial(choice, this.app.engine.resourceSystem)) {
-        this.app.toasts.show(i18n.t('toast.notEnough'), 'bad');
+        this.app.toasts.show(missingOr(this.app.state, CEREMONY_COST), 'bad'); // [ux-wp3 A1]
         return;
       }
       this.app.engine.requestSave();
@@ -250,7 +251,8 @@ export class DangerController {
   quickFixIncident(id: string): void {
     if (!this.app.engine.incidentSystem.quickFix(id)) {
       this.app.audio.play('error');
-      this.app.toasts.show(i18n.t('toast.notEnough'), 'bad');
+      const inc = this.app.state.incidents?.find(i => i.id === id);
+      this.app.toasts.show(inc ? missingOr(this.app.state, quickFixCost(this.app.state, inc.kind)) : i18n.t('toast.notEnough'), 'bad'); // [ux-wp3 A1]
       return;
     }
     this.app.renderer.incidents.hit(id);
