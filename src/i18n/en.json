@@ -603,7 +603,7 @@
   "build.needsResearch": "Requires research: {name}",
   "build.search": "Search rooms",
   "build.searchPh": "Search rooms...",
-  "build.availableNow": "Can build now",
+  "build.availableNow": "Affordable only",
   "build.cat.all": "All",
   "build.cat.living": "Living & society",
   "build.cat.food": "Food & water",

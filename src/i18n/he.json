@@ -603,7 +603,7 @@
   "build.needsResearch": "דורש מחקר: {name}",
   "build.search": "חיפוש חדרים",
   "build.searchPh": "חפשו חדר...",
-  "build.availableNow": "אפשר לבנות עכשיו",
+  "build.availableNow": "רק מה שאפשר לשלם",
   "build.cat.all": "הכול",
   "build.cat.living": "מגורים וחברה",
   "build.cat.food": "מזון ומים",
