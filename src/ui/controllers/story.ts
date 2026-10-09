@@ -76,13 +76,18 @@ export class StoryController {
   }
 
   playIntroSequence(): void {
-    // [Long game] A new game first asks how hard the world should be.
-    if (!this.app.state.storyFlags.includes('difficulty:chosen')) {
-      this.chooseDifficulty(() => this.playIntroSequence());
-      return;
-    }
+    // [ux-wp6: clarity F1 / playtest P1] The world first (gate, comic, title), then the one question: how hard should it be.
+    // The game stays paused until the choice is made; 'intro:done' is set only after it, so a reload at the question asks again.
+    const begin = () => {
+      this.app.engine.paused = false;
+      this.app.engine.stateManager.applyDelta({ path: 'storyFlags', value: [...new Set([...this.app.state.storyFlags, 'intro:done'])] });
+      this.app.engine.requestSave();
+      this.app.toasts.show(`[[flashlight]] ${i18n.t('intro.firstHint')}`, 'info');
+    };
+    const ask = () => (this.app.state.storyFlags.includes('difficulty:chosen') ? begin() : this.chooseDifficulty(begin));
     this.app.introPlaying = true;
     this.app.engine.paused = true;
+    hideSplash();
     document.body.classList.add('intro-active');
     // Start looking at the dark dormitory where the newcomers make camp.
     this.app.renderer.focusOn(150, 120, 1.6);
@@ -90,11 +95,8 @@ export class StoryController {
       play: (sfx) => this.app.audio.play(sfx),
       onDone: () => {
         this.app.introPlaying = false;
-        this.app.engine.paused = false;
         document.body.classList.remove('intro-active');
-        this.app.engine.stateManager.applyDelta({ path: 'storyFlags', value: [...new Set([...this.app.state.storyFlags, 'intro:done'])] });
-        this.app.engine.requestSave();
-        this.app.toasts.show(`[[flashlight]] ${i18n.t('intro.firstHint')}`, 'info');
+        ask();
       },
     });
   }
