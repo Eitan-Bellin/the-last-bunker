@@ -16,10 +16,7 @@ import { griefFor } from './DeathSystem'; // [Danger C5]
 import { MAX_RANK, MENTOR_BOOST, rankOf, rankOfXp, trainingCost, trainingGain } from '../data/mastery'; // [LateGame B3]
 import type { ResourceSystem } from './ResourceSystem';
 
-const FIRST_NAMES_EN = ['Alex', 'Sam', 'Jordan', 'Taylor', 'Morgan', 'Casey', 'Riley', 'Avery', 'Quinn', 'Dana',
-  'Max', 'Eli', 'Kai', 'Sage', 'Rowan', 'River', 'Sky', 'Phoenix', 'Blake', 'Drew'];
-const FIRST_NAMES_HE = ['דני', 'יעל', 'אורי', 'נועה', 'עידו', 'מיכל', 'איתי', 'שירה', 'ליאור', 'תמר',
-  'רועי', 'הילה', 'גל', 'דנה', 'אלון', 'ענבל', 'עמית', 'רונית', 'ניר', 'הדר'];
+import { localizeName, pickName } from '../data/names'; // [ux-wp5 C5] a large pool, unique among the living
 
 /** Story characters who can join keep their own names. */
 const STORY_NAMES_HE: Record<string, string> = { Maya: 'מאיה', Gideon: 'גדעון' };
@@ -110,6 +107,24 @@ export function xpForNextLevel(level: number): number {
 }
 
 export class PopulationSystem {
+  /** [ux-wp5 C5] The game whose living people's names are taken (known from the first update or newcomer). */
+  private sm: StateManager | null = null;
+  /** Names handed out moments ago that may not be in the state yet (a pair at the door, the night's arrivals). */
+  private recentNames: string[] = [];
+
+  /** [ux-wp5 C5] Every name carried by someone alive or waiting to come in. */
+  private takenNames(): Set<string> {
+    const taken = new Set(this.recentNames);
+    const state = this.sm?.state;
+    if (!state) return taken;
+    for (const s of state.survivors) taken.add(s.name);
+    for (const s of state.doorWaiting ?? []) taken.add(s.name);
+    const data = state.activeEvent?.data;
+    if (data?.survivor) taken.add((data.survivor as SurvivorState).name);
+    for (const s of (data?.group as SurvivorState[] | undefined) ?? []) taken.add(s.name);
+    return taken;
+  }
+
   syncNextId(state: GameState): void {
     let max = 0;
     const pending = state.activeEvent?.data?.survivor as SurvivorState | undefined;
@@ -123,6 +138,7 @@ export class PopulationSystem {
 
   /** [Danger C4] healthFloor: while the player is away, hunger can hurt but never kill (offline safety net). */
   update(sm: StateManager, dt: number, healthFloor = 0): void {
+    this.sm = sm;
     const state = sm.state;
     if (state.survivors.length === 0) return;
 
@@ -381,10 +397,13 @@ export class PopulationSystem {
 
     const traits: string[] = [];
     if (rng.chance(0.6)) traits.push(rng.pick(TRAITS));
+    // One roll, as before (a seeded run draws the same numbers), then the first free name from there.
+    const name = pickName(rng.next(), this.takenNames());
+    this.recentNames = [...this.recentNames.slice(-7), name];
 
     return {
       id,
-      name: rng.pick(FIRST_NAMES_EN),
+      name,
       portraitIndex: rng.nextInt(0, 39),
       level: 1,
       xp: 0,
@@ -399,6 +418,7 @@ export class PopulationSystem {
   }
 
   addSurvivor(sm: StateManager, survivor: SurvivorState): void {
+    this.sm = sm;
     const hardy = sm.state.prestige.upgrades['hardyStock'] ?? 0;
     if (hardy > 0) {
       const stats = { ...survivor.stats };
@@ -451,8 +471,8 @@ export class PopulationSystem {
   getLocalizedName(survivor: SurvivorState, locale: 'en' | 'he'): string {
     if (locale === 'he') {
       if (STORY_NAMES_HE[survivor.name]) return STORY_NAMES_HE[survivor.name];
-      const idx = FIRST_NAMES_EN.indexOf(survivor.name);
-      if (idx !== -1 && idx < FIRST_NAMES_HE.length) return FIRST_NAMES_HE[idx];
+      const he = localizeName(survivor.name, 'he');
+      if (he) return he;
     }
     return survivor.name;
   }
