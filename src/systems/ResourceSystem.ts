@@ -20,8 +20,11 @@ import { isTier2 } from './economy';
 import { moraleOutputMult, moraleRawAverage } from './morale';
 
 const EMERGENCY_EFFICIENCY = 0.25;
-/** [ux-wp2 R7] Stores that hold hours of production in Act I. */
-const ACT1_BUFFERED: ResourceType[] = ['food', 'water', 'materials', 'knowledge'];
+/**
+ * [ux-wp2 R7] Stores that hold hours of production in Act I. Not materials: their overflow is what feeds the Vault Seal charter, and a
+ * deeper store delayed Act I by half a day in the sim (the materials went to upgrades instead).
+ */
+const ACT1_BUFFERED: ResourceType[] = ['food', 'water', 'knowledge'];
 /** [ux-wp2 R1] A reward may fill a store up to this many times its cap. */
 export const OVERFILL_CAPS = 3;
 const FOOD_PER_SURVIVOR = 0.08;

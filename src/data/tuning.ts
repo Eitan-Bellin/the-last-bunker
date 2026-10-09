@@ -28,7 +28,7 @@ export const TUNING = {
   olderCurrencyShare: 0.4,
   /**
    * L2: each Act's currency can be stored for this many hours of its reference income (index = current Act).
-   * [ux-wp2 R7/R10] Act I (2.5, was 0.9): food, water, materials and knowledge hold at least this many hours of the bunker's own
+   * [ux-wp2 R7/R10] Act I (2.5, was 0.9): food, water and knowledge hold at least this many hours of the bunker's own
    * production (ResourceSystem.computeCaps), so the first night away fills the stores instead of spilling after an hour.
    */
   capHours: [0, 2.5, 4, 6, 8, 9, 10, 10],
@@ -40,7 +40,7 @@ export const TUNING = {
    * [ux-wp2 S3] Tier-2 roles (assembly line, arc furnace, data vault, council hall, seed forge) now go through their crew and the
    * modifier stack (morale, laws, research, Echo...), about x6-8 in a developed bunker; their base rates are divided by this.
    */
-  roleOutputNorm: 6.5,
+  roleOutputNorm: 8,
   /** Charter project stages, in hours of their Act's income (index = Act). */
   charterStageHours: [0, 3, 17, 12, 9, 9, 9, 9],
   /** [P4] Contracts: an offer every so many world seconds, open this long, at most this many waiting; paid in hours of income. */
