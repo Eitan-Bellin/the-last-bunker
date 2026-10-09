@@ -506,7 +506,9 @@ export class BuildingPanel {
     const bs = this.engine.buildingSystem;
     const block = bs.upgradeBlock(b, state);
     if (block === null) {
-      const up = button(`[[up]] ${i18n.t('building.upgradeTo', { n: b.level + 1 })}`, 'btn-primary bp-upbtn', () => this.onUpgrade?.(b.id), !affordable);
+      // Short of the price the button stays tappable: the app's handler then says what is missing and when it will be there (ui/missing.ts).
+      const up = button(`[[up]] ${i18n.t('building.upgradeTo', { n: b.level + 1 })}`, `btn-primary bp-upbtn${affordable ? '' : ' unaffordable'}`, () => this.onUpgrade?.(b.id));
+      if (!affordable) up.setAttribute('aria-disabled', 'true');
       up.appendChild(costRow(state, bs.getUpgradeCost(b)));
       bar.appendChild(up);
     } else {

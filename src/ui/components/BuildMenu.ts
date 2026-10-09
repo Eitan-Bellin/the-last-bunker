@@ -11,31 +11,14 @@ import { recommendedRooms } from '../../systems/BuildAdvice';
 import { Sheet } from './Sheet';
 import { ArtLibrary } from '../../art/ArtLibrary';
 import { buildingArtKey } from '../../art/registry';
-import { BUILDING_ICONS, RESOURCE_ICONS, costAmount, el, rateText } from '../dom';
+import { BUILDING_ICONS, RESOURCE_ICONS, el, rateText } from '../dom';
+import { describeMissing, missingList } from '../missing';
 import { haptic } from '../../utils/haptics';
 import { uiSound } from '../../audio/uiSound';
 
-/**
- * [ux-wp4] B2: what a price still lacks, and roughly when the bunker will have it ("Missing 120 [materials] · about 3 min").
- * Kept in one function so it can be swapped for the shared helper (src/ui/missing.ts, WP3) at merge.
- */
+/** [ux-wp4] B2: what a price still lacks and roughly when the bunker will have it (the shared helper, src/ui/missing.ts); empty when nothing is. */
 export function missingText(state: GameState, cost: Record<string, number>): string {
-  const parts: string[] = [];
-  let eta = 0;
-  let never = false;
-  for (const [r, need] of Object.entries(cost)) {
-    const res = state.resources[r as ResourceType];
-    const short = need - (res?.amount ?? 0);
-    if (short <= 0) continue;
-    parts.push(`${costAmount(short)} ${RESOURCE_ICONS[r] ?? i18n.t(`resources.${r}`)}`);
-    if (res && need > res.cap && isFinite(res.cap)) never = true;
-    const net = res ? res.productionRate - res.consumptionRate : 0;
-    if (net > 0.0001) eta = Math.max(eta, short / net);
-    else never = true;
-  }
-  if (!parts.length) return '';
-  const what = i18n.t('wp4.missing', { list: parts.join(' ') });
-  return never ? what : `${what} · ${i18n.t('wp4.eta', { t: i18n.formatDuration(eta) })}`;
+  return missingList(state, cost).length ? describeMissing(state, cost) : '';
 }
 
 /** What one card needs to know about a room right now. */

@@ -11,8 +11,6 @@
   "wp4.next": "Next",
   "wp4.nextHint": "The next room worth upgrading",
   "wp4.nextNone": "No other room can be upgraded now",
-  "wp4.missing": "Missing {list}",
-  "wp4.eta": "in about {t}",
   "wp4.canBuild": "Can build",
   "wp4.locked": "Locked ({n})",
   "wp4.noneMatch": "Nobody matches the filter.",

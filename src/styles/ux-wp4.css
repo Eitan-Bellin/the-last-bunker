@@ -115,3 +115,4 @@ button.info-item.morale-chip:focus-visible, button.hud-banner.power:focus-visibl
 /* ---------- M5: the rooms list's filter chips ---------- */
 .struct-chips { margin: 4px 0 10px; flex-wrap: wrap; }
 .struct-chips .bm-chip { min-height: 44px; }
+.bp-upbar .bp-upbtn.unaffordable { filter: grayscale(0.6) brightness(0.8); }

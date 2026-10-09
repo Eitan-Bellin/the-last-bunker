@@ -78,6 +78,12 @@ export class EventController {
     this.app.engine.notifyInteraction();
     this.app.engine.requestSave();
     this.app.audio.play(eventId === 'trader' && result.gains ? 'coin' : 'click');
+    // [ux-wp4] P10: letting a wanderer in needs no second "has joined! Continue" dialog: a toast says it and the game goes on.
+    if (eventId === 'wanderer' && choiceKey === 'accept' && !result.gains && !(result.injured ?? []).length) {
+      this.app.modal.hide();
+      this.app.toasts.show(`[[door]] ${i18n.t(`event.${eventId}.result.${result.key}`, params)}`, 'good');
+      return;
+    }
     const body = el('div', 'modal-result');
     body.appendChild(el('p', 'modal-body', i18n.t(`event.${eventId}.result.${result.key}`, params)));
     if (result.gains) body.appendChild(this.app.welcome.gainsList(result.gains));
