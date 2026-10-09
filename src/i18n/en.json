@@ -1,4 +1,11 @@
 {
+  "shop.item.actGoods": "Act goods",
+  "shop.item.actGoods.desc": "An hour of the Act's currency. No daily limit, but each purchase this week makes the next 25% dearer.",
+  "mod.crew": "Crew",
+  "mod.memory": "Scientific Memory",
+  "mod.scenario": "This place",
+  "wp2.lawImpact": "In your bunker: output {out}, morale {from} → {to}",
+  "wp2.labour": "Idle hands help: digs and charter work +{n}%",
   "game.title": "The Last Bunker",
   "game.subtitle": "Survive. Build. Endure.",
   "game.newGame": "New Game",

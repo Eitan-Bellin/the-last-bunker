@@ -305,53 +305,13 @@ export class PopulationSystem {
     return factors;
   }
 
-  /**
-   * The parts of morale that do not depend on who is asking. Must stay in step with getMoraleFactors (the list the
-   * People panel shows): that function is the readable version, this is the same sum done once for everybody.
-   */
-  private sharedMood(state: GameState): { sum: number; leaders: number; ids: Set<string> } {
-    let sum = 45;
-    if (state.resources.food.amount <= 0) sum -= 30;
-    if (state.resources.water.amount <= 0) sum -= 30;
-    if (state.survivors.length > state.maxPopulation) sum -= 15;
-    const crowd = crowdingPenalty(state);
-    if (crowd > 0) sum -= crowd;
-    if ((state.powerRatio ?? 1) < 0.99) sum -= Math.round(15 * (1 - state.powerRatio)) + 5;
-    const canteen = this.getCanteenBonus(state);
-    if (canteen > 0) sum += Math.round(canteen);
-    const now = state.stats.totalPlayTime;
-    const buffs = state.moraleBuffs.filter(b => b.expiresAt > now).reduce((acc, b) => acc + b.value, 0);
-    sum += buffs;
-    const research = researchMorale(state);
-    if (research > 0) sum += research;
-    sum += lawMorale(state);
-    sum += projectMorale(state); // the Sky Dome
-    const specs = specTotal(state, 'morale');
-    if (specs > 0) sum += specs;
-    let kids = 0;
-    let leaders = 0;
-    const ids = new Set<string>();
-    for (const o of state.survivors) {
-      ids.add(o.id);
-      if (o.child) kids++;
-      if (o.traits.includes('naturalLeader')) leaders++;
-    }
-    if (kids > 0) sum += Math.min(6, kids * 2);
-    sum -= 4 * (state.incidents?.length ?? 0);
-    return { sum, leaders, ids };
+  private sharedMood(state: GameState): SharedMood {
+    return sharedMoodOf(state);
   }
 
   /** One survivor's target mood from the shared part plus what is personal to them. Same result as getTargetHappiness. */
-  private fastTargetHappiness(state: GameState, s: SurvivorState, mood: { sum: number; leaders: number; ids: Set<string> }): number {
-    let total = mood.sum;
-    if (!s.isOnMission) total += s.assignedBuildingId ? 15 : -10;
-    if (s.health < 50) total -= 10;
-    if (s.partnerId && mood.ids.has(s.partnerId)) total += 6;
-    total += griefFor(state, s.id);
-    if (mood.leaders - (s.traits.includes('naturalLeader') ? 1 : 0) > 0) total += 5;
-    if (s.traits.includes('optimist')) total += 10;
-    if (s.traits.includes('pessimist')) total -= 10;
-    return Math.max(0, Math.min(100, total));
+  private fastTargetHappiness(state: GameState, s: SurvivorState, mood: SharedMood): number {
+    return Math.max(0, Math.min(100, mood.sum + personalMood(state, s, mood)));
   }
 
   getTargetHappiness(state: GameState, s: SurvivorState): number {
@@ -461,4 +421,73 @@ export class PopulationSystem {
     if (state.survivors.length === 0) return 50;
     return state.survivors.reduce((sum, s) => sum + s.happiness, 0) / state.survivors.length;
   }
+}
+
+/** The parts of morale that are the same for everyone, worked out once per step. */
+export interface SharedMood { sum: number; leaders: number; ids: Set<string> }
+
+/**
+ * The parts of morale that do not depend on who is asking. Must stay in step with getMoraleFactors (the list the
+ * People panel shows): that function is the readable version, this is the same sum done once for everybody.
+ */
+export function sharedMoodOf(state: GameState): SharedMood {
+  let sum = 45;
+  if (state.resources.food.amount <= 0) sum -= 30;
+  if (state.resources.water.amount <= 0) sum -= 30;
+  if (state.survivors.length > state.maxPopulation) sum -= 15;
+  const crowd = crowdingPenalty(state);
+  if (crowd > 0) sum -= crowd;
+  if ((state.powerRatio ?? 1) < 0.99) sum -= Math.round(15 * (1 - state.powerRatio)) + 5;
+  const canteen = moraleBreakdown(state).total;
+  if (canteen > 0) sum += Math.round(canteen);
+  const now = state.stats.totalPlayTime;
+  const buffs = state.moraleBuffs.filter(b => b.expiresAt > now).reduce((acc, b) => acc + b.value, 0);
+  sum += buffs;
+  const research = researchMorale(state);
+  if (research > 0) sum += research;
+  sum += lawMorale(state);
+  sum += projectMorale(state); // the Sky Dome
+  const specs = specTotal(state, 'morale');
+  if (specs > 0) sum += specs;
+  let kids = 0;
+  let leaders = 0;
+  const ids = new Set<string>();
+  for (const o of state.survivors) {
+    ids.add(o.id);
+    if (o.child) kids++;
+    if (o.traits.includes('naturalLeader')) leaders++;
+  }
+  if (kids > 0) sum += Math.min(6, kids * 2);
+  sum -= 4 * (state.incidents?.length ?? 0);
+  return { sum, leaders, ids };
+}
+
+/** What is personal in one survivor's mood (job, health, partner, grief, leaders, temper), on top of the shared part. */
+export function personalMood(state: GameState, s: SurvivorState, mood: SharedMood): number {
+  let total = 0;
+  if (!s.isOnMission) total += s.assignedBuildingId ? 15 : -10;
+  if (s.health < 50) total -= 10;
+  if (s.partnerId && mood.ids.has(s.partnerId)) total += 6;
+  total += griefFor(state, s.id);
+  if (mood.leaders - (s.traits.includes('naturalLeader') ? 1 : 0) > 0) total += 5;
+  if (s.traits.includes('optimist')) total += 10;
+  if (s.traits.includes('pessimist')) total -= 10;
+  return total;
+}
+
+/**
+ * [ux-wp2 S4] The bunker's average mood before each person's 0..100 limit (`shift` added to everyone, for "what if" previews):
+ * `raw` can pass 100 in a well-kept bunker, `target` is where people's morale is heading.
+ */
+export function moraleTargets(state: GameState, shift = 0): { raw: number; target: number } {
+  if (state.survivors.length === 0) return { raw: 50, target: 50 };
+  const mood = sharedMoodOf(state);
+  let raw = 0;
+  let target = 0;
+  for (const p of state.survivors) {
+    const v = mood.sum + personalMood(state, p, mood) + shift;
+    raw += v;
+    target += Math.max(0, Math.min(100, v));
+  }
+  return { raw: raw / state.survivors.length, target: target / state.survivors.length };
 }
