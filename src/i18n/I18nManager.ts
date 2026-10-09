@@ -117,7 +117,17 @@ export class I18nManager {
       const m = Math.floor(total / 60);
       return total % 60 === 0 ? this.t('time.mOnly', { m }) : this.t('time.m', { m, s: total % 60 });
     }
-    return this.t('time.h', { h: Math.floor(total / 3600), m: Math.floor((total % 3600) / 60) });
+    // [ux] Two days and more read as days and hours; a whole hour drops the "0 min".
+    if (total >= 48 * 3600) {
+      const d = Math.floor(total / 86400), h = Math.floor((total % 86400) / 3600);
+      return h ? this.t('time.d', { d, h }) : this.t('time.dOnly', { d });
+    }
+    if (total >= 24 * 3600) {
+      const h = Math.floor((total - 86400) / 3600);
+      return h ? this.t('time.d1', { h }) : this.t('time.d1Only');
+    }
+    const h = Math.floor(total / 3600), m = Math.floor((total % 3600) / 60);
+    return m ? this.t('time.h', { h, m }) : this.t('time.hOnly', { h });
   }
 
   formatRate(perSecond: number): string {
