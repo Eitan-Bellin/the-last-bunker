@@ -113,9 +113,9 @@ function setFlags(ctx: Ctx, add: string[], remove: (f: string) => boolean = () =
 /** Everyday events told three ways (`data.v`): the dialog shows `event.<id>.desc` or `event.<id>.desc.<v>`. */
 export const EVENT_VARIANTS: Record<string, number> = { stash: 3, trader: 3, pipeLeak: 3, argument: 3, sickness: 3, powerSurge: 3, wanderer: 3 };
 /** Play seconds before the same everyday event may come again. */
-const EVENT_COOLDOWN: Record<string, number> = { stash: 900, trader: 900, pipeLeak: 1200, argument: 1200, sickness: 1200, powerSurge: 1500, returning: 3600 };
+const EVENT_COOLDOWN: Record<string, number> = { stash: 600, trader: 600, pipeLeak: 900, argument: 900, sickness: 900, powerSurge: 1200, returning: 3600 };
 /** The last this many events can't come next (no "the same thing again" right after). */
-const RECENT_BLOCK = 2;
+const RECENT_BLOCK = 1;
 /** [ux-wp5, clarity C5] In Act I at most one everyday event every 6 minutes (the door keeps its own clock). */
 const ACT1_MIN_GAP = 360;
 /** Someone turned away comes back after this much play, at the earliest. */
@@ -243,7 +243,7 @@ const EVENTS: EventDef[] = [
     weight: 1.5,
     condition: s => s.buildings.some(b => b.type === 'waterPump'),
     // [ux-wp5 C2] The repair is priced from the stores, so it stays a choice in a rich bunker; the hint shows what waiting costs.
-    init: s => ({ fix: capShare(s, 'materials', 0.02, 10), loss: Math.floor(s.resources.water.amount * 0.3) }),
+    init: s => ({ fix: capShare(s, 'materials', 0.01, 10), loss: Math.floor(s.resources.water.amount * 0.3) }),
     choices: (data) => [
       { key: 'fix', cost: { materials: num(data, 'fix', 10) }, hint: 'event.hint.noLoss' },
       { key: 'ignore', hint: 'event.hint.waterLoss', hintParams: { n: num(data, 'loss', 0) } },
@@ -261,7 +261,7 @@ const EVENTS: EventDef[] = [
     condition: s => s.survivors.length >= 2,
     init: (s, ctx) => {
       const [a, b] = ctx.rng.shuffle(s.survivors);
-      return { nameA: a.name, nameB: b.name, food: capShare(s, 'food', 0.03, 5) };
+      return { nameA: a.name, nameB: b.name, food: capShare(s, 'food', 0.02, 5) };
     },
     choices: (data) => [
       { key: 'mediate', cost: { food: num(data, 'food', 5) }, hint: 'event.hint.moraleUp', hintParams: { n: 8 } },
@@ -339,7 +339,7 @@ const EVENTS: EventDef[] = [
     condition: s => s.survivors.length >= 1,
     init: (s, ctx) => {
       const v = ctx.rng.pick(s.survivors);
-      return { survivorId: v.id, name: v.name, med: capShare(s, 'medicine', 0.04, 3) };
+      return { survivorId: v.id, name: v.name, med: capShare(s, 'medicine', 0.03, 3) };
     },
     choices: (data) => [
       { key: 'medicine', cost: { medicine: num(data, 'med', 3) }, hint: 'event.hint.heal' },
@@ -842,7 +842,7 @@ export class EventSystem {
     }
     if (state.activeEvent || state.stats.totalPlayTime < state.nextEventAt) return;
 
-    // [ux-wp5 C1] Not one of the last two again, and each everyday event rests a while before it comes back.
+    // [ux-wp5 C1] Never the same one twice running, and each everyday event rests a while before it comes back.
     const recent = this.recent.slice(-RECENT_BLOCK);
     const rested = (e: EventDef) => e.id === 'refugees'
       || (!recent.includes(e.id) && now - (this.lastAt[e.id] ?? -Infinity) >= (EVENT_COOLDOWN[e.id] ?? 0));
