@@ -586,6 +586,7 @@
   "journal.bonus": "ידע מהעבר: +{pct}% תפוקה ל{name}",
   "journal.close": "סגירה",
   "journal.found": "מצאתם משהו!",
+  "journal.foundQuiet": "נמצא משהו בהריסות. הוא מחכה לכם ביומן",
   "journal.readNow": "קראו עכשיו",
   "journal.later": "אחר כך",
   "era.title": "מרכז פיקוד",

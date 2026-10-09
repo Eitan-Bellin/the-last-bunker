@@ -310,8 +310,9 @@ export class HUD {
     if (this.eraChip.dataset.sig !== sig) {
       this.eraChip.dataset.sig = sig;
       setRich(this.eraChip, '[[flag]]');
+      // [ux] One ladder on the chip: the Act when there is one (the era stays in its title and in the Command panel), the era otherwise.
       if (actTag) this.eraChip.appendChild(el('span', 'act-tag', actTag));
-      this.eraChip.appendChild(el('span', 'era-name', name));
+      else this.eraChip.appendChild(el('span', 'era-name', name));
       this.eraChip.title = title;
       this.eraChip.setAttribute('aria-label', title);
     }

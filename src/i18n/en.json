@@ -586,6 +586,7 @@
   "journal.bonus": "Know-how from the past: +{pct}% {name} output",
   "journal.close": "Close",
   "journal.found": "You found something!",
+  "journal.foundQuiet": "Something turned up in the rubble. It is waiting in the journal",
   "journal.readNow": "Read now",
   "journal.later": "Later",
   "era.title": "Command",
