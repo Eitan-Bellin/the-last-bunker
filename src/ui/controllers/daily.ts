@@ -116,8 +116,9 @@ export class DailyController {
   /** Called a few times a second: the HUD chip, and the sheet if it is open. */
   refresh(state: GameState): void {
     const d = state.daily;
-    const show = d.orders.length > 0 && this.sys.active(state);
     const sum = this.sys.summary(state);
+    // [ux-wp4] D3: once the Decision inbox holds the orders card, the chip shows only while a reward waits (the inbox has the rest).
+    const show = d.orders.length > 0 && this.sys.active(state) && (sum.claimable > 0 || !this.app.inbox.defers(state));
     this.app.hud.setDaily(show, sum.done, sum.n, sum.claimable, i18n.t('daily.chip', { done: sum.done, n: sum.n }));
     if (this.sheet?.isVisible) this.render();
   }

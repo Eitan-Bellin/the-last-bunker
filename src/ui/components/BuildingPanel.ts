@@ -6,7 +6,8 @@ import { roomEffect, childCapacityOf } from '../../data/roomEffects'; // [plan4:
 import { Sheet } from './Sheet';
 import { genderOf, portraitFor, portraitUrl } from '../../data/portraits';
 import { bunkerDefense } from '../../systems/EventSystem';
-import { BUILDING_ICONS, RESOURCE_ICONS, STAT_ICONS, bar, button, costRow, el, rateText, setBar, setRich } from '../dom';
+import { BUILDING_ICONS, RESOURCE_ICONS, STAT_ICONS, bar, bidiNumbers, button, costRow, el, rateText, setBar, setRich } from '../dom';
+import { flowArrow } from '../rtl'; // [ux-wp4] B3 "Next" points along the reading direction
 import { INCIDENTS, quickFixCost } from '../../data/incidents';
 import { boostReserve, chainInputs, inputFed, inputRate } from '../../data/chains';
 import { roomPowerDraw } from '../../systems/ResourceSystem';
@@ -34,6 +35,10 @@ export class BuildingPanel {
   private efficiencyEl: HTMLElement | null = null;
 
   onUpgrade: ((buildingId: string) => void) | null = null;
+  /** [ux-wp4] B3: opens another room's panel in place (the "Next" button of the upgrade bar). */
+  onOpenRoom: ((buildingId: string) => void) | null = null;
+  /** [ux-wp4] B3: rooms already visited with "Next" since the sheet opened, so the button walks the list instead of bouncing between two. */
+  private visited = new Set<string>();
   onMove: ((buildingId: string) => void) | null = null; // [plan4:ST-19] "Move": starts the relocate flow (WorldController.beginRelocate)
   onClose: (() => void) | null = null;
   onIncidentTap: ((incidentId: string) => void) | null = null;
@@ -51,6 +56,7 @@ export class BuildingPanel {
     this.sheet.onClose = () => {
       this.buildingId = null;
       this.pickerOpen = false;
+      this.visited.clear();
       this.onClose?.();
     };
   }
@@ -81,7 +87,9 @@ export class BuildingPanel {
     }
 
     const upgradeAffordable = this.engine.resourceSystem.canAfford(state, this.engine.buildingSystem.getUpgradeCost(b));
+    this.nextId = this.nextUpgrade(state, b.id);
     const sig = [
+      this.nextId ?? '',
       b.level, b.isConstructing, state.rush ?? 0, b.assignedSurvivorIds.join(','), this.pickerOpen, upgradeAffordable,
       state.survivors.map(s => `${s.id}:${s.assignedBuildingId}:${s.level}`).join(','),
       state.powerRatio < 0.99,
@@ -125,6 +133,8 @@ export class BuildingPanel {
       }, !this.engine.rushSystem.canRushBuilding(state, b.id)));
     }
     status.style.display = b.isConstructing ? '' : 'none';
+    // [ux-wp4] B3: the upgrade and "Next" sit in a bar pinned to the top of the sheet: upgrading several rooms is one tap each.
+    root.appendChild(this.renderUpgradeBar(state, b, upgradeAffordable));
     root.appendChild(status);
 
     if (this.pickerOpen) {
@@ -409,7 +419,15 @@ export class BuildingPanel {
     if (candidates.length === 0) card.appendChild(el('div', 'bp-hint', i18n.t('people.empty')));
 
     const locale = i18n.currentLocale;
-    for (const s of candidates) {
+    // [ux-wp4] B4: free hands first (no one else's room empties), then people from other rooms under their own heading.
+    const idle = candidates.filter(s => !s.assignedBuildingId);
+    const busy = candidates.filter(s => s.assignedBuildingId);
+    const heads = new Map<string, string>();
+    if (idle.length) heads.set(idle[0].id, i18n.t('wp4.freeHands', { n: idle.length }));
+    if (busy.length) heads.set(busy[0].id, i18n.t('wp4.fromRooms'));
+    for (const s of [...idle, ...busy]) {
+      const head = heads.get(s.id);
+      if (head) card.appendChild(el('div', 'bp-hint bp-pick-head', head));
       const row = el('button', 'worker-row worker-pick');
       row.appendChild(this.face(s));
       const name = el('div', 'worker-name', this.engine.populationSystem.getLocalizedName(s, locale));
@@ -451,7 +469,7 @@ export class BuildingPanel {
     const cost = this.engine.buildingSystem.getUpgradeCost(b);
     const time = this.engine.buildingSystem.getUpgradeTime(b);
     const info = el('div', 'bp-upgrade-info');
-    info.appendChild(costRow(state, cost));
+    info.appendChild(costRow(state, cost, true)); // [ux-wp4] P17: short prices with the resource's name
     info.appendChild(el('span', 'bp-hint', `[[clock]] ${i18n.formatDuration(time)}`));
     card.appendChild(info);
     // The price is more than storage can even hold: point at the Storage Room instead of a silent grey button.
@@ -460,13 +478,53 @@ export class BuildingPanel {
       const cap = Math.floor(state.resources[over[0] as ResourceType].cap);
       card.appendChild(el('div', 'bp-hint negative-text', `[[storage]] ${i18n.t('building.needStorage', { cap, cost: over[1] })}`));
     }
-    card.appendChild(button(
-      `[[up]] ${i18n.t('building.upgradeTo', { n: b.level + 1 })}`,
-      'btn-primary',
-      () => this.onUpgrade?.(b.id),
-      !affordable || b.isConstructing,
-    ));
+    // [ux-wp4] B3: the button itself is in the bar at the top (renderUpgradeBar); this card keeps the full price, the time and the notes.
+    void affordable;
     return card;
+  }
+
+  private nextId: string | null = null;
+
+  /**
+   * [ux-wp4] B3: the next room worth upgrading after this one: rooms that can go up now (the Act allows it, not busy), the affordable ones
+   * first, then the highest level, then the cheapest (the order of the guide's "take me there"); rooms already visited with Next come last.
+   */
+  private nextUpgrade(state: GameState, currentId: string): string | null {
+    const bs = this.engine.buildingSystem;
+    const rs = this.engine.resourceSystem;
+    const rows = state.buildings.filter(x => x.id !== currentId && !x.isConstructing && bs.canUpgrade(x, state)).map(x => {
+      const cost = bs.getUpgradeCost(x);
+      return { id: x.id, level: x.level, ok: rs.canAfford(state, cost), total: Object.values(cost).reduce((a, v) => a + v, 0), seen: this.visited.has(x.id) };
+    });
+    rows.sort((a, c) => Number(a.seen) - Number(c.seen) || Number(c.ok) - Number(a.ok) || c.level - a.level || a.total - c.total || (a.id < c.id ? -1 : 1));
+    return rows[0]?.id ?? null;
+  }
+
+  /** [ux-wp4] B3: the sticky bar: [Upgrade to N · price] [Next ▸]. */
+  private renderUpgradeBar(state: GameState, b: BuildingInstance, affordable: boolean): HTMLElement {
+    const bar = el('div', 'bp-upbar');
+    const bs = this.engine.buildingSystem;
+    const block = bs.upgradeBlock(b, state);
+    if (block === null) {
+      const up = button(`[[up]] ${i18n.t('building.upgradeTo', { n: b.level + 1 })}`, 'btn-primary bp-upbtn', () => this.onUpgrade?.(b.id), !affordable);
+      up.appendChild(costRow(state, bs.getUpgradeCost(b)));
+      bar.appendChild(up);
+    } else {
+      const note = block === 'max' ? `[[star]] ${i18n.t('building.maxLevel')}` : block === 'act' ? `[[lock]] ${i18n.t('building.actCap', { level: b.level + 1 })}`
+        : `[[build]] ${i18n.t('wp4.busy')}`;
+      bar.appendChild(el('div', 'bp-upnote', note));
+    }
+    const next = this.nextId;
+    const go = button(`${i18n.t('wp4.next')} ${flowArrow()}`, 'btn-secondary bp-next', () => {
+      if (!next || !this.buildingId) return;
+      this.visited.add(this.buildingId);
+      uiSound('click');
+      this.onOpenRoom?.(next);
+    }, !next);
+    go.title = next ? i18n.t('wp4.nextHint') : i18n.t('wp4.nextNone');
+    go.setAttribute('aria-label', go.title);
+    bar.appendChild(go);
+    return bar;
   }
 
   /** NICE2: tear a room down for half its build price (two taps: the button, then the confirmation). */
@@ -528,7 +586,7 @@ export class BuildingPanel {
     const output = this.engine.resourceSystem.getBuildingOutput(state, b);
     for (const [r, elv] of this.outputValues) {
       const v = output[r as ResourceType] ?? 0;
-      elv.textContent = rateText(v); // plan4:BL-25 a trickle (blueprints) shows per hour
+      elv.textContent = bidiNumbers(rateText(v)); // plan4:BL-25 a trickle (blueprints) shows per hour; [ux-wp4] I1 the sign stays in front in Hebrew
     }
     if (this.efficiencyEl) {
       this.efficiencyEl.textContent = `${Math.round(workforceMultiplier(state, b) * 100)}%`;

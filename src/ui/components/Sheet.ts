@@ -78,7 +78,8 @@ export class Sheet {
     if (!escBound) {
       escBound = true;
       document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape') openSheets[openSheets.length - 1]?.hide();
+        // [ux-wp4] Escape closes the top sheet only, and not while a dialog is up (the dialog asks for an answer first).
+        if (e.key === 'Escape' && !document.querySelector('.modal-overlay.open')) Sheet.closeTop();
       });
     }
   }
@@ -176,6 +177,14 @@ export class Sheet {
     };
     handle.addEventListener('pointerdown', grabMouse);
     this.titleEl.addEventListener('pointerdown', grabMouse);
+  }
+
+  /** [ux-wp4] Closes the newest open sheet (the phone's back button and Escape): false when no sheet is open. */
+  static closeTop(): boolean {
+    const top = openSheets[openSheets.length - 1];
+    if (!top) return false;
+    top.hide();
+    return true;
   }
 
   setTitle(text: string): void {

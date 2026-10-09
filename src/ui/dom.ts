@@ -86,8 +86,8 @@ BUILDING_ICONS.watchtower ??= tok('eye');
 
 const TOKEN = /\[\[([a-zA-Z0-9]+)\]\]/g;
 
-/** A signed number ("+2.9", "−1", "+10%", "+1.2K") that does not continue a word or a range like "3-5". */
-const SIGNED = /[+\-−–]\s?\d[\d.,]*(?:%|[KMB](?!\p{L}))?/gu;
+/** A signed number ("+2.9", "−1", "+10%", "+1.2K", "×1.25") that does not continue a word or a range like "3-5". [ux-wp4] I1: "×" too. */
+const SIGNED = /[+\-−–×]\s?\d[\d.,]*(?:%|[KMB](?!\p{L}))?/gu;
 
 /**
  * In right-to-left text a leading sign is a neutral character and drifts to the far side ("2.9+", "1–").
@@ -95,7 +95,7 @@ const SIGNED = /[+\-−–]\s?\d[\d.,]*(?:%|[KMB](?!\p{L}))?/gu;
  * number still takes its natural place in the Hebrew sentence.
  */
 export function bidiNumbers(text: string): string {
-  if (document.documentElement.dir !== 'rtl' || !/[+\-−–]\s?\d/.test(text)) return text;
+  if (document.documentElement.dir !== 'rtl' || !/[+\-−–×]\s?\d/.test(text)) return text;
   // A sign glued to a letter or digit ("A-5", "3-5") is not a signed number. (No regex lookbehind: older iPhones cannot even parse one.)
   return text.replace(SIGNED, (m, offset: number) => (/[\p{L}\p{N}]/u.test(text[offset - 1] ?? '') ? m : `⁦${m}⁩`));
 }
@@ -147,11 +147,36 @@ export function rateText(perSecond: number): string {
   return `${i18n.formatRate(perSecond)} ${i18n.t('resources.perSecond')}`;
 }
 
-export function costRow(state: GameState, cost: Record<string, number>): HTMLDivElement {
+/**
+ * [ux-wp4] P17: a price for a cost chip. Up to 9,999 it is the exact number; above that it is short like the HUD ("470K", "2.4M"),
+ * always rounded up so a short price is never less than what is asked.
+ */
+export function costAmount(n: number): string {
+  if (n < 10_000) return String(Math.ceil(n));
+  if (n < 999_500) return `${Math.ceil(n / 1000)}K`;
+  if (n < 9_995_000) return `${(Math.ceil(n / 100_000) / 10).toFixed(1)}M`;
+  if (n < 999_500_000) return `${Math.ceil(n / 1_000_000)}M`;
+  return `${(Math.ceil(n / 100_000_000) / 10).toFixed(1)}B`;
+}
+
+/** [ux-wp4] A number with a sign, kept left-to-right inside Hebrew text ("+30%", "−3", "×1.25"), for places that set textContent. */
+export function signed(text: string): string {
+  return document.documentElement.dir === 'rtl' ? `⁦${text}⁩` : text;
+}
+
+/**
+ * A price as chips (icon + amount; green when you have it). [ux-wp4] P17: big amounts are short (470K), every chip names its resource
+ * for a screen reader and on hover, and `labelled` also writes the name next to the number (the upgrade card).
+ */
+export function costRow(state: GameState, cost: Record<string, number>, labelled = false): HTMLDivElement {
   const row = el('div', 'cost-row');
   for (const [r, amount] of Object.entries(cost)) {
     const have = state.resources[r as ResourceType]?.amount ?? 0;
-    row.appendChild(el('span', `cost-chip ${have >= amount ? 'affordable' : 'expensive'}`, `${RESOURCE_ICONS[r] ?? ''} ${amount}`));
+    const name = i18n.t(`resources.${r}`);
+    const chip = el('span', `cost-chip ${have >= amount ? 'affordable' : 'expensive'}`, `${RESOURCE_ICONS[r] ?? ''} ${costAmount(amount)}${labelled ? ` ${name}` : ''}`);
+    chip.title = `${name}: ${i18n.formatNumber(Math.ceil(amount))}`;
+    chip.setAttribute('aria-label', chip.title);
+    row.appendChild(chip);
   }
   return row;
 }

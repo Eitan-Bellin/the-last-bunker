@@ -1,0 +1,117 @@
+/* [ux-wp4] Convenience and HUD (store/ux-review/03-convenience.md and friends): the room panel's upgrade bar, the People rows and filters,
+   the build menu's "Locked (N)" fold, the tappable power banner and morale chip, the Act lock on the door. */
+
+/* ---------- W2: the low-power banner and the morale chip are buttons now ---------- */
+button.hud-banner.power { font: inherit; font-size: calc(12px * var(--fs, 1)); font-weight: 600; cursor: pointer; min-height: 36px; }
+button.hud-banner.power .ic { opacity: 0.85; }
+button.info-item.morale-chip { font: inherit; color: inherit; cursor: pointer; }
+button.info-item.morale-chip:focus-visible, button.hud-banner.power:focus-visible { outline: 2px solid var(--accent, #ffb547); outline-offset: 2px; }
+
+/* R3: the Act's limit is a fact, not an alarm: neutral grey, no pulse. */
+.info-arrival.act-lock { color: #c9c2b2; animation: none; }
+
+/* I1: the toast's "×3" counter reads left to right in Hebrew too. */
+.toast-count { direction: ltr; }
+
+/* ---------- B3: the room panel's upgrade bar, pinned to the top of the sheet ---------- */
+.bp-upbar {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+  margin: 0 0 10px;
+  /* the sheet's ✕ plate sits at the end of the top row: keep clear of it */
+  padding: 6px 44px 6px 0;
+  padding-inline: 0 44px;
+  background: linear-gradient(180deg, var(--crt-bg-2, #16201a) 80%, rgba(0, 0, 0, 0));
+}
+.bp-upbar .bp-upbtn { flex: 1 1 auto; min-height: 48px; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 4px 8px; }
+.bp-upbar .bp-upbtn .cost-row { margin: 0; gap: 4px; }
+.bp-upbar .bp-upbtn .cost-chip { font-size: calc(11px * var(--fs, 1)); padding: 1px 5px; }
+.bp-upbar .bp-next { flex: 0 0 auto; min-width: 72px; min-height: 48px; display: inline-flex; align-items: center; justify-content: center; gap: 4px; }
+.bp-upbar .bp-upnote { flex: 1 1 auto; display: flex; align-items: center; justify-content: center; min-height: 48px; font-size: calc(12px * var(--fs, 1)); color: var(--text-secondary, #b8ad96); }
+.bp-pick-head { margin: 8px 0 4px; font-weight: 700; color: var(--accent, #ffb547); }
+
+/* ---------- B2/P7: the build menu's locked fold and "what is missing" ---------- */
+.bm-locked {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  min-height: 48px;
+  margin-top: 6px;
+  padding: 8px 12px;
+  font: inherit;
+  color: var(--text-secondary, #b8ad96);
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px dashed rgba(255, 255, 255, 0.18);
+  border-radius: 6px;
+  cursor: pointer;
+}
+.bm-locked.open { color: var(--text-primary, #eee); }
+.bm-why { margin-top: 6px; font-size: calc(12px * var(--fs, 1)); font-weight: 600; color: #ffb0a0; }
+.bm-card.shake, .bm-rec-chip.shake { animation: ux-wp4-shake 0.32s ease-in-out; }
+@keyframes ux-wp4-shake {
+  20% { transform: translateX(-4px); }
+  40% { transform: translateX(4px); }
+  60% { transform: translateX(-3px); }
+  80% { transform: translateX(2px); }
+}
+@media (prefers-reduced-motion: reduce) { .bm-card.shake, .bm-rec-chip.shake { animation: none; } }
+
+/* ---------- B4/M5/P8: People: assign bar, filters, compact rows, labelled stats ---------- */
+.pp-jobs { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
+.pp-jobs:empty { display: none; }
+.pp-assign { width: 100%; min-height: 48px; }
+.pp-nojob { padding: 8px 10px; border-radius: 6px; background: rgba(255, 255, 255, 0.06); color: var(--text-secondary, #b8ad96); font-size: calc(12px * var(--fs, 1)); }
+.pp-note { text-align: center; }
+.pp-tools { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
+.pp-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.pp-row .pp-search { flex: 1 1 140px; min-width: 0; }
+.pp-chip { min-height: 44px; }
+.pp-select {
+  min-height: 44px;
+  max-width: 46%;
+  padding: 0 8px;
+  font: inherit;
+  font-size: 16px; /* iOS zooms into smaller fields */
+  color: var(--text-primary, #eee);
+  background: rgba(0, 0, 0, 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 6px;
+}
+.pp-view { min-height: 44px; }
+.people-list.rows { gap: 4px; }
+.person-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 52px;
+  padding: 4px 8px;
+  font: inherit;
+  color: inherit;
+  text-align: start;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  cursor: pointer;
+}
+.person-row.idle { border-color: rgba(255, 181, 71, 0.55); }
+.person-row .worker-face { margin-inline-end: 0; }
+.pr-main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
+.pr-name { font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pr-job { font-size: calc(11.5px * var(--fs, 1)); color: var(--text-secondary, #b8ad96); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pr-job.warn { color: #ffb547; }
+.pr-stat { flex: 0 0 auto; font-size: calc(12px * var(--fs, 1)); font-variant-numeric: tabular-nums; }
+.person-card.open { border-color: var(--accent, #ffb547); }
+.person-head .pp-fold { margin-inline-start: auto; min-width: 44px; min-height: 44px; }
+.stat-chip { display: inline-flex; flex-direction: column; align-items: center; min-width: 44px; line-height: 1.15; }
+.stat-chip .stat-name { font-size: calc(9.5px * var(--fs, 1)); opacity: 0.8; }
+.pp-fit { margin-top: 4px; }
+
+/* ---------- M5: the rooms list's filter chips ---------- */
+.struct-chips { margin: 4px 0 10px; flex-wrap: wrap; }
+.struct-chips .bm-chip { min-height: 44px; }

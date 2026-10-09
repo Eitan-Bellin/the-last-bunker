@@ -234,7 +234,10 @@ export class MenuPanel {
     book.append(el('span', '', `[[question]] ${i18n.t('book.title')}`), button(i18n.t('book.open'), 'btn-small', () => { uiSound('click'); this.actions.openBook(); }));
     const chron = el('div', 'bp-row');
     chron.append(el('span', '', `[[journal]] ${i18n.t('chronicle.title')}`), button(i18n.t('book.open'), 'btn-small', () => { uiSound('click'); this.actions.openChronicle(); }));
-    guide.append(book, chron);
+    // [ux-wp4] M5/D5: the rooms list (with filters) is reachable from the menu, not only from the Accessibility tab.
+    const rooms = el('div', 'bp-row');
+    rooms.append(el('span', '', `[[build]] ${i18n.t('wp4.roomsList')}`), button(i18n.t('book.open'), 'btn-small', () => { uiSound('click'); this.actions.openStructure(); }));
+    guide.append(book, chron, rooms);
     box.appendChild(guide);
     box.appendChild(this.renderTipsBlock());
     box.appendChild(this.renderShareTourBlock());

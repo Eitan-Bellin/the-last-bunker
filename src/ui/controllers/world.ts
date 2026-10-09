@@ -1,7 +1,7 @@
 import { haptic } from '../../utils/haptics';
 import { bus } from '../../core/EventBus'; // [plan4:GP-1]
 import { statusTint } from '../../utils/a11y';
-import { HUD } from '../../ui/HUD';
+import { HUD, actLock } from '../../ui/HUD';
 import { i18n } from '../../i18n/I18nManager';
 import { getDef } from '../../data/buildingDefs';
 import { allowedFloors } from '../../data/zones';
@@ -10,6 +10,7 @@ import type { BuildingType, GameState, Position, ResourceType } from '../../core
 import { roomFloors, roomSlots } from '../../data/buildingDefs';
 import { PlacementBar, type Chip } from '../components/PlacementBar'; // [plan4:ST-19]
 import { DropChip } from '../components/DropChip'; // [plan4:UX-20]
+import type { StructurePanel } from '../components/StructurePanel'; // [ux-wp4] M5
 import { getHudInsets } from '../../utils/hudInsets';
 import { RUIN_KINDS } from '../../data/ruins';
 import type { PlaceBlock } from '../../systems/BuildingSystem';
@@ -25,6 +26,8 @@ const BUBBLE_SECONDS = 120;
 /** Now and then a bubble holds a surprise instead: salvage or a bit of know-how (share of that store's cap). */
 const BUBBLE_SURPRISE_CHANCE = 0.15;
 const BUBBLE_SURPRISE_SHARE = 0.04;
+/** [ux-wp4] F1: from this share of its cap a store counts as full for bubbles and the routine "+N" numbers. */
+const BUBBLE_FULL = 0.95;
 export const PRODUCTION_POPUP_MS = 4000;
 const MAX_PRODUCTION_POPUPS = 8;
 const RESOURCE_COLORS: Partial<Record<ResourceType, number>> = {
@@ -45,7 +48,7 @@ export class WorldController {
   // is spent until Build. The same machinery moves a finished room (`relocateId`): the room is judged against the bunker without itself.
 
   /** After choosing a type, drop the ghost on the recommended spot at once (2 taps to build) instead of waiting for a tap on a frame. */
-  private static readonly AUTO_GHOST = false;
+  private static readonly AUTO_GHOST = true; // [ux-wp4] B2/P7: the ghost lands on the best spot at once (the green frames still move it)
 
   private bar: PlacementBar | null = null;
   /** Valid spots for the room being placed (recomputed when a drag starts and when the mode opens). */
@@ -347,41 +350,107 @@ export class WorldController {
     haptic('error'); // [plan4:UX-2] every invalid placement is rejected through here
   }
 
-  /** Working rooms now and then offer a bonus to tap: about half a minute of their output. */
+  /** [ux-wp4] F1: what each open bubble holds (chosen when it appears, so it never offers a store that is already full). */
+  private bubbleRes = new Map<string, ResourceType>();
+
+  /** [ux-wp4] F1: a store at 95% of its cap or more gains (almost) nothing from a bubble. */
+  private nearCap(state: GameState, r: ResourceType): boolean {
+    const res = state.resources[r];
+    return !res || (res.cap > 0 && isFinite(res.cap) && res.amount >= res.cap * BUBBLE_FULL);
+  }
+
+  /**
+   * [ux-wp4] F1: the resource a room's bubble offers: what the room makes and the bunker still has room for (the emptiest first),
+   * else salvage or know-how when there is room for it, else nothing (no bubble: a tap that gives nothing teaches the player to stop tapping).
+   */
+  private bubbleOffer(state: GameState, buildingId: string): ResourceType | null {
+    const b = state.buildings.find(x => x.id === buildingId);
+    if (!b) return null;
+    const out = this.app.engine.resourceSystem.getBuildingOutput(state, b);
+    const fill = (r: ResourceType) => state.resources[r].amount / Math.max(1, state.resources[r].cap);
+    const made = (Object.entries(out) as [ResourceType, number][]).filter(([r, v]) => v > 0 && !!state.resources[r]).sort((x, y) => fill(x[0]) - fill(y[0]));
+    if (!made.length) return null;
+    const open = made.find(([r]) => !this.nearCap(state, r));
+    if (open) return open[0];
+    return (['scrap', 'knowledge'] as ResourceType[]).find(r => !this.nearCap(state, r)) ?? null;
+  }
+
+  /** Working rooms now and then offer a bonus to tap: about two minutes of their output. */
   spawnBubbles(): void {
     if (document.hidden || this.app.introPlaying) return;
     const state = this.app.state;
+    for (const id of [...this.bubbleRes.keys()]) if (!this.app.renderer.hasBubble(id)) this.bubbleRes.delete(id);
     for (const b of state.buildings) {
       if (this.app.renderer.hasBubble(b.id) || b.assignedSurvivorIds.length === 0 || Math.random() > 0.28) continue;
-      const out = this.app.engine.resourceSystem.getBuildingOutput(state, b);
-      const entry = (Object.entries(out) as [ResourceType, number][]).find(([, v]) => v > 0);
-      if (!entry) continue;
-      this.app.renderer.showBubble(b.id, entry[0] as IconName);
+      const r = this.bubbleOffer(state, b.id);
+      if (!r) continue;
+      this.bubbleRes.set(b.id, r);
+      this.app.renderer.showBubble(b.id, r as IconName);
     }
   }
 
+  /** [ux-wp4] B1: is the bubble over this room on the screen now (between the HUD bands)? */
+  private bubbleOnScreen(buildingId: string): boolean {
+    const rect = this.app.renderer.roomRect(buildingId);
+    if (!rect) return false;
+    const p = this.app.renderer.worldContainer.toGlobal({ x: rect.x + rect.w / 2, y: rect.y + 26 });
+    const ins = getHudInsets();
+    return p.x >= 0 && p.x <= window.innerWidth && p.y >= ins.top && p.y <= window.innerHeight - ins.bottom;
+  }
+
+  /** One bubble's prize (the room may have stopped making its resource, or the store filled up since: then the next best thing). */
+  private takeBubble(state: GameState, buildingId: string): { r: ResourceType; amount: number; pos: { x: number; y: number } } | null {
+    const b = state.buildings.find(x => x.id === buildingId);
+    let r = this.bubbleRes.get(buildingId) ?? null;
+    this.bubbleRes.delete(buildingId);
+    const pos = this.app.renderer.popBubble(buildingId);
+    if (!b || !pos) return null;
+    if (!r || this.nearCap(state, r)) r = this.bubbleOffer(state, buildingId);
+    if (!r) return { r: 'scrap', amount: 0, pos };
+    const rate = this.app.engine.resourceSystem.getBuildingOutput(state, b)[r] ?? 0;
+    // A room's own goods: two minutes of its output; now and then (and for salvage or know-how) a share of that store instead.
+    if (rate > 0 && Math.random() >= BUBBLE_SURPRISE_CHANCE) return { r, amount: Math.max(1, Math.round(rate * BUBBLE_SECONDS)), pos };
+    if (rate > 0) {
+      const order: ResourceType[] = Math.random() < 0.5 ? ['scrap', 'knowledge'] : ['knowledge', 'scrap'];
+      const alt = order.find(x => !this.nearCap(state, x));
+      if (!alt) return { r, amount: Math.max(1, Math.round(rate * BUBBLE_SECONDS)), pos };
+      r = alt;
+    }
+    return { r, amount: Math.max(3, Math.round(state.resources[r].cap * BUBBLE_SURPRISE_SHARE)), pos };
+  }
+
+  /** [ux-wp4] B1: a tap on one bubble collects every bubble on the screen, with one flying icon per resource and one combined popup. */
   collectBubble(buildingId: string): void {
     const state = this.app.state;
-    const b = state.buildings.find(x => x.id === buildingId);
-    const pos = this.app.renderer.popBubble(buildingId);
-    if (!b || !pos) return;
-    const out = this.app.engine.resourceSystem.getBuildingOutput(state, b);
-    const entry = (Object.entries(out) as [ResourceType, number][]).find(([, v]) => v > 0);
-    if (!entry) return;
-    const [made, rate] = entry;
-    let r: ResourceType = made;
-    let amount = Math.max(1, Math.round(rate * BUBBLE_SECONDS));
-    if (Math.random() < BUBBLE_SURPRISE_CHANCE) {
-      r = Math.random() < 0.5 ? 'scrap' : 'knowledge';
-      amount = Math.max(3, Math.round(state.resources[r].cap * BUBBLE_SURPRISE_SHARE));
+    const others = [...this.bubbleRes.keys()].filter(id => id !== buildingId && this.app.renderer.hasBubble(id) && this.bubbleOnScreen(id));
+    const totals = new Map<ResourceType, number>();
+    let from: { x: number; y: number } | null = null;
+    let n = 0;
+    for (const id of [buildingId, ...others]) {
+      const got = this.takeBubble(state, id);
+      if (!got) continue;
+      from ??= got.pos;
+      n++;
+      if (got.amount > 0) totals.set(got.r, (totals.get(got.r) ?? 0) + got.amount);
+      bus.emit('bubble:collected', id); // [plan4:GP-1] the "collect 10 bubbles" order
     }
-    this.app.engine.resourceSystem.gain(this.app.engine.stateManager, { [r]: amount });
-    this.app.audio.play(r === 'water' ? 'drip' : r === 'materials' || r === 'scrap' ? 'coin' : 'collect');
-    if (r === 'water') this.app.audio.play('collect', { volume: 0.6 });
-    haptic('tap');
-    this.flyToHud(r, pos.x, pos.y, `+${amount}`);
+    if (!from || n === 0) return;
+    const gain = Object.fromEntries(totals) as Partial<Record<ResourceType, number>>;
+    if (totals.size) this.app.engine.resourceSystem.gain(this.app.engine.stateManager, gain);
+    const rs = [...totals.keys()];
+    const main = rs[0];
+    this.app.audio.play(main === 'water' ? 'drip' : main === 'materials' || main === 'scrap' ? 'coin' : 'collect');
+    if (main === 'water' || n > 1) this.app.audio.play('collect', { volume: 0.6 });
+    haptic(n > 1 ? 'success' : 'tap');
+    rs.forEach((r, i) => window.setTimeout(() => this.flyToHud(r, from!.x, from!.y, `+${i18n.formatCompact(totals.get(r)!)}`), i * 90));
+    if (n > 1) {
+      const b = state.buildings.find(x => x.id === buildingId);
+      if (b) {
+        const c = this.app.renderer.roomCenter(b);
+        this.app.popups.spawn(c.x, c.y - 20, `[[star]] ×${n} ${rs.map(r => `${RESOURCE_ICONS[r] ?? ''}+${i18n.formatCompact(totals.get(r)!)}`).join(' ')}`, 0xffe2a0);
+      }
+    }
     this.app.engine.notifyInteraction();
-    bus.emit('bubble:collected', buildingId); // [plan4:GP-1] the "collect 10 bubbles" order
   }
 
   /** A collected resource icon arcs up into its HUD counter, which then pulses. */
@@ -402,6 +471,84 @@ export class WorldController {
       fly.remove();
       this.app.hud.pulseResource(r);
     }, 650);
+  }
+
+  // ───────────────────────────── [ux-wp4] HUD and panel shortcuts ─────────────────────────────
+
+  /**
+   * [ux-wp4] Wires the convenience hooks (one call from the app, after its own handlers): the low-power banner and the morale chip explain
+   * themselves (W2), the population chip at the Act's limit opens Command (R3), the room panel's "Next" opens the next room to upgrade (B3).
+   */
+  installHud(p: { openPeople: () => void; structure: StructurePanel }): void {
+    const app = this.app;
+    const hud = app.hud;
+    // M5: the rooms list filters by "can be upgraded now" (the Act ceiling and the busy rule live in BuildingSystem).
+    p.structure.canUpgrade = b => app.engine.buildingSystem.canUpgrade(b, app.state);
+    hud.onPowerTap = () => {
+      app.audio.play('click');
+      app.closeSheets();
+      app.resourceSheet.show('power', app.state);
+    };
+    hud.onMoraleTap = () => {
+      app.audio.play('click');
+      this.showMoraleWhy(p.openPeople);
+    };
+    const population = hud.onPopulation;
+    hud.onPopulation = () => {
+      if (actLock(app.state)) {
+        app.audio.play('click');
+        hud.onEra?.();
+        return;
+      }
+      population?.();
+    };
+    app.buildingPanel.onOpenRoom = id => this.openRoom(id);
+  }
+
+  /** [ux-wp4] B3: shows a room's panel in place (no close first) and brings the camera to it. */
+  openRoom(id: string): void {
+    const r = this.app.renderer.roomRect(id);
+    if (r) this.app.renderer.focusOn(r.x + r.w / 2, r.y + 50, 1.6);
+    this.app.renderer.setSelected(id);
+    this.app.buildingPanel.show(id);
+  }
+
+  /** [ux-wp4] W2: "why is morale where it is": the bunker-wide causes, largest first (each the average over everyone), and a way to the people. */
+  private showMoraleWhy(openPeople: () => void): void {
+    const app = this.app;
+    const state = app.state;
+    const ps = app.engine.populationSystem;
+    const n = state.survivors.length;
+    const body = el('div', 'why-box');
+    if (n === 0) {
+      body.appendChild(el('p', 'modal-body', i18n.t('people.empty')));
+    } else {
+      const sums = new Map<string, number>();
+      for (const s of state.survivors) {
+        for (const f of ps.getMoraleFactors(state, s)) if (f.key !== 'base') sums.set(f.key, (sums.get(f.key) ?? 0) + f.value);
+      }
+      const avg = Math.round(state.survivors.reduce((a, s) => a + s.happiness, 0) / n);
+      const target = Math.round(state.survivors.reduce((a, s) => a + ps.getTargetHappiness(state, s), 0) / n);
+      body.appendChild(el('p', 'modal-body', i18n.t('wp4.moraleNow', { now: avg, target })));
+      const rows = [...sums.entries()].map(([k, v]) => [k, v / n] as const).filter(([, v]) => Math.abs(v) >= 0.5)
+        .sort((a, b) => Math.abs(b[1]) - Math.abs(a[1])).slice(0, 6);
+      for (const [k, v] of rows) {
+        const row = el('div', 'bp-row');
+        const val = Math.round(v);
+        row.append(el('span', '', i18n.t(`morale.${k}`)), el('span', `bp-value ${v >= 0 ? 'positive' : 'negative'}`, `${val > 0 ? '+' : val < 0 ? '−' : ''}${Math.abs(val)}`));
+        body.appendChild(row);
+      }
+      if (!rows.length) body.appendChild(el('p', 'bp-hint', i18n.t('wp4.moraleCalm')));
+    }
+    app.modal.show({
+      icon: '[[happy]]',
+      title: i18n.t('wp4.moraleWhy'),
+      body,
+      actions: [
+        { label: `[[people]] ${i18n.t('hud.people')}`, className: 'btn-primary', onClick: () => { app.modal.hide(); app.closeSheets(); openPeople(); } },
+        { label: i18n.t('wp4.close'), className: 'btn-secondary', onClick: () => app.modal.hide() },
+      ],
+    });
   }
 
   // ───────────────────────────── [plan4:UX-20] carrying a survivor: the label and ring over the room under them ─────────────────────────────
@@ -488,7 +635,8 @@ export class WorldController {
     for (const b of state.buildings) {
       if (shown >= MAX_PRODUCTION_POPUPS) break;
       const out = this.app.engine.resourceSystem.getBuildingOutput(state, b);
-      const entry = (Object.entries(out) as [ResourceType, number][]).find(([r, v]) => v > 0 && r !== 'power');
+      // [ux-wp4] F1(c): no "+6" over a store that is full (the number would be a lie: nothing goes in).
+      const entry = (Object.entries(out) as [ResourceType, number][]).find(([r, v]) => v > 0 && r !== 'power' && !this.nearCap(state, r));
       if (!entry) continue;
       const [r, rate] = entry;
       const amount = rate * (PRODUCTION_POPUP_MS / 1000);

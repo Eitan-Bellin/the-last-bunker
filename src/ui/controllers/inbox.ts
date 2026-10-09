@@ -40,6 +40,11 @@ export class InboxController {
   /** Cards already announced with a toast (by key), so each one is announced once. */
   private seen = new Set<string>();
   private lastCount = -1;
+  /**
+   * [ux-wp4] B7: a card was opened from the inbox. Once its dialog has come and gone (answered, or put off with "Later"), the inbox opens
+   * again on the next card instead of dropping the player back to the bunker. Dropped when the card led somewhere else (a sheet).
+   */
+  private resume: { at: number; sawDialog: boolean } | null = null;
 
   constructor(app: GameApp) {
     this.app = app;
@@ -138,6 +143,21 @@ export class InboxController {
       this.app.toasts.show(`[[inbox]] ${i18n.t('inbox.new', { name: e.title })}`, 'info');
     }
     if (this.sheet?.isVisible) this.render(list);
+    if (this.resume) this.checkResume(waiting);
+  }
+
+  /** [ux-wp4] B7: see `resume`. */
+  private checkResume(waiting: number): void {
+    const r = this.resume!;
+    const app = this.app;
+    if (app.modal.isVisible) { r.sawDialog = true; return; }
+    if (!r.sawDialog) {
+      if (performance.now() - r.at > 2500) this.resume = null;
+      return;
+    }
+    this.resume = null;
+    if (waiting <= 0 || app.anyPanelOpen() || app.placementMode || app.storyOpen || app.welcomeOpen || app.introPlaying) return;
+    this.show();
   }
 
   get isVisible(): boolean {
@@ -192,6 +212,7 @@ export class InboxController {
         card.addEventListener('click', () => {
           this.app.audio.play('click');
           this.sheet?.hide();
+          this.resume = { at: performance.now(), sawDialog: false }; // [ux-wp4] B7
           e.open();
         });
         body.appendChild(card);

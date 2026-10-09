@@ -76,6 +76,7 @@ import './styles/ceremony.css'; // [plan4:GP-2] key moments
 import './styles/touch.css'; // [plan4:UX-5] last again (its header says so): its 44px targets must beat the older sheet-help sizes in command.css
 import './styles/placement.css'; // [plan4:ST-19] the confirm bar and the chips over the ghost room
 import './styles/pwa.css'; // [plan4:UX-13] update chip, home-screen card, copy box
+import './styles/ux-wp4.css'; // [ux-wp4] convenience and HUD (upgrade bar, people rows, build menu folds)
 import './styles/a11y.css'; // [plan4:AC-2] the accessibility layer, last of all: reduced motion, colour modes, focus rings
 import { FeedbackController } from './ui/controllers/feedback';
 import { InboxController } from './ui/controllers/inbox';
@@ -1067,6 +1068,7 @@ export class GameApp {
       this.buildingPanel.show(buildingId);
     };
 
+    this.world.installHud({ openPeople: () => this.peoplePanel.show(), structure: this.structurePanel }); // [ux-wp4] W2, R3, B3, M5 hooks
     this.feedback.install();
     this.inbox.install();
     this.daily.install(); // [plan4:GP-1]
@@ -1129,10 +1131,11 @@ export class GameApp {
         history.pushState({ lastbunker: 1 }, '');
         return;
       }
-      if (this.anyPanelOpen()) {
-        this.closeSheets();
-        this.surfacePanel.hide();
-        this.loreReader.hide();
+      // [ux-wp4] Back closes only the top panel (the book opened over a room panel goes back to that panel, not to the bunker).
+      if (this.loreReader.isVisible || this.surfacePanel.isVisible || this.anyPanelOpen() || this.structurePanel.isVisible) {
+        if (this.loreReader.isVisible) this.loreReader.hide();
+        else if (this.surfacePanel.isVisible) this.surfacePanel.hide();
+        else if (!Sheet.closeTop()) this.closeSheets();
         history.pushState({ lastbunker: 1 }, '');
         return;
       }

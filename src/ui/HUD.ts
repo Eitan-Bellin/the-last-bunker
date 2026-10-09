@@ -6,7 +6,9 @@ import { timeOfDay } from '../data/dayCycle';
 import { isPowerPlant } from '../data/buildingDefs';
 import { i18n } from '../i18n/I18nManager';
 import { RESOURCE_ICONS, el, setRich } from './dom';
-import { bedsBuilt } from '../systems/BuildingSystem';
+import { bedCap, bedsBuilt } from '../systems/BuildingSystem';
+import { ACTS, MAX_ACT, actOf, type ActDef } from '../data/acts';
+import { crewCount, getDef } from '../data/buildingDefs';
 import { subscribeA11y, getA11y, reducedMotion } from '../utils/a11y';
 import { setHudInsets } from '../utils/hudInsets';
 import { initViewportUi } from './viewportUi';
@@ -23,6 +25,34 @@ const CORE_RESOURCES = new Set<ResourceType>(['food', 'water', 'power', 'materia
 const MORE_KEY = 'lastbunker_hud_more';
 
 export type NavKey = 'build' | 'surface' | 'research' | 'people';
+
+/**
+ * [ux-wp4] R3: the bunker is full because the Act holds the number of people (the rooms already give the beds), so the red door "!"
+ * would be an alarm nobody can answer. Returns the next Act and how many places it opens, or null when more beds would help.
+ */
+export function actLock(state: GameState): { next: ActDef; more: number } | null {
+  const lg = state.longGame;
+  if (!lg || lg.meta.legacy || state.maxPopulation <= 0 || state.survivors.length < state.maxPopulation) return null;
+  const act = actOf(state);
+  if (act.id >= MAX_ACT || bedsBuilt(state) < bedCap(state)) return null;
+  const next = ACTS[act.id];
+  return next ? { next, more: Math.max(0, next.popCap - act.popCap) } : null;
+}
+
+/** [ux-wp4] B4/P14: idle adults and the free work places they could fill (a room behind a sealed door or still being built does not count). */
+export function jobRoom(state: GameState): { idle: number; free: number } {
+  let idle = 0;
+  for (const s of state.survivors) if (!s.assignedBuildingId && !s.isOnMission && !s.child) idle++;
+  let free = 0;
+  if (idle > 0) {
+    for (const b of state.buildings) {
+      if (b.isConstructing && b.level <= 1) continue;
+      const max = getDef(b.type)?.maxWorkers ?? 0;
+      if (max > 0) free += Math.max(0, max - crewCount(state, b));
+    }
+  }
+  return { idle, free };
+}
 /** Buttons a "new system" card can make glow (see src/ui/controllers/systems.ts). */
 export type SpotKey = NavKey | 'inbox' | 'season' | 'era';
 
@@ -43,7 +73,13 @@ export class HUD {
   onPopulation?: () => void;
   private moraleValue!: HTMLElement;
   private moraleIcon!: HTMLElement;
-  private powerBanner!: HTMLElement;
+  private powerBanner!: HTMLButtonElement;
+  /** [ux-wp4] W2: the low-power banner and the morale chip open a short "why". */
+  onPowerTap: (() => void) | null = null;
+  onMoraleTap: (() => void) | null = null;
+  /** [ux-wp4] B4: the People badge is recounted once a second, not every frame. */
+  private jobsAt = 0;
+  private jobsText = '';
   private placementBanner!: HTMLElement;
   private placementText!: HTMLElement;
   private peopleBadge!: HTMLElement;
@@ -184,10 +220,13 @@ export class HUD {
     pop.append(el('span', 'info-icon', '[[people]]'), el('span', 'info-label', i18n.t('hud.population')), this.popValue, this.arrivalValue);
     pop.addEventListener('click', () => this.onPopulation?.());
 
-    const morale = el('div', 'info-item');
+    const morale = el('button', 'info-item info-tap morale-chip');
     this.moraleValue = el('span', 'info-value', '50%');
     this.moraleIcon = el('span', 'info-icon', '[[happy]]');
     morale.append(this.moraleIcon, el('span', 'info-label', i18n.t('hud.morale')), this.moraleValue);
+    morale.setAttribute('aria-label', i18n.t('wp4.moraleWhy'));
+    morale.title = i18n.t('wp4.moraleWhy');
+    morale.addEventListener('click', () => this.onMoraleTap?.());
 
     const journal = el('button', 'lang-btn journal-btn', '[[journal]]');
     journal.setAttribute('aria-label', i18n.t('journal.title'));
@@ -350,8 +389,9 @@ export class HUD {
     this.objectiveEl.addEventListener('click', () => this.onObjectiveTap?.());
     this.container.appendChild(this.objectiveEl);
 
-    this.powerBanner = el('div', 'hud-banner power');
+    this.powerBanner = el('button', 'hud-banner power');
     this.powerBanner.style.display = 'none';
+    this.powerBanner.addEventListener('click', () => this.onPowerTap?.()); // [ux-wp4] W2
     this.incidentBanner = el('button', 'hud-banner incident');
     this.incidentBanner.style.display = 'none';
     this.incidentBanner.addEventListener('click', () => this.onIncident?.());
@@ -494,6 +534,7 @@ export class HUD {
     // Plan 2026-10 Q12: on a phone only the key four show, plus whatever needs attention; the pill expands the rest.
     const collapsible = this.narrow.matches;
     const compact = collapsible && !this.expanded;
+    const slots = compact ? this.phoneSlots(state, act) : null;
     let hiddenCount = 0;
     for (const [rt, els] of this.resourceEls) {
       const res = state.resources[rt];
@@ -518,16 +559,16 @@ export class HUD {
       }
       const inAct = this.actShow.get(rt) !== false;
       const attention = (res.amount <= 0 && res.consumptionRate > 0) || (pct < 15 && net < -0.005 && res.cap > 0);
-      const visible = inAct && (!compact || CORE_RESOURCES.has(rt) || attention);
+      const visible = inAct && (!compact || (slots ? slots.has(rt) : CORE_RESOURCES.has(rt)) || attention);
       if (inAct && !visible) hiddenCount++;
       const want = visible ? '' : 'none';
       if (els.root.style.display !== want) els.root.style.display = want;
     }
     this.topBar.classList.toggle('res-collapsible', collapsible);
-    const more = collapsible ? `${this.expanded ? 'less' : 'more'}|${hiddenCount}` : '';
+    const more = collapsible ? `${this.expanded ? 'less' : 'more'}|${hiddenCount}|${slots ? [...slots].join(',') : ''}` : '';
     if (more !== this.lastMore) {
       this.lastMore = more;
-      const total = [...this.actShow.entries()].filter(([rt, s]) => s && !CORE_RESOURCES.has(rt)).length;
+      const total = [...this.actShow.entries()].filter(([rt, s]) => s && !(slots ? slots.has(rt) : CORE_RESOURCES.has(rt))).length;
       this.moreBtn.style.display = collapsible && total > 0 ? '' : 'none';
       this.moreBtn.textContent = this.expanded ? '▴' : `▾ ${total}`;
       this.moreBtn.setAttribute('aria-label', i18n.t(this.expanded ? 'hud.lessRes' : 'hud.moreRes'));
@@ -538,14 +579,20 @@ export class HUD {
     const built = bedsBuilt(state);
     const capped = built > state.maxPopulation;
     this.setText(this.popValue, `${state.survivors.length}/${state.maxPopulation}${capped ? ' [[lock]]' : ''}`);
-    this.popValue.parentElement!.title = capped ? i18n.t('building.bedsCapped', { built, cap: state.maxPopulation }) : '';
     // The door: a countdown to the next newcomer, or a warning that there are no free beds.
+    // [ux-wp4] R3: when the Act (not the beds) holds the number, a neutral lock that says what the next Act opens, and a tap opens Command.
     const full = state.survivors.length >= state.maxPopulation && state.maxPopulation > 0;
+    const lock = full ? actLock(state) : null;
     const left = Math.max(0, Math.ceil((state.nextArrivalAt ?? 0) - state.stats.totalPlayTime));
-    const arrival = full ? '[[door]] !' : state.survivors.length > 0 && !state.activeEvent
+    const roman = lock ? (['I', 'II', 'III', 'IV', 'V', 'VI', 'VII'][lock.next.id - 1] ?? String(lock.next.id)) : '';
+    const arrival = lock ? `[[lock]] ${roman} +${lock.more}` : full ? '[[door]] !' : state.survivors.length > 0 && !state.activeEvent
       ? `[[door]] ${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}` : '';
     this.setText(this.arrivalValue, arrival);
-    this.arrivalValue.classList.toggle('negative', full);
+    this.arrivalValue.classList.toggle('negative', full && !lock);
+    this.arrivalValue.classList.toggle('act-lock', !!lock);
+    const popTitle = lock ? i18n.t('wp4.actLock', { act: lock.next.name[i18n.currentLocale], n: lock.more })
+      : capped ? i18n.t('building.bedsCapped', { built, cap: state.maxPopulation }) : '';
+    if (this.popValue.parentElement!.title !== popTitle) this.popValue.parentElement!.title = popTitle;
     const morale = state.survivors.length > 0
       ? Math.round(state.survivors.reduce((s, sv) => s + sv.happiness, 0) / state.survivors.length)
       : 50;
@@ -558,7 +605,7 @@ export class HUD {
     // No alarm before there is any power plant to blame: the dead bunker is simply dark.
     const hasPlant = state.buildings.some(b => isPowerPlant(b.type) && !(b.isConstructing && b.level === 1));
     if (ratio < 0.99 && hasPlant) {
-      this.setText(this.powerBanner, i18n.t('hud.powerLow', { pct: Math.round(ratio * 100) }));
+      this.setText(this.powerBanner, `${i18n.t('hud.powerLow', { pct: Math.round(ratio * 100) })} [[question]]`);
       this.powerBanner.style.display = '';
     } else {
       this.powerBanner.style.display = 'none';
@@ -566,9 +613,46 @@ export class HUD {
 
     this.updateClock(state);
 
-    const idle = state.survivors.filter(s => !s.assignedBuildingId && !s.isOnMission).length;
-    this.peopleBadge.style.display = idle > 0 ? '' : 'none';
-    this.setText(this.peopleBadge, String(idle));
+    // [ux-wp4] B4/P14: the red badge counts only the idle people there is a job for (min of idle and free places); idle people with no
+    // job anywhere are a fact of the Act, not a task: no badge (the People panel says so in grey at the top).
+    if (nowMs - this.jobsAt > 1000) {
+      this.jobsAt = nowMs;
+      const { idle, free } = jobRoom(state);
+      const n = Math.min(idle, free);
+      const text = n > 0 ? String(n) : '';
+      if (text !== this.jobsText) {
+        this.jobsText = text;
+        this.peopleBadge.style.display = n > 0 ? '' : 'none';
+        this.setText(this.peopleBadge, text);
+        this.peopleBadge.title = n > 0 ? i18n.t('wp4.badgeJobs', { n }) : '';
+      }
+    }
+  }
+
+  /**
+   * [ux-wp4] M2: which resources the phone row shows (four places). Early on (Acts I-II) the four basics. From Act III the row shows what
+   * holds progress back: the Act's currency (and the last Act's), then the basics that are not full (a full store says nothing), the emptiest
+   * first; a resource that runs short always joins (see `attention` in update).
+   */
+  private phoneSlots(state: GameState, act: number): Set<ResourceType> | null {
+    if (act < 3) return null;
+    const fill = (r: ResourceType): number => {
+      const res = state.resources[r];
+      return res && res.cap > 0 && isFinite(res.cap) ? res.amount / res.cap : 0;
+    };
+    const currency = [...this.actShow.entries()].filter(([rt, s]) => s && (resourceDef(rt)?.act ?? 0) > 0).map(([rt]) => rt)
+      .sort((a, b) => (resourceDef(b)?.act ?? 0) - (resourceDef(a)?.act ?? 0));
+    const basics = [...CORE_RESOURCES].sort((a, b) => fill(a) - fill(b));
+    const out = new Set<ResourceType>(currency.slice(0, 2));
+    for (const r of basics) {
+      if (out.size >= 4) break;
+      const res = state.resources[r];
+      const draining = res.productionRate - res.consumptionRate < -0.005;
+      if (fill(r) < 0.9 || draining) out.add(r);
+    }
+    // Room left: the basics again (fullest last), so the row is never half empty.
+    for (const r of basics) if (out.size < 4) out.add(r);
+    return out;
   }
 
   destroy(): void {

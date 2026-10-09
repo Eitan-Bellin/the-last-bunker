@@ -11,7 +11,32 @@ import { recommendedRooms } from '../../systems/BuildAdvice';
 import { Sheet } from './Sheet';
 import { ArtLibrary } from '../../art/ArtLibrary';
 import { buildingArtKey } from '../../art/registry';
-import { BUILDING_ICONS, RESOURCE_ICONS, el, rateText } from '../dom';
+import { BUILDING_ICONS, RESOURCE_ICONS, costAmount, el, rateText } from '../dom';
+import { haptic } from '../../utils/haptics';
+import { uiSound } from '../../audio/uiSound';
+
+/**
+ * [ux-wp4] B2: what a price still lacks, and roughly when the bunker will have it ("Missing 120 [materials] · about 3 min").
+ * Kept in one function so it can be swapped for the shared helper (src/ui/missing.ts, WP3) at merge.
+ */
+export function missingText(state: GameState, cost: Record<string, number>): string {
+  const parts: string[] = [];
+  let eta = 0;
+  let never = false;
+  for (const [r, need] of Object.entries(cost)) {
+    const res = state.resources[r as ResourceType];
+    const short = need - (res?.amount ?? 0);
+    if (short <= 0) continue;
+    parts.push(`${costAmount(short)} ${RESOURCE_ICONS[r] ?? i18n.t(`resources.${r}`)}`);
+    if (res && need > res.cap && isFinite(res.cap)) never = true;
+    const net = res ? res.productionRate - res.consumptionRate : 0;
+    if (net > 0.0001) eta = Math.max(eta, short / net);
+    else never = true;
+  }
+  if (!parts.length) return '';
+  const what = i18n.t('wp4.missing', { list: parts.join(' ') });
+  return never ? what : `${what} · ${i18n.t('wp4.eta', { t: i18n.formatDuration(eta) })}`;
+}
 
 /** What one card needs to know about a room right now. */
 interface Entry {
@@ -48,7 +73,10 @@ export class BuildMenu {
   private chips = el('div', 'bm-chips');
   private rec = el('div', 'bm-rec');
   private list = el('div', 'bm-list');
-  private category: BuildCategory | 'all' = 'all';
+  /** [ux-wp4] B2/P7: the menu opens on "Can build now" (every unlocked room, any category). */
+  private category: BuildCategory | 'all' | 'now' = 'now';
+  /** [ux-wp4] B2/P7: the locked rooms sit folded under one "Locked (N)" row. */
+  private lockedOpen = false;
   private query = '';
   private onlyAvailable = false;
 
@@ -86,6 +114,8 @@ export class BuildMenu {
   show(state: GameState): void {
     this.sheet.setTitle(`[[build]] ${i18n.t('build.title')}`);
     this.signature = '';
+    this.category = 'now';
+    this.lockedOpen = false;
     this.refresh(state);
     this.sheet.show();
   }
@@ -134,10 +164,10 @@ export class BuildMenu {
     const all = this.entries(state);
     // Only categories that have a buildable room get a chip.
     const present = BUILD_CATEGORIES.filter(c => all.some(e => buildCategoryOf(e.type) === c.id && (c.id !== 'act' || e.unlocked))); // plan4:BL-34..38 the Act chip shows once an Act room is open
-    if (this.category !== 'all' && !present.some(c => c.id === this.category)) this.category = 'all';
+    if (this.category !== 'all' && this.category !== 'now' && !present.some(c => c.id === this.category)) this.category = 'now';
 
     // A search looks through every category (a typed word means the player knows what they want).
-    const shown = all.filter(e => (this.category === 'all' || !!this.query || buildCategoryOf(e.type) === this.category)
+    const shown = all.filter(e => (this.category === 'all' || this.category === 'now' || !!this.query || buildCategoryOf(e.type) === this.category)
       && this.matches(e, locale) && (!this.onlyAvailable || (e.affordable && this.placeable(state, e))));
     const recs = this.query || this.onlyAvailable ? [] : recommendedRooms(state, t => {
       const e = all.find(x => x.type === t);
@@ -145,7 +175,7 @@ export class BuildMenu {
     });
 
     const sig = [
-      locale, this.category, this.query, this.onlyAvailable, actOf(state).id,
+      locale, this.category, this.query, this.onlyAvailable, actOf(state).id, this.lockedOpen,
       shown.map(e => `${e.type}:${e.unlocked}:${e.affordable}:${e.count}:${JSON.stringify(e.cost)}`).join('|'),
       recs.map(r => `${r.type}:${r.why}`).join(','),
       present.map(c => c.id).join(','),
@@ -166,7 +196,7 @@ export class BuildMenu {
   }
 
   private renderChips(present: { id: BuildCategory; icon: string }[], all: Entry[]): void {
-    const chip = (id: BuildCategory | 'all', icon: string, label: string, n: number) => {
+    const chip = (id: BuildCategory | 'all' | 'now', icon: string, label: string, n: number) => {
       const b = el('button', `bm-chip${this.category === id ? ' active' : ''}`);
       b.type = 'button';
       b.setAttribute('aria-pressed', String(this.category === id));
@@ -178,6 +208,7 @@ export class BuildMenu {
       return b;
     };
     this.chips.replaceChildren(
+      chip('now', '[[check]]', i18n.t('wp4.canBuild'), all.filter(e => e.unlocked).length),
       chip('all', '[[build]]', i18n.t('build.cat.all'), all.length),
       ...present.map(c => chip(c.id, c.icon, i18n.t(`build.cat.${c.id}`), all.filter(e => buildCategoryOf(e.type) === c.id).length)),
     );
@@ -198,14 +229,34 @@ export class BuildMenu {
       );
       const text = b.querySelector('.bm-rec-text') as HTMLElement;
       text.append(el('span', 'bm-rec-name', e.def.name[locale] ?? e.def.name.en), el('span', 'bm-rec-why', i18n.t(r.why)));
-      b.addEventListener('click', () => this.pick(state, e));
+      b.addEventListener('click', () => this.pick(this.lastState ?? state, e, b));
       row.appendChild(b);
     }
     this.rec.replaceChildren(el('div', 'bm-rec-title', `[[star]] ${i18n.t('build.recommended')}`), row);
   }
 
-  private pick(state: GameState, e: Entry): void {
-    if (!e.unlocked || e.count >= e.max || !this.resources.canAfford(state, e.cost)) return;
+  private pick(state: GameState, e: Entry, card?: HTMLElement): void {
+    if (!e.unlocked) return;
+    // [ux-wp4] B2: a card that cannot be picked says why (what is missing and when it will be there), with a buzz, instead of doing nothing.
+    const why = e.count >= e.max ? i18n.t('build.copiesFull', { n: e.count, max: e.max }) : missingText(state, e.cost);
+    if (why) {
+      haptic('error');
+      uiSound('error', 0.6);
+      if (card) {
+        let line = card.querySelector<HTMLElement>('.bm-why');
+        if (!line) {
+          line = el('div', 'bm-why');
+          line.setAttribute('role', 'status');
+          (card.querySelector('.bm-info') ?? card).appendChild(line);
+        }
+        line.textContent = '';
+        line.append(el('span', '', `[[warning]] ${why}`));
+        card.classList.remove('shake');
+        void card.offsetWidth;
+        card.classList.add('shake');
+      }
+      return;
+    }
     this.hide();
     this.onSelectBuilding?.(e.type);
   }
@@ -216,9 +267,25 @@ export class BuildMenu {
       this.list.appendChild(el('div', 'bm-empty', i18n.t('build.noMatch')));
       return;
     }
-    // Rooms you can build come first, locked ones after; inside each group the menu's own order holds.
-    const ordered = [...shown.filter(e => e.unlocked), ...shown.filter(e => !e.unlocked)];
-    for (const e of ordered) this.list.appendChild(this.card(state, e, locale));
+    // Rooms you can build come first; [ux-wp4] B2/P7 the locked ones fold under one "Locked (N)" row (open while searching).
+    const open = shown.filter(e => e.unlocked);
+    const locked = shown.filter(e => !e.unlocked);
+    for (const e of open) this.list.appendChild(this.card(state, e, locale));
+    if (!open.length && !locked.length) return;
+    if (!open.length) this.list.appendChild(el('div', 'bm-empty', i18n.t('build.noMatch')));
+    if (!locked.length) return;
+    const expanded = this.lockedOpen || !!this.query;
+    const fold = el('button', `bm-locked${expanded ? ' open' : ''}`);
+    fold.type = 'button';
+    fold.setAttribute('aria-expanded', String(expanded));
+    fold.append(el('span', '', `[[lock]] ${i18n.t('wp4.locked', { n: locked.length })}`), el('span', 'bm-locked-arrow', expanded ? '▴' : '▾'));
+    fold.addEventListener('click', () => {
+      uiSound('click');
+      this.lockedOpen = !expanded;
+      this.redraw();
+    });
+    this.list.appendChild(fold);
+    if (expanded) for (const e of locked) this.list.appendChild(this.card(state, e, locale));
   }
 
   /** The room's main results as short chips with an icon (a number alone would not say what it is). */
@@ -333,7 +400,7 @@ export class BuildMenu {
     }
 
     card.append(thumb, info);
-    const activate = () => this.pick(state, e);
+    const activate = () => this.pick(this.lastState ?? state, e, card);
     card.addEventListener('click', activate);
     card.addEventListener('keydown', (ev) => {
       if (ev.key === 'Enter' || ev.key === ' ') {

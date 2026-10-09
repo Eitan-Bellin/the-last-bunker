@@ -2,7 +2,8 @@ import type { GameState, ResourceType, Ruin } from '../../core/GameState';
 import { floorTag } from '../floorTag'; // plan4:ST-16
 import type { GameEngine } from '../../core/GameEngine';
 import { i18n } from '../../i18n/I18nManager';
-import { getDef } from '../../data/buildingDefs';
+import { getDef, isPowerPlant } from '../../data/buildingDefs';
+import { roomPowerDraw } from '../../systems/ResourceSystem'; // [ux-wp4] P4
 import { MAX_RUIN_WORKERS, RUIN_KINDS } from '../../data/ruins';
 import { Sheet } from './Sheet';
 import { BUILDING_ICONS, RESOURCE_ICONS, STAT_ICONS, bar, button, costRow, el, setBar, setRich } from '../dom';
@@ -53,7 +54,7 @@ export class RuinPanel {
     }
     const rs = this.engine.restorationSystem;
     const sig = [
-      r.started, rs.blockReason(state, r), rs.canStart(state, r), i18n.currentLocale,
+      r.started, rs.blockReason(state, r), rs.canStart(state, r), i18n.currentLocale, this.powerShort(state, r)?.join(':') ?? '',
       state.survivors.map(s => `${s.id}:${s.assignedBuildingId}:${s.isOnMission}`).join(','),
     ].join('|');
     if (sig !== this.signature) {
@@ -102,6 +103,10 @@ export class RuinPanel {
     finds.appendChild(chips);
     root.appendChild(finds);
 
+    // [ux-wp4] P4: restoring a room that draws power the bunker does not have makes the blackout worse: say so before the tap.
+    const short = this.powerShort(state, r);
+    if (short) root.appendChild(el('div', 'bp-warning', `[[power]] ${i18n.t(short[1] <= 0 ? 'wp4.ruinNoPower' : 'wp4.ruinPower', { draw: short[0], spare: short[1] })}`));
+
     const block = rs.blockReason(state, r);
     if (block === 'needsPump') {
       root.appendChild(el('div', 'bp-warning', `[[lock]] ${i18n.t('ruin.needsPump')}`));
@@ -135,6 +140,21 @@ export class RuinPanel {
       ));
     }
     this.sheet.body.replaceChildren(root);
+  }
+
+  /**
+   * [ux-wp4] P4: [draw, spare] when the room this ruin turns into draws more power than the bunker has spare (production minus demand,
+   * rounded to tenths); null when it makes power itself, draws none, or there is enough.
+   */
+  private powerShort(state: GameState, r: Ruin): [number, number] | null {
+    if (!r.restoresTo || isPowerPlant(r.restoresTo)) return null;
+    const def = getDef(r.restoresTo);
+    const draw = def ? roomPowerDraw(def.powerConsumption, 1) : 0;
+    if (draw <= 0) return null;
+    const p = state.resources.power;
+    const spare = Math.round((p.productionRate - p.consumptionRate) * 10) / 10;
+    if (spare >= draw && (state.powerRatio ?? 1) >= 0.99) return null;
+    return [Math.round(draw * 10) / 10, Math.max(0, spare)];
   }
 
   private renderCrew(state: GameState, r: Ruin): HTMLElement {

@@ -56,6 +56,19 @@ const lookups = legacy.filter(l => l.includes('FLOOR_H'));
 const counts = legacy.filter(l => l.includes('SLOTS_PER_FLOOR'));
 for (const l of lookups) problems.push(`geometry: ${l} (use floorAtY in rendering/geom.ts)`);
 if (counts.length) console.log(`lint warning: ${counts.length} use(s) of SLOTS_PER_FLOOR outside rendering/geom.ts (use floorExtent)`);
+// [ux-wp4] I1: a signed number written straight into textContent skips the left-to-right isolate setRich adds, so in Hebrew "+30%" shows
+// as "30%+" and "−3" as "3−". UI code that sets textContent with a sign before a template value, or a rate, must wrap it (bidiNumbers or
+// signed in src/ui/dom.ts) or use setRich. The toast "×N" counter is isolated in CSS (.toast-count, ux-wp4.css).
+for (const f of srcFiles) {
+  if (!f.rel.startsWith('ui/')) continue;
+  f.text.split(/\r?\n/).forEach((line, i) => {
+    const m = /\.textContent\s*=\s*(.*)$/.exec(line);
+    if (!m || /bidiNumbers\(|signed\(/.test(m[1])) return;
+    if (!/(?:^|[^\w}])[+\-−×]\$\{|rateText\(|formatRate\(/.test(m[1])) return;
+    if (f.rel === 'ui/components/Toast.ts' && m[1].includes('e.count')) return;
+    problems.push(`bidi: src/${f.rel}:${i + 1} puts a signed number into textContent (use setRich, or bidiNumbers / signed from ui/dom.ts)`);
+  });
+}
 if (process.argv.includes('--verbose')) console.log(`legacy geometry: ${lookups.length} reverse lookup(s), ${counts.length} slot-count use(s)` + (legacy.length ? '\n - ' + legacy.join('\n - ') : ''));
 
 if (problems.length) {
