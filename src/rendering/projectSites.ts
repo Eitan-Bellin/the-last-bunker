@@ -223,6 +223,14 @@ export function lotTop(id: string): number {
   return l ? BASE - (l.h * (l.back ? BACK_SCALE : 1)) - (l.back ? BACK_RISE : 0) - 40 : 0;
 }
 
+/** [ux-wp3 R4] Middle of a lot's building in world coordinates (the project ceremony's camera goes there); null for an unknown id. */
+export function lotCenter(id: string): { x: number; y: number } | null {
+  const l = LOTS[id];
+  if (!l) return null;
+  const s = l.back ? BACK_SCALE : 1;
+  return { x: l.x, y: BASE - (l.h * s) / 2 - (l.back ? BACK_RISE : 0) };
+}
+
 /** The plain shapes behind each painting are drawn at their own size; this fits them to the lot. */
 const shapeScale = (id: string) => LOT_H[id] / PLANS[id].h;
 

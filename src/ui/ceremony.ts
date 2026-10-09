@@ -7,6 +7,7 @@ import { floorExtent, type BuildingInstance } from '../core/GameState';
 import { roomSlots } from '../data/buildingDefs';
 import type { Sfx } from '../audio/sfx';
 import { hudBottom, hudTop } from '../rendering/CameraController';
+import { lotCenter } from '../rendering/projectSites'; // [ux-wp3 R4]
 import type { GameApp } from '../app';
 
 /**
@@ -16,7 +17,9 @@ import type { GameApp } from '../app';
  * ceremony adds at most a handful of draw calls. Under reduced motion every moment becomes a still card (sound and haptics stay) and
  * the camera does not travel for it. Nothing flashes: opacity ramps are slow and never go to full white.
  */
-export type CeremonyKind = 'build' | 'roomLevel' | 'research' | 'person' | 'act' | 'dig' | 'death' | 'genesis';
+export type CeremonyKind = 'build' | 'roomLevel' | 'research' | 'person' | 'act' | 'dig' | 'death' | 'genesis'
+  // [ux-wp3 R4/F15/F2] A charter project's stage or completion, an achievement, and the moment the raiders reach the gate.
+  | 'project' | 'achievement' | 'raid';
 
 export interface CeremonySpec {
   kind: CeremonyKind;
@@ -35,6 +38,10 @@ export interface CeremonySpec {
   side?: 'w' | 'e';
   /** How many moments of this kind were folded into this one. */
   n?: number;
+  /** [ux-wp3] The charter project (its lot on the surface is where the camera goes). */
+  projectId?: string;
+  /** [ux-wp3 F2] The raid was beaten off (cheer) or not (crumble); undefined when the bunker hid (no outcome sound). */
+  win?: boolean;
   /** Replaces the usual sound (a power plant has its own start-up). */
   sound?: Sfx;
   /** At the peak of the moment (the Act's banner opens here); also runs when the moment is skipped. */
@@ -58,13 +65,19 @@ export const CEREMONIES: Record<CeremonyKind, Def> = {
   build: { ms: 1600, prio: 35, sound: 'complete', haptic: [{ kind: 'success', at: 0 }] },
   roomLevel: { ms: 1200, prio: 30, sound: 'levelup', haptic: [{ kind: 'success', at: 0 }] },
   research: { ms: 1400, prio: 40, sound: 'research', haptic: [{ kind: 'success', at: 0 }] },
-  // 'coin' is the little bell the shop uses: the closest existing "ding".
-  person: { ms: 900, prio: 10, sound: 'coin', haptic: [{ kind: 'tap', at: 0 }] },
+  // [ux-wp3 D1/F5] Its own small sound (two knocks and a bell), no longer the shop's 'coin'.
+  person: { ms: 900, prio: 10, sound: 'rankUp', haptic: [{ kind: 'tap', at: 0 }] },
   act: { ms: 4500, prio: 90, sound: 'era', haptic: [{ kind: 'success', at: 0 }, { kind: 'success', at: 260 }], beatAt: 1500 },
   dig: { ms: 2000, prio: 50, sound: 'dig', haptic: [{ kind: 'success', at: 0 }] },
   // 'lore' (soft bells over a low pad) stands in for the mourning tone.
   // Not blocking: a death in the middle of a fire must not swallow the player's next tap (it still ends the moment).
   death: { ms: 3000, prio: 70, sound: 'lore', haptic: [{ kind: 'warning', at: 0 }] },
+  // [ux-wp3 R4] A project stage or the whole project: the camera goes to its lot, dust and stars, a card with what it was.
+  project: { ms: 3200, prio: 80, sound: 'achievement', haptic: [{ kind: 'success', at: 0 }, { kind: 'success', at: 260 }] },
+  // [ux-wp3 F15] A badge card at the top with the count ("Achievement · 12/28").
+  achievement: { ms: 1600, prio: 45, sound: 'achievement', haptic: [{ kind: 'success', at: 0 }] },
+  // [ux-wp3 F2] The raiders reach the gate: siren, the camera at the entrance, the impact (a shake, sparks, a soft warm flash).
+  raid: { ms: 2600, prio: 85, sound: 'siren', haptic: [{ kind: 'warning', at: 0 }, { kind: 'error', at: 900 }] },
   genesis: { ms: 6000, prio: 100, block: true, sound: 'era', haptic: [{ kind: 'success', at: 0 }, { kind: 'success', at: 900 }, { kind: 'success', at: 1800 }] },
 };
 
@@ -184,7 +197,7 @@ export class Ceremonies {
     for (const h of def.haptic) { if (h.at === 0) haptic(h.kind); else later(() => haptic(h.kind), h.at); }
 
     // The card: always still, always readable. Shown for research, death and Genesis, and for every kind under reduced motion.
-    const wantsCard = calm || spec.kind === 'research' || spec.kind === 'death' || spec.kind === 'genesis';
+    const wantsCard = calm || spec.kind === 'research' || spec.kind === 'death' || spec.kind === 'genesis' || spec.kind === 'project' || spec.kind === 'achievement';
     if (wantsCard && spec.kind !== 'act' && (spec.title || spec.lines)) root.appendChild(this.card(spec));
 
     let beatDone = false;
@@ -225,6 +238,7 @@ export class Ceremonies {
     const many = (spec.n ?? 1) > 1;
     const title = many && spec.kind === 'person' ? i18n.t('cer.person.many', { n: spec.n ?? 1 }) : many && spec.kind === 'death' ? i18n.t('cer.deathMany', { n: spec.n ?? 1 }) : spec.title;
     const sub = many && spec.kind === 'person' ? undefined : spec.sub;
+    if (spec.kind === 'achievement') c.style.top = '9%'; // [ux-wp3 F15] a badge near the top, out of the bunker's middle
     if (spec.icon) c.appendChild(el('div', 'cer-icon', spec.icon));
     if (title) c.appendChild(el('div', 'cer-title', title));
     if (sub) c.appendChild(el('div', 'cer-sub', sub));
@@ -365,6 +379,31 @@ export class Ceremonies {
       case 'genesis':
         root.appendChild(el('div', 'cer-dim'));
         break;
+      case 'project': {
+        // [ux-wp3 R4] The camera goes up to the lot, dust rises and stars float over it (the card says what was finished).
+        const c = spec.projectId ? lotCenter(spec.projectId) : null;
+        if (!c) break;
+        if (this.cameraFree()) this.visit(c.x, c.y, 1.2, 2400, later);
+        later(() => { r.burstAt(c.x, c.y + 20, 160, 26); r.floatIcons(c.x, c.y - 10, 'star', 6, '#ffd27a'); }, 500);
+        break;
+      }
+      case 'raid': {
+        // [ux-wp3 F2] At the gate: the siren is already sounding; at the impact the picture shakes, sparks fly at the door,
+        // and a soft warm flash (never white, never above 30%) passes over the screen.
+        const gate = { x: slotX(0) + SLOT_W, y: floorTop(0) + 30 };
+        if (this.cameraFree()) this.visit(gate.x, gate.y - 20, 1.25, 2200, later);
+        later(() => {
+          r.shake(5, 0.6);
+          r.burstAt(gate.x, gate.y, 90, 10);
+          const flash = el('div', 'cer-flash');
+          flash.style.cssText = 'position:absolute;inset:0;background:rgba(255,196,120,1);opacity:0;pointer-events:none';
+          root.appendChild(flash);
+          flash.animate([{ opacity: 0 }, { opacity: 0.28, offset: 0.25 }, { opacity: 0 }], { duration: 650, easing: 'ease-out' });
+        }, 900);
+        later(() => r.burstAt(gate.x + 24, gate.y - 6, 70, 8), 1250);
+        if (spec.win !== undefined) later(() => this.app.audio.play(spec.win ? 'cheer' : 'crumble'), 1700);
+        break;
+      }
     }
   }
 }

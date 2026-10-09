@@ -296,6 +296,11 @@ export class GameApp {
     // [plan4:AC-9] Captions for the sounds that carry information (only when the player turned them on).
     const CAPTIONED = new Set(['warn', 'pulse', 'alarm', 'siren', 'door', 'thunder']);
     this.audio.onCue = name => { if (CAPTIONED.has(name)) showCaption(i18n.t(`caption.${name}`)); };
+    // [ux-wp3 D2/F4] While the bunker works through time away, no toasts and no game sounds (the taps of the player's own hands still
+    // click): the welcome-back report tells what happened. Held toasts wait in toasts.takeHeld() for that report.
+    const HANDS = new Set(['click', 'open', 'tab', 'switch', 'modalOpen', 'confirm', 'cancel', 'whoosh', 'type', 'error']);
+    this.audio.mute = name => this.engine.awayRunning && !HANDS.has(name);
+    this.toasts.hold = () => this.engine.awayRunning;
     setSplashProgress(0.1);
     await Promise.all([this.renderer.init(canvas), preloadIcons(SCENE_ICONS).catch(() => undefined)]);
     setSplashProgress(0.4); // [plan4:UX-18]
@@ -355,10 +360,9 @@ export class GameApp {
         this.notifier.cancel();
         return;
       }
-      if (this.notifier.isOn(this.state.settings.notificationsEnabled)) {
-        this.engine.incidentSystem.spawnOnLeave(); // [Danger C4] now and then trouble starts just as you leave: the phone warns you
-        this.notifier.plan(this.notifyPlan());
-      }
+      // [ux-wp3 E3/R8] Leaving no longer rolls a disaster (it was 30% at every lock of the screen, and only for players with
+      // notifications on). Danger while away is the away simulation's (AwayDanger), the same for everyone.
+      if (this.notifier.isOn(this.state.settings.notificationsEnabled)) this.notifier.plan(this.notifyPlan());
     });
   }
 
@@ -551,6 +555,12 @@ export class GameApp {
     if (now - this.lastGestureAt < 1200) return false;
     if (this.ceremonyActive(now)) return false;
     if (!critical && this.anyPanelOpen() && now - this.lastGestureAt < 20000) return false;
+    // [ux-wp3 C1] A tip card and a dialog never share the screen: an ordinary dialog waits for the tip (it goes by itself within
+    // seconds); an emergency puts the tip away (it is not marked seen, so it comes back in a calm moment).
+    if (this.tips.isShowing) {
+      if (!critical) return false;
+      this.tips.defer();
+    }
     return true;
   }
 
@@ -730,9 +740,12 @@ export class GameApp {
     const state = this.state;
     // Thunder rolls over the dead city now and then in the first eras.
     if ((state.era ?? 0) <= 1 && Math.random() < 1 / 900) this.audio.play('thunder', { volume: 0.35 });
-    const night = timeOfDay(state.stats.totalPlayTime).night > 0.6;
-    const crisis = state.activeEvent?.id === 'raiders' || (state.powerRatio ?? 1) < 0.6 || (state.incidents?.length ?? 0) > 0;
-    this.audio.setMood(night || crisis ? 'dark' : 'shelter');
+    // [ux-wp3 F3/F12] The dark layer is the crisis layer: a raid on its way, a disaster on the clock, a blackout, a room in trouble.
+    // Night alone no longer turns it on (38% of all play time was "danger", so the danger music stopped meaning anything).
+    const d = state.danger;
+    const crisis = !!d?.raid || (d?.disasters?.length ?? 0) > 0 || state.activeEvent?.id === 'raiders'
+      || (state.powerRatio ?? 1) < 0.6 || (state.incidents?.length ?? 0) > 0;
+    this.audio.setMood(crisis ? 'dark' : 'shelter');
     this.audio.setEra(state.era ?? 0);
     this.audio.setExpedition(state.activeMissions.length > 0);
     this.audio.setAmbience(this.renderer.getAmbienceMix(state));

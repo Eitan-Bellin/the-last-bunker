@@ -6,10 +6,16 @@ import { costRow, el } from '../../ui/dom';
 import { portraitFor, portraitUrl } from '../../data/portraits';
 import { INCIDENTS, DISASTERS, disasterCost, quickFixCost } from '../../data/incidents';
 import { missingOr } from '../missing'; // [ux-wp3 A1]
+import { causeText } from './feedback'; // [ux-wp3 W1]
 import { CEREMONY_COST } from '../../systems/DeathSystem';
 import { bunkerDefense, defenseParts, raidTribute, type RaidResult } from '../../systems/EventSystem';
 import { announce } from '../a11yDom';
 import type { GameApp } from '../../app';
+
+/** [ux-wp3 F3] A quiet reminder while a danger waits (ms), and the countdown at the end (game seconds). */
+const REMINDER_MS = 90_000;
+const COUNTDOWN_S = 10;
+const REMINDER_VOLUME = 0.35;
 
 /** Raids, disasters, incidents in rooms, and the memorial. */
 export class DangerController {
@@ -20,9 +26,13 @@ export class DangerController {
   }
 
   lastIncidentAlarm = 0;
+  /** [ux-wp3 F3] The danger the tension curve is following (a new one starts the curve again), and the last countdown second played. */
+  private curveKey = '';
+  private lastTickS = -1;
+  private lastWarnAt = 0;
 
   /** The banner for the most urgent danger on the clock (null = calm). */
-  dangerBanner(): { text: string; kind: string } | null {
+  dangerBanner(): { text: string; kind: string; left: number } | null {
     const d = this.app.state.danger;
     if (!d) return null;
     const now = this.app.state.stats.totalPlayTime;
@@ -35,9 +45,14 @@ export class DangerController {
       return {
         text: `[[${def.icon}]] ${i18n.t('danger.banner.disaster', { name: def.name[locale], time: i18n.formatDuration(dz.deadline - now) })}${room} · ${i18n.t('danger.tapHint')}`,
         kind: 'danger',
+        left: Math.max(0, dz.deadline - now),
       };
     }
-    if (d.raid) return { text: `[[armory]] ${i18n.t('danger.banner.raid', { time: i18n.formatDuration(raidLeft) })} · ${i18n.t('danger.tapHint')}`, kind: 'raid' };
+    if (d.raid) {
+      // [ux-wp3 F3] The last ten seconds read as a countdown ("Raiders at the gate in 7 s").
+      const text = raidLeft <= COUNTDOWN_S ? i18n.t('wp3.raid.soon', { t: i18n.formatDuration(raidLeft) }) : `${i18n.t('danger.banner.raid', { time: i18n.formatDuration(raidLeft) })} · ${i18n.t('danger.tapHint')}`;
+      return { text: `[[armory]] ${text}`, kind: 'raid', left: raidLeft };
+    }
     return null;
   }
 
@@ -162,6 +177,7 @@ export class DangerController {
     const name = this.app.localName(f.name);
     const lineKey = f.job && i18n.has(`memorial.line.${f.job}`) ? `memorial.line.${f.job}` : 'memorial.line.generic';
     const memorialGender = this.app.gOf(f);
+    const why = causeText(this.app.state, f.cause, memorialGender);
     const body = el('div', 'modal-result memorial');
     const row = el('div', 'modal-portraits');
     const img = el('img', 'modal-portrait');
@@ -171,6 +187,7 @@ export class DangerController {
     body.append(
       row,
       el('p', 'modal-sub', i18n.t('memorial.sub', { level: f.level })),
+      ...(why ? [el('p', 'modal-sub negative-text', `[[skull]] ${why.charAt(0).toUpperCase()}${why.slice(1)}`)] : []), // [ux-wp3 W1] how they died
       el('p', 'modal-body', `"${i18n.t(lineKey, memorialGender)}"`),
       el('p', 'bp-hint', `[[heart]] ${i18n.t('memorial.ceremonyHint')}`),
       el('p', 'bp-hint', `[[hourglass]] ${i18n.t('memorial.carryOnHint')}`),
@@ -211,13 +228,10 @@ export class DangerController {
     }
     if (danger) {
       this.app.hud.setIncident(danger.text, danger.kind);
-      const t = performance.now();
-      if (t - this.lastIncidentAlarm > 25000) {
-        if (this.lastIncidentAlarm) this.app.audio.play('alarm');
-        this.lastIncidentAlarm = t;
-      }
+      this.tension(danger.kind, danger.left);
       return;
     }
+    this.curveKey = '';
     const list = this.app.state.incidents ?? [];
     if (!list.length) {
       this.app.hud.setIncident(null);
@@ -227,11 +241,46 @@ export class DangerController {
     const def = INCIDENTS[inc.kind];
     const more = list.length > 1 ? ` +${list.length - 1}` : '';
     this.app.hud.setIncident(`[[${def.icon}]] ${def.name[i18n.currentLocale]} · ${this.app.roomName(inc.buildingId)}${more} · ${i18n.t('incident.tapAlarm')}`, inc.kind);
-    // A reminder sound every so often while it burns.
+    // [ux-wp3 F3] The alarm sounded when it started (feedback); while it burns, only a quiet one now and then (it does not duck the music).
     const now = performance.now();
-    if (now - this.lastIncidentAlarm > 25000) {
-      if (this.lastIncidentAlarm) this.app.audio.play('alarm');
+    if (now - this.lastIncidentAlarm > REMINDER_MS) {
+      if (this.lastIncidentAlarm) this.app.audio.play('alarm', { volume: REMINDER_VOLUME });
       this.lastIncidentAlarm = now;
+    }
+  }
+
+  /**
+   * [ux-wp3 F3] A raid or a disaster on the clock builds tension instead of repeating the alarm every 25 s: the alarm once when it
+   * is announced (feedback), then a quiet one every minute and a half, a little louder every 20 s in the last minute, and a tick
+   * every second in the last ten (with a tap of the buzzer at 3, 2, 1).
+   */
+  private tension(kind: string, left: number): void {
+    const now = performance.now();
+    if (this.curveKey !== kind) {
+      this.curveKey = kind;
+      this.lastIncidentAlarm = now; // the announcement already sounded
+      this.lastWarnAt = 0;
+      this.lastTickS = -1;
+    }
+    if (left <= COUNTDOWN_S && left > 0) {
+      const s = Math.ceil(left);
+      if (s !== this.lastTickS) {
+        this.lastTickS = s;
+        this.app.audio.play('tick', { volume: 0.8 });
+        if (s <= 3) haptic('tap');
+      }
+      return;
+    }
+    if (left <= 60) {
+      if (now - this.lastWarnAt > 20_000) {
+        this.lastWarnAt = now;
+        this.app.audio.play('alarm', { volume: 0.45 });
+      }
+      return;
+    }
+    if (now - this.lastIncidentAlarm > REMINDER_MS) {
+      this.lastIncidentAlarm = now;
+      this.app.audio.play('alarm', { volume: REMINDER_VOLUME });
     }
   }
 
