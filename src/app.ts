@@ -136,7 +136,7 @@ export class GameApp {
   private peoplePanel: PeoplePanel;
   private researchPanel: ResearchPanel;
   private structurePanel!: StructurePanel; // [plan4:AC-11] the list view
-  private surfacePanel: SurfacePanel;
+  surfacePanel: SurfacePanel; // [ux] the keyboard closes it with Escape
   menuPanel: MenuPanel;
   modal: Modal;
   toasts: Toasts;
@@ -722,7 +722,7 @@ export class GameApp {
     const act = actOf(state);
     const pct = Math.floor(Math.min(0.99, actFraction(this.engine, state, act)) * 100);
     const roman = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII'][act.id - 1] ?? String(act.id);
-    this.hud.setEra(era.key, eraName, `${roman}·${pct}%`, `${act.name[i18n.currentLocale]} · ${pct}% · ${eraName}`);
+    this.hud.setEra(era.key, eraName, i18n.t('act.tag', { n: `\u2066${roman}\u2069`, pct }), `${act.name[i18n.currentLocale]} · ${pct}% · ${eraName}`); // [ux] "Act I · 7%", not a bare "I·7%"
   }
 
   private updateAudio(): void {
@@ -841,7 +841,7 @@ export class GameApp {
         this.lowWarned.add(r);
         this.audio.play('warn');
         // [plan4:AC-9] The sound has a visual twin: a toast and a blink of the resource plate.
-        this.toasts.show(`[[warning]] ${i18n.t('shortage.low', { name: i18n.t(`resources.${r}`) })}`, 'bad');
+        this.toasts.show(`[[warning]] ${i18n.t(`shortage.low.${r}`)}`, 'bad'); // [ux] says what fixes it, not just "act now"
         this.hud.alertResource(r);
       } else if (res.amount > res.cap * 0.25) this.lowWarned.delete(r);
     }

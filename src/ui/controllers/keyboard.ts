@@ -54,6 +54,8 @@ export class KeyboardShortcuts {
     const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
     // [plan4:AC-10] Escape also leaves placing a room (the confirm bar has a cancel button; this is its key). An open panel closes first (Sheet.ts).
     if (k === 'Escape' && app.placementMode && !this.sheetOpen()) { e.preventDefault(); app.world.cancelPlacement(); return; }
+    // [ux] The surface map is a full screen of its own (not a sheet): Escape closes it like its X.
+    if (k === 'Escape' && app.surfacePanel.isVisible && !this.sheetOpen()) { e.preventDefault(); app.surfacePanel.hide(); return; }
     // Panels: the same handler the bottom navigation uses (it toggles, closes what is open, cancels a placement).
     const nav = k === 'b' ? 'build' : k === 'p' ? 'people' : k === 'r' ? 'research' : null;
     if (nav) { e.preventDefault(); app.hud.onNav?.(nav); return; }

@@ -7,6 +7,8 @@ export interface ModalAction {
   className?: string;
   disabled?: boolean;
   detail?: HTMLElement;
+  /** [ux] This choice gets the focus instead of the first one (the recommended answer). */
+  autofocus?: boolean;
   onClick: () => void;
 }
 
@@ -67,6 +69,7 @@ export class Modal {
       btn.appendChild(el('span', '', a.label));
       if (a.detail) btn.appendChild(a.detail);
       btn.disabled = !!a.disabled;
+      if (a.autofocus) btn.dataset.autofocus = '1';
       btn.addEventListener('click', () => {
         if (btn.disabled) return;
         const cls = a.className ?? 'btn-primary';
@@ -99,7 +102,8 @@ export class Modal {
     }
     this.overlay.classList.add('open');
     // Keyboard and screen-reader users land on the first choice.
-    this.box.querySelector<HTMLButtonElement>('.modal-actions button:not(:disabled)')?.focus({ preventScroll: true });
+    (this.box.querySelector<HTMLButtonElement>('.modal-actions button[data-autofocus]:not(:disabled)')
+      ?? this.box.querySelector<HTMLButtonElement>('.modal-actions button:not(:disabled)'))?.focus({ preventScroll: true });
   }
 
   hide(): void {

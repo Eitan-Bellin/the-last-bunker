@@ -47,24 +47,15 @@ const bool = (v: boolean): [number, number] => [v ? 1 : 0, 1];
 const noRuinFor = (s: GameState, t: BuildingType) => !has(s, t) && !s.ruins.some(r => r.restoresTo === t);
 const noRuins = (s: GameState) => s.ruins.length === 0 && (s.ruinsCleared ?? 0) === 0;
 
+/** [ux] Set on saves that use the current onboarding order (see ObjectiveSystem.migrateOrder). */
+export const TUTORIAL_ORDER = 'tut:v2';
+
 const ONBOARDING: Objective[] = [
   {
     id: 'restoreGenerator', icon: '[[generator]]', reward: { materials: 20 }, action: { kind: 'ruin', restoresTo: 'generator' },
     text: { he: 'שקמו את הגנרטור הישן ב־B3 (הקישו על החדר ההרוס)', en: 'Restore the old generator on B3 (tap the wrecked room)' },
     progress: s => bool(ready(s, 'generator')),
     skipIf: s => noRuinFor(s, 'generator'),
-  },
-  {
-    id: 'firstNote', icon: '[[note]]', reward: { food: 20, water: 20 }, action: { kind: 'ruin', lore: 'welcome' },
-    text: { he: 'פנו את ההריסות ב־B1. מישהו השאיר שם משהו', en: 'Clear the rubble on B1. Someone left something there' },
-    progress: s => bool(s.lore.includes('welcome')),
-    skipIf: s => !s.lore.includes('welcome') && !s.ruins.some(r => r.lore === 'welcome'),
-  },
-  {
-    id: 'readNote', icon: '[[journal]]', reward: { materials: 10 }, action: { kind: 'journal' },
-    text: { he: 'קראו את הפתק ביומן', en: 'Read the note in the journal' },
-    progress: s => bool(s.lore.length > 0 && (s.loreUnread?.length ?? 0) < s.lore.length),
-    skipIf: s => s.lore.length === 0 && noRuins(s),
   },
   {
     id: 'pump', icon: '[[water]]', reward: { materials: 15 }, action: { kind: 'ruin', restoresTo: 'waterPump' },
@@ -77,6 +68,18 @@ const ONBOARDING: Objective[] = [
     text: { he: 'שקמו את החווה ב־B2. הזרעים עוד שם', en: 'Restore the farm on B2. The seeds are still there' },
     progress: s => bool(ready(s, 'farm')),
     skipIf: s => noRuinFor(s, 'farm'),
+  },
+  {
+    id: 'firstNote', icon: '[[note]]', reward: { food: 20, water: 20 }, action: { kind: 'ruin', lore: 'welcome' },
+    text: { he: 'פנו את ההריסות ב־B1. מישהו השאיר שם משהו', en: 'Clear the rubble on B1. Someone left something there' },
+    progress: s => bool(s.lore.includes('welcome')),
+    skipIf: s => !s.lore.includes('welcome') && !s.ruins.some(r => r.lore === 'welcome'),
+  },
+  {
+    id: 'readNote', icon: '[[journal]]', reward: { materials: 10 }, action: { kind: 'journal' },
+    text: { he: 'קראו את הפתק ביומן', en: 'Read the note in the journal' },
+    progress: s => bool(s.lore.length > 0 && (s.loreUnread?.length ?? 0) < s.lore.length),
+    skipIf: s => s.lore.length === 0 && noRuins(s),
   },
   {
     id: 'staff', icon: '[[worker]]', reward: { food: 25, water: 25 }, action: { kind: 'people' },
@@ -232,6 +235,17 @@ export class ObjectiveSystem {
   }
 
   /** Maps a tutorial step saved under the old onboarding list onto the current list. */
+  /**
+   * [ux] The pump and the farm now come right after the generator (water runs out first), the B1 note after them.
+   * A save that stopped inside the old order (generator, note, read, pump, farm) goes back to the pump: whatever it has
+   * already done completes again at once, so nobody skips the pump or the farm.
+   */
+  static migrateOrder(state: GameState): GameState {
+    if (state.storyFlags.includes(TUTORIAL_ORDER)) return state;
+    const step = state.tutorialStep ?? 0;
+    return { ...state, tutorialStep: step >= 1 && step <= 4 ? 1 : step, storyFlags: [...state.storyFlags, TUTORIAL_ORDER] };
+  }
+
   static migrateStep(oldStep: number): number {
     if (oldStep >= LEGACY_IDS.length) return ONBOARDING.length + (oldStep - LEGACY_IDS.length);
     const idx = ONBOARDING.findIndex(o => o.id === LEGACY_IDS[oldStep]);

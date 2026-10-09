@@ -37,6 +37,14 @@ const MORALE_DRIFT_PER_SECOND = 0.01;
 export const MORALE_CAPS: Record<MoraleKind, number> = { base: 22, comfort: 6, culture: 6 };
 export const MORALE_KINDS: MoraleKind[] = ['base', 'comfort', 'culture'];
 
+/**
+ * [ux] A new bunker starts with its generator in ruins: until the first task (restore it) is done, the dark is the
+ * starting situation the player is fixing, not a morale penalty for something they did wrong.
+ */
+export function darkGrace(state: GameState): boolean {
+  return (state.tutorialStep ?? 0) === 0 && !state.buildings.some(b => b.type === 'generator');
+}
+
 /** [plan4:BL-3] What one room gives its morale channel right now (0 when it gives none). */
 function roomMorale(state: GameState, b: BuildingInstance): number {
   const morale = getDef(b.type)?.effects?.morale;
@@ -274,7 +282,7 @@ export class PopulationSystem {
     // A bigger bunker is louder and more cramped: gardens, the lake and the canteen have to make up for it.
     const crowd = crowdingPenalty(state);
     if (crowd > 0) factors.push({ key: 'crowding', value: -crowd });
-    if ((state.powerRatio ?? 1) < 0.99) factors.push({ key: 'darkness', value: -Math.round(15 * (1 - state.powerRatio)) - 5 });
+    if ((state.powerRatio ?? 1) < 0.99 && !darkGrace(state)) factors.push({ key: 'darkness', value: -Math.round(15 * (1 - state.powerRatio)) - 5 });
     if (s.health < 50) factors.push({ key: 'injured', value: -10 });
 
     const canteen = this.getCanteenBonus(state);
@@ -316,7 +324,7 @@ export class PopulationSystem {
     if (state.survivors.length > state.maxPopulation) sum -= 15;
     const crowd = crowdingPenalty(state);
     if (crowd > 0) sum -= crowd;
-    if ((state.powerRatio ?? 1) < 0.99) sum -= Math.round(15 * (1 - state.powerRatio)) + 5;
+    if ((state.powerRatio ?? 1) < 0.99 && !darkGrace(state)) sum -= Math.round(15 * (1 - state.powerRatio)) + 5;
     const canteen = this.getCanteenBonus(state);
     if (canteen > 0) sum += Math.round(canteen);
     const now = state.stats.totalPlayTime;

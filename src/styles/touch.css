@@ -363,3 +363,8 @@ body.intro-active .hud-bottom { visibility: hidden; }
 :root[data-large="on"] .info-row, :root[data-large="on"] .modal-actions, :root[data-large="on"] .btn-row, :root[data-large="on"] .person-actions { gap: 8px; }
 :root[data-large="on"] .hud-top .info-row { row-gap: 8px; }
 :root[data-large="on"] .vol-slider { height: var(--tap); }
+
+/* ---------- [ux] Wide screens: the nav keys sit together in the middle instead of spreading across the whole width ---------- */
+@media (min-width: 600px) and (min-height: 500px) {
+  .hud-bottom { justify-content: center; gap: 10px; }
+}
