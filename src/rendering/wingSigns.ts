@@ -1,9 +1,10 @@
 import { Container, Graphics, Rectangle } from 'pixi.js';
 import { BASE_EAST, ROOM_H, floorTop, slotX, type Ext } from './geom';
+
 import { richLine } from './richText';
 import { VIEW } from './perfFx';
 import { steelTag } from './signage';
-import type { WingOption } from './wingsApi';
+import { WING_STEP, type WingOption } from './wingsApi';
 
 /**
  * [plan4:ST-4] Dig signs at the open ends of the floors: a small steel plate under a strip of hazard tape with "+2" and the price, planted in the casing at
@@ -50,6 +51,8 @@ export class WingSigns {
     const keep = new Set<string>();
     this.options = options.slice();
     for (const o of options) {
+      // [ux] A side the Act (or the save) does not let grow yet gets no sign: a plate that offers nothing only puzzles a new player.
+      if (o.block === 'act' || o.block === 'locked') continue;
       const ext = exts[o.floor] ?? { w: 0, e: BASE_EAST };
       const key = `${o.floor}${o.side}`;
       const x = o.side === 'e' ? slotX(ext.e) + 7 : ext.w > 0 ? slotX(-ext.w) - 7 : -15;
@@ -81,7 +84,8 @@ export class WingSigns {
     for (let x = -SIGN_W / 2 - 2; x < SIGN_W / 2 + 2; x += 6) tape.poly([x, -4, x + 3, -4, x - 0.5, 1, x - 3.5, 1]).fill(0x1a1612);
     tape.position.y = -SIGN_H / 2 + 1;
     tape.rotation = s.side === 'e' ? -0.05 : 0.05;
-    const plus = richLine(`+${o.steps}`, { fontFamily: 'Rubik, sans-serif', fontSize: 11, fontWeight: '700', fill: 0xffd447 }, 11, false, 4);
+    const plus = richLine(`+${WING_STEP}`, // [ux] what one dig adds (slots), not how many were dug already
+      { fontFamily: 'Rubik, sans-serif', fontSize: 11, fontWeight: '700', fill: 0xffd447 }, 11, false, 4);
     plus.position.set(0, -SIGN_H / 2 + 14);
     const price = richLine(Object.entries(o.cost).slice(0, 2).map(([k, v]) => `[[${ICON[k] ?? k}]] ${v}`).join('  '), { fontFamily: 'Rubik, sans-serif', fontSize: 6.5, fontWeight: '700', fill: 0xf2e6c8 }, 7, false, 4);
     price.position.set(0, -SIGN_H / 2 + 25);

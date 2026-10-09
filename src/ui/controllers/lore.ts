@@ -14,6 +14,12 @@ export class LoreController {
   loreQueue: string[] = [];
 
   queueLore(id: string): void {
+    // [ux] Until the B1 note is found (the first three tasks and the farm's own find as it completes), a find goes to the journal quietly:
+    // no dialog over the work. The B1 note itself is that task's goal and still opens.
+    if ((this.app.state.tutorialStep ?? 0) < 4 && id !== 'welcome') {
+      this.app.toasts.show(`[[note]] ${i18n.t('journal.foundQuiet')}`, 'info');
+      return;
+    }
     if (!this.loreQueue.includes(id)) this.loreQueue.push(id);
   }
 
