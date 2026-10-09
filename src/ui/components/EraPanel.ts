@@ -14,6 +14,8 @@ import { resourceDef } from '../../data/resources';
 import { getScenario, homeShare, type HomeSite } from '../../data/scenarios';
 import { wingSummary } from '../../data/wings';
 import { fillSafetyCard } from './SafetyCard'; // plan4:ST-14/15
+import { lawImpact } from '../../systems/morale';
+import { labourBonus } from '../../systems/economy';
 
 /** Sets a line of text that may hold icon tokens ([[food]]), only when it changed (the panel refreshes four times a second). */
 function setLine(node: HTMLElement | null, text: string): void {
@@ -362,6 +364,12 @@ export class EraPanel {
       const row = el('div', 'foreman-row');
       const text = el('span', 'foreman-text');
       text.append(el('div', '', `${l.icon} ${l.name[locale]}`), el('div', 'bp-hint', l.desc[locale]));
+      // [ux-wp2 S4] What the law really does in this bunker (morale above 100 is worth less, below 60 it costs output).
+      const imp = lawImpact(state, l.id);
+      if (imp) {
+        const pct = Math.round(imp.outputChange * 100);
+        text.appendChild(el('div', 'bp-hint law-impact', i18n.t('wp2.lawImpact', { out: `${pct > 0 ? '+' : pct < 0 ? '−' : ''}${Math.abs(pct)}%`, from: Math.round(imp.moraleWithout), to: Math.round(imp.moraleWith) })));
+      }
       const can = on || (active.length < slots && this.engine!.resourceSystem.canAfford(state, lawCost(state)));
       row.append(text, button(i18n.t(on ? 'laws.repeal' : 'laws.enact'), on ? 'btn-secondary btn-small' : 'btn-primary btn-small', () => {
         if (on) this.engine!.repealLaw(l.id); else this.engine!.enactLaw(l.id);
@@ -378,6 +386,9 @@ export class EraPanel {
     const box = el('div', 'foreman');
     box.appendChild(el('div', 'bp-section-title', `[[worker]] ${i18n.t('foreman.title')}`));
     box.appendChild(el('div', 'bp-hint', i18n.t('foreman.hint')));
+    // [ux-wp2 S7] Idle adults lend a hand: say how much it speeds digs and charter work.
+    const labour = Math.round(labourBonus(state) * 100);
+    if (labour >= 1) box.appendChild(el('div', 'bp-hint', `[[worker]] ${i18n.t('wp2.labour', { n: labour })}`));
     this.foremanReports = [];
     for (const o of FOREMAN_ORDERS) {
       const on = !!state.longGame?.foreman.orders[o];
