@@ -3,6 +3,7 @@ import type { StateManager } from '../core/StateManager';
 import type { DigState } from '../core/state/longGame';
 import { bus } from '../core/EventBus';
 import { masteryMultiplier } from '../data/mastery';
+import { workSpeedMult } from './economy'; // [ux-wp2 S7/M7] idle labour and Systems Memory
 import { getDef } from '../data/buildingDefs';
 import { digAt, digSlotCount } from '../data/wings';
 import type { BuildingSystem } from './BuildingSystem';
@@ -75,7 +76,7 @@ export class DigSystem {
     if (want <= 0) return 0;
     const w = this.crew(state, slot).filter(s => !s.isOnMission && !s.child);
     if (w.length === 0) return 0;
-    return Math.min(1, w.length / want) * masteryMultiplier(w);
+    return Math.min(1, w.length / want) * masteryMultiplier(w) * workSpeedMult(state);
   }
 
   /** Seconds left at the current speed (Infinity with no crew). */

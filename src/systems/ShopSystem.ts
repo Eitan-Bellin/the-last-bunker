@@ -6,7 +6,8 @@ import type { SupplySystem } from './SupplySystem';
 import { localDay } from './SupplySystem';
 import { TUNING } from '../data/tuning';
 import { hasFeature } from './ResearchSystem';
-import { PROJECT_BOOST_SHARE, RESEARCH_BOOST_SECONDS, SCRAP_BUNDLE, SHOP_ITEMS, SHOP_PRICE_RAMP, type ShopItem, type ShopItemId } from '../data/shop';
+import { ACT_GOODS_HOURS, PROJECT_BOOST_SHARE, RESEARCH_BOOST_SECONDS, SCRAP_BUNDLE, SHOP_ITEMS, SHOP_PRICE_RAMP, type ShopItem, type ShopItemId } from '../data/shop';
+import { actGoods } from '../data/pricing';
 
 /** What the Projects system offers the shop (feature-detected: absent until that system exists). */
 export interface ProjectBooster { boostStage?(state: GameState, share: number): boolean }
@@ -45,18 +46,19 @@ export class ShopSystem {
   }
 
   price(state: GameState, item: ShopItem): number {
-    const n = this.counts(state).day[item.id] ?? 0;
+    const c = this.counts(state);
+    const n = (item.weeklyRamp ? c.week[item.id] : c.day[item.id]) ?? 0;
     // [Q10] Dearer in later Acts, so the credits of a bigger bunker do not buy more than the first ones did.
     const act = state.longGame?.meta.act ?? 1;
     const doctrine = hasFeature(state, 'merchantRepublic') ? 0.85 : 1; // [P2-1]
-    return Math.round(item.price * (1 + TUNING.shopActRamp * Math.max(0, act - 1)) * doctrine * Math.pow(SHOP_PRICE_RAMP, n));
+    return Math.round(item.price * (1 + TUNING.shopActRamp * Math.max(0, act - 1)) * doctrine * Math.pow(item.weeklyRamp ?? SHOP_PRICE_RAMP, n));
   }
 
   offers(state: GameState): ShopOffer[] {
     const c = this.counts(state);
     return SHOP_ITEMS.map(item => {
       const price = this.price(state, item);
-      const visible = item.id !== 'projectBoost' || !!this.getProjects?.()?.boostStage;
+      const visible = (item.id !== 'projectBoost' || !!this.getProjects?.()?.boostStage) && (state.longGame?.meta.act ?? 1) >= (item.fromAct ?? 0);
       let left: number | undefined;
       if (item.weeklyLimit) left = item.weeklyLimit - (c.week[item.id] ?? 0);
       if (item.dailyLimit) left = item.dailyLimit - (c.day[item.id] ?? 0);
@@ -105,9 +107,15 @@ export class ShopSystem {
         return true;
       }
       case 'projectBoost': return this.getProjects?.()?.boostStage?.(state, PROJECT_BOOST_SHARE) ?? false;
+      case 'actGoods': {
+        const goods = actGoods(state, ACT_GOODS_HOURS);
+        if (!Object.keys(goods).length) return false;
+        this.resources.gain(sm, goods, { overfill: true });
+        return true;
+      }
       case 'crate': {
         // An extra crate on top of the daily one: the day-one size, no streak and no flag touched.
-        this.resources.gain(sm, this.supply.contents(state, 1));
+        this.resources.gain(sm, this.supply.contents(state, 1), { overfill: true });
         return true;
       }
     }

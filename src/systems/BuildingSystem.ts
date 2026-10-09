@@ -15,6 +15,7 @@ import { RETOOL_PRICE_MULT, RETOOL_SECONDS, SPEC_COST, specTotal, specsFor } fro
 import { RELOCATE_SECONDS, relocateBlock, relocateCost, stateWithout } from './relocate'; // [plan4:ST-19]
 import { isInfra } from '../data/buildingDefs'; // plan4:ST-14
 import { infraOccupies, pruneOrphanDoors } from './doors'; // plan4:ST-15, plan4:polish
+import { memoryTimeMult } from './economy'; // [ux-wp2 M7]
 
 /** Slots east of the shaft on a floor without a wing. [plan4:X-2] Placement reads floorExtent(state, floor); this stays exported for tools. */
 export const SLOTS_PER_FLOOR = BASE_EAST;
@@ -51,6 +52,7 @@ export class BuildingSystem {
   update(sm: StateManager, dt: number): void {
     const state = sm.state;
     this.artisan = !!state.prestige.upgrades['ksArtisan'];
+    this.timeMemory = memoryTimeMult(state);
     let changed = false;
     // [plan4:ST-16] The gate-house yard is cleared for building when Act II begins; an older save already past it opens on its first tick
     // (migrateState leaves surfaceOpen false on purpose, so the migration test stays strict).
@@ -103,6 +105,8 @@ export class BuildingSystem {
 
   /** [P5] Set by the engine each tick from the Artisan keystone (getUpgradeCost has no state). */
   artisan = false;
+  /** [ux-wp2 M7] Systems Memory (Genesis): upgrades take this share of their time; set each tick like artisan. */
+  timeMemory = 1;
 
   getUpgradeCost(building: BuildingInstance): Record<string, number> {
     const def = getDef(building.type);
@@ -140,7 +144,7 @@ export class BuildingSystem {
     const classic = specLevel(def);
     const at = (l: number) => def.constructionTime * (l + 1) * 0.75 * Math.pow(3, Math.max(0, l - 1));
     const t = building.level < classic ? at(building.level) : at(classic - 1) * Math.pow(2, building.level - classic + 1);
-    return Math.round(Math.min(TUNING.maxUpgradeSeconds, t));
+    return Math.round(Math.min(TUNING.maxUpgradeSeconds, t) * this.timeMemory);
   }
 
   /** With a state, the Act's level ceiling applies too (see upgradeBlock for why a room cannot go up). */

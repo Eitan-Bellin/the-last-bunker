@@ -1,6 +1,6 @@
 import { i18n } from '../../i18n/I18nManager';
 import { bus } from '../../core/EventBus';
-import { bar, button, el, setBar } from '../dom';
+import { RESOURCE_ICONS, bar, button, el, setBar } from '../dom';
 import { Sheet } from '../components/Sheet';
 import { haptic } from '../../utils/haptics';
 import { getOrder, orderTier, REWARD_GOLD, REWARD_SILVER, actCreditScale, FRAGS_PER_PLAN, type OrderTier } from '../../data/orders';
@@ -61,7 +61,7 @@ export class DailyController {
       haptic('success');
       const what = claim.rush > 0 ? i18n.t('daily.gotRush')
         : claim.frag > 0 ? (claim.blueprints > 0 ? i18n.t('daily.gotPlan') : i18n.t('daily.goldFrag'))
-          : `[[credits]] ${i18n.formatNumber(claim.credits)}`;
+          : `[[credits]] ${i18n.formatNumber(claim.credits)}${goodsText(claim.gains)}`; // [ux-wp2 R5] + the Act goods of a silver order
       this.app.toasts.show(`[[gift]] ${i18n.t('daily.got', { what })}`, 'good');
       this.app.engine.requestSave();
     });
@@ -108,7 +108,8 @@ export class DailyController {
 
   private rewardText(tier: OrderTier): string {
     if (tier === 'easy') return i18n.t('daily.reward.easy');
-    return i18n.t(tier === 'medium' ? 'daily.reward.medium' : 'daily.reward.new', { n: i18n.formatNumber(this.creditsFor(tier)) });
+    return i18n.t(tier === 'medium' ? 'daily.reward.medium' : 'daily.reward.new', { n: i18n.formatNumber(this.creditsFor(tier)) })
+      + (tier === 'medium' ? goodsText(this.sys.silverGoods()) : ''); // [ux-wp2 R5]
   }
 
   // ---- the HUD chip and the cards elsewhere ---------------------------------------------------------------------------------
@@ -257,4 +258,10 @@ export class DailyController {
     body.appendChild(this.app.welcome.gainsList(c.gains));
     this.app.modal.show({ icon: '[[gift]]', title: i18n.t('daily.chest'), body, actions: [{ label: i18n.t('event.ok'), onClick: () => this.app.modal.hide() }] });
   }
+}
+
+/** [ux-wp2 R5] " + [[components]] 200" for goods paid besides credits (empty when there are none). */
+function goodsText(gains: Partial<Record<string, number>> | undefined): string {
+  const parts = Object.entries(gains ?? {}).filter(([, v]) => (v ?? 0) > 0).map(([r, v]) => `${RESOURCE_ICONS[r as keyof typeof RESOURCE_ICONS] ?? ''} ${i18n.formatCompact(Math.round(v ?? 0))}`);
+  return parts.length ? ` + ${parts.join(' ')}` : '';
 }

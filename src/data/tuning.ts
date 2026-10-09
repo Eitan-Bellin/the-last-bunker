@@ -26,12 +26,21 @@ export const TUNING = {
   priceScale: 3.5,
   /** From Act III on, this share of a price is also asked in each older currency (in its own reference income). */
   olderCurrencyShare: 0.4,
-  /** L2: each Act's currency can be stored for this many hours of its reference income (index = current Act). */
-  capHours: [0, 0.9, 4, 6, 8, 9, 10, 10],
+  /**
+   * L2: each Act's currency can be stored for this many hours of its reference income (index = current Act).
+   * [ux-wp2 R7/R10] Act I (2.5, was 0.9): food, water and knowledge hold at least this many hours of the bunker's own
+   * production (ResourceSystem.computeCaps), so the first night away fills the stores instead of spilling after an hour.
+   */
+  capHours: [0, 2.5, 4, 6, 8, 9, 10, 10],
   maxPaymentShare: 0.8,
   /** Digging to B7 costs this many hours of income; each floor deeper costs digHoursGrowth times more. */
   digHours: 1.2,
   digHoursGrowth: 1.15,
+  /**
+   * [ux-wp2 S3] Tier-2 roles (assembly line, arc furnace, data vault, council hall, seed forge) now go through their crew and the
+   * modifier stack (morale, laws, research, Echo...), about x6-8 in a developed bunker; their base rates are divided by this.
+   */
+  roleOutputNorm: 8,
   /** Charter project stages, in hours of their Act's income (index = Act). */
   charterStageHours: [0, 3, 17, 12, 9, 9, 9, 9],
   /** [P4] Contracts: an offer every so many world seconds, open this long, at most this many waiting; paid in hours of income. */
@@ -47,13 +56,16 @@ export const TUNING = {
   outpostHours: 3,
   outpostBuildHours: 4,
   outpostYieldHours: 0.12,
-  /** [Q10] From this Act, storage overflow turns into this share of the credits it used to. */
-  overflowDecayAct: 4,
-  overflowDecay: 0.25,
+  /**
+   * [Q10] From this Act, storage overflow turns into this share of the credits it used to. [ux-wp2 R5] From Act III and to a twentieth
+   * (it was Act IV and a quarter): 1-6M credits of nothing piled up; credits now come mostly from the daily orders and buy Act goods.
+   */
+  overflowDecayAct: 3,
+  overflowDecay: 0.05,
   /** [Q10] Shop prices rise by this share of the base price for every Act after the first. */
   shopActRamp: 0.5,
-  /** Longest a single room upgrade takes. */
-  maxUpgradeSeconds: 20 * 3600,
+  /** Longest a single room upgrade takes. [ux-wp2 M1] 12 h (was 20): Mk9/Mk10 upgrades were day-long waits with nothing to decide. */
+  maxUpgradeSeconds: 12 * 3600,
   /** Digging: seconds per new floor (index = floors after the dig); deeper floors grow by digTimeGrowth each. */
   digSeconds: [0, 0, 0, 0, 60, 300, 1800, 3600, 7200],
   digTimeGrowth: 1.15,

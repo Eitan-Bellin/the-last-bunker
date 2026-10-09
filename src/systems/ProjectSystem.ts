@@ -3,6 +3,7 @@ import type { StateManager } from '../core/StateManager';
 import { bus } from '../core/EventBus';
 import { PROJECTS, getProject, projectDone, stagesDone, type ProjectDef, type ProjectStage } from '../data/projects';
 import { masteryMultiplier } from '../data/mastery';
+import { workSpeedMult } from './economy'; // [ux-wp2 S7/M7] idle labour and Systems Memory
 import type { ResourceSystem } from './ResourceSystem';
 import type { PopulationSystem } from './PopulationSystem';
 
@@ -65,7 +66,7 @@ export class ProjectSystem {
     if (!stage) return 0;
     const w = this.workers(state, id);
     if (w.length === 0) return 0;
-    return Math.min(1, w.length / stage.crew) * masteryMultiplier(w);
+    return Math.min(1, w.length / stage.crew) * masteryMultiplier(w) * workSpeedMult(state);
   }
 
   /** [ux-wp1 E1] Every resource of the current stage is delivered (to within PAID_SLACK). */
