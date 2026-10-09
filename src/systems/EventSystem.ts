@@ -30,6 +30,9 @@ export interface EventChoice {
   cost?: Resources;
   /** Free beds this choice needs (true = 1). */
   requiresSpace?: boolean | number;
+  /** [ux-wp5 C2] A short line under the button: what this choice costs or risks (an i18n key, with the event's params). */
+  hint?: string;
+  hintParams?: Record<string, string | number>;
 }
 
 export interface EventResult {
@@ -99,6 +102,53 @@ function addMoraleBuff(ctx: Ctx, value: number): void {
   ctx.sm.applyDelta({ path: 'moraleBuffs', value: [...ctx.sm.state.moraleBuffs, { value, expiresAt: now + MORALE_BUFF_DURATION }] });
 }
 
+/** [ux-wp5] Adds and removes story flags in one write. */
+function setFlags(ctx: Ctx, add: string[], remove: (f: string) => boolean = () => false): void {
+  const flags = ctx.sm.state.storyFlags.filter(f => !remove(f));
+  ctx.sm.applyDelta({ path: 'storyFlags', value: [...new Set([...flags, ...add])] });
+}
+
+// ---- [ux-wp5 C1/C9] variety: text variants, cooldowns, the trader Saul, people who were turned away ----
+
+/** Everyday events told three ways (`data.v`): the dialog shows `event.<id>.desc` or `event.<id>.desc.<v>`. */
+export const EVENT_VARIANTS: Record<string, number> = { stash: 3, trader: 3, pipeLeak: 3, argument: 3, sickness: 3, powerSurge: 3, wanderer: 3 };
+/** Play seconds before the same everyday event may come again. */
+const EVENT_COOLDOWN: Record<string, number> = { stash: 600, trader: 600, pipeLeak: 900, argument: 900, sickness: 900, powerSurge: 1200, returning: 3600 };
+/** The last this many events can't come next (no "the same thing again" right after). */
+const RECENT_BLOCK = 1;
+/** [ux-wp5, clarity C5] In Act I at most one everyday event every 6 minutes (the door keeps its own clock). */
+const ACT1_MIN_GAP = 360;
+/** Someone turned away comes back after this much play, at the earliest. */
+const RETURN_AFTER = 7200;
+/** At most this many turned-away people are remembered. */
+const REFUSED_KEPT = 3;
+
+/** The i18n key of the event's description (its variant, or the trader once he is known by name). */
+export function eventDescKey(ev: { id: string; data: Record<string, unknown> }): string {
+  const v = typeof ev.data.v === 'number' ? Math.max(0, Math.floor(ev.data.v)) : 0;
+  if (ev.id === 'trader' && ev.data.saul) return `event.trader.desc.saul.${v % 3}`;
+  return v > 0 && v < (EVENT_VARIANTS[ev.id] ?? 1) ? `event.${ev.id}.desc.${v}` : `event.${ev.id}.desc`;
+}
+
+/** A remembered refusal: "refused:<name>@<play time>#<portrait>". */
+function parseRefused(f: string): { name: string; at: number; portrait: number } | null {
+  const m = /^refused:(.+)@(\d+)#(\d+)$/.exec(f);
+  return m ? { name: m[1], at: Number(m[2]), portrait: Number(m[3]) } : null;
+}
+
+/** Someone turned away earlier who may knock again now (beds for two, the name not taken meanwhile). */
+function returningCandidate(s: GameState): { flag: string; name: string; portrait: number } | null {
+  if (s.maxPopulation - s.survivors.length < 2) return null;
+  const now = s.stats.totalPlayTime;
+  for (const f of s.storyFlags) {
+    const r = parseRefused(f);
+    if (!r || now - r.at < RETURN_AFTER) continue;
+    if (s.survivors.some(x => x.name === r.name) || (s.doorWaiting ?? []).some(x => x.name === r.name)) continue;
+    return { flag: f, name: r.name, portrait: r.portrait };
+  }
+  return null;
+}
+
 function updateSurvivor(ctx: Ctx, id: string, patch: Partial<SurvivorState>): void {
   ctx.sm.applyDelta({
     path: 'survivors',
@@ -130,14 +180,24 @@ const EVENTS: EventDef[] = [
     condition: s => s.survivors.length < s.maxPopulation,
     init: (s, ctx) => {
       const survivor = ctx.population.createSurvivor(ctx.rng);
-      // A small bunker takes anyone in, hungry or not.
-      return { survivor, name: survivor.name, free: s.survivors.length < 5 ? 1 : 0 };
+      // A small bunker takes anyone in, hungry or not. [ux-wp5 C2] A bigger one feeds them from bigger stores.
+      return { survivor, name: survivor.name, free: s.survivors.length < 5 ? 1 : 0, food: capShare(s, 'food', 0.02, 10) };
     },
-    choices: (data) => [{ key: 'accept', cost: data.free ? undefined : { food: 10 }, requiresSpace: true }, { key: 'refuse' }],
+    choices: (data) => [
+      { key: 'accept', cost: data.free ? undefined : { food: num(data, 'food', 10) }, requiresSpace: true, hint: 'event.hint.bed' },
+      { key: 'refuse', hint: 'event.hint.walkOn' },
+    ],
     resolve: (choice, data, ctx) => {
       if (choice === 'accept') {
         ctx.population.addSurvivor(ctx.sm, data.survivor as SurvivorState);
         return { key: 'accept' };
+      }
+      // [ux-wp5 C9] They may come back one day (the first few are remembered).
+      const sv = data.survivor as SurvivorState | undefined;
+      if (sv?.name && !/[@#]/.test(sv.name)) {
+        // The first ones turned away are the first to come back: once a few are remembered, later ones are not.
+        const kept = ctx.sm.state.storyFlags.filter(f => f.startsWith('refused:')).length;
+        if (kept < REFUSED_KEPT) setFlags(ctx, [`refused:${sv.name}@${Math.round(ctx.sm.state.stats.totalPlayTime)}#${Math.abs(sv.portraitIndex | 0)}`]);
       }
       return { key: 'refuse' };
     },
@@ -149,12 +209,12 @@ const EVENTS: EventDef[] = [
     condition: () => false,
     init: (s, ctx) => {
       const group = [ctx.population.createSurvivor(ctx.rng), ctx.population.createSurvivor(ctx.rng)];
-      return { group, name: group[0].name, nameB: group[1].name, free: s.survivors.length < 5 ? 1 : 0 };
+      return { group, name: group[0].name, nameB: group[1].name, free: s.survivors.length < 5 ? 1 : 0, food: capShare(s, 'food', 0.02, 10) };
     },
     choices: (data) => [
-      { key: 'accept', cost: data.free ? undefined : { food: 20 }, requiresSpace: 2 },
-      { key: 'one', cost: data.free ? undefined : { food: 10 }, requiresSpace: 1 },
-      { key: 'refuse' },
+      { key: 'accept', cost: data.free ? undefined : { food: 2 * num(data, 'food', 10) }, requiresSpace: 2, hint: 'event.hint.beds2' },
+      { key: 'one', cost: data.free ? undefined : { food: num(data, 'food', 10) }, requiresSpace: 1, hint: 'event.hint.split' },
+      { key: 'refuse', hint: 'event.hint.walkOn2' },
     ],
     resolve: (choice, data, ctx) => {
       const group = data.group as SurvivorState[];
@@ -182,7 +242,12 @@ const EVENTS: EventDef[] = [
     id: 'pipeLeak',
     weight: 1.5,
     condition: s => s.buildings.some(b => b.type === 'waterPump'),
-    choices: () => [{ key: 'fix', cost: { materials: 10 } }, { key: 'ignore' }],
+    // [ux-wp5 C2] The repair is priced from the stores, so it stays a choice in a rich bunker; the hint shows what waiting costs.
+    init: s => ({ fix: capShare(s, 'materials', 0.01, 10), loss: Math.floor(s.resources.water.amount * 0.3) }),
+    choices: (data) => [
+      { key: 'fix', cost: { materials: num(data, 'fix', 10) }, hint: 'event.hint.noLoss' },
+      { key: 'ignore', hint: 'event.hint.waterLoss', hintParams: { n: num(data, 'loss', 0) } },
+    ],
     resolve: (choice, _d, ctx) => {
       if (choice === 'fix') return { key: 'fix' };
       const lost = Math.floor(ctx.sm.state.resources.water.amount * 0.3);
@@ -196,9 +261,12 @@ const EVENTS: EventDef[] = [
     condition: s => s.survivors.length >= 2,
     init: (s, ctx) => {
       const [a, b] = ctx.rng.shuffle(s.survivors);
-      return { nameA: a.name, nameB: b.name };
+      return { nameA: a.name, nameB: b.name, food: capShare(s, 'food', 0.02, 5) };
     },
-    choices: () => [{ key: 'mediate', cost: { food: 5 } }, { key: 'ignore' }],
+    choices: (data) => [
+      { key: 'mediate', cost: { food: num(data, 'food', 5) }, hint: 'event.hint.moraleUp', hintParams: { n: 8 } },
+      { key: 'ignore', hint: 'event.hint.moraleDown', hintParams: { n: 8 } },
+    ],
     resolve: (choice, _d, ctx) => {
       addMoraleBuff(ctx, choice === 'mediate' ? 8 : -8);
       return { key: choice };
@@ -210,7 +278,10 @@ const EVENTS: EventDef[] = [
     // Deals sized to the bunker's storage; each visit also brings one rare offer: salvage or a blueprint.
     init: (s, ctx) => ({
       food: capShare(s, 'food', 0.12, 15),
-      mat: capShare(s, 'materials', 0.15 + ctx.rng.next() * 0.05, 30),
+      // [ux-wp5 C9] Saul, once known: a regular who traded last time gets a tenth more for the food.
+      saul: s.storyFlags.includes('saul:met') ? 1 : 0,
+      loyal: s.storyFlags.includes('saul:last') ? 1 : 0,
+      mat: Math.round(capShare(s, 'materials', 0.15 + ctx.rng.next() * 0.05, 30) * (s.storyFlags.includes('saul:last') ? 1.1 : 1)),
       water: capShare(s, 'water', 0.12, 15),
       med: capShare(s, 'medicine', 0.2, 5),
       rare: ctx.rng.chance(0.5) ? 'scrap' : 'blueprint',
@@ -219,7 +290,7 @@ const EVENTS: EventDef[] = [
       bpScrap: capShare(s, 'scrap', 0.15, 30),
     }),
     choices: (data) => [
-      { key: 'tradeFood', cost: { food: num(data, 'food', 15) } },
+      { key: 'tradeFood', cost: { food: num(data, 'food', 15) }, hint: data.loyal ? 'event.hint.loyal' : undefined },
       { key: 'tradeWater', cost: { water: num(data, 'water', 15) } },
       ...(data.rare === 'scrap'
         ? [{ key: 'tradeScrap', cost: { food: num(data, 'food', 15), water: num(data, 'water', 15) } }]
@@ -233,6 +304,9 @@ const EVENTS: EventDef[] = [
       if (choice === 'tradeScrap') gains = { scrap: num(data, 'scrap', 20) };
       if (choice === 'tradeBlueprint') gains = { blueprints: 1 };
       if (gains) ctx.resources.gain(ctx.sm, gains);
+      // [ux-wp5 C9] The trader remembers: after a first deal he has a name, and a deal now makes the next one a little better.
+      if (gains) setFlags(ctx, ['saul:met', 'saul:last']);
+      else setFlags(ctx, [], f => f === 'saul:last');
       return { key: choice, gains };
     },
   },
@@ -240,15 +314,19 @@ const EVENTS: EventDef[] = [
     id: 'powerSurge',
     weight: 1,
     condition: s => s.buildings.some(b => b.type === 'generator' && !b.isConstructing),
-    choices: () => [{ key: 'shutdown' }, { key: 'risk' }],
-    resolve: (choice, _d, ctx) => {
+    init: s => ({ risk: capShare(s, 'materials', 0.03, 20), power: Math.floor(s.resources.power.amount) }),
+    choices: (data) => [
+      { key: 'shutdown', hint: 'event.hint.safe' },
+      { key: 'risk', hint: 'event.hint.coinFlip', hintParams: { n: num(data, 'risk', 20) } },
+    ],
+    resolve: (choice, data, ctx) => {
       if (choice === 'shutdown') {
         const lost = ctx.sm.state.resources.power.amount;
         ctx.resources.gain(ctx.sm, { power: -lost });
         return { key: 'shutdown', gains: { power: -Math.floor(lost) } };
       }
       if (ctx.rng.chance(0.5)) {
-        const lost = Math.min(20, Math.floor(ctx.sm.state.resources.materials.amount));
+        const lost = Math.min(num(data, 'risk', 20), Math.floor(ctx.sm.state.resources.materials.amount));
         ctx.resources.gain(ctx.sm, { materials: -lost });
         return { key: 'riskBad', gains: { materials: -lost } };
       }
@@ -261,9 +339,12 @@ const EVENTS: EventDef[] = [
     condition: s => s.survivors.length >= 1,
     init: (s, ctx) => {
       const v = ctx.rng.pick(s.survivors);
-      return { survivorId: v.id, name: v.name };
+      return { survivorId: v.id, name: v.name, med: capShare(s, 'medicine', 0.03, 3) };
     },
-    choices: () => [{ key: 'medicine', cost: { medicine: 3 } }, { key: 'rest' }],
+    choices: (data) => [
+      { key: 'medicine', cost: { medicine: num(data, 'med', 3) }, hint: 'event.hint.heal' },
+      { key: 'rest', hint: 'event.hint.weaken', hintParams: { n: 30 } },
+    ],
     resolve: (choice, data, ctx) => {
       const sv = ctx.sm.state.survivors.find(s => s.id === data.survivorId);
       if (!sv) return { key: 'gone' };
@@ -273,6 +354,28 @@ const EVENTS: EventDef[] = [
       }
       updateSurvivor(ctx, sv.id, { health: Math.max(1, sv.health - 30) });
       return { key: 'rest' };
+    },
+  },
+  {
+    // [ux-wp5 C9] Someone the bunker turned away comes back, now with a small child, and asks once more.
+    id: 'returning',
+    weight: 1.2,
+    condition: s => !!returningCandidate(s),
+    init: (s, ctx) => {
+      const c = returningCandidate(s)!;
+      const adult = { ...ctx.population.createSurvivor(ctx.rng), name: c.name, portraitIndex: c.portrait };
+      const kid: SurvivorState = { ...ctx.population.createSurvivor(ctx.rng), child: true, bornAt: s.stats.totalPlayTime, parentIds: [adult.id], happiness: 70 };
+      return { group: [adult, kid], survivor: adult, name: adult.name, nameB: kid.name, flag: c.flag, food: capShare(s, 'food', 0.02, 10) };
+    },
+    choices: (data) => [
+      { key: 'accept', cost: { food: 2 * num(data, 'food', 10) }, requiresSpace: 2, hint: 'event.hint.family' },
+      { key: 'refuse', hint: 'event.hint.gone' },
+    ],
+    resolve: (choice, data, ctx) => {
+      setFlags(ctx, [], f => f === data.flag);
+      if (choice !== 'accept') return { key: 'refuse' };
+      for (const s of data.group as SurvivorState[]) ctx.population.addSurvivor(ctx.sm, s);
+      return { key: 'accept' };
     },
   },
   {
@@ -732,14 +835,19 @@ export class EventSystem {
       const pair = state.survivors.length >= 6 && state.maxPopulation - state.survivors.length >= 2 && this.ctx.rng.chance(0.2);
       const def = EVENTS.find(e => e.id === (pair ? 'group' : 'wanderer'))!;
       const data = { ...def.init!(state, this.ctx), knock: 1 };
+      this.told(def.id, data, now);
       this.ctx.sm.applyDelta({ path: 'activeEvent', value: { id: def.id, data, at: now } });
       bus.emit('event:triggered', def.id);
       return;
     }
     if (state.activeEvent || state.stats.totalPlayTime < state.nextEventAt) return;
 
+    // [ux-wp5 C1] Never the same one twice running, and each everyday event rests a while before it comes back.
+    const recent = this.recent.slice(-RECENT_BLOCK);
+    const rested = (e: EventDef) => e.id === 'refugees'
+      || (!recent.includes(e.id) && now - (this.lastAt[e.id] ?? -Infinity) >= (EVENT_COOLDOWN[e.id] ?? 0));
     const candidates = EVENTS.filter(e =>
-      (!e.once || !state.storyFlags.includes(`event:${e.id}`)) && (!e.condition || e.condition(state)),
+      (!e.once || !state.storyFlags.includes(`event:${e.id}`)) && rested(e) && (!e.condition || e.condition(state)),
     );
     if (candidates.length === 0) {
       this.scheduleNext();
@@ -768,6 +876,7 @@ export class EventSystem {
     }
 
     const data = picked.init?.(state, this.ctx) ?? {};
+    this.told(picked.id, data, now);
     this.ctx.sm.applyDelta({ path: 'activeEvent', value: { id: picked.id, data, at: state.stats.totalPlayTime } });
     bus.emit('event:triggered', picked.id);
   }
@@ -843,6 +952,26 @@ export class EventSystem {
     const state = this.ctx.sm.state;
     const now = state.stats.totalPlayTime;
     const factor = Math.max(0.5, 1 - radioLevels(state) * 0.08);
-    this.ctx.sm.applyDelta({ path: 'nextEventAt', value: now + Math.round(this.ctx.rng.nextInt(MIN_GAP, MAX_GAP) * factor) });
+    let gap = Math.round(this.ctx.rng.nextInt(MIN_GAP, MAX_GAP) * factor);
+    // [ux-wp5, clarity C5] Act I is busy enough: everyday events keep at least 6 minutes apart there.
+    const lg = state.longGame;
+    if (lg && !lg.meta.legacy && lg.meta.act <= 1) gap = Math.max(ACT1_MIN_GAP, gap);
+    this.ctx.sm.applyDelta({ path: 'nextEventAt', value: now + gap });
+  }
+
+  // ---- [ux-wp5 C1] what was told lately (this session): no repeats back to back, rests per kind, rotating texts ----
+  private recent: string[] = [];
+  private lastAt: Record<string, number> = {};
+  private variantAt: Record<string, number> = {};
+
+  /** Notes an event that is about to be shown, and picks its text variant (the next one in turn, never the same twice running). */
+  private told(id: string, data: Record<string, unknown>, now: number): void {
+    this.recent = [...this.recent.slice(-(RECENT_BLOCK + 2)), id];
+    this.lastAt[id] = now;
+    const n = EVENT_VARIANTS[id];
+    if (!n) return;
+    const v = ((this.variantAt[id] ?? Math.floor(now) % n) + 1) % n;
+    this.variantAt[id] = v;
+    data.v = v;
   }
 }

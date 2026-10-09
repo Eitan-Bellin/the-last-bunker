@@ -1,4 +1,6 @@
 import type { BuildingType } from '../core/GameState';
+import type { StateManager } from '../core/StateManager';
+import { bus } from '../core/EventBus';
 
 /**
  * The story of Bunker 17's previous residents, found piece by piece:
@@ -206,6 +208,77 @@ export const LORE: LoreEntry[] = [
       en: 'We found them. Genesis is real: a lab deep under the observatory, people trying to send a message back in time, before the ashes. They need isotope, a lot of isotope. If the bunker still stands, build. Grow. And one day, send the message yourselves.',
     },
   },
+  // ---- [ux-wp5 C4] deeper down: one find every few levels, B8 to B24 (DIG_LORE in ruins.ts) ----
+  {
+    id: 'builders', kind: 'note',
+    title: { he: 'גיר על הסלע', en: 'Chalk on the rock' },
+    author: { he: 'מנהל עבודה, צוות הבנייה', en: 'A foreman of the building crew' },
+    date: { he: 'לפני האפר', en: 'Before the ashes' },
+    body: {
+      he: 'מספרים בגיר על הקיר: עומק, תאריך, שמות של משמרת. ומתחת, באותיות גדולות: "המשרד אומר שאף אחד לא יצטרך לרדת כל כך עמוק. אנחנו חופרים בכל זאת. משלמים לנו לפי מטר."',
+      en: 'Numbers in chalk on the wall: depth, a date, the names of a shift. Below, in big letters: "The ministry says nobody will ever need to go this deep. We dig anyway. They pay by the meter."',
+    },
+  },
+  {
+    id: 'borisTools', kind: 'note',
+    title: { he: 'ארגז הכלים של בוריס', en: 'Boris\'s toolbox' },
+    author: { he: 'בוריס', en: 'Boris' },
+    date: { he: 'שנה 3', en: 'Year 3' },
+    body: {
+      he: 'ארגז עטוף בשמן, ועליו פתק: "מי שחופר עד לכאן צריך את זה יותר ממני. המפתח הגדול חוזר למקום. ואל תשאילו אותו ליוסי, הוא אף פעם לא מחזיר."',
+      en: 'A box wrapped in oilcloth, with a note on top: "Whoever digs this far needs these more than I do. The big wrench goes back in its place. And don\'t lend it to Yossi, he never gives it back."',
+    },
+  },
+  {
+    id: 'bunker16', kind: 'tape',
+    title: { he: 'קלטת: השכנים', en: 'Tape: the neighbours' },
+    author: { he: 'עמית ורד, קשר', en: 'Amit Vered, radio operator' },
+    date: { he: 'שנה 2', en: 'Year 2' },
+    body: {
+      he: '[דפיקות בצינור] "...שבע־עשרה, כאן שש־עשרה. אנחנו שומעים את המקדחות שלכם דרך הסלע. אין לנו יותר אוכל לחלוק. בבקשה, אל תפרצו אלינו." [שקט ארוך] "...ותודה על השירים בלילות. אנחנו שומעים גם אותם."',
+      en: '[knocking on a pipe] "...Seventeen, this is Sixteen. We hear your drills through the rock. We have no food left to share. Please don\'t break through." [a long silence] "...and thank you for the songs at night. We hear those too."',
+    },
+  },
+  {
+    id: 'quarantine', kind: 'log',
+    title: { he: 'יומן הבידוד', en: 'The quarantine log' },
+    author: { he: 'ד"ר עלי מנסור', en: 'Dr. Ali Mansour' },
+    date: { he: 'שנה 5', en: 'Year 5' },
+    body: {
+      he: 'הורדתי את המשתעלים אל הסלע הקר. הקור מאט את המחלה. אני יורד פעמיים ביום עם מרק ומקריא להם מספר אחד שנשאר לנו, תמיד מאותו עמוד. הם כבר יודעים אותו בעל פה. הם מתקנים אותי כשאני טועה.',
+      en: 'I moved the coughing ones down to the cold rock. The cold slows it. I come down twice a day with soup and read to them from the one book we have left, always the same page. They know it by heart now. They correct me when I get it wrong.',
+    },
+  },
+  {
+    id: 'waterTable', kind: 'note',
+    title: { he: 'מי התהום', en: 'The water table' },
+    author: { he: 'ד"ר נועה הלפרין', en: 'Dr. Noa Halperin' },
+    date: { he: 'שנה 3', en: 'Year 3' },
+    body: {
+      he: 'שרטוט של קידוח, וחץ אדום לשכבה עמוקה: "מים נקיים. ישנים יותר מהמלחמה, ישנים יותר מכולנו. אם מישהו יגיע לכאן, זאת הסיבה שהבונקר יכול לחיות לנצח."',
+      en: 'A sketch of a borehole, and a red arrow to a deep layer: "Clean water. Older than the war, older than all of us. If anyone gets this far, this is why the bunker can live forever."',
+    },
+  },
+  {
+    id: 'handprints', kind: 'photo',
+    title: { he: 'כפות ידיים על הקיר', en: 'Handprints on the wall' },
+    author: { he: 'ילדי בונקר 17', en: 'The children of Bunker 17' },
+    date: { he: 'שנה 1, החורף הראשון', en: 'Year 1, the first winter' },
+    body: {
+      he: 'במערה הקטנה שמתחת לבור הקידוח: כפות ידיים בצבע, קטנות וגדולות, ולצד כל אחת שם. ספרתם ארבעים ואחת. אחת מהן קטנה מאוד, עם שמש מצוירת באמצע.',
+      en: 'In the small cave below the borehole: painted handprints, small and large, a name beside each. You count forty-one. One of them is very small, with a sun painted in the middle.',
+    },
+  },
+  {
+    id: 'warmRock', kind: 'tape',
+    title: { he: 'קלטת: הסלע החם', en: 'Tape: the warm rock' },
+    author: { he: 'ד"ר נועה הלפרין', en: 'Dr. Noa Halperin' },
+    date: { he: 'שנה 4, לילה לפני היציאה', en: 'Year 4, the night before we left' },
+    body: {
+      he: '"...אם הגעתם עד כאן, עברתם את כל מה שאנחנו הספקנו. שימו יד על הקיר. מרגישים? הסלע חם. לכדור הזה עוד יש לב שפועם. גם לכם. אל תתנו לאף אחד להגיד לכם אחרת."',
+      en: '"...if you\'ve come this far, you\'re past everything we ever reached. Put a hand on the wall. Feel that? The rock is warm. This world still has a beating heart. So do you. Don\'t let anyone tell you otherwise."',
+    },
+  },
 ];
 
 export function getLore(id: string): LoreEntry | undefined {
@@ -221,4 +294,17 @@ export function loreBonus(found: string[] | undefined, type: BuildingType): numb
     if (e?.bonus?.type === type) pct += e.bonus.pct;
   }
   return pct / 100;
+}
+
+/**
+ * [ux-wp5 C3] Adds a find to the journal (the same as RestorationSystem.addLore, for finds that come from the story, the radio
+ * or the map). `quiet` skips the announcement: used when an older save catches up on finds it already earned.
+ */
+export function grantLore(sm: StateManager, id: string, quiet = false): boolean {
+  const s = sm.state;
+  if (!getLore(id) || s.lore.includes(id)) return false;
+  sm.applyDelta({ path: 'lore', value: [...s.lore, id] });
+  sm.applyDelta({ path: 'loreUnread', value: [...(s.loreUnread ?? []), id] });
+  if (!quiet) bus.emit('lore:found', id);
+  return true;
 }

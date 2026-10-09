@@ -7,7 +7,7 @@ import { ENDINGS } from '../../data/endings';
 import { getProject } from '../../data/projects';
 import { RESEARCH } from '../../data/research';
 import { LAWS } from '../../data/laws';
-import { CHAPTERS } from '../../data/story';
+import { getChapter } from '../../data/story';
 import { Sheet } from './Sheet';
 import { el } from '../dom';
 
@@ -48,7 +48,7 @@ export class ChroniclePanel {
       case 'act': return { icon: '[[flag]]', text: i18n.t('chronicle.act', { name: ACTS[(e.n ?? 1) - 1]?.name[locale] ?? String(e.n) }) };
       case 'era': return { icon: '[[sun]]', text: i18n.t('chronicle.era', { name: ERAS[e.n ?? 0]?.name[locale] ?? String(e.n) }) };
       case 'project': return { icon: '[[build]]', text: i18n.t('chronicle.project', { name: getProject(e.id)?.name[locale] ?? e.id ?? '' }) };
-      case 'chapter': return { icon: '[[journal]]', text: i18n.t('chronicle.chapter', { name: CHAPTERS.find(c => c.id === e.id)?.title[locale] ?? e.id ?? '' }) };
+      case 'chapter': return { icon: '[[journal]]', text: i18n.t('chronicle.chapter', { name: getChapter(e.id ?? '')?.title[locale] ?? e.id ?? '' }) };
       case 'doctrine': return { icon: '[[books]]', text: i18n.t('chronicle.doctrine', { name: RESEARCH.find(r => r.id === e.id)?.name[locale] ?? e.id ?? '' }) };
       case 'law': return { icon: '[[books]]', text: i18n.t('chronicle.law', { name: LAWS.find(l => l.id === e.id)?.name[locale] ?? e.id ?? '' }) };
       case 'ending': return { icon: '[[trophy]]', text: i18n.t('chronicle.ending', { name: ENDINGS.find(x => x.id === e.id)?.name[locale] ?? e.id ?? '' }) };
