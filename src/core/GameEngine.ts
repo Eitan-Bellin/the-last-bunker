@@ -5,7 +5,7 @@ import { SaveManager, type BackupKind } from './SaveManager';
 import { stillOwner } from './singleInstance';
 import { bus } from './EventBus';
 import { SeededRandom } from './Random';
-import { createInitialState, migrateState, type GameState, type ResourceType } from './GameState';
+import { createInitialState, migrateState, type GameState, type MissionReport, type ResourceType, type SurvivorState } from './GameState';
 import { ResourceSystem, type OverflowAbsorber } from '../systems/ResourceSystem';
 import { BuildingSystem } from '../systems/BuildingSystem';
 import { PopulationSystem } from '../systems/PopulationSystem';
@@ -91,6 +91,27 @@ interface SimRun {
   stepSize: number;
   remaining: number;
   off: (() => void)[];
+  /** [ux-wp5 C14] What happened to people and places meanwhile, in order (the night log). */
+  log: NightEntry[];
+}
+
+/**
+ * [ux-wp5 C14 / bugs D2] One line of the night log on the welcome-back screen: who was born, who paired up, who was lost,
+ * what was dug, built, finished or cleared while the player was away. Names are stored as saved (shown localized).
+ */
+export interface NightEntry {
+  k: 'born' | 'couple' | 'grown' | 'died' | 'dig' | 'stage' | 'project' | 'ruin' | 'built' | 'act' | 'season' | 'find' | 'recruit';
+  names?: string[];
+  id?: string;
+  n?: number;
+}
+
+/** [ux-wp5 C14 / bugs D1] What raids and disasters did while away, with names and losses. */
+export interface NightDanger {
+  /** People hurt (alive), by name. */
+  hurt: string[];
+  /** Stores taken or ruined (negative numbers). */
+  lost: Partial<Record<ResourceType, number>>;
 }
 
 export interface OfflineReport {
@@ -112,6 +133,12 @@ export interface OfflineReport {
   research: string[];
   /** [Danger C4] Raids and disasters that struck while away (soft version). */
   danger?: AwayDangerReport;
+  /** [ux-wp5 bugs D3] The real length of the absence (`seconds` stops at the 24-hour cap). */
+  realSeconds?: number;
+  /** [ux-wp5 C14] The night log, oldest first. */
+  log?: NightEntry[];
+  /** [ux-wp5 C14 / bugs D1] Names hurt and stores lost to raids and disasters (also already counted in `gained`). */
+  nightDanger?: NightDanger;
 }
 
 /**
@@ -563,6 +590,7 @@ export class GameEngine {
     const offlineSeconds = Math.min(offlineMs / 1000, OFFLINE_MAX_SECONDS);
     // [perf] In slices: the splash screen keeps moving, and the start does not freeze for 10 s on a mid-range phone after a day away.
     this.offlineReport = await this.simulateSliced(offlineSeconds, this.offlineEfficiency());
+    this.offlineReport.realSeconds = offlineMs / 1000; // [ux-wp5 D3]
     this.stateManager.applyDelta({ path: 'timestamp', value: now });
     bus.emit('offline:processed', this.offlineReport);
   }
@@ -612,16 +640,52 @@ export class GameEngine {
       seconds, efficiency, before, arrivals, missions: 0, research: [], wastedRaw: {}, creditsBefore: 0,
       // Short absences are simulated finely, long ones coarsely: the cost grows with the number of steps (and with the crowd).
       stepSize: seconds > 300 ? OFFLINE_STEP_SECONDS : seconds > 60 ? 5 : 1,
-      remaining: seconds, off: [],
+      remaining: seconds, off: [], log: [],
     };
     this.dailySystem.beginAway(); // [plan4:GP-1]
     run.off.push(bus.on('mission:complete', () => { run.missions++; }));
+    this.listenNight(run);
     run.off.push(bus.on('research:complete', (id: unknown) => { run.research.push(id as string); }));
     // [Economy A1] overflow is now converted/absorbed by ResourceSystem; count only this run's share.
     this.resourceSystem.overflowLog = {};
     run.creditsBefore = this.resourceSystem.creditsMade;
     this.offlineWaste = run.wastedRaw;
     return run;
+  }
+
+  /**
+   * [ux-wp5 C14 / bugs D2] The night log: listens, while the away-simulation runs, to what happens to people and places
+   * (these events used to fire with nobody listening on a cold start). Capped so a day away stays a short read.
+   */
+  private listenNight(run: SimRun): void {
+    const add = (e: NightEntry) => { if (run.log.length < 40) run.log.push(e); };
+    const sm = this.stateManager;
+    const nameOf = (s: unknown) => (s as { name?: string } | undefined)?.name ?? '';
+    run.off.push(bus.on('family:child', (x: unknown) => {
+      const b = x as { child: SurvivorState; parents: SurvivorState[] };
+      add({ k: 'born', names: [b.child.name, ...b.parents.map(p => p.name)] });
+    }));
+    run.off.push(bus.on('family:couple', (x: unknown) => { const c = x as { a: SurvivorState; b: SurvivorState }; add({ k: 'couple', names: [c.a.name, c.b.name] }); }));
+    run.off.push(bus.on('family:grownUp', (s: unknown) => { if (nameOf(s)) add({ k: 'grown', names: [nameOf(s)] }); }));
+    run.off.push(bus.on('survivor:died', (s: unknown) => { if (nameOf(s)) add({ k: 'died', names: [nameOf(s)] }); }));
+    run.off.push(bus.on('floor:dug', (n: unknown) => add({ k: 'dig', n: (n as number) + 1 })));
+    run.off.push(bus.on('project:stage', (id: unknown, stage: unknown) => add({ k: 'stage', id: id as string, n: stage as number })));
+    run.off.push(bus.on('project:done', (id: unknown) => add({ k: 'project', id: id as string })));
+    run.off.push(bus.on('ruin:cleared', (x: unknown) => {
+      const r = (x as { ruin?: { restoresTo?: string | null; kind?: string } }).ruin;
+      add({ k: 'ruin', id: r?.restoresTo ?? undefined });
+    }));
+    run.off.push(bus.on('building:complete', (id: unknown) => {
+      const b = sm.state.buildings.find(x => x.id === id);
+      if (b) add({ k: 'built', id: b.type, n: b.level });
+    }));
+    run.off.push(bus.on('act:advance', (n: unknown) => add({ k: 'act', n: n as number })));
+    run.off.push(bus.on('season:change', (id: unknown) => add({ k: 'season', id: id as string })));
+    run.off.push(bus.on('mission:complete', (x: unknown) => {
+      const r = x as MissionReport;
+      if (r?.poi) add({ k: 'find', id: r.poi });
+      if (r?.recruitName) add({ k: 'recruit', names: [r.recruitName] });
+    }));
   }
 
   private simStep(run: SimRun): void {
@@ -640,6 +704,16 @@ export class GameEngine {
   private simFinish(run: SimRun): OfflineReport {
     const sm = this.stateManager;
     const { seconds, before, arrivals, missions, research, wastedRaw, creditsBefore } = run;
+    // [ux-wp5 bugs D1] Raids and disasters strike first (they used to come after the count, so what they took was never told).
+    const preDanger: Partial<Record<ResourceType, number>> = {};
+    for (const [k, v] of Object.entries(sm.state.resources)) preDanger[k as ResourceType] = v.amount;
+    const health = new Map(sm.state.survivors.map(s => [s.id, s.health]));
+    const danger = this.awayDanger.run(seconds);
+    const nightDanger: NightDanger = { hurt: sm.state.survivors.filter(s => (health.get(s.id) ?? 0) > s.health).map(s => s.name), lost: {} };
+    for (const [k, v] of Object.entries(sm.state.resources)) {
+      const d = v.amount - (preDanger[k as ResourceType] ?? v.amount);
+      if (k !== 'power' && d <= -1) nightDanger.lost[k as ResourceType] = Math.round(d);
+    }
     const gained: Partial<Record<ResourceType, number>> = {};
     for (const [k, v] of Object.entries(sm.state.resources)) {
       if (k === 'credits') continue; // reported separately as converted overflow
@@ -660,14 +734,13 @@ export class GameEngine {
       if (left >= 1) wasted[r] = Math.round(left);
     }
     const credits = Math.round(this.resourceSystem.creditsMade - creditsBefore);
-    // [Danger C4] The soft version of raids and disasters, with the 24-hour safety net.
-    const danger = this.awayDanger.run(seconds);
+    // [Danger C4] The soft version of raids and disasters, with the 24-hour safety net (run above, before the count: ux-wp5 D1).
     // [P2] The player is back: the "danger ignored" streak ends (a day of neglect is a day away, not any day since).
     if (difficultyOf(sm.state).id !== 'last' && sm.state.danger.ignoredSince !== null) sm.applyDelta({ path: 'danger', value: { ...sm.state.danger, ignoredSince: null } });
     // A real absence (not a short tab switch): the return grace starts now.
     if (seconds > 300) this.graceUntil = sm.state.stats.totalPlayTime + RETURN_GRACE;
     if (danger.raids + danger.disasters.length > 0) bus.emit('danger:away', danger);
-    return { seconds, gained, wasted, converted, credits, absorbed, arrivals, missions, research, danger };
+    return { seconds, gained, wasted, converted, credits, absorbed, arrivals, missions, research, danger, log: run.log, nightDanger };
   }
 
   /**
@@ -828,6 +901,7 @@ export class GameEngine {
     let report: OfflineReport;
     try {
       report = await this.simulateSliced(Math.min(away, OFFLINE_MAX_SECONDS), away > 60 ? this.offlineEfficiency() : 1);
+      report.realSeconds = away; // [ux-wp5 D3]
     } finally {
       this.catchingUp = false;
     }
