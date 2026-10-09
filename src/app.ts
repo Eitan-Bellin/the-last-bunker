@@ -43,7 +43,7 @@ import { Sheet } from './ui/components/Sheet';
 import { eraOf } from './data/eras';
 import { actOf } from './data/acts';
 import type { ObjectiveAction } from './systems/ObjectiveSystem';
-import { actFraction } from './systems/Guide';
+import { actFraction, upgradeCandidate } from './systems/Guide';
 import { genderOf, genderOfName } from './data/portraits';
 import { ensurePersistentStorage, getPersistStatus } from './core/SaveManager';
 import { claimOwnership, onSuperseded } from './core/singleInstance';
@@ -722,7 +722,10 @@ export class GameApp {
     const act = actOf(state);
     const pct = Math.floor(Math.min(0.99, actFraction(this.engine, state, act)) * 100);
     const roman = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII'][act.id - 1] ?? String(act.id);
-    this.hud.setEra(era.key, eraName, `${roman}·${pct}%`, `${act.name[i18n.currentLocale]} · ${pct}% · ${eraName}`);
+    // [ux-wp1 C1] The chip names the Act only ("I·34% Survive"); the era stays the bunker's look (banner, Command panel).
+    const actName = act.name[i18n.currentLocale];
+    const short = actName.split('·').pop()?.trim() || actName;
+    this.hud.setEra(era.key, short, `${roman}·${pct}%`, `${actName} · ${pct}%`);
   }
 
   private updateAudio(): void {
@@ -752,8 +755,9 @@ export class GameApp {
   /** [Q2] Takes the player to where an objective or a guide step is dealt with. */
   runAction(action: ObjectiveAction): void {
     const state = this.state;
-    this.closeSheets();
+    // [ux-wp1 B1] A step with nowhere to go leaves the open panels alone.
     if (!action) return;
+    this.closeSheets();
     if (action.kind === 'build') {
       const cost = this.engine.buildingSystem.getBuildCost(action.type, state);
       if (isBuildingUnlocked(state, action.type) && this.engine.resourceSystem.canAfford(state, cost)) this.world.startPlacement(action.type);
@@ -774,7 +778,16 @@ export class GameApp {
       const rs = this.engine.restorationSystem;
       const target = state.ruins.find(r => r.started) ?? state.ruins.find(r => rs.canStart(state, r)) ?? state.ruins[0];
       if (target) this.openRuin(target.id, true);
-    } else if (action.kind === 'rooms') this.focusUpgradeCandidate();
+    } else if (action.kind === 'rooms') {
+      const room = action.open && action.type ? state.buildings.find(b => b.type === action.type) : undefined;
+      if (room) this.focusRoom(room.id);
+      else this.focusUpgradeCandidate(action.type);
+    }
+    else if (action.kind === 'wing') {
+      // [ux-wp1 B1] Straight to that wing's dig; without one, the wing line in the Command panel.
+      if (action.floor !== undefined && action.side) this.dig.confirmWingDig(action.floor, action.side);
+      else this.showWingLine();
+    }
     else if (action.kind === 'journal') this.journal.show(state);
     else if (action.kind === 'people') this.peoplePanel.show();
     else if (action.kind === 'research') this.researchPanel.show();
@@ -787,19 +800,33 @@ export class GameApp {
     this.helpPanel.show(topic);
   }
 
-  /** The room most worth upgrading next (cheapest that the Act allows), opened for the player; the build menu when nothing qualifies. */
-  private focusUpgradeCandidate(): void {
+  /**
+   * The room most worth upgrading next, opened for the player [ux-wp1 P16: see upgradeCandidate in Guide.ts]. With a type, that kind of room,
+   * and a new one placed (or the build menu) when none can go up. The build menu when nothing qualifies.
+   */
+  private focusUpgradeCandidate(type?: BuildingType): void {
     const state = this.state;
-    const bs = this.engine.buildingSystem;
-    const total = (b: (typeof state.buildings)[number]) => Object.values(bs.getUpgradeCost(b)).reduce((s, v) => s + v, 0);
-    const pick = state.buildings
-      .filter(b => !b.isConstructing && bs.canUpgrade(b, state))
-      .sort((a, b) => b.level - a.level || total(a) - total(b))[0];
-    if (!pick) { this.buildMenu.show(state); return; }
-    const r = this.renderer.roomRect(pick.id);
+    const pick = upgradeCandidate(this.engine, state, type);
+    if (!pick) {
+      if (type) {
+        const cost = this.engine.buildingSystem.getBuildCost(type, state);
+        if (isBuildingUnlocked(state, type) && this.engine.resourceSystem.canAfford(state, cost)) { this.world.startPlacement(type); return; }
+        // [ux-wp1 B3] A room of that type that is busy upgrading still beats a random one: show it.
+        const busy = state.buildings.find(b => b.type === type && b.isConstructing);
+        if (busy) { this.focusRoom(busy.id); return; }
+      }
+      this.buildMenu.show(state);
+      return;
+    }
+    this.focusRoom(pick.id);
+  }
+
+  /** [ux-wp1] Centres the camera on a room and opens its panel. */
+  private focusRoom(id: string): void {
+    const r = this.renderer.roomRect(id);
     if (r) this.renderer.focusOn(r.x + r.w / 2, r.y + 50, 1.6);
-    this.renderer.setSelected(pick.id);
-    this.buildingPanel.show(pick.id);
+    this.renderer.setSelected(id);
+    this.buildingPanel.show(id);
   }
 
   openRuin(ruinId: string, focus = false): void {
