@@ -146,7 +146,7 @@ export class HUD {
       root.title = i18n.t(`resources.${rt}`);
       const value = el('span', 'resource-value', '0');
       const rate = el('span', 'resource-rate');
-      rate.dir = 'ltr';
+      rate.dir = 'auto'; // [ux] the number is isolated as LTR inside, the unit follows the language
       const track = el('div', 'resource-fill-track');
       const fill = el('div', 'resource-fill-bar');
       track.appendChild(fill);
@@ -504,7 +504,8 @@ export class HUD {
       this.shown.set(rt, next);
       this.setText(els.value, i18n.formatCompact(next));
       const net = res.productionRate - res.consumptionRate;
-      this.setText(els.rate, i18n.formatRate(net));
+      // [ux] Per minute and with its unit ("−14/min"), and nothing at all while the resource stands still.
+      this.setText(els.rate, Math.abs(net) < 0.005 ? '' : i18n.t('hud.perMin', { n: `\u2066${i18n.formatRate(net * 60)}\u2069` }));
       els.rate.className = `resource-rate ${net > 0.005 ? 'positive' : net < -0.005 ? 'negative' : ''}`;
       const pct = res.cap > 0 && isFinite(res.cap) ? Math.min(100, (res.amount / res.cap) * 100) : 0;
       els.fill.style.width = `${pct}%`;
@@ -542,9 +543,13 @@ export class HUD {
     // The door: a countdown to the next newcomer, or a warning that there are no free beds.
     const full = state.survivors.length >= state.maxPopulation && state.maxPopulation > 0;
     const left = Math.max(0, Math.ceil((state.nextArrivalAt ?? 0) - state.stats.totalPlayTime));
-    const arrival = full ? '[[door]] !' : state.survivors.length > 0 && !state.activeEvent
-      ? `[[door]] ${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}` : '';
+    // [ux] No countdown while the door is held shut for the first tasks (EventSystem): it would only reset itself.
+    const doorOpen = (state.tutorialStep ?? 0) >= 3;
+    const clock = `${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`;
+    const arrival = full ? '[[door]] !' : doorOpen && state.survivors.length > 0 && !state.activeEvent ? `[[door]] ${clock}` : '';
     this.setText(this.arrivalValue, arrival);
+    const doorHint = full ? i18n.t('hud.doorFull') : arrival ? i18n.t('hud.nextArrival', { t: clock }) : '';
+    if (this.arrivalValue.title !== doorHint) { this.arrivalValue.title = doorHint; this.arrivalValue.setAttribute('aria-label', doorHint); }
     this.arrivalValue.classList.toggle('negative', full);
     const morale = state.survivors.length > 0
       ? Math.round(state.survivors.reduce((s, sv) => s + sv.happiness, 0) / state.survivors.length)

@@ -653,7 +653,7 @@ export function createInitialState(): GameState {
     resources: {
       food: { amount: 150, cap: 150, productionRate: 0, consumptionRate: 0 },
       water: { amount: 100, cap: 100, productionRate: 0, consumptionRate: 0 },
-      power: { amount: 10, cap: 50, productionRate: 0, consumptionRate: 0 },
+      power: { amount: 50, cap: 50, productionRate: 0, consumptionRate: 0 }, // [ux] a full battery: the dorm stays lit while the generator is restored
       materials: { amount: 70, cap: 200, productionRate: 0, consumptionRate: 0 },
       medicine: { amount: 5, cap: 30, productionRate: 0, consumptionRate: 0 },
       knowledge: { amount: 0, cap: 100, productionRate: 0, consumptionRate: 0 },
@@ -702,7 +702,7 @@ export function createInitialState(): GameState {
       planDust: 0,
     },
     achievements: [],
-    storyFlags: [],
+    storyFlags: ['tut:v2'], // [ux] the current onboarding order (ObjectiveSystem.migrateOrder)
     currentFloors: 3,
     layout: createLayout(),
     maxPopulation: 0,

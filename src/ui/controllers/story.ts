@@ -173,8 +173,9 @@ export class StoryController {
       title: i18n.t('difficulty.title'),
       body: i18n.t('difficulty.body'),
       actions: DIFFICULTIES.map(d => ({
-        label: `${d.icon} ${i18n.t(`difficulty.${d.id}`)}`,
+        label: `${d.icon} ${i18n.t(`difficulty.${d.id}`)}${d.id === 'warden' ? ` · ${i18n.t('difficulty.recommended')}` : ''}`,
         className: d.id === 'warden' ? 'btn-primary' : 'btn-secondary',
+        autofocus: d.id === 'warden', // [ux] one highlighted answer, the recommended one
         detail: el('span', 'difficulty-desc', i18n.t(`difficulty.${d.id}.desc`)),
         onClick: () => {
           this.app.modal.hide();

@@ -112,6 +112,8 @@ export class TipsController {
     this.lastCheck = now;
     const app = this.app;
     const s = app.state;
+    // [ux] A panel or a dialog opened over the tip: the tip steps aside instead of covering it.
+    if (this.card && (app.anyPanelOpen() || app.modal.isVisible || app.placementMode)) { this.hide(); return; }
     if (this.card || now - this.lastTipAt < GAP_MS) return;
     if (!s.storyFlags.includes('intro:done') || app.introPlaying || app.storyOpen || app.modal.isVisible || app.welcomeOpen) return;
     if (app.placementMode || app.anyPanelOpen() || !app.dialogGate(false)) return;

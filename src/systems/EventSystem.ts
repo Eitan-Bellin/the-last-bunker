@@ -723,8 +723,13 @@ export class EventSystem {
     if (!state.activeEvent && state.survivors.length === 0 && state.nextEventAt > state.stats.totalPlayTime + 45) {
       this.ctx.sm.applyDelta({ path: 'nextEventAt', value: state.stats.totalPlayTime + 45 });
     }
-    // Newcomers keep coming on their own clock while there are free beds; a full bunker makes them wait.
     const now = state.stats.totalPlayTime;
+    // [ux] The first minutes belong to the generator, the pump and the farm: no knocks or events until those three are done.
+    if ((state.tutorialStep ?? 0) < 3 && state.survivors.length > 0) {
+      if (state.nextArrivalAt < now + 45) this.ctx.sm.applyDelta({ path: 'nextArrivalAt', value: now + 45 });
+      return;
+    }
+    // Newcomers keep coming on their own clock while there are free beds; a full bunker makes them wait.
     if (state.survivors.length >= state.maxPopulation) {
       if (state.nextArrivalAt < now + 20) this.ctx.sm.applyDelta({ path: 'nextArrivalAt', value: now + 20 });
     } else if (!state.activeEvent && state.survivors.length > 0 && now >= state.nextArrivalAt) {

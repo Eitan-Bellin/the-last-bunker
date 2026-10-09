@@ -435,7 +435,7 @@ export class GameEngine {
   /** Makes a loaded save the running game (the same steps for the autosave, an import and a restored backup). */
   private adoptState(saved: GameState): void {
     const oldVersion = saved.version ?? 1;
-    const state = migrateState(saved);
+    const state = ObjectiveSystem.migrateOrder(migrateState(saved)); // [ux] onboarding order
     this.stateManager.loadState(state);
     this.rng.seed = state.randomSeed;
     this.buildingSystem.syncNextId(state);
