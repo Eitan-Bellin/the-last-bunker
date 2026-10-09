@@ -19,6 +19,11 @@
 .req-row:active { opacity: 0.8; }
 .req-row.done { opacity: 0.55; }
 .req-hint { margin-top: 4px; line-height: 1.35; }
+/* [ux-wp1] Era steps listed under their Act goal, and the Act's ETA line. */
+.req-subs { margin-top: 4px; padding-inline-start: 10px; border-inline-start: 2px solid rgba(255, 255, 255, 0.08); }
+.req-sub { line-height: 1.35; padding: 1px 0; }
+.req-sub.done { opacity: 0.55; text-decoration: line-through; }
+.now-eta { margin-top: 2px; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
 
 .forecast-row { display: grid; grid-template-columns: 1.3fr 0.8fr 1.4fr; gap: 8px; align-items: baseline; padding: 3px 0; font-size: calc(13px * var(--fs, 1)); }
 .forecast-now { text-align: end; font-variant-numeric: tabular-nums; }
