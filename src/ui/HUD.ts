@@ -219,6 +219,8 @@ export class HUD {
     this.arrivalValue.dir = 'ltr';
     pop.append(el('span', 'info-icon', '[[people]]'), el('span', 'info-label', i18n.t('hud.population')), this.popValue, this.arrivalValue);
     pop.addEventListener('click', () => this.onPopulation?.());
+    pop.setAttribute('role', 'button'); // [ux-wp4]
+    pop.tabIndex = 0;
 
     const morale = el('button', 'info-item info-tap morale-chip');
     this.moraleValue = el('span', 'info-value', '50%');
@@ -523,7 +525,8 @@ export class HUD {
       this.seasonBtn.style.display = season ? '' : 'none';
       if (season) {
         setRich(this.seasonBtn, `[[${season.def.icon}]]`);
-        this.seasonBtn.title = `${season.def.name[i18n.currentLocale]} · ${i18n.formatDuration(season.left)}`;
+        this.seasonBtn.title = i18n.t('wp6.hud.season', { name: season.def.name[i18n.currentLocale], t: i18n.formatDuration(season.left) }); // [ux-wp4] WP6 label
+        this.seasonBtn.setAttribute('aria-label', this.seasonBtn.title);
       }
     }
     const nowMs = performance.now();
@@ -571,8 +574,9 @@ export class HUD {
       const total = [...this.actShow.entries()].filter(([rt, s]) => s && !(slots ? slots.has(rt) : CORE_RESOURCES.has(rt))).length;
       this.moreBtn.style.display = collapsible && total > 0 ? '' : 'none';
       this.moreBtn.textContent = this.expanded ? '▴' : `▾ ${total}`;
-      this.moreBtn.setAttribute('aria-label', i18n.t(this.expanded ? 'hud.lessRes' : 'hud.moreRes'));
-      this.moreBtn.title = i18n.t(this.expanded ? 'hud.lessRes' : 'hud.moreRes');
+      const moreLabel = this.expanded ? i18n.t('hud.lessRes') : i18n.t('wp6.hud.more', { n: total }); // [ux-wp4] WP6 label
+      this.moreBtn.setAttribute('aria-label', moreLabel);
+      this.moreBtn.title = moreLabel;
     }
 
     // A lock when the Act's limit holds back beds the rooms already give.
@@ -591,12 +595,21 @@ export class HUD {
     this.arrivalValue.classList.toggle('negative', full && !lock);
     this.arrivalValue.classList.toggle('act-lock', !!lock);
     const popTitle = lock ? i18n.t('wp4.actLock', { act: lock.next.name[i18n.currentLocale], n: lock.more })
-      : capped ? i18n.t('building.bedsCapped', { built, cap: state.maxPopulation }) : '';
-    if (this.popValue.parentElement!.title !== popTitle) this.popValue.parentElement!.title = popTitle;
+      : capped ? i18n.t('building.bedsCapped', { built, cap: state.maxPopulation })
+        : i18n.t('wp6.hud.population', { n: state.survivors.length, max: state.maxPopulation });
+    const popEl = this.popValue.parentElement!;
+    if (popEl.title !== popTitle) { popEl.title = popTitle; popEl.setAttribute('aria-label', popTitle); }
+    const doorTitle = lock ? '' : full ? i18n.t('wp6.hud.arrivalFull') : arrival ? i18n.t('wp6.hud.arrival', { t: i18n.formatDuration(left) }) : '';
+    if (ariaDue && this.arrivalValue.title !== doorTitle) this.arrivalValue.title = doorTitle;
     const morale = state.survivors.length > 0
       ? Math.round(state.survivors.reduce((s, sv) => s + sv.happiness, 0) / state.survivors.length)
       : 50;
     this.setText(this.moraleValue, `${morale}%`);
+    if (ariaDue) {
+      const moraleChip = this.moraleValue.parentElement!;
+      const ml = i18n.t('wp6.hud.morale', { pct: morale }); // [ux-wp4] WP6 label (the chip opens the "why")
+      if (moraleChip.getAttribute('aria-label') !== ml) { moraleChip.setAttribute('aria-label', ml); moraleChip.title = ml; }
+    }
     // [plan4:AC-7] The mood is a face as well as a colour: happy / neutral / sad.
     this.setText(this.moraleIcon, morale < 35 ? '[[sad]]' : morale > 70 ? '[[happy]]' : '[[neutral]]');
     this.moraleValue.className = `info-value ${morale < 35 ? 'negative' : morale > 70 ? 'positive' : ''}`;

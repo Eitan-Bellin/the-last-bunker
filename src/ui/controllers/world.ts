@@ -500,7 +500,11 @@ export class WorldController {
         hud.onEra?.();
         return;
       }
-      population?.();
+      // The bunker full of beds-to-build keeps its toast; otherwise the chip opens the People panel (WP6 label: "tap for the People panel").
+      if (app.state.survivors.length >= app.state.maxPopulation) { population?.(); return; }
+      app.audio.play('click');
+      app.closeSheets();
+      p.openPeople();
     };
     app.buildingPanel.onOpenRoom = id => this.openRoom(id);
   }
