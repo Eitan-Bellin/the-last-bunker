@@ -1,12 +1,14 @@
 import { i18n } from '../../i18n/I18nManager';
 import { BIOMES, POIS, type BiomeId } from '../../data/surface';
-import { costRow, el } from '../../ui/dom';
+import { el } from '../../ui/dom';
 import type { MissionReport, SurvivorState } from '../../core/GameState';
 import { genderOf, portraitFor, portraitUrl } from '../../data/portraits';
 import { biomeImage, journalTimeline } from '../../ui/expeditionText';
 import { expeditionEvent } from '../../data/expeditionEvents';
 import type { ActiveMission } from '../../core/GameState';
 import type { GameApp } from '../../app';
+import { eventDescKey } from '../../systems/EventSystem';
+import { choiceDetail } from '../../ui/eventText'; // [ux-wp5 C1/C2] text variants and choice hints
 
 export const EVENT_ICONS: Record<string, string> = {
   wanderer: '[[door]]',
@@ -22,6 +24,7 @@ export const EVENT_ICONS: Record<string, string> = {
   radioSignal2: '[[dish]]',
   radioSignal3: '[[map]]',
   raiders: '[[skull]]',
+  returning: '[[door]]',
 };
 
 /** Bunker events (the door, traders, radio...) and expedition choices and reports. */
@@ -41,12 +44,12 @@ export class EventController {
     this.app.modal.show({
       icon: EVENT_ICONS[ev.id] ?? '[[warning]]',
       title: i18n.t(`event.${ev.id}.title`, params),
-      body: this.eventBody(ev.data, i18n.t(`event.${ev.id}.desc`, params)),
+      body: this.eventBody(ev.data, i18n.t(eventDescKey(ev), params)),
       actions: choices.map((c, i) => ({
         label: i18n.t(`event.${ev.id}.choice.${c.key}`, params),
         className: i === 0 ? 'btn-primary' : 'btn-secondary',
         disabled: !this.app.engine.eventSystem.isChoiceAvailable(c),
-        detail: c.cost ? costRow(this.app.state, c.cost as Record<string, number>) : undefined,
+        detail: choiceDetail(this.app.state, c, params),
         onClick: () => this.resolveEvent(ev.id, c.key, params),
       })),
     });
