@@ -5,7 +5,7 @@ import { getDef } from '../../data/buildingDefs';
 import { Sheet } from './Sheet';
 import { enhanceTabs } from '../a11yDom';
 import { button, el } from '../dom';
-import { CHAPTERS, CHARACTERS, type CharacterId } from '../../data/story';
+import { CHAPTERS, CHARACTERS, INTERLUDES, type CharacterId } from '../../data/story';
 // [Economy A2] credits shop tab
 import { ShopPanel } from './ShopPanel';
 import type { ShopSystem } from '../../systems/ShopSystem';
@@ -116,6 +116,18 @@ export class JournalPanel {
       if (done) item.addEventListener('click', () => this.onReplay?.(c.id));
       else item.disabled = true;
       box.appendChild(item);
+    }
+    // [ux-wp5 C10] The moments between the chapters, once told (tap to replay).
+    const told = INTERLUDES.filter(c => state.storyFlags.includes(`story:${c.id}`));
+    if (told.length) {
+      box.appendChild(el('div', 'bp-section-title', `[[moon]] ${i18n.t('story.interludes')}`));
+      for (const c of told) {
+        for (const l of c.lines) if (l.who !== 'narrator') met.add(l.who);
+        const item = el('button', 'journal-item story-item');
+        item.append(el('span', 'journal-icon', '[[moon]]'), el('span', 'journal-title', c.title[locale]));
+        item.addEventListener('click', () => this.onReplay?.(c.id));
+        box.appendChild(item);
+      }
     }
     if (met.size) {
       box.appendChild(el('div', 'bp-section-title', `[[people]] ${i18n.t('story.characters')}`));

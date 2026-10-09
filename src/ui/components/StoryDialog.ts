@@ -53,7 +53,7 @@ export class StoryDialog {
     this.overlay.replaceChildren();
     const card = el('div', 'story-title-card');
     card.append(
-      el('div', 'story-chapter', i18n.t('story.chapter', { n: opts.chapter.number })),
+      el('div', 'story-chapter', opts.chapter.interlude ? i18n.t('story.interlude') : i18n.t('story.chapter', { n: opts.chapter.number })), // [ux-wp5 C10]
       el('div', 'story-chapter-title', opts.chapter.title[locale]),
     );
     this.overlay.appendChild(card);

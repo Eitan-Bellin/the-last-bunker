@@ -4,9 +4,15 @@ import type { SeededRandom } from '../core/Random';
 import type { ResourceSystem } from './ResourceSystem';
 import type { PopulationSystem } from './PopulationSystem';
 import { bus } from '../core/EventBus';
-import { CHAPTERS, bindStoryState, getChapter, shownChoices, shownLines, type StoryEffect, type StoryLine } from '../data/story';
+import { CHAPTERS, INTERLUDES, bindStoryState, getChapter, shownChoices, shownLines, type StoryEffect, type StoryLine } from '../data/story';
+import { grantLore } from '../data/lore';
+import { DIG_LORE } from '../data/ruins';
+import { hexDistance } from '../data/surface';
+import type { MissionReport } from '../core/GameState';
 
 const CHAPTER_GAP = 240;
+/** [ux-wp5 C3] The first team to come home from this far out finds the Genesis expedition's map. */
+const MAP_FRAGMENT_RING = 5;
 /** [Q1] From the late chapters on, at least an hour of play separates two chapters, so a run never ends in a flood of dialogs. */
 const LATE_CHAPTER = 9;
 const LATE_CHAPTER_GAP = 3600;
@@ -46,6 +52,29 @@ export class StorySystem {
     this.population = population;
     // Late chapters pick their lines and choices from earlier decisions (see `when` in story.ts).
     bindStoryState(() => this.sm.state);
+    // [ux-wp5 C3] Finds on the map: the Genesis expedition's map on the far road, Noa's letter in the vault.
+    bus.on('mission:complete', (r: unknown) => this.mapFinds(r as MissionReport));
+    bus.on('state:loaded', () => { this.caughtUp = false; });
+  }
+
+  /** [ux-wp5 C3] An older save catches up, quietly, on finds it has already earned (once per load). */
+  private caughtUp = false;
+
+  private catchUpLore(): void {
+    this.caughtUp = true;
+    const s = this.sm.state;
+    if (!Array.isArray(s.lore)) return;
+    const flags = s.storyFlags;
+    if (flags.includes('story:maya')) grantLore(this.sm, 'goodbye', true);
+    if (flags.includes('vaultFound')) grantLore(this.sm, 'genesisLetter', true);
+    if ((s.explorationMap ?? []).some(h => h.explored && hexDistance(h.x, h.y) >= MAP_FRAGMENT_RING)) grantLore(this.sm, 'mapFragment', true);
+    for (const [floor, id] of Object.entries(DIG_LORE)) if (s.currentFloors > Number(floor)) grantLore(this.sm, id, true);
+  }
+
+  private mapFinds(r: MissionReport | undefined): void {
+    if (!r?.success) return;
+    if (r.poi === 'genesisVault') grantLore(this.sm, 'genesisLetter');
+    if (hexDistance(r.hexX, r.hexY) >= MAP_FRAGMENT_RING) grantLore(this.sm, 'mapFragment');
   }
 
   /** The next chapter whose moment has come (checked about once a second). */
@@ -53,10 +82,13 @@ export class StorySystem {
     if (this.offered) return;
     const state = this.sm.state;
     if (!state.storyFlags.includes('intro:done')) return;
+    if (!this.caughtUp) this.catchUpLore();
     const now = state.stats.totalPlayTime;
     if (this.nextAllowed < 0) this.nextAllowed = now + 45;
     if (now < this.nextAllowed || now < (state.lateGame?.storyUntil ?? 0) || (state.incidents?.length ?? 0) > 0 || state.activeEvent) return;
-    const ch = CHAPTERS.find(c => !state.storyFlags.includes(`story:${c.id}`) && c.trigger(state));
+    // [ux-wp5 C10] The numbered chapters first; when none is due and the story has been quiet for days, a short interlude.
+    const due = (c: (typeof CHAPTERS)[number]) => !state.storyFlags.includes(`story:${c.id}`) && c.trigger(state);
+    const ch = CHAPTERS.find(due) ?? INTERLUDES.find(due);
     if (!ch) return;
     this.offered = ch.id;
     bus.emit('story:chapter', ch.id);
@@ -99,7 +131,7 @@ export class StorySystem {
     this.sm.applyDelta({ path: 'storyFlags', value: [...new Set([...this.sm.state.storyFlags, ...flags, ...(effect?.flags ?? [])])] });
     this.sm.applyDelta({ path: 'prestige.storySeen', value: [...new Set([...(this.sm.state.prestige.storySeen ?? []), ch.id])] });
     this.offered = null;
-    const gap = ch.number >= LATE_CHAPTER ? LATE_CHAPTER_GAP : CHAPTER_GAP;
+    const gap = ch.number >= LATE_CHAPTER || ch.interlude ? LATE_CHAPTER_GAP : CHAPTER_GAP;
     this.nextAllowed = this.sm.state.stats.totalPlayTime + gap;
     // The late gap is long enough to outlive a session: it is kept in the save.
     if (gap > CHAPTER_GAP) this.sm.applyDelta({ path: 'lateGame.storyUntil', value: this.nextAllowed });
@@ -138,6 +170,7 @@ export class StorySystem {
       for (let i = 0; i < effect.group; i++) this.population.addSurvivor(this.sm, this.population.createSurvivor(this.rng));
       out.newcomers = effect.group;
     }
+    if (effect.lore) grantLore(this.sm, effect.lore);
     if (effect.leaves) out.left = this.leave(effect.leaves);
     if (effect.hurt) out.hurt = this.injure(effect.hurt.count, effect.hurt.damage);
   }
