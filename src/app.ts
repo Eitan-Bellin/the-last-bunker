@@ -148,7 +148,7 @@ export class GameApp {
   journal = new JournalPanel();
   loreReader = new LoreReader();
   private eraPanel = new EraPanel();
-  private helpPanel = new HelpPanel(); // [Q6]
+  private helpPanel = new HelpPanel(() => this.state); // [Q6] [ux-wp6] the book reads the Act to open entries progressively
   private chroniclePanel = new ChroniclePanel(); // [Q14]
   private projectsPanel: ProjectsPanel; // [LateGame B1]
   private couponPanel: CouponPanel;

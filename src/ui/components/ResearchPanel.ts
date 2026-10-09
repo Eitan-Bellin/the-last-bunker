@@ -104,8 +104,13 @@ export class ResearchPanel {
       : `[[intelligence]] ${i18n.t('research.needLab')}`));
     root.appendChild(head);
 
+    // [ux-wp6: clarity C3] The tree opens with the game: this Act and the next are shown, the rest is a count. The Genesis tab
+    // waits for the late game (or a second run), so a new player does not meet the ending in the first minutes.
+    const hidden = this.hiddenNodes(state);
+    const branches = BRANCHES.filter(b => b.id !== 'genesis' || this.showGenesis(state));
+    if (!branches.some(b => b.id === this.branch)) this.branch = 'infrastructure';
     const tabs = el('div', 'tab-row');
-    for (const b of BRANCHES) {
+    for (const b of branches) {
       const t = button(`${b.icon} ${b.name[locale] ?? b.name.en}`, `tab ${b.id === this.branch ? 'active' : ''}`, () => {
         this.branch = b.id;
         this.refresh(this.engine.stateManager.state);
@@ -120,17 +125,63 @@ export class ResearchPanel {
       list.appendChild(el('div', 'bp-hint', `[[up]] ${i18n.t('research.refineHint')}`));
       for (const ref of REFINEMENTS) list.appendChild(this.renderCard(state, rs.defOf(state, ref.id)!, refinementLevel(state, ref.id)));
     } else {
-      for (const def of RESEARCH.filter(r => r.branch === this.branch).sort((a, b) => a.tier - b.tier)) {
+      const inBranch = RESEARCH.filter(r => r.branch === this.branch);
+      for (const def of inBranch.filter(r => !hidden.has(r.id)).sort((a, b) => a.tier - b.tier)) {
         list.appendChild(this.renderCard(state, def, null));
       }
+      const later = inBranch.filter(r => hidden.has(r.id)).length;
+      if (later > 0) list.appendChild(el('div', 'bp-hint research-later', `[[lock]] ${i18n.t('wp6.research.later', { n: later })}`));
     }
     root.appendChild(list);
 
-    if (this.branch === 'genesis') {
+    if (this.branch === 'genesis' && this.genesisNear(state)) {
       root.appendChild(genesisRequirements(state, this.engine.metaSystem));
       root.appendChild(button(`[[isotope7]] ${i18n.t('genesis.open')}`, 'btn-secondary', () => this.onOpenGenesis?.()));
     }
     this.sheet.body.replaceChildren(root);
+  }
+
+  /** [ux-wp6] A second run (or later): the whole tree was seen once, nothing is held back. */
+  private veteran(state: GameState): boolean {
+    return (state.prestige?.rebirthCount ?? 0) > 0 || (state.longGame?.meta.runIndex ?? 0) > 0;
+  }
+
+  /** [ux-wp6] The Genesis tab: from Act III (its first nodes open in Act IV), on a later run, or once any of its nodes was begun. */
+  private showGenesis(state: GameState): boolean {
+    const rs = this.engine.researchSystem;
+    const act = state.longGame?.meta.act ?? 1;
+    return this.veteran(state) || act >= 3 || RESEARCH.some(r => r.branch === 'genesis' && rs.status(state, r.id) !== 'available' && rs.status(state, r.id) !== 'locked');
+  }
+
+  /** [ux-wp6] The Genesis requirements and button: only once the last Acts are in sight (or on a later run). */
+  private genesisNear(state: GameState): boolean {
+    return this.veteran(state) || (state.longGame?.meta.act ?? 1) >= 6;
+  }
+
+  /**
+   * [ux-wp6: clarity C3] Nodes held back for now: those that open two or more Acts ahead, and those that need one of them.
+   * Done, running and queued nodes always show.
+   */
+  private hiddenNodes(state: GameState): Set<string> {
+    const out = new Set<string>();
+    if (this.veteran(state) || !state.longGame) return out;
+    const rs = this.engine.researchSystem;
+    const act = state.longGame.meta.act ?? 1;
+    const byId = new Map(RESEARCH.map(r => [r.id, r]));
+    const memo = new Map<string, boolean>();
+    const far = (id: string, depth = 0): boolean => {
+      const known = memo.get(id);
+      if (known !== undefined) return known;
+      const def = byId.get(id);
+      if (!def || depth > 40) return false;
+      const st = rs.status(state, id);
+      const started = st === 'done' || st === 'active' || st === 'queued';
+      const v = !started && ((def.act ?? 1) > act + 1 || def.requires.some(q => far(q, depth + 1)));
+      memo.set(id, v);
+      return v;
+    };
+    for (const r of RESEARCH) if (far(r.id)) out.add(r.id);
+    return out;
   }
 
   /** The waiting line behind the active research, with a refund button per entry. */
@@ -173,7 +224,7 @@ export class ResearchPanel {
     const top = el('div', 'bp-row');
     top.append(
       el('span', 'research-name', `${def.icon} ${def.name[locale] ?? def.name.en}`),
-      el('span', 'tier-chip', level === null ? `T${def.tier}` : i18n.t('research.level', { n: level })),
+      el('span', 'tier-chip', level === null ? i18n.t('wp6.research.tier', { n: def.tier }) : i18n.t('research.level', { n: level })), // [ux-wp6] no Latin "T3" in Hebrew
     );
     card.append(top, el('div', 'build-item-desc', def.desc[locale] ?? def.desc.en));
     // [P3] Doctrine forks and Eureka.
