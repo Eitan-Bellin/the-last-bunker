@@ -26,7 +26,23 @@ export class LoreController {
   flushLoreQueue(): void {
     if (!this.loreQueue.length || this.app.modal.isVisible || this.app.storyOpen || this.app.introPlaying || this.app.loreReader.isVisible) return;
     if (document.querySelector('.era-banner')) return;
-    this.showLoreFound(this.loreQueue.shift()!);
+    this.noticeLoreFound(this.loreQueue.shift()!);
+  }
+
+  /** [plan5:UX-B] A find is news, not a decision: a card offers to read it, and the journal keeps it marked unread either way. */
+  private noticeLoreFound(id: string): void {
+    const entry = getLore(id);
+    if (!entry) return;
+    this.app.audio.play('lore');
+    const locale = i18n.currentLocale;
+    const icon = entry.kind === 'tape' ? '[[tape]]' : entry.kind === 'photo' ? '[[eye]]' : '[[note]]';
+    this.app.toasts.log(`${icon} ${i18n.t('journal.found')}: ${entry.title[locale]}`, 'info', `lore:${id}`);
+    this.app.notice.show({
+      icon,
+      title: i18n.t('journal.found'),
+      body: `${entry.title[locale]} · ${entry.author[locale]}`,
+      action: { label: i18n.t('journal.readNow'), onClick: () => this.readLore(id) },
+    });
   }
 
   /** "You found something": offers to read a newly found note, log or tape. */

@@ -55,12 +55,12 @@ export class InboxController {
     bus.on('event:expired', (e: unknown) => {
       const x = e as EventExpired;
       const params = this.app.events.eventParams(x.data);
-      this.app.toasts.show(`[[clock]] ${i18n.t('inbox.expired', { name: i18n.t(`event.${x.id}.title`, params), choice: i18n.t(`event.${x.id}.choice.${x.key}`, params) })}`, 'info');
+      this.app.toasts.event(`[[clock]] ${i18n.t('inbox.expired', { name: i18n.t(`event.${x.id}.title`, params), choice: i18n.t(`event.${x.id}.choice.${x.key}`, params) })}`, 'info');
     });
     bus.on('inbox:expired', (it: unknown) => {
       const item = it as InboxItem;
       const def = inboxKind(item.kind);
-      if (def) this.app.toasts.show(`[[clock]] ${i18n.t('inbox.expiredItem', { name: i18n.t(def.title, this.params(item)) })}`, 'info');
+      if (def) this.app.toasts.event(`[[clock]] ${i18n.t('inbox.expiredItem', { name: i18n.t(def.title, this.params(item)) })}`, 'info');
     });
   }
 
@@ -135,7 +135,7 @@ export class InboxController {
       if (this.seen.has(e.key)) continue;
       this.seen.add(e.key);
       this.app.audio.play('paper');
-      this.app.toasts.show(`[[inbox]] ${i18n.t('inbox.new', { name: e.title })}`, 'info');
+      this.app.toasts.event(`[[inbox]] ${i18n.t('inbox.new', { name: e.title })}`, 'info'); // [plan5:UX-A] the chip's badge carries it
     }
     if (this.sheet?.isVisible) this.render(list);
   }

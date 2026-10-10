@@ -203,7 +203,20 @@ export class DigController {
   }
 
   /** The tunnel broke through: reveal the cavern with its painting. */
-  showDistrictFound(kind: string): void {
+  /** [plan5:UX-B] The breakthrough is told by a card; its picture and story open on "Show". */
+  noticeDistrictFound(kind: string): void {
+    const d = districtDef(kind);
+    if (!d) return;
+    const title = i18n.t('district.found', { name: d.name[i18n.currentLocale] });
+    this.app.audio.play('era');
+    this.app.toasts.log(`[[${d.icon}]] ${title}`, 'good', `district:${kind}`);
+    this.app.notice.show({
+      icon: `[[${d.icon}]]`, title,
+      action: { label: i18n.t('notice.view'), onClick: () => this.showDistrictFound(kind, true) },
+    });
+  }
+
+  showDistrictFound(kind: string, quiet = false): void {
     const d = districtDef(kind);
     if (!d) return;
     const locale = i18n.currentLocale;
@@ -212,7 +225,7 @@ export class DigController {
     img.src = `${import.meta.env.BASE_URL}art/districts/${districtArtName(kind)}.webp`;
     img.alt = '';
     body.append(img, el('p', 'modal-body', d.find[locale]));
-    this.app.audio.play('era');
+    if (!quiet) this.app.audio.play('era');
     this.app.modal.show({
       icon: `[[${d.icon}]]`,
       title: i18n.t('district.found', { name: d.name[locale] }),

@@ -39,7 +39,7 @@ const TIPS: TipDef[] = [
 ];
 
 /** Time between two tips (ms): they teach one thing at a time. */
-const GAP_MS = 40_000;
+const GAP_MS = 90_000; // [plan5:UX-A] was 40 s: three tips in two minutes was its own kind of noise
 const SHOW_MS = 14_000;
 const CHECK_MS = 700;
 
@@ -114,7 +114,7 @@ export class TipsController {
     const s = app.state;
     if (this.card || now - this.lastTipAt < GAP_MS) return;
     if (!s.storyFlags.includes('intro:done') || app.introPlaying || app.storyOpen || app.modal.isVisible || app.welcomeOpen) return;
-    if (app.placementMode || app.anyPanelOpen() || !app.dialogGate(false)) return;
+    if (app.placementMode || app.anyPanelOpen() || app.notice.isShowing || !app.dialogGate(false)) return; // [plan5:UX-B] the notice card's place
     const next = TIPS.find(t => !this.seen(t.flag) && t.due(s, this));
     if (next) this.show(next);
   }

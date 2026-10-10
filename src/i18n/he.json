@@ -113,7 +113,7 @@
   "building.close": "סגור",
   "building.powerLow": "הייצור מואט בגלל חוסר חשמל",
   "building.needStorage": "צריך מחסן גדול יותר: יש מקום ל־{cap}, המחיר {cost}",
-  "building.digForHomes": "אין מקום למגורים חדשים. שדרגו את אלה (+3 מיטות לכל רמה) או חפרו קומה עמוקה יותר בשביל עוד בתים.",
+  "building.digForHomes": "אין מקום למגורים נוספים: שדרגו (+3 מיטות לרמה) או חפרו קומה.",
   "stats.strength": "כוח",
   "stats.intelligence": "אינטליגנציה",
   "stats.agility": "זריזות",
@@ -1455,5 +1455,13 @@
   "cer.gen.floors": "{n} קומות נחפרו",
   "cer.gen.rooms": "{n} חדרים נבנו",
   "cer.gen.act": "הגענו למערכה {n}",
-  "cer.gen.iso": "{n} איזוטופ-7 עוברים לדור הבא"
+  "cer.gen.iso": "{n} איזוטופ-7 עוברים לדור הבא",
+  "activity.title": "מה קרה",
+  "activity.empty": "עוד לא קרה כלום. מה שיקרה בבונקר יופיע כאן.",
+  "activity.now": "עכשיו",
+  "activity.ago": "לפני {t}",
+  "notice.view": "הציגו",
+  "activity.digest.build": "{n} חדרים הושלמו",
+  "activity.digest.levelup": "{n} עליות רמה של ניצולים",
+  "activity.digest.ruin": "{n} הריסות פונו"
 }

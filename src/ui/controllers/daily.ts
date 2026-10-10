@@ -42,15 +42,15 @@ export class DailyController {
       this.app.audio.play('collect');
       haptic('success');
       // With the sheet open the card itself turns into a Claim button: no toast over its title.
-      if (!this.isVisible) this.app.toasts.show(`[[check]] ${i18n.t('daily.toast.done', { name: this.orderText(id as string, this.needOf(id as string)) })}`, 'good');
+      if (!this.isVisible) this.app.toasts.event(`[[check]] ${i18n.t('daily.toast.done', { name: this.orderText(id as string, this.needOf(id as string)) })}`, 'good', 'daily');
       this.app.engine.requestSave();
     });
     bus.on('daily:new', (info: unknown) => {
       const { day, auto } = info as { day: number; auto: number };
-      if (auto > 0) this.app.toasts.show(`[[gift]] ${i18n.t('daily.toast.auto', { n: auto })}`, 'info');
+      if (auto > 0) this.app.toasts.log(`[[gift]] ${i18n.t('daily.toast.auto', { n: auto })}`, 'good', 'daily');
       if (this.toldDay !== day) {
         this.toldDay = day;
-        this.app.toasts.show(`[[target]] ${i18n.t('daily.toast.new')}`, 'info');
+        this.app.toasts.event(`[[target]] ${i18n.t('daily.toast.new')}`, 'info', 'daily');
       }
       this.app.engine.requestSave();
     });

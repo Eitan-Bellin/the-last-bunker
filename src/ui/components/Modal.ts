@@ -99,7 +99,9 @@ export class Modal {
     }
     this.overlay.classList.add('open');
     // Keyboard and screen-reader users land on the first choice.
-    this.box.querySelector<HTMLButtonElement>('.modal-actions button:not(:disabled)')?.focus({ preventScroll: true });
+    // [plan5:UI-C] The focus (and its ring) goes to the main action, so the highlighted button is the recommended one, not just the first.
+    (this.box.querySelector<HTMLButtonElement>('.modal-actions .btn-primary:not(:disabled)')
+      ?? this.box.querySelector<HTMLButtonElement>('.modal-actions button:not(:disabled)'))?.focus({ preventScroll: true });
   }
 
   hide(): void {

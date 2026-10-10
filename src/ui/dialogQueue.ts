@@ -17,6 +17,8 @@ export interface DialogSource {
   snoozeMs: number;
   /** Emergencies (a countdown is running) ignore an open sheet; they still wait for a gesture, a placement or a ceremony to end. */
   critical?: boolean;
+  /** [plan5:UX-B] Opens a notice card, not a dialog: never folded into the "N waiting" card (that would be a dialog again). */
+  passive?: boolean;
   /** Something is waiting from this source (no side effects). */
   ready: () => boolean;
   /** Opens the dialog (the source consumes its own queue entry). */
@@ -70,8 +72,8 @@ export class DialogQueue {
       this.lastDecision = 'blocked';
       return;
     }
-    const soft = list.filter(s => !s.critical);
-    if (!top.critical && !this.working && soft.length >= FOLD_AT && this.playSeconds() > FOLD_AFTER_PLAY_S) {
+    const soft = list.filter(s => !s.critical && !s.passive);
+    if (!top.critical && !top.passive && !this.working && soft.length >= FOLD_AT && this.playSeconds() > FOLD_AFTER_PLAY_S) {
       this.lastDecision = 'fold';
       this.showFolded(soft, now);
       return;

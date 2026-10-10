@@ -104,17 +104,17 @@ export class SystemsController {
     this.app.engine.stateManager.applyDelta({ path: 'storyFlags', value: [...new Set([...state.storyFlags, ...add])] });
   }
 
+  /** [plan5:UX-B] A card above the console, not a dialog: the button glows at once, the Bunker Book has the long version. */
   private show(card: SystemCard, state: GameState): void {
     const params = card.params?.(state) ?? {};
-    this.app.audio.play('paper');
-    this.app.modal.show({
+    const title = i18n.t(card.title ?? `sys.${card.id}.title`, params);
+    this.app.toasts.log(`${card.icon} ${title}`, 'info', `sys:${card.id}`);
+    this.app.notice.show({
       icon: card.icon,
-      title: i18n.t(card.title ?? `sys.${card.id}.title`, params),
+      title,
       body: i18n.t(card.body ?? `sys.${card.id}.body`, params),
-      actions: [
-        { label: i18n.t('sys.ok'), className: 'btn-primary', onClick: () => { this.app.modal.hide(); this.app.hud.spotlight(card.spot); } },
-        { label: i18n.t('sys.more'), className: 'btn-secondary', onClick: () => { this.app.modal.hide(); this.app.openBook(card.book); } },
-      ],
+      action: { label: i18n.t('sys.more'), onClick: () => this.app.openBook(card.book) },
     });
+    this.app.hud.spotlight(card.spot);
   }
 }

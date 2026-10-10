@@ -17,14 +17,16 @@ import { SurfacePanel } from './ui/components/SurfacePanel';
 import { MenuPanel } from './ui/components/MenuPanel';
 import { Modal } from './ui/components/Modal';
 import { Toasts } from './ui/components/Toast';
-import { NumberPopupManager } from './ui/components/NumberPopup';
+import { NumberPopupManager, popupMode } from './ui/components/NumberPopup';
+import { ActivitySheet, type ActivityShortcut } from './ui/components/ActivitySheet';
+import { NoticeCards } from './ui/notice';
 import { DepthRuler } from './ui/components/DepthRuler'; // [plan4:ST-12]
 import { AudioEngine } from './audio/AudioEngine';
 import { setUiSound } from './audio/uiSound';
 import { timeOfDay } from './ui/HUD';
 import { i18n } from './i18n/I18nManager';
 import { bus } from './core/EventBus';
-import { getDef } from './data/buildingDefs';
+import { getDef, isPowerPlant } from './data/buildingDefs';
 import { RESEARCH } from './data/research';
 import { RESOURCE_ICONS, el } from './ui/dom';
 import { isBuildingUnlocked } from './systems/ResearchSystem';
@@ -76,6 +78,7 @@ import './styles/ceremony.css'; // [plan4:GP-2] key moments
 import './styles/touch.css'; // [plan4:UX-5] last again (its header says so): its 44px targets must beat the older sheet-help sizes in command.css
 import './styles/placement.css'; // [plan4:ST-19] the confirm bar and the chips over the ghost room
 import './styles/pwa.css'; // [plan4:UX-13] update chip, home-screen card, copy box
+import './styles/declutter.css'; // [plan5] thinner status band, activity bell and sheet, notice card, compact toasts
 import './styles/a11y.css'; // [plan4:AC-2] the accessibility layer, last of all: reduced motion, colour modes, focus rings
 import { FeedbackController } from './ui/controllers/feedback';
 import { InboxController } from './ui/controllers/inbox';
@@ -145,6 +148,10 @@ export class GameApp {
   ruler!: DepthRuler;
   private ruinPanel: RuinPanel;
   journal = new JournalPanel();
+  /** [plan5:UX-F] The activity feed and its shortcuts (the HUD's bell). */
+  activitySheet!: ActivitySheet;
+  /** [plan5:UX-B] Non-blocking cards above the console (new systems, finds, districts, what's new). */
+  readonly notice = new NoticeCards();
   loreReader = new LoreReader();
   private eraPanel = new EraPanel();
   private helpPanel = new HelpPanel(); // [Q6]
@@ -277,7 +284,12 @@ export class GameApp {
     this.resourceSheet = new ResourceSheet(this.engine);
     this.modal = new Modal();
     this.toasts = new Toasts();
-    this.dialogs = new DialogQueue(this.dialogSources(), this.modal, c => this.dialogGate(c), () => this.engine.stateManager.state?.stats.totalPlayTime ?? 0);
+    this.toasts.importantOnly = () => popupMode() !== 'all'; // [plan5:UX-A] the popups setting covers the toasts too
+    this.activitySheet = new ActivitySheet(this.toasts.activity);
+    this.toasts.activity.subscribe(() => this.hud.setActivity(this.toasts.activity.unseen, this.toasts.activity.unseenBad));
+    // [plan5:UX-B] A dialog that opens by itself stops the clock until it is closed: being interrupted must not also cost time.
+    const sources = this.dialogSources().map(src => src.passive ? src : { ...src, open: () => { this.pauseForDialog(); src.open(); } });
+    this.dialogs = new DialogQueue(sources, this.modal, c => this.dialogGate(c), () => this.engine.stateManager.state?.stats.totalPlayTime ?? 0);
   }
 
   async start(): Promise<void> {
@@ -515,6 +527,7 @@ export class GameApp {
       if (this.projectsPanel.isVisible) this.projectsPanel.refresh(state); // [LateGame B1]
       this.inbox.refresh(state);
       if (this.resourceSheet.isVisible) this.resourceSheet.refresh(state);
+      this.activitySheet.refresh(); // [plan5:UX-F] the shortcut counts
       this.renderer.setProjectSites(this.projectSites(state)); // [LateGame B1] lots on the surface
       this.updateBadges();
     }
@@ -527,6 +540,10 @@ export class GameApp {
       this.world.spawnBubbles();
     }
     this.renderer.setNight(timeOfDay(state.stats.totalPlayTime).night);
+    if (this.dialogPaused && !this.modal.isVisible && !this.welcomeOpen && !this.storyOpen && !this.storyDialog.isVisible && !this.loreReader.isVisible) {
+      this.dialogPaused = false;
+      this.engine.paused = false;
+    }
     // [plan4:UX-10] One dialog at a time, never into a gesture: the sources and their priorities are in dialogSources().
     if (!this.modal.isVisible && !this.welcomeOpen && !this.introPlaying && !this.storyOpen && !this.loreReader.isVisible && !this.storyDialog.isVisible
       && now - this.lastDialogCheck > 100) {
@@ -541,16 +558,36 @@ export class GameApp {
    * a pinch, a carried survivor), a gesture ended less than 1.2 s ago, a ceremony is playing, or (for anything that is not an
    * emergency) a sheet is open under the player's hands. A sheet left open and untouched for 20 s no longer holds the dialogs back.
    */
-  dialogGate(critical = false): boolean {
+  dialogGate(critical = false, ignoreCeremony = false): boolean {
     const now = performance.now();
     if (this.placementMode) return false;
     if (this.tour?.active) return false; // [plan4:GP-6] the tour is for watching: dialogs wait for the tap that ends it
     for (const [id, t] of this.pointersDown) if (now - t > 12000) this.pointersDown.delete(id); // a lost pointerup must not block forever
     if (this.pointersDown.size > 0) return false;
     if (now - this.lastGestureAt < 1200) return false;
-    if (this.ceremonyActive(now)) return false;
+    if (!ignoreCeremony && this.ceremonyActive(now)) return false;
+    if (!critical && this.notice.isShowing) return false; // [plan5:UX-B] one thing at a time: a dialog waits for the notice card to go
     if (!critical && this.anyPanelOpen() && now - this.lastGestureAt < 20000) return false;
     return true;
+  }
+
+  /** [plan5:UX-B] Set while the clock is stopped for an auto-opened dialog (frameUi starts it again once the screen is clear). */
+  private dialogPaused = false;
+
+  private pauseForDialog(): void {
+    if (this.engine.paused) return; // someone else (the story) holds the clock: they also give it back
+    this.engine.paused = true;
+    this.dialogPaused = true;
+  }
+
+  /**
+   * [plan5:UX-B] May a full-screen banner (era, Act, ending) or the rebirth choice open now? Nothing else holds the screen, and the
+   * gate's rules for the player's hands hold (no gesture, no placement, no sheet in use). A playing ceremony does not count: the Act
+   * card is the ceremony's own beat.
+   */
+  bannerReady(): boolean {
+    return !this.storyOpen && !this.modal.isVisible && !this.welcomeOpen && !this.introPlaying && !this.loreReader.isVisible
+      && !this.storyDialog.isVisible && !document.querySelector('.era-banner') && this.dialogGate(false, true);
   }
 
   /** [plan4:UX-10] A ceremony is on screen: a timed one (ceremonyUntil, set by GP-2), or a full-screen era/act banner. */
@@ -576,6 +613,8 @@ export class GameApp {
     const st = () => this.state;
     const memorialN = () => st().danger?.memorialQueue?.length ?? 0;
     const asking = () => this.engine.explorationSystem.waitingMission();
+    // [plan5:UX-B] One card at a time, and not on top of a gesture tip (they share the place above the console).
+    const noticeFree = () => !this.notice.isShowing && !this.tips.isShowing;
     // [Long game] After the first era events, questions and reports wait in the Decision Inbox; emergencies and the story still open by themselves.
     // [plan4:UX-13] The two lowest sources: "Add to Home Screen" (iPhone Safari) and the weekly backup reminder.
     const pwa = pwaDialogSources({
@@ -589,8 +628,16 @@ export class GameApp {
     return [
       {
         id: 'welcome', priority: 100, snoozeMs: 60_000, critical: true, icon: '[[door]]',
-        ready: () => !!this.pendingWelcome || (st().doorWaiting?.length ?? 0) > 0,
+        ready: () => !!this.pendingWelcome,
         open: () => { const p = this.pendingWelcome; this.pendingWelcome = null; this.welcome.showWelcome(p ? p.report : null); },
+        label: () => i18n.t('welcome.title'),
+      },
+      {
+        // [plan5:UX-B] A knock during play is not an emergency: it waits while the player is working in a sheet (the welcome-back
+        // report on return stays critical and still opens first).
+        id: 'door', priority: 99, snoozeMs: 60_000, icon: '[[door]]',
+        ready: () => !this.pendingWelcome && (st().doorWaiting?.length ?? 0) > 0,
+        open: () => this.welcome.showWelcome(null),
         label: () => i18n.t('welcome.title'),
       },
       {
@@ -636,27 +683,27 @@ export class GameApp {
         label: () => { const c = this.pendingChapter ? getChapter(this.pendingChapter) : undefined; return c ? c.title[i18n.currentLocale] : i18n.t('dq.chapter'); },
       },
       {
-        id: 'system', priority: 20, snoozeMs: 300_000, icon: '[[sparkle]]',
-        ready: () => this.systems.hasDue(st()),
+        id: 'system', priority: 20, snoozeMs: 300_000, icon: '[[sparkle]]', passive: true,
+        ready: () => noticeFree() && this.systems.hasDue(st()),
         open: () => this.systems.update(st()),
         label: () => this.systems.dueTitle(st()),
       },
       {
-        id: 'lore', priority: 15, snoozeMs: 300_000, icon: '[[note]]',
-        ready: () => this.lore.hasQueued,
+        id: 'lore', priority: 15, snoozeMs: 300_000, icon: '[[note]]', passive: true,
+        ready: () => noticeFree() && this.lore.hasQueued,
         open: () => this.lore.flushLoreQueue(),
         label: () => i18n.t('journal.found'),
       },
       {
-        id: 'whatsNew', priority: 5, snoozeMs: 600_000, icon: '[[build]]', // [plan4:ST-9] last in line: every other dialog goes first
-        ready: () => this.whatsNew.hasDue(st()),
+        id: 'whatsNew', priority: 5, snoozeMs: 600_000, icon: '[[build]]', passive: true, // [plan4:ST-9] last in line: every other dialog goes first
+        ready: () => noticeFree() && this.whatsNew.hasDue(st()),
         open: () => this.whatsNew.open(st()),
         label: () => this.whatsNew.label(),
       },
       {
-        id: 'district', priority: 10, snoozeMs: 300_000, icon: '[[pick]]',
-        ready: () => this.districtFoundQueue.length > 0,
-        open: () => this.dig.showDistrictFound(this.districtFoundQueue.shift()!),
+        id: 'district', priority: 10, snoozeMs: 300_000, icon: '[[pick]]', passive: true,
+        ready: () => noticeFree() && this.districtFoundQueue.length > 0,
+        open: () => this.dig.noticeDistrictFound(this.districtFoundQueue.shift()!),
         label: () => { const d = districtDef(this.districtFoundQueue[0] ?? ''); return d ? i18n.t('district.found', { name: d.name[i18n.currentLocale] }) : ''; },
       },
       ...pwa,
@@ -827,21 +874,24 @@ export class GameApp {
     rs.start(ruinId);
     this.engine.requestSave();
     this.audio.play('debris');
-    this.toasts.show(idle > 0 ? `[[broom]] ${i18n.t('ruin.started')}` : `[[warning]] ${i18n.t('ruin.startedNoCrew')}`, idle > 0 ? 'good' : 'info');
+    // [plan5:UX-A] Only the case the player cannot see needs words: nobody is free to dig.
+    if (idle === 0) this.toasts.show(`[[warning]] ${i18n.t('ruin.startedNoCrew')}`, 'info');
     this.ruinPanel.refresh(this.state);
   }
 
   private checkShortages(): void {
     const state = this.state;
-    // Early warning while there is still time to react.
+    // Early warning while there is still time to react. [plan5:UX-E] Not for power before any plant runs (the first task is the generator).
+    const hasPlant = state.buildings.some(b => isPowerPlant(b.type) && !(b.isConstructing && b.level === 1));
     for (const r of ['food', 'water', 'power'] as ResourceType[]) {
+      if (r === 'power' && !hasPlant) continue;
       const res = state.resources[r];
       const falling = res.productionRate < res.consumptionRate;
       if (falling && res.amount > 0 && res.amount < res.cap * 0.1 && !this.lowWarned.has(r)) {
         this.lowWarned.add(r);
         this.audio.play('warn');
         // [plan4:AC-9] The sound has a visual twin: a toast and a blink of the resource plate.
-        this.toasts.show(`[[warning]] ${i18n.t('shortage.low', { name: i18n.t(`resources.${r}`) })}`, 'bad');
+        this.toasts.event(`[[warning]] ${i18n.t('shortage.low', { name: i18n.t(`resources.${r}`) })}`, 'bad', `low:${r}`);
         this.hud.alertResource(r);
       } else if (res.amount > res.cap * 0.25) this.lowWarned.delete(r);
     }
@@ -849,7 +899,7 @@ export class GameApp {
       if (s.health < 30 && !this.hurtWarned.has(s.id)) {
         this.hurtWarned.add(s.id);
         this.audio.play('pulse');
-        this.toasts.show(`[[warning]] ${i18n.t('shortage.hurt', { name: s.name })}`, 'bad');
+        this.toasts.event(`[[warning]] ${i18n.t('shortage.hurt', { name: this.localName(s.name) })}`, 'bad', 'hurt');
       } else if (s.health > 60) this.hurtWarned.delete(s.id);
     }
     const ok = (state.powerRatio ?? 1) >= 0.99;
@@ -866,7 +916,7 @@ export class GameApp {
       const res = this.state.resources[r];
       if (res.amount <= 0 && res.consumptionRate > 0 && !this.shortages.has(r)) {
         this.shortages.add(r);
-        this.toasts.show(`[[warning]] ${i18n.t(`toast.no_${r}`)}`, 'bad');
+        this.toasts.event(`[[warning]] ${i18n.t(`toast.no_${r}`)}`, 'bad', `no:${r}`);
         this.audio.play('error');
       } else if (res.amount > 5) {
         this.shortages.delete(r);
@@ -937,6 +987,23 @@ export class GameApp {
       if (!wasOpen) this.eraPanel.show(this.state);
     };
     this.hud.onSupply = () => this.welcome.openSupplyDrop();
+    // [plan5:UX-F] The bell: the feed, and the places that moved out of the status row.
+    this.hud.onActivity = () => {
+      this.audio.play('click');
+      const wasOpen = this.activitySheet.isVisible;
+      this.closeSheets();
+      if (!wasOpen) this.activitySheet.show();
+    };
+    this.activitySheet.shortcuts = () => {
+      const h = this.hud.hub;
+      const out: ActivityShortcut[] = [];
+      if (h.inboxVisible) out.push({ icon: '[[inbox]]', label: i18n.t('inbox.title'), meta: h.inboxCount ? String(h.inboxCount) : '', alert: h.inboxCount > 0, onClick: () => this.hud.onInbox?.() });
+      if (h.daily.visible) out.push({ icon: '[[target]]', label: i18n.t('daily.title'), meta: `${h.daily.done}/${h.daily.n}`, alert: h.daily.claimable > 0, onClick: () => this.hud.onDaily?.() });
+      if (h.supplyReady) out.push({ icon: '[[gift]]', label: i18n.t('supply.title'), alert: true, onClick: () => this.hud.onSupply?.() });
+      out.push({ icon: '[[journal]]', label: i18n.t('journal.title'), meta: h.journalUnread ? String(h.journalUnread) : '', alert: h.journalUnread > 0, onClick: () => this.hud.onJournal?.() });
+      if (h.season) out.push({ icon: h.season.icon, label: i18n.t('season.title'), meta: h.season.title, onClick: () => this.hud.onSeason?.() });
+      return out;
+    };
     this.journal.onRead = (id: string) => this.lore.readLore(id);
     this.journal.onReplay = (id: string) => this.story.replayChapter(id);
     // [Economy A2] credits shop tab in the journal
@@ -1037,8 +1104,7 @@ export class GameApp {
       }
       this.engine.buildingSystem.upgradeBuilding(id, this.engine.stateManager);
       this.engine.requestSave();
-      this.audio.play('build');
-      this.toasts.show(`[[up]] ${i18n.t('toast.upgradeStarted')}`, 'good');
+      this.audio.play('build'); // [plan5:UX-A] no toast: the room shows the upgrade starting
       this.buildingPanel.refresh(this.state);
     };
 
@@ -1108,7 +1174,7 @@ export class GameApp {
   anyPanelOpen(): boolean {
     return this.buildMenu.isVisible || this.buildingPanel.isVisible || this.peoplePanel.isVisible || this.researchPanel.isVisible
       || this.surfacePanel.isVisible || this.menuPanel.isVisible || this.ruinPanel.isVisible || this.journal.isVisible
-      || this.eraPanel.isVisible || this.projectsPanel.isVisible || this.helpPanel.isVisible || this.chroniclePanel.isVisible || this.loreReader.isVisible || this.inbox.isVisible || this.resourceSheet.isVisible || this.daily.isVisible;
+      || this.eraPanel.isVisible || this.projectsPanel.isVisible || this.helpPanel.isVisible || this.chroniclePanel.isVisible || this.loreReader.isVisible || this.inbox.isVisible || this.resourceSheet.isVisible || this.daily.isVisible || this.activitySheet.isVisible;
   }
 
   /**
@@ -1198,6 +1264,7 @@ export class GameApp {
     this.inbox.hide();
     this.resourceSheet.hide();
     this.daily.hide(); // [plan4:GP-1]
+    this.activitySheet.hide(); // [plan5:UX-F]
   }
 
   // ---- [Danger] raid warnings, disasters, memorials (LATEGAME-PLAN part C) ----

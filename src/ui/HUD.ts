@@ -174,7 +174,8 @@ export class HUD {
       this.lastMore = '';
       if (this.lastState) this.update(this.lastState);
     });
-    topBar.appendChild(this.moreBtn);
+    // [plan5:UI-A] The "more" pill is the last cell of the resource row, not a row of its own under it.
+    resourceRow.appendChild(this.moreBtn);
 
     const infoRow = el('div', 'info-row');
     const pop = el('div', 'info-item info-tap');
@@ -235,14 +236,61 @@ export class HUD {
     this.dailyBtn.append(el('span', 'daily-ic', '[[target]]'), this.dailyText, this.dailyBadge);
     this.dailyBtn.addEventListener('click', () => this.onDaily?.());
 
-    infoRow.append(this.eraChip, pop, morale, clock, this.seasonBtn, this.supplyBtn, this.dailyBtn, this.inboxBtn, journal);
+    // [plan5:UI-A] The activity chip: one bell for the feed and for the places that used to be chips of their own (season, supply crate,
+    // daily orders, journal); its badge counts what waits there. The inbox keeps its own chip, but only while decisions wait (they expire).
+    this.activityBtn = el('button', 'lang-btn activity-btn', '[[bell]]');
+    this.activityBtn.setAttribute('aria-label', i18n.t('activity.title'));
+    this.activityBtn.title = i18n.t('activity.title');
+    this.activityBadge = el('span', 'nav-badge');
+    this.activityBadge.style.display = 'none';
+    this.activityBtn.appendChild(this.activityBadge);
+    this.activityBtn.addEventListener('click', () => this.onActivity?.());
+    infoRow.append(this.eraChip, pop, morale, clock, this.inboxBtn, this.activityBtn);
     topBar.appendChild(infoRow);
     this.container.appendChild(topBar);
   }
 
+  private activityBtn!: HTMLButtonElement;
+  private activityBadge!: HTMLElement;
+  onActivity: (() => void) | null = null;
+  /** [plan5:UI-A] What the activity sheet's shortcuts show (the chips that moved into it keep reporting here). */
+  readonly hub = {
+    daily: { visible: false, done: 0, n: 0, claimable: 0 },
+    supplyReady: false,
+    journalUnread: 0,
+    inboxVisible: false,
+    inboxCount: 0,
+    season: null as null | { icon: string; title: string },
+    unseen: 0,
+    unseenBad: 0,
+  };
+  private activitySig = '';
+
+  /** [plan5:UX-F] The feed's unseen entries (and how many of them are warnings: the badge turns red then). */
+  setActivity(unseen: number, unseenBad: number): void {
+    this.hub.unseen = unseen;
+    this.hub.unseenBad = unseenBad;
+    this.paintActivity();
+  }
+
+  private paintActivity(): void {
+    const h = this.hub;
+    const waiting = h.daily.claimable + (h.supplyReady ? 1 : 0) + h.journalUnread;
+    const n = h.unseen + waiting;
+    const sig = `${n}|${h.unseenBad > 0}|${waiting > 0}`;
+    if (sig === this.activitySig) return;
+    this.activitySig = sig;
+    this.activityBadge.style.display = n > 0 ? '' : 'none';
+    this.setText(this.activityBadge, n > 99 ? '99+' : String(n));
+    // A quiet grey count for news, the red badge for warnings or for something to collect.
+    this.activityBadge.classList.toggle('quiet', h.unseenBad === 0 && waiting === 0);
+    this.activityBtn.classList.toggle('has-cards', waiting > 0 || h.unseenBad > 0);
+  }
+
   /** [Q7] Makes a HUD button glow for a few seconds, so the player sees where the new thing lives. */
   spotlight(key: SpotKey): void {
-    const target = key === 'inbox' ? this.inboxBtn : key === 'season' ? this.seasonBtn : key === 'era' ? this.eraChip
+    const inboxShown = this.inboxBtn.style.display !== 'none';
+    const target = key === 'inbox' ? (inboxShown ? this.inboxBtn : this.activityBtn) : key === 'season' ? this.activityBtn : key === 'era' ? this.eraChip
       : this.container.querySelector<HTMLElement>(`.nav-btn[data-key="${key}"]`);
     if (!target) return;
     target.classList.remove('spotlight');
@@ -261,6 +309,11 @@ export class HUD {
 
   /** [plan4:GP-1] `claimable` > 0 shows the dot and lights the chip; `title` is the spoken name ("Daily orders: 1 of 3"). */
   setDaily(visible: boolean, done: number, n: number, claimable: number, title: string): void {
+    const d = this.hub.daily;
+    if (d.visible !== visible || d.done !== done || d.n !== n || d.claimable !== claimable) {
+      Object.assign(d, { visible, done, n, claimable });
+      this.paintActivity();
+    }
     this.dailyBtn.style.display = visible ? '' : 'none';
     this.setText(this.dailyText, `${done}/${n}`);
     this.dailyBadge.style.display = claimable > 0 ? '' : 'none';
@@ -274,6 +327,7 @@ export class HUD {
   onSupply: (() => void) | null = null;
 
   setSupply(ready: boolean, title: string): void {
+    if (this.hub.supplyReady !== ready) { this.hub.supplyReady = ready; this.paintActivity(); }
     this.supplyBtn.style.display = ready ? '' : 'none';
     this.supplyBtn.title = title;
   }
@@ -289,7 +343,10 @@ export class HUD {
 
   /** The inbox button: hidden until the inbox is in use; the badge shows the waiting cards. */
   setInbox(visible: boolean, count: number): void {
-    this.inboxBtn.style.display = visible ? '' : 'none';
+    this.hub.inboxVisible = visible;
+    this.hub.inboxCount = count;
+    // [plan5:UI-A] Only while decisions wait; an empty inbox is one tap away in the activity sheet.
+    this.inboxBtn.style.display = visible && count > 0 ? '' : 'none';
     this.inboxBadge.style.display = count > 0 ? '' : 'none';
     this.setText(this.inboxBadge, String(count));
     this.inboxBtn.classList.toggle('has-cards', count > 0);
@@ -297,6 +354,7 @@ export class HUD {
   onEra: (() => void) | null = null;
 
   setJournalUnread(n: number): void {
+    if (this.hub.journalUnread !== n) { this.hub.journalUnread = n; this.paintActivity(); }
     this.journalBadge.style.display = n > 0 ? '' : 'none';
     this.setText(this.journalBadge, String(n));
   }
@@ -481,6 +539,7 @@ export class HUD {
     if (sSig !== this.seasonSig) {
       this.seasonSig = sSig;
       this.seasonBtn.style.display = season ? '' : 'none';
+      this.hub.season = season ? { icon: `[[${season.def.icon}]]`, title: `${season.def.name[i18n.currentLocale]} · ${i18n.formatDuration(season.left)}` } : null;
       if (season) {
         setRich(this.seasonBtn, `[[${season.def.icon}]]`);
         this.seasonBtn.title = `${season.def.name[i18n.currentLocale]} · ${i18n.formatDuration(season.left)}`;
@@ -495,6 +554,9 @@ export class HUD {
     const collapsible = this.narrow.matches;
     const compact = collapsible && !this.expanded;
     let hiddenCount = 0;
+    // No alarm before there is any power plant to blame: the dead bunker is simply dark. [plan5:UX-E] That holds for the power plate
+    // too: before the old generator runs, a red, pulsing power plate only taught the player to ignore red.
+    const hasPlant = state.buildings.some(b => isPowerPlant(b.type) && !(b.isConstructing && b.level === 1));
     for (const [rt, els] of this.resourceEls) {
       const res = state.resources[rt];
       // Counters roll toward their value instead of jumping.
@@ -504,12 +566,14 @@ export class HUD {
       this.shown.set(rt, next);
       this.setText(els.value, i18n.formatCompact(next));
       const net = res.productionRate - res.consumptionRate;
-      this.setText(els.rate, i18n.formatRate(net));
-      els.rate.className = `resource-rate ${net > 0.005 ? 'positive' : net < -0.005 ? 'negative' : ''}`;
+      // [plan5:UI-B] No "0.00" on a resource that stands still: the plate is just its icon and amount then.
+      this.setText(els.rate, Math.abs(net) < 0.005 ? '' : i18n.formatRate(net));
+      els.rate.className = `resource-rate ${net > 0.005 ? 'positive' : net < -0.005 && !(rt === 'power' && !hasPlant) ? 'negative' : ''}`;
       const pct = res.cap > 0 && isFinite(res.cap) ? Math.min(100, (res.amount / res.cap) * 100) : 0;
       els.fill.style.width = `${pct}%`;
-      els.fill.className = `resource-fill-bar ${pct >= 99 ? 'full' : pct < 15 ? 'low' : ''}`;
-      els.root.classList.toggle('empty', res.amount <= 0 && res.consumptionRate > 0);
+      els.fill.className = `resource-fill-bar ${pct >= 99 ? 'full' : pct < 15 && !(rt === 'power' && !hasPlant) ? 'low' : ''}`;
+      const quiet = rt === 'power' && !hasPlant;
+      els.root.classList.toggle('empty', !quiet && res.amount <= 0 && res.consumptionRate > 0);
       if (ariaDue) {
         // "Food: 124 of 150, +0.4 per second": the real value (not the rolling counter) and the net rate, in words.
         const hasCap = res.cap > 0 && isFinite(res.cap);
@@ -517,19 +581,20 @@ export class HUD {
         if (els.root.getAttribute('aria-label') !== label) els.root.setAttribute('aria-label', label);
       }
       const inAct = this.actShow.get(rt) !== false;
-      const attention = (res.amount <= 0 && res.consumptionRate > 0) || (pct < 15 && net < -0.005 && res.cap > 0);
+      const attention = !quiet && ((res.amount <= 0 && res.consumptionRate > 0) || (pct < 15 && net < -0.005 && res.cap > 0));
       const visible = inAct && (!compact || CORE_RESOURCES.has(rt) || attention);
       if (inAct && !visible) hiddenCount++;
       const want = visible ? '' : 'none';
       if (els.root.style.display !== want) els.root.style.display = want;
     }
     this.topBar.classList.toggle('res-collapsible', collapsible);
+    this.topBar.classList.toggle('res-expanded', collapsible && this.expanded);
     const more = collapsible ? `${this.expanded ? 'less' : 'more'}|${hiddenCount}` : '';
     if (more !== this.lastMore) {
       this.lastMore = more;
       const total = [...this.actShow.entries()].filter(([rt, s]) => s && !CORE_RESOURCES.has(rt)).length;
       this.moreBtn.style.display = collapsible && total > 0 ? '' : 'none';
-      this.moreBtn.textContent = this.expanded ? '▴' : `▾ ${total}`;
+      this.moreBtn.textContent = this.expanded ? '▴' : `+${total}`;
       this.moreBtn.setAttribute('aria-label', i18n.t(this.expanded ? 'hud.lessRes' : 'hud.moreRes'));
       this.moreBtn.title = i18n.t(this.expanded ? 'hud.lessRes' : 'hud.moreRes');
     }
@@ -555,8 +620,6 @@ export class HUD {
     this.moraleValue.className = `info-value ${morale < 35 ? 'negative' : morale > 70 ? 'positive' : ''}`;
 
     const ratio = state.powerRatio ?? 1;
-    // No alarm before there is any power plant to blame: the dead bunker is simply dark.
-    const hasPlant = state.buildings.some(b => isPowerPlant(b.type) && !(b.isConstructing && b.level === 1));
     if (ratio < 0.99 && hasPlant) {
       this.setText(this.powerBanner, i18n.t('hud.powerLow', { pct: Math.round(ratio * 100) }));
       this.powerBanner.style.display = '';

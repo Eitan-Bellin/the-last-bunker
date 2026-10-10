@@ -1,6 +1,7 @@
 import { el } from '../dom';
 import { relaxedMs } from '../../utils/a11y';
 import { uiSound } from '../../audio/uiSound';
+import { ActivityLog } from '../activity';
 
 /**
  * [plan4:UX-9] Three weights of message:
@@ -15,9 +16,15 @@ export type ToastKind = 'info' | 'good' | 'bad' | 'critical';
 
 const RANK: Record<ToastKind, number> = { info: 0, good: 1, bad: 2, critical: 3 };
 const DURATION_MS: Record<ToastKind, number> = { info: 3200, good: 3000, bad: 5000, critical: 6000 };
-/** On screen at once, and how many more may wait their turn. */
-const MAX_VISIBLE = 3;
-const MAX_QUEUED = 6;
+/** On screen at once, and how many more may wait their turn. [plan5:UX-A] two, not three: the toasts sat over the middle of the bunker. */
+const MAX_VISIBLE = 2;
+const MAX_QUEUED = 4;
+/**
+ * [plan5:UX-A] News the game sends by itself (`event()`): the same key at most once per KEY_COOLDOWN_MS, and good or neutral news at
+ * most once per AUTO_GAP_MS. What does not make it to the screen is still in the activity feed.
+ */
+const KEY_COOLDOWN_MS = 30_000;
+const AUTO_GAP_MS = 8_000;
 const FADE_MS = 300;
 /** A sideways drag past this (px), or a quick flick, dismisses the toast. */
 const SWIPE_PX = 60;
@@ -36,10 +43,43 @@ export class Toasts {
   private stack: HTMLDivElement;
   private visible: Entry[] = [];
   private queue: Entry[] = [];
+  /** [plan5:UX-F] Everything the game reported by itself, shown or not (the activity sheet reads it). */
+  readonly activity = new ActivityLog();
+  private keyShownAt = new Map<string, number>();
+  private lastAutoAt = -Infinity;
+  /** [plan5:UX-A] "Important only": good and neutral news never pops up, it waits in the feed. Set by the app from the settings. */
+  importantOnly: () => boolean = () => false;
 
   constructor() {
     this.stack = el('div', 'toast-stack');
     document.body.appendChild(this.stack);
+  }
+
+  /**
+   * [plan5:UX-A] Something happened by itself (not a reply to a tap). It always goes to the activity feed; it pops up only when it is
+   * a warning, or when it is good news that has not just been told and the screen has been quiet for a while.
+   */
+  event(text: string, kind: ToastKind = 'info', key = text): void {
+    this.activity.add(text, kind, key);
+    if (kind === 'critical' || kind === 'bad') {
+      const now = performance.now();
+      if (now - (this.keyShownAt.get(key) ?? -Infinity) < KEY_COOLDOWN_MS / 3) return;
+      this.keyShownAt.set(key, now);
+      this.show(text, kind);
+      return;
+    }
+    if (this.importantOnly()) return;
+    const now = performance.now();
+    if (now - (this.keyShownAt.get(key) ?? -Infinity) < KEY_COOLDOWN_MS) return;
+    if (now - this.lastAutoAt < AUTO_GAP_MS || this.visible.length > 0) return;
+    this.keyShownAt.set(key, now);
+    this.lastAutoAt = now;
+    this.show(text, kind);
+  }
+
+  /** [plan5:UX-A] Routine news: into the activity feed only, never on screen (the room, the ceremony or the strip already shows it). */
+  log(text: string, kind: ToastKind = 'good', key = text, digest?: (n: number) => string): void {
+    this.activity.add(text, kind, key, digest);
   }
 
   show(text: string, kind: ToastKind = 'info'): void {
@@ -91,7 +131,8 @@ export class Toasts {
     e.countEl = count;
     this.paintCount(e);
     this.bindSwipe(toast, e);
-    if (e.kind === 'info') uiSound('notify', 0.6, 4000);
+    // [plan5:UX-A] Only a toast that has no sound of its own and must be heard (the game cannot save) rings; routine news is silent.
+    if (e.kind === 'critical') uiSound('notify', 0.6, 4000);
     this.visible.push(e);
     this.stack.appendChild(toast);
     requestAnimationFrame(() => toast.classList.add('in'));

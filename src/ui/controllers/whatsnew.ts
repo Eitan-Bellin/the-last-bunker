@@ -35,18 +35,13 @@ export class WhatsNewController {
   open(state: GameState): void {
     this.app.engine.stateManager.applyDelta({ path: 'storyFlags', value: [...new Set([...state.storyFlags, WHATSNEW_SEEN])] });
     this.app.audio.play('paper');
-    this.app.modal.show({
+    // [plan5:UX-B] A card above the console, not a dialog.
+    this.app.toasts.log(`[[build]] ${i18n.t('whatsnew.wings.title')}`, 'info', 'whatsnew');
+    this.app.notice.show({
       icon: '[[build]]',
       title: i18n.t('whatsnew.wings.title'),
       body: i18n.t('whatsnew.wings.body'),
-      actions: [
-        {
-          label: i18n.t('whatsnew.wings.show'),
-          className: 'btn-primary',
-          onClick: () => { this.app.modal.hide(); this.app.showWingLine(); },
-        },
-        { label: i18n.t('sys.ok'), className: 'btn-secondary', onClick: () => this.app.modal.hide() },
-      ],
+      action: { label: i18n.t('whatsnew.wings.show'), onClick: () => this.app.showWingLine() },
     });
   }
 

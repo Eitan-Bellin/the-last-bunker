@@ -456,7 +456,7 @@ export class WorldController {
         this.app.toasts.show(`[[warning]] ${i18n.t('people.full')}`, 'bad');
         return;
       }
-      this.app.toasts.show(`[[pick]] ${i18n.t('drag.toRuin', { name, ...this.app.gOf(s) })}`, 'good');
+      // [plan5:UX-A] no toast: the survivor walking to the ruin is the confirmation
     } else {
       const b = state.buildings.find(x => x.id === targetId);
       if (!b) return;
@@ -473,7 +473,7 @@ export class WorldController {
         this.app.toasts.show(`[[warning]] ${i18n.t('drag.full', { room: def.name[i18n.currentLocale] ?? def.name.en })}`, 'bad');
         return;
       }
-      this.app.toasts.show(`${BUILDING_ICONS[b.type] ?? ''} ${i18n.t('drag.assigned', { name, room: def.name[i18n.currentLocale] ?? def.name.en, ...this.app.gOf(s) })}`, 'good');
+      // [plan5:UX-A] no toast: the survivor walking into the room is the confirmation
     }
     this.app.audio.play('assign');
     haptic('impact');

@@ -37,6 +37,12 @@ export class FeedbackController {
     this.app = app;
   }
 
+  /** [plan5:UX-B] Runs `fn` once a full-screen moment may take over (see GameApp.bannerReady); checks every second. */
+  private whenCalm(fn: () => void): void {
+    const tryNow = () => { if (this.app.bannerReady()) fn(); else setTimeout(tryNow, 1000); };
+    tryNow();
+  }
+
   install(): void {
     bus.on('building:complete', (id: unknown) => {
       const b = this.app.state.buildings.find(x => x.id === id);
@@ -48,7 +54,7 @@ export class FeedbackController {
         this.app.districtFoundQueue.push(b.type);
       }
       const name = getDef(b.type)?.name[i18n.currentLocale] ?? b.type;
-      this.app.toasts.show(`[[check]] ${i18n.t('toast.buildingComplete', { name })}`, 'good');
+      this.app.toasts.log(`[[check]] ${i18n.t('toast.buildingComplete', { name })}`, 'good', 'build', n => `[[check]] ${i18n.t('activity.digest.build', { n })}`); // [plan5:UX-C] the ceremony, the tick and the sound tell it
       announce(i18n.t('announce.built', { name }), 'polite'); // plan4:qa the key existed but nothing said it
       // [plan4:GP-2] The sound and the buzz belong to the moment (the same event fires when an upgrade finishes: that is the level-up ceremony).
       const upgraded = b.level > 1;
@@ -61,24 +67,24 @@ export class FeedbackController {
       this.app.popups.spawn(c.x, c.y, '[[check]]', statusTint('ok'));
     });
 
-    bus.on('surface:open', () => { this.app.toasts.show(`[[sun]] ${i18n.t('toast.surfaceOpen')}`, 'good'); haptic('success'); }); // [plan4:ST-16] the gate-house yard is cleared
+    bus.on('surface:open', () => { this.app.toasts.event(`[[sun]] ${i18n.t('toast.surfaceOpen')}`, 'good'); haptic('success'); }); // [plan4:ST-16] the gate-house yard is cleared
 
     bus.on('survivor:levelup', (s: unknown, stat: unknown) => {
       const survivor = s as SurvivorState;
       // [plan4:GP-2] A little star over their head and a bell (the ceremony queue folds several at once into one).
       void this.app.ceremony.fire({ kind: 'person', personId: survivor.id, title: this.app.localName(survivor.name), sub: i18n.t('cer.person.sub', { level: survivor.level }) });
-      this.app.toasts.show(`[[star]] ${i18n.t('toast.levelUp', {
+      this.app.toasts.log(`[[star]] ${i18n.t('toast.levelUp', {
         name: this.app.localName(survivor.name),
         level: survivor.level,
         stat: i18n.t(`stats.${stat as keyof SurvivorStats}`),
         ...this.app.gOf(survivor),
-      })}`, 'good');
+      })}`, 'good', 'levelup', n => `[[star]] ${i18n.t('activity.digest.levelup', { n })}`); // [plan5:UX-A] the noisiest toast of all: the star over their head says it, the feed keeps it
     });
 
     bus.on('survivor:died', (s: unknown) => {
       // [plan4:GP-2] A slow dimming, a candle and a line of remembrance; the memorial dialog waits behind it (dialog gate).
       void this.app.ceremony.fire({ kind: 'death', personId: (s as SurvivorState).id, icon: '[[heart]]', title: i18n.t('cer.death', { name: this.app.localName((s as SurvivorState).name) }) });
-      this.app.toasts.show(`[[skull]] ${i18n.t('toast.died', { name: this.app.localName((s as SurvivorState).name), ...this.app.gOf(s as SurvivorState) })}`, 'bad');
+      this.app.toasts.event(`[[skull]] ${i18n.t('toast.died', { name: this.app.localName((s as SurvivorState).name), ...this.app.gOf(s as SurvivorState) })}`, 'bad');
     });
 
     bus.on('research:complete', (id: unknown) => {
@@ -92,7 +98,7 @@ export class FeedbackController {
         sub: [i18n.t('cer.research.sub'), opens.length ? i18n.t('cer.research.opens', { list: opens.join(', ') }) : ''].filter(Boolean).join(' · '),
         sound: def.effects.some(e => e.type === 'unlock' || e.type === 'feature') ? 'unlock' : 'research',
       });
-      this.app.toasts.show(`[[research]] ${i18n.t('toast.researchDone', { name: def.name[i18n.currentLocale] ?? def.name.en })}`, 'good');
+      this.app.toasts.log(`[[research]] ${i18n.t('toast.researchDone', { name: def.name[i18n.currentLocale] ?? def.name.en })}`, 'good', 'research'); // [plan5:UX-C] the ceremony card says it
       this.app.engine.requestSave();
     });
 
@@ -101,7 +107,7 @@ export class FeedbackController {
       if (!a) return;
       this.app.audio.play('achievement');
       haptic('success');
-      this.app.toasts.show(`[[trophy]] ${i18n.t('toast.achievement', { name: a.name[i18n.currentLocale] ?? a.name.en })}`, 'good');
+      this.app.toasts.event(`[[trophy]] ${i18n.t('toast.achievement', { name: a.name[i18n.currentLocale] ?? a.name.en })}`, 'good', 'achievement');
       this.app.engine.requestSave();
     });
 
@@ -122,17 +128,17 @@ export class FeedbackController {
       if (inc.kind !== 'breach') setTimeout(() => this.app.audio.play('alarm'), 400);
       this.app.renderer.shake(inc.kind === 'breach' ? 6 : 4, 0.5);
       haptic('warning');
-      this.app.toasts.show(`[[${def.icon}]] ${i18n.t('incident.started', { name: def.name[i18n.currentLocale], room: this.app.roomName(inc.buildingId) })}`, 'bad');
+      this.app.toasts.event(`[[${def.icon}]] ${i18n.t('incident.started', { name: def.name[i18n.currentLocale], room: this.app.roomName(inc.buildingId) })}`, 'bad');
       // [plan4:AC-11] Said to a screen reader as an alert, with the floor (when the player turned announcements on).
       const floor = this.app.state.buildings.find(b => b.id === inc.buildingId)?.position.floor ?? 0;
       announce(i18n.t('announce.incident', { name: def.name[i18n.currentLocale], floor: floor + 1 }), 'assertive');
     });
     bus.on('incident:burnout', (i: unknown) => {
       const inc = i as Incident;
-      this.app.toasts.show(`[[${INCIDENTS[inc.kind].icon}]] ${i18n.t('incident.burnout', { name: INCIDENTS[inc.kind].name[i18n.currentLocale], room: this.app.roomName(inc.buildingId) })}`, 'bad');
+      this.app.toasts.event(`[[${INCIDENTS[inc.kind].icon}]] ${i18n.t('incident.burnout', { name: INCIDENTS[inc.kind].name[i18n.currentLocale], room: this.app.roomName(inc.buildingId) })}`, 'bad');
     });
     bus.on('incident:spread', (id: unknown) => {
-      this.app.toasts.show(`[[fire]] ${i18n.t('incident.spread', { room: this.app.roomName(id as string) })}`, 'bad');
+      this.app.toasts.event(`[[fire]] ${i18n.t('incident.spread', { room: this.app.roomName(id as string) })}`, 'bad');
     });
     bus.on('incident:resolved', (r: unknown) => {
       const { incident, quick } = r as IncidentResolved;
@@ -147,7 +153,7 @@ export class FeedbackController {
         this.app.renderer.floatIcons(rect.x + rect.w / 2, rect.y + 40, 'star', 5, '#ffd27a');
         this.app.popups.spawn(rect.x + rect.w / 2, rect.y + 30, `[[check]] ${def.name[i18n.currentLocale]}`, statusTint('ok'));
       }
-      this.app.toasts.show(`[[check]] ${i18n.t(quick ? 'incident.fixedQuick' : 'incident.fixed', { name: def.name[i18n.currentLocale] })}`, 'good');
+      this.app.toasts.log(`[[check]] ${i18n.t(quick ? 'incident.fixedQuick' : 'incident.fixed', { name: def.name[i18n.currentLocale] })}`, 'good', 'fixed'); // [plan5:UX-C] the stars over the room say it
       this.app.engine.requestSave();
     });
 
@@ -156,7 +162,7 @@ export class FeedbackController {
       const raid = r as { hitAt: number };
       this.app.audio.play('alarm');
       this.app.dangerPrompt = true;
-      this.app.toasts.show(`[[armory]] ${i18n.t('danger.toast.raid', { time: i18n.formatDuration(raid.hitAt - this.app.state.stats.totalPlayTime) })}`, 'bad');
+      this.app.toasts.event(`[[armory]] ${i18n.t('danger.toast.raid', { time: i18n.formatDuration(raid.hitAt - this.app.state.stats.totalPlayTime) })}`, 'bad');
       announce(i18n.t('announce.raid', { time: i18n.formatDuration(raid.hitAt - this.app.state.stats.totalPlayTime) }), 'assertive'); // plan4:qa
     });
     bus.on('raid:resolved', (r: unknown) => { this.app.raidResult = r as RaidResult; });
@@ -164,18 +170,18 @@ export class FeedbackController {
       const def = DISASTERS[(d as { kind: keyof typeof DISASTERS }).kind];
       this.app.audio.play('alarm');
       this.app.dangerPrompt = true;
-      this.app.toasts.show(`[[${def.icon}]] ${i18n.t('danger.toast.disaster', { name: def.name[i18n.currentLocale], time: i18n.formatDuration(def.countdown) })}`, 'bad');
+      this.app.toasts.event(`[[${def.icon}]] ${i18n.t('danger.toast.disaster', { name: def.name[i18n.currentLocale], time: i18n.formatDuration(def.countdown) })}`, 'bad');
     });
     bus.on('disaster:handled', (d: unknown) => {
       const def = DISASTERS[(d as { kind: keyof typeof DISASTERS }).kind];
-      this.app.toasts.show(`[[check]] ${def.saved[i18n.currentLocale]}`, 'good');
+      this.app.toasts.event(`[[check]] ${def.saved[i18n.currentLocale]}`, 'good');
     });
     bus.on('disaster:struck', (r: unknown) => {
       const res = r as { kind: keyof typeof DISASTERS };
       const def = DISASTERS[res.kind];
       this.app.audio.play('error');
       haptic('error');
-      this.app.toasts.show(`[[${def.icon}]] ${i18n.t('danger.toast.struck', { name: def.name[i18n.currentLocale], text: def.struck[i18n.currentLocale] })}`, 'bad');
+      this.app.toasts.event(`[[${def.icon}]] ${i18n.t('danger.toast.struck', { name: def.name[i18n.currentLocale], text: def.struck[i18n.currentLocale] })}`, 'bad');
     });
     bus.on('family:couple', (c: unknown) => {
       const { a, b } = c as CoupleFormed;
@@ -184,7 +190,7 @@ export class FeedbackController {
         const p = this.app.renderer.personPos(s.id);
         if (p) this.app.renderer.floatIcons(p.x, p.y, 'heart', 6, '#ff7a9a');
       }
-      this.app.toasts.show(`[[heart]] ${i18n.t('family.couple', { a: this.app.localName(a.name), b: this.app.localName(b.name) })}`, 'good');
+      this.app.toasts.event(`[[heart]] ${i18n.t('family.couple', { a: this.app.localName(a.name), b: this.app.localName(b.name) })}`, 'good', 'family');
       this.app.engine.requestSave();
     });
     bus.on('family:child', (c: unknown) => {
@@ -192,14 +198,14 @@ export class FeedbackController {
       this.app.audio.play('baby');
       const p = this.app.renderer.personPos(parents[0].id);
       if (p) this.app.renderer.floatIcons(p.x, p.y, 'baby', 4, '#ffe2a0');
-      this.app.toasts.show(`[[baby]] ${i18n.t('family.born', { a: this.app.localName(parents[0].name), b: this.app.localName(parents[1].name), name: this.app.localName(child.name), ...this.app.gOf(child) })}`, 'good');
+      this.app.toasts.event(`[[baby]] ${i18n.t('family.born', { a: this.app.localName(parents[0].name), b: this.app.localName(parents[1].name), name: this.app.localName(child.name), ...this.app.gOf(child) })}`, 'good', 'family');
       this.app.engine.requestSave();
     });
     bus.on('family:grownUp', (s: unknown) => {
       const sv = s as SurvivorState | undefined;
       if (!sv) return;
       this.app.audio.play('levelup');
-      this.app.toasts.show(`[[star]] ${i18n.t('family.grownUp', { name: this.app.localName(sv.name), ...this.app.gOf(sv) })}`, 'good');
+      this.app.toasts.log(`[[star]] ${i18n.t('family.grownUp', { name: this.app.localName(sv.name), ...this.app.gOf(sv) })}`, 'good', 'grownUp');
     });
     bus.on('story:chapter', (id: unknown) => { this.app.pendingChapter = id as string; });
     bus.on('mission:choice', () => this.app.audio.play('radio'));
@@ -211,12 +217,12 @@ export class FeedbackController {
       const c = this.app.renderer.roomCenter(b);
       this.app.renderer.burstAt(c.x, c.y + 30, 120);
       this.app.renderer.floatIcons(c.x, c.y + 10, 'crown', 5, '#ffd27a');
-      this.app.toasts.show(`[[crown]] ${i18n.t('spec.done', { room: this.app.roomName(b.id), spec: spec.name[i18n.currentLocale] })}`, 'good');
+      this.app.toasts.event(`[[crown]] ${i18n.t('spec.done', { room: this.app.roomName(b.id), spec: spec.name[i18n.currentLocale] })}`, 'good');
       this.app.engine.requestSave();
     });
 
     bus.on('floor:dug', (floor: unknown) => {
-      this.app.toasts.show(`[[pick]] ${i18n.t('dig.done', { n: (floor as number) + 1 })}`, 'good');
+      this.app.toasts.log(`[[pick]] ${i18n.t('dig.done', { n: (floor as number) + 1 })}`, 'good', 'dig'); // [plan5:UX-C] the ceremony says it
       this.app.renderer.focusFloor(floor as number);
       void this.app.ceremony.fire({ kind: 'dig', floor: floor as number, icon: '[[pick]]', title: i18n.t('dig.done', { n: (floor as number) + 1 }) }); // [plan4:GP-2]
     });
@@ -225,32 +231,32 @@ export class FeedbackController {
     bus.on('project:stage', (id: unknown, stage: unknown) => {
       const def = getProject(id as string);
       this.app.audio.play('complete');
-      this.app.toasts.show(`[[build]] ${i18n.t('proj.stageDone', { name: def?.name[i18n.currentLocale] ?? '', n: stage as number, all: def?.stages.length ?? 0 })}`, 'good');
+      this.app.toasts.log(`[[build]] ${i18n.t('proj.stageDone', { name: def?.name[i18n.currentLocale] ?? '', n: stage as number, all: def?.stages.length ?? 0 })}`, 'good', 'project');
       this.app.engine.requestSave();
     });
     bus.on('project:done', (id: unknown) => {
       const def = getProject(id as string);
-      this.app.toasts.show(`[[trophy]] ${i18n.t('proj.done', { name: def?.name[i18n.currentLocale] ?? '' })}`, 'good');
+      this.app.toasts.event(`[[trophy]] ${i18n.t('proj.done', { name: def?.name[i18n.currentLocale] ?? '' })}`, 'good');
     });
     bus.on('caravan:complete', (r: unknown) => {
       const c = r as { partner: string; ok: boolean; levelUp: boolean; recruitName: string | null };
       const name = getPartner(c.partner)?.name[i18n.currentLocale] ?? '';
-      this.app.toasts.show(c.ok ? `[[cart]] ${i18n.t('trade.home', { name })}${c.levelUp ? ` · ${i18n.t('trade.levelUp')}` : ''}${c.recruitName ? ` · ${i18n.t('mission.recruit', { name: this.app.localName(c.recruitName), ...this.app.gByName(c.recruitName) })}` : ''}` : `[[skull]] ${i18n.t('trade.ambush', { name })}`, c.ok ? 'good' : 'bad');
+      this.app.toasts.event(c.ok ? `[[cart]] ${i18n.t('trade.home', { name })}${c.levelUp ? ` · ${i18n.t('trade.levelUp')}` : ''}${c.recruitName ? ` · ${i18n.t('mission.recruit', { name: this.app.localName(c.recruitName), ...this.app.gByName(c.recruitName) })}` : ''}` : `[[skull]] ${i18n.t('trade.ambush', { name })}`, c.ok ? 'good' : 'bad');
       this.app.engine.requestSave();
     });
     bus.on('survivor:rank', (s: unknown, rank: unknown) => {
-      this.app.toasts.show(`[[medal]] ${i18n.t('mastery.up', { name: this.app.localName((s as SurvivorState).name), n: rank as number })}`);
+      this.app.toasts.log(`[[medal]] ${i18n.t('mastery.up', { name: this.app.localName((s as SurvivorState).name), n: rank as number })}`, 'good', 'rank');
     });
     bus.on('weekly:done', () => {
       this.app.audio.play('complete');
-      this.app.toasts.show(`[[trophy]] ${i18n.t('weekly.won', { n: WEEKLY_CREDITS })}`, 'good');
+      this.app.toasts.event(`[[trophy]] ${i18n.t('weekly.won', { n: WEEKLY_CREDITS })}`, 'good');
       this.app.engine.requestSave();
     });
 
     bus.on('objective:complete', (o: unknown) => {
       const obj = o as Objective;
       this.app.audio.play('complete');
-      this.app.toasts.show(`[[target]] ${i18n.t('toast.objective', { name: obj.text[i18n.currentLocale] ?? obj.text.en })}`, 'good');
+      this.app.toasts.event(`[[target]] ${i18n.t('toast.objective', { name: obj.text[i18n.currentLocale] ?? obj.text.en })}`, 'good', 'objective');
       this.app.engine.requestSave();
     });
 
@@ -264,9 +270,9 @@ export class FeedbackController {
         const b = this.app.state.buildings.find(x => x.id === buildingId);
         const name = b ? getDef(b.type)?.name[i18n.currentLocale] ?? '' : '';
         setTimeout(() => this.app.audio.play('restore'), 300);
-        this.app.toasts.show(`[[workshop]] ${i18n.t('ruin.restored', { name })}`, 'good');
+        this.app.toasts.log(`[[workshop]] ${i18n.t('ruin.restored', { name })}`, 'good', 'ruin', n => `[[broom]] ${i18n.t('activity.digest.ruin', { n })}`); // [plan5:UX-A] the loot rising from the rubble says it
       } else {
-        this.app.toasts.show(`[[broom]] ${i18n.t('ruin.cleared', { name: RUIN_KINDS[ruin.kind].name[i18n.currentLocale] })}`, 'good');
+        this.app.toasts.log(`[[broom]] ${i18n.t('ruin.cleared', { name: RUIN_KINDS[ruin.kind].name[i18n.currentLocale] })}`, 'good', 'ruin', n => `[[broom]] ${i18n.t('activity.digest.ruin', { n })}`);
       }
       this.app.engine.requestSave();
       if (lore) setTimeout(() => this.app.lore.queueLore(lore), 900);
@@ -281,13 +287,16 @@ export class FeedbackController {
     bus.on('era:advance', (era: unknown) => {
       const def = ERAS[era as number];
       if (!def) return;
-      this.app.audio.play('era');
       this.app.audio.setEra(def.id);
-      this.app.renderer.shake(5, 1.2);
-      this.app.storyOpen = true;
-      this.app.closeSheets();
       this.app.engine.requestSave();
-      showEraBanner(def, () => { this.app.storyOpen = false; });
+      // [plan5:UX-B] The banner waits for a calm moment (no dialog, no gesture, no sheet in use) instead of tearing the screen away.
+      this.whenCalm(() => {
+        this.app.audio.play('era');
+        this.app.renderer.shake(5, 1.2);
+        this.app.storyOpen = true;
+        this.app.closeSheets();
+        showEraBanner(def, () => { this.app.storyOpen = false; });
+      });
     });
 
     // [Long game] A new Act: its title card once nothing else holds the screen, and the beds it opens fill again.
@@ -300,7 +309,7 @@ export class FeedbackController {
       const cam = this.app.renderer.camera;
       const back = { x: cam.camX, y: cam.camY, z: cam.zoom };
       const show = () => {
-        if (this.app.storyOpen || this.app.modal.isVisible || document.querySelector('.era-banner')) { setTimeout(show, 1500); return; }
+        if (!this.app.bannerReady()) { setTimeout(show, 1500); return; } // [plan5:UX-B]
         this.app.storyOpen = true;
         this.app.closeSheets();
         showActBanner(act, () => { this.app.storyOpen = false; if (!reducedMotion()) cam.focusTo(back.x, back.y, back.z); });
@@ -313,7 +322,7 @@ export class FeedbackController {
       const s = SEASONS.find(x => x.id === id);
       if (!s) return;
       this.app.audio.play('paper');
-      this.app.toasts.show(`[[${s.icon}]] ${i18n.t('season.now', { name: s.name[i18n.currentLocale], desc: s.desc[i18n.currentLocale] })}`, 'info');
+      this.app.toasts.event(`[[${s.icon}]] ${i18n.t('season.now', { name: s.name[i18n.currentLocale], desc: s.desc[i18n.currentLocale] })}`, 'info');
     });
     this.app.hud.onSeason = () => {
       const st = this.app.state;
@@ -326,17 +335,17 @@ export class FeedbackController {
     bus.on('contract:done', (issuer: unknown) => {
       const p = getPartner(issuer as string);
       this.app.audio.play('coin');
-      this.app.toasts.show(`[[cart]] ${i18n.t('contract.done', { issuer: p ? p.name[i18n.currentLocale] : i18n.t('contract.drifters') })}`, 'good');
+      this.app.toasts.event(`[[cart]] ${i18n.t('contract.done', { issuer: p ? p.name[i18n.currentLocale] : i18n.t('contract.drifters') })}`, 'good');
       this.app.engine.requestSave();
     });
-    bus.on('outpost:damaged', () => this.app.toasts.show(`[[flag]] ${i18n.t('outpost.hit')}`, 'bad'));
+    bus.on('outpost:damaged', () => this.app.toasts.event(`[[flag]] ${i18n.t('outpost.hit')}`, 'bad'));
     // [P5] The ending of the run.
     bus.on('ending', (id: unknown) => {
       const ending = ENDINGS.find(e => e.id === id);
       if (!ending) return;
       this.app.engine.requestSave();
       const show = () => {
-        if (this.app.storyOpen || this.app.modal.isVisible || document.querySelector('.era-banner')) { setTimeout(show, 1500); return; }
+        if (!this.app.bannerReady()) { setTimeout(show, 1500); return; } // [plan5:UX-B]
         this.app.audio.play('era');
         this.app.storyOpen = true;
         this.app.closeSheets();
@@ -346,16 +355,16 @@ export class FeedbackController {
     });
     // [P5] A new timeline: choose its hardships (if any) for more Legacy.
     // [P3-5] First where the next world begins, then the hardships.
-    bus.on('rebirth', () => setTimeout(() => this.app.story.chooseScenario(() => this.app.story.chooseMutators()), 1500));
+    bus.on('rebirth', () => setTimeout(() => this.whenCalm(() => this.app.story.chooseScenario(() => this.app.story.chooseMutators())), 1500));
     bus.on('dig:start', (_floor: unknown, total: unknown) => {
-      this.app.toasts.show(`[[pick]] ${i18n.t('dig.started', { n: this.app.state.currentFloors + 1, t: i18n.formatDuration((total as number | undefined) ?? this.app.state.longGame?.dig.total ?? 0) })}`, 'info');
+      this.app.toasts.log(`[[pick]] ${i18n.t('dig.started', { n: this.app.state.currentFloors + 1, t: i18n.formatDuration((total as number | undefined) ?? this.app.state.longGame?.dig.total ?? 0) })}`, 'info');
     });
     // [plan4:ST-3] Wings: the dig starts, and a step opens (the camera goes to the floor).
     bus.on('wing:start', (floor: unknown, side: unknown, total: unknown) => {
-      this.app.toasts.show(`[[pick]] ${i18n.t('wing.started', { n: (floor as number) + 1, side: i18n.t(`wing.side.${side as string}`), t: i18n.formatDuration(total as number) })}`, 'info');
+      this.app.toasts.log(`[[pick]] ${i18n.t('wing.started', { n: (floor as number) + 1, side: i18n.t(`wing.side.${side as string}`), t: i18n.formatDuration(total as number) })}`, 'info');
     });
     bus.on('wing:dug', (floor: unknown, side: unknown) => {
-      this.app.toasts.show(`[[pick]] ${i18n.t('wing.done', { n: (floor as number) + 1, side: i18n.t(`wing.side.${side as string}`) })}`, 'good');
+      this.app.toasts.log(`[[pick]] ${i18n.t('wing.done', { n: (floor as number) + 1, side: i18n.t(`wing.side.${side as string}`) })}`, 'good');
       this.app.renderer.focusFloor(floor as number);
       void this.app.ceremony.fire({ kind: 'dig', floor: floor as number, side: side as 'w' | 'e', icon: '[[pick]]', title: i18n.t('wing.done', { n: (floor as number) + 1, side: i18n.t(`wing.side.${side as string}`) }) }); // [plan4:GP-2]
     });

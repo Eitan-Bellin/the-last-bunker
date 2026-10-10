@@ -113,7 +113,7 @@
   "building.close": "Close",
   "building.powerLow": "Output reduced by power shortage",
   "building.needStorage": "Needs more storage: cap {cap} < cost {cost}",
-  "building.digForHomes": "No room left for new quarters. Upgrade these (+3 beds a level) or dig a deeper level for more homes.",
+  "building.digForHomes": "No room for more quarters: upgrade (+3 beds a level) or dig a floor.",
   "stats.strength": "Strength",
   "stats.intelligence": "Intelligence",
   "stats.agility": "Agility",
@@ -1455,5 +1455,13 @@
   "cer.gen.floors": "{n} floors dug",
   "cer.gen.rooms": "{n} rooms built",
   "cer.gen.act": "Reached Act {n}",
-  "cer.gen.iso": "{n} Isotope-7 pass to the next generation"
+  "cer.gen.iso": "{n} Isotope-7 pass to the next generation",
+  "activity.title": "What happened",
+  "activity.empty": "Nothing yet. What happens in the bunker shows up here.",
+  "activity.now": "now",
+  "activity.ago": "{t} ago",
+  "notice.view": "Show",
+  "activity.digest.build": "{n} rooms finished",
+  "activity.digest.levelup": "{n} survivor level-ups",
+  "activity.digest.ruin": "{n} ruins cleared"
 }

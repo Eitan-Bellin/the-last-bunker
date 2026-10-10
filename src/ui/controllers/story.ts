@@ -49,7 +49,8 @@ export class StoryController {
     this.app.storyDialog.play({
       ...this.chapterOptions(id),
       // Seen in an earlier timeline (before Genesis): the scene can be skipped, the decision cannot.
-      canSkip: (this.app.state.prestige.storySeen ?? []).includes(id),
+      // [plan5:UX-D] The talk can always be skipped (it stays in the journal to replay); the decision at the end still has to be made.
+      canSkip: true,
       finish: (key: string | null) => {
         const out = this.app.engine.storySystem.finish(id, key);
         this.app.engine.requestSave();

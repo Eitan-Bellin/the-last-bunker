@@ -1,0 +1,168 @@
+/* [plan5] Less noise, more game (store/plan-2026-10/5-ux-declutter.md): a thinner status band, the activity bell and its sheet, the
+   notice card, compact toasts and lighter backdrops. Loaded after touch.css (its 44px targets stay) and before a11y.css (the colour
+   and motion modes still win). Every font goes through --fs so Text size XL keeps working. */
+
+/* ---------- UI-A: the resource row is one line; "+N" is its last cell, not a row of its own ---------- */
+.hud-top.res-collapsible:not(.res-expanded) .resource-row {
+  display: flex;
+  gap: 4px;
+}
+.hud-top.res-collapsible:not(.res-expanded) .resource-row > .resource-item { flex: 1 1 0; min-width: 0; }
+.hud-top .resource-row > .res-more,
+.hud-top.res-collapsible .resource-row > .res-more {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  margin: 0;
+  min-width: 34px;
+  min-height: var(--tap, 44px);
+  padding: 0 6px;
+  border-radius: 4px;
+  font-size: calc(11px * var(--fs, 1));
+  line-height: 1;
+}
+.hud-top.res-expanded .resource-row > .res-more { min-height: 32px; }
+.hud-top.res-collapsible .resource-row > .res-more::after { inset: -4px 0; }
+.hud-top.res-collapsible { padding-bottom: 4px; }
+/* A plate without a rate (it stands still) centres its amount. */
+.resource-rate:empty { display: none; }
+.resource-item:has(.resource-rate:empty) { justify-content: center; }
+
+/* ---------- UI-A: the status row: one line of short chips (no labels: the icons say it, the buttons are named for screen readers) ---------- */
+.hud-top .info-row { flex-wrap: nowrap; gap: 4px; margin-top: 4px; }
+.hud-top .info-row .info-label { display: none; }
+@media (max-width: 359px) {
+  .hud-top .info-row { flex-wrap: wrap; }
+}
+.activity-btn .nav-badge { top: -6px; inset-inline-end: -6px; }
+.inbox-btn .nav-badge { top: -6px; inset-inline-end: -6px; }
+/* News only: a quiet grey count. Warnings and things to collect keep the red badge. */
+.nav-badge.quiet { background: #4a4f57; box-shadow: none; color: #e8e2d4; }
+
+/* ---------- UI-A: the objective strip: two lines at most (its instruction in brackets must stay readable) ---------- */
+.objective { max-width: calc(100% - 16px); padding-block: 6px; }
+.objective-text {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  line-height: 1.3;
+}
+
+/* ---------- UI-D: toasts are short, quiet strips ---------- */
+.toast {
+  padding: 6px 12px;
+  font-size: calc(12.5px * var(--fs, 1));
+  max-width: min(88%, 380px);
+}
+.toast-msg {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* ---------- UI-E: lighter backdrops, so the bunker stays in sight behind a dialog ---------- */
+.modal-overlay { background: rgba(0, 0, 0, 0.45); }
+.sheet-overlay.open { background: rgba(0, 0, 0, 0.32); }
+
+/* ---------- UX-B: the notice card (news that used to be a dialog); the game keeps running around it ---------- */
+.notice-card {
+  position: fixed;
+  z-index: 28;
+  inset-inline: 12px;
+  bottom: calc(var(--nav-h, 72px) + var(--obj-h, 52px) + 10px);
+  max-width: 420px;
+  margin-inline: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 8px 10px 12px;
+  border-radius: 12px;
+  background: rgba(16, 20, 18, 0.97);
+  border: 1px solid rgba(110, 255, 160, 0.3);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.55);
+  opacity: 0;
+  transform: translateY(10px);
+  transition: opacity 0.25s, transform 0.25s;
+}
+[dir="rtl"] .notice-card { padding: 10px 12px 10px 8px; }
+.notice-card.in { opacity: 1; transform: none; }
+.notice-icon { flex: 0 0 auto; font-size: calc(22px * var(--fs, 1)); line-height: 1; }
+.notice-icon .ic { width: 26px; height: 26px; }
+.notice-text { flex: 1 1 auto; min-width: 0; text-align: start; }
+.notice-title { font-weight: 700; font-size: calc(14px * var(--fs, 1)); color: var(--text-primary, #f4ecd8); }
+.notice-body {
+  margin-top: 2px;
+  font-size: calc(12.5px * var(--fs, 1));
+  line-height: 1.4;
+  color: var(--text-secondary, #b8ad96);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.notice-btn { flex: 0 0 auto; min-height: var(--tap, 44px); padding-inline: 12px; white-space: nowrap; }
+.notice-close {
+  flex: 0 0 auto;
+  width: 32px;
+  height: var(--tap, 44px);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: 0;
+  color: var(--text-secondary, #b8ad96);
+  cursor: pointer;
+}
+.notice-close .ic { width: 16px; height: 16px; }
+body.tour-on .notice-card { display: none; }
+
+/* ---------- UX-F: the activity sheet ---------- */
+.activity-shortcuts {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  gap: 8px;
+  margin-bottom: 14px;
+}
+.activity-tile {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-height: 64px;
+  padding: 8px 6px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.12));
+  color: var(--text-primary, #f4ecd8);
+  font-size: calc(12px * var(--fs, 1));
+  cursor: pointer;
+}
+.activity-tile.alert { border-color: var(--amber, #ffb547); box-shadow: 0 0 0 1px rgba(255, 181, 71, 0.35) inset; }
+.activity-tile-icon { font-size: calc(20px * var(--fs, 1)); line-height: 1; }
+.activity-tile-icon .ic { width: 22px; height: 22px; }
+.activity-tile-label { font-weight: 600; text-align: center; }
+.activity-tile-meta { color: var(--text-secondary, #b8ad96); font-variant-numeric: tabular-nums; font-size: calc(11px * var(--fs, 1)); text-align: center; }
+.activity-tile.alert .activity-tile-meta { color: var(--amber, #ffb547); }
+.activity-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.activity-item {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.22);
+  font-size: calc(13px * var(--fs, 1));
+  line-height: 1.4;
+  text-align: start;
+}
+.activity-item.new { background: rgba(110, 255, 160, 0.08); }
+.activity-item.bad, .activity-item.critical { box-shadow: inset 3px 0 0 rgba(255, 90, 74, 0.8); }
+[dir="rtl"] .activity-item.bad, [dir="rtl"] .activity-item.critical { box-shadow: inset -3px 0 0 rgba(255, 90, 74, 0.8); }
+.activity-text { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+.activity-count { flex: 0 0 auto; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--amber, #ffb547); unicode-bidi: isolate; }
+.activity-time { flex: 0 0 auto; color: var(--text-secondary, #b8ad96); font-size: calc(11px * var(--fs, 1)); white-space: nowrap; }
+.activity-empty { color: var(--text-secondary, #b8ad96); text-align: center; padding: 16px 0; }
