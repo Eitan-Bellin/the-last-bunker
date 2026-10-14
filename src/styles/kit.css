@@ -29,7 +29,7 @@
 .k-hit {
   position: absolute;
   inset: min(0px, calc((100% - max(var(--hit-min), var(--tap, 0px))) / 2));
-  pointer-events: auto;
+  pointer-events: inherit; /* follow the button: a hidden or closed dialog must not catch taps through its hit area */
 }
 .k-btn > :not(.k-hit) { position: relative; }
 .k-btn__icon { display: inline-flex; line-height: 0; }

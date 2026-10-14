@@ -1083,6 +1083,7 @@ export class GameApp {
       this.researchPanel.show();
     };
 
+    this.researchPanel.onGo = (action) => { this.audio.play('click'); this.runAction(action); }; // blocked research routes to the room that makes the missing input
     this.researchPanel.onOpenGenesis = () => {
       this.closeSheets();
       this.menuPanel.show('genesis');
