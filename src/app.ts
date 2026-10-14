@@ -994,6 +994,7 @@ export class GameApp {
       this.closeSheets();
       if (!wasOpen) this.journal.show(this.state);
     };
+    this.hud.onShop = () => { this.audio.play('paper'); this.closeSheets(); this.journal.showShop(this.state); }; // [ux-redesign W2b] shop has its own HUD entry
     this.eraPanel.onOpenProjects = () => { this.closeSheets(); this.projectsPanel.show(); }; // [LateGame B1]
     this.eraPanel.foreman = this.engine.foremanSystem; // [Long game]
     this.eraPanel.engine = this.engine;
