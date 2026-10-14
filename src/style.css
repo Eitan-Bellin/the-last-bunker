@@ -1,22 +1,9 @@
-/* Fonts (Karantina, Rubik, Secular One) load from index.html. */
+/* Fonts (Karantina, Rubik, Secular One) are self-hosted: public/fonts/fonts.css, linked from index.html. */
+@import './styles/tokens.css';
+@import './styles/kit.css';
 
-:root {
-  /* One palette: gunmetal steel, CRT phosphor green, lamp amber; red only for alerts. */
-  --bg-dark: #0b0c0e;
-  --bg-panel: rgba(14, 16, 18, 0.96);
-  --bg-card: rgba(18, 40, 26, 0.72);
-  --bg-card-hi: rgba(30, 62, 40, 0.85);
-  --accent: #ffb547;
-  --accent-glow: rgba(255, 181, 71, 0.28);
-  --text-primary: #e8e2d2;
-  --text-secondary: #a89e88;
-  --text-dim: #5f5a50;
-  --positive: #4dff8f;
-  --negative: #ff5555;
-  --warning: #ffb547;
-  --border: rgba(110, 255, 160, 0.22);
-  --radius: 8px;
-}
+/* [ux-redesign W1] The palette, spacing, type, layers and motion live in one place now: styles/tokens.css. */
+
 
 * {
   margin: 0;
@@ -29,7 +16,7 @@ html, body {
   width: 100%;
   height: 100%;
   overflow: hidden;
-  font-family: 'Rubik', sans-serif;
+  font-family: var(--font-body);
   background: var(--bg-dark);
   color: var(--text-primary);
   user-select: none;
@@ -58,7 +45,7 @@ button {
   inset: 0;
   width: 100%;
   height: 100%;
-  z-index: 0;
+  z-index: var(--z-world);
 }
 
 /* gfx-p0 light: vignette and film grain are drawn in-engine (postfx.ts composite, per era); the old DOM overlay and its scanlines are gone. */
@@ -70,7 +57,7 @@ button {
   position: fixed;
   inset: 0;
   pointer-events: none;
-  z-index: 10;
+  z-index: var(--z-hud);
 }
 
 .hud-top {
@@ -204,7 +191,7 @@ button {
   /* [perf] no backdrop-filter: a blur over the live canvas is a GPU pass every picture (96% opaque anyway) */
   /* [plan4:UX-8] 22: above the bottom sheets (20), so the nav stays visible and tappable with a sheet open; below the surface map (25),
      toasts (30) and dialogs (40). HUD.ts puts the console on <body> so this z-index competes with the sheets at all. */
-  z-index: 22;
+  z-index: var(--z-nav);
 }
 
 .nav-btn {
@@ -300,19 +287,19 @@ body.placement-mode #game-canvas { cursor: crosshair; }
 .sheet-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0);
+  background: transparent;
   display: flex;
   align-items: flex-end;
   justify-content: center;
-  z-index: 20;
+  z-index: var(--z-panels);
   pointer-events: none;
-  transition: background 0.25s;
+  transition: background var(--dur-popup-in) var(--ease-out);
 }
-.sheet-overlay.open { background: rgba(0, 0, 0, 0.5); pointer-events: auto; }
+.sheet-overlay.open { background: var(--overlay-soft); pointer-events: auto; }
 
 .sheet {
   background: var(--bg-panel);
-  border-radius: 18px 18px 0 0;
+  border-radius: var(--r-card) var(--r-card) 0 0;
   /* [plan4:UX-6] side padding clears the notch / rounded corners in landscape */
   padding: 8px max(16px, env(safe-area-inset-right)) 16px max(16px, env(safe-area-inset-left));
   width: 100%;
@@ -328,7 +315,7 @@ body.placement-mode #game-canvas { cursor: crosshair; }
   border: 1px solid var(--border);
   border-bottom: none;
   transform: translateY(100%);
-  transition: transform 0.28s cubic-bezier(0.2, 0.9, 0.3, 1);
+  transition: transform var(--dur-screen) var(--ease-out);
 }
 .sheet-overlay.open .sheet { transform: translateY(0); }
 /* [plan4:UX-7] dvh follows the browser bars (100vh on iOS Safari is the tallest state, so a 72vh sheet could reach under the toolbar). */
@@ -342,7 +329,7 @@ body.placement-mode #game-canvas { cursor: crosshair; }
   width: 40px;
   height: 4px;
   background: var(--text-dim);
-  border-radius: 2px;
+  border-radius: var(--r-full);
   margin: 2px auto 10px;
 }
 
@@ -459,30 +446,30 @@ body.placement-mode #game-canvas { cursor: crosshair; }
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.65);
+  background: var(--overlay);
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 40;
+  z-index: var(--z-popups);
   /* [plan4:UX-3] Keep clear of the notch, the home bar and rounded corners. */
   padding: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
   opacity: 0;
   pointer-events: none;
-  transition: opacity 0.2s;
+  transition: opacity var(--dur-popup-out) var(--ease-in);
 }
-.modal-overlay.open { opacity: 1; pointer-events: auto; }
+.modal-overlay.open { opacity: 1; pointer-events: auto; transition: opacity var(--dur-popup-in) var(--ease-out); }
 
 .modal {
   background: linear-gradient(180deg, #23233f, #16162b);
   border: 1px solid var(--border);
-  border-radius: 16px;
+  border-radius: var(--r-card);
   padding: 20px 18px 16px;
   width: 100%;
   max-width: 380px;
   text-align: center;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
-  transform: scale(0.92);
-  transition: transform 0.22s cubic-bezier(0.2, 1.4, 0.4, 1);
+  box-shadow: var(--elev-3);
+  transform: scale(var(--popup-from-scale));
+  transition: transform var(--dur-popup-in) var(--ease-out-back);
   /* [plan4:UX-3] A dialog never grows past the screen (small phone, landscape, big text): the text scrolls, the buttons stay in reach.
      html/body are overflow:hidden, so a dialog taller than the screen used to push its buttons out of reach (Genesis choices could lock). */
   display: flex;
@@ -498,10 +485,10 @@ body.placement-mode #game-canvas { cursor: crosshair; }
 .modal-body { min-height: 0; }
 .modal-overlay.open .modal { transform: scale(1); }
 .modal-icon { font-size: calc(44px * var(--fs, 1)); margin-bottom: 6px; }
-.modal-title { font-size: calc(19px * var(--fs, 1)); font-weight: 700; color: var(--accent); margin-bottom: 8px; }
-.modal-body { font-size: calc(14px * var(--fs, 1)); line-height: 1.5; color: var(--text-primary); margin-bottom: 14px; }
-.modal-sub { font-size: calc(12px * var(--fs, 1)); color: var(--text-secondary); margin-bottom: 8px; }
-.modal-actions { display: flex; flex-direction: column; gap: 8px; }
+.modal-title { font-size: calc(19px * var(--fs, 1)); font-weight: var(--weight-bold); color: var(--accent); margin-bottom: var(--sp-2); }
+.modal-body { font-size: calc(var(--type-body) * var(--fs, 1)); line-height: 1.5; color: var(--text-primary); margin-bottom: 14px; }
+.modal-sub { font-size: calc(var(--type-caption) * var(--fs, 1)); color: var(--text-secondary); margin-bottom: var(--sp-2); }
+.modal-actions { display: flex; flex-direction: column; gap: var(--sp-2); }
 /* The last (main) button stays pinned under the scrolling part; a very tall pinned group may scroll on its own, never push the text away. */
 .modal > .modal-actions { flex: 0 0 auto; max-height: 45vh; overflow-y: auto; overscroll-behavior: contain; touch-action: pan-y; padding: 8px 4px max(2px, env(safe-area-inset-bottom)); margin-inline: -4px; }
 .modal-scroll > .modal-actions { margin-bottom: 8px; }
@@ -524,30 +511,30 @@ body.placement-mode #game-canvas { cursor: crosshair; }
   flex-direction: column;
   align-items: center;
   gap: 6px;
-  z-index: 30;
+  z-index: var(--z-toasts);
   pointer-events: none;
 }
 .toast {
   max-width: 90%;
   background: rgba(20, 20, 40, 0.95);
   border: 1px solid var(--border);
-  border-radius: 20px;
-  padding: 8px 16px;
+  border-radius: var(--r-full);
+  padding: var(--sp-2) var(--sp-4);
   font-size: calc(13px * var(--fs, 1));
-  font-weight: 500;
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+  font-weight: var(--weight-medium);
+  box-shadow: var(--elev-2);
   opacity: 0;
   transform: translateY(-8px);
-  transition: opacity 0.25s, transform 0.25s;
+  transition: opacity var(--dur-toast) var(--ease-out), transform var(--dur-toast) var(--ease-out);
 }
-.toast.good { border-color: rgba(77, 255, 143, 0.6); }
-.toast.bad, .toast.critical { border-color: rgba(255, 85, 85, 0.7); }
+.toast.good { border-color: var(--success); }
+.toast.bad, .toast.critical { border-color: var(--danger); }
 .toast.critical { border-width: 2px; }
 /* [plan4:UX-9] The player can swipe a toast away (Toast.ts moves it with --dx); the counter shows merged repeats ("x3"). */
 .toast { pointer-events: auto; touch-action: none; transform: translate(var(--dx, 0px), -8px); }
 .toast.in { opacity: 1; transform: translate(var(--dx, 0px), 0); }
 .toast.dragging { transition: none; }
-.toast-count { margin-inline-start: 8px; font-weight: 700; font-variant-numeric: tabular-nums; opacity: 0.85; unicode-bidi: isolate; }
+.toast-count { margin-inline-start: var(--sp-2); font-weight: var(--weight-bold); font-variant-numeric: var(--num-tabular); opacity: 0.85; unicode-bidi: isolate; }
 
 ::-webkit-scrollbar { width: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }

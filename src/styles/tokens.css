@@ -1,0 +1,223 @@
+/*
+ * [ux-redesign W1] Design tokens: the ONE :root block of the game's DOM interface.
+ * Every colour, space, size, radius, shadow, layer, duration and easing of new UI code comes from here
+ * (store/ux-redesign/DESIGN-SYSTEM.md lists them with their contrast table). Imported first, from the top of style.css.
+ *
+ * Rules
+ *  - Font sizes are tokens times the text-size setting: font-size: calc(var(--type-body) * var(--fs, 1)).
+ *  - Layout uses logical properties (inset-inline, margin-inline-start) so Hebrew RTL and English LTR share one rule.
+ *  - Later layers may only override these on purpose: a11y.css (colour-vision modes, reduced motion) and the high-contrast block in
+ *    touch.css. The "Legacy names" section keeps every variable name the older sheets use, pointed at the new tokens.
+ *  - src/ui/kit/tokens.ts mirrors the few values TypeScript needs (durations of gestures); tools/sim/tokens-test.mjs keeps both in step.
+ */
+
+:root {
+  /* ---- Surfaces ------------------------------------------------------------------------------------------------------------------- */
+  --surface-0: #14161A;            /* the page, sheets' base */
+  --surface-1: #1F2329;            /* cards, rows */
+  --surface-2: #2A3038;            /* raised: chips, inputs, pressed rows */
+  --border: #3A424C;               /* hairlines and card edges (decorative: not a contrast-bearing edge) */
+  --overlay: rgba(0, 0, 0, 0.7);   /* behind a dialog */
+  --overlay-soft: rgba(0, 0, 0, 0.5); /* behind a bottom sheet (the bunker stays visible) */
+
+  /* ---- Text ------------------------------------------------------------------------------------------------------------------------ */
+  --text-primary: #ECE6D8;         /* body text: warm paper (14.6 / 12.7 / 10.7 : 1 on surface-0/1/2) */
+  --text-secondary: #A8A194;       /* hints, meta (7.1 / 6.2 / 5.2 : 1) */
+  --text-tertiary: #9C9689;        /* the dimmest readable text (6.2 / 5.4 / 4.5 : 1) */
+  --text-disabled: #807B71;        /* locked / disabled: exempt from AA, kept >= 3:1 everywhere (4.3 / 3.8 / 3.2 : 1); pair with a non-colour cue */
+  --text-on-primary: #14161A;      /* text on an amber button (8.4 : 1) */
+  --terminal: #9DFFB4;             /* CRT phosphor green: terminal titles and readouts, never body text */
+
+  /* ---- Brand and status ------------------------------------------------------------------------------------------------------------ */
+  --primary: #E8A33D;              /* lamp amber: the one main action */
+  --primary-pressed: #C7862A;
+  --primary-glow: rgba(232, 163, 61, 0.28);
+  --success: #6FBF73;
+  --danger: #E5533D;
+  --danger-text: #F27A63;          /* danger as running text: >= 4.5 : 1 on every surface (--danger is 3.6 : 1 on surface-2) */
+  --warning: #F2C14E;
+  --info: #5BA4CF;                 /* note: a11y.css (AC-6) still sets its own --info after this file */
+
+  /* ---- Resources (src/data/resources.ts: one token per resource id, --res-<id>) -------------------------------------------------------- */
+  --power: #F5D547;
+  --water: #4FB3E8;
+  --food: #8CC152;
+  --scrap: #B0866A;
+  --radiation: #9BE15D;
+  --currency-premium: #7FD3E8;
+  --res-food: var(--food);
+  --res-water: var(--water);
+  --res-power: var(--power);
+  --res-materials: #C9A27A;
+  --res-medicine: #E9798B;
+  --res-knowledge: #A99CF0;
+  --res-scrap: var(--scrap);
+  --res-components: #C3CAD3;
+  --res-alloys: #93A9C2;
+  --res-data: #63D2BE;
+  --res-influence: #E2A6F2;
+  --res-seedCores: #B7DB6A;
+  --res-isotope7: var(--radiation);
+  --res-blueprints: #7FB2EA;
+  --res-vaultCoins: #D9B54A;
+  --res-credits: var(--currency-premium);
+
+  /* ---- Spacing (4-pt grid) --------------------------------------------------------------------------------------------------------- */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 24px;
+  --sp-6: 32px;
+  --sp-7: 48px;
+  --sp-8: 64px;
+
+  /* ---- Radius ---------------------------------------------------------------------------------------------------------------------- */
+  --r-panel: 6px;
+  --r-card: 12px;
+  --r-full: 999px;
+  --border-w: 1px;
+  --ring-w: 3px;                   /* focus / highlight ring */
+  --spinner-w: 2px;
+
+  /* ---- Elevation ------------------------------------------------------------------------------------------------------------------- */
+  --shadow-color: rgba(0, 0, 0, 0.45);
+  --shadow-deep: rgba(0, 0, 0, 0.7);
+  --btn-edge: #0B0C0F;             /* the "key side" under a button */
+  --elev-btn: 0 5px 0 var(--btn-edge);
+  --elev-btn-pressed: 0 1px 0 var(--btn-edge);
+  --elev-btn-lift: 4px;            /* how far a pressed button sinks: base shadow 5px minus pressed 1px */
+  --elev-1: 0 2px 4px var(--shadow-color);
+  --elev-2: 0 6px 20px var(--shadow-color);
+  --elev-3: 0 24px 60px var(--shadow-deep);
+
+  /* ---- Layers (the numbers the game already used, so nothing changes its stacking) -------------------------------------------------- */
+  --z-world: 0;        /* the Pixi canvas */
+  --z-hud: 10;
+  --z-panels: 20;      /* bottom sheets */
+  --z-nav: 22;         /* the nav console stays above the sheets */
+  --z-toasts: 30;
+  --z-popups: 40;      /* modal dialogs */
+  --z-tooltip: 50;     /* kit tooltips: over a dialog's buttons */
+  --z-story: 60;       /* story dialog, depth overlays */
+  --z-tutorial: 90;    /* intro, spotlights */
+  --z-system: 100000;  /* share picture, turn-phone card */
+  --z-splash: 100001;
+
+  /* ---- Type ------------------------------------------------------------------------------------------------------------------------ */
+  --font-body: 'Rubik', system-ui, sans-serif;
+  /* Sturdy Hebrew + Latin display face for titles, labels and buttons under 28 px. */
+  --font-title: 'Secular One', 'Rubik', sans-serif;
+  /* Karantina only at 28 px and up: smaller, its ה reads as ק and its digits blur. */
+  --font-display: 'Karantina', 'Secular One', 'Rubik', sans-serif;
+  --font-mono: ui-monospace, 'SFMono-Regular', Menlo, Consolas, 'Liberation Mono', monospace;
+  --num-tabular: tabular-nums;     /* font-variant-numeric for every counter and timer */
+  --type-caption: 12px;
+  --type-body: 14px;
+  --type-body-l: 16px;
+  --type-subtitle: 18px;
+  --type-title: 22px;
+  --type-headline: 28px;
+  --type-hero: 40px;
+  --lh-tight: 1.2;
+  --lh-body: 1.45;
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-bold: 700;
+
+  /* ---- Motion ---------------------------------------------------------------------------------------------------------------------- */
+  --dur-press: 60ms;
+  --dur-release: 150ms;
+  --dur-popup-in: 250ms;
+  --dur-popup-out: 180ms;
+  --dur-screen: 300ms;
+  --dur-toast: 200ms;
+  --toast-hold: 2500ms;
+  --stagger: 40ms;
+  --dur-shake: 200ms;
+  --dur-breathe: 1.8s;
+  --dur-pulse: 1.2s;
+  --ease-out-back: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-in: cubic-bezier(0.32, 0, 0.67, 0);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --ease-out: cubic-bezier(0.33, 1, 0.68, 1);
+  --press-scale: 0.93;
+  --popup-from-scale: 0.92;        /* a dialog grows in from here */
+  --dur-crt-on: 0.4s;              /* Bunker OS skin: the CRT switch-on flash of sheets and dialogs */
+  --press-darken: 0.9;             /* brightness() of a pressed control: 10 % darker */
+  --breathe-scale: 1.04;
+  --shake-distance: 6px;
+
+  /* ---- Touch ----------------------------------------------------------------------------------------------------------------------- */
+  --hit-min: 48px;                 /* every tappable thing reaches this, even when it looks smaller */
+  --debounce: 350ms;               /* a kit button ignores a second press this soon (src/ui/kit/tokens.ts mirrors it) */
+  --long-press: 450ms;             /* hold this long for a tooltip */
+  --icon-s: 16px;
+  --icon-m: 20px;
+  --icon-l: 24px;
+  --tooltip-max: 280px;
+  --measure-short: 32ch;           /* the widest line of an empty-state sentence */
+  --ghost-opacity: 0.45;           /* the trailing "ghost" of a progress bar */
+
+  /* ---- Bunker OS skin (the steel plates and CRT terminals of bunker-os.css) ---------------------------------------------------------- */
+  --r-s: 2px;
+  --r-m: 4px;
+  --r-l: 8px;
+  --steel-1: #4a4d52;
+  --steel-2: #2e3034;
+  --steel-3: #1c1d20;
+  --rivet: radial-gradient(circle at 35% 35%, #9a9ea6 0 1px, #4a4d52 1.6px, #1c1d20 2.6px, transparent 3px);
+  --crt-bg: #07120c;
+  --crt-bg-2: #0b1a12;
+  --phosphor: var(--terminal);
+  --phosphor-dim: #5fbf7c;
+  --phosphor-faint: rgba(110, 255, 160, 0.12);
+  --bg-panel: rgba(14, 16, 18, 0.96);
+  --bg-card: rgba(18, 40, 26, 0.72);
+  --bg-card-hi: rgba(30, 62, 40, 0.85);
+
+  /* ---- Legacy names (style.css / bunker-os.css used these before the merge; keep them working) -------------------------------------- */
+  --bg-dark: #0b0c0e;              /* the page under the canvas */
+  --accent: var(--primary);
+  --amber: var(--primary);
+  --accent-glow: var(--primary-glow);
+  --text-dim: var(--text-tertiary);
+  --positive: var(--success);
+  --negative: var(--danger);
+  --radius: var(--r-l);
+}
+
+/* Reduced motion (Accessibility tab, data-motion set by utils/a11y.ts; the media query covers the first paint before it runs):
+   every movement duration is zero, so token-driven motion turns into an instant change. */
+:root[data-motion="reduced"] {
+  --dur-press: 0ms;
+  --dur-release: 0ms;
+  --dur-popup-in: 0ms;
+  --dur-popup-out: 0ms;
+  --dur-screen: 0ms;
+  --dur-toast: 0ms;
+  --stagger: 0ms;
+  --dur-shake: 0ms;
+  --press-scale: 1;
+  --popup-from-scale: 1;
+  --dur-crt-on: 0ms;
+  --breathe-scale: 1;
+  --shake-distance: 0px;
+}
+@media (prefers-reduced-motion: reduce) {
+  :root:not([data-motion]) {
+    --dur-press: 0ms;
+    --dur-release: 0ms;
+    --dur-popup-in: 0ms;
+    --dur-popup-out: 0ms;
+    --dur-screen: 0ms;
+    --dur-toast: 0ms;
+    --stagger: 0ms;
+    --dur-shake: 0ms;
+    --press-scale: 1;
+  --popup-from-scale: 1;
+  --dur-crt-on: 0ms;
+    --breathe-scale: 1;
+    --shake-distance: 0px;
+  }
+}

@@ -1,12 +1,15 @@
 import { el } from '../dom';
 import { uiSound } from '../../audio/uiSound';
 import { setInert, trapTab } from '../a11yDom';
+import { kButton } from '../kit';
 
 export interface ModalAction {
   label: string;
   className?: string;
   disabled?: boolean;
   detail?: HTMLElement;
+  /** [ux-redesign W1] Why a disabled choice cannot be taken (shown when it is pressed anyway). */
+  disabledReason?: string;
   onClick: () => void;
 }
 
@@ -62,18 +65,22 @@ export class Modal {
     this.box.setAttribute('aria-describedby', bodyNode.id);
     scroll.appendChild(bodyNode);
 
+    // [ux-redesign W1] Kit buttons: pressed feedback, action on release, double-tap guard, and a disabled choice explains itself.
     const makeButton = (a: ModalAction): HTMLButtonElement => {
-      const btn = el('button', `btn ${a.className ?? 'btn-primary'}`);
-      btn.appendChild(el('span', '', a.label));
-      if (a.detail) btn.appendChild(a.detail);
-      btn.disabled = !!a.disabled;
-      btn.addEventListener('click', () => {
-        if (btn.disabled) return;
-        const cls = a.className ?? 'btn-primary';
-        uiSound(cls.includes('btn-primary') || cls.includes('btn-danger') ? 'confirm' : 'cancel', 0.8);
-        a.onClick();
+      const cls = a.className ?? 'btn-primary';
+      return kButton({
+        variant: cls.includes('btn-primary') ? 'primary' : 'secondary',
+        className: cls,
+        label: a.label,
+        detail: a.detail,
+        disabledReason: a.disabled ? a.disabledReason ?? '' : null,
+        haptics: false,
+        stopPropagation: false,
+        onPress: () => {
+          uiSound(cls.includes('btn-primary') || cls.includes('btn-danger') ? 'confirm' : 'cancel', 0.8);
+          a.onClick();
+        },
       });
-      return btn;
     };
     const pinnedFrom = opts.actions.length > 3 ? opts.actions.length - 1 : 0;
     if (pinnedFrom > 0) {
@@ -99,7 +106,7 @@ export class Modal {
     }
     this.overlay.classList.add('open');
     // Keyboard and screen-reader users land on the first choice.
-    this.box.querySelector<HTMLButtonElement>('.modal-actions button:not(:disabled)')?.focus({ preventScroll: true });
+    this.box.querySelector<HTMLButtonElement>('.modal-actions button:not(:disabled):not([aria-disabled="true"])')?.focus({ preventScroll: true });
   }
 
   hide(): void {

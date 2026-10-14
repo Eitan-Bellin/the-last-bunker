@@ -1,6 +1,7 @@
 import { el } from '../dom';
 import { relaxedMs } from '../../utils/a11y';
 import { uiSound } from '../../audio/uiSound';
+import { MS } from '../kit/tokens';
 
 /**
  * [plan4:UX-9] Three weights of message:
@@ -18,7 +19,8 @@ const DURATION_MS: Record<ToastKind, number> = { info: 3200, good: 3000, bad: 50
 /** On screen at once, and how many more may wait their turn. */
 const MAX_VISIBLE = 3;
 const MAX_QUEUED = 6;
-const FADE_MS = 300;
+/** [ux-redesign W1] How long a leaving toast stays in the page: the --dur-screen token (its fade is the shorter --dur-toast). */
+const FADE_MS = MS['dur-screen'];
 /** [ux-wp3 D2] Messages kept back while the bunker works through time away (the welcome report tells that story). */
 const MAX_HELD = 40;
 /** A sideways drag past this (px), or a quick flick, dismisses the toast. */

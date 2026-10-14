@@ -3,6 +3,7 @@ import { haptic } from '../utils/haptics';
 import { i18n } from '../i18n/I18nManager';
 import { iconSvg, isIcon, tok, type IconName } from './icons';
 import { uiSound } from '../audio/uiSound';
+import { fmtCost, fmtRate } from './format';
 
 /** Icon tokens for resources; embed them in any UI string. */
 export const RESOURCE_ICONS: Record<string, string> = {
@@ -140,23 +141,18 @@ export function el<K extends keyof HTMLElementTagNameMap>(
 
 /**
  * [plan4:BL-25,34..38] A production rate for the panels: per second as usual, but a trickle (the pre-war vault's blueprints, a forum's influence:
- * under 0.01 a second) is shown per hour, since "+0.00 /s" says nothing.
+ * under 0.01 a second) is shown per hour, since "+0.00 /s" says nothing. [ux-redesign W1] Lives in format.ts now (`fmtRate`).
  */
 export function rateText(perSecond: number): string {
-  if (perSecond > 0 && perSecond < 0.005) return `${i18n.formatRate(perSecond * 3600)} ${i18n.t('resources.perHour')}`;
-  return `${i18n.formatRate(perSecond)} ${i18n.t('resources.perSecond')}`;
+  return fmtRate(perSecond);
 }
 
 /**
  * [ux-wp4] P17: a price for a cost chip. Up to 9,999 it is the exact number; above that it is short like the HUD ("470K", "2.4M"),
- * always rounded up so a short price is never less than what is asked.
+ * always rounded up so a short price is never less than what is asked. [ux-redesign W1] Lives in format.ts now (`fmtCost`).
  */
 export function costAmount(n: number): string {
-  if (n < 10_000) return String(Math.ceil(n));
-  if (n < 999_500) return `${Math.ceil(n / 1000)}K`;
-  if (n < 9_995_000) return `${(Math.ceil(n / 100_000) / 10).toFixed(1)}M`;
-  if (n < 999_500_000) return `${Math.ceil(n / 1_000_000)}M`;
-  return `${(Math.ceil(n / 100_000_000) / 10).toFixed(1)}B`;
+  return fmtCost(n);
 }
 
 /** [ux-wp4] A number with a sign, kept left-to-right inside Hebrew text ("+30%", "−3", "×1.25"), for places that set textContent. */
