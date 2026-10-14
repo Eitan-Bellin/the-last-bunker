@@ -7,7 +7,11 @@
 import { Container, Sprite, Texture } from 'pixi.js';
 import type { GameState } from '../core/GameState';
 import { isDistrict } from '../data/buildingDefs';
-import { ROOMS_W, ROOMS_X, FLOOR_H, floorTop } from './layout';
+import { ROOMS_W, FLOOR_H, floorTop } from './layout';
+import { eastmostSlotX } from '../world/project';
+
+/** [world:C0] The dust band: the default east strip, from where the east rooms begin (a global extent: the east-most frame). */
+const dustX0 = (): number => eastmostSlotX(0);
 import { hashString, seeded } from './draw';
 
 /**
@@ -236,7 +240,7 @@ export class Dust {
     this.motes = [];
     for (let i = 0; i < 26 * floors; i++) {
       this.motes.push({
-        x: ROOMS_X + rnd() * ROOMS_W, y: floorTop(0) + rnd() * (floorTop(floors) - floorTop(0)), // [plan4:ST-1] the galleries add height
+        x: dustX0() + rnd() * ROOMS_W, y: floorTop(0) + rnd() * (floorTop(floors) - floorTop(0)), // [plan4:ST-1] the galleries add height
         vx: (rnd() - 0.5) * 4, vy: (rnd() - 0.5) * 3, ph: rnd() * Math.PI * 2,
       });
     }
@@ -253,12 +257,13 @@ export class Dust {
   update(dt: number, t: number): void {
     const { x0, y0, x1, y1 } = VIEW;
     const pool = this.pool;
+    const x0d = dustX0();
     let n = 0;
     for (const m of this.motes) {
       m.x += m.vx * dt;
       m.y += m.vy * dt;
-      if (m.x < ROOMS_X) m.x += ROOMS_W;
-      if (m.x > ROOMS_X + ROOMS_W) m.x -= ROOMS_W;
+      if (m.x < x0d) m.x += ROOMS_W;
+      if (m.x > x0d + ROOMS_W) m.x -= ROOMS_W;
       if (n < this.want && m.x > x0 && m.x < x1 && m.y > y0 && m.y < y1) {
         if (n >= pool.length) pool.push(this.make());
         const s = pool[n++];

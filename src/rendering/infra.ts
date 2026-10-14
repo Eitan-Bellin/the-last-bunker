@@ -3,7 +3,8 @@ import type { GameState } from '../core/GameState';
 import { glowTexture } from '../art/ArtLibrary';
 import { i18n } from '../i18n/I18nManager';
 import { GFX, gfxLevel } from './gfxFeatures';
-import { BASE_EAST, ROOMS_X, ROOM_H, SHAFT_GAP, SLAB, SLAB_CLASSIC, SLOT_W, floorTop, slotX, type Ext } from './geom';
+import { BASE_EAST, ROOM_H, SLAB, SLAB_CLASSIC, SLOT_W, floorTop, type Ext } from './geom';
+import { roomsEastX, roomsWestX, slotX } from '../world/project';
 import { VIEW } from './perfFx';
 import { hashString } from './draw';
 import { occupancy } from './occupancy';
@@ -198,7 +199,7 @@ export class InfraLayer implements Animated {
       if (f >= (this.ctx?.floors ?? 0)) break;
       const top = floorTop(f);
       const s = new Sprite(tex);
-      s.position.set(slotX(it.x), top);
+      s.position.set(slotX(f, it.x), top);
       s.width = SLOT_W;
       s.height = ROOM_H + SLAB;
       s.tint = tintAt(top + ROOM_H / 2, 0.8);
@@ -210,7 +211,7 @@ export class InfraLayer implements Animated {
       g.width = 44;
       g.height = 34;
       g.alpha = 0.4;
-      g.position.set(slotX(it.x) + 9.4, top + 19.3 * ART_K);
+      g.position.set(slotX(f, it.x) + 9.4, top + 19.3 * ART_K);
       this.container.addChild(s, g);
       this.sections.push({ s, glow: g, floor: f, y0: top, y1: top + ROOM_H + SLAB, ph: (it.x * 1.7 + f * 0.9) % 6.28 });
     }
@@ -224,7 +225,7 @@ export class InfraLayer implements Animated {
       const top = floorTop(f);
       const first = i === 0;
       const s = new Sprite(ventTexture(first));
-      s.position.set(slotX(it.x), top);
+      s.position.set(slotX(f, it.x), top);
       s.width = SLOT_W;
       s.height = ROOM_H + SLAB;
       s.tint = tintAt(top + ROOM_H / 2);
@@ -233,7 +234,7 @@ export class InfraLayer implements Animated {
       if (first) {
         const fan = new Sprite(fanTexture());
         fan.anchor.set(0.5);
-        fan.position.set(slotX(it.x) + 23, top + 24 * ART_K);
+        fan.position.set(slotX(f, it.x) + 23, top + 24 * ART_K);
         fan.width = fan.height = 20;
         fan.tint = tintAt(top + 24 * ART_K);
         this.container.addChild(fan);
@@ -245,7 +246,7 @@ export class InfraLayer implements Animated {
   // ------------------------------------------------------------------------------------------------ bulkhead doors
 
   private addDoor(key: string, floor: number, slot: number, tintAt: (y: number, v?: number) => number, glow: Texture): void {
-    const x = slotX(slot);
+    const x = slotX(floor, slot);
     const top = floorTop(floor);
     const floorY = top + ROOM_H - LIP;
     const y1 = floorY, y0 = floorY - PASS_H;
@@ -381,16 +382,16 @@ export class InfraLayer implements Animated {
       for (const o of ops) if (o.kind === 'room' && this.readDoor(`${f}:${o.slot}`) !== 'open') cutX.push(o.x);
       for (const k in this.state.layout.doors) {
         const p = parseKey(k);
-        if (p && p.floor === f && this.readDoor(k) !== 'open') cutX.push(slotX(p.slot));
+        if (p && p.floor === f && this.readDoor(k) !== 'open') cutX.push(slotX(f, p.slot));
       }
       // East part and west part of the floor each run from the shaft out to the end of the last room; a cut makes everything beyond dead.
       const runs: { dir: 1 | -1; x0: number; x1: number }[] = [];
       let last = -1;
       for (let s = ext.e - 1; s >= 0; s--) if (cell(s)) { last = s; break; }
-      if (last >= 0) runs.push({ dir: 1, x0: ROOMS_X - 2, x1: slotX(last + 1) - 2 });
+      if (last >= 0) runs.push({ dir: 1, x0: roomsEastX(f) - 2, x1: slotX(f, last + 1) - 2 });
       let first = 1;
       for (let s = -ext.w; s < 0; s++) if (cell(s)) { first = s; break; }
-      if (first < 0) runs.push({ dir: -1, x0: -SHAFT_GAP + 2, x1: slotX(first) + 2 });
+      if (first < 0) runs.push({ dir: -1, x0: roomsWestX(f) + 2, x1: slotX(f, first) + 2 });
       for (const r of runs) {
         // Cuts along this run, nearest the shaft first.
         const cuts = cutX.filter(x => (r.dir > 0 ? x > r.x0 && x < r.x1 : x < r.x0 && x > r.x1)).sort((a, b) => (r.dir > 0 ? a - b : b - a));

@@ -1,5 +1,6 @@
 import { Container, Graphics, Rectangle } from 'pixi.js';
-import { BASE_EAST, ROOM_H, floorTop, slotX, type Ext } from './geom';
+import { BASE_EAST, ROOM_H, floorTop, type Ext } from './geom';
+import { slotX } from '../world/project';
 import { richLine } from './richText';
 import { GFX } from './gfxFeatures';
 import { VIEW } from './perfFx';
@@ -55,7 +56,7 @@ export class WingSigns {
     for (const o of options) {
       const ext = exts[o.floor] ?? { w: 0, e: BASE_EAST };
       const key = `${o.floor}${o.side}`;
-      const x = o.side === 'e' ? slotX(ext.e) + 7 : ext.w > 0 ? slotX(-ext.w) - 7 : westX;
+      const x = o.side === 'e' ? slotX(o.floor, ext.e) + 7 : ext.w > 0 ? slotX(o.floor, -ext.w) - 7 : westX;
       const y = floorTop(o.floor) + ROOM_H * 0.4;
       const cost = Object.entries(o.cost).slice(0, 2).map(([k, v]) => `[[${ICON[k] ?? k}]] ${v}`).join('  ');
       const label = `${x}|${y}|+${o.steps}|${cost}|${o.block ?? ''}`;

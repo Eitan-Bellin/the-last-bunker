@@ -1,7 +1,7 @@
 import { Rectangle, Texture } from 'pixi.js';
 import type { Grid } from './occupancy';
 import { cellAt } from './occupancy';
-import { slotX } from './geom';
+import { slotX } from '../world/project';
 import { straddles, voidBoundaries } from './voids'; // [airy2:D3]
 
 /**
@@ -39,7 +39,7 @@ export function piersOfFloor(grid: Grid, f: number, airy: boolean): Pier[] {
     if (sl === 0) { last = 0; continue; } // the shaft stands between the last west slot and slot 0
     const a = row[i - 1], b = row[i];
     if (voids && sl > 0 && voids.has(sl)) {
-      if (!straddles(grid, f, sl)) out.push({ x: slotX(sl), tier: 2 });
+      if (!straddles(grid, f, sl)) out.push({ x: slotX(f, sl), tier: 2 });
       continue;
     }
     if (!(a || b)) continue;
@@ -54,7 +54,7 @@ export function piersOfFloor(grid: Grid, f: number, airy: boolean): Pier[] {
         last = sl;
       }
     }
-    out.push({ x: slotX(sl), tier });
+    out.push({ x: slotX(f, sl), tier });
   }
   return out;
 }

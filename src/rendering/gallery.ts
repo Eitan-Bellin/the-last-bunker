@@ -1,6 +1,10 @@
 import { Container, Graphics, Sprite, Texture, TilingSprite } from 'pixi.js';
 import { glowTexture } from '../art/ArtLibrary';
-import { GALLERY_H, SHAFT_W, SLOT_W, galleryCount, galleryExt, galleryTop, slotX, type Ext } from './geom';
+import { GALLERY_EVERY, GALLERY_H, SHAFT_W, SLOT_W, galleryCount, galleryExt, galleryTop, type Ext } from './geom';
+import { slotX } from '../world/project';
+
+/** [world:C0] The floor above gallery g (4g + 3): the band lies in that floor's stratum, so its x follows that floor's frame. */
+const gFloor = (g: number): number => g * GALLERY_EVERY + GALLERY_EVERY - 1;
 import { seeded } from './draw';
 import { VIEW } from './perfFx';
 import { depthGains, kitTex, softTexture, type KitState } from './structure';
@@ -56,7 +60,7 @@ export function galleryVents(floors: number, exts: readonly Ext[]): { x: number;
     const ext = galleryExt(exts, g);
     const r = seeded(7000 + g * 31);
     const y = galleryTop(g) + PIPE_Y + PIPE_H * 0.55;
-    const x0 = slotX(-ext.w), x1 = slotX(ext.e);
+    const x0 = slotX(gFloor(g), -ext.w), x1 = slotX(gFloor(g), ext.e);
     const n = 1 + Math.floor((x1 - x0) / (SLOT_W * 7));
     for (let i = 0; i < n; i++) {
       let x = x0 + SLOT_W * 2 + r() * (x1 - x0 - SLOT_W * 4);
@@ -94,8 +98,8 @@ export function buildGalleries(floors: number, exts: readonly Ext[], st: KitStat
     const r = seeded(4100 + g * 17);
     const tint = tintAt(base, y0 + GALLERY_H / 2);
     // Both halves of the band: east of the shaft, and west of it when the floors above reach that way.
-    const spans: [number, number][] = [[SHAFT_W, slotX(ext.e) + 6]];
-    if (ext.w > 0) spans.push([slotX(-ext.w) - 6, 0]);
+    const spans: [number, number][] = [[SHAFT_W, slotX(gFloor(g), ext.e) + 6]];
+    if (ext.w > 0) spans.push([slotX(gFloor(g), -ext.w) - 6, 0]);
     const g2 = new Graphics();
     for (const [xa, xb] of spans) {
       const w = xb - xa;
@@ -151,7 +155,7 @@ export function buildGalleries(floors: number, exts: readonly Ext[], st: KitStat
       // Steel struts from the slab to the catwalk, with a base plate.
       if (colTex) {
         for (let s = -Math.ceil(ext.w / 4) * 4; s <= ext.e; s += 4) {
-          const x = slotX(s);
+          const x = slotX(gFloor(g), s);
           if (x <= xa + 8 || x >= xb - 4 || (x > -SLOT_W && x < SHAFT_W + SLOT_W / 2)) continue;
           const post = new TilingSprite({ texture: colTex, width: 5, height: GALLERY_H });
           post.position.set(x - 2.5, y0);
@@ -204,7 +208,7 @@ export function buildGalleries(floors: number, exts: readonly Ext[], st: KitStat
     band.c.addChildAt(g2, 0);
     // Ends of the band: where it enters the casing walls, the shadow of the wall.
     const endFade = softTexture('fadeH');
-    for (const [ex, flip] of [[slotX(ext.e) + 6 - 8, true], ...(ext.w > 0 ? [[slotX(-ext.w) - 6, false]] : [])] as [number, boolean][]) {
+    for (const [ex, flip] of [[slotX(gFloor(g), ext.e) + 6 - 8, true], ...(ext.w > 0 ? [[slotX(gFloor(g), -ext.w) - 6, false]] : [])] as [number, boolean][]) {
       const cap = new Sprite(endFade);
       cap.tint = 0x000000;
       cap.alpha = 0.6;

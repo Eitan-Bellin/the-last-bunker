@@ -2,7 +2,8 @@ import { Container, FillPattern, Graphics, Matrix, NineSliceSprite, Rectangle, S
 import type { BuildingInstance } from '../core/GameState';
 import { isDistrict, isHall, roomSlots } from '../data/buildingDefs';
 import { ArtLibrary, glowTexture } from '../art/ArtLibrary';
-import { BASE_EAST, BUILDING_W, FLOOR_H, ROOMS_W, ROOMS_X, ROOM_H, SHAFT_GAP, SHAFT_W, SLAB, SLOT_W, TOPSOIL, floorAtY, floorFrac, floorTop, galleryCount, galleryExt, galleryTop, slotX, type Ext } from './layout';
+import { BASE_EAST, BUILDING_W, FLOOR_H, ROOMS_W, ROOM_H, SHAFT_W, SLAB, SLOT_W, TOPSOIL, floorAtY, floorFrac, floorTop, galleryCount, galleryExt, galleryTop, type Ext } from './layout';
+import { roomsEastX, roomsWestX, slotX, stripX } from '../world/project';
 import { ERAS } from '../data/eras';
 import { GFX } from './gfxFeatures';
 import { roomFlicker } from './paintedRoom';
@@ -106,21 +107,21 @@ export { cellAt, occupancy, type Cell, type Grid } from './occupancy';
 /** Halls on floor f swallow the slab under f (and the ceiling of f+1) across their width. */
 export function hallSpans(buildings: BuildingInstance[], floor: number): [number, number][] {
   return buildings.filter(b => isHall(b.type) && b.position.floor === floor)
-    .map(b => [slotX(b.position.x), slotX(b.position.x) + roomSlots(b.type) * SLOT_W]);
+    .map(b => [slotX(floor, b.position.x), slotX(floor, b.position.x) + roomSlots(b.type) * SLOT_W]);
 }
 
 export const inSpan = (x0: number, x1: number, spans: [number, number][]) => spans.some(([a, b]) => x0 >= a - 0.5 && x1 <= b + 0.5);
 
-/** Segment edges from x0 to x1 that land on the slot grid (so a hall's span is always whole segments). */
-export function gridSegments(x0: number, x1: number, step: number, west = false): [number, number][] {
+/** Segment edges from x0 to x1 that land on floor f's slot grid (so a hall's span is always whole segments). */
+export function gridSegments(f: number, x0: number, x1: number, step: number, west = false): [number, number][] {
   const edges = [x0];
-  // [plan4:ST-4] West of the shaft the slot grid is anchored at its west edge (slotX(-1) + SLOT_W = -SHAFT_GAP).
+  // [plan4:ST-4] West of the shaft the slot grid is anchored at its west edge (slotX(f, -1) + SLOT_W = roomsWestX(f)).
   if (west) {
     const w: number[] = [];
-    for (let x = -SHAFT_GAP; x > x0; x -= step) if (x < x1) w.push(x);
+    for (let x = roomsWestX(f); x > x0; x -= step) if (x < x1) w.push(x);
     for (let i = w.length - 1; i >= 0; i--) edges.push(w[i]);
   }
-  for (let x = ROOMS_X; x < x1; x += step) if (x > x0) edges.push(x);
+  for (let x = roomsEastX(f); x < x1; x += step) if (x > x0) edges.push(x);
   edges.push(x1);
   const out: [number, number][] = [];
   for (let i = 0; i < edges.length - 1; i++) if (edges[i + 1] - edges[i] > 0.5) out.push([edges[i], edges[i + 1]]);
@@ -153,7 +154,7 @@ export function buildBays(grid: Grid): Container {
         const sp = new Sprite(tex);
         sp.width = take * SLOT_W;
         sp.height = ROOM_H;
-        sp.position.set(slotX(x), floorTop(f));
+        sp.position.set(slotX(f, x), floorTop(f));
         if (n++ % 2 === 1) {
           sp.scale.x *= -1;
           sp.x += take * SLOT_W;
@@ -170,7 +171,7 @@ export function buildBays(grid: Grid): Container {
           g.alpha = 0.35;
           g.width = take * SLOT_W * 0.9;
           g.height = ROOM_H * 0.7;
-          g.position.set(slotX(x) + take * SLOT_W * 0.5, floorTop(f) + ROOM_H * 0.3);
+          g.position.set(slotX(f, x) + take * SLOT_W * 0.5, floorTop(f) + ROOM_H * 0.3);
           root.addChild(g);
         }
         x += take;
@@ -198,9 +199,8 @@ interface CasingBlock {
 }
 
 /** Outer and inner wall faces of a floor reaching {w, e}: no west wing keeps the thick concrete strip beside the shaft (x -30 .. 0). */
-function wallFaces(ext: Ext): { xl: number; xr: number; xinL: number; xinR: number } {
-  const xinL = ext.w > 0 ? slotX(-ext.w) : 0;
-  const xinR = slotX(ext.e);
+function wallFaces(ext: Ext, f: number): { xl: number; xr: number; xinL: number; xinR: number } {
+  const { x0: xinL, x1: xinR } = stripX(f, ext);
   return { xl: ext.w > 0 ? xinL - 14 : WALL_W_OUT, xr: xinR + 14, xinL, xinR };
 }
 
@@ -210,20 +210,20 @@ function wallFaces(ext: Ext): { xl: number; xr: number; xinL: number; xinR: numb
  * just above its ceiling pipes.
  */
 function casingBlocks(floors: number, exts: readonly Ext[], top: number, bottom: number): CasingBlock[] {
-  const rows: { y: number; ext: Ext }[] = [];
+  const rows: { y: number; ext: Ext; f: number }[] = [];
   const nG = galleryCount(floors);
   for (let f = 0; f < floors; f++) {
     const afterGallery = f > 0 && (f & 3) === 0 && floorTop(f) - floorTop(f - 1) > FLOOR_H;
-    rows.push({ y: f === 0 ? top : afterGallery ? floorTop(f) - 3 : floorTop(f) - SLAB / 2, ext: exts[f] ?? { w: 0, e: BASE_EAST } });
-    if ((f & 3) === 3 && (f >> 2) < nG) rows.push({ y: galleryTop(f >> 2) - SLAB / 2, ext: galleryExt(exts, f >> 2) });
+    rows.push({ y: f === 0 ? top : afterGallery ? floorTop(f) - 3 : floorTop(f) - SLAB / 2, ext: exts[f] ?? { w: 0, e: BASE_EAST }, f });
+    if ((f & 3) === 3 && (f >> 2) < nG) rows.push({ y: galleryTop(f >> 2) - SLAB / 2, ext: galleryExt(exts, f >> 2), f });
   }
   const blocks: CasingBlock[] = [];
   for (let i = 0; i < rows.length; i++) {
-    const { ext, y } = rows[i];
+    const { ext, y, f } = rows[i];
     const prev = blocks[blocks.length - 1];
     if (prev && prev.w === ext.w && prev.e === ext.e) continue;
     if (prev) prev.y1 = y;
-    blocks.push({ y0: y, y1: bottom, w: ext.w, e: ext.e, ...wallFaces(ext) });
+    blocks.push({ y0: y, y1: bottom, w: ext.w, e: ext.e, ...wallFaces(ext, f) });
   }
   return blocks;
 }
@@ -384,7 +384,7 @@ export function buildCasing(floors: number, st: KitState = 'F', exts: readonly E
   const d = new Graphics();
   for (let f = 0; f <= floors; f++) {
     const y = slabMidY(f);
-    const sx = wallFaces(slabExt(exts, floors, f));
+    const sx = wallFaces(slabExt(exts, floors, f), Math.max(0, f - 1)); // slab line f lies under floor f - 1 (line 0: the roof of floor 0)
     // Pour joint: a dark seam with a lit lower lip, slightly wavy.
     for (const [a, b] of [[sx.xl + 1, sx.xinL - 12], [sx.xinR + 2, sx.xr - 1]] as [number, number][]) {
       const w = (rnd() - 0.5) * 0.8;
@@ -422,7 +422,7 @@ export function buildCasing(floors: number, st: KitState = 'F', exts: readonly E
   // Hairline cracks in the cut face, one or two per level.
   for (let f = 0; f < floors; f++) {
     const n = 1 + (rnd() < 0.4 ? 1 : 0);
-    const fb = wallFaces(exts[f] ?? { w: 0, e: BASE_EAST });
+    const fb = wallFaces(exts[f] ?? { w: 0, e: BASE_EAST }, f);
     for (let k = 0; k < n; k++) {
       const west = k === 0 || rnd() < 0.6;
       let x = west ? fb.xl + 2 + rnd() * 14 : fb.xr - 2 - rnd() * 8;

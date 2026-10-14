@@ -2,7 +2,8 @@ import { Container, Graphics, Rectangle, Sprite, Text, TextStyle, Texture, Tilin
 import type { BuildingInstance } from '../core/GameState';
 import { getDef, isDistrict, isHall, roomSlots } from '../data/buildingDefs';
 import { needsWater, zoneForFloor } from '../data/zones';
-import { BASE_EAST, BUILDING_W, DEPTH_TOP, DEPTH_X, ROOMS_W, ROOMS_X, ROOM_H, SHAFT_GAP, SHAFT_W, SLAB, SLOT_W, TOPSOIL, districtXAt, floorTop, slotX, type Ext } from './layout';
+import { BASE_EAST, BUILDING_W, DEPTH_TOP, DEPTH_X, ROOMS_W, ROOM_H, SHAFT_W, SLAB, SLOT_W, TOPSOIL, floorTop, type Ext } from './layout';
+import { districtXAt, eastmostSlotX, roomsEastX, roomsWestX, slotX, stripX, westmostSlotX } from '../world/project';
 import { block, hGradient, seeded, shade, softGlow, vGradient } from './draw';
 import { lineWidth, richLine } from './richText';
 import { steelTag } from './signage';
@@ -24,7 +25,7 @@ export const SKY_TOP = -300;
  * (The east side needs no such help: the surface already runs 1500 units past the bunker for the project lots, wider than the 22-slot cap.)
  */
 export function worldLeft(maxW: number): number {
-  return Math.min(WORLD_LEFT, slotX(-maxW) - 260);
+  return Math.min(WORLD_LEFT, westmostSlotX(-maxW) - 260); // [world:C0] a global extent: the west-most frame
 }
 const ENTRANCE_H = 52;
 
@@ -240,7 +241,7 @@ export function buildUnderground(
     const top = floorTop(f);
     const dw = 4 * SLOT_W;
     // [plan4:ST-8] The tunnel runs from the end of the floor (its east casing) to the cavern, which sits wherever the district's own position says.
-    const wallX = slotX(districtSlot[f] ?? BASE_EAST), dx = districtXAt(districtSlot[f] ?? BASE_EAST);
+    const wallX = slotX(f, districtSlot[f] ?? BASE_EAST), dx = districtXAt(f, districtSlot[f] ?? BASE_EAST);
     const hollow: number[] = [];
     for (let i = 0; i <= 12; i++) {
       const a = (i / 12) * Math.PI * 2;
@@ -259,7 +260,7 @@ export function buildUnderground(
   const casingTop = TOPSOIL - SLAB;
   const casingBottom = floorTop(floors) + 6;
   if (!casing) {
-    const cx0 = (maxW > 0 ? slotX(-maxW) : 0) - 12, cw = slotX(maxE) + 12 - cx0;
+    const cx0 = (maxW > 0 ? westmostSlotX(-maxW) : 0) - 12, cw = eastmostSlotX(maxE) + 12 - cx0; // [world:C0] global extents (classic casing)
     g.rect(cx0, casingTop - 4, cw, casingBottom - casingTop + 10).fill(0x55565c);
     g.rect(cx0, casingTop - 4, cw, 4).fill(0x7a7b80);
   }
@@ -269,8 +270,8 @@ export function buildUnderground(
     const zone = zoneForFloor(f);
     // Empty excavated bay behind where rooms sit: east of the shaft, and west of it where the floor has a wing [plan4:ST-4].
     const fe = extOf(f);
-    const eastX1 = slotX(fe.e);
-    for (const [bx0, bx1] of [[ROOMS_X, eastX1], ...(fe.w > 0 ? [[slotX(-fe.w), -SHAFT_GAP]] : [])] as [number, number][]) {
+    const eastX1 = slotX(f, fe.e);
+    for (const [bx0, bx1] of [[roomsEastX(f), eastX1], ...(fe.w > 0 ? [[slotX(f, -fe.w), roomsWestX(f)]] : [])] as [number, number][]) {
       const bw = bx1 - bx0;
       g.rect(bx0, top, bw, ROOM_H).fill(vGradient([[0, shade(zone.rock, 0.85)], [1, shade(zone.rock, 0.55)]]));
       g.rect(bx0 + DEPTH_X, top + DEPTH_TOP, bw - 2 * DEPTH_X, ROOM_H - DEPTH_TOP - 16).fill({ color: 0x000000, alpha: 0.12 + gloom * 0.6 });
@@ -280,9 +281,9 @@ export function buildUnderground(
     }
     // Floor slab under this level, with a hazard edge (the painted kit draws the slab in front of the rooms instead).
     if (!casing) {
-      const sx0 = (fe.w > 0 ? slotX(-fe.w) : 0) - 12;
+      const sx0 = stripX(f, fe).x0 - 12;
       g.rect(sx0, top + ROOM_H, eastX1 + 12 - sx0, SLAB).fill(vGradient([[0, 0x6e6f75], [1, 0x4a4b50]]));
-      for (let x = ROOMS_X; x < eastX1; x += 18) g.rect(x, top + ROOM_H + 2, 9, 2).fill({ color: 0xd9a441, alpha: 0.65 });
+      for (let x = roomsEastX(f); x < eastX1; x += 18) g.rect(x, top + ROOM_H + 2, 9, 2).fill({ color: 0xd9a441, alpha: 0.65 });
       for (let x = fe.w > 0 ? sx0 + 6 : -6; x < eastX1 + 12; x += 30) g.circle(x, top + ROOM_H + SLAB - 4, 1.4).fill(0x3a3a3e);
     }
     // Level plaque on the shaft, and the zone name stencilled on the empty back wall.
@@ -347,8 +348,8 @@ function rockDetails(floors: number, districts: number[], exts: readonly Ext[] =
   const g = new Graphics();
   // [plan4:ST-6] The wall faces follow each floor's reach (a plain bunker: x -30 and BUILDING_W + 14 all the way down).
   const extOf = (f: number): Ext => exts[f] ?? { w: 0, e: BASE_EAST };
-  const faceW = (x: Ext) => (x.w > 0 ? slotX(-x.w) - 14 : -30), faceE = (x: Ext) => slotX(x.e) + 14;
-  const west = exts.reduce((m, x) => Math.min(m, faceW(x)), -30) - 10, east = exts.reduce((m, x) => Math.max(m, faceE(x)), BUILDING_W + 14) + 10;
+  const faceW = (x: Ext, f: number) => (x.w > 0 ? slotX(f, -x.w) - 14 : -30), faceE = (x: Ext, f: number) => slotX(f, x.e) + 14;
+  const west = exts.reduce((m, x, f) => Math.min(m, faceW(x, f)), -30) - 10, east = exts.reduce((m, x, f) => Math.max(m, faceE(x, f)), BUILDING_W + 14) + 10;
   // Roots: tapering, wandering, with a few rootlets; thicker near the bunker where the soil was disturbed.
   for (let i = 0; i < 26; i++) {
     let x = WORLD_LEFT + 10 + rnd() * (WORLD_RIGHT - WORLD_LEFT - 20);
@@ -400,8 +401,8 @@ function rockDetails(floors: number, districts: number[], exts: readonly Ext[] =
   };
   const levels = Array.from({ length: floors }, (_, f) => f);
   for (const f of levels) {
-    if (rnd() < 0.5) conduit(faceW(extOf(f)) - 10, floorTop(f) + 18 + rnd() * 60, 30 + rnd() * 70, -1);
-    if (!districts.includes(f) && rnd() < 0.25) conduit(faceE(extOf(f)) + 10, floorTop(f) + 20 + rnd() * 50, 20 + rnd() * 40, 1);
+    if (rnd() < 0.5) conduit(faceW(extOf(f), f) - 10, floorTop(f) + 18 + rnd() * 60, 30 + rnd() * 70, -1);
+    if (!districts.includes(f) && rnd() < 0.25) conduit(faceE(extOf(f), f) + 10, floorTop(f) + 20 + rnd() * 50, 20 + rnd() * 40, 1);
   }
   root.addChild(g);
   // Seepage: wet runs from the backfill down the rock, dark with a faint cold sheen.
@@ -509,13 +510,13 @@ export function buildUtilities(buildings: BuildingInstance[], floors: number, pa
     const top = floorTop(f);
     const onFloor = buildings.filter(b => b.position.floor === f && !(b.isConstructing && b.level === 1) && !isDistrict(b.type));
     // A two-storey hall from the level above leaves no ceiling here for the mains to hang from.
-    const halls = buildings.filter(b => isHall(b.type) && b.position.floor === f - 1).map(b => [slotX(b.position.x), slotX(b.position.x) + roomSlots(b.type) * SLOT_W]);
+    const halls = buildings.filter(b => isHall(b.type) && b.position.floor === f - 1).map(b => [slotX(b.position.floor, b.position.x), slotX(b.position.floor, b.position.x) + roomSlots(b.type) * SLOT_W]);
     const powerDrops: number[] = [];
     const waterDrops: number[] = [];
     for (const b of onFloor) {
       const def = getDef(b.type);
       if (!def) continue;
-      const x = slotX(b.position.x);
+      const x = slotX(b.position.floor, b.position.x);
       if (def.powerConsumption > 0 || def.production?.power) powerDrops.push(x + DEPTH_X + 6);
       if (needsWater(b.type) || b.type === 'waterPump' || b.type === 'waterPurifier') waterDrops.push(x + DEPTH_X + 14);
     }
@@ -530,9 +531,9 @@ export function buildUtilities(buildings: BuildingInstance[], floors: number, pa
       if (h0 > start) segments.push([start, h0]);
       start = Math.max(start, h1);
     }
-    if (slotX(fe.e) + 6 > start) segments.push([start, slotX(fe.e) + 6]);
+    if (slotX(f, fe.e) + 6 > start) segments.push([start, slotX(f, fe.e) + 6]);
     if (fe.w > 0) {
-      start = slotX(-fe.w) - 6;
+      start = slotX(f, -fe.w) - 6;
       for (const [h0, h1] of sorted) {
         if (h0 >= 20 || h1 <= start) continue;
         if (h0 > start) segments.push([start, h0]);
@@ -549,7 +550,7 @@ export function buildUtilities(buildings: BuildingInstance[], floors: number, pa
       g.rect(s0, yW - 2, s1 - s0, 1.3).fill(0x8ab8e0);
     }
     const inHall = (x: number) => halls.some(([h0, h1]) => x >= h0 && x <= h1);
-    if (!painted) for (let x = ROOMS_X + 20; x < slotX(fe.e); x += 46) if (!inHall(x)) g.rect(x, top, 1.5, 11).fill(0x7a7f86);
+    if (!painted) for (let x = roomsEastX(f) + 20; x < slotX(f, fe.e); x += 46) if (!inHall(x)) g.rect(x, top, 1.5, 11).fill(0x7a7f86);
     // [airy2:D1] The rooms have their own painted lamps and ceilings now: the black power drops with a yellow box and the water drops would only double them.
     for (const x of GFX.airy && painted ? [] : powerDrops) {
       g.rect(x - 1, yP + 2, 2.5, DEPTH_TOP + 8).fill(0x151518);
@@ -581,6 +582,7 @@ export function buildUtilities(buildings: BuildingInstance[], floors: number, pa
 export function buildDigSign(floors: number, text: string, cost: string, rock: Texture | null = null): Container {
   const root = new Container();
   const top = floorTop(floors);
+  const X0 = roomsEastX(floors); // [world:C0] the next floor's default east strip
   const g = new Graphics();
   if (rock) {
     // New look: the next level is a raw rock face behind warning tape, not a dashed box.
@@ -588,7 +590,7 @@ export function buildDigSign(floors: number, text: string, cost: string, rock: T
       const s = new Sprite(rock);
       s.width = ROOMS_W / 4;
       s.height = ROOM_H;
-      s.position.set(ROOMS_X + (i * ROOMS_W) / 4, top);
+      s.position.set(X0 + (i * ROOMS_W) / 4, top);
       if (i % 2) { s.scale.x *= -1; s.x += ROOMS_W / 4; }
       s.tint = 0x625c55;
       root.addChild(s);
@@ -597,7 +599,7 @@ export function buildDigSign(floors: number, text: string, cost: string, rock: T
       const t = new Graphics();
       t.rect(0, -2.5, ROOMS_W + 10, 5).fill(0xd9a441);
       for (let x = 0; x < ROOMS_W + 10; x += 10) t.poly([x, -2.5, x + 5, -2.5, x + 1, 2.5, x - 4, 2.5]).fill(0x1a1612);
-      t.position.set(ROOMS_X - 5, y);
+      t.position.set(X0 - 5, y);
       t.rotation = tilt;
       t.alpha = 0.9;
       root.addChild(t);
@@ -606,35 +608,35 @@ export function buildDigSign(floors: number, text: string, cost: string, rock: T
     tape(top + ROOM_H - 18, -0.01);
     // [gfx2 signage] The same bolted steel as the room tags, with a worn hazard stripe.
     const plate = new Graphics();
-    steelTag(plate, ROOMS_X + ROOMS_W / 2 - 80, top + ROOM_H / 2 - 26, 160, 50, { rivets: 4, stripe: true });
+    steelTag(plate, X0 + ROOMS_W / 2 - 80, top + ROOM_H / 2 - 26, 160, 50, { rivets: 4, stripe: true });
     root.addChild(plate);
     const label = richLine(`[[pick]] ${text}`, { ...signStyle, fontSize: 15 }, 16, true, 4);
-    label.position.set(ROOMS_X + ROOMS_W / 2, top + ROOM_H / 2 - 5);
+    label.position.set(X0 + ROOMS_W / 2, top + ROOM_H / 2 - 5);
     const costText = richLine(cost, { ...signStyle, fontSize: 12, fill: 0xffd447 }, 13, false, 4);
-    costText.position.set(ROOMS_X + ROOMS_W / 2, top + ROOM_H / 2 + 13);
+    costText.position.set(X0 + ROOMS_W / 2, top + ROOM_H / 2 + 13);
     root.addChild(label, costText);
     root.eventMode = 'static';
     root.cursor = 'pointer';
-    root.hitArea = { contains: (x: number, y: number) => x >= ROOMS_X && x <= ROOMS_X + ROOMS_W && y >= top && y <= top + ROOM_H };
+    root.hitArea = { contains: (x: number, y: number) => x >= X0 && x <= X0 + ROOMS_W && y >= top && y <= top + ROOM_H };
     return root;
   }
-  for (let x = ROOMS_X; x < ROOMS_X + ROOMS_W; x += 14) {
+  for (let x = X0; x < X0 + ROOMS_W; x += 14) {
     g.rect(x, top + 4, 8, 2).fill({ color: 0xd9a441, alpha: 0.7 });
     g.rect(x, top + ROOM_H - 6, 8, 2).fill({ color: 0xd9a441, alpha: 0.7 });
   }
   for (let y = top + 4; y < top + ROOM_H - 4; y += 14) {
-    g.rect(ROOMS_X, y, 2, 8).fill({ color: 0xd9a441, alpha: 0.7 });
-    g.rect(ROOMS_X + ROOMS_W - 2, y, 2, 8).fill({ color: 0xd9a441, alpha: 0.7 });
+    g.rect(X0, y, 2, 8).fill({ color: 0xd9a441, alpha: 0.7 });
+    g.rect(X0 + ROOMS_W - 2, y, 2, 8).fill({ color: 0xd9a441, alpha: 0.7 });
   }
-  g.rect(ROOMS_X + 2, top + 6, ROOMS_W - 4, ROOM_H - 12).fill({ color: 0x000000, alpha: 0.25 });
+  g.rect(X0 + 2, top + 6, ROOMS_W - 4, ROOM_H - 12).fill({ color: 0x000000, alpha: 0.25 });
   const label = richLine(`[[pick]] ${text}`, { ...signStyle, fontSize: 15 }, 16, true, 4);
-  label.position.set(ROOMS_X + ROOMS_W / 2, top + ROOM_H / 2 - 9);
+  label.position.set(X0 + ROOMS_W / 2, top + ROOM_H / 2 - 9);
   const costText = richLine(cost, { ...signStyle, fontSize: 12, fill: 0xffd447 }, 13, false, 4);
-  costText.position.set(ROOMS_X + ROOMS_W / 2, top + ROOM_H / 2 + 12);
+  costText.position.set(X0 + ROOMS_W / 2, top + ROOM_H / 2 + 12);
   root.addChild(g, label, costText);
   root.eventMode = 'static';
   root.cursor = 'pointer';
-  root.hitArea = { contains: (x: number, y: number) => x >= ROOMS_X && x <= ROOMS_X + ROOMS_W && y >= top && y <= top + ROOM_H };
+  root.hitArea = { contains: (x: number, y: number) => x >= X0 && x <= X0 + ROOMS_W && y >= top && y <= top + ROOM_H };
   return root;
 }
 

@@ -3,7 +3,8 @@ import type { BuildingInstance, BuildingType } from '../core/GameState';
 import { isDistrict, isHall, roomSlots } from '../data/buildingDefs';
 import { ArtLibrary } from '../art/ArtLibrary';
 import { voidBoundaries } from './voids';
-import { BASE_EAST, ROOMS_X, ROOM_H, SHAFT_GAP, SHAFT_W, SLAB, SLOT_W, floorTop, slotX } from './layout';
+import { BASE_EAST, ROOM_H, SHAFT_W, SLAB, SLOT_W, floorTop } from './layout';
+import { roomsEastX, roomsWestX, slotX } from '../world/project';
 import { hashString, seeded } from './draw';
 import { GFX } from './gfxFeatures';
 import { depthGains, type Grid, type WorldLamp } from './structure';
@@ -190,11 +191,11 @@ export function buildDecals(
   const blocked: Rect[] = avoid.flatMap(c => rectsOf(c, c.x, c.y, 0));
   const district = new Set(buildings.filter(b => isDistrict(b.type)).map(b => b.position.floor));
   const hallSpans = (f: number) => buildings.filter(b => isHall(b.type) && b.position.floor === f)
-    .map(b => [slotX(b.position.x), slotX(b.position.x) + roomSlots(b.type) * SLOT_W] as [number, number]);
+    .map(b => [slotX(f, b.position.x), slotX(f, b.position.x) + roomSlots(b.type) * SLOT_W] as [number, number]);
   const typesAt = (f: number, x: number) => buildings.filter(b => {
     if (isDistrict(b.type)) return false;
     const onFloor = b.position.floor === f || (isHall(b.type) && b.position.floor + 1 === f);
-    const x0 = slotX(b.position.x), x1 = x0 + roomSlots(b.type) * SLOT_W;
+    const x0 = slotX(b.position.floor, b.position.x), x1 = x0 + roomSlots(b.type) * SLOT_W;
     return onFloor && x >= x0 - 1 && x <= x1 + 1;
   }).map(b => b.type);
 
@@ -229,8 +230,8 @@ export function buildDecals(
     // [plan4:ST-4] Index i of the row is slot i - ew; the shaft sits between the last west slot and slot 0, so no run of cells crosses index ew.
     const ex = grid.ext[f] ?? { w: 0, e: BASE_EAST };
     const ew = ex.w;
-    const runEnd = (a: number, b: number) => slotX(b - 1 - ew) + SLOT_W; // x of the right edge of the slots [a, b)
-    const xFirst = ew > 0 ? slotX(-ew) : ROOMS_X, xLast = slotX(ex.e);
+    const runEnd = (a: number, b: number) => slotX(f, b - 1 - ew) + SLOT_W; // x of the right edge of the slots [a, b)
+    const xFirst = ew > 0 ? slotX(f, -ew) : roomsEastX(f), xLast = slotX(f, ex.e);
     const taken: Rect[] = blocked.filter(b => b.y1 > top - SLAB - 4 && b.y0 < top + ROOM_H + SLAB + 4);
 
     // Room middles stay clear (empty bays are fair game).
@@ -239,21 +240,21 @@ export function buildDecals(
       const cell = row[s];
       let e2 = s + 1;
       while (cell && e2 < slots && e2 !== ew && row[e2]?.key === cell.key) e2++;
-      if (cell) interiors.push({ x0: slotX(s - ew) + ROOM_EDGE, y0: top + PIPES_BOTTOM + 2, x1: runEnd(s, e2) - ROOM_EDGE, y1: bottom - 2 });
+      if (cell) interiors.push({ x0: slotX(f, s - ew) + ROOM_EDGE, y0: top + PIPES_BOTTOM + 2, x1: runEnd(s, e2) - ROOM_EDGE, y1: bottom - 2 });
       s = e2;
     }
     // Columns stand wherever two different things meet, and at both ends of the level.
-    const cols: number[] = [ROOMS_X, xLast];
-    if (ew > 0) cols.push(xFirst, -SHAFT_GAP);
+    const cols: number[] = [roomsEastX(f), xLast];
+    if (ew > 0) cols.push(xFirst, roomsWestX(f));
     for (let s = 1; s < slots; s++) {
       if (s === ew) continue;
       const a = row[s - 1], b = row[s];
-      if ((a || b) && a?.key !== b?.key) cols.push(slotX(s - ew));
+      if ((a || b) && a?.key !== b?.key) cols.push(slotX(f, s - ew));
     }
     cols.sort((a, b) => a - b);
     if (GFX.airy) {
       // [airy2:D3] A void is rock, not a column: nothing is stuck to it.
-      const vs = voidBoundaries(grid).map(slotX);
+      const vs = voidBoundaries(grid).map(sl => slotX(f, sl));
       for (let i = cols.length - 1; i >= 0; i--) if (vs.includes(cols[i])) cols.splice(i, 1);
     }
     const bays: [number, number][] = [];
@@ -261,7 +262,7 @@ export function buildDecals(
       if (row[s]) { s++; continue; }
       let e2 = s + 1;
       while (e2 < slots && e2 !== ew && !row[e2]) e2++;
-      bays.push([slotX(s - ew), runEnd(s, e2)]);
+      bays.push([slotX(f, s - ew), runEnd(s, e2)]);
       s = e2;
     }
     const bayUse: number[] = [];
@@ -275,7 +276,7 @@ export function buildDecals(
           // [airy2:D1] The airy slab is the corridor band (deck, beam, soffit): decals sit on the soffit under the beam, 5 tall.
           const hMax = GFX.airy ? 5 : SLAB + 2;
           if (h > hMax + (GFX.airy ? 0 : 1)) { w *= hMax / h; h = hMax; }
-          const lo = ew > 0 ? xFirst - 6 : -6, hi = xLast + 6;
+          const lo = ew > 0 ? xFirst - 6 : roomsWestX(f), hi = xLast + 6;
           const x = lo + w / 2 + r() * (hi - lo - w);
           if (inSlabGap(x - w / 2, x + w / 2) || x - w / 2 < SHAFT_W + 2 && x + w / 2 > -2 && r() < 0.6) return null;
           return { x, y: bottom + (GFX.airy ? 41 : 6.5) + (r() - 0.5) * (GFX.airy ? 0.6 : 2), w, h };
@@ -288,7 +289,7 @@ export function buildDecals(
         case 'edgeTop': {
           if (w > 22) { h *= 22 / w; w = 22; }
           const x = cols[Math.floor(r() * cols.length)];
-          const side = x <= xFirst ? 1 : x >= xLast ? -1 : ew > 0 && x === -SHAFT_GAP ? -1 : ew > 0 && x === ROOMS_X ? 1 : r() < 0.5 ? -1 : 1;
+          const side = x <= xFirst ? 1 : x >= xLast ? -1 : ew > 0 && x === roomsWestX(f) ? -1 : ew > 0 && x === roomsEastX(f) ? 1 : r() < 0.5 ? -1 : 1;
           return { x: x + side * ((GFX.airy ? 7.5 : COLUMN_W / 2 + 1) + w / 2 + r() * 3), y: top + PIPES_BOTTOM + h / 2 - 1, w, h }; // [airy:A6] piers are 13 wide
         }
         case 'bay': {
@@ -382,7 +383,7 @@ export function buildDecals(
 
     // From the Colony on, every level has an exit sign by the shaft; in the Undercity it is lit.
     if (e >= 2) {
-      const x = ROOMS_X + 2, y = top + PIPES_BOTTOM + 12;
+      const x = roomsEastX(f) + 2, y = top + PIPES_BOTTOM + 12;
       taken.push({ x0: x - 9, y0: y - 4.5, x1: x + 9, y1: y + 4.5 });
       const lit = e >= 3;
       place('sign-exit', 'alpha', x, y, 18, 9, 1, 0, false, lit ? 0xd8e8d8 : litTint(x, y, lamps, ambient));

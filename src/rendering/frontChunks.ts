@@ -12,7 +12,8 @@ import type { Pier } from './airyArt';
 import { ANNEX_W, ANNEX_X, VOID_W, TOWER_W, hasAnnex, voidBoundaries } from './voids';
 import { PIER_AO, PIER_W, clusterSpan, pierKey, piersOfFloor } from './airyArt'; // [airy:A2]
 import { beamTexture, deckTexture, railTexture, seamBack, slotSlice, towerStubTexture, towerTexture } from './circulation'; // [airy2:D1]
-import { BASE_EAST, CORR_BEAM, CORR_DECK, CORR_LANE, CORR_RAIL, FLOOR_H, ROOMS_X, ROOM_H, SHAFT_GAP, SLAB, SLOT_W, TOPSOIL, floorAtY, floorH, floorTop, slotX, type Ext } from './layout';
+import { BASE_EAST, CORR_BEAM, CORR_DECK, CORR_LANE, CORR_RAIL, FLOOR_H, ROOM_H, SLAB, SLOT_W, TOPSOIL, floorAtY, floorH, floorTop, type Ext } from './layout';
+import { roomsEastX, roomsWestX, slotX, stripX } from '../world/project';
 import {
   AO_CONTACT, AO_SIDE, COLUMN_SPILL_W, COLUMN_W, KIT_LIFT, LIP, PIPES_H, PIPES_Y, SLAB_DRAW,
   cellAt, depthGains, gridSegments, hallSpans, inSpan, kitTex, lampParts, lightOf, nightLight, shadeAt, slabExt, softTexture,
@@ -51,10 +52,19 @@ try {
   // no location: the default stands
 }
 
-/** Chunk column of a world x: 0 = the shaft's strip, 1.. east of it, -1.. west of it. */
-const cxOfX = (x: number): number => (x >= ROOMS_X ? 1 + Math.floor((x - ROOMS_X) / CW) : x >= -SHAFT_GAP ? 0 : Math.floor((x + SHAFT_GAP) / CW));
-const chunkX0 = (cx: number): number => (cx >= 1 ? ROOMS_X + (cx - 1) * CW : cx === 0 ? -SHAFT_GAP : -SHAFT_GAP + cx * CW);
-const chunkX1 = (cx: number): number => (cx >= 1 ? ROOMS_X + cx * CW : cx === 0 ? ROOMS_X : -SHAFT_GAP + (cx + 1) * CW);
+/**
+ * Chunk column of a world x on floor f: 0 = the spine's strip (the shaft, and the hub with its vestibules in the city), 1.. east of it, -1.. west of it. The
+ * columns are cut on the slot line (CHUNK_SLOTS slots each), so a column is the same slots on every floor; its x follows the floor's frame. [world:C0]
+ */
+const cxOfX = (f: number, x: number): number => {
+  const e0 = roomsEastX(f), w1 = roomsWestX(f);
+  return x >= e0 ? 1 + Math.floor((x - e0) / CW) : x >= w1 ? 0 : Math.floor((x - w1) / CW);
+};
+const chunkX0 = (f: number, cx: number): number => (cx >= 1 ? roomsEastX(f) + (cx - 1) * CW : cx === 0 ? roomsWestX(f) : roomsWestX(f) + cx * CW);
+const chunkX1 = (f: number, cx: number): number => (cx >= 1 ? roomsEastX(f) + cx * CW : cx === 0 ? roomsEastX(f) : roomsWestX(f) + (cx + 1) * CW);
+/** X bounds of a column over the floors fa .. fb-1 (a group spans at most two strata: its first and last floor bound it). */
+const groupX0 = (fa: number, fb: number, cx: number): number => Math.min(chunkX0(fa, cx), chunkX0(Math.max(fa, fb - 1), cx));
+const groupX1 = (fa: number, fb: number, cx: number): number => Math.max(chunkX1(fa, cx), chunkX1(Math.max(fa, fb - 1), cx));
 
 /** A repeatable pseudo-random number in [0, 1) from a floor and an x (so a chunk builds the same whenever it is built). */
 function hr(f: number, x: number): number {
@@ -167,8 +177,8 @@ export class FrontChunks implements Animated {
       const fa = cy * CHUNK_FLOORS, fb = Math.min(floors, fa + CHUNK_FLOORS);
       for (let f = fa; f < fb; f++) {
         const e = grid.ext[f];
-        lo = Math.min(lo, cxOfX(slotX(-e.w) + 0.01));
-        hi = Math.max(hi, cxOfX(slotX(e.e) - 0.01));
+        lo = Math.min(lo, cxOfX(f, slotX(f, -e.w) + 0.01));
+        hi = Math.max(hi, cxOfX(f, slotX(f, e.e) - 0.01));
       }
       for (let cx = lo; cx <= hi; cx++) {
         const key = cy * 8192 + (cx + 4096);
@@ -181,7 +191,7 @@ export class FrontChunks implements Animated {
         if (old) this.drop(old);
         const yTop = floorTop(fa) - 8, yBot = floorTop(fb - 1) + ROOM_H + SLAB + 8;
         want.set(key, {
-          cx, cy, x0: chunkX0(cx) - (cx === 0 && this.annex ? 60 : 30), x1: chunkX1(cx) + 30, y0: cy === 0 ? TOPSOIL - SLAB - 8 : yTop, y1: yBot, sig, container: null, parts: [],
+          cx, cy, x0: groupX0(fa, fb, cx) - (cx === 0 && this.annex ? 60 : 30), x1: groupX1(fa, fb, cx) + 30, y0: cy === 0 ? TOPSOIL - SLAB - 8 : yTop, y1: yBot, sig, container: null, parts: [],
           lit: [], spills: [], guides: [], markers: [], stamp: 0, shown: false, lastSeen: 0,
         });
       }
@@ -218,7 +228,7 @@ export class FrontChunks implements Animated {
   private signature(cx: number, cy: number): string {
     const { grid, buildings, floors } = this;
     const fa = cy * CHUNK_FLOORS, fb = Math.min(floors, fa + CHUNK_FLOORS);
-    const x0 = chunkX0(cx), x1 = chunkX1(cx);
+    const x0 = groupX0(fa, fb, cx), x1 = groupX1(fa, fb, cx);
     const parts: string[] = [];
     // The slots a chunk covers (the shaft strip: the two slots against the shaft), and one more on each side: a column depends on both its neighbours.
     const sLo = (cx >= 1 ? CHUNK_SLOTS * (cx - 1) : cx === 0 ? -1 : CHUNK_SLOTS * cx) - 1;
@@ -343,9 +353,12 @@ export class FrontChunks implements Animated {
     const ya = floorTop(fa) - 120, yb = floorTop(Math.max(fa, fb - 1)) + ROOM_H + 120;
     const near = this.lamps.filter(l => l.x > c.x0 - l.reach * 1.7 && l.x < c.x1 + l.reach * 1.7 && l.y > ya && l.y < yb);
     // A piece belongs to the chunk of its middle; one hanging past the end of a floor (the wall end of a slab, the last stub of a pipe) to the last chunk of that floor.
-    const mine = (x: number, ext: Ext = { w: 0, e: BASE_EAST }) => cxOfX(Math.min(Math.max(x, ext.w > 0 ? slotX(-ext.w) + 0.01 : 0), slotX(ext.e) - 0.01)) === cx;
+    const mine = (x: number, ext: Ext, f: number) => {
+      const s = stripX(f, ext);
+      return cxOfX(f, Math.min(Math.max(x, ext.w > 0 ? s.x0 + 0.01 : s.x0), s.x1 - 0.01)) === cx;
+    };
     // A column belongs to the chunk of the room it stands against (an east-facing end to the one on its right).
-    const mineCol = (col: { x: number; l: boolean; r: boolean }) => cxOfX(col.x + (col.r && !col.l ? 0.01 : -0.01)) === cx;
+    const mineCol = (col: { x: number; l: boolean; r: boolean }, f: number) => cxOfX(f, col.x + (col.r && !col.l ? 0.01 : -0.01)) === cx;
 
     const add = (tex: Texture, x: number, y: number, w: number, h: number, scale: number, ccx: number, ccy: number, lampGain = 1, baseGain = 1, into: Container = root) => {
       const t = new TilingSprite({ texture: tex, width: w, height: h });
@@ -399,11 +412,11 @@ export class FrontChunks implements Animated {
         const sty = styleOf(f);
         mul = sty.tint;
         const { w: ew, e: ee } = grid.ext[f];
-        const runs: [number, number][] = gridSegments(64 - 26, slotX(ee) + 6, SLOT_W / 2);
-        if (ew > 0) runs.push(...gridSegments(slotX(-ew) - 6, 20, SLOT_W / 2, true));
+        const runs: [number, number][] = gridSegments(f, roomsEastX(f) - 26, slotX(f, ee) + 6, SLOT_W / 2);
+        if (ew > 0) runs.push(...gridSegments(f, slotX(f, -ew) - 6, 20, SLOT_W / 2, true));
         for (const [x, x1] of runs) {
           const w = x1 - x;
-          if (!mine((x + x1) / 2, grid.ext[f]) || inSpan(x, x1, spans)) continue;
+          if (!mine((x + x1) / 2, grid.ext[f], f) || inSpan(x, x1, spans)) continue;
           add(pipeTex, x, y, w, PIPES_H, PIPES_H / pipeTex.height, x + w / 2, y + PIPES_H / 2);
           // [plan4:ST-11] A covered ceiling: pale panels hung under the bundle (the pipes show above them).
           if (panelTex && sty.ceil === 1) addLit(panelTex, x, y + 2.5, w, PIPES_H - 2.5, x + w / 2, y + PIPES_H / 2, 1, 1, ovl1);
@@ -438,9 +451,9 @@ export class FrontChunks implements Animated {
         run0 = run1 = -1;
       };
       const { w: ew, e: ee } = grid.ext[f];
-      for (const half of [gridSegments(ROOMS_X, slotX(ee), SLOT_W), ...(ew > 0 ? [gridSegments(slotX(-ew), -SHAFT_GAP, SLOT_W, true)] : [])]) {
+      for (const half of [gridSegments(f, roomsEastX(f), slotX(f, ee), SLOT_W), ...(ew > 0 ? [gridSegments(f, slotX(f, -ew), roomsWestX(f), SLOT_W, true)] : [])]) {
         for (const [x0, x1] of half) {
-          if (!mine((x0 + x1) / 2, grid.ext[f])) { flush(); continue; }
+          if (!mine((x0 + x1) / 2, grid.ext[f], f)) { flush(); continue; }
           if (!inSpan(x0, x1, above)) {
             if (run0 < 0) run0 = x0;
             run1 = x1;
@@ -458,16 +471,16 @@ export class FrontChunks implements Animated {
       // The roof slab under the topsoil (first group only), then one under every level of the group.
       const lines: { y: number; spans: [number, number][]; ext: Ext; f: number; piers: Pier[]; lo: number; hi: number }[] = [];
       if (cy === 0) lines.push({ y: TOPSOIL - SLAB - LIP, spans: [], ext: slabExt(grid.ext, floors, 0), f: 0, piers: [], lo: 0, hi: 0 });
-      for (let f = fa; f < fb; f++) lines.push({ y: floorTop(f) + ROOM_H - LIP, spans: hallSpans(buildings, f), ext: slabExt(grid.ext, floors, f + 1), f, piers: airy ? piersOfFloor(grid, f, true) : [], lo: slotX(-grid.ext[f].w), hi: slotX(grid.ext[f].e) });
+      for (let f = fa; f < fb; f++) lines.push({ y: floorTop(f) + ROOM_H - LIP, spans: hallSpans(buildings, f), ext: slabExt(grid.ext, floors, f + 1), f, piers: airy ? piersOfFloor(grid, f, true) : [], lo: slotX(f, -grid.ext[f].w), hi: slotX(f, grid.ext[f].e) });
       const heavyTex = full ? heavySlabTexture() : null;
       const perfTex = full ? perforatedSlabTexture() : null;
       for (const line of lines) {
         const sty = styleOf(line.f);
         mul = sty.tint;
-        const sx0 = (line.ext.w > 0 ? slotX(-line.ext.w) : 0) - 12 - (this.annex && line.y > TOPSOIL ? 37 : 0), sx1 = slotX(line.ext.e) + 12;
-        for (const [x, x1] of gridSegments(sx0, sx1, SLOT_W, line.ext.w > 0)) {
+        const sx0 = stripX(line.f, line.ext).x0 - 12 - (this.annex && line.y > TOPSOIL ? 37 : 0), sx1 = slotX(line.f, line.ext.e) + 12;
+        for (const [x, x1] of gridSegments(line.f, sx0, sx1, SLOT_W, line.ext.w > 0)) {
           const w = x1 - x;
-          if (!mine((x + x1) / 2, line.ext)) continue;
+          if (!mine((x + x1) / 2, line.ext, line.f)) continue;
           // [airy2:D1] A hall swallows the slab, but its mezzanine gallery (the corridor of the level) still crosses it, in front of the hall.
           const hall = inSpan(x, x1, line.spans);
           if (hall && !(airy && line.y > TOPSOIL)) continue;
@@ -531,7 +544,7 @@ export class FrontChunks implements Animated {
         }
         // The slab ends bear into the casing walls: a soft dark where they enter.
         for (const [ex, flip] of [[sx0, false], [sx1 - 5, true]] as [number, boolean][]) {
-          if (!mine(flip ? sx1 - 30 : sx0 + 30, line.ext)) continue;
+          if (!mine(flip ? sx1 - 30 : sx0 + 30, line.ext, line.f)) continue;
           const cap = new Sprite(endFade);
           cap.tint = 0x000000;
           cap.alpha = 0.6;
@@ -811,10 +824,10 @@ export class FrontChunks implements Animated {
         const { w: ew, e: ee } = grid.ext[f];
         // [airy:A2] `tier` (see airyArt.piersOfFloor): the walls and the classic columns are 1; thin seams (0) and cluster bulkheads (2) exist only with the airy flag.
         const xs: { x: number; l: boolean; r: boolean; open: boolean; door?: boolean; tier: 0 | 1 | 2 }[] = [
-          { x: ROOMS_X, l: false, r: true, open: false, tier: 1 }, { x: slotX(ee), l: true, r: false, open: ee > BASE_EAST, tier: 1 },
+          { x: roomsEastX(f), l: false, r: true, open: false, tier: 1 }, { x: slotX(f, ee), l: true, r: false, open: ee > BASE_EAST, tier: 1 },
         ];
         for (const p of piersOfFloor(grid, f, airy)) xs.push({ x: p.x, l: true, r: true, open: false, tier: p.tier });
-        if (ew > 0) xs.push({ x: slotX(-ew), l: false, r: true, open: true, tier: 1 }, { x: -SHAFT_GAP, l: true, r: false, open: false, door: true, tier: 1 });
+        if (ew > 0) xs.push({ x: slotX(f, -ew), l: false, r: true, open: true, tier: 1 }, { x: roomsWestX(f), l: true, r: false, open: false, door: true, tier: 1 });
         const ceil = top + PIPES_Y + PIPES_H;
         const floorY = top + ROOM_H - LIP;
         const above = hallSpans(buildings, f - 1);
@@ -829,7 +842,7 @@ export class FrontChunks implements Animated {
         const pipeColTex = full && sty.col === 2 ? pipeColumnTexture() : null;
         for (const col of xs) {
           const x = col.x;
-          if (!mineCol(col)) continue;
+          if (!mineCol(col, f)) continue;
           // [airy:A2] Piers are wider than the classic 9-unit column (the walls, the shaft door and the classic default stay at COLUMN_W).
           const wall = !col.l || !col.r || col.door;
           const isVoid = airy && col.tier === 2 && !wall;
@@ -916,8 +929,8 @@ export class FrontChunks implements Animated {
         // [airy2:D3] The stair tower is one tall stair through every floor, in front of the rock where there is one and in front of a bridging room where there is not. A storey
         // runs from the lane of floor f-1 to the lane of floor f, so it is drawn with floor f (in this chunk row, above the void strip of floor f-1 and under none of the next).
         if (airy && f >= 1) for (const sl of voidBoundaries(grid)) {
-          const vx = slotX(sl);
-          if (sl >= Math.min(ee, grid.ext[f - 1].e) || !mineCol({ x: vx, l: true, r: true })) continue;
+          const vx = slotX(f, sl);
+          if (sl >= Math.min(ee, grid.ext[f - 1].e) || !mineCol({ x: vx, l: true, r: true }, f)) continue;
           towerStorey(vx, f - 1);
         }
       }
@@ -929,7 +942,7 @@ export class FrontChunks implements Animated {
 
     for (let f = fa; f < fb; f++) {
       for (const l of this.lampsByFloor[f] ?? []) {
-        if (!l.ceiling || !mine(l.x, grid.ext[f])) continue;
+        if (!l.ceiling || !mine(l.x, grid.ext[f], f)) continue;
         const top = floorTop(f);
         const room = roomIndex(l.room);
         const ceilGlow = new Sprite(glow);

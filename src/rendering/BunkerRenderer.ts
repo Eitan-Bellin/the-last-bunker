@@ -8,7 +8,8 @@ import type { EraDef } from '../data/eras';
 import type { BuildingInstance, BuildingType, GameState, Position, Ruin, SurvivorState } from '../core/GameState';
 import { effectiveLevel, isDistrict, roomFloors, roomSlots } from '../data/buildingDefs';
 import { i18n } from '../i18n/I18nManager';
-import { BASE_EAST, BUILDING_W, districtXAt, FLOOR_H, ROOM_H, SHAFT_GAP, SHAFT_W, SLOT_W, TOPSOIL, buildingH, buildingX, extentsFor, floorExtent, floorIndexAt, floorTop, slotX, ROOMS_X, type Ext } from './layout';
+import { BASE_EAST, BUILDING_W, FLOOR_H, ROOM_H, SHAFT_W, SLOT_W, TOPSOIL, buildingH, extentsFor, floorExtent, floorIndexAt, floorTop, type Ext } from './layout';
+import { buildingX, districtXAt, eastmostSlotX, slotX, westmostSlotX } from '../world/project';
 import { hashString, seeded } from './draw';
 import { PEOPLE_STYLE, Person, ROOM_ACTIVITY, type Activity, type Lane } from './people';
 import { crowdFor, restCountFor, settleCrowds } from './workSpots'; // gfx-p0 people
@@ -304,7 +305,7 @@ export class BunkerRenderer {
     this.districtSignHolder.removeChildren().forEach(c => c.destroy({ children: true }));
     if (!info) return;
     const top = floorTop(info.floor);
-    const wallX = slotX(info.slot ?? BASE_EAST), DX = districtXAt(info.slot ?? BASE_EAST);
+    const wallX = slotX(info.floor, info.slot ?? BASE_EAST), DX = districtXAt(info.floor, info.slot ?? BASE_EAST);
     const w = 4 * SLOT_W;
     const g = new Graphics();
     // [gfx2 signage] Miners' spray marks on the rock instead of a dashed UI box (see signage.ts).
@@ -608,7 +609,7 @@ export class BunkerRenderer {
   }
 
   slotCenter(pos: Position): { x: number; y: number } {
-    return { x: slotX(pos.x) + SLOT_W / 2, y: floorTop(pos.floor) + ROOM_H / 2 };
+    return { x: slotX(pos.floor, pos.x) + SLOT_W / 2, y: floorTop(pos.floor) + ROOM_H / 2 };
   }
 
   private rebuildStructure(state: GameState): void {
@@ -616,9 +617,9 @@ export class BunkerRenderer {
     // [plan4:ST-4] How far every floor reaches (layout.ext): the camera's world edges follow the widest ones.
     const exts = this.extsFor(state);
     this.exts = exts;
-    this.extentL = exts.reduce((m, x) => Math.max(m, x.w), 0) > 0 ? slotX(-exts.reduce((m, x) => Math.max(m, x.w), 0)) - 14 : 0;
+    this.extentL = exts.reduce((m, x) => Math.max(m, x.w), 0) > 0 ? westmostSlotX(-exts.reduce((m, x) => Math.max(m, x.w), 0)) - 14 : 0; // [world:C0] global extents
     this.extentL = Math.min(this.extentL, this.rowOpen ? ROW_X0 - 14 : -280); // plan4:ST-16 the camera may pan to the row's west end, or (closed) to the ruin of the old gate house
-    this.extentWingR = slotX(exts.reduce((m, x) => Math.max(m, x.e), 12));
+    this.extentWingR = eastmostSlotX(exts.reduce((m, x) => Math.max(m, x.e), 12));
     this.extentR = Math.max(BUILDING_W, this.extentWingR, this.projectSites.right);
     // [plan4:ST-4] A west wing past the classic edge: the sky, ground and dark edge of the surface move out with the rock (rebuilt once per two-slot step).
     const rowWas = this.rowOpen;
@@ -1401,7 +1402,7 @@ export class BunkerRenderer {
       v.label.y = floorTop(r?.floor ?? 0) + ROOM_H * 0.3 + Math.sin(this.time * 2.2 + v.root.x) * 2;
     }
     this.incidents.quality = this.postfx?.quality ?? 'high'; // gfx-p0 crisis: particle budget follows the quality ladder
-    this.incidents.update(state, this.time, dt, id => this.roomRect(id), f => { const ex = floorExtent(state, f); return { x: slotX(-ex.w), y: floorTop(f), w: (ex.w + ex.e) * SLOT_W }; }); // [plan4:ST-4] a floor reaches as far as its wings
+    this.incidents.update(state, this.time, dt, id => this.roomRect(id), f => { const ex = floorExtent(state, f); return { x: slotX(f, -ex.w), y: floorTop(f), w: (ex.w + ex.e) * SLOT_W }; }); // [plan4:ST-4] a floor reaches as far as its wings
     this.disasterFx.update(state, this.time, id => this.roomRect(id)); // [Danger]
     this.updateBlockers(state); // [camera]
     this.updateBursts(dt);
@@ -1420,8 +1421,8 @@ export class BunkerRenderer {
     let w = 0, e = floorExtent(state, -1 /* a floor with no entry: the default extent */).e;
     const ext = state.layout?.ext;
     if (ext) for (const k in ext) { const x = ext[k]; if (x.w > w) w = x.w; if (x.e > e) e = x.e; }
-    const l = w > 0 ? -SHAFT_GAP - w * SLOT_W : 0;
-    const r = ROOMS_X + e * SLOT_W;
+    const l = w > 0 ? westmostSlotX(-w) : 0; // [world:C0] global extents over every stratum's frame
+    const r = eastmostSlotX(e);
     if (l !== this.span.l || r !== this.span.r) { this.span.l = l; this.span.r = r; }
   }
 
@@ -1580,7 +1581,7 @@ export class BunkerRenderer {
     const root = new Container();
     root.label = 'ruin';
     root.isRenderGroup = true; // [perf]
-    root.position.set(slotX(r.x), floorTop(r.floor));
+    root.position.set(slotX(r.floor, r.x), floorTop(r.floor));
     const people = new Container();
     people.sortableChildren = true;
     root.addChild(people);
@@ -1591,7 +1592,7 @@ export class BunkerRenderer {
       if (!this.cam.isDragging) this.onRuinClick?.(r.id);
     });
     const label = new Container();
-    label.position.set(slotX(r.x) + width / 2, floorTop(r.floor) + ROOM_H * 0.3);
+    label.position.set(slotX(r.floor, r.x) + width / 2, floorTop(r.floor) + ROOM_H * 0.3);
     label.eventMode = 'none';
     return { root, visual: null, people, label, visualSig: '', labelSig: '', width, bar: null, attached: true, lane: { x0: 14, x1: width - 14 } };
   }
@@ -1697,8 +1698,8 @@ export class BunkerRenderer {
       if (!v) continue;
       const r = this.blockRects[n] ?? (this.blockRects[n] = { x: 0, y: 0, w: 0, h: 0 });
       if (inc.kind === 'blackout') {
-        const fx = floorExtent(state, floorIndexAt(v.root.y)); // [plan4:ST-4] the whole floor, wings included
-        r.x = slotX(-fx.w); r.y = v.root.y; r.w = (fx.w + fx.e) * SLOT_W; r.h = v.height;
+        const ff = floorIndexAt(v.root.y), fx = floorExtent(state, ff); // [plan4:ST-4] the whole floor, wings included
+        r.x = slotX(ff, -fx.w); r.y = v.root.y; r.w = (fx.w + fx.e) * SLOT_W; r.h = v.height;
       } else {
         r.x = v.root.x; r.y = v.root.y; r.w = v.width; r.h = v.height;
       }
@@ -1716,7 +1717,7 @@ export class BunkerRenderer {
   }
 
   ruinCenter(r: Ruin): { x: number; y: number } {
-    return { x: slotX(r.x) + (r.w * SLOT_W) / 2, y: floorTop(r.floor) + ROOM_H / 2 };
+    return { x: slotX(r.floor, r.x) + (r.w * SLOT_W) / 2, y: floorTop(r.floor) + ROOM_H / 2 };
   }
 
   destroy(): void {

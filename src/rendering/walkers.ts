@@ -2,7 +2,8 @@ import { Container } from 'pixi.js';
 import type { GameState } from '../core/GameState';
 import { GFX } from './gfxFeatures';
 import { reducedMotion } from '../utils/a11y'; // plan4:AC-2
-import { ROOM_H, SLOT_W, floorIndexAt, slotX } from './geom';
+import { ROOM_H, SLOT_W, floorIndexAt } from './geom';
+import { slotX } from '../world/project';
 import { depthGains } from './structure'; // plan4:polish
 import { getDef } from '../data/buildingDefs'; // plan4:polish
 import { VIEW } from './perfFx';
@@ -219,10 +220,10 @@ export class Walkers {
     let best = LADDER_X, bestD = Math.abs(LADDER_X - wx) + 40; // (the shaft is the fallback: a stairwell has to be clearly nearer to win)
     const consider = (x: number): void => { const d = Math.abs(x - wx); if (d < bestD) { bestD = d; best = x; } };
     for (const i of state.layout?.infra ?? []) {
-      if (i.kind === 'stairwell' && floor >= i.floor && floor <= i.floor + Math.max(1, i.floors ?? 1) - 1) consider(slotX(i.x) + SLOT_W / 2);
+      if (i.kind === 'stairwell' && floor >= i.floor && floor <= i.floor + Math.max(1, i.floors ?? 1) - 1) consider(slotX(floor, i.x) + SLOT_W / 2);
     }
     for (const b of state.buildings) {
-      if (b.position.floor === floor && !b.isConstructing && getDef(b.type)?.effects?.evacuation) consider(slotX(b.position.x) + SLOT_W / 2);
+      if (b.position.floor === floor && !b.isConstructing && getDef(b.type)?.effects?.evacuation) consider(slotX(floor, b.position.x) + SLOT_W / 2);
     }
     return best;
   }

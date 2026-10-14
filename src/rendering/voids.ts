@@ -1,6 +1,6 @@
 import type { Grid } from './occupancy';
 import { cellAt } from './occupancy';
-import { slotX } from './geom';
+import { slotX } from '../world/project';
 
 /**
  * [airy2:D3] Cluster voids: the bunker's floors are split into clusters of 3 to 5 slots by narrow shafts of cut rock (a stair tower stands in each, a catwalk crosses
@@ -63,7 +63,7 @@ export function voidBoundaries(grid: Grid): number[] {
   return out;
 }
 
-/** World x of the middle of every void (for the stair towers and the walkers). */
-export function voidXs(grid: Grid): number[] {
-  return voidBoundaries(grid).map(slotX);
+/** World x of the middle of every void on a floor (for the stair towers and the walkers). The boundaries are the same on every floor; x follows the floor's stratum. */
+export function voidXs(grid: Grid, floor: number): number[] {
+  return voidBoundaries(grid).map(sl => slotX(floor, sl));
 }

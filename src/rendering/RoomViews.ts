@@ -5,7 +5,8 @@ import { specOf } from '../data/specializations';
 import { i18n } from '../i18n/I18nManager';
 import { ArtLibrary } from '../art/ArtLibrary';
 import { artEntry, buildingArtKey, roomTier } from '../art/registry';
-import { BUILDING_W, DEPTH_X, FLOOR_H, ROOM_H, SLAB, SLOT_W, buildingH, buildingX, floorTop } from './layout';
+import { BUILDING_W, DEPTH_X, FLOOR_H, ROOM_H, SLAB, SLOT_W, buildingH, floorTop } from './layout';
+import { buildingX } from '../world/project';
 import { hashString, seeded } from './draw';
 import { buildConstructionVisual, buildPaintedConstruction, buildRoomVisual, buildScaffold, type RoomVisual } from './roomArt';
 import { buildPaintedRoom, roomWorking } from './paintedRoom'; // plan4:BL-6

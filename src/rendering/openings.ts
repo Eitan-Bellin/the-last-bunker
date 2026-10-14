@@ -1,6 +1,7 @@
 import type { BuildingType, GameState } from '../core/GameState';
 import { roomSlots } from '../data/buildingDefs';
-import { BASE_EAST, ROOMS_X, SHAFT_GAP, extentsFor, slotX } from './geom';
+import { BASE_EAST, extentsFor } from './geom';
+import { roomsEastX, roomsWestX, slotX } from '../world/project';
 import { occupancy, type Cell, type Grid } from './occupancy';
 
 /**
@@ -74,27 +75,27 @@ export function openingsOfFloor(grid: Grid, f: number): Opening[] {
   // West landing (a west wing's first room against the shaft) and the doors between rooms west of the shaft.
   if (ext.w > 0) {
     const a = cell(-1);
-    if (isRoom(a)) out.push({ floor: f, slot: 0, x: -SHAFT_GAP, kind: 'landing', side: 'w', leftId: idOf(a), rightId: null, style: 'open' });
+    if (isRoom(a)) out.push({ floor: f, slot: 0, x: roomsWestX(f), kind: 'landing', side: 'w', leftId: idOf(a), rightId: null, style: 'open' });
   }
   for (let b = -ext.w + 1; b < ext.e; b++) {
     if (b === 0) continue; // the shaft
     const a = cell(b - 1), c = cell(b);
-    if (isRoom(a) && isRoom(c) && a.key !== c.key) out.push({ floor: f, slot: b, x: slotX(b), kind: 'room', leftId: idOf(a), rightId: idOf(c), style: styleBetween(a, c) });
+    if (isRoom(a) && isRoom(c) && a.key !== c.key) out.push({ floor: f, slot: b, x: slotX(f, b), kind: 'room', leftId: idOf(a), rightId: idOf(c), style: styleBetween(a, c) });
   }
   const east0 = cell(0);
-  if (isRoom(east0)) out.push({ floor: f, slot: 0, x: ROOMS_X, kind: 'landing', side: 'e', leftId: null, rightId: idOf(east0), style: 'open' });
+  if (isRoom(east0)) out.push({ floor: f, slot: 0, x: roomsEastX(f), kind: 'landing', side: 'e', leftId: null, rightId: idOf(east0), style: 'open' });
   // The corridor stubs: the outermost one or two empty slots of a wing, with a room right beside them.
   if (ext.e > BASE_EAST) {
     let run = 0;
     while (run < ext.e && !cell(ext.e - 1 - run)) run++;
     const edge = ext.e - run;
-    if (run >= 1 && run <= 2 && edge > 0 && isRoom(cell(edge - 1))) out.push({ floor: f, slot: edge, x: slotX(edge), kind: 'stub', leftId: idOf(cell(edge - 1)), rightId: null, style: 'blast', run });
+    if (run >= 1 && run <= 2 && edge > 0 && isRoom(cell(edge - 1))) out.push({ floor: f, slot: edge, x: slotX(f, edge), kind: 'stub', leftId: idOf(cell(edge - 1)), rightId: null, style: 'blast', run });
   }
   if (ext.w > 0) {
     let run = 0;
     while (run < ext.w && !cell(-ext.w + run)) run++;
     const edge = -ext.w + run;
-    if (run >= 1 && run <= 2 && edge < 0 && isRoom(cell(edge))) out.push({ floor: f, slot: edge, x: slotX(edge), kind: 'stub', leftId: null, rightId: idOf(cell(edge)), style: 'blast', run });
+    if (run >= 1 && run <= 2 && edge < 0 && isRoom(cell(edge))) out.push({ floor: f, slot: edge, x: slotX(f, edge), kind: 'stub', leftId: null, rightId: idOf(cell(edge)), style: 'blast', run });
   }
   return out.sort((p, q) => p.x - q.x);
 }
@@ -127,8 +128,8 @@ export function roomDoorX(state: Source, which: number | string): number[] | { w
     return hit ? hit.x : null;
   };
   // A room of the east part: its west boundary is x0 (the landing when x0 is 0), its east boundary x1. West wing rooms mirror that against the shaft.
-  const west = x0 === 0 ? at(0, ROOMS_X) : at(x0, null);
-  const east = x1 === 0 ? at(0, -SHAFT_GAP) : at(x1, null);
+  const west = x0 === 0 ? at(0, roomsEastX(b.position.floor)) : at(x0, null);
+  const east = x1 === 0 ? at(0, roomsWestX(b.position.floor)) : at(x1, null);
   return { w: west, e: east };
 }
 

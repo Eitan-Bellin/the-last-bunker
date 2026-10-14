@@ -1,10 +1,11 @@
 import type { GameState } from '../core/GameState';
 import { getDef } from '../data/buildingDefs';
 import { doorwayX } from './openings';
-import { CORR_LANE, FLIGHTS_PER_FLOOR, TOWER_AMP, ROOMS_X, ROOM_H, SHAFT_GAP, SHAFT_W, SLOT_W, floorTop, slotAtX, slotX, extentsFor } from './geom';
+import { CORR_LANE, FLIGHTS_PER_FLOOR, TOWER_AMP, ROOM_H, SHAFT_W, SLOT_W, floorTop, extentsFor } from './geom';
+import { roomsEastX, roomsWestX, slotAtX, slotX } from '../world/project';
 import { GFX } from './gfxFeatures';
 import { occupancy } from './occupancy';
-import { ANNEX_X, hasAnnex, voidXs } from './voids';
+import { ANNEX_X, hasAnnex, voidBoundaries } from './voids';
 
 /**
  * [plan4:ST-18] Route planning for people walking between rooms, floors and the lift. Purely cosmetic (decision D4): nothing here
@@ -101,12 +102,13 @@ export function setDoorBlocked(fn: DoorBlockedFn | null): void {
 export function walkBlocked(floor: number, x0: number, x1: number): boolean {
   if (floor < 0) return false;
   const lo = Math.min(x0, x1), hi = Math.max(x0, x1);
-  if (hi > ROOMS_X) {
-    const a = slotAtX(Math.max(lo, ROOMS_X)), b = slotAtX(hi);
+  const e0 = roomsEastX(floor), w1 = roomsWestX(floor);
+  if (hi > e0) {
+    const a = slotAtX(floor, Math.max(lo, e0)), b = slotAtX(floor, hi);
     if (a !== null && b !== null) for (let s = a; s < b; s++) if (doorBlocked(floor, s, s + 1)) return true;
   }
-  if (lo < -SHAFT_GAP) {
-    const a = slotAtX(lo), b = slotAtX(Math.min(hi, -SHAFT_GAP - 0.01));
+  if (lo < w1) {
+    const a = slotAtX(floor, lo), b = slotAtX(floor, Math.min(hi, w1 - 0.01));
     if (a !== null && b !== null) for (let s = a; s < b; s++) if (doorBlocked(floor, s, s + 1)) return true;
   }
   return false;
@@ -127,14 +129,14 @@ export function entryX(roomX: number, roomW: number, fromX: number): number {
 /** The world x of the middle of a stairwell column that runs through every floor from lo to hi, or NaN when there is none. */
 export function stairColumnX(state: GameState, lo: number, hi: number): number {
   for (const inf of state.layout?.infra ?? []) {
-    if ((inf.kind === 'stairs' || inf.kind === 'stairwell') && inf.floor <= lo && inf.floor + (inf.floors ?? 1) - 1 >= hi) return slotX(inf.x) + SLOT_W / 2;
+    if ((inf.kind === 'stairs' || inf.kind === 'stairwell') && inf.floor <= lo && inf.floor + (inf.floors ?? 1) - 1 >= hi) return slotX(lo, inf.x) + SLOT_W / 2;
   }
   // [plan4:ST-15] Built stairwells are one floor each (BL-28): a column is the same slot on every floor from lo to hi.
   for (const inf of state.layout?.infra ?? []) {
     if (inf.kind !== 'stairwell' || inf.floor !== lo) continue;
     let ok = true;
     for (let f = lo + 1; f <= hi && ok; f++) ok = (state.layout?.infra ?? []).some(o => o.kind === 'stairwell' && o.x === inf.x && f >= o.floor && f <= o.floor + (o.floors ?? 1) - 1);
-    if (ok) return slotX(inf.x) + SLOT_W / 2;
+    if (ok) return slotX(lo, inf.x) + SLOT_W / 2;
   }
   const bs = state.buildings;
   for (const c of bs) {
@@ -146,7 +148,7 @@ export function stairColumnX(state: GameState, lo: number, hi: number): number {
         if (o.position.floor === f && o.position.x === c.position.x && !o.isConstructing && getDef(o.type)?.effects?.evacuation) { ok = true; break; }
       }
     }
-    if (ok) return slotX(c.position.x) + SLOT_W / 2;
+    if (ok) return slotX(lo, c.position.x) + SLOT_W / 2;
   }
   return NaN;
 }
@@ -159,11 +161,13 @@ export function towerColumnX(state: GameState, lo: number, hi: number, nearX: nu
   if (!GFX.airy || lo < 0) return NaN;
   const grid = occupancy(state.buildings, state.ruins ?? [], state.currentFloors, extentsFor(state, state.currentFloors));
   let best = NaN, bestD = Infinity;
-  const xs = voidXs(grid);
-  if (hasAnnex(grid)) xs.push(ANNEX_X);
-  for (const x of xs) {
+  // [world:C0] A tower stands on a void boundary (slot sl, the same on every floor) or in the annex west of the shaft (slot -1 here: always reachable).
+  const slots = voidBoundaries(grid).slice();
+  if (hasAnnex(grid)) slots.push(-1);
+  for (const sl of slots) {
+    const x = sl < 0 ? ANNEX_X : slotX(lo, sl);
     let ok = true;
-    for (let f = lo; f <= hi && ok; f++) ok = x < 0 || (grid.ext[f]?.e ?? 0) > Math.round((x - ROOMS_X) / SLOT_W);
+    for (let f = lo; f <= hi && ok; f++) ok = sl < 0 || (grid.ext[f]?.e ?? 0) > sl;
     if (ok && Math.abs(x - nearX) < bestD) { bestD = Math.abs(x - nearX); best = x; }
   }
   return best;

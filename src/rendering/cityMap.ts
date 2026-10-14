@@ -2,7 +2,8 @@ import { Container, Graphics, Text } from 'pixi.js';
 import type { BuildingType, GameState } from '../core/GameState';
 import { isDistrict, isHall, roomSlots } from '../data/buildingDefs';
 import { zoneForFloor } from '../data/zones';
-import { BASE_EAST, BUILDING_W, ROOMS_X, SHAFT_W, SLAB, SLOT_W, TOPSOIL, buildingH, buildingX, extentsFor, floorTop, galleryCount, galleryTop, GALLERY_H, slotX } from './layout';
+import { BASE_EAST, BUILDING_W, SHAFT_W, SLAB, SLOT_W, TOPSOIL, buildingH, extentsFor, floorTop, galleryCount, galleryTop, GALLERY_H } from './layout';
+import { buildingX, eastmostSlotX, roomsEastX, slotX, westmostSlotX } from '../world/project';
 import { hashString } from './draw';
 
 export interface CityMap {
@@ -40,8 +41,8 @@ export function buildCityMap(state: GameState, floors: number, locale: string): 
   container.alpha = 0;
   const exts = extentsFor(state, floors); // [plan4:ST-4] a wing is a lit rectangle on the map
   const maxW = exts.reduce((m, x) => Math.max(m, x.w), 0), maxE = exts.reduce((m, x) => Math.max(m, x.e), BASE_EAST);
-  const left = maxW > 0 ? Math.min(-28, slotX(-maxW) - 28) : -28;
-  const right = Math.max(BUILDING_W, slotX(maxE), ...state.buildings.map(b => buildingX(b) + roomSlots(b.type) * SLOT_W)) + 24;
+  const left = maxW > 0 ? Math.min(-28, westmostSlotX(-maxW) - 28) : -28; // [world:C0] global extents
+  const right = Math.max(BUILDING_W, eastmostSlotX(maxE), ...state.buildings.map(b => buildingX(b) + roomSlots(b.type) * SLOT_W)) + 24;
   const top = TOPSOIL - SLAB - 8;
   const bottom = floorTop(floors) + 6;
 
@@ -57,7 +58,7 @@ export function buildCityMap(state: GameState, floors: number, locale: string): 
     const x = exts[f];
     if (x.w === 0 && x.e <= BASE_EAST) continue;
     // The dug reach of a wide floor: a pale band the length of the floor, brighter beyond the classic twelve slots.
-    base.rect(slotX(-x.w), floorTop(f) + 4, (x.w + x.e) * SLOT_W, 100 - 8).fill({ color: 0x5ab8ff, alpha: 0.1 });
+    base.rect(slotX(f, -x.w), floorTop(f) + 4, (x.w + x.e) * SLOT_W, 100 - 8).fill({ color: 0x5ab8ff, alpha: 0.1 });
   }
   // [plan4:ST-1] Service galleries: an orange line each, so the far view reads the rhythm of the floors.
   for (let g = 0; g < galleryCount(floors); g++) base.rect(left, galleryTop(g) + GALLERY_H / 2 - 1.5, right - left, 3).fill({ color: 0xff9a3a, alpha: 0.5 });
@@ -79,8 +80,8 @@ export function buildCityMap(state: GameState, floors: number, locale: string): 
     label.anchor.set(0, 0.5);
     const ly = floorTop(f) - SLAB / 2;
     const pill = new Graphics();
-    pill.roundRect(ROOMS_X - 4, ly - 15, label.width + 16, 30, 6).fill({ color: 0x06101e, alpha: 0.92 }).stroke({ color: 0x5ab8ff, width: 1.5, alpha: 0.7 });
-    label.position.set(ROOMS_X + 4, ly);
+    pill.roundRect(roomsEastX(f) - 4, ly - 15, label.width + 16, 30, 6).fill({ color: 0x06101e, alpha: 0.92 }).stroke({ color: 0x5ab8ff, width: 1.5, alpha: 0.7 });
+    label.position.set(roomsEastX(f) + 4, ly);
     container.addChild(pill, label);
   }
 
