@@ -20,6 +20,11 @@ import { uiSound } from '../../audio/uiSound';
 import { maintenanceCard } from './MaintenanceCard'; // [Danger C3]
 import { relocateBlock } from '../../systems/relocate'; // [plan4:ST-19]
 import { infraCard, infraSignature } from './InfraCard'; // plan4:ST-14
+import { kButton } from '../kit'; // [ux2e]
+import { masteryMultiplier } from '../../data/mastery';
+
+/** [ux2e #45] How many number rows the stats card shows before "More numbers" (with the upgrade price and time: about 7 in view). */
+const PRIMARY_ROWS = 3;
 
 export class BuildingPanel {
   private sheet = new Sheet('building-sheet', 'building');
@@ -27,6 +32,11 @@ export class BuildingPanel {
   private pickerOpen = false;
   /** NICE2: the demolish button was pressed once and waits for a confirmation. */
   private demolishOpen = false;
+  /** [ux2e #28] The "…" menu (Demolish lives there) is open. */
+  private moreOpen = false;
+  /** [ux2e #45] The "why this efficiency" breakdown and the folded number rows are open. */
+  private effOpen = false;
+  private detailsOpen = false;
   private signature = '';
 
   private statusText: HTMLElement | null = null;
@@ -65,6 +75,8 @@ export class BuildingPanel {
     this.buildingId = buildingId;
     this.pickerOpen = false;
     this.demolishOpen = false;
+    this.moreOpen = false;
+    this.effOpen = false;
     this.signature = '';
     this.refresh(this.engine.stateManager.state);
     this.sheet.show();
@@ -101,6 +113,7 @@ export class BuildingPanel {
       state.longGame?.meta.act ?? 0, Math.ceil(Math.max(0, (b.retoolUntil ?? 0) - (state.longGame?.meta.worldT ?? 0)) / 60), // [Long game]
       this.engine.resourceSystem.canAfford(state, this.engine.buildingSystem.specCost()),
       this.demolishOpen, this.engine.buildingSystem.demolishBlock(state, b.id), state.maxPopulation,
+      this.moreOpen, this.effOpen, this.detailsOpen, relocateBlock(state, b) ?? '', // [ux2e]
       Object.values(state.resources).map(r => Math.floor(r.cap)).join(','), state.buildings.length, state.currentFloors,
     ].join('|');
 
@@ -153,7 +166,10 @@ export class BuildingPanel {
       root.appendChild(card);
     }
 
+    // [ux2e #45] At most PRIMARY_ROWS numbers in view (output and efficiency first); the rest fold under "More numbers". Notes stay visible.
     const stats = el('div', 'bp-card');
+    const nums: HTMLElement[] = [];
+    const notes: HTMLElement[] = [];
     if (def.production) {
       for (const r of Object.keys(def.production)) {
         const row = el('div', 'bp-row');
@@ -161,65 +177,61 @@ export class BuildingPanel {
         const val = el('span', 'bp-value positive');
         this.outputValues.set(r, val);
         row.appendChild(val);
-        stats.appendChild(row);
+        nums.push(row);
       }
     }
     if (def.maxWorkers > 0) {
-      const row = el('div', 'bp-row');
-      row.appendChild(el('span', '', i18n.t('building.efficiency')));
-      this.efficiencyEl = el('span', 'bp-value');
-      row.appendChild(this.efficiencyEl);
-      stats.appendChild(row);
+      nums.push(this.renderEfficiency(state, b));
     } else {
       this.efficiencyEl = null;
     }
     const level = Math.max(1, effectiveLevel(b));
     if (def.effects?.maxPopulation) {
       const p = def.effects.maxPopulation;
-      stats.appendChild(this.row(`[[quarters]] ${i18n.t('building.capacity')}`, String(p.base + p.perLevel * (level - 1))));
+      nums.push(this.row(`[[quarters]] ${i18n.t('building.capacity')}`, String(p.base + p.perLevel * (level - 1))));
       // The Act's limit can leave beds unused: say so here, where the player upgrades for more.
       const built = bedsBuilt(state);
       if (built > state.maxPopulation) {
-        stats.appendChild(el('div', 'bp-note warning', i18n.t('building.bedsCapped', { built, cap: state.maxPopulation })));
+        notes.push(el('div', 'bp-note warning', i18n.t('building.bedsCapped', { built, cap: state.maxPopulation })));
       }
     }
     if (def.effects?.morale) {
       const m = def.effects.morale;
-      stats.appendChild(this.row(`[[happy]] ${i18n.t('building.morale')}`, `+${Math.round((m.base + m.perLevel * (level - 1)) * workforceMultiplier(state, b))}`));
+      nums.push(this.row(`[[happy]] ${i18n.t('building.morale')}`, `+${Math.round((m.base + m.perLevel * (level - 1)) * workforceMultiplier(state, b))}`));
       // [plan4:BL-39] Which of the three morale channels it feeds (each has its own ceiling).
       if (def.effects.moraleKind && def.effects.moraleKind !== 'base') {
         const cap = MORALE_CAPS[def.effects.moraleKind];
-        stats.appendChild(this.row(`[[happy]] ${i18n.t('building.moraleChannel')}`, `${i18n.t(`morale.channel.${def.effects.moraleKind}`)} · max ${cap}`));
+        nums.push(this.row(`[[happy]] ${i18n.t('building.moraleChannel')}`, `${i18n.t(`morale.channel.${def.effects.moraleKind}`)} · max ${cap}`));
       }
     }
     if (def.effects?.storageCap) {
       const caps = Object.entries(def.effects.storageCap).map(([r, v]) => `${RESOURCE_ICONS[r] ?? ''}+${v * level}`).join('  ');
-      stats.appendChild(this.row(`[[storage]] ${i18n.t('building.storage')}`, caps));
+      nums.push(this.row(`[[storage]] ${i18n.t('building.storage')}`, caps));
     }
     const compound = compoundNeighbors(state, b);
-    if (compound > 0) stats.appendChild(this.row(`[[compound]] ${i18n.t('building.compound')}`, `+${compound * 10}%`));
+    if (compound > 0) nums.push(this.row(`[[compound]] ${i18n.t('building.compound')}`, `+${compound * 10}%`));
     // [plan4:BL-39] Neighbour pairs (doc 2.5): who stands next door and what the pair gives.
     for (const link of synergyOf(state, b).links) {
       const nd = getDef(link.with);
-      stats.appendChild(this.row(`[[compound]] ${i18n.t('building.synergyRow', { name: nd?.name[locale] ?? nd?.name.en ?? link.with })}`, `+${Math.round(link.value * 100)}% ${i18n.t(`synergy.effect.${link.effect}`)}`));
+      nums.push(this.row(`[[compound]] ${i18n.t('building.synergyRow', { name: nd?.name[locale] ?? nd?.name.en ?? link.with })}`, `+${Math.round(link.value * 100)}% ${i18n.t(`synergy.effect.${link.effect}`)}`));
     }
     if (def.effects?.defense) {
       const d = def.effects.defense;
-      stats.appendChild(this.row(`[[endurance]] ${i18n.t('building.defense')}`, `+${Math.round((d.base + d.perLevel * (level - 1)) * workforceMultiplier(state, b))} · ${i18n.t('building.totalDefense', { n: bunkerDefense(state) })}`));
+      nums.push(this.row(`[[endurance]] ${i18n.t('building.defense')}`, `+${Math.round((d.base + d.perLevel * (level - 1)) * workforceMultiplier(state, b))} · ${i18n.t('building.totalDefense', { n: bunkerDefense(state) })}`));
     }
-    for (const r of this.wave2Rows(state, b, def)) stats.appendChild(r); // [plan4:BL-15..32]
-    if (b.type === 'radioTower') stats.appendChild(el('div', 'bp-hint', `[[radioTower]] ${i18n.t('building.radio')}`));
-    if (b.type === 'trainingRoom') stats.appendChild(el('div', 'bp-hint', `[[trainingRoom]] ${i18n.t('building.training')}`));
+    for (const r of this.wave2Rows(state, b, def)) nums.push(r); // [plan4:BL-15..32]
+    if (b.type === 'radioTower') notes.push(el('div', 'bp-hint', `[[radioTower]] ${i18n.t('building.radio')}`));
+    if (b.type === 'trainingRoom') notes.push(el('div', 'bp-hint', `[[trainingRoom]] ${i18n.t('building.training')}`));
     if (b.type === 'laboratory') {
-      stats.appendChild(this.row(`[[research]] ${i18n.t('building.labSpeed')}`, `×${this.engine.researchSystem.speed(state).toFixed(2)}`));
+      nums.push(this.row(`[[research]] ${i18n.t('building.labSpeed')}`, `×${this.engine.researchSystem.speed(state).toFixed(2)}`));
     }
     if (def.powerConsumption > 0) {
       // S3: the draw grows with the room's level.
       const draw = roomPowerDraw(def.powerConsumption, level);
-      stats.appendChild(this.row(`[[power]] ${i18n.t('build.powerUse')}`, `−${Number.isInteger(draw) ? draw : draw.toFixed(1)}`));
+      nums.push(this.row(`[[power]] ${i18n.t('build.powerUse')}`, `−${Number.isInteger(draw) ? draw : draw.toFixed(1)}`));
     }
     if (def.production && !def.production.power && state.powerRatio < 0.99) {
-      stats.appendChild(el('div', 'bp-warning', `[[warning]] ${i18n.t('building.powerLow')}`));
+      notes.push(el('div', 'bp-warning', `[[warning]] ${i18n.t('building.powerLow')}`));
     }
     for (const input of chainInputs(b)) {
       const fed = inputFed(state, input);
@@ -233,12 +245,27 @@ export class BuildingPanel {
         el('span', '', `[[recycle]] ${i18n.t(input.boost ? 'chain.fuel' : 'chain.input')} ${RESOURCE_ICONS[input.resource] ?? ''}`),
         el('span', 'bp-value', `−${inputRate(input, b).toFixed(2)} · ${status}`),
       );
-      stats.appendChild(r);
+      nums.push(r);
     }
     // S2: B1 is full of homes: say where more beds come from.
     if (b.type === 'quarters' && bedsBuilt(state) <= state.maxPopulation && !allowedFloors('quarters', state.currentFloors).some(f => this.engine.buildingSystem.findFreeSpot('quarters', f, state))) {
-      stats.appendChild(el('div', 'bp-hint', `[[pick]] ${i18n.t('building.digForHomes')}`));
+      notes.push(el('div', 'bp-hint', `[[pick]] ${i18n.t('building.digForHomes')}`));
     }
+    stats.append(...nums.slice(0, PRIMARY_ROWS));
+    if (nums.length > PRIMARY_ROWS) {
+      const more = nums.slice(PRIMARY_ROWS);
+      const box = el('div', 'ux2e-more');
+      box.hidden = !this.detailsOpen;
+      box.append(...more);
+      const toggle = kButton({
+        variant: 'tertiary', className: 'btn-ghost ux2e-more-btn',
+        label: `${this.detailsOpen ? '▴' : '▾'} ${i18n.t(this.detailsOpen ? 'ux2e.room.lessNumbers' : 'ux2e.room.moreNumbers', { n: more.length })}`,
+        onPress: () => { this.detailsOpen = !this.detailsOpen; this.signature = ''; this.refresh(this.engine.stateManager.state); },
+      });
+      toggle.setAttribute('aria-expanded', String(this.detailsOpen));
+      stats.append(toggle, box);
+    }
+    stats.append(...notes);
     root.appendChild(stats);
 
     if (def.maxWorkers > 0) root.appendChild(this.renderWorkers(state, b));
@@ -359,6 +386,60 @@ export class BuildingPanel {
     return out;
   }
 
+  /**
+   * [ux2e #45] The efficiency row is a button: a tap shows where the number comes from (crew, skill match, neighbours) and the power
+   * supply that scales the output on top of it. Read-only: the parts are the same terms workforceMultiplier multiplies.
+   */
+  private renderEfficiency(state: GameState, b: BuildingInstance): HTMLElement {
+    const def = getDef(b.type)!;
+    const wrap = el('div', 'ux2e-eff');
+    const row = el('button', 'bp-row ux2e-eff-row');
+    row.type = 'button';
+    row.setAttribute('aria-expanded', String(this.effOpen));
+    this.efficiencyEl = el('span', 'bp-value');
+    row.append(el('span', '', `[[chart]] ${i18n.t('building.efficiency')} ${this.effOpen ? '▴' : '▾'}`), this.efficiencyEl);
+    row.addEventListener('click', (e) => {
+      e.stopPropagation();
+      uiSound('click');
+      this.effOpen = !this.effOpen;
+      this.refresh(this.engine.stateManager.state);
+    });
+    wrap.appendChild(row);
+    if (!this.effOpen) return wrap;
+
+    const box = el('div', 'ux2e-why');
+    const workers = b.assignedSurvivorIds.map(id => state.survivors.find(s => s.id === id)).filter((s): s is SurvivorState => !!s && !s.isOnMission && !s.child);
+    const baseEff = def.baseEfficiency ?? 0.2;
+    const staffing = baseEff + (1 - baseEff) * Math.min(1, workers.length / Math.max(1, def.maxWorkers));
+    const compound = compoundNeighbors(state, b);
+    const total = workforceMultiplier(state, b);
+    const pct = (v: number) => `${Math.round(v * 100)}%`;
+    const why = (label: string, value: string, bad = false) => {
+      const r = el('div', `bp-row${bad ? ' ux2e-why-bad' : ''}`);
+      r.append(el('span', '', label), el('span', 'bp-value', value));
+      box.appendChild(r);
+    };
+    why(`[[worker]] ${i18n.t('ux2e.room.why.crew', { n: workers.length, max: def.maxWorkers })}`, `×${pct(staffing)}`, workers.length < def.maxWorkers);
+    if (workers.length > 0) {
+      // Skill, traits and mastery together: what is left of the total once crew and neighbours are taken out.
+      const skill = total / Math.max(0.0001, staffing * (1 + 0.1 * compound));
+      const stat = def.optimalStat;
+      const avg = stat ? workers.reduce((a, w) => a + w.stats[stat], 0) / workers.length : 0;
+      const label = stat
+        ? i18n.t('ux2e.room.why.skill', { stat: `${STAT_ICONS[stat]} ${i18n.t(`stats.${stat}`)}`, avg: avg.toFixed(1) })
+        : i18n.t('ux2e.room.why.skillAny');
+      why(`[[star]] ${label}`, `×${pct(skill)}`, skill < 1);
+      if (masteryMultiplier(workers) > 1) box.appendChild(el('div', 'bp-hint', i18n.t('ux2e.room.why.mastery')));
+    }
+    if (compound > 0) why(`[[compound]] ${i18n.t('building.compound')}`, `+${compound * 10}%`);
+    if (def.production && !def.production.power) {
+      why(`[[power]] ${i18n.t('ux2e.room.why.power')}`, pct(Math.min(1, state.powerRatio ?? 1)), (state.powerRatio ?? 1) < 0.99);
+    }
+    box.appendChild(el('div', 'bp-hint', i18n.t('ux2e.room.why.hint')));
+    wrap.appendChild(box);
+    return wrap;
+  }
+
   private row(label: string, value: string): HTMLDivElement {
     const r = el('div', 'bp-row');
     r.append(el('span', '', label), el('span', 'bp-value', value));
@@ -385,11 +466,15 @@ export class BuildingPanel {
       row.appendChild(name);
       if (def.optimalStat) row.appendChild(el('span', 'worker-stat', `${STAT_ICONS[def.optimalStat]} ${s.stats[def.optimalStat]}`));
       if (traitBonus(s.traits, b.type) > 0) row.appendChild(el('span', 'worker-trait', '[[star]]'));
-      row.appendChild(button(i18n.t('building.unassign'), 'btn-small btn-ghost', () => {
-        uiSound('unassign');
-        this.engine.populationSystem.assignSurvivorToBuilding(this.engine.stateManager, s.id, null);
-        this.engine.requestSave();
-        this.refresh(this.engine.stateManager.state);
+      // [ux2e #28] A 48 px Remove (it was a 34 px ghost button).
+      row.appendChild(kButton({
+        variant: 'secondary', className: 'btn-secondary ux2e-48', label: i18n.t('building.unassign'), sound: 'unassign',
+        ariaLabel: `${i18n.t('building.unassign')} ${this.engine.populationSystem.getLocalizedName(s, i18n.currentLocale)}`,
+        onPress: () => {
+          this.engine.populationSystem.assignSurvivorToBuilding(this.engine.stateManager, s.id, null);
+          this.engine.requestSave();
+          this.refresh(this.engine.stateManager.state);
+        },
       }));
       card.appendChild(row);
     }
@@ -468,9 +553,9 @@ export class BuildingPanel {
     }
     const cost = this.engine.buildingSystem.getUpgradeCost(b);
     const time = this.engine.buildingSystem.getUpgradeTime(b);
+    // [ux2e #45] The price is on the Upgrade button at the top: this card keeps only the time (and the storage note).
     const info = el('div', 'bp-upgrade-info');
-    info.appendChild(costRow(state, cost, true)); // [ux-wp4] P17: short prices with the resource's name
-    info.appendChild(el('span', 'bp-hint', `[[clock]] ${i18n.formatDuration(time)}`));
+    info.appendChild(el('span', 'bp-hint', `[[clock]] ${i18n.t('ux2e.room.upgradeTime', { t: i18n.formatDuration(time) })}`));
     card.appendChild(info);
     // The price is more than storage can even hold: point at the Storage Room instead of a silent grey button.
     const over = Object.entries(cost).find(([r, v]) => v > (state.resources[r as ResourceType]?.cap ?? Infinity));
@@ -529,44 +614,87 @@ export class BuildingPanel {
     return bar;
   }
 
-  /** NICE2: tear a room down for half its build price (two taps: the button, then the confirmation). */
+  /**
+   * [ux2e #28] Room actions: Move (48 px) and a "…" menu that holds Demolish, away from Move. Demolish asks first, saying what it
+   * costs (the crew goes idle, half the price back, no undo); Cancel is the big button there, Demolish the quiet one.
+   * NICE2: tearing down still refunds half the build price (unchanged).
+   */
   private renderDemolish(state: GameState, b: BuildingInstance): HTMLElement {
     const bs = this.engine.buildingSystem;
-    const card = el('div', 'bp-card bp-demolish');
+    const card = el('div', 'bp-card bp-demolish ux2e-actions');
     const block = bs.demolishBlock(state, b.id);
-    // [plan4:ST-19] Move the room (10% of its price, 30 s of downtime); greyed out with the reason when it can't move now.
-    if (this.onMove && !isDistrict(b.type)) card.appendChild(button(`[[walker]] ${i18n.t('relocate.button')}`, 'btn-secondary btn-small', () => this.onMove?.(b.id), relocateBlock(state, b) !== null));
-    if (block === 'busy') return card;
-    if (block) {
-      card.appendChild(el('div', 'bp-hint', `[[lock]] ${i18n.t(block === 'incident' ? 'build.demolishIncident' : 'build.demolishBeds')}`));
+    const redraw = () => this.refresh(this.engine.stateManager.state);
+
+    if (this.demolishOpen && !block) {
+      const def = getDef(b.type)!;
+      const name = def.name[i18n.currentLocale] ?? def.name.en;
+      const crew = b.assignedSurvivorIds.length;
+      card.classList.add('ux2e-confirm');
+      card.setAttribute('role', 'group');
+      card.appendChild(el('div', 'bp-section-title', `[[warning]] ${i18n.t('ux2e.room.demolishTitle', { name })}`));
+      const list = el('ul', 'ux2e-conseq');
+      if (crew > 0) list.appendChild(el('li', '', i18n.t('ux2e.room.demolishCrew', { n: crew })));
+      const back = el('li', '', i18n.t('ux2e.room.demolishRefund'));
+      const refund = bs.demolishRefund(state, b.id);
+      if (Object.keys(refund).length) back.appendChild(costRow(state, refund, true));
+      list.append(back, el('li', '', i18n.t('ux2e.room.demolishUndo')));
+      card.appendChild(list);
+      const actions = el('div', 'ux2e-confirm-actions');
+      actions.append(
+        kButton({
+          variant: 'primary', className: 'btn-primary ux2e-48', label: i18n.t('placement.cancel'), sound: 'click',
+          onPress: () => { this.demolishOpen = false; this.moreOpen = false; redraw(); },
+        }),
+        kButton({
+          variant: 'tertiary', className: 'btn-ghost ux2e-48 ux2e-danger', icon: 'trash', label: i18n.t('build.demolishYes'),
+          onPress: () => {
+            const sm = this.engine.stateManager;
+            const gain = bs.demolishRefund(sm.state, b.id);
+            if (!bs.demolish(sm, b.id)) return;
+            this.engine.resourceSystem.gain(sm, gain);
+            this.engine.requestSave();
+            uiSound('debris');
+            this.hide();
+          },
+        }),
+      );
+      card.appendChild(actions);
       return card;
     }
-    if (!this.demolishOpen) {
-      card.appendChild(button(`[[trash]] ${i18n.t('build.demolish')}`, 'btn-ghost btn-small', () => {
-        uiSound('click');
-        this.demolishOpen = true;
-        this.refresh(this.engine.stateManager.state);
+
+    const row = el('div', 'ux2e-action-row');
+    // [plan4:ST-19] Move the room (10% of its price, 30 s of downtime); pressing it while it can't move says why.
+    if (this.onMove && !isDistrict(b.type)) {
+      const why = relocateBlock(state, b);
+      row.appendChild(kButton({
+        variant: 'secondary', className: 'btn-secondary ux2e-48 ux2e-grow', icon: 'walker', label: i18n.t('relocate.button'),
+        disabledReason: why ? i18n.t(`relocate.blocked.${why}`) : null,
+        onPress: () => this.onMove?.(b.id),
       }));
-      return card;
     }
-    const refund = bs.demolishRefund(state, b.id);
-    card.appendChild(el('div', 'bp-warning', `[[warning]] ${i18n.t('build.demolishConfirm')}`));
-    if (Object.keys(refund).length) card.appendChild(costRow(state, refund));
-    const actions = el('div', 'incident-actions');
-    actions.appendChild(button(`[[trash]] ${i18n.t('build.demolishYes')}`, 'btn-primary', () => {
-      const sm = this.engine.stateManager;
-      const gain = bs.demolishRefund(sm.state, b.id);
-      if (!bs.demolish(sm, b.id)) return;
-      this.engine.resourceSystem.gain(sm, gain);
-      this.engine.requestSave();
-      uiSound('debris');
-      this.hide();
-    }));
-    actions.appendChild(button(i18n.t('placement.cancel'), 'btn-secondary', () => {
-      this.demolishOpen = false;
-      this.refresh(this.engine.stateManager.state);
-    }));
-    card.appendChild(actions);
+    if (block !== 'busy') {
+      const more = kButton({
+        variant: 'icon', className: 'btn-secondary ux2e-48 ux2e-more-menu', label: '…', ariaLabel: i18n.t('ux2e.room.moreActions'),
+        onPress: () => { this.moreOpen = !this.moreOpen; redraw(); },
+      });
+      more.setAttribute('aria-expanded', String(this.moreOpen));
+      more.setAttribute('aria-haspopup', 'menu');
+      row.appendChild(more);
+    }
+    if (row.childElementCount) card.appendChild(row);
+    if (!this.moreOpen || block === 'busy') return card;
+
+    const menu = el('div', 'ux2e-menu');
+    menu.setAttribute('role', 'menu');
+    const item = kButton({
+      variant: 'tertiary', className: 'btn-ghost ux2e-48 ux2e-danger ux2e-menu-item', icon: 'trash', label: i18n.t('build.demolish'),
+      disabledReason: block ? i18n.t(block === 'incident' ? 'build.demolishIncident' : 'build.demolishBeds') : null,
+      onPress: () => { this.demolishOpen = true; redraw(); },
+    });
+    item.setAttribute('role', 'menuitem');
+    menu.appendChild(item);
+    if (block) menu.appendChild(el('div', 'bp-hint', `[[lock]] ${i18n.t(block === 'incident' ? 'build.demolishIncident' : 'build.demolishBeds')}`));
+    card.appendChild(menu);
     return card;
   }
 
