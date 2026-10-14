@@ -2,6 +2,7 @@ import { el } from '../dom';
 import { uiSound } from '../../audio/uiSound';
 import { setInert, trapTab } from '../a11yDom';
 import { kButton } from '../kit';
+import { dismissIndex, tapBlocked } from '../popupRules';
 
 export interface ModalAction {
   label: string;
@@ -20,9 +21,17 @@ export interface ModalOptions {
   actions: ModalAction[];
   /** Called once when this dialog goes away: closed, or replaced by another one. */
   onDismiss?: () => void;
+  /**
+   * [ux-redesign w2a] The choice that Escape and the phone's back button press. Default: the only choice of a one-button (info) dialog;
+   * 'none' for a decision that needs an explicit answer. Dialogs with several choices name theirs ("Later").
+   */
+  dismiss?: number | 'none';
 }
 
-/** Centered dialog that requires an explicit choice; backdrop taps don't dismiss it. */
+/**
+ * Centered dialog that requires an explicit choice; backdrop taps don't dismiss it. [ux-redesign w2a] A dialog that just opened (or whose
+ * content was just replaced) ignores taps for MODAL_TAP_GUARD_MS, and an info dialog closes with Escape / back (`dismiss`).
+ */
 export class Modal {
   private overlay: HTMLDivElement;
   private box: HTMLDivElement;
@@ -32,6 +41,9 @@ export class Modal {
   /** [plan4:AC-8] Page parts made inert while the dialog is up (and only those it made inert), and what had the focus before it. */
   private inerted: Element[] = [];
   private opener: HTMLElement | null = null;
+  /** [ux-redesign w2a] When the current content appeared, and the button back / Escape presses (null: a decision). */
+  private openedAt = 0;
+  private dismissBtn: HTMLButtonElement | null = null;
 
   constructor() {
     this.overlay = el('div', 'modal-overlay');
@@ -42,6 +54,30 @@ export class Modal {
     this.overlay.appendChild(this.box);
     document.body.appendChild(this.overlay);
     this.overlay.addEventListener('keydown', (e) => trapTab(e, [this.box]));
+    // [ux-redesign w2a #20] Escape belongs to the dialog while one is up (a sheet under it stays open); a decision ignores it.
+    document.addEventListener('keydown', (e) => {
+      if (e.key !== 'Escape' || !this.isVisible) return;
+      e.preventDefault();
+      e.stopPropagation();
+      this.back();
+    }, { capture: true });
+    // [ux-redesign w2a #4] A tap that lands right after the dialog appeared was meant for what was there before: swallow it.
+    this.overlay.addEventListener('click', (e) => {
+      if (tapBlocked(this.openedAt, performance.now(), e.detail)) { e.preventDefault(); e.stopPropagation(); }
+    }, { capture: true });
+  }
+
+  /** [ux-redesign w2a #20] The open dialog has a choice that back / Escape may press (an info dialog, or one with a "Later"). */
+  get canDismiss(): boolean {
+    return this.isVisible && !!this.dismissBtn?.isConnected;
+  }
+
+  /** [ux-redesign w2a #20] Escape / the phone's back button: presses the dismiss choice of an info dialog. False for a decision. */
+  back(): boolean {
+    const b = this.dismissBtn;
+    if (!this.isVisible || !b || !b.isConnected) return false;
+    b.click();
+    return true;
   }
 
   show(opts: ModalOptions): void {
@@ -89,7 +125,16 @@ export class Modal {
       scroll.appendChild(list);
     }
     const actions = el('div', 'modal-actions');
-    for (const a of opts.actions.slice(pinnedFrom)) actions.appendChild(makeButton(a));
+    const buttons: HTMLButtonElement[] = [];
+    if (pinnedFrom > 0) buttons.push(...(scroll.querySelectorAll<HTMLButtonElement>('.modal-actions button')));
+    for (const a of opts.actions.slice(pinnedFrom)) {
+      const b = makeButton(a);
+      buttons.push(b);
+      actions.appendChild(b);
+    }
+    const di = dismissIndex(opts.actions, opts.dismiss);
+    this.dismissBtn = di === null ? null : buttons[di] ?? null;
+    this.openedAt = performance.now();
 
     this.scroll = scroll;
     this.box.replaceChildren(scroll, actions);
@@ -110,6 +155,7 @@ export class Modal {
   }
 
   hide(): void {
+    this.dismissBtn = null;
     this.overlay.classList.remove('open');
     for (const n of this.inerted) setInert(n, false);
     this.inerted = [];

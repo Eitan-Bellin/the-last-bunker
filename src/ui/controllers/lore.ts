@@ -44,6 +44,7 @@ export class LoreController {
         { label: i18n.t('journal.readNow'), className: 'btn-primary', onClick: () => { this.app.modal.hide(); this.readLore(id); } },
         { label: i18n.t('journal.later'), className: 'btn-secondary', onClick: () => { this.app.modal.hide(); this.app.storyOpen = false; } },
       ],
+      dismiss: 1, // [ux-redesign w2a #20] back / Escape = "Later"
     });
   }
 
@@ -59,5 +60,22 @@ export class LoreController {
       this.app.journal.refresh(this.app.state);
     };
     this.app.loreReader.show(entry);
+    this.reserveText(entry.body[i18n.currentLocale]);
+  }
+
+  /**
+   * [ux-redesign w2a #18] A tape types itself out: the page keeps the height of the whole transcript from the start, so the Close button
+   * never slides away under a finger (a tap on the card still finishes the typing at once).
+   */
+  private reserveText(text: string): void {
+    const body = document.querySelector<HTMLElement>('.lore-overlay.open .lore-body');
+    if (!body || !body.parentElement) return;
+    const probe = body.cloneNode(false) as HTMLElement;
+    probe.textContent = text;
+    probe.setAttribute('aria-hidden', 'true');
+    probe.style.cssText = `position:absolute;visibility:hidden;pointer-events:none;inline-size:${body.clientWidth}px`;
+    body.parentElement.appendChild(probe);
+    body.style.minBlockSize = `${probe.offsetHeight}px`;
+    probe.remove();
   }
 }

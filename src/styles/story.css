@@ -104,7 +104,8 @@
 .lore-card.kind-tape .lore-body { font-family: 'Courier New', monospace; font-size: calc(14px * var(--fs, 1)); color: #bfe4ff; }
 .lore-bonus { font-size: calc(13px * var(--fs, 1)); font-weight: 700; padding: 8px 10px; border-radius: 8px; background: rgba(90, 160, 80, 0.18); color: #2f5a22; margin-bottom: 12px; }
 .lore-card.kind-tape .lore-bonus { color: #9fe38a; background: rgba(90, 200, 80, 0.12); }
-.lore-close { width: 100%; }
+/* [ux-redesign w2a #18] Close stays in reach at the foot of a long page (the controller also reserves the transcript's full height). */
+.lore-close { width: 100%; position: sticky; inset-block-end: 0; }
 .tape-deck { display: flex; align-items: center; justify-content: center; gap: 10px; margin-bottom: 12px; padding: 12px; border-radius: 10px; background: #0b0e14; border: 1px solid rgba(255, 255, 255, 0.06); }
 .tape-reel { width: 34px; height: 34px; border-radius: 50%; border: 3px dashed #6b7c94; animation: reel 1.4s linear infinite; }
 .tape-window { flex: 1; max-width: 120px; height: 18px; border-radius: 4px; background: linear-gradient(90deg, #3a2a1c, #5a4030, #3a2a1c); }

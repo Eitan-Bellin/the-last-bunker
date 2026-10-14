@@ -1,6 +1,7 @@
 import { i18n } from '../i18n/I18nManager';
 import { el } from './dom';
 import type { Modal } from './components/Modal';
+import { allowedNow, orderSources, type PopupTier } from './popupRules';
 
 /**
  * [plan4:UX-10] Every dialog that opens by itself (welcome, memorial, raid result, danger prompt, events, expedition questions and
@@ -11,8 +12,10 @@ import type { Modal } from './components/Modal';
  */
 export interface DialogSource {
   id: string;
-  /** Higher goes first. */
+  /** Higher goes first (inside its tier). */
   priority: number;
+  /** [ux-redesign w2a] crisis > offline > story > unlock > daily > offer (popupRules.TIER_BASE). Default 'story'. */
+  tier?: PopupTier;
   /** How long "Later" holds this source back. */
   snoozeMs: number;
   /** Emergencies (a countdown is running) ignore an open sheet; they still wait for a gesture, a placement or a ceremony to end. */
@@ -38,6 +41,8 @@ export class DialogQueue {
   waiting = 0;
   /** Last decision, for debugging: 'open:<id>' | 'blocked' | 'fold' | 'idle'. */
   lastDecision = 'idle';
+  /** [ux-redesign w2a] Offers shown this session (at most popupRules.OFFERS_PER_SESSION). */
+  offersShown = 0;
 
   private readonly sources: DialogSource[];
   private readonly modal: Modal;
@@ -45,7 +50,7 @@ export class DialogQueue {
   private readonly playSeconds: () => number;
 
   constructor(sources: DialogSource[], modal: Modal, gate: (critical: boolean) => boolean, playSeconds: () => number) {
-    this.sources = [...sources].sort((a, b) => b.priority - a.priority);
+    this.sources = orderSources(sources);
     this.modal = modal;
     this.gate = gate;
     this.playSeconds = playSeconds;
@@ -53,7 +58,7 @@ export class DialogQueue {
 
   /** The sources with something to say right now and not snoozed, best first. */
   pending(now = performance.now()): DialogSource[] {
-    return this.sources.filter(s => (this.snoozedUntil.get(s.id) ?? 0) <= now && s.ready());
+    return allowedNow(this.sources, this.offersShown).filter(s => (this.snoozedUntil.get(s.id) ?? 0) <= now && s.ready());
   }
 
   /** Called every frame while no dialog is on screen. Opens at most one. */
@@ -78,7 +83,12 @@ export class DialogQueue {
     }
     if (soft.length < FOLD_AT) this.working = false;
     this.lastDecision = `open:${top.id}`;
-    top.open();
+    this.openOne(top);
+  }
+
+  private openOne(s: DialogSource): void {
+    if (s.tier === 'offer') this.offersShown++;
+    s.open();
   }
 
   /** One card for the whole pile: what waits, "start" (one by one, most important first) or "later". */
@@ -94,12 +104,13 @@ export class DialogQueue {
       title: i18n.t('dq.title', { n: soft.length }),
       body,
       actions: [
-        { label: i18n.t('dq.start'), className: 'btn-primary', onClick: () => { this.working = true; this.modal.hide(); soft[0].open(); } },
+        { label: i18n.t('dq.start'), className: 'btn-primary', onClick: () => { this.working = true; this.modal.hide(); this.openOne(soft[0]); } },
         {
           label: i18n.t('dq.later'), className: 'btn-secondary',
           onClick: () => { for (const s of soft) this.snoozedUntil.set(s.id, now + s.snoozeMs); this.modal.hide(); },
         },
       ],
+      dismiss: 1, // [ux-redesign w2a] back / Escape = "Later"
     });
   }
 

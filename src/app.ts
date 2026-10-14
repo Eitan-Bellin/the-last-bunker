@@ -61,6 +61,7 @@ import { Notifier, type NotifyItem } from './ui/notifications';
 import type { TourMode } from './ui/tour'; // [plan4:GP-6] type only: the tour's code loads on first use
 import { arrivalGap, type RaidResult } from './systems/EventSystem';
 import { DialogQueue, type DialogSource } from './ui/dialogQueue'; // [plan4:UX-10]
+import { backAction, gateBlock, LOST_POINTER_MS, lowStoreStep, SHEET_SETTLE_MS, wantsWelcome } from './ui/popupRules'; // [ux-redesign w2a]
 import { getChapter } from './data/story';
 import { districtDef } from './data/districts';
 import { haptic } from './utils/haptics'; // [plan4:UX-20]
@@ -180,10 +181,16 @@ export class GameApp {
   /** [plan4:UX-10] Pointers that are down right now (id -> last event time) and the time of the last touch gesture. */
   private pointersDown = new Map<number, number>();
   private lastGestureAt = -Infinity;
+  /** [ux-redesign w2a #5] A sheet started to open or close: it is still moving until this time. */
+  private sheetMovingUntil = 0;
+  /** [ux-redesign w2a] Why the last dialog check was held back ('' = open), for debugging (?debug: __app.lastGateBlock). */
+  lastGateBlock = '';
   /** [plan4:UX-10] A ceremony (GP-2) holds every dialog back until this time (performance.now() ms). */
   ceremonyUntil = 0;
   private shortages = new Set<ResourceType>();
   private lowWarned = new Set<ResourceType>();
+  /** [ux-redesign w2a #11] When each store last warned (performance.now() ms). */
+  private lowWarnedAt = new Map<ResourceType, number>();
   private hurtWarned = new Set<string>();
   private powerOk = true;
   private ruinBuckets = new Map<string, number>();
@@ -302,6 +309,7 @@ export class GameApp {
     const HANDS = new Set(['click', 'open', 'tab', 'switch', 'modalOpen', 'confirm', 'cancel', 'whoosh', 'type', 'error']);
     this.audio.mute = name => this.engine.awayRunning && !HANDS.has(name);
     this.toasts.hold = () => this.engine.awayRunning;
+    this.toasts.pause = () => !!this.placementMode; // [ux-redesign w2a #12/#39] the placement hint is never under a toast
     setSplashProgress(0.1);
     await Promise.all([this.renderer.init(canvas), preloadIcons(SCENE_ICONS).catch(() => undefined)]);
     setSplashProgress(0.4); // [plan4:UX-18]
@@ -343,7 +351,7 @@ export class GameApp {
     // Back from a break, or people still waiting at the door from last time: the welcome screen comes first. [plan4:UX-10] It waits in the
     // dialog queue (top priority) so a gesture or placement under way is not interrupted; it is set before the loop starts, or the first
     // frame would open the door-only welcome without the report.
-    if (this.state.storyFlags.includes('intro:done') && (this.engine.offlineReport || (this.state.doorWaiting?.length ?? 0) > 0)) this.pendingWelcome = { report: this.engine.offlineReport };
+    if (this.state.storyFlags.includes('intro:done')) this.queueWelcome(this.engine.offlineReport);
     this.engine.start();
     this.installBackNavigation();
     // Ask the browser to keep the save safe (it may clear site data when the phone runs low on space): after the first tap, and once more later.
@@ -544,24 +552,23 @@ export class GameApp {
 
   /**
    * [plan4:UX-10] May an auto-opening dialog land right now? Not while a building is being placed, a finger is down (a camera drag,
-   * a pinch, a carried survivor), a gesture ended less than 1.2 s ago, a ceremony is playing, or (for anything that is not an
+   * a pinch, a carried survivor), a gesture ended less than 1.5 s ago, a sheet is sliding, a ceremony is playing, or (for anything that is not an
    * emergency) a sheet is open under the player's hands. A sheet left open and untouched for 20 s no longer holds the dialogs back.
    */
   dialogGate(critical = false): boolean {
     const now = performance.now();
-    if (this.placementMode) return false;
-    if (this.tour?.active) return false; // [plan4:GP-6] the tour is for watching: dialogs wait for the tap that ends it
-    for (const [id, t] of this.pointersDown) if (now - t > 12000) this.pointersDown.delete(id); // a lost pointerup must not block forever
-    if (this.pointersDown.size > 0) return false;
-    if (now - this.lastGestureAt < 1200) return false;
-    if (this.ceremonyActive(now)) return false;
-    if (!critical && this.anyPanelOpen() && now - this.lastGestureAt < 20000) return false;
+    for (const [id, t] of this.pointersDown) if (now - t > LOST_POINTER_MS) this.pointersDown.delete(id); // a lost pointerup must not block forever
+    // [ux-redesign w2a #5] The rules live in popupRules.gateBlock: 1.5 s after any touch, and never while a sheet is still moving.
+    const why = gateBlock({
+      now, critical, placing: !!this.placementMode, touring: !!this.tour?.active, pointersDown: this.pointersDown.size,
+      lastGestureAt: this.lastGestureAt, ceremony: this.ceremonyActive(now), panelOpen: this.anyPanelOpen(),
+      sheetMovingUntil: this.sheetMovingUntil, tipShowing: this.tips.isShowing,
+    });
+    this.lastGateBlock = why;
+    if (why) return false;
     // [ux-wp3 C1] A tip card and a dialog never share the screen: an ordinary dialog waits for the tip (it goes by itself within
     // seconds); an emergency puts the tip away (it is not marked seen, so it comes back in a calm moment).
-    if (this.tips.isShowing) {
-      if (!critical) return false;
-      this.tips.defer();
-    }
+    if (this.tips.isShowing) this.tips.defer();
     return true;
   }
 
@@ -581,9 +588,24 @@ export class GameApp {
     window.addEventListener('blur', () => this.pointersDown.clear());
     document.addEventListener('wheel', stamp, { capture: true, passive: true });
     document.addEventListener('keydown', stamp, { capture: true, passive: true });
+    // [ux-redesign w2a #5] A sheet sliding in or out: no dialog lands on the moving panel.
+    document.addEventListener('transitionrun', e => {
+      const t = e.target;
+      if (t instanceof Element && t.matches('.sheet, .sheet-overlay')) this.sheetMovingUntil = performance.now() + SHEET_SETTLE_MS;
+    }, { capture: true, passive: true });
   }
 
-  /** [plan4:UX-10] Every dialog that opens by itself, in the order of the old fixed chain (higher priority = first). */
+  /** [ux-redesign w2a #7] "Welcome back" only after more than 10 minutes away; people at the door are asked about regardless. */
+  private queueWelcome(report: OfflineReport | null): void {
+    const away = report ? report.realSeconds ?? report.seconds : null;
+    if (!wantsWelcome(away, this.state.doorWaiting?.length ?? 0)) return;
+    this.pendingWelcome = { report: wantsWelcome(away, 0) ? report : null };
+  }
+
+  /**
+   * [plan4:UX-10] Every dialog that opens by itself, in the order of the old fixed chain (higher priority = first). [ux-redesign w2a] Each
+   * has a tier (popupRules.TIER_BASE): crisis (memorial, raid result, danger) > offline (welcome back) > story > unlock > offer.
+   */
   private dialogSources(): DialogSource[] {
     const st = () => this.state;
     const memorialN = () => st().danger?.memorialQueue?.length ?? 0;
@@ -600,78 +622,79 @@ export class GameApp {
     });
     return [
       {
-        id: 'welcome', priority: 100, snoozeMs: 60_000, critical: true, icon: '[[door]]',
+        id: 'welcome', priority: 100, tier: 'offline', snoozeMs: 60_000, critical: true, icon: '[[door]]',
         ready: () => !!this.pendingWelcome || (st().doorWaiting?.length ?? 0) > 0,
         open: () => { const p = this.pendingWelcome; this.pendingWelcome = null; this.welcome.showWelcome(p ? p.report : null); },
         label: () => i18n.t('welcome.title'),
       },
       {
-        id: 'memorial', priority: 90, snoozeMs: 60_000, critical: true, icon: '[[heart]]',
+        id: 'memorial', priority: 90, tier: 'crisis', snoozeMs: 60_000, critical: true, icon: '[[heart]]',
         ready: () => memorialN() > 0,
         open: () => this.danger.showMemorial(), // [Danger C5]
         label: () => i18n.t('dq.memorial'),
       },
       {
-        id: 'raidResult', priority: 80, snoozeMs: 60_000, critical: true, icon: '[[warning]]',
+        id: 'raidResult', priority: 80, tier: 'crisis', snoozeMs: 60_000, critical: true, icon: '[[warning]]',
         ready: () => !!this.raidResult,
         open: () => { const r = this.raidResult!; this.raidResult = null; this.danger.showRaidResult(r); }, // [Danger C1]
         label: () => i18n.t('dq.raidResult'),
       },
       {
-        id: 'danger', priority: 70, snoozeMs: 30_000, critical: true, icon: '[[warning]]',
+        id: 'danger', priority: 70, tier: 'crisis', snoozeMs: 30_000, critical: true, icon: '[[warning]]',
         ready: () => this.dangerPrompt,
         open: () => { this.dangerPrompt = false; if (this.danger.dangerBanner()) this.danger.showDanger(); }, // [Danger C1/C2]
         label: () => i18n.t('dq.danger'),
       },
       {
-        id: 'event', priority: 60, snoozeMs: 120_000, icon: '[[inbox]]',
+        id: 'event', priority: 60, tier: 'story', snoozeMs: 120_000, icon: '[[inbox]]',
         ready: () => this.inbox.autoOpenEvent(st()),
         open: () => this.events.showEvent(),
         label: () => { const ev = st().activeEvent; return ev ? i18n.t(`event.${ev.id}.title`, this.events.eventParams(ev.data)) : ''; },
       },
       {
-        id: 'missionChoice', priority: 50, snoozeMs: 180_000, icon: '[[radioTower]]',
+        id: 'missionChoice', priority: 50, tier: 'story', snoozeMs: 180_000, icon: '[[radioTower]]',
         ready: () => !!asking() && !this.inbox.defers(st()),
         open: () => { const m = asking(); if (m) this.events.showMissionChoice(m); },
         label: () => i18n.t('inbox.missionAsks'),
       },
       {
-        id: 'missionReport', priority: 40, snoozeMs: 180_000, icon: '[[map]]',
+        id: 'missionReport', priority: 40, tier: 'story', snoozeMs: 180_000, icon: '[[map]]',
         ready: () => st().missionReports.length > 0 && !this.inbox.defers(st()),
         open: () => this.events.showMissionReport(st().missionReports[0]),
         label: () => i18n.t(st().missionReports[0]?.success ? 'inbox.reportOk' : 'inbox.reportBad'),
       },
       {
-        id: 'chapter', priority: 30, snoozeMs: 240_000, icon: '[[books]]',
+        id: 'chapter', priority: 30, tier: 'story', snoozeMs: 240_000, icon: '[[books]]',
         ready: () => !!this.pendingChapter,
         open: () => this.story.playChapter(this.pendingChapter!),
         label: () => { const c = this.pendingChapter ? getChapter(this.pendingChapter) : undefined; return c ? c.title[i18n.currentLocale] : i18n.t('dq.chapter'); },
       },
       {
-        id: 'system', priority: 20, snoozeMs: 300_000, icon: '[[sparkle]]',
+        id: 'system', priority: 20, tier: 'unlock', snoozeMs: 300_000, icon: '[[sparkle]]',
         ready: () => this.systems.hasDue(st()),
         open: () => this.systems.update(st()),
         label: () => this.systems.dueTitle(st()),
       },
       {
-        id: 'lore', priority: 15, snoozeMs: 300_000, icon: '[[note]]',
+        id: 'lore', priority: 15, tier: 'unlock', snoozeMs: 300_000, icon: '[[note]]',
         ready: () => this.lore.hasQueued,
         open: () => this.lore.flushLoreQueue(),
         label: () => i18n.t('journal.found'),
       },
       {
-        id: 'whatsNew', priority: 5, snoozeMs: 600_000, icon: '[[build]]', // [plan4:ST-9] last in line: every other dialog goes first
+        id: 'whatsNew', priority: 5, tier: 'unlock', snoozeMs: 600_000, icon: '[[build]]', // [plan4:ST-9] last in line: every other dialog goes first
         ready: () => this.whatsNew.hasDue(st()),
         open: () => this.whatsNew.open(st()),
         label: () => this.whatsNew.label(),
       },
       {
-        id: 'district', priority: 10, snoozeMs: 300_000, icon: '[[pick]]',
+        id: 'district', priority: 10, tier: 'unlock', snoozeMs: 300_000, icon: '[[pick]]',
         ready: () => this.districtFoundQueue.length > 0,
         open: () => this.dig.showDistrictFound(this.districtFoundQueue.shift()!),
         label: () => { const d = districtDef(this.districtFoundQueue[0] ?? ''); return d ? i18n.t('district.found', { name: d.name[i18n.currentLocale] }) : ''; },
       },
-      ...pwa,
+      // [ux-redesign w2a] Install / power saver / backup reminders are offers: last in line, at most one a session.
+      ...pwa.map(src => ({ ...src, tier: 'offer' as const })),
     ];
   }
 
@@ -878,14 +901,17 @@ export class GameApp {
     // Early warning while there is still time to react.
     for (const r of ['food', 'water', 'power'] as ResourceType[]) {
       const res = state.resources[r];
-      const falling = res.productionRate < res.consumptionRate;
-      if (falling && res.amount > 0 && res.amount < res.cap * 0.1 && !this.lowWarned.has(r)) {
+      // [ux-redesign w2a #11] Only when the store empties within 3 minutes at the current rate; a rising store never warns.
+      const now = performance.now();
+      const step = lowStoreStep(res.amount, res.productionRate - res.consumptionRate, this.lowWarned.has(r), now - (this.lowWarnedAt.get(r) ?? -Infinity));
+      if (step === 'warn') {
         this.lowWarned.add(r);
+        this.lowWarnedAt.set(r, now);
         this.audio.play('warn');
         // [plan4:AC-9] The sound has a visual twin: a toast and a blink of the resource plate.
         this.toasts.show(`[[warning]] ${i18n.t('shortage.low', { name: i18n.t(`resources.${r}`) })}`, 'bad');
         this.hud.alertResource(r);
-      } else if (res.amount > res.cap * 0.25) this.lowWarned.delete(r);
+      } else if (step === 'clear') this.lowWarned.delete(r);
     }
     for (const s of state.survivors) {
       if (s.health < 30 && !this.hurtWarned.has(s.id)) {
@@ -1125,7 +1151,7 @@ export class GameApp {
 
     bus.on('offline:processed', (report: unknown) => {
       if (this.engine.offlineReport === report) return;
-      this.pendingWelcome = { report: report as OfflineReport }; // [plan4:UX-10] through the gate, like every auto dialog
+      this.queueWelcome(report as OfflineReport); // [plan4:UX-10] through the gate, like every auto dialog
     });
 
     // Any touch, drag, wheel or key counts: the picture draws at full speed while the player is handling the bunker.
@@ -1162,21 +1188,20 @@ export class GameApp {
     let lastBack = 0;
     history.pushState({ lastbunker: 1 }, '');
     window.addEventListener('popstate', () => {
-      if (this.tour?.active) { this.tour.stop(); history.pushState({ lastbunker: 1 }, ''); return; } // [plan4:GP-6] back ends the tour first
-      if (this.modal.isVisible) {
-        history.pushState({ lastbunker: 1 }, '');
-        return;
-      }
-      if (this.placementMode) {
-        this.world.cancelPlacement();
-        history.pushState({ lastbunker: 1 }, '');
-        return;
-      }
-      // [ux-wp4] Back closes only the top panel (the book opened over a room panel goes back to that panel, not to the bunker).
-      if (this.loreReader.isVisible || this.surfacePanel.isVisible || this.anyPanelOpen() || this.structurePanel.isVisible) {
-        if (this.loreReader.isVisible) this.loreReader.hide();
-        else if (this.surfacePanel.isVisible) this.surfacePanel.hide();
-        else if (!Sheet.closeTop()) this.closeSheets();
+      // [ux-redesign w2a #20] Back closes the top layer only (popupRules.backAction): an info dialog closes, a decision stays.
+      const act = backAction({
+        touring: !!this.tour?.active, modalOpen: this.modal.isVisible, modalDismiss: this.modal.isVisible && this.modal.canDismiss ? 0 : null,
+        placing: !!this.placementMode, readerOpen: this.loreReader.isVisible, surfaceOpen: this.surfacePanel.isVisible,
+        sheetOpen: this.anyPanelOpen() || this.structurePanel.isVisible,
+      });
+      if (act !== 'leave') {
+        if (act === 'tour') this.tour?.stop(); // [plan4:GP-6] back ends the tour first
+        else if (act === 'modalDismiss') this.modal.back();
+        else if (act === 'placement') this.world.cancelPlacement();
+        else if (act === 'reader') this.loreReader.hide();
+        else if (act === 'surface') this.surfacePanel.hide();
+        // [ux-wp4] the book opened over a room panel goes back to that panel, not to the bunker
+        else if (act === 'sheet' && !Sheet.closeTop()) this.closeSheets();
         history.pushState({ lastbunker: 1 }, '');
         return;
       }
