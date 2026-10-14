@@ -13,12 +13,16 @@ import { ACTS } from '../../data/acts';
 import { SEASONS } from '../../data/seasons';
 import { POIS } from '../../data/surface';
 import { DISASTERS } from '../../data/incidents';
+import { WELCOME_MIN_AWAY_S } from '../popupRules';
 
 /** [ux-wp5 C14] The night log shows at most this many lines. */
 const NIGHT_LINES = 6;
 
-/** [plan4:GP-3] An absence longer than this (seconds) gets the short check-in instead of the long report. */
-const CHECKIN_MIN_SECONDS = 600;
+/**
+ * [plan4:GP-3] An absence longer than this (seconds) gets the short check-in instead of the long report. [ux-redesign w2a #7] A shorter
+ * one gets no welcome at all (app.queueWelcome, popupRules.WELCOME_MIN_AWAY_S); only people at the door are still asked about.
+ */
+const CHECKIN_MIN_SECONDS = WELCOME_MIN_AWAY_S;
 
 /** The welcome-back report and the daily supply drop. */
 export class WelcomeController {
@@ -54,7 +58,7 @@ export class WelcomeController {
       const actions = [{ label: i18n.t('welcome.ok'), onClick: close }] as { label: string; className?: string; onClick: () => void }[];
       // [Economy A1] a shortcut to spend the credits the overflow earned.
       if ((report?.credits ?? 0) > 0) actions.unshift({ label: i18n.t('welcome.toShop'), className: 'btn-secondary', onClick: () => { close(); this.app.journal.showShop(this.app.state); } });
-      this.app.modal.show({ icon: '[[vault]]', title: i18n.t('welcome.title'), body, actions, onDismiss });
+      this.app.modal.show({ icon: '[[vault]]', title: i18n.t('welcome.title'), body, actions, onDismiss, dismiss: actions.length - 1 }); // [ux-redesign w2a] back = OK
       return;
     }
     // The doorstep: faces and names of who waited through the night.
@@ -405,6 +409,17 @@ export class WelcomeController {
       c.append(main, b);
       return c;
     };
+    // [ux-redesign w2a #7] The people at the door come first: answered right here, no separate door dialog follows (unless the card is left alone).
+    const waiting = state.doorWaiting ?? [];
+    if (waiting.length > 0) {
+      const beds = state.maxPopulation - state.survivors.length;
+      const names = waiting.map(p => app.localName(p.name)).join(', ');
+      cards.push(card('[[door]]', i18n.t(waiting.length === 1 ? 'checkin.doorOne' : 'checkin.door', { n: waiting.length, names }), i18n.t('welcome.doorAccept'), done => {
+        const n = app.engine.answerDoor(true);
+        app.audio.play(n > 0 ? 'cheer' : 'click');
+        done(`[[people]] ${i18n.t('welcome.doorIn', { n })}`);
+      }, beds <= 0, beds < waiting.length ? i18n.t(beds <= 0 ? 'welcome.doorNoBeds' : 'welcome.doorBeds', { n: Math.max(0, beds) }) : undefined));
+    }
     if (app.engine.supplySystem.isReady(state)) {
       cards.push(card('[[gift]]', i18n.t('checkin.crate'), i18n.t('checkin.collect'), done => {
         const claim = app.engine.supplySystem.claim();
@@ -436,16 +451,6 @@ export class WelcomeController {
         app.audio.play('click');
         done(`[[cart]] ${i18n.t('checkin.contractsDone')}`);
       }));
-    }
-    const waiting = state.doorWaiting ?? [];
-    if (waiting.length > 0) {
-      const beds = state.maxPopulation - state.survivors.length;
-      const names = waiting.map(p => app.localName(p.name)).join(', ');
-      cards.push(card('[[door]]', i18n.t(waiting.length === 1 ? 'checkin.doorOne' : 'checkin.door', { n: waiting.length, names }), i18n.t('welcome.doorAccept'), done => {
-        const n = app.engine.answerDoor(true);
-        app.audio.play(n > 0 ? 'cheer' : 'click');
-        done(`[[people]] ${i18n.t('welcome.doorIn', { n })}`);
-      }, beds <= 0, beds < waiting.length ? i18n.t(beds <= 0 ? 'welcome.doorNoBeds' : 'welcome.doorBeds', { n: Math.max(0, beds) }) : undefined));
     }
     return cards.slice(0, 3);
   }
