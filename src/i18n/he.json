@@ -1654,5 +1654,21 @@
   "cer.gen.floors": "{n} קומות נחפרו",
   "cer.gen.rooms": "{n} חדרים נבנו",
   "cer.gen.act": "הגענו למערכה {n}",
-  "cer.gen.iso": "{n} איזוטופ-7 עוברים לדור הבא"
+  "cer.gen.iso": "{n} איזוטופ-7 עוברים לדור הבא",
+  "kit.dur.dh": "{d}י {h}ש",
+  "kit.dur.d": "{d}י",
+  "kit.dur.hm": "{h}ש {m}ד",
+  "kit.dur.h": "{h}ש",
+  "kit.dur.s": "{s}ש",
+  "kit.unavailable": "לא זמין כרגע",
+  "kit.loading": "רגע…",
+  "kit.timer.done": "מוכן",
+  "kit.badge.label": "{n} חדשים",
+  "kit.close": "סגירה",
+  "kit.survivors.one": "שורד אחד",
+  "kit.survivors.two": "שני שורדים",
+  "kit.survivors.other": "{n} שורדים",
+  "kit.minutes.one": "דקה",
+  "kit.minutes.two": "שתי דקות",
+  "kit.minutes.other": "{n} דקות"
 }

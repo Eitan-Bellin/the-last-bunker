@@ -1654,5 +1654,21 @@
   "cer.gen.floors": "{n} floors dug",
   "cer.gen.rooms": "{n} rooms built",
   "cer.gen.act": "Reached Act {n}",
-  "cer.gen.iso": "{n} Isotope-7 pass to the next generation"
+  "cer.gen.iso": "{n} Isotope-7 pass to the next generation",
+  "kit.dur.dh": "{d}d {h}h",
+  "kit.dur.d": "{d}d",
+  "kit.dur.hm": "{h}h {m}m",
+  "kit.dur.h": "{h}h",
+  "kit.dur.s": "{s}s",
+  "kit.unavailable": "Not available yet",
+  "kit.loading": "Working…",
+  "kit.timer.done": "Ready",
+  "kit.badge.label": "{n} new",
+  "kit.close": "Close",
+  "kit.survivors.one": "1 survivor",
+  "kit.survivors.two": "2 survivors",
+  "kit.survivors.other": "{n} survivors",
+  "kit.minutes.one": "1 minute",
+  "kit.minutes.two": "2 minutes",
+  "kit.minutes.other": "{n} minutes"
 }
