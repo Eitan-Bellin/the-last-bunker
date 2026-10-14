@@ -12,6 +12,25 @@ let openCount = 0;
 let titleSeq = 0;
 const behind = (): Element[] => [document.getElementById('hud'), document.getElementById('game-canvas')].filter((n): n is HTMLElement => !!n);
 
+/**
+ * [ux-w2f #38] Sheet motion: 250 ms in, 180 ms out (motion tokens; the older rules in style.css / bunker-os.css said 300 ms and a 400 ms
+ * CRT flash). Injected from here because this task may only touch Sheet.ts; fold into style.css when that file is open. A sheet that is
+ * replaced by another one closes with `.sheet-instant`, so two panels never slide over each other.
+ */
+function injectMotion(): void {
+  if (document.getElementById('sheet-motion')) return;
+  const st = document.createElement('style');
+  st.id = 'sheet-motion';
+  st.textContent = `
+.sheet-overlay { transition-duration: var(--dur-popup-out); }
+.sheet-overlay.open { transition-duration: var(--dur-popup-in); }
+.sheet-overlay .sheet { transition: transform var(--dur-popup-out) var(--ease-in), visibility 0s linear var(--dur-popup-out); }
+.sheet-overlay.open .sheet { transition: transform var(--dur-popup-in) var(--ease-out); animation-duration: var(--dur-popup-in); }
+.sheet-overlay .sheet.dragging { transition: none; animation: none; }
+.sheet-overlay.sheet-instant, .sheet-overlay.sheet-instant .sheet { transition: none; animation: none; }`;
+  document.head.appendChild(st);
+}
+
 /** How far (px) or how fast (px/ms) a pull-down must go to dismiss the sheet. */
 const DISMISS_PX = 90;
 const DISMISS_SPEED = 0.6;
@@ -35,6 +54,7 @@ export class Sheet {
   static onHelp: ((topic: string) => void) | null = null;
 
   constructor(extraClass = '', helpTopic: string | null = null) {
+    injectMotion();
     this.overlay = el('div', 'sheet-overlay');
     this.overlay.addEventListener('click', (e) => {
       if (e.target === this.overlay) this.hide();
@@ -206,6 +226,10 @@ export class Sheet {
       if (modal && modal.parentElement === document.body) document.body.insertBefore(this.overlay, modal);
       else document.body.appendChild(this.overlay);
     }
+    // [ux-w2f #38] Switching sheets: the old one goes at once (the Bunker Book is the exception, it opens over the sheet that asked for it).
+    if (!this.panel.classList.contains('help-sheet')) {
+      for (const other of [...openSheets]) if (other !== this && !other.panel.classList.contains('help-sheet')) other.hideNow();
+    }
     this.open = true;
     this.panel.style.transform = '';
     const wasOpen = openSheets.includes(this);
@@ -218,6 +242,14 @@ export class Sheet {
       // The title takes the focus so a screen reader starts at the top of the panel (a repeated show() leaves it where the player is).
       this.titleEl.focus({ preventScroll: true });
     }
+  }
+
+  /** [ux-w2f #38] Closes without the slide (another sheet is taking over). */
+  private hideNow(): void {
+    this.overlay.classList.add('sheet-instant');
+    this.hide();
+    void this.overlay.offsetWidth; // apply the instant state before the class goes
+    requestAnimationFrame(() => this.overlay.classList.remove('sheet-instant'));
   }
 
   hide(): void {

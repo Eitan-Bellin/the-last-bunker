@@ -240,6 +240,9 @@ export class AudioEngine {
     }, 700);
   }
 
+  /** [ux-w2f #43] Public hook for a known gesture (the intro's "Tap to enter"): same path as the global unlock listeners. */
+  unlock(): void { this.gesture(); }
+
   /** Not from a gesture, so iOS may refuse: if the context is still not running a moment later, ask for a tap. */
   private tryResume(): void {
     const ctx = this.ctx;
