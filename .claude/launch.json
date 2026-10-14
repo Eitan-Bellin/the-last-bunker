@@ -70,6 +70,18 @@
         "--strictPort"
       ],
       "port": 5175
+    },
+    {
+      "name": "world",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": [
+        "vite",
+        "C:/Users/eitan/Desktop/last-bunker-world",
+        "--port",
+        "5176",
+        "--strictPort"
+      ],
+      "port": 5176
     }
   ]
 }

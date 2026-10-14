@@ -6,10 +6,10 @@
    One set of tokens for good / warning / bad / info; the colour-vision modes swap the values (the same table lives in utils/a11y.ts for the
    canvas: statusTint). The older --positive / --negative / --warning follow them in a colour mode, so every existing rule changes with them. */
 :root {
-  --ok: #7dff9e;
-  --warn: #ffb547;
-  --bad: #ff5555;
-  --info: #6fc3ff;
+  /* Default status colours come from the design tokens (styles/tokens.css); only the colour-vision modes below override them. */
+  --ok: var(--success);
+  --warn: var(--warning);
+  --bad: var(--danger-text);
 }
 :root[data-color="deuter"], :root[data-color="protan"] {
   --ok: #4aa3ff; --warn: #ffc83d; --bad: #e0457b; --info: #8fe0ff;

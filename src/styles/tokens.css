@@ -36,7 +36,7 @@
   --danger: #E5533D;
   --danger-text: #F27A63;          /* danger as running text: >= 4.5 : 1 on every surface (--danger is 3.6 : 1 on surface-2) */
   --warning: #F2C14E;
-  --info: #5BA4CF;                 /* note: a11y.css (AC-6) still sets its own --info after this file */
+  --info: #5BA4CF;                 /* colour-vision modes in a11y.css override it */
 
   /* ---- Resources (src/data/resources.ts: one token per resource id, --res-<id>) -------------------------------------------------------- */
   --power: #F5D547;
