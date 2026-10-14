@@ -1,5 +1,6 @@
 /* Fonts (Karantina, Rubik, Secular One) are self-hosted: public/fonts/fonts.css, linked from index.html. */
 @import './styles/tokens.css';
+@import './styles/kit.css';
 
 /* [ux-redesign W1] The palette, spacing, type, layers and motion live in one place now: styles/tokens.css. */
 
