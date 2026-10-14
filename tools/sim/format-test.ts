@@ -44,12 +44,12 @@ export function formatChecks(): { problems: string[]; notes: string[] } {
     }
     // ---- fmtDuration
     const D = lang === 'he'
-      ? [[2 * 86400 + 4 * 3600 + 59, '2י 4ש'], [4 * 3600 + 12 * 60 + 30, '4ש 12ד'], [12 * 60 + 5, '12:05'], [45, '45ש'], [0, '0ש'], [0.2, '1ש'],
+      ? [[2 * 86400 + 4 * 3600 + 59, '2י 4ש'], [4 * 3600 + 12 * 60 + 30, '4ש 12ד'], [12 * 60 + 5, '12:05'], [45, '45שנ׳'], [0, '0שנ׳'], [0.2, '1שנ׳'],
         [60, '1:00'], [3600, '1ש'], [86400, '1י'], [59.5, '1:00']]
       : [[2 * 86400 + 4 * 3600 + 59, '2d 4h'], [4 * 3600 + 12 * 60 + 30, '4h 12m'], [12 * 60 + 5, '12:05'], [45, '45s'], [0, '0s'], [0.2, '1s'],
         [60, '1:00'], [3600, '1h'], [86400, '1d'], [59.5, '1:00']];
     for (const [s, want] of D as [number, string][]) eq(`${lang} fmtDuration(${s})`, fmtDuration(s), want);
-    eq(`${lang} fmtDuration(NaN)`, fmtDuration(Number.NaN), lang === 'he' ? '0ש' : '0s');
+    eq(`${lang} fmtDuration(NaN)`, fmtDuration(Number.NaN), lang === 'he' ? '0שנ׳' : '0s');
   }
 
   // ---- plural (Intl.PluralRules; Hebrew has a dual)

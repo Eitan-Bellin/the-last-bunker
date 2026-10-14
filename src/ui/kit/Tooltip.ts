@@ -13,6 +13,7 @@ let bubble: HTMLDivElement | null = null;
 let owner: HTMLElement | null = null;
 let hideTimer = 0;
 let seq = 0;
+let docBound = false;
 
 function ensureBubble(): HTMLDivElement {
   if (bubble?.isConnected) return bubble;
@@ -21,10 +22,13 @@ function ensureBubble(): HTMLDivElement {
   bubble.setAttribute('role', 'tooltip');
   bubble.id = `k-tooltip-${++seq}`;
   document.body.appendChild(bubble);
-  // Any press elsewhere closes it (capture: before the press does anything else).
-  document.addEventListener('pointerdown', (e) => {
-    if (owner && !owner.contains(e.target as Node)) hideTip();
-  }, true);
+  if (!docBound) {
+    docBound = true;
+    // Any press elsewhere closes it (capture: before the press does anything else). Bound once, even if the bubble is rebuilt.
+    document.addEventListener('pointerdown', (e) => {
+      if (owner && !owner.contains(e.target as Node)) hideTip();
+    }, true);
+  }
   return bubble;
 }
 

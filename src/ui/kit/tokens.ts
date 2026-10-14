@@ -31,6 +31,8 @@ export const DANGER_RATIO = 0.15;
 export const BADGE_MAX = 99;
 /** How far (px) a finger may drift during a long press before it counts as a drag. */
 export const LONG_PRESS_SLOP = 10;
+/** A timer that is still not on the page after this many ticks was never shown: it stops. */
+export const NEVER_ATTACHED_TICKS = 5;
 /** One second, for timers. */
 export const SECOND_MS = 1000;
 

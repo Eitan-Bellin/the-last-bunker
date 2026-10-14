@@ -129,8 +129,8 @@ other way round in the game (toasts 30 under dialogs 40); that order was kept.
 | `--type-hero` | 40 | | `--weight-regular/medium/bold` | 400 / 500 / 700 |
 
 Fonts are self-hosted woff2 (Hebrew + Latin subsets): Rubik as one variable file per subset (weights 400 to 800, so the 600 / 800 the
-older CSS uses still render), Secular One 400, Karantina 400 / 700. Rubik is preloaded. The service worker caches them on first use
-(same-origin stale-while-revalidate); it does not precache `public/fonts` at install.
+older CSS uses still render), Secular One 400, Karantina 400 / 700. Rubik is preloaded. The whole set
+is precached with the shell at install (`FONTS` in `public/sw.js`).
 
 ### Motion
 
@@ -180,7 +180,9 @@ kButton({
   haptics?: boolean,         // 'tap' haptic on press, default true
   sound?: Sfx | null,        // sound on press, default none
   stopPropagation?: boolean, // default true
+  debounceMs?: number,       // default 350 (--debounce); 0 turns it off
 }): HTMLButtonElement
+bindPress(el, onPress, { debounceMs?, haptics?, sound?, stopPropagation?, state?, onDeny? }) // the same press behaviour for any element
 setKButtonDisabled(b, reason | null); setKButtonLoading(b, on); setKButtonHighlighted(b, on); setKButtonLabel(b, text); isKButtonDisabled(b)
 ```
 
@@ -203,11 +205,11 @@ footer.appendChild(go);
 | `kResourceChip({ resource?, icon?, amount, rate?, max?, state?, label? })` | `setResourceChip(chip, {...})` | colour from `--res-<id>`; state `normal` / `low` (< 30 % of `max`) / `danger` (< 15 %: dashed red edge + pulse, static under reduced motion); amount via `fmtNum`, rate via `fmtRate` |
 | `kProgress(value, max, label?)` | `setProgress(track, value, max)` | `role=progressbar`; on a drop the fill jumps and a ghost bar follows after `--dur-popup-in` |
 | `kBadge(count)` | `setBadge(b, count)` | hidden at 0, `99+` above 99 |
-| `kCard({ title?, body?, children?, onPress?, className? })` | | a `<button>` when pressable |
-| `kRow({ icon?, label, value?, trailing?, onPress? })` | | one list line, 48 px tall |
+| `kCard({ title?, body?, children?, onPress?, className? })` | | a `<button>` when pressable; presses go through `bindPress` (same feel, release-inside, debounce as kButton) |
+| `kRow({ icon?, label, value?, trailing?, onPress? })` | | one list line, 48 px tall; pressable rows use `bindPress` |
 | `kTabs(tabs, active, onChange, label?, panel?)` | | `.tab-row` look + `a11yDom.enhanceTabs` (roles, roving tabindex, RTL-aware arrows); tabs may carry a badge |
 | `kEmpty(icon, text, cta?)` | | icon, sentence, optional secondary button |
-| `kTimer({ endsAt, now?, onDone?, doneText? })` | | `role=timer`, mono + tabular, ticks every second, stops when done or removed |
+| `kTimer({ endsAt, now?, onDone?, doneText? })` | | `role=timer`, mono + tabular, ticks every second; stops when done, when removed from the page, or if never attached within 5 ticks; `onDone` runs once |
 | `kTooltip(anchor, text \| () => text)` | `showTip(anchor, text, holdMs?)`, `hideTip()` | long press 450 ms on touch (the click that ends it is swallowed), hover / focus-visible with a mouse / keyboard |
 
 ```ts
@@ -231,9 +233,9 @@ list.appendChild(people.length ? rows : kEmpty('people', i18n.t('people.none'), 
 | Function | Examples |
 |---|---|
 | `fmtNum(n)` | `9,999` · `15.2K` · `152K` · `1.52M` · `3.40B` · `1.20T` · `−5`. Exact with separators to 9,999, then 3 significant digits, always cut down (never shows more than there is) |
-| `fmtCost(n)` | the old `costAmount` (prices round UP): `470K`, `2.4M` |
+| `fmtCost(n)` | the old `costAmount` (prices round UP, 2 significant digits): `470K`, `2.4M`. Differs from `fmtNum` on purpose: a price must never look smaller than what is asked (rounded up, short), an amount owned must never look bigger than what is there (cut down, 3 digits). Do not swap one for the other |
 | `fmtRate(perSec)` | the old `rateText`: `+1.2 /s`, trickles per hour |
-| `fmtDuration(sec)` | en `2d 4h` · `4h 12m` · `12:05` · `45s`; he `2י 4ש` · `4ש 12ד` · `12:05` · `45ש`. Zero second unit dropped (`1h`), rounds up |
+| `fmtDuration(sec)` | en `2d 4h` · `4h 12m` · `12:05` · `45s`; he `2י 4ש` · `4ש 12ד` · `12:05` · `45שנ׳` (seconds `שנ׳` so they never read as hours `ש`). Zero second unit dropped (`1h`), rounds up |
 | `plural(key, n, params?)` | `Intl.PluralRules` category → `<key>.one` / `.two` / `.other` (falls back to `.other`); `{n}` gets the separated number. he: `שורד אחד` / `שני שורדים` / `5 שורדים` |
 
 New strings live under `kit.*` in both `he.json` and `en.json` (flat keys like the rest of the tables): duration units, `kit.unavailable`,
@@ -247,4 +249,3 @@ Every plural key needs all three forms in both languages (the i18n parity lint e
   l10n-a11y pass (file outside this wave's scope).
 * `touch.css` declares `:root { --fs; --fs-hud; --tap; --chip-h }` and the high-contrast overrides (outside scope; they still work).
 * Roughly 340 hex and 380 rgba literals remain in the older sheets; Wave 2 screen work should replace them as each screen is rebuilt.
-* `public/sw.js` caches the fonts on first use only; precaching `public/fonts` at install would make the very first offline launch safe too.

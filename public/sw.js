@@ -9,7 +9,10 @@
 const CACHE = 'lastbunker-v4';
 const BUILD = '__BUILD_ID__';
 const PRECACHE = /*__PRECACHE__*/[];
-const SHELL = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png', './favicon-64.png'];
+// [ux-redesign W1] The self-hosted fonts (public/fonts) belong to the shell: a first offline launch must not fall back to system fonts.
+const FONTS = ['fonts.css', 'rubik-400-800-hebrew.woff2', 'rubik-400-800-latin.woff2', 'secular-one-400-hebrew.woff2', 'secular-one-400-latin.woff2',
+  'karantina-400-hebrew.woff2', 'karantina-400-latin.woff2', 'karantina-700-hebrew.woff2', 'karantina-700-latin.woff2'].map((f) => `./fonts/${f}`);
+const SHELL = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png', './favicon-64.png', ...FONTS];
 const NAVIGATE_TIMEOUT_MS = 4000;
 
 // Plan 4 wave 3: the build writes asset-manifest.json (every script and stylesheet, including the chunks fetched only on demand: the

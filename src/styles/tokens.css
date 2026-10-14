@@ -215,8 +215,8 @@
     --stagger: 0ms;
     --dur-shake: 0ms;
     --press-scale: 1;
-  --popup-from-scale: 1;
-  --dur-crt-on: 0ms;
+    --popup-from-scale: 1;
+    --dur-crt-on: 0ms;
     --breathe-scale: 1;
     --shake-distance: 0px;
   }

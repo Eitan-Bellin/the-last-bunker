@@ -17,6 +17,9 @@
   -webkit-user-select: none;
   user-select: none;
   transform-origin: center;
+}
+/* Release: springs back (out-back). One class more than the legacy .btn { transition } so it wins whatever the order. */
+.btn.k-btn {
   transition:
     transform var(--dur-release) var(--ease-out-back),
     filter var(--dur-release) var(--ease-out),
@@ -58,6 +61,9 @@
   filter: none;
   cursor: not-allowed;
 }
+/* ...and never looks pressed (the legacy .btn:active:not(:disabled) rules only know the native disabled attribute). */
+.btn.k-btn.is-disabled:active,
+.btn.k-btn.is-disabled.is-pressed { transform: none; box-shadow: none; filter: none; }
 .btn.k-btn.is-disabled::before { opacity: 0; }
 .k-btn.is-shaking { animation: k-shake var(--dur-shake) var(--ease-in-out); }
 @keyframes k-shake {
@@ -241,6 +247,7 @@
 .k-row__value { color: var(--text-secondary); font-variant-numeric: var(--num-tabular); unicode-bidi: isolate; }
 
 .k-card.is-pressable, .k-row.is-pressable { cursor: pointer; transition: transform var(--dur-release) var(--ease-out-back), filter var(--dur-release) var(--ease-out); }
+.k-card.is-pressable.is-pressed, .k-row.is-pressable.is-pressed,
 .k-card.is-pressable:active, .k-row.is-pressable:active { transform: scale(var(--press-scale)); filter: brightness(var(--press-darken)); transition-duration: var(--dur-press); }
 
 /* ---- Tabs ---------------------------------------------------------------------------------------------------------------------------- */
@@ -269,4 +276,13 @@
 
 /* ---- Reduced motion: no pulses or spins; the dashed edge / text carry the state ------------------------------------------------------ */
 :root[data-motion="reduced"] .k-chip.is-danger,
-:root[data-motion="reduced"] .k-btn.is-shaking { animation: none; }
+:root[data-motion="reduced"] .k-btn.is-shaking,
+:root[data-motion="reduced"] .k-btn.is-highlighted,
+:root[data-motion="reduced"] .k-btn.is-loading > .k-btn__spinner { animation: none; }
+/* Before utils/a11y.ts has set data-motion (first paint), the system setting decides. */
+@media (prefers-reduced-motion: reduce) {
+  :root:not([data-motion="full"]) .k-chip.is-danger,
+  :root:not([data-motion="full"]) .k-btn.is-shaking,
+  :root:not([data-motion="full"]) .k-btn.is-highlighted,
+  :root:not([data-motion="full"]) .k-btn.is-loading > .k-btn__spinner { animation: none; }
+}

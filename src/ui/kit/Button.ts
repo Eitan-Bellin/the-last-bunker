@@ -11,10 +11,12 @@ import { showTip } from './Tooltip';
  *
  *  - Pressed: scales to --press-scale (0.93) and darkens 10 % in --dur-press (60 ms), springs back in --dur-release (150 ms, out-back).
  *  - The action fires on release INSIDE the button (keyboard Enter / Space too); dragging out cancels it.
- *  - A second press within --debounce (350 ms) is ignored.
+ *  - A second press within --debounce (350 ms, `debounceMs` to change, 0 to turn off) is ignored.
  *  - Disabled (`disabledReason`): a press shakes it sideways (--dur-shake), buzzes ('error' haptic + sound) and shows the reason
  *    in a tooltip. It stays focusable (aria-disabled), so a keyboard or screen-reader player can learn why too.
- *  - Loading: ignores presses and shows a spinner (aria-busy). Highlighted: breathes 1.0 <-> 1.04 every 1.8 s (still under reduced motion).
+ *  - Loading: ignores presses and shows a spinner (aria-busy). Highlighted: breathes 1.0 <-> 1.04 every 1.8 s.
+ *  - Reduced motion: the press, shake, spinner and breathing have no movement (tokens at 0 / scale 1); a highlighted button shows a
+ *    static amber ring instead, and a disabled press still buzzes and shows its reason.
  *  - The hit area is at least --hit-min (48 px) even when the button looks smaller.
  */
 
@@ -44,13 +46,13 @@ export interface KButtonOptions {
   sound?: Sfx | null;
   /** Stop the click from reaching the sheet behind (default true, like dom.ts `button`). */
   stopPropagation?: boolean;
+  /** Ignore a second press this soon after the last (ms; default --debounce, 350; 0 turns it off). */
+  debounceMs?: number;
 }
 
 interface KState {
-  onPress: () => void;
   reason: string | null;
   loading: boolean;
-  lastFire: number;
 }
 
 const STATE = new WeakMap<HTMLButtonElement, KState>();
@@ -65,7 +67,7 @@ const SKIN: Record<KButtonVariant, string> = {
 };
 
 /** True when the pointer that ended this click was released outside the button's hit area (a press dragged out). */
-function releasedOutside(b: HTMLButtonElement, e: MouseEvent): boolean {
+function releasedOutside(b: HTMLElement, e: MouseEvent): boolean {
   if (e.detail === 0) return false; // keyboard or script click: no pointer
   const hit = b.querySelector<HTMLElement>(':scope > .k-hit') ?? b;
   const r = hit.getBoundingClientRect();
@@ -100,38 +102,62 @@ export function kButton(opts: KButtonOptions): HTMLButtonElement {
   b.appendChild(spinner);
   if (opts.ariaLabel) b.setAttribute('aria-label', opts.ariaLabel);
 
-  const st: KState = { onPress: opts.onPress, reason: null, loading: false, lastFire: -Infinity };
+  const st: KState = { reason: null, loading: false };
   STATE.set(b, st);
   setKButtonDisabled(b, opts.disabledReason ?? null);
-
-  // Pressed look follows the pointer: on while it is down and over the button, off when it leaves (that also cancels the action).
-  const release = (): void => b.classList.remove('is-pressed');
-  b.addEventListener('pointerdown', (e) => {
-    if (e.button !== 0 || st.loading) return;
-    // Touch captures the pointer to the button implicitly: release it so leaving the button is noticed.
-    try { if (b.hasPointerCapture(e.pointerId)) b.releasePointerCapture(e.pointerId); } catch { /* synthetic pointer */ }
-    if (st.reason === null) b.classList.add('is-pressed');
+  bindPress(b, opts.onPress, {
+    ...opts,
+    state: () => (st.loading ? 'ignore' : st.reason !== null ? 'deny' : 'ok'),
+    onDeny: () => deny(b, st.reason ?? ''),
   });
-  b.addEventListener('pointerenter', (e) => { if (e.buttons === 1 && st.reason === null && !st.loading) b.classList.add('is-pressed'); });
-  b.addEventListener('pointerleave', release);
-  b.addEventListener('pointerup', release);
-  b.addEventListener('pointercancel', release);
+  return b;
+}
 
-  b.addEventListener('click', (e) => {
-    if (opts.stopPropagation !== false) e.stopPropagation();
-    if (releasedOutside(b, e) || st.loading) return;
-    if (st.reason !== null) {
-      deny(b, st.reason);
+export interface PressOptions {
+  haptics?: boolean;
+  sound?: Sfx | null;
+  stopPropagation?: boolean;
+  debounceMs?: number;
+  /** 'ok' fires, 'deny' calls onDeny, 'ignore' does nothing (default always 'ok'). */
+  state?: () => 'ok' | 'deny' | 'ignore';
+  onDeny?: () => void;
+}
+
+/**
+ * The press behaviour of every kit control (kButton, pressable kCard / kRow): the `is-pressed` look follows the pointer, the action
+ * fires on release inside the hit area (keyboard and script clicks too), a press dragged out is cancelled, and a repeat inside the
+ * debounce is ignored.
+ */
+export function bindPress(target: HTMLElement, onPress: () => void, o: PressOptions = {}): void {
+  const state = o.state ?? ((): 'ok' => 'ok');
+  const debounce = o.debounceMs ?? MS.debounce;
+  let lastFire = -Infinity;
+  const release = (): void => target.classList.remove('is-pressed');
+  target.addEventListener('pointerdown', (e) => {
+    if (e.button !== 0) return;
+    // Touch captures the pointer to the element implicitly: release it so leaving the element is noticed.
+    try { if (target.hasPointerCapture(e.pointerId)) target.releasePointerCapture(e.pointerId); } catch { /* synthetic pointer */ }
+    if (state() === 'ok') target.classList.add('is-pressed');
+  });
+  target.addEventListener('pointerenter', (e) => { if (e.buttons === 1 && state() === 'ok') target.classList.add('is-pressed'); });
+  target.addEventListener('pointerleave', release);
+  target.addEventListener('pointerup', release);
+  target.addEventListener('pointercancel', release);
+  target.addEventListener('click', (e) => {
+    if (o.stopPropagation !== false) e.stopPropagation();
+    const s = state();
+    if (releasedOutside(target, e) || s === 'ignore') return;
+    if (s === 'deny') {
+      o.onDeny?.();
       return;
     }
     const now = performance.now();
-    if (now - st.lastFire < MS.debounce) return;
-    st.lastFire = now;
-    if (opts.haptics !== false) haptic('tap');
-    if (opts.sound) uiSound(opts.sound);
-    st.onPress();
+    if (debounce > 0 && now - lastFire < debounce) return;
+    lastFire = now;
+    if (o.haptics !== false) haptic('tap');
+    if (o.sound) uiSound(o.sound);
+    onPress();
   });
-  return b;
 }
 
 /** Disables the button with a reason (`null` enables it). An empty reason shows the generic "not available". */

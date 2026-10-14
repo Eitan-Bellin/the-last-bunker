@@ -2,8 +2,8 @@ import { el, setRich, RESOURCE_ICONS } from '../dom';
 import { i18n } from '../../i18n/I18nManager';
 import { enhanceTabs } from '../a11yDom';
 import { fmtDuration, fmtNum, fmtRate } from '../format';
-import { BADGE_MAX, DANGER_RATIO, LOW_RATIO, SECOND_MS, resourceColor } from './tokens';
-import { kButton } from './Button';
+import { BADGE_MAX, DANGER_RATIO, LOW_RATIO, NEVER_ATTACHED_TICKS, SECOND_MS, resourceColor } from './tokens';
+import { bindPress, kButton } from './Button';
 
 /**
  * [ux-redesign W1] The display half of the kit: resource chip, progress bar, badge, card / row, tabs, empty state, timer.
@@ -129,7 +129,7 @@ export function kCard(o: CardOptions = {}): HTMLElement {
   for (const c of o.children ?? []) card.appendChild(c);
   if (o.onPress) {
     (card as HTMLButtonElement).type = 'button';
-    card.addEventListener('click', (e) => { e.stopPropagation(); o.onPress?.(); });
+    bindPress(card, o.onPress); // same press feel, release-inside and debounce as kButton
   }
   return card;
 }
@@ -152,7 +152,7 @@ export function kRow(o: RowOptions): HTMLElement {
   if (o.trailing) row.appendChild(o.trailing);
   if (o.onPress) {
     (row as HTMLButtonElement).type = 'button';
-    row.addEventListener('click', (e) => { e.stopPropagation(); o.onPress?.(); });
+    bindPress(row, o.onPress);
   }
   return row;
 }
@@ -229,11 +229,13 @@ export function kTimer(o: TimerOptions): HTMLSpanElement {
     node.textContent = fmtDuration(left);
     return true;
   };
-  tick();
+  if (!tick()) return node; // already over: onDone has run once, no interval
+  // Ticks stop when it ends, when it is taken off the page after being on it, or if it never reaches the page within a few ticks.
+  let ticks = 0;
   const id = window.setInterval(() => {
-    // Not yet on the page is fine (just built); taken off the page again means it is gone: stop.
+    ticks++;
     if (node.isConnected) started = true;
-    else if (started) { window.clearInterval(id); return; }
+    else if (started || ticks > NEVER_ATTACHED_TICKS) { window.clearInterval(id); return; }
     if (!tick()) window.clearInterval(id);
   }, SECOND_MS);
   return node;
