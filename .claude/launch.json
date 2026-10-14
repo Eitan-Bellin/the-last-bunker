@@ -58,6 +58,18 @@
         "--strictPort"
       ],
       "port": 5174
+    },
+    {
+      "name": "ux",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": [
+        "vite",
+        "C:/Users/eitan/Desktop/last-bunker-ux",
+        "--port",
+        "5175",
+        "--strictPort"
+      ],
+      "port": 5175
     }
   ]
 }
