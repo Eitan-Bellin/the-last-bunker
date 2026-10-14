@@ -21,14 +21,20 @@ Owner: design-system (serial, runs first).
   Hebrew/English plurals via Intl.PluralRules.
 - Token test: every token defined, text/background contrast >= 4.5:1 (tools/sim/tokens-test.mjs); format test.
 
-## Wave 2 - Quick wins on screens (parallel screen-builders, one worktree each, no file overlap)
-- SB-HUD: HUD.ts + style.css HUD part: 4 resources max with trend + rate, danger pulse < 15 %, info row slimmed
-  (Act chip, population, alerts), touch targets >= 44 px.
-- SB-Build: BuildMenu.ts, buildmenu.css, PlacementBar: kit buttons, cost chips with "missing X" reason.
-- SB-Room: BuildingPanel.ts, MaintenanceCard, InfraCard: one primary CTA, numbers <= 7 visible, details on tap.
-- SB-People: PeoplePanel.ts: survivor cards, empty states, auto-assign surfaced.
-- SB-Menu: MenuPanel.ts settings grouping (Sound / Display / Accessibility / Game / About+version).
-Then l10n-a11y: contrast fixes, safe-area pass, RTL checks, plurals keys.
+## Wave 2 - Quick wins from the audit (02-audit.md issue #), parallel screen-builders after wave 1 merges,
+one worktree each, disjoint files; new strings in a top-level i18n block per agent ("ux2a".."ux2f").
+- A Interruptions & layering: dialogQueue.ts, app.ts, Modal.ts, Toast.ts, ceremony.ts, controllers/{feedback,events,
+  welcome,tips,saves,story,lore}.ts, core/saveFlag.ts -> #4 #5 #6 #7 #11 #12 #18 #19 #20 #21 #22 #39.
+- B HUD: HUD.ts, style.css (HUD/nav), touch.css -> #8 #27 #31 #35 #37 #44, UI half of #1 (time-to-empty on tiles,
+  morale top cause), shop entry chip (#23 HUD side), resource danger pulse, max 4 resources + "more".
+- C Build/placement/ruins: BuildMenu.ts, PlacementBar.ts, controllers/world.ts, RuinPanel.ts, buildmenu.css,
+  placement.css -> #2 #3 #16 (+#17 camera framing via hudInsets if contained in world.ts).
+- D Research/Surface/Shop/Journal: ResearchPanel, SurfacePanel, worldMap, ShopPanel, JournalPanel -> #9 #13 #14 #15 #23 #24.
+- E Room/People/Menu/Command: BuildingPanel, PeoplePanel, MenuPanel, EraPanel -> #25 #28 #29 #32 #33 #45.
+- F Small tech: BunkerRenderer resize (#26), NumberPopup default (#36), Sheet speed/cross-fade (#38),
+  depth ruler/badge sizes (#42), audio unlock on splash (#43), RTL floor tags (#41).
+Not UI (game logic, owner approval needed, written up as proposals only): #1 Act I drain rates, #10 mid-game economy
+(stores full by day 10), #30 duplicate names, #40 language switch without reload (kept for wave 5 if cheap).
 
 ## Wave 3 - Simplify (onboarding + HUD/bunker)
 - onboarding: "What now?" advisor button driven by Guide.ts (crisis -> reward -> active task -> upgrade),
