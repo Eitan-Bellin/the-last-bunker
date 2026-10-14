@@ -1,7 +1,8 @@
 import { i18n } from '../../i18n/I18nManager';
 import { BIOMES, POIS, type BiomeId } from '../../data/surface';
 import { el } from '../../ui/dom';
-import type { MissionReport, SurvivorState } from '../../core/GameState';
+import type { MissionReport, ResourceType, SurvivorState } from '../../core/GameState';
+import { gainsText } from '../../ui/components/StoryDialog';
 import { genderOf, portraitFor, portraitUrl } from '../../data/portraits';
 import { biomeImage, journalTimeline } from '../../ui/expeditionText';
 import { expeditionEvent } from '../../data/expeditionEvents';
@@ -85,6 +86,19 @@ export class EventController {
     if (eventId === 'wanderer' && choiceKey === 'accept' && !result.gains && !(result.injured ?? []).length) {
       this.app.modal.hide();
       this.app.toasts.show(`[[door]] ${i18n.t(`event.${eventId}.result.${result.key}`, params)}`, 'good');
+      return;
+    }
+    // [ux-redesign w2a #19] A find (the hidden stash) needs no second "Continue" dialog either: a toast says what was taken and the
+    // goods fly up into their counters.
+    if (eventId === 'stash' && !(result.injured ?? []).length) {
+      this.app.modal.hide();
+      const gains = result.gains ?? {};
+      const got = gainsText(gains);
+      this.app.toasts.show(`${EVENT_ICONS.stash} ${i18n.t(`event.${eventId}.result.${result.key}`, params)}${got ? ` ${got}` : ''}`, 'good');
+      const x = window.innerWidth / 2;
+      const y = window.innerHeight / 2;
+      (Object.entries(gains) as [ResourceType, number][]).filter(([, v]) => v > 0)
+        .forEach(([r, v], i) => window.setTimeout(() => this.app.world.flyToHud(r, x, y, `+${i18n.formatCompact(v)}`), i * 90));
       return;
     }
     const body = el('div', 'modal-result');

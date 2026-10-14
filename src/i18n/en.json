@@ -1670,5 +1670,6 @@
   "kit.survivors.other": "{n} survivors",
   "kit.minutes.one": "1 minute",
   "kit.minutes.two": "2 minutes",
-  "kit.minutes.other": "{n} minutes"
+  "kit.minutes.other": "{n} minutes",
+  "ux2a.goals": "{n} goals complete"
 }

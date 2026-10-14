@@ -1670,5 +1670,6 @@
   "kit.survivors.other": "{n} שורדים",
   "kit.minutes.one": "דקה",
   "kit.minutes.two": "שתי דקות",
-  "kit.minutes.other": "{n} דקות"
+  "kit.minutes.other": "{n} דקות",
+  "ux2a.goals": "{n} משימות הושלמו"
 }
