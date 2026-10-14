@@ -831,3 +831,51 @@ export function roomFloorLight(state: 'working' | 'idle' | 'building' | 'unpower
   const base = state === 'working' ? r.roomWorking : state === 'idle' ? r.roomIdle : state === 'building' ? r.roomBuilding : state === 'unpowered' ? r.roomUnpowered : r.ruin;
   return Math.min(1, base + (selected ? r.selectedLift : 0));
 }
+
+// =================================================================================================================================
+// CITY (level-builder, phase C0): the projection frames and the hub atrium geometry
+// =================================================================================================================================
+
+/**
+ * One stratum's horizontal frame (world units). The shaft (the logical spine) always stands at x 0..58. The hub atrium spans
+ * hubL..hubR around it; the east rooms start a vestibule (vestE) past hubR, the west rooms end a vestibule (vestW) before hubL; a
+ * district opens `tunnel` past the end of its floor. `slotX(f, s) = s >= 0 ? hubR + vestE + s * SLOT_W : hubL - vestW + s * SLOT_W`.
+ */
+export interface CityFrameTokens {
+  readonly hubL: number;
+  readonly hubR: number;
+  readonly vestW: number;
+  readonly vestE: number;
+  readonly tunnel: number;
+}
+
+/** The classic tower: no hub beyond the shaft, a 6-unit gap each side (geom.ts SHAFT_GAP), an 18-unit district tunnel. */
+const CLASSIC_FRAME: CityFrameTokens = { hubL: 0, hubR: 58, vestW: 6, vestE: 6, tunnel: 18 };
+/**
+ * Every underground stratum through C and M1 (architecture D5: one shared frame; distinct frames arrive with the nav graph in M2).
+ * The atrium is 186 wide: the 58 shaft plus 64 each side, room for a stair column (CITY.hub.stairW) and a balcony landing.
+ */
+const UNDER_FRAME: CityFrameTokens = { hubL: -64, hubR: 122, vestW: 36, vestE: 36, tunnel: 18 };
+
+export const CITY = {
+  /** Indexed by stratum id. Stratum 0 (the surface row) always keeps the classic frame. */
+  frames: [CLASSIC_FRAME, UNDER_FRAME, UNDER_FRAME, UNDER_FRAME, UNDER_FRAME, UNDER_FRAME, UNDER_FRAME] as readonly CityFrameTokens[],
+  classic: CLASSIC_FRAME,
+  hub: {
+    /** Thickness of the atrium's side walls, drawn inside hubL / hubR. */
+    wallW: 10,
+    /** Width of the stair-flight column on each side of the spine, and its gap from the wall. */
+    stairW: 44,
+    stairInset: 8,
+    /** Balconies sit on the corridor lane (routes laneY): their deck depth and railing height. */
+    balconyDepth: 14,
+    balconyRail: 14,
+    /** The atrium vault rises this far above the ceiling of the stratum's top floor (it eats into the gallery/rock above). */
+    vaultRise: 56,
+    /** The floor (0-based within the stratum) that carries a bridge across the spine in front of the lift; -1 = none. */
+    bridgeFloor: 1,
+    bridgeH: 8,
+    /** Vestibule ceiling light pitch (fluorescent tubes) along a vestibule. */
+    vestLampEvery: 24,
+  },
+} as const;
