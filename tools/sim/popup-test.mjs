@@ -1,0 +1,137 @@
+#!/usr/bin/env node
+// [ux-redesign w2a] Interruption rules test: src/ui/popupRules.ts (the dialog queue's order and offer cap, the dialog gate, the tap
+// guard of a fresh dialog, what back closes, store warnings, the one-toast lane, folding, the stale-save note, welcome back).
+// Exit 1 on any problem. Usage: node tools/sim/popup-test.mjs
+import { rmSync } from 'node:fs';
+import { join, resolve, dirname } from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { bundleSim } from './bundle.mjs';
+import './node-globals.mjs';
+
+const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
+const { file } = await bundleSim({ tag: 'popup', entry: join(ROOT, 'src', 'ui', 'popupRules.ts') });
+const P = await import(pathToFileURL(file).href);
+try { rmSync(file); } catch { /* cache file */ }
+
+const problems = [];
+const ok = (cond, what) => { if (!cond) problems.push(what); };
+const eq = (a, b, what) => ok(JSON.stringify(a) === JSON.stringify(b), `${what}: got ${JSON.stringify(a)}, want ${JSON.stringify(b)}`);
+
+// ---- priorities: crisis > offline > story > unlock > daily > offer; inside a tier the old priority -------------------------------
+const sources = [
+  { id: 'install', priority: 3, tier: 'offer' },
+  { id: 'welcome', priority: 100, tier: 'offline' },
+  { id: 'system', priority: 20, tier: 'unlock' },
+  { id: 'daily', priority: 1, tier: 'daily' },
+  { id: 'danger', priority: 70, tier: 'crisis' },
+  { id: 'memorial', priority: 90, tier: 'crisis' },
+  { id: 'event', priority: 60, tier: 'story' },
+  { id: 'backup', priority: 2, tier: 'offer' },
+];
+eq(P.orderSources(sources).map(s => s.id), ['memorial', 'danger', 'welcome', 'event', 'system', 'daily', 'install', 'backup'], 'priority order');
+eq(P.orderSources([{ id: 'a', priority: 5 }, { id: 'b', priority: 5 }]).map(s => s.id), ['a', 'b'], 'stable for equal ranks');
+
+// ---- one offer per session ------------------------------------------------------------------------------------------------------
+eq(P.allowedNow(sources, 0).filter(s => s.tier === 'offer').length, 2, 'offers allowed before the first');
+eq(P.allowedNow(sources, P.OFFERS_PER_SESSION).filter(s => s.tier === 'offer').length, 0, 'no offer after the session had one');
+eq(P.allowedNow(sources, 5).length, sources.length - 2, 'only offers are capped');
+
+// ---- one at a time: a simulated queue opens the best ready source, never two while one is open --------------------------------------
+{
+  let open = null;
+  const shown = [];
+  let offers = 0;
+  const ready = new Set(['install', 'backup', 'system', 'event', 'welcome']);
+  const step = () => {
+    if (open) return;
+    const list = P.allowedNow(P.orderSources(sources), offers).filter(s => ready.has(s.id));
+    if (!list.length) return;
+    open = list[0];
+    if (open.tier === 'offer') offers++;
+    ready.delete(open.id);
+    shown.push(open.id);
+  };
+  for (let i = 0; i < 20; i++) { step(); step(); if (i % 2) open = null; }
+  eq(shown, ['welcome', 'event', 'system', 'install'], 'one at a time, best first, one offer');
+}
+
+// ---- the gate ---------------------------------------------------------------------------------------------------------------------
+const base = { now: 100_000, critical: false, placing: false, touring: false, pointersDown: 0, lastGestureAt: 0, ceremony: false, panelOpen: false, sheetMovingUntil: 0, tipShowing: false };
+eq(P.gateBlock(base), '', 'calm screen: open');
+eq(P.gateBlock({ ...base, lastGestureAt: base.now - 1000 }), 'gesture', '1 s after a tap: wait');
+eq(P.gateBlock({ ...base, lastGestureAt: base.now - 1499 }), 'gesture', '1.499 s after a tap: wait');
+eq(P.gateBlock({ ...base, lastGestureAt: base.now - P.GESTURE_QUIET_MS }), '', '1.5 s after a tap: open');
+eq(P.gateBlock({ ...base, pointersDown: 1 }), 'finger', 'finger down');
+eq(P.gateBlock({ ...base, critical: true, pointersDown: 1 }), 'finger', 'even a crisis waits for a finger');
+eq(P.gateBlock({ ...base, placing: true, critical: true }), 'placement', 'placement holds everything');
+eq(P.gateBlock({ ...base, sheetMovingUntil: base.now + 10 }), 'sheetMoving', 'sheet still moving');
+eq(P.gateBlock({ ...base, ceremony: true }), 'ceremony', 'ceremony on screen');
+eq(P.gateBlock({ ...base, panelOpen: true, lastGestureAt: base.now - 5000 }), 'sheet', 'sheet in use holds ordinary dialogs');
+eq(P.gateBlock({ ...base, panelOpen: true, lastGestureAt: base.now - 5000, critical: true }), '', 'a crisis comes over a sheet');
+eq(P.gateBlock({ ...base, panelOpen: true, lastGestureAt: base.now - P.SHEET_IDLE_MS - 1 }), '', 'an idle sheet stops holding');
+eq(P.gateBlock({ ...base, tipShowing: true }), 'tip', 'a tip holds an ordinary dialog');
+eq(P.gateBlock({ ...base, tipShowing: true, critical: true }), '', 'a crisis pushes a tip away');
+
+// ---- tap guard of a fresh dialog ----------------------------------------------------------------------------------------------------
+ok(P.tapBlocked(1000, 1000 + 100, 1), 'tap 100 ms after open is swallowed');
+ok(P.tapBlocked(1000, 1000 + 599, 1), 'tap 599 ms after open is swallowed');
+ok(!P.tapBlocked(1000, 1000 + P.MODAL_TAP_GUARD_MS, 1), 'tap 600 ms after open passes');
+ok(!P.tapBlocked(1000, 1000 + 10, 0), 'keyboard click passes at once');
+
+// ---- back closes the top layer only -------------------------------------------------------------------------------------------------
+const b0 = { touring: false, modalOpen: false, modalDismiss: null, placing: false, readerOpen: false, surfaceOpen: false, sheetOpen: false };
+eq(P.backAction({ ...b0, modalOpen: true, modalDismiss: 0, sheetOpen: true }), 'modalDismiss', 'back closes an info dialog, not the sheet under it');
+eq(P.backAction({ ...b0, modalOpen: true, modalDismiss: null, sheetOpen: true }), 'modalStay', 'back leaves a decision alone');
+eq(P.backAction({ ...b0, touring: true, modalOpen: true, modalDismiss: 0 }), 'tour', 'the tour first');
+eq(P.backAction({ ...b0, placing: true, sheetOpen: true }), 'placement', 'placement before sheets');
+eq(P.backAction({ ...b0, readerOpen: true, sheetOpen: true }), 'reader', 'the lore page over its sheet');
+eq(P.backAction({ ...b0, sheetOpen: true }), 'sheet', 'a sheet');
+eq(P.backAction(b0), 'leave', 'nothing open');
+eq(P.dismissIndex([{}], undefined), 0, 'one-button dialog is info');
+eq(P.dismissIndex([{}, {}], undefined), null, 'two choices: a decision by default');
+eq(P.dismissIndex([{}, {}], 1), 1, 'named "Later"');
+eq(P.dismissIndex([{}], 'none'), null, 'explicit decision');
+eq(P.dismissIndex([{ disabled: true }], undefined), null, 'never a disabled choice');
+
+// ---- store warnings: time to empty under 3 minutes, never while rising, one icon -------------------------------------------------------
+eq(P.lowStoreStep(5, 0.24, false, Infinity), 'keep', 'rising food (+0.24/s) never warns, however low');
+eq(P.lowStoreStep(50, -0.07, false, Infinity), 'keep', '12 minutes from empty: no warning');
+eq(P.lowStoreStep(50, -0.5, false, Infinity), 'warn', '100 s from empty: warn');
+eq(P.lowStoreStep(50, -0.5, true, 1000), 'keep', 'warned once is enough');
+eq(P.lowStoreStep(50, 0.1, true, 1000), 'clear', 'the rate turned positive: forget the warning');
+eq(P.lowStoreStep(500, -0.5, true, 1000), 'clear', 'far from empty again: forget it');
+eq(P.lowStoreStep(50, -0.5, false, 1000), 'keep', 'not twice within the repeat window');
+eq(P.lowStoreStep(0, -0.5, false, Infinity), 'keep', 'already empty: the "out of" toast says it');
+eq(P.oneIcon('[[warning]] Food is running low', 'bad'), 'Food is running low', 'bad toast: one warning icon');
+eq(P.oneIcon('[[check]] Built', 'good'), 'Built', 'good toast: one check icon');
+eq(P.oneIcon('[[warning]] Note', 'info'), '[[warning]] Note', 'info toast keeps its icon');
+
+// ---- one-toast lane -------------------------------------------------------------------------------------------------------------------
+eq(P.LANE_VISIBLE, 1, 'one toast on screen');
+eq(P.nextInLane([{ kind: 'info' }, { kind: 'bad' }, { kind: 'good' }, { kind: 'bad' }], false), 1, 'most important, oldest first');
+eq(P.nextInLane([{ kind: 'info' }, { kind: 'good' }], true), -1, 'nothing during placement');
+eq(P.nextInLane([{ kind: 'info' }, { kind: 'critical' }], true), 1, 'critical even during placement');
+
+// ---- folding ----------------------------------------------------------------------------------------------------------------------------
+eq(P.goalLine(['A'], n => `done ${n}`, n => `${n} goals`), 'done A', 'one goal: its name');
+eq(P.goalLine(['A', 'B', 'C'], n => `done ${n}`, n => `${n} goals`), '3 goals', 'three at once: one line');
+
+// ---- the stale-save note --------------------------------------------------------------------------------------------------------------
+eq(P.saveLooksStale(1000, 2000, null), false, 'last save landed');
+eq(P.saveLooksStale(100_000, 50_000, 100_500), false, 'write landed, page closed before the note: no warning');
+eq(P.saveLooksStale(100_000, 50_000, 80_000), false, 'an autosave 20 s earlier is safe: no warning');
+eq(P.saveLooksStale(500_000, 50_000, 60_000), true, 'stored game minutes older: warn');
+eq(P.saveLooksStale(500_000, 50_000, null), true, 'unknown stamp: old rule');
+
+// ---- welcome back ------------------------------------------------------------------------------------------------------------------------
+eq(P.wantsWelcome(60, 0), false, '1 minute away: no welcome');
+eq(P.wantsWelcome(600, 0), false, '10 minutes away: no welcome');
+eq(P.wantsWelcome(601, 0), true, 'over 10 minutes: welcome');
+eq(P.wantsWelcome(60, 2), true, 'people at the door are asked about');
+eq(P.wantsWelcome(null, 0), false, 'no report, no door: nothing');
+
+if (problems.length) {
+  console.error(`popup-test: ${problems.length} problem(s)\n - ${problems.join('\n - ')}`);
+  process.exit(1);
+}
+console.log('popup-test OK');
