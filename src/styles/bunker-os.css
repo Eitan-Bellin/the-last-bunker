@@ -4,36 +4,8 @@
  * chunky machine buttons with indicator lamps, LED segment gauges.
  */
 
-:root {
-  /* Karantina only at 28 px and up: smaller, its ה reads as ק and its digits blur. */
-  --font-display: 'Karantina', 'Secular One', 'Rubik', sans-serif;
-  /* Sturdy Hebrew + Latin display face for titles, labels and buttons under 28 px. */
-  --font-title: 'Secular One', 'Rubik', sans-serif;
-  --r-s: 2px;
-  --r-m: 4px;
-  --r-l: 8px;
-  --steel-1: #4a4d52;
-  --steel-2: #2e3034;
-  --steel-3: #1c1d20;
-  --rivet: radial-gradient(circle at 35% 35%, #9a9ea6 0 1px, #4a4d52 1.6px, #1c1d20 2.6px, transparent 3px);
-  --crt-bg: #07120c;
-  --crt-bg-2: #0b1a12;
-  --phosphor: #9dffb4;
-  --phosphor-dim: #5fbf7c;
-  --phosphor-faint: rgba(110, 255, 160, 0.12);
-  --amber: #ffb547;
-  --accent: #ffb547;
-  --accent-glow: rgba(255, 181, 71, 0.28);
-  --bg-card: rgba(18, 40, 26, 0.72);
-  --bg-card-hi: rgba(30, 62, 40, 0.85);
-  --border: rgba(110, 255, 160, 0.22);
-  --text-primary: #dcffe6;
-  --text-secondary: #86c79a;
-  /* [plan4:AC-3] was #4f7d5c (4.0:1 on the screen green, 3.4:1 on cards): now 6.7:1 / 5.7:1, still the dimmest of the three text tones. */
-  --text-dim: #6fa57d;
-  /* Disabled and locked controls keep a readable colour (no opacity on text): 6:1 on the screen green, with a dashed edge as the non-colour cue. */
-  --text-disabled: #8a9890;
-}
+/* [ux-redesign W1] The skin's tokens (fonts, radii, steel, CRT, phosphor, text) moved to styles/tokens.css, the single :root. */
+
 
 /* ---------- Steel plates (HUD) ---------- */
 
@@ -170,7 +142,7 @@
     linear-gradient(180deg, var(--crt-bg-2), var(--crt-bg));
   border: 3px solid #1a1c1f;
   border-bottom: none;
-  border-radius: 14px 14px 0 0;
+  border-radius: var(--r-card) var(--r-card) 0 0;
   box-shadow:
     0 0 0 2px #3a3d42,
     0 -10px 40px rgba(0, 0, 0, 0.7),
@@ -187,7 +159,7 @@
   height: 0;
   pointer-events: none;
 }
-.sheet-overlay.open .sheet { animation: crt-on 0.42s ease-out; }
+.sheet-overlay.open .sheet { animation: crt-on var(--dur-crt-on) var(--ease-out); }
 @keyframes crt-on {
   0% { filter: brightness(2.2) saturate(0.4); clip-path: inset(48% 0 48% 0); }
   45% { filter: brightness(1.6); clip-path: inset(0 0 0 0); }
@@ -322,7 +294,7 @@
 /* ---------- Dialogs ---------- */
 
 .modal {
-  border-radius: 10px;
+  border-radius: var(--r-card);
   border: 3px solid #1a1c1f;
   background:
     repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.2) 0 1px, transparent 1px 3px),
@@ -340,12 +312,12 @@
   text-shadow: 0 0 12px rgba(110, 255, 160, 0.45);
 }
 .modal-body { color: var(--text-primary); }
-.modal-overlay.open .modal { animation: crt-on 0.4s ease-out; }
+.modal-overlay.open .modal { animation: crt-on var(--dur-crt-on) var(--ease-out); }
 
 /* ---------- Toasts: a dot-matrix ticker ---------- */
 
 .toast {
-  border-radius: 3px;
+  border-radius: var(--r-panel);
   background:
     radial-gradient(circle, rgba(0, 0, 0, 0.35) 0.6px, transparent 0.8px) 0 0 / 3px 3px,
     linear-gradient(180deg, #14231a, #0a140e);
@@ -354,8 +326,8 @@
   text-shadow: 0 0 6px rgba(110, 255, 160, 0.4);
   font-weight: 600;
 }
-.toast.good { border-color: var(--ok, #7dff9e); }
-.toast.bad { border-color: rgba(255, 90, 74, 0.8); color: #ffb3a8; text-shadow: 0 0 6px rgba(255, 90, 74, 0.4); }
+.toast.good { border-color: var(--ok, var(--success)); }
+.toast.bad { border-color: var(--danger); color: #ffb3a8; text-shadow: 0 0 6px rgba(255, 90, 74, 0.4); }
 
 /* ---------- Surface map as a radar screen ---------- */
 
@@ -375,7 +347,7 @@
 .sheet-overlay:not(.open) .sheet {
   box-shadow: none;
   visibility: hidden;
-  transition: transform 0.28s cubic-bezier(0.2, 0.9, 0.3, 1), visibility 0s linear 0.28s;
+  transition: transform var(--dur-screen) var(--ease-out), visibility 0s linear var(--dur-screen);
 }
 .sheet.dragging { transition: none; animation: none; }
 .sheet-title { padding-inline: 40px; }
