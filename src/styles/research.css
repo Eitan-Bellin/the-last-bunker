@@ -1,0 +1,65 @@
+/* [ux-redesign W2d] Research sheet: tab row that fits (fade at the scroll edge), folded later nodes, blocked buttons that say why.
+   Tokens only (src/styles/tokens.css). */
+
+/* #14 The tab row scrolls sideways; a fade marks the side with more tabs. */
+.research-tabwrap { position: relative; }
+.research-tabwrap .research-tabs { scroll-snap-type: x proximity; }
+.research-tabwrap .research-tabs .tab { scroll-snap-align: start; min-height: var(--hit-min); }
+.research-tabwrap.fade-end .research-tabs {
+  -webkit-mask-image: linear-gradient(to left, transparent, var(--surface-0) var(--sp-7));
+  mask-image: linear-gradient(to left, transparent, var(--surface-0) var(--sp-7));
+}
+.research-tabwrap.fade-start .research-tabs {
+  -webkit-mask-image: linear-gradient(to right, transparent, var(--surface-0) var(--sp-7));
+  mask-image: linear-gradient(to right, transparent, var(--surface-0) var(--sp-7));
+}
+.research-tabwrap.fade-start.fade-end .research-tabs {
+  -webkit-mask-image: linear-gradient(to right, transparent, var(--surface-0) var(--sp-7), var(--surface-0) calc(100% - var(--sp-7)), transparent);
+  mask-image: linear-gradient(to right, transparent, var(--surface-0) var(--sp-7), var(--surface-0) calc(100% - var(--sp-7)), transparent);
+}
+:root[dir="rtl"] .research-tabwrap.fade-end:not(.fade-start) .research-tabs {
+  -webkit-mask-image: linear-gradient(to right, transparent, var(--surface-0) var(--sp-7));
+  mask-image: linear-gradient(to right, transparent, var(--surface-0) var(--sp-7));
+}
+:root[dir="rtl"] .research-tabwrap.fade-start:not(.fade-end) .research-tabs {
+  -webkit-mask-image: linear-gradient(to left, transparent, var(--surface-0) var(--sp-7));
+  mask-image: linear-gradient(to left, transparent, var(--surface-0) var(--sp-7));
+}
+
+/* #14 Folded groups: "Opens in Act 2 (4)", "More this Act (3)", "Done (5)". */
+.research-fold {
+  border: var(--border-w) dashed var(--border);
+  border-radius: var(--r-panel);
+  background: var(--surface-1);
+}
+.research-fold__summary {
+  min-height: var(--hit-min);
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding-inline: var(--sp-3);
+  cursor: pointer;
+  color: var(--text-secondary);
+  font-size: calc(var(--type-body) * var(--fs, 1));
+  list-style: none;
+}
+.research-fold__summary::-webkit-details-marker { display: none; }
+.research-fold__summary::after {
+  content: '▾';
+  margin-inline-start: auto;
+  transition: transform var(--dur-release) var(--ease-out);
+}
+.research-fold[open] > .research-fold__summary::after { transform: rotate(180deg); }
+.research-fold .k-row { padding-inline: var(--sp-3); color: var(--text-secondary); }
+.research-fold .k-row__value { font-size: calc(var(--type-caption) * var(--fs, 1)); text-align: end; }
+
+/* #13 A blocked start button carries its reason; a route button reads as a way there. */
+.research-card .k-btn { inline-size: 100%; flex-wrap: wrap; }
+.research-why {
+  flex-basis: 100%;
+  font-size: calc(var(--type-caption) * var(--fs, 1));
+  color: var(--text-secondary);
+  font-weight: var(--weight-regular);
+}
+.research-route { text-align: start; white-space: normal; }
+.research-head .research-route { justify-content: flex-start; }
