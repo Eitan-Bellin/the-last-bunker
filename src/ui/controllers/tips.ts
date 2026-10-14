@@ -3,6 +3,24 @@ import { el } from '../dom';
 import type { GameApp } from '../../app';
 import type { GameState } from '../../core/GameState';
 import { relaxedMs } from '../../utils/a11y'; // plan4:AC-13
+import { kButton } from '../kit';
+
+/**
+ * [ux-redesign w2a #7] Tips are taught once per player, not once per save: what was seen is also kept on the device (one key for every
+ * slot, so a new game or another slot does not teach the pinch again). The save's storyFlags still count (older saves stay quiet).
+ */
+const PROFILE_KEY = 'lastbunker_tips_seen';
+
+function profileSeen(): string[] {
+  try {
+    const v = JSON.parse(localStorage.getItem(PROFILE_KEY) ?? '[]') as unknown;
+    return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [];
+  } catch { return []; }
+}
+
+function setProfileSeen(flags: string[]): void {
+  try { localStorage.setItem(PROFILE_KEY, JSON.stringify(flags)); } catch { /* storage blocked: the save's flags still work */ }
+}
 
 /**
  * [plan4:UX-11] Gesture tips: each one shows once, at the moment it is useful, as a small card above the nav (never a dialog, never over a gesture).
@@ -77,11 +95,13 @@ export class TipsController {
   }
 
   private seen(flag: string): boolean {
-    return this.app.state.storyFlags.includes(flag);
+    return this.app.state.storyFlags.includes(flag) || profileSeen().includes(flag);
   }
 
   private mark(flag: string): void {
-    if (this.seen(flag)) return;
+    const mine = profileSeen();
+    if (!mine.includes(flag)) setProfileSeen([...mine, flag]);
+    if (this.app.state.storyFlags.includes(flag)) return;
     this.app.engine.stateManager.applyDelta({ path: 'storyFlags', value: [...this.app.state.storyFlags, flag] });
   }
 
@@ -101,6 +121,7 @@ export class TipsController {
   reset(): void {
     const s = this.app.state;
     this.app.engine.stateManager.applyDelta({ path: 'storyFlags', value: s.storyFlags.filter(f => !TIPS.some(t => t.flag === f)) });
+    setProfileSeen(profileSeen().filter(f => !TIPS.some(t => t.flag === f)));
     this.roomTaps = 0;
     this.lastTipAt = -Infinity;
     this.app.engine.requestSave();
@@ -139,10 +160,9 @@ export class TipsController {
     ghost.setAttribute('aria-hidden', 'true');
     ghost.append(el('b', 'tip-trail'), el('i', 'tip-f1'), el('i', 'tip-f2'), el('u', 'tip-ring'));
     const text = el('p', 'tip-text', i18n.t(def.textKey));
-    const more = el('button', 'btn btn-secondary tip-btn', i18n.t('tip.more'));
-    more.addEventListener('click', () => { this.hide(true); this.app.openBook('touch'); });
-    const ok = el('button', 'btn btn-primary tip-btn', i18n.t('tip.ok'));
-    ok.addEventListener('click', () => this.hide(true));
+    // [ux-redesign w2a] Kit buttons (action on release, 48 px hit area).
+    const more = kButton({ variant: 'secondary', className: 'btn-secondary tip-btn', label: i18n.t('tip.more'), onPress: () => { this.hide(true); this.app.openBook('touch'); } });
+    const ok = kButton({ variant: 'primary', className: 'btn-primary tip-btn', label: i18n.t('tip.ok'), onPress: () => this.hide(true) });
     const row = el('div', 'tip-actions');
     row.append(more, ok);
     card.append(ghost, text, row);

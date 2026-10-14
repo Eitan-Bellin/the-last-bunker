@@ -32,7 +32,18 @@ export function markSaved(): void {
 
 /** True once per start when the previous session asked for a save that never reached storage; then the note is cleared. */
 export function lastSaveWasInterrupted(): boolean {
-  const lost = get(PENDING) > get(SAVED);
-  if (lost) put(PENDING, get(SAVED));
-  return lost;
+  const { pending, saved } = takeSaveNote();
+  return pending > saved;
+}
+
+/**
+ * [ux-redesign w2a #6] The two stamps as they were left by the previous session (then the note is cleared). The caller decides whether
+ * the stored game is really stale (popupRules.saveLooksStale): a normal reload often ends the page between "the write landed" and
+ * markSaved(), or cuts the last pagehide write while an autosave from seconds earlier is already safe.
+ */
+export function takeSaveNote(): { pending: number; saved: number } {
+  const pending = get(PENDING);
+  const saved = get(SAVED);
+  if (pending > saved) put(PENDING, saved);
+  return { pending, saved };
 }

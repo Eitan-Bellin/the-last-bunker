@@ -29,6 +29,7 @@ import type { Incident } from '../../core/GameState';
 import { type RaidResult } from '../../systems/EventSystem';
 import { deathCause } from '../../systems/DeathSystem'; // [ux-wp3 W1]
 import type { GameApp } from '../../app';
+import { GOAL_FOLD_MS, goalLine } from '../popupRules';
 
 /** [ux-wp3 W1] The cause of a death in words (null when unknown: the old sentence is used). Also used by the memorial. */
 export function causeText(state: import('../../core/GameState').GameState, cause: string | undefined, g: Record<string, string | number>): string | null {
@@ -40,6 +41,8 @@ export function causeText(state: import('../../core/GameState').GameState, cause
 
 /** [ux-wp3 D1] Survivor level-up toasts fold into one line per this window. */
 const LEVEL_TOAST_GAP_MS = 60_000;
+/** [ux-redesign w2a #22] The first digest of a quiet minute still waits this long, so a burst of level-ups becomes one line. */
+const LEVEL_DIGEST_MIN_MS = 8_000;
 
 /** What the player sees and hears when something happens in the bunker: toasts, sounds, little bursts over the rooms. */
 export class FeedbackController {
@@ -57,11 +60,7 @@ export class FeedbackController {
   private levelToast(text: string): void {
     if (this.app.engine.awayRunning) return; // [ux-wp3 D2] the hours away are told by the welcome report, not by a pile of level-ups
     const now = performance.now();
-    if (!this.levelTimer && now - this.levelShownAt >= LEVEL_TOAST_GAP_MS) {
-      this.levelShownAt = now;
-      this.app.toasts.show(text, 'good');
-      return;
-    }
+    // [ux-redesign w2a #22] Never at once: the star over the person's head is the moment; the toast is a digest at the end of the minute.
     this.levelWaiting.push(text);
     if (this.levelTimer) return;
     this.levelTimer = window.setTimeout(() => {
@@ -71,7 +70,24 @@ export class FeedbackController {
       if (!list.length) return;
       this.levelShownAt = performance.now();
       this.app.toasts.show(list.length === 1 ? list[0] : `[[star]] ${i18n.t('wp3.levelUps', { n: list.length })}`, 'good');
-    }, Math.max(1000, LEVEL_TOAST_GAP_MS - (now - this.levelShownAt)));
+    }, Math.max(LEVEL_DIGEST_MIN_MS, LEVEL_TOAST_GAP_MS - (now - this.levelShownAt)));
+  }
+
+  /** [ux-redesign w2a #21] Goals finished in the same moment (three "assign a worker" goals at once) are told as one line. */
+  private goalsWaiting: string[] = [];
+  private goalTimer = 0;
+
+  private goalToast(name: string): void {
+    this.goalsWaiting.push(name);
+    if (this.goalTimer) return;
+    this.goalTimer = window.setTimeout(() => {
+      this.goalTimer = 0;
+      const names = this.goalsWaiting;
+      this.goalsWaiting = [];
+      if (!names.length) return;
+      this.app.audio.play('complete');
+      this.app.toasts.show(`[[target]] ${goalLine(names, n => i18n.t('toast.objective', { name: n }), n => i18n.t('ux2a.goals', { n }))}`, 'good');
+    }, GOAL_FOLD_MS);
   }
 
   install(): void {
@@ -299,8 +315,7 @@ export class FeedbackController {
 
     bus.on('objective:complete', (o: unknown) => {
       const obj = o as Objective;
-      this.app.audio.play('complete');
-      this.app.toasts.show(`[[target]] ${i18n.t('toast.objective', { name: obj.text[i18n.currentLocale] ?? obj.text.en })}`, 'good');
+      this.goalToast(obj.text[i18n.currentLocale] ?? obj.text.en);
       this.app.engine.requestSave();
     });
 

@@ -86,6 +86,11 @@ const MAX_WAITING = 3;
 /** A still card stays this long under reduced motion (Genesis waits longer: it is a summary to read). */
 const STATIC_MS = 1600;
 const STATIC_GENESIS_MS = 4000;
+/** [ux-redesign w2a #12] A moment waits while a sheet, a dialog or a placement holds the screen; looked at this often. */
+const WAIT_POLL_MS = 400;
+/** Small moments (below this priority) that waited longer than WAIT_STALE_MS are dropped: the toast already told them. */
+const WAIT_KEEP_PRIO = 50;
+const WAIT_STALE_MS = 8000;
 
 interface Item {
   spec: CeremonySpec;
@@ -96,6 +101,8 @@ export class Ceremonies {
   private app: GameApp;
   private queue: Item[] = [];
   private current: { item: Item; root: HTMLElement; end: (skipped: boolean) => void } | null = null;
+  private waitTimer = 0;
+  private waitingSince = 0;
 
   constructor(app: GameApp) {
     this.app = app;
@@ -135,7 +142,7 @@ export class Ceremonies {
         gone.resolve();
       }
       this.hold();
-      if (!this.current) this.next();
+      if (!this.current && !this.waitTimer) this.next();
     });
   }
 
@@ -164,7 +171,29 @@ export class Ceremonies {
     return spec.kind === 'genesis' ? STATIC_GENESIS_MS : spec.kind === 'act' ? 400 : Math.min(d.ms, STATIC_MS);
   }
 
+  /** [ux-redesign w2a #12] Something holds the screen: a sheet, a dialog, a lore page, a story card or a room being placed. */
+  private screenBusy(): boolean {
+    const app = this.app;
+    return !!app.placementMode || app.anyPanelOpen() || app.modal.isVisible || app.storyOpen || app.welcomeOpen || app.loreReader.isVisible;
+  }
+
   private next(): void {
+    if (this.queue.length && this.screenBusy()) {
+      const now = performance.now();
+      if (!this.waitingSince) this.waitingSince = now;
+      if (now - this.waitingSince > WAIT_STALE_MS) {
+        this.queue = this.queue.filter(q => {
+          if (CEREMONIES[q.spec.kind].prio >= WAIT_KEEP_PRIO) return true;
+          q.spec.beat?.();
+          q.resolve();
+          return false;
+        });
+      }
+      this.current = null;
+      if (this.queue.length && !this.waitTimer) this.waitTimer = window.setTimeout(() => { this.waitTimer = 0; if (!this.current) this.next(); }, WAIT_POLL_MS);
+      if (this.queue.length) return;
+    }
+    this.waitingSince = 0;
     const item = this.queue.shift();
     if (!item) {
       this.current = null;

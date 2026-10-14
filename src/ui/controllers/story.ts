@@ -185,6 +185,8 @@ export class StoryController {
           then();
         },
       })),
+      // [ux-redesign w2a #4] A decision for the whole run: back / Escape never pick it, and taps in the first 600 ms are ignored (Modal).
+      dismiss: 'none',
     });
   }
 }
