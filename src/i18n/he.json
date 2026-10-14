@@ -1670,5 +1670,17 @@
   "kit.survivors.other": "{n} שורדים",
   "kit.minutes.one": "דקה",
   "kit.minutes.two": "שתי דקות",
-  "kit.minutes.other": "{n} דקות"
+  "kit.minutes.other": "{n} דקות",
+  "ux2c.noSpace.wreck": "אין מקום: שקמו את ההריסות של {name} ב־{floor} ←",
+  "ux2c.noSpace.wreckBusy": "אין מקום: ההריסות של {name} ב־{floor} כבר בשיקום ←",
+  "ux2c.noSpace.clear": "אין מקום: פנו את ההריסות ב־{floor} ←",
+  "ux2c.noSpace.dig": "אין מקום: חפרו קומה חדשה ←",
+  "ux2c.noSpace.digging": "אין מקום עדיין: קומה חדשה בחפירה ←",
+  "ux2c.noSpace.none": "אין מקום פנוי ב־{floors}",
+  "ux2c.short": "חסרים {n}",
+  "ux2c.rec.food": "האוכל ייגמר בעוד {time}",
+  "ux2c.rec.water": "המים ייגמרו בעוד {time}",
+  "ux2c.rec.power": "החשמל ייגמר בעוד {time}",
+  "ux2c.ruin.power": "צורך {draw} חשמל · יש לכם {spare}",
+  "ux2c.ruin.powerShort": "אין מספיק חשמל פנוי: חזקו קודם את החשמל"
 }

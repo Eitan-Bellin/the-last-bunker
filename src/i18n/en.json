@@ -1670,5 +1670,17 @@
   "kit.survivors.other": "{n} survivors",
   "kit.minutes.one": "1 minute",
   "kit.minutes.two": "2 minutes",
-  "kit.minutes.other": "{n} minutes"
+  "kit.minutes.other": "{n} minutes",
+  "ux2c.noSpace.wreck": "No space: restore the wrecked {name} on {floor} →",
+  "ux2c.noSpace.wreckBusy": "No space: the wrecked {name} on {floor} is being restored →",
+  "ux2c.noSpace.clear": "No space: clear the rubble on {floor} →",
+  "ux2c.noSpace.dig": "No space: dig a new floor →",
+  "ux2c.noSpace.digging": "No space yet: a new floor is being dug →",
+  "ux2c.noSpace.none": "No free spot on {floors}",
+  "ux2c.short": "{n} short",
+  "ux2c.rec.food": "Food runs out in {time}",
+  "ux2c.rec.water": "Water runs out in {time}",
+  "ux2c.rec.power": "Power runs out in {time}",
+  "ux2c.ruin.power": "Uses {draw} power · you have {spare}",
+  "ux2c.ruin.powerShort": "Not enough spare power: shore up power first"
 }

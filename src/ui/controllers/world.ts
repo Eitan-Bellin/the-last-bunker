@@ -6,7 +6,7 @@ import { i18n } from '../../i18n/I18nManager';
 import { getDef } from '../../data/buildingDefs';
 import { allowedFloors } from '../../data/zones';
 import { BUILDING_ICONS, RESOURCE_ICONS, costRow, el } from '../../ui/dom';
-import type { BuildingType, GameState, Position, ResourceType } from '../../core/GameState';
+import type { BuildingType, GameState, Position, ResourceType, Ruin } from '../../core/GameState';
 import { roomFloors, roomSlots } from '../../data/buildingDefs';
 import { PlacementBar, type Chip } from '../components/PlacementBar'; // [plan4:ST-19]
 import { DropChip } from '../components/DropChip'; // [plan4:UX-20]
@@ -16,7 +16,8 @@ import { RUIN_KINDS } from '../../data/ruins';
 import type { PlaceBlock } from '../../systems/BuildingSystem';
 import { bestSpot, floorRangesLabel, nameOf, nearestSpot, placeEffects, spotForTap, validSpots } from '../../systems/placementRank';
 import { RELOCATE_SECONDS, relocateBlock, relocateCost, stateWithout } from '../../systems/relocate';
-import { SLOT_W, buildingH, floorTop, slotX } from '../../rendering/geom';
+import { ROOM_H, SLOT_W, buildingH, floorTop, slotX } from '../../rendering/geom';
+import { hasFreeSpot, missingText, noSpaceRoute, noSpaceText } from '../components/BuildMenu'; // [ux-redesign w2c #2]
 import type { IconName } from '../../ui/icons';
 import type { GameApp } from '../../app';
 import { popupMode } from '../components/NumberPopup'; // [plan4:UX-21]
@@ -40,6 +41,21 @@ export class WorldController {
 
   constructor(app: GameApp) {
     this.app = app;
+    // [ux-redesign w2c #17] A sheet opened for a ruin (RuinPanel.show) frames it in the strip of world left above the sheet.
+    window.addEventListener('lb:sheet-target', (ev) => {
+      const id = (ev as CustomEvent<{ ruinId?: string }>).detail?.ruinId;
+      const ruin = id ? this.app.state.ruins.find(r => r.id === id) : undefined;
+      if (ruin) this.frameRuin(ruin);
+    });
+  }
+
+  /**
+   * [ux-redesign w2c #17] Glides the camera just enough that a ruin sits between the status row and the open sheet (CameraController measures
+   * the sheet and the HUD bands itself, utils/hudInsets). Waits two frames so the sheet has its height.
+   */
+  frameRuin(ruin: Ruin): void {
+    const go = () => this.app.renderer.revealRect(slotX(ruin.x), floorTop(ruin.floor), ruin.w * SLOT_W, ROOM_H, 0);
+    requestAnimationFrame(() => requestAnimationFrame(go));
   }
 
   // ───────────────────────────── [plan4:ST-19] placing a room: ghost, confirm bar, best spot, moving a room ─────────────────────────────
@@ -78,13 +94,6 @@ export class WorldController {
       bar.onCancel = () => { this.app.audio.play('click'); this.cancelPlacement(); };
       bar.onRecommend = () => this.recommend();
       bar.onConfirm = () => this.confirmPlacement();
-      bar.onIdleBuild = () => {
-        haptic('error');
-        const at = r.ghostSpot;
-        const type = this.app.placementMode;
-        const block = at && type ? this.blockAt(type, at) : null;
-        bar.flash(block && type ? this.reasonText(block, type) : i18n.t('placement.noGhost'), 'warn');
-      };
       r.onGhostLift = () => {
         const type = this.app.placementMode;
         if (!type) return;
@@ -112,9 +121,12 @@ export class WorldController {
 
   startPlacement(type: BuildingType, relocateId: string | null = null): void {
     this.cancelPlacement();
-    this.relocateId = relocateId;
     const state = this.app.state;
     const bs = this.app.engine.buildingSystem;
+    // [ux-redesign w2c #2] A new room with no free spot anywhere never opens the console (a green "Build" over "No free spot" was a dead end):
+    // the player goes where the space is instead (restore the wreck, clear the rubble, dig a floor).
+    if (!relocateId && !hasFreeSpot(bs, state, type)) { this.routeNoSpace(type); return; }
+    this.relocateId = relocateId;
     const probe = this.placeState();
     const floors = allowedFloors(type, state.currentFloors);
     const target = floors.find(f => bs.findFreeSpot(type, f, probe)) ?? floors[0];
@@ -132,14 +144,58 @@ export class WorldController {
     bar.followGhost(() => this.app.renderer.ghostScreenRect());
     this.app.renderer.setCarryInset(bar.coverPx());
     this.spots = validSpots(type, probe, bs);
+    bar.setRecommendable(this.spots.length ? null : i18n.t('placement.noSpot'));
     window.clearInterval(this.costTimer);
     this.costTimer = window.setInterval(() => {
       const t = this.app.placementMode;
       if (!t) return;
-      const rr = this.relocateId ? this.app.state.buildings.find(b => b.id === this.relocateId) : null;
-      bar.setCost(this.app.state, rr ? relocateCost(bs, this.app.state, rr) : bs.getBuildCost(t, this.app.state));
+      bar.setCost(this.app.state, this.priceNow(t));
+      this.syncReady(); // the price may have become payable (or not) since
     }, 1000);
     if (WorldController.AUTO_GHOST && !rel) this.recommend();
+  }
+
+  /** The price of what is being placed now: a new room, or the move. */
+  private priceNow(type: BuildingType): Record<string, number> {
+    const bs = this.app.engine.buildingSystem;
+    const rel = this.relocateId ? this.app.state.buildings.find(b => b.id === this.relocateId) : null;
+    return rel ? relocateCost(bs, this.app.state, rel) : bs.getBuildCost(type, this.app.state);
+  }
+
+  /** [ux-redesign w2c #2] Why Build cannot go now (no ghost, a refused spot, what the price lacks), or null when it can. */
+  private buildBlock(): string | null {
+    const type = this.app.placementMode;
+    const at = this.app.renderer.ghostSpot;
+    if (!type || !at) return i18n.t('placement.noGhost');
+    const block = this.blockAt(type, at);
+    if (block) return this.reasonText(block, type);
+    return missingText(this.app.state, this.priceNow(type)) || null;
+  }
+
+  private syncReady(): void {
+    this.bar?.setReady(this.buildBlock());
+  }
+
+  /**
+   * [ux-redesign w2c #2] A room with no free spot: open what makes space (the wreck of this room, rubble in the way, the dig), framed on screen;
+   * when nothing can, say where the room may stand.
+   */
+  private routeNoSpace(type: BuildingType): void {
+    const app = this.app;
+    const state = app.state;
+    const route = noSpaceRoute(app.engine.buildingSystem, state, type);
+    haptic('warning');
+    if (route.kind === 'wreck' || route.kind === 'clear') {
+      app.openRuin(route.ruin.id); // RuinPanel.show frames it (see the constructor)
+      return;
+    }
+    if (route.kind === 'dig' || route.kind === 'digging') {
+      app.closeSheets();
+      app.dig.confirmDig();
+      return;
+    }
+    app.audio.play('error');
+    app.toasts.show(`[[warning]] ${noSpaceText(state, type, route)}`, 'bad');
   }
 
   cancelPlacement(): void {
@@ -194,7 +250,7 @@ export class WorldController {
     r.showGhost(type, pos, block === null);
     const { chips, say } = this.chipsFor(type, pos, block);
     this.bar?.setChips(chips, say);
-    this.bar?.setReady(block === null);
+    this.syncReady();
   }
 
   /** A tap on a slot (or on a room / ruin that is in the way) while choosing a spot. */
@@ -238,6 +294,7 @@ export class WorldController {
       haptic('warning');
       this.app.audio.play('error');
       this.bar?.flash(i18n.t('placement.noSpot'), 'warn');
+      this.bar?.setRecommendable(i18n.t('placement.noSpot'));
       return;
     }
     this.setGhost(type, best, this.blockAt(type, best));
@@ -250,7 +307,7 @@ export class WorldController {
   confirmPlacement(): void {
     const type = this.app.placementMode;
     const at = this.app.renderer.ghostSpot;
-    if (!type || !at) { this.bar?.onIdleBuild?.(); return; }
+    if (!type || !at) { haptic('error'); this.bar?.flash(i18n.t('placement.noGhost'), 'warn'); return; }
     const block = this.blockAt(type, at);
     if (block) { this.setGhost(type, at, block); this.refuse(); return; }
     if (this.relocateId) {
@@ -539,7 +596,7 @@ export class WorldController {
       for (const [k, v] of rows) {
         const row = el('div', 'bp-row');
         const val = Math.round(v);
-        row.append(el('span', '', i18n.t(`morale.${k}`)), el('span', `bp-value ${v >= 0 ? 'positive' : 'negative'}`, `${val > 0 ? '+' : val < 0 ? '−' : ''}${Math.abs(val)}`));
+        row.append(el('span', '', i18n.t(`morale.${k}`)), el('span', `bp-value ${v >= 0 ? 'positive' : 'negative'}`, `${val > 0 ? '+' : val < 0 ? '\u2212' : ''}${Math.abs(val)}`));
         body.appendChild(row);
       }
       if (!rows.length) body.appendChild(el('p', 'bp-hint', i18n.t('wp4.moraleCalm')));
