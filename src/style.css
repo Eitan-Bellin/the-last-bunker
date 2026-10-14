@@ -67,89 +67,13 @@ button {
   padding-top: max(8px, env(safe-area-inset-top));
 }
 
-.resource-row {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 5px;
-  max-width: 480px;
-  margin: 0 auto;
-}
-
-.resource-item {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  padding: 5px 8px 7px;
-  border-radius: var(--radius);
-  position: relative;
-  overflow: hidden;
-  cursor: pointer;
-  min-width: 0;
-}
-
-.resource-item:active { transform: scale(0.96); }
-.resource-item.empty { border-color: var(--negative); animation: pulse-red 1s infinite alternate; }
+/* [ux-redesign W2b] The resource tiles, the info row and the nav keys are styled in styles/hud.css (imported by HUD.ts). */
 
 @keyframes pulse-red {
   from { box-shadow: 0 0 0 rgba(255, 85, 85, 0); }
   to { box-shadow: 0 0 10px rgba(255, 85, 85, 0.6); }
 }
 
-.resource-icon { font-size: calc(14px * var(--fs, 1)); }
-.resource-value { font-weight: 700; font-size: calc(13px * var(--fs, 1)); }
-.resource-rate {
-  font-size: calc(11px * var(--fs, 1));
-  /* [plan4:AC-3] was --text-dim: 2.8:1 on the steel plate. */
-  color: var(--text-secondary);
-  margin-inline-start: auto;
-  unicode-bidi: isolate;
-  font-variant-numeric: tabular-nums;
-}
-.resource-rate.positive { color: var(--positive); }
-.resource-rate.negative { color: var(--negative); }
-
-.resource-fill-track {
-  position: absolute;
-  bottom: 0;
-  inset-inline: 0;
-  height: 3px;
-  background: rgba(255, 255, 255, 0.06);
-}
-
-.resource-fill-bar {
-  height: 100%;
-  background: var(--accent);
-  transition: width 0.3s ease;
-}
-.resource-fill-bar.full { background: var(--warning); }
-.resource-fill-bar.low { background: var(--negative); }
-
-.info-row {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: 16px;
-  margin-top: 7px;
-}
-
-.info-item { display: flex; align-items: center; gap: 4px; font-size: calc(12px * var(--fs, 1)); }
-.info-icon { font-size: calc(14px * var(--fs, 1)); }
-.info-label { color: var(--text-secondary); }
-.info-value { font-weight: 700; }
-.info-value.positive { color: var(--positive); }
-.info-value.negative { color: var(--negative); }
-
-.lang-btn {
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 2px 8px;
-  font-size: calc(11px * var(--fs, 1));
-  font-weight: 600;
-  cursor: pointer;
-}
 
 .hud-banner {
   pointer-events: auto;
@@ -194,37 +118,6 @@ button {
   z-index: var(--z-nav);
 }
 
-.nav-btn {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2px;
-  background: none;
-  border: none;
-  color: var(--text-secondary);
-  cursor: pointer;
-  padding: 6px 14px;
-  border-radius: var(--radius);
-  transition: background 0.2s, transform 0.1s;
-}
-.nav-btn:active { background: var(--accent-glow); color: var(--accent); transform: scale(0.95); }
-.nav-btn.locked { opacity: 1; }
-.nav-icon { font-size: calc(22px * var(--fs, 1)); position: relative; }
-.nav-label { font-size: calc(11px * var(--fs, 1)); }
-.nav-badge {
-  position: absolute;
-  top: -4px;
-  inset-inline-end: -10px;
-  background: var(--negative);
-  color: #fff;
-  font-size: calc(10px * var(--fs, 1));
-  font-weight: 700;
-  min-width: 16px;
-  height: 16px;
-  line-height: 16px;
-  border-radius: 8px;
-  padding: 0 4px;
-}
 
 body.placement-mode #game-canvas { cursor: crosshair; }
 
@@ -702,16 +595,11 @@ body.placement-mode #game-canvas { cursor: crosshair; }
 .ic-strength { color: #ff8a5a; } .ic-intelligence { color: #ffe27a; } .ic-agility { color: #7ae0ff; }
 .ic-charisma { color: #ff9ad5; } .ic-endurance { color: #9ad08a; } .ic-gift { color: #ff9ad5; } .ic-target { color: #ff7a5a; }
 .ic-clock, .ic-hourglass { color: #d8cfbf; } .ic-pick { color: #d9a441; } .ic-trophy, .ic-crown, .ic-medal { color: #ffc547; }
-.resource-icon .ic, .info-icon .ic { width: 16px; height: 16px; }
-.nav-icon .ic { width: 26px; height: 26px; }
 .modal-icon .ic { width: 52px; height: 52px; }
 .ach-icon .ic { width: 30px; height: 30px; }
 .build-icon .ic { width: 28px; height: 28px; }
 .hex-icon { fill: rgba(255, 255, 255, 0.88); font-size: calc(13px * var(--fs, 1)); pointer-events: none; }
 
-/* Daily supply drop (NICE3): a gold crate in the info row that bobs until opened. */
-.supply-btn { color: #ffd27a; border-color: rgba(255, 210, 122, 0.6); animation: supply-bob 1.6s ease-in-out infinite; }
-@keyframes supply-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-2px); box-shadow: 0 0 8px rgba(255, 210, 122, 0.55); } }
 .welcome-door { margin-top: 10px; padding: 8px; border-radius: 10px; background: rgba(255, 210, 122, 0.08); border: 1px solid rgba(255, 210, 122, 0.3); }
 
 /* Coupon: the code box in Settings and the amount boxes in the coupon sheet. */
