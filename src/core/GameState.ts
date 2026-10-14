@@ -1,4 +1,5 @@
 import { createLongGame, migrateLongGame, type LongGameState } from './state/longGame';
+import { createCity, normalizeCity, seedCity, type CityState } from './state/city';
 
 export interface ResourceState {
   amount: number;
@@ -471,6 +472,8 @@ export interface GameState {
   currentFloors: number;
   /** [plan4:X-3] Side wings, doors, infrastructure and the surface row (save v7; see LayoutState). */
   layout: LayoutState;
+  /** [world:C0] Save v8: what the player has seen and found of the city (presentation only; see state/city.ts). */
+  city: CityState;
   maxPopulation: number;
   /** [reserved: saved, not used yet] */
   tensionValue: number;
@@ -590,10 +593,19 @@ export function createLateGame(): LateGameState {
 }
 
 /**
+ * v8 (world redesign "The City Below"): additive `city` discovery slice (seen / found); positions and layout unchanged (layout stays v:1).
  * v7 (plan 4): additive `layout` (side wings, doors, infrastructure, surface row); a v6 save is kept once as lastbunker_auto_v6 before it migrates.
  * v6: the Chronicle (longGame.chronicle) and the standing orders added by the balance plan; a v5 save is kept once as lastbunker_auto_v5 before it migrates.
  */
-export const SAVE_VERSION = 7;
+export const SAVE_VERSION = 8;
+
+/**
+ * [world:C0] The layout migration seam: today the same merge as v7 (a partial layout keeps what it has; still `v: 1`). A layout v2 changes only this
+ * function (architecture section 2).
+ */
+export function migrateLayout(saved: Partial<LayoutState> | undefined | null): LayoutState {
+  return { ...createLayout(), ...(saved ?? {}), v: 1 };
+}
 
 export function migrateState(saved: GameState): GameState {
   const fresh = createInitialState();
@@ -605,9 +617,11 @@ export function migrateState(saved: GameState): GameState {
   merged.version = fresh.version;
   merged.currentFloors = Math.max(saved.currentFloors ?? 1, fresh.currentFloors);
   // [plan4:X-3] v7: no wings, doors or infrastructure yet; a partial layout keeps what it has.
-  merged.layout = { ...createLayout(), ...(saved.layout ?? {}), v: 1 };
+  merged.layout = migrateLayout(saved.layout);
   // [plan4:ST-9] A save from before v7 is owed the one-time "the bunker can grow sideways" card (ui/controllers/whatsnew.ts shows it after the first half hour, Act II+).
   if ((saved.version ?? 1) < 7 && !(merged.storyFlags ?? []).includes('whatsnew:v7')) merged.storyFlags = [...(merged.storyFlags ?? []), 'whatsnew:v7'];
+  // [world:C0] A save from before v8 is owed the one-time "the bunker is a city now" card (shown by the UI once the city ships; M1).
+  if ((saved.version ?? 1) < 8 && !(merged.storyFlags ?? []).includes('whatsnew:v8')) merged.storyFlags = [...(merged.storyFlags ?? []), 'whatsnew:v8'];
   if ((saved.version ?? 1) < 4) {
     // Bunkers from before the restoration update were never ruined and have already been "entered".
     merged.ruins = [];
@@ -643,6 +657,8 @@ export function migrateState(saved: GameState): GameState {
   merged.daily.spare = Array.isArray(merged.daily.spare) ? merged.daily.spare : [];
   // [Long game] v5: Act, difficulty, world clock and the empty slices of the newer systems.
   merged.longGame = migrateLongGame(saved.longGame, saved.era ?? 0, merged.stats.totalPlayTime ?? 0, merged.prestige?.rebirthCount ?? 0);
+  // [world:C0] v8: the city slice. A save without one is seeded from the merged bunker (everything it already has counts as seen); one with it is normalised.
+  merged.city = saved.city ? normalizeCity(saved.city) : seedCity(merged);
   return merged;
 }
 
@@ -707,6 +723,7 @@ export function createInitialState(): GameState {
     storyFlags: [],
     currentFloors: 3,
     layout: createLayout(),
+    city: createCity(), // [world:C0]
     maxPopulation: 0,
     tensionValue: 0,
     lastEventTime: now,

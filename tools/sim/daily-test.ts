@@ -472,7 +472,7 @@ export async function dailyChecks(games: { name: string; json: string }[]): Prom
     const fresh = createInitialState();
     eq('new game has the daily block', JSON.stringify(Object.keys(fresh.daily).sort()), JSON.stringify(['chest', 'day', 'frag', 'graceUsed', 'lastClaim', 'orders', 'spare', 'streak', 'swapped']));
     eq('and no orders', fresh.daily.orders.length, 0);
-    eq('SAVE_VERSION stays 7 (additive)', SAVE_VERSION, 7);
+    eq('SAVE_VERSION is 8 (the daily orders added none; v8 is the world:C0 city slice)', SAVE_VERSION, 8);
     const old = JSON.parse(JSON.stringify(createInitialState())) as Partial<GameState>;
     delete old.daily;
     const m = migrateState(old as GameState);
