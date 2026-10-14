@@ -7,22 +7,31 @@ import { isPowerPlant } from '../data/buildingDefs';
 import { i18n } from '../i18n/I18nManager';
 import { RESOURCE_ICONS, el, setRich } from './dom';
 import { bedCap, bedsBuilt } from '../systems/BuildingSystem';
+import { PopulationSystem } from '../systems/PopulationSystem';
 import { ACTS, MAX_ACT, actOf, type ActDef } from '../data/acts';
 import { crewCount, getDef } from '../data/buildingDefs';
 import { subscribeA11y, getA11y, reducedMotion } from '../utils/a11y';
 import { setHudInsets } from '../utils/hudInsets';
 import { initViewportUi } from './viewportUi';
+import { kResourceChip, kProgress, setProgress, kBadge, setBadge, kRow, kTooltip } from './kit';
+import { fmtDuration, fmtNum } from './format';
+import '../styles/hud.css';
 
-/** [Long game] Components and alloys join the row from their Act on (the row then has four columns). */
+/** [Long game] Every resource the top bar can show; the Act decides which are in play (components, alloys... join from their Act on). */
 const VISIBLE_RESOURCES: ResourceType[] = ['food', 'water', 'power', 'materials', 'medicine', 'knowledge', 'scrap', 'components', 'alloys', 'data', 'influence', 'seedCores'];
 
 /**
- * Plan 2026-10 Q12 (HUD diet): on a phone the top bar shows only these four, in one row. Every other resource of the Act
- * joins the row only while it needs attention (empty, or low and draining); the "show all" pill under the row expands the
- * rest (remembered), and a tap on any resource still opens its drawer.
+ * [ux-redesign W2b] HUD diet: at most four resource tiles, on every screen. Early on the four basics; from Act III what holds progress
+ * back (phoneSlots). A resource that runs short swaps itself in; the rest sit behind the labelled "N more" handle (a small list).
  */
 const CORE_RESOURCES = new Set<ResourceType>(['food', 'water', 'power', 'materials']);
-const MORE_KEY = 'lastbunker_hud_more';
+const MAX_TILES = 4;
+/** Time to empty under which a tile shows a countdown (s), and under which it turns to danger. */
+const COUNTDOWN_S = 300;
+const DANGER_S = 180;
+const LOW_PCT = 30;
+const DANGER_PCT = 15;
+const STEADY = 0.005;
 
 export type NavKey = 'build' | 'surface' | 'research' | 'people';
 
@@ -59,38 +68,51 @@ export type SpotKey = NavKey | 'inbox' | 'season' | 'era';
 export { timeOfDay };
 
 interface ResourceEls {
-  root: HTMLElement;
+  root: HTMLButtonElement;
+  chip: HTMLElement;
   value: HTMLElement;
+  trend: HTMLElement;
   rate: HTMLElement;
-  fill: HTMLElement;
+  bar: HTMLElement;
+}
+
+/** One line of the alerts list. `action` = something to do now (the badge turns red); otherwise news to read. */
+interface Alert {
+  key: string;
+  icon: string;
+  label: string;
+  value?: string;
+  count: number;
+  action: boolean;
+  open: () => void;
 }
 
 export class HUD {
   private container: HTMLDivElement;
   private resourceEls = new Map<ResourceType, ResourceEls>();
-  private popValue!: HTMLElement;
-  private arrivalValue!: HTMLElement;
   onPopulation?: () => void;
-  private moraleValue!: HTMLElement;
-  private moraleIcon!: HTMLElement;
-  private powerBanner!: HTMLButtonElement;
   /** [ux-wp4] W2: the low-power banner and the morale chip open a short "why". */
   onPowerTap: (() => void) | null = null;
   onMoraleTap: (() => void) | null = null;
+  /** [ux-redesign W2b] #23: the trade shop (falls back to the journal, whose Shop tab it is, until the app wires it). */
+  onShop: (() => void) | null = null;
   /** [ux-wp4] B4: the People badge is recounted once a second, not every frame. */
   private jobsAt = 0;
   private jobsText = '';
+  private powerBanner!: HTMLButtonElement;
   private placementBanner!: HTMLElement;
   private placementText!: HTMLElement;
-  private peopleBadge!: HTMLElement;
+  /** #44: the last text / class / style written to each node, so a frame writes only what changed. */
   private lastText = new WeakMap<HTMLElement, string>();
+  private lastAttr = new WeakMap<HTMLElement, Map<string, string>>();
   private shown = new Map<ResourceType, number>();
-  /** Plan 2026-10 Q12: which resources the current Act opens, the "show all" pill and its state. */
+  /** Which resources the current Act opens. */
   private actShow = new Map<ResourceType, boolean>();
   private topBar!: HTMLElement;
+  private resRow!: HTMLElement;
   private moreBtn!: HTMLButtonElement;
-  private expanded = false;
-  private narrow = window.matchMedia('(max-width: 520px)');
+  private moreText!: HTMLElement;
+  private hiddenRes: ResourceType[] = [];
   private lastUpdate = performance.now();
   /** [plan4:AC-8] The resource buttons' spoken labels are refreshed at most 4 times a second (a screen reader must not be flooded). */
   private lastAria = 0;
@@ -114,9 +136,8 @@ export class HUD {
   setNavCurrent(key: NavKey | 'menu' | null): void {
     if (this.navCurrent === key) return;
     this.navCurrent = key;
-    for (const b of this.nav.querySelectorAll<HTMLElement>('.nav-btn')) {
-      const k = b.classList.contains('nav-menu') ? 'menu' : b.dataset.key;
-      if (k === key) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
+    for (const b of this.nav.querySelectorAll<HTMLElement>('.hx-tab')) {
+      if (b.dataset.key === key) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
     }
   }
   private navCurrent: NavKey | 'menu' | null = null;
@@ -140,8 +161,8 @@ export class HUD {
 
   /**
    * [plan4:UX-5] Measures the real HUD bands (they change with the text size, the banners and the safe areas) and publishes them
-   * (utils/hudInsets.ts: `window.__hudInsets`, --hud-top-h, --nav-h). From a text size of 1.25 the resource row becomes 2x2: that is
-   * a class on the bar, because a stylesheet cannot compare a custom property's number in a media query.
+   * (utils/hudInsets.ts: `window.__hudInsets`, --hud-top-h, --nav-h). From a text size of 1.25 the tiles drop their second line
+   * into a 2x2 grid: that is a class on the bar, because a stylesheet cannot compare a custom property's number in a media query.
    */
   private watchLayout(): void {
     const sync = (): void => {
@@ -151,8 +172,8 @@ export class HUD {
     this.unsubA11y = subscribeA11y(sync);
     const measure = (): void => {
       const vh = window.innerHeight;
-      // The compact landscape layout (touch.css) turns the status row and the nav into full-height side columns: they take
-      // nothing from the top or bottom band then (the camera's side bands are a later concern), so the heights are 0.
+      // The compact landscape layout (touch.css / hud.css) turns the status row and the nav into full-height side columns: they take
+      // nothing from the top or bottom band then, so the heights are 0.
       const isColumn = (r: DOMRect): boolean => r.height > vh * 0.8;
       const topRect = this.topBar.getBoundingClientRect();
       let top = isColumn(topRect) ? 0 : topRect.bottom;
@@ -162,9 +183,9 @@ export class HUD {
       const navRect = this.nav.getBoundingClientRect();
       const bottom = isColumn(navRect) ? 0 : vh - navRect.top;
       const objRect = this.objectiveEl.getBoundingClientRect();
-      // The strip sits just above the nav console (or at the bottom edge in landscape): what it adds is the gap from its top to the band.
       const objective = this.objectiveEl.style.display === 'none' ? 0 : Math.max(0, vh - bottom - objRect.top);
       setHudInsets({ top, bottom, objective });
+      if (this.pop) this.placePop();
     };
     if (typeof ResizeObserver === 'undefined') { measure(); return; }
     this.resizeObs = new ResizeObserver(measure);
@@ -173,118 +194,132 @@ export class HUD {
     measure();
   }
 
-  private createTopBar(): void {
-    const topBar = el('div', 'hud-top');
-    const resourceRow = el('div', 'resource-row');
+  // ───────────────────────────── top bar: resource tiles + one info row ─────────────────────────────
 
+  private actBtn!: HTMLButtonElement;
+  private actName!: HTMLElement;
+  private actPct!: HTMLElement;
+  private actBar!: HTMLElement;
+  private popBtn!: HTMLButtonElement;
+  private popValue!: HTMLElement;
+  private popCaption!: HTMLElement;
+  private moraleBtn!: HTMLButtonElement;
+  private moraleValue!: HTMLElement;
+  private moraleIcon!: HTMLElement;
+  private creditsBtn!: HTMLButtonElement;
+  private creditsValue!: HTMLElement;
+  private alertsBtn!: HTMLButtonElement;
+  private alertsBadge!: HTMLElement;
+  private clockValue!: HTMLElement;
+  private clockIcon!: HTMLElement;
+  private nightOverlay = el('div', 'night-overlay');
+
+  private createTopBar(): void {
+    // `.hud-top` stays for the safe-area and landscape-column rules in touch.css; everything inside is the W2b layout (styles/hud.css).
+    const topBar = el('div', 'hud-top hx-top');
+    const resourceRow = el('div', 'hx-res-row');
     for (const rt of VISIBLE_RESOURCES) {
-      const root = el('button', 'resource-item');
+      const root = el('button', 'hx-res');
+      root.type = 'button';
       root.title = i18n.t(`resources.${rt}`);
-      const value = el('span', 'resource-value', '0');
-      const rate = el('span', 'resource-rate');
-      rate.dir = 'ltr';
-      const track = el('div', 'resource-fill-track');
-      const fill = el('div', 'resource-fill-bar');
-      track.appendChild(fill);
-      root.append(el('span', 'resource-icon', RESOURCE_ICONS[rt] ?? ''), value, rate, track);
+      const chip = kResourceChip({ resource: rt, amount: 0 });
+      chip.removeAttribute('role');
+      chip.removeAttribute('aria-label');
+      chip.setAttribute('aria-hidden', 'true');
+      const value = chip.querySelector<HTMLElement>('.k-chip__amount')!;
+      const rate = chip.querySelector<HTMLElement>('.k-chip__rate')!;
+      rate.hidden = false;
+      const trend = el('span', 'hx-trend');
+      const line2 = el('span', 'hx-res__line2');
+      // Danger also has a shape (the warning sign), never colour alone.
+      line2.append(el('span', 'hx-warn', '[[warning]]'), trend, rate);
+      const bar = kProgress(0, 100);
+      bar.classList.add('hx-res__bar');
+      bar.setAttribute('aria-hidden', 'true');
+      chip.append(line2, bar);
+      root.appendChild(chip);
       root.addEventListener('click', () => this.onResourceTap?.(rt));
       resourceRow.appendChild(root);
-      this.resourceEls.set(rt, { root, value, rate, fill });
+      this.resourceEls.set(rt, { root, chip, value, trend, rate, bar });
     }
-    topBar.appendChild(resourceRow);
-    this.topBar = topBar;
-    try {
-      this.expanded = localStorage.getItem(MORE_KEY) === '1';
-    } catch {
-      this.expanded = false;
-    }
-    this.moreBtn = el('button', 'res-more');
-    this.moreBtn.addEventListener('click', () => {
-      this.expanded = !this.expanded;
-      try {
-        localStorage.setItem(MORE_KEY, this.expanded ? '1' : '0');
-      } catch {
-        // the choice just won't be remembered
-      }
-      haptic('tap');
-      this.lastMore = '';
-      if (this.lastState) this.update(this.lastState);
-    });
-    topBar.appendChild(this.moreBtn);
+    // "N more": hangs off the bottom edge of the bar (adds no row); opens the list of the Act's other stores.
+    this.moreBtn = el('button', 'hx-more');
+    this.moreBtn.type = 'button';
+    this.moreText = el('span', 'hx-more__text');
+    this.moreBtn.append(this.moreText);
+    this.moreBtn.addEventListener('click', () => { haptic('tap'); this.togglePop('more'); });
+    this.resRow = resourceRow;
 
-    const infoRow = el('div', 'info-row');
-    const pop = el('div', 'info-item info-tap');
-    this.popValue = el('span', 'info-value', '0/0');
-    this.arrivalValue = el('span', 'info-arrival');
-    this.arrivalValue.dir = 'ltr';
-    pop.append(el('span', 'info-icon', '[[people]]'), el('span', 'info-label', i18n.t('hud.population')), this.popValue, this.arrivalValue);
-    pop.addEventListener('click', () => this.onPopulation?.());
-    pop.setAttribute('role', 'button'); // [ux-wp4]
-    pop.tabIndex = 0;
+    const info = el('div', 'hx-info');
+    // The Act: its name, how far through it, as a labelled progress bar. Opens the Command panel.
+    this.actBtn = el('button', 'hx-chip hx-act');
+    this.actBtn.type = 'button';
+    const actHead = el('span', 'hx-act__head');
+    this.actName = el('span', 'hx-act__name');
+    this.actPct = el('span', 'hx-act__pct');
+    actHead.append(this.actName, this.actPct);
+    this.actBar = kProgress(0, 100);
+    this.actBar.classList.add('hx-act__bar');
+    this.actBar.setAttribute('aria-hidden', 'true');
+    this.actBtn.append(actHead, this.actBar);
+    this.actBtn.addEventListener('click', () => this.onEra?.());
 
-    const morale = el('button', 'info-item info-tap morale-chip');
-    this.moraleValue = el('span', 'info-value', '50%');
-    this.moraleIcon = el('span', 'info-icon', '[[happy]]');
-    morale.append(this.moraleIcon, el('span', 'info-label', i18n.t('hud.morale')), this.moraleValue);
-    morale.setAttribute('aria-label', i18n.t('wp4.moraleWhy'));
-    morale.title = i18n.t('wp4.moraleWhy');
-    morale.addEventListener('click', () => this.onMoraleTap?.());
+    this.popBtn = el('button', 'hx-chip hx-stat hx-people');
+    this.popBtn.type = 'button';
+    this.popValue = el('span', 'hx-stat__value', '0/0');
+    this.popCaption = el('span', 'hx-stat__caption', i18n.t('ux2b.survivors'));
+    this.popBtn.append(el('span', 'hx-stat__icon', '[[people]]'), this.wrap(this.popValue, this.popCaption));
+    this.popBtn.addEventListener('click', () => this.onPopulation?.());
 
-    const journal = el('button', 'lang-btn journal-btn', '[[journal]]');
-    journal.setAttribute('aria-label', i18n.t('journal.title'));
-    this.journalBadge = el('span', 'nav-badge');
-    this.journalBadge.style.display = 'none';
-    journal.appendChild(this.journalBadge);
-    journal.addEventListener('click', () => this.onJournal?.());
-    this.eraChip = el('button', 'era-chip');
-    this.eraChip.addEventListener('click', () => this.onEra?.());
+    this.moraleBtn = el('button', 'hx-chip hx-stat hx-morale');
+    this.moraleBtn.type = 'button';
+    this.moraleValue = el('span', 'hx-stat__value', '50%');
+    this.moraleIcon = el('span', 'hx-stat__icon', '[[neutral]]');
+    this.moraleBtn.append(this.moraleIcon, this.wrap(this.moraleValue, el('span', 'hx-stat__caption', i18n.t('hud.morale'))));
+    // Long press (or hover / keyboard focus): the biggest single cause. Bound before the click so the press that ends it is swallowed.
+    kTooltip(this.moraleBtn, () => this.moraleTopCause());
+    this.moraleBtn.addEventListener('click', () => this.onMoraleTap?.());
 
-    const clock = el('div', 'info-item info-clock');
-    this.clockValue = el('span', 'info-value', '06:00');
+    // #23: the shop's own way in (wide screens; on a phone it is the last line of the alerts list).
+    this.creditsBtn = el('button', 'hx-chip hx-stat hx-credits');
+    this.creditsBtn.type = 'button';
+    this.creditsValue = el('span', 'hx-stat__value', '0');
+    this.creditsBtn.append(el('span', 'hx-stat__icon', RESOURCE_ICONS.credits ?? '[[credits]]'), this.wrap(this.creditsValue, el('span', 'hx-stat__caption', i18n.t('shop.tab'))));
+    this.creditsBtn.addEventListener('click', () => this.openShop());
+
+    const clock = el('div', 'hx-clock');
+    this.clockValue = el('span', 'hx-stat__value', '06:00');
     this.clockValue.dir = 'ltr';
-    this.clockIcon = el('span', 'info-icon', '[[sun]]');
+    this.clockIcon = el('span', 'hx-stat__icon', '[[sun]]');
     clock.append(this.clockIcon, this.clockValue);
-    // [P2] The season: its icon and the days left; a tap tells the forecast.
-    this.seasonBtn = el('button', 'lang-btn season-btn', '[[clover]]');
-    this.seasonBtn.style.display = 'none';
-    this.seasonBtn.setAttribute('aria-label', i18n.t('season.title'));
-    this.seasonBtn.addEventListener('click', () => this.onSeason?.());
+    clock.setAttribute('aria-hidden', 'true');
 
-    // The daily supply drop (NICE3): a crate button that only shows while today's crate is unopened.
-    this.supplyBtn = el('button', 'lang-btn supply-btn', '[[gift]]');
-    this.supplyBtn.style.display = 'none';
-    this.supplyBtn.setAttribute('aria-label', i18n.t('a11y.supply'));
-    this.supplyBtn.addEventListener('click', () => this.onSupply?.());
+    // One inbox for everything that waits: decisions, the supply crate, daily orders, the journal, the season, the shop.
+    this.alertsBtn = el('button', 'hx-chip hx-alerts');
+    this.alertsBtn.type = 'button';
+    this.alertsBadge = kBadge(0);
+    this.alertsBtn.append(el('span', 'hx-stat__icon', '[[bell]]'), el('span', 'hx-alerts__label', i18n.t('ux2b.alerts')), this.alertsBadge);
+    this.alertsBtn.setAttribute('aria-haspopup', 'dialog');
+    this.alertsBtn.setAttribute('aria-expanded', 'false');
+    this.alertsBtn.addEventListener('click', () => { haptic('tap'); this.togglePop('alerts'); });
 
-    // gfx-p0: the menu moved to the bottom nav (createBottomNav) so this row fits a 360 px phone.
-    // [Long game] The Decision Inbox: shown from the second era on, with how many cards wait.
-    this.inboxBtn = el('button', 'lang-btn inbox-btn', '[[inbox]]');
-    this.inboxBtn.style.display = 'none';
-    this.inboxBtn.setAttribute('aria-label', i18n.t('inbox.title'));
-    this.inboxBadge = el('span', 'nav-badge');
-    this.inboxBadge.style.display = 'none';
-    this.inboxBtn.appendChild(this.inboxBadge);
-    this.inboxBtn.addEventListener('click', () => this.onInbox?.());
-
-    // [plan4:GP-1] Daily orders: "done/total", a red dot while something can be taken. Hidden until the orders start.
-    this.dailyBtn = el('button', 'lang-btn daily-btn');
-    this.dailyBtn.style.display = 'none';
-    this.dailyText = el('span', 'daily-text');
-    this.dailyText.dir = 'ltr';
-    this.dailyBadge = el('span', 'nav-badge daily-dot');
-    this.dailyBadge.style.display = 'none';
-    this.dailyBtn.append(el('span', 'daily-ic', '[[target]]'), this.dailyText, this.dailyBadge);
-    this.dailyBtn.addEventListener('click', () => this.onDaily?.());
-
-    infoRow.append(this.eraChip, pop, morale, clock, this.seasonBtn, this.supplyBtn, this.dailyBtn, this.inboxBtn, journal);
-    topBar.appendChild(infoRow);
+    info.append(this.actBtn, this.popBtn, this.moraleBtn, this.creditsBtn, clock, this.alertsBtn);
+    topBar.append(resourceRow, info, this.moreBtn);
+    this.topBar = topBar;
     this.container.appendChild(topBar);
+    this.refreshAlerts();
+  }
+
+  private wrap(value: HTMLElement, caption: HTMLElement): HTMLElement {
+    const box = el('span', 'hx-stat__text');
+    box.append(value, caption);
+    return box;
   }
 
   /** [Q7] Makes a HUD button glow for a few seconds, so the player sees where the new thing lives. */
   spotlight(key: SpotKey): void {
-    const target = key === 'inbox' ? this.inboxBtn : key === 'season' ? this.seasonBtn : key === 'era' ? this.eraChip
-      : this.container.querySelector<HTMLElement>(`.nav-btn[data-key="${key}"]`);
+    const target = key === 'inbox' || key === 'season' ? this.alertsBtn : key === 'era' ? this.actBtn
+      : this.nav.querySelector<HTMLElement>(`.hx-tab[data-key="${key}"]`);
     if (!target) return;
     target.classList.remove('spotlight');
     void target.offsetWidth;
@@ -292,82 +327,186 @@ export class HUD {
     window.setTimeout(() => target.classList.remove('spotlight'), 9000);
   }
 
-  private journalBadge!: HTMLElement;
-  private supplyBtn!: HTMLButtonElement;
-  /** [plan4:GP-1] The daily orders chip. */
-  private dailyBtn!: HTMLButtonElement;
-  private dailyText!: HTMLElement;
-  private dailyBadge!: HTMLElement;
+  // ───────────────────────────── alerts (the one notification lane) ─────────────────────────────
+
   onDaily: (() => void) | null = null;
-
-  /** [plan4:GP-1] `claimable` > 0 shows the dot and lights the chip; `title` is the spoken name ("Daily orders: 1 of 3"). */
-  setDaily(visible: boolean, done: number, n: number, claimable: number, title: string): void {
-    this.dailyBtn.style.display = visible ? '' : 'none';
-    this.setText(this.dailyText, `${done}/${n}`);
-    this.dailyBadge.style.display = claimable > 0 ? '' : 'none';
-    this.setText(this.dailyBadge, String(claimable));
-    this.dailyBtn.classList.toggle('has-cards', claimable > 0);
-    if (this.dailyBtn.title !== title) {
-      this.dailyBtn.title = title;
-      this.dailyBtn.setAttribute('aria-label', title);
-    }
-  }
   onSupply: (() => void) | null = null;
-
-  setSupply(ready: boolean, title: string): void {
-    this.supplyBtn.style.display = ready ? '' : 'none';
-    this.supplyBtn.title = title;
-  }
-
-  private eraChip!: HTMLButtonElement;
   onJournal: (() => void) | null = null;
   onInbox: (() => void) | null = null;
   onSeason: (() => void) | null = null;
-  private seasonBtn!: HTMLButtonElement;
-  private seasonSig = '';
-  private inboxBtn!: HTMLButtonElement;
-  private inboxBadge!: HTMLElement;
-
-  /** The inbox button: hidden until the inbox is in use; the badge shows the waiting cards. */
-  setInbox(visible: boolean, count: number): void {
-    this.inboxBtn.style.display = visible ? '' : 'none';
-    this.inboxBadge.style.display = count > 0 ? '' : 'none';
-    this.setText(this.inboxBadge, String(count));
-    this.inboxBtn.classList.toggle('has-cards', count > 0);
-  }
   onEra: (() => void) | null = null;
 
-  setJournalUnread(n: number): void {
-    this.journalBadge.style.display = n > 0 ? '' : 'none';
-    this.setText(this.journalBadge, String(n));
+  private daily = { visible: false, done: 0, n: 0, claimable: 0, title: '' };
+  private supplyReady = false;
+  private inbox = { visible: false, count: 0 };
+  private journalUnread = 0;
+  private season: { icon: string; label: string } | null = null;
+  private credits = 0;
+  private alertsSig = '';
+
+  /** [plan4:GP-1] Daily orders: a line in the alerts list ("1/3"); `claimable` > 0 makes it an action. */
+  setDaily(visible: boolean, done: number, n: number, claimable: number, title: string): void {
+    this.daily = { visible, done, n, claimable, title };
+    this.refreshAlerts();
   }
 
+  setSupply(ready: boolean, _title: string): void {
+    this.supplyReady = ready;
+    this.refreshAlerts();
+  }
+
+  /** The decisions inbox: a line in the alerts list while it is in use; waiting cards make it an action. */
+  setInbox(visible: boolean, count: number): void {
+    this.inbox = { visible, count };
+    this.refreshAlerts();
+  }
+
+  setJournalUnread(n: number): void {
+    this.journalUnread = n;
+    this.refreshAlerts();
+  }
+
+  private alerts(): Alert[] {
+    const out: Alert[] = [];
+    if (this.inbox.visible) out.push({ key: 'inbox', icon: 'inbox', label: i18n.t('ux2b.inbox'), value: this.inbox.count > 0 ? String(this.inbox.count) : '', count: this.inbox.count, action: this.inbox.count > 0, open: () => this.onInbox?.() });
+    if (this.supplyReady) out.push({ key: 'supply', icon: 'gift', label: i18n.t('a11y.supply'), value: i18n.t('ux2b.supplyReady'), count: 1, action: true, open: () => this.onSupply?.() });
+    if (this.daily.visible) out.push({ key: 'daily', icon: 'target', label: this.daily.title, value: `${this.daily.done}/${this.daily.n}`, count: this.daily.claimable, action: this.daily.claimable > 0, open: () => this.onDaily?.() });
+    if (this.season) out.push({ key: 'season', icon: this.season.icon, label: this.season.label, count: 0, action: false, open: () => this.onSeason?.() });
+    out.push({ key: 'journal', icon: 'journal', label: i18n.t('journal.title'), value: this.journalUnread > 0 ? i18n.t('ux2b.unread', { n: this.journalUnread }) : '', count: this.journalUnread, action: false, open: () => this.onJournal?.() });
+    out.push({ key: 'shop', icon: 'credits', label: i18n.t('ux2b.shop'), value: fmtNum(this.credits), count: 0, action: false, open: () => this.openShop() });
+    return out;
+  }
+
+  /** Recounts the badge (red only when something can be done now; grey for news; 99+). Called by the setters, not every frame. */
+  private refreshAlerts(): void {
+    const list = this.alerts();
+    const acts = list.filter(a => a.action).reduce((s, a) => s + a.count, 0);
+    const news = list.filter(a => !a.action).reduce((s, a) => s + a.count, 0);
+    const n = acts > 0 ? acts : news;
+    const sig = `${acts}|${news}|${list.map(a => `${a.key}:${a.value ?? ''}:${a.label}`).join(',')}`;
+    if (sig === this.alertsSig) return;
+    this.alertsSig = sig;
+    setBadge(this.alertsBadge, n);
+    this.alertsBadge.classList.toggle('is-news', acts === 0);
+    this.alertsBtn.classList.toggle('has-action', acts > 0);
+    const label = acts > 0 ? i18n.t('ux2b.alertsAct', { n: acts }) : news > 0 ? i18n.t('ux2b.alertsNews', { n: news }) : i18n.t('ux2b.alerts');
+    this.alertsBtn.setAttribute('aria-label', label);
+    this.alertsBtn.title = label;
+    if (this.popKind === 'alerts') this.fillPop();
+  }
+
+  private openShop(): void {
+    if (this.onShop) this.onShop();
+    else this.onJournal?.();
+  }
+
+  // ───────────────────────────── the small list (alerts / more resources) ─────────────────────────────
+
+  private pop: HTMLElement | null = null;
+  private popKind: 'alerts' | 'more' | null = null;
+  private popOff: (() => void) | null = null;
+
+  private togglePop(kind: 'alerts' | 'more'): void {
+    const same = this.popKind === kind;
+    this.closePop();
+    if (same) return;
+    this.popKind = kind;
+    const pop = el('div', 'hx-pop');
+    pop.id = 'hud-pop';
+    pop.setAttribute('role', 'dialog');
+    pop.setAttribute('aria-label', kind === 'alerts' ? i18n.t('ux2b.alerts') : i18n.t('ux2b.moreTitle'));
+    this.pop = pop;
+    this.fillPop();
+    document.body.appendChild(pop);
+    this.placePop();
+    const opener = kind === 'alerts' ? this.alertsBtn : this.moreBtn;
+    opener.setAttribute('aria-expanded', 'true');
+    pop.querySelector<HTMLElement>('button')?.focus({ preventScroll: true });
+    const onDown = (e: PointerEvent): void => {
+      const t = e.target as Node;
+      if (!pop.contains(t) && !opener.contains(t)) this.closePop();
+    };
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape') { this.closePop(); opener.focus(); }
+    };
+    window.addEventListener('pointerdown', onDown, true);
+    window.addEventListener('keydown', onKey);
+    this.popOff = () => {
+      window.removeEventListener('pointerdown', onDown, true);
+      window.removeEventListener('keydown', onKey);
+      opener.setAttribute('aria-expanded', 'false');
+    };
+  }
+
+  private closePop(): void {
+    this.popOff?.();
+    this.popOff = null;
+    this.pop?.remove();
+    this.pop = null;
+    this.popKind = null;
+  }
+
+  private placePop(): void {
+    if (!this.pop) return;
+    const anchor = (this.popKind === 'alerts' ? this.alertsBtn : this.moreBtn).getBoundingClientRect();
+    this.pop.style.top = `${Math.round(Math.max(this.topBar.getBoundingClientRect().bottom, anchor.bottom))}px`;
+  }
+
+  private fillPop(): void {
+    const pop = this.pop;
+    if (!pop) return;
+    pop.replaceChildren();
+    const go = (fn: () => void) => (): void => { this.closePop(); fn(); };
+    if (this.popKind === 'alerts') {
+      for (const a of this.alerts()) {
+        const row = kRow({ icon: a.icon, label: a.label, value: a.value || undefined, onPress: go(a.open) });
+        row.classList.add('hx-pop__row');
+        if (a.action) {
+          row.classList.add('is-action');
+          row.appendChild(el('span', 'hx-pop__dot', '[[warning]]'));
+        }
+        pop.appendChild(row);
+      }
+    } else if (this.lastState) {
+      for (const rt of this.hiddenRes) {
+        const res = this.lastState.resources[rt];
+        const net = res.productionRate - res.consumptionRate;
+        const row = kRow({ label: i18n.t(`resources.${rt}`), value: `${fmtNum(res.amount)} · ${i18n.formatRate(net)}`, onPress: go(() => this.onResourceTap?.(rt)) });
+        row.insertBefore(el('span', 'k-row__icon', RESOURCE_ICONS[rt] ?? ''), row.firstChild);
+        row.classList.add('hx-pop__row');
+        row.querySelector<HTMLElement>('.k-row__value')!.dir = 'ltr';
+        pop.appendChild(row);
+      }
+    }
+  }
+
+  // ───────────────────────────── Act chip, clock, objective ─────────────────────────────
+
   /**
-   * The chip shows where the run stands. [Q2] In a long game that is the Act and how far through it (the tag stays on narrow
-   * screens), the era's name is the quieter second half; the whole thing opens the Command panel.
+   * The Act and how far through it, as a labelled bar ("Survive 45%"); the era stays the bunker's look. Opens the Command panel.
+   * `actTag` is "III·45%" from the app; without it (legacy runs) the chip names the era only.
    */
   setEra(key: string, name: string, actTag = '', title = name): void {
     const sig = `${key}|${name}|${actTag}|${title}`;
-    if (this.eraChip.dataset.sig !== sig) {
-      this.eraChip.dataset.sig = sig;
-      setRich(this.eraChip, '[[flag]]');
-      if (actTag) this.eraChip.appendChild(el('span', 'act-tag', actTag));
-      this.eraChip.appendChild(el('span', 'era-name', name));
-      this.eraChip.title = title;
-      this.eraChip.setAttribute('aria-label', title);
-    }
-    this.eraChip.dataset.era = key;
+    if (this.actBtn.dataset.sig === sig) return;
+    this.actBtn.dataset.sig = sig;
+    this.actBtn.dataset.era = key;
+    const m = /^([IVX]+)\D*?(\d+)%/.exec(actTag);
+    const roman = m?.[1] ?? '';
+    const pct = m ? Number(m[2]) : -1;
+    this.setText(this.actName, roman ? `${i18n.t('wp6.hud.actShort')} ${roman} · ${name}` : name);
+    this.setText(this.actPct, pct >= 0 ? `${pct}%` : '');
+    this.actBar.hidden = pct < 0;
+    if (pct >= 0) setProgress(this.actBar, pct, 100);
+    this.actBtn.title = title;
+    this.actBtn.setAttribute('aria-label', title);
   }
-
-  private clockValue!: HTMLElement;
-  private clockIcon!: HTMLElement;
-  private nightOverlay = el('div', 'night-overlay');
 
   private updateClock(state: GameState): void {
     const { hour, minute, night } = timeOfDay(state.stats.totalPlayTime);
     this.setText(this.clockValue, `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`);
     this.setText(this.clockIcon, night > 0.5 ? '[[moon]]' : '[[sun]]');
-    this.nightOverlay.style.opacity = night.toFixed(3);
+    this.setStyle(this.nightOverlay, 'opacity', night.toFixed(3));
   }
 
   private objectiveEl!: HTMLButtonElement;
@@ -379,7 +518,7 @@ export class HUD {
     this.setText(this.objectiveText, `${icon} ${text}`);
     const [cur, target] = progress;
     this.setText(this.objectiveMeta, `${target > 1 ? `${cur}/${target}` : ''}${reward ? `${target > 1 ? ' · ' : ''}[[gift]] ${reward}` : ''}`);
-    this.objectiveEl.style.setProperty('--obj-progress', `${Math.round((cur / Math.max(1, target)) * 100)}%`);
+    this.setStyle(this.objectiveEl, '--obj-progress', `${Math.round((cur / Math.max(1, target)) * 100)}%`);
   }
 
   private createBanners(): void {
@@ -409,50 +548,48 @@ export class HUD {
     this.container.append(this.powerBanner, this.placementBanner);
   }
 
+  // ───────────────────────────── bottom nav (thumb zone) ─────────────────────────────
+
   private createBottomNav(): void {
-    const nav = el('div', 'hud-bottom');
+    const nav = el('div', 'hud-bottom hx-nav');
+    nav.id = 'hud-nav';
     this.nav = nav;
     // [plan4:AC-8] The console is a toolbar; the open panel's button says aria-current (setNavCurrent).
     nav.setAttribute('role', 'toolbar');
     nav.setAttribute('aria-label', i18n.t('a11y.nav'));
-    const buttons: { key: NavKey; icon: string }[] = [
-      { key: 'build', icon: '[[build]]' },
-      { key: 'people', icon: '[[people]]' },
-      { key: 'research', icon: '[[research]]' },
-      { key: 'surface', icon: '[[surface]]' },
+    const buttons: { key: NavKey | 'menu'; icon: string; label: string }[] = [
+      { key: 'build', icon: '[[build]]', label: i18n.t('hud.build') },
+      { key: 'people', icon: '[[people]]', label: i18n.t('hud.people') },
+      { key: 'research', icon: '[[research]]', label: i18n.t('hud.research') },
+      { key: 'surface', icon: '[[surface]]', label: i18n.t('hud.surface') },
+      { key: 'menu', icon: '[[menu]]', label: i18n.t('menu.title') },
     ];
-
     for (const btn of buttons) {
-      const b = el('button', 'nav-btn');
+      // #37: the keys fill the console edge to edge (no dead gaps); the visible plate is inset inside each key.
+      const b = el('button', `hx-tab${btn.key === 'menu' ? ' hx-tab--menu' : ''}`);
+      b.type = 'button';
       b.dataset.key = btn.key;
-      const icon = el('span', 'nav-icon', btn.icon);
-      const badge = el('span', 'nav-badge');
-      badge.style.display = 'none';
-      icon.appendChild(badge);
-      this.badges.set(btn.key, badge);
-      if (btn.key === 'people') this.peopleBadge = badge;
-      b.append(icon, el('span', 'nav-label', i18n.t(`hud.${btn.key}`)));
+      const icon = el('span', 'hx-tab__icon', btn.icon);
+      if (btn.key !== 'menu') {
+        const badge = el('span', 'k-badge hx-tab__badge');
+        badge.hidden = true;
+        icon.appendChild(badge);
+        this.badges.set(btn.key, badge);
+        if (btn.key === 'people') this.peopleBadge = badge;
+      }
+      b.append(icon, el('span', 'hx-tab__label', btn.label));
       b.addEventListener('click', () => {
         haptic('select');
-        this.onNav?.(btn.key);
+        if (btn.key === 'menu') this.onMenu?.(); else this.onNav?.(btn.key);
       });
       nav.appendChild(b);
     }
-    // A narrow bolt-on button at the end of the console opens the menu (settings, stats, rebirth).
-    const menu = el('button', 'nav-btn nav-menu');
-    menu.setAttribute('aria-label', i18n.t('menu.title'));
-    menu.title = i18n.t('menu.title');
-    menu.append(el('span', 'nav-icon', '[[menu]]'));
-    menu.addEventListener('click', () => {
-      haptic('select');
-      this.onMenu?.();
-    });
-    nav.appendChild(menu);
     // [plan4:UX-8] The console lives on <body>, not inside #hud: #hud is its own stacking context (z 10), under the sheets (z 20),
     // and the nav has to stay visible and tappable above an open sheet so a tab swaps the panel without closing it first.
     document.body.appendChild(nav);
   }
 
+  private peopleBadge!: HTMLElement;
   private incidentBanner!: HTMLButtonElement;
   onIncident: (() => void) | null = null;
 
@@ -464,8 +601,11 @@ export class HUD {
     this.setText(this.incidentBanner, text);
   }
 
+  /** Where a resource's tile is (fly-to-HUD); a resource without a tile flies to the "more" handle. */
   resourceRect(r: ResourceType): DOMRect | null {
-    return this.resourceEls.get(r)?.root.getBoundingClientRect() ?? null;
+    const root = this.resourceEls.get(r)?.root;
+    if (root && root.style.display !== 'none') return root.getBoundingClientRect();
+    return this.moreBtn.style.display !== 'none' ? this.moreBtn.getBoundingClientRect() : null;
   }
 
   pulseResource(r: ResourceType): void {
@@ -479,7 +619,7 @@ export class HUD {
   setBadge(key: NavKey, text: string | null): void {
     const badge = this.badges.get(key);
     if (!badge) return;
-    badge.style.display = text ? '' : 'none';
+    badge.hidden = !text;
     if (text) this.setText(badge, text);
   }
 
@@ -492,142 +632,131 @@ export class HUD {
     this.placementBanner.style.display = 'none';
   }
 
+  // ───────────────────────────── cached writes (#44) ─────────────────────────────
+
   private setText(node: HTMLElement, text: string): void {
     if (this.lastText.get(node) === text) return;
     this.lastText.set(node, text);
     setRich(node, text);
   }
 
+  private cache(node: HTMLElement): Map<string, string> {
+    let m = this.lastAttr.get(node);
+    if (!m) { m = new Map(); this.lastAttr.set(node, m); }
+    return m;
+  }
+
+  /** An attribute, a style property (`--x` or a property name) or a class set, written only when its value changes. */
+  private setAttr(node: HTMLElement, name: string, value: string): void {
+    const m = this.cache(node);
+    if (m.get(`a:${name}`) === value) return;
+    m.set(`a:${name}`, value);
+    node.setAttribute(name, value);
+  }
+
+  private setStyle(node: HTMLElement, prop: string, value: string): void {
+    const m = this.cache(node);
+    if (m.get(`s:${prop}`) === value) return;
+    m.set(`s:${prop}`, value);
+    node.style.setProperty(prop, value);
+  }
+
+  private setState(node: HTMLElement, group: string, value: string): void {
+    const m = this.cache(node);
+    const prev = m.get(`c:${group}`);
+    if (prev === value) return;
+    m.set(`c:${group}`, value);
+    if (prev) node.classList.remove(prev);
+    if (value) node.classList.add(value);
+  }
+
+  // ───────────────────────────── the frame ─────────────────────────────
+
   private shownAct = -1;
   private lastState: GameState | null = null;
-  private lastMore = '';
+  private seasonSig = '';
+  private lastSlots = '';
+  private popSig = '';
 
   update(state: GameState): void {
     this.lastState = state;
     const act = state.longGame?.meta.act ?? 1;
     if (act !== this.shownAct) {
       this.shownAct = act;
-      let tier2 = false;
-      for (const [rt, els] of this.resourceEls) {
+      for (const rt of this.resourceEls.keys()) {
         const opens = resourceDef(rt)?.act ?? 0;
         // Tier-2 goods: the current Act's and the one before (older ones still show in costs and in the drawer).
-        const show = opens === 0 || (act >= opens && opens >= act - 1);
-        this.actShow.set(rt, show);
-        if (opens > 0 && show) tier2 = true;
+        this.actShow.set(rt, opens === 0 || (act >= opens && opens >= act - 1));
       }
-      this.resourceEls.values().next().value?.root.parentElement?.classList.toggle('tier2', tier2);
     }
-    // [P2] Season chip (from the second Act).
+    // [P2] The season (from the second Act): a line in the alerts list.
     const season = seasonsActive(state) ? seasonAt(state) : null;
-    const sSig = season ? `${season.def.id}|${Math.ceil(season.left / 86400)}` : '';
+    const sSig = season ? `${season.def.id}|${Math.ceil(season.left / 86400)}|${i18n.currentLocale}` : '';
     if (sSig !== this.seasonSig) {
       this.seasonSig = sSig;
-      this.seasonBtn.style.display = season ? '' : 'none';
-      if (season) {
-        setRich(this.seasonBtn, `[[${season.def.icon}]]`);
-        this.seasonBtn.title = i18n.t('wp6.hud.season', { name: season.def.name[i18n.currentLocale], t: i18n.formatDuration(season.left) }); // [ux-wp4] WP6 label
-        this.seasonBtn.setAttribute('aria-label', this.seasonBtn.title);
-      }
+      this.season = season ? { icon: season.def.icon, label: i18n.t('ux2b.season', { name: season.def.name[i18n.currentLocale], t: i18n.formatDuration(season.left) }) } : null;
+      this.refreshAlerts();
     }
+    const credits = Math.floor(state.resources.credits?.amount ?? 0);
+    if (credits !== this.credits) {
+      this.credits = credits;
+      this.setText(this.creditsValue, fmtNum(credits));
+      this.setAttr(this.creditsBtn, 'aria-label', i18n.t('ux2b.creditsLabel', { n: fmtNum(credits) }));
+      this.refreshAlerts();
+    }
+
     const nowMs = performance.now();
     const dtRoll = Math.min(0.1, (nowMs - this.lastUpdate) / 1000);
     this.lastUpdate = nowMs;
     const ariaDue = nowMs - this.lastAria >= 250;
     if (ariaDue) this.lastAria = nowMs;
-    // Plan 2026-10 Q12: on a phone only the key four show, plus whatever needs attention; the pill expands the rest.
-    const collapsible = this.narrow.matches;
-    const compact = collapsible && !this.expanded;
-    const slots = compact ? this.phoneSlots(state, act) : null;
-    let hiddenCount = 0;
+
+    const tiles = this.pickTiles(state, act);
+    const tileSig = tiles.join(',');
+    const hidden: ResourceType[] = [];
     for (const [rt, els] of this.resourceEls) {
       const res = state.resources[rt];
+      const visible = tiles.includes(rt);
+      if (!visible && this.actShow.get(rt)) hidden.push(rt);
+      this.setStyle(els.root, 'display', visible ? '' : 'none');
+      if (visible) this.setStyle(els.root, 'order', String(tiles.indexOf(rt)));
       // Counters roll toward their value instead of jumping.
       const prev = this.shown.get(rt) ?? res.amount;
       const diff = res.amount - prev;
       const next = Math.abs(diff) < 0.5 ? res.amount : prev + diff * Math.min(1, dtRoll * 9);
       this.shown.set(rt, next);
-      this.setText(els.value, i18n.formatCompact(next));
-      const net = res.productionRate - res.consumptionRate;
-      this.setText(els.rate, i18n.formatRate(net));
-      els.rate.className = `resource-rate ${net > 0.005 ? 'positive' : net < -0.005 ? 'negative' : ''}`;
-      const pct = res.cap > 0 && isFinite(res.cap) ? Math.min(100, (res.amount / res.cap) * 100) : 0;
-      els.fill.style.width = `${pct}%`;
-      els.fill.className = `resource-fill-bar ${pct >= 99 ? 'full' : pct < 15 ? 'low' : ''}`;
-      els.root.classList.toggle('empty', res.amount <= 0 && res.consumptionRate > 0);
-      if (ariaDue) {
-        // "Food: 124 of 150, +0.4 per second": the real value (not the rolling counter) and the net rate, in words.
-        const hasCap = res.cap > 0 && isFinite(res.cap);
-        const label = i18n.t(hasCap ? 'a11y.resLabel' : 'a11y.resLabelNoCap', { name: i18n.t(`resources.${rt}`), amount: i18n.formatCompact(res.amount), cap: hasCap ? i18n.formatCompact(res.cap) : '', rate: i18n.formatRate(net) });
-        if (els.root.getAttribute('aria-label') !== label) els.root.setAttribute('aria-label', label);
-      }
-      const inAct = this.actShow.get(rt) !== false;
-      const attention = (res.amount <= 0 && res.consumptionRate > 0) || (pct < 15 && net < -0.005 && res.cap > 0);
-      const visible = inAct && (!compact || (slots ? slots.has(rt) : CORE_RESOURCES.has(rt)) || attention);
-      if (inAct && !visible) hiddenCount++;
-      const want = visible ? '' : 'none';
-      if (els.root.style.display !== want) els.root.style.display = want;
+      if (!visible) continue;
+      this.updateTile(rt, els, next, ariaDue);
     }
-    this.topBar.classList.toggle('res-collapsible', collapsible);
-    const more = collapsible ? `${this.expanded ? 'less' : 'more'}|${hiddenCount}|${slots ? [...slots].join(',') : ''}` : '';
-    if (more !== this.lastMore) {
-      this.lastMore = more;
-      const total = [...this.actShow.entries()].filter(([rt, s]) => s && !(slots ? slots.has(rt) : CORE_RESOURCES.has(rt))).length;
-      this.moreBtn.style.display = collapsible && total > 0 ? '' : 'none';
-      this.moreBtn.textContent = this.expanded ? '▴' : `▾ ${total}`;
-      const moreLabel = this.expanded ? i18n.t('hud.lessRes') : i18n.t('wp6.hud.more', { n: total }); // [ux-wp4] WP6 label
-      this.moreBtn.setAttribute('aria-label', moreLabel);
-      this.moreBtn.title = moreLabel;
+    if (tileSig !== this.lastSlots) {
+      this.lastSlots = tileSig;
+      this.hiddenRes = hidden;
+      this.setStyle(this.moreBtn, 'display', hidden.length ? '' : 'none');
+      this.setText(this.moreText, i18n.t('ux2b.more', { n: hidden.length }));
+      const label = i18n.t('wp6.hud.more', { n: hidden.length });
+      this.setAttr(this.moreBtn, 'aria-label', label);
+      this.moreBtn.title = label;
+    }
+    if (this.popKind === 'more' && ariaDue) {
+      const sig = this.hiddenRes.map(r => `${fmtNum(state.resources[r].amount)}`).join(',');
+      if (sig !== this.popSig) { this.popSig = sig; this.fillPop(); }
     }
 
-    // A lock when the Act's limit holds back beds the rooms already give.
-    const built = bedsBuilt(state);
-    const capped = built > state.maxPopulation;
-    this.setText(this.popValue, `${state.survivors.length}/${state.maxPopulation}${capped ? ' [[lock]]' : ''}`);
-    // The door: a countdown to the next newcomer, or a warning that there are no free beds.
-    // [ux-wp4] R3: when the Act (not the beds) holds the number, a neutral lock that says what the next Act opens, and a tap opens Command.
-    const full = state.survivors.length >= state.maxPopulation && state.maxPopulation > 0;
-    const lock = full ? actLock(state) : null;
-    const left = Math.max(0, Math.ceil((state.nextArrivalAt ?? 0) - state.stats.totalPlayTime));
-    const roman = lock ? (['I', 'II', 'III', 'IV', 'V', 'VI', 'VII'][lock.next.id - 1] ?? String(lock.next.id)) : '';
-    const arrival = lock ? `[[lock]] ${roman} +${lock.more}` : full ? '[[door]] !' : state.survivors.length > 0 && !state.activeEvent
-      ? `[[door]] ${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}` : '';
-    this.setText(this.arrivalValue, arrival);
-    this.arrivalValue.classList.toggle('negative', full && !lock);
-    this.arrivalValue.classList.toggle('act-lock', !!lock);
-    const popTitle = lock ? i18n.t('wp4.actLock', { act: lock.next.name[i18n.currentLocale], n: lock.more })
-      : capped ? i18n.t('building.bedsCapped', { built, cap: state.maxPopulation })
-        : i18n.t('wp6.hud.population', { n: state.survivors.length, max: state.maxPopulation });
-    const popEl = this.popValue.parentElement!;
-    if (popEl.title !== popTitle) { popEl.title = popTitle; popEl.setAttribute('aria-label', popTitle); }
-    const doorTitle = lock ? '' : full ? i18n.t('wp6.hud.arrivalFull') : arrival ? i18n.t('wp6.hud.arrival', { t: i18n.formatDuration(left) }) : '';
-    if (ariaDue && this.arrivalValue.title !== doorTitle) this.arrivalValue.title = doorTitle;
-    const morale = state.survivors.length > 0
-      ? Math.round(state.survivors.reduce((s, sv) => s + sv.happiness, 0) / state.survivors.length)
-      : 50;
-    this.setText(this.moraleValue, `${morale}%`);
-    if (ariaDue) {
-      const moraleChip = this.moraleValue.parentElement!;
-      const ml = i18n.t('wp6.hud.morale', { pct: morale }); // [ux-wp4] WP6 label (the chip opens the "why")
-      if (moraleChip.getAttribute('aria-label') !== ml) { moraleChip.setAttribute('aria-label', ml); moraleChip.title = ml; }
-    }
-    // [plan4:AC-7] The mood is a face as well as a colour: happy / neutral / sad.
-    this.setText(this.moraleIcon, morale < 35 ? '[[sad]]' : morale > 70 ? '[[happy]]' : '[[neutral]]');
-    this.moraleValue.className = `info-value ${morale < 35 ? 'negative' : morale > 70 ? 'positive' : ''}`;
+    this.updatePeople(state, ariaDue);
 
     const ratio = state.powerRatio ?? 1;
     // No alarm before there is any power plant to blame: the dead bunker is simply dark.
     const hasPlant = state.buildings.some(b => isPowerPlant(b.type) && !(b.isConstructing && b.level === 1));
     if (ratio < 0.99 && hasPlant) {
       this.setText(this.powerBanner, `${i18n.t('hud.powerLow', { pct: Math.round(ratio * 100) })} [[question]]`);
-      this.powerBanner.style.display = '';
+      this.setStyle(this.powerBanner, 'display', '');
     } else {
-      this.powerBanner.style.display = 'none';
+      this.setStyle(this.powerBanner, 'display', 'none');
     }
 
     this.updateClock(state);
 
-    // [ux-wp4] B4/P14: the red badge counts only the idle people there is a job for (min of idle and free places); idle people with no
-    // job anywhere are a fact of the Act, not a task: no badge (the People panel says so in grey at the top).
+    // [ux-wp4] B4/P14: the red badge counts only the idle people there is a job for (min of idle and free places).
     if (nowMs - this.jobsAt > 1000) {
       this.jobsAt = nowMs;
       const { idle, free } = jobRoom(state);
@@ -635,7 +764,7 @@ export class HUD {
       const text = n > 0 ? String(n) : '';
       if (text !== this.jobsText) {
         this.jobsText = text;
-        this.peopleBadge.style.display = n > 0 ? '' : 'none';
+        this.peopleBadge.hidden = n === 0;
         this.setText(this.peopleBadge, text);
         this.peopleBadge.title = n > 0 ? i18n.t('wp4.badgeJobs', { n }) : '';
       }
@@ -643,9 +772,74 @@ export class HUD {
   }
 
   /**
-   * [ux-wp4] M2: which resources the phone row shows (four places). Early on (Acts I-II) the four basics. From Act III the row shows what
-   * holds progress back: the Act's currency (and the last Act's), then the basics that are not full (a full store says nothing), the emptiest
-   * first; a resource that runs short always joins (see `attention` in update).
+   * One tile: icon, amount, trend arrow + rate. A full store says FULL (its rate means nothing then); a store that runs dry within
+   * five minutes shows the countdown; under 15 % or 3 minutes it is in danger (dashed edge, warning sign, amber-to-red pulse).
+   */
+  private updateTile(rt: ResourceType, els: ResourceEls, shownAmount: number, ariaDue: boolean): void {
+    const res = this.lastState!.resources[rt];
+    const net = res.productionRate - res.consumptionRate;
+    const hasCap = res.cap > 0 && isFinite(res.cap);
+    const pct = hasCap ? Math.min(100, (res.amount / res.cap) * 100) : 0;
+    const empty = res.amount <= 0 && res.consumptionRate > 0;
+    const tte = net < -STEADY && res.amount > 0 ? res.amount / -net : Infinity;
+    const full = hasCap && pct >= 99.5 && net > -STEADY;
+    const draining = net < -STEADY;
+    const danger = empty || tte < DANGER_S || (draining && hasCap && pct < DANGER_PCT);
+    const low = !danger && (tte < COUNTDOWN_S || (draining && hasCap && pct < LOW_PCT));
+    const countdown = !empty && tte < COUNTDOWN_S;
+
+    this.setText(els.value, fmtNum(shownAmount));
+    let line: string;
+    let mode: string;
+    if (full) { line = i18n.t('ux2b.full'); mode = 'is-full'; }
+    else if (countdown) { line = `[[hourglass]] ${fmtDuration(tte)}`; mode = 'is-countdown'; }
+    else { line = i18n.formatRate(net); mode = net > STEADY ? 'is-up' : draining ? 'is-down' : 'is-flat'; }
+    this.setText(els.rate, line);
+    this.setText(els.trend, full || countdown ? '' : net > STEADY ? '▲' : draining ? '▼' : '');
+    this.setState(els.chip, 'mode', mode);
+    this.setState(els.chip, 'state', danger ? 'is-danger' : low ? 'is-low' : 'is-normal');
+    this.setState(els.root, 'empty', empty ? 'empty' : '');
+    const barPct = Math.round(pct);
+    if (this.cache(els.bar).get('pct') !== String(barPct)) {
+      this.cache(els.bar).set('pct', String(barPct));
+      setProgress(els.bar, barPct, 100);
+    }
+    if (ariaDue) {
+      // "Food: 124 of 150, +0.4 per second" (the real value, not the rolling counter); then FULL or the time it runs out.
+      const name = i18n.t(`resources.${rt}`);
+      let label = i18n.t(hasCap ? 'a11y.resLabel' : 'a11y.resLabelNoCap', { name, amount: i18n.formatCompact(res.amount), cap: hasCap ? i18n.formatCompact(res.cap) : '', rate: i18n.formatRate(net) });
+      if (full) label += `. ${i18n.t('ux2b.fullLabel')}`;
+      else if (countdown) label += `. ${i18n.t('ux2b.runsOut', { t: fmtDuration(tte) })}`;
+      this.setAttr(els.root, 'aria-label', label);
+    }
+  }
+
+  /**
+   * At most four tiles. Acts I-II: the four basics. From Act III what holds progress back (phoneSlots). A resource that runs short
+   * swaps itself in for the calmest tile.
+   */
+  private pickTiles(state: GameState, act: number): ResourceType[] {
+    const slots = this.phoneSlots(state, act);
+    const base = [...(slots ?? CORE_RESOURCES)].filter(r => this.actShow.get(r) !== false).slice(0, MAX_TILES);
+    const urgent = (r: ResourceType): boolean => {
+      const res = state.resources[r];
+      const net = res.productionRate - res.consumptionRate;
+      if (res.amount <= 0 && res.consumptionRate > 0) return true;
+      if (net < -STEADY && res.amount / -net < COUNTDOWN_S) return true;
+      return res.cap > 0 && isFinite(res.cap) && res.amount / res.cap < DANGER_PCT / 100 && net < -STEADY;
+    };
+    for (const r of VISIBLE_RESOURCES) {
+      if (this.actShow.get(r) === false || base.includes(r) || !urgent(r)) continue;
+      const calm = [...base].reverse().find(b => !urgent(b));
+      if (!calm) break;
+      base[base.indexOf(calm)] = r;
+    }
+    return base;
+  }
+
+  /**
+   * [ux-wp4] M2: which resources the row shows (four places). Early on (Acts I-II) the four basics. From Act III the row shows what holds
+   * progress back: the Act's currency (and the last Act's), then the basics that are not full (a full store says nothing), the emptiest first.
    */
   private phoneSlots(state: GameState, act: number): Set<ResourceType> | null {
     if (act < 3) return null;
@@ -658,17 +852,70 @@ export class HUD {
     const basics = [...CORE_RESOURCES].sort((a, b) => fill(a) - fill(b));
     const out = new Set<ResourceType>(currency.slice(0, 2));
     for (const r of basics) {
-      if (out.size >= 4) break;
+      if (out.size >= MAX_TILES) break;
       const res = state.resources[r];
-      const draining = res.productionRate - res.consumptionRate < -0.005;
+      const draining = res.productionRate - res.consumptionRate < -STEADY;
       if (fill(r) < 0.9 || draining) out.add(r);
     }
-    // Room left: the basics again (fullest last), so the row is never half empty.
-    for (const r of basics) if (out.size < 4) out.add(r);
+    for (const r of basics) if (out.size < MAX_TILES) out.add(r);
     return out;
   }
 
+  /** Population (with the door's state as a caption) and morale. */
+  private updatePeople(state: GameState, ariaDue: boolean): void {
+    const built = bedsBuilt(state);
+    const capped = built > state.maxPopulation;
+    this.setText(this.popValue, `${state.survivors.length}/${state.maxPopulation}`);
+    const full = state.survivors.length >= state.maxPopulation && state.maxPopulation > 0;
+    const lock = full ? actLock(state) : null;
+    const left = Math.max(0, Math.ceil((state.nextArrivalAt ?? 0) - state.stats.totalPlayTime));
+    // [ux-wp4] R3: the Act holds the number: a neutral lock that names the next Act. No free bed: a warning in words. Else: the next arrival.
+    const caption = lock ? `[[lock]] ${i18n.t('ux2b.popLock')}`
+      : full ? `[[warning]] ${i18n.t('ux2b.popFull')}`
+        : state.survivors.length > 0 && !state.activeEvent ? `[[door]] ${fmtDuration(left)}` : i18n.t('ux2b.survivors');
+    this.setText(this.popCaption, caption);
+    this.setState(this.popBtn, 'door', lock ? 'is-lock' : full ? 'is-full' : capped ? 'is-capped' : '');
+    if (ariaDue) {
+      const popTitle = lock ? i18n.t('wp4.actLock', { act: lock.next.name[i18n.currentLocale], n: lock.more })
+        : full ? `${i18n.t('wp6.hud.population', { n: state.survivors.length, max: state.maxPopulation })}. ${i18n.t('wp6.hud.arrivalFull')}`
+          : capped ? i18n.t('building.bedsCapped', { built, cap: state.maxPopulation })
+            : `${i18n.t('wp6.hud.population', { n: state.survivors.length, max: state.maxPopulation })}. ${i18n.t('wp6.hud.arrival', { t: i18n.formatDuration(left) })}`;
+      this.setAttr(this.popBtn, 'aria-label', popTitle);
+      this.setAttr(this.popBtn, 'title', popTitle);
+    }
+    const morale = state.survivors.length > 0
+      ? Math.round(state.survivors.reduce((s, sv) => s + sv.happiness, 0) / state.survivors.length)
+      : 50;
+    this.setText(this.moraleValue, `${morale}%`);
+    // [plan4:AC-7] The mood is a face as well as a colour: happy / neutral / sad.
+    this.setText(this.moraleIcon, morale < 35 ? '[[sad]]' : morale > 70 ? '[[happy]]' : '[[neutral]]');
+    this.setState(this.moraleBtn, 'mood', morale < 35 ? 'is-down' : morale > 70 ? 'is-up' : '');
+    if (ariaDue) this.setAttr(this.moraleBtn, 'aria-label', `${i18n.t('wp6.hud.morale', { pct: morale })}`);
+  }
+
+  private moraleRules: PopulationSystem | null = null;
+
+  /** The biggest single thing moving morale (the average over everyone of the same factors the "why" dialog lists). Read only. */
+  private moraleTopCause(): string {
+    const state = this.lastState;
+    if (!state || state.survivors.length === 0) return i18n.t('wp4.moraleCalm');
+    const ps = this.moraleRules ?? (this.moraleRules = new PopulationSystem());
+    const sums = new Map<string, number>();
+    for (const s of state.survivors) {
+      for (const f of ps.getMoraleFactors(state, s)) if (f.key !== 'base') sums.set(f.key, (sums.get(f.key) ?? 0) + f.value);
+    }
+    let best: [string, number] | null = null;
+    for (const [k, v] of sums) {
+      const avg = v / state.survivors.length;
+      if (Math.abs(avg) >= 0.5 && (!best || Math.abs(avg) > Math.abs(best[1]))) best = [k, avg];
+    }
+    if (!best) return i18n.t('wp4.moraleCalm');
+    const v = Math.round(best[1]);
+    return `${i18n.t('ux2b.moraleTop', { cause: i18n.t(`morale.${best[0]}`), v: `${v > 0 ? '+' : v < 0 ? '−' : ''}${Math.abs(v)}` })} ${i18n.t('ux2b.moraleMore')}`;
+  }
+
   destroy(): void {
+    this.closePop();
     this.resizeObs?.disconnect();
     this.unsubA11y?.();
     this.nav.remove();

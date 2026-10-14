@@ -1,0 +1,393 @@
+/*
+ * [ux-redesign W2b] The HUD: one calm status bar and the nav console.
+ *   - top: at most four resource tiles (icon, amount, trend + rate / FULL / countdown), then ONE info row: the Act as a labelled
+ *     progress bar, survivors, morale, (wide screens: credits, clock) and the alerts button that gathers everything that waits.
+ *   - bottom (thumb zone): the five nav keys, edge to edge.
+ * Imported by src/ui/HUD.ts, i.e. BEFORE style.css / bunker-os.css / touch.css: every rule is anchored on #hud or #hud-nav so the older
+ * class rules cannot reach it. Tokens only (styles/tokens.css). Hit areas reach --hit-min (or --tap with "Large touch targets").
+ */
+
+#hud .hx-top, #hud-nav { --hx-hit: max(var(--hit-min), var(--tap, var(--hit-min))); --hx-h: var(--hx-hit); }
+
+/* ---------- the bar ---------- */
+
+#hud .hx-top {
+  position: relative;
+  pointer-events: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-2) var(--sp-3);
+  padding-top: max(var(--sp-2), env(safe-area-inset-top));
+  padding-inline: max(var(--sp-2), env(safe-area-inset-left)) max(var(--sp-2), env(safe-area-inset-right));
+  background: linear-gradient(to bottom, var(--surface-0) 0%, color-mix(in srgb, var(--surface-0) 88%, transparent) 75%, transparent 100%);
+}
+
+/* ---------- resource tiles ---------- */
+
+#hud .hx-res-row {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--sp-2);
+  width: 100%;
+  max-width: calc(var(--sp-8) * 9);
+  margin-inline: auto;
+}
+#hud .hx-res {
+  display: block;
+  min-width: 0;
+  min-height: var(--hx-hit);
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  border-radius: var(--r-panel);
+  transition: transform var(--dur-release) var(--ease-out-back);
+}
+#hud .hx-res:active { transform: scale(var(--press-scale)); transition-duration: var(--dur-press); }
+#hud .hx-res:focus-visible { outline: var(--ring-w) solid var(--primary); outline-offset: var(--border-w); }
+
+#hud .hx-res .k-chip {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-areas: 'icon amount' 'line2 line2';
+  align-items: center;
+  column-gap: var(--sp-1);
+  row-gap: 0;
+  width: 100%;
+  height: 100%;
+  min-height: var(--hx-hit);
+  padding: var(--sp-1) var(--sp-1) var(--sp-2);
+  padding-inline-start: calc(var(--sp-1) + var(--sp-1) / 2);
+  overflow: hidden;
+  background: var(--surface-1);
+  font-size: calc(var(--type-body) * var(--fs, 1));
+  line-height: var(--lh-tight);
+}
+#hud .hx-res .k-chip__icon { grid-area: icon; }
+#hud .hx-res .k-chip__icon .ic { width: var(--icon-s); height: var(--icon-s); }
+#hud .hx-res .k-chip__amount {
+  grid-area: amount;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-primary);
+  font-variant-numeric: var(--num-tabular);
+  unicode-bidi: isolate;
+}
+#hud .hx-res__line2 {
+  grid-area: line2;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  font-size: calc(var(--type-caption) * var(--fs, 1));
+  color: var(--text-secondary);
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+[dir='rtl'] #hud .hx-res__line2 { justify-content: flex-end; }
+#hud .hx-res .k-chip__rate { font-size: inherit; color: inherit; font-variant-numeric: var(--num-tabular); }
+#hud .hx-res .k-chip__rate .ic { width: var(--icon-s); height: var(--icon-s); }
+#hud .hx-trend { font-size: calc(var(--type-caption) * var(--fs, 1) * 0.75); line-height: 1; }
+#hud .hx-res .k-chip.is-up .hx-res__line2 { color: var(--success); }
+#hud .hx-res .k-chip.is-down .hx-res__line2 { color: var(--danger-text); }
+#hud .hx-res .k-chip.is-full .hx-res__line2 { color: var(--warning); font-weight: var(--weight-bold); letter-spacing: 0.04em; }
+#hud .hx-res .k-chip.is-countdown .hx-res__line2 { color: var(--warning); font-family: var(--font-mono); font-weight: var(--weight-bold); }
+#hud .hx-res .k-chip.is-danger.is-countdown .hx-res__line2 { color: var(--danger-text); }
+
+/* Fill: a thin bar along the bottom edge of the tile (the kit progress, slimmed). */
+#hud .hx-res__bar {
+  position: absolute;
+  inset-inline: 0;
+  bottom: 0;
+  height: calc(var(--sp-1) - var(--border-w));
+  border-radius: 0;
+  background: var(--surface-2);
+}
+#hud .hx-res__bar .k-progress__fill { background: var(--k-chip-color); }
+#hud .hx-res .k-chip.is-full .hx-res__bar .k-progress__fill { background: var(--warning); }
+#hud .hx-res .k-chip.is-danger .hx-res__bar .k-progress__fill { background: var(--danger); }
+
+/* Danger: dashed red edge, a warning sign (shape, not colour alone) and an amber-to-red pulse. Low: amber edge. */
+#hud .hx-warn { display: none; line-height: 0; color: var(--danger-text); }
+#hud .hx-warn .ic { width: var(--icon-s); height: var(--icon-s); }
+#hud .hx-res .k-chip.is-danger .hx-warn { display: inline-flex; }
+#hud .hx-res .k-chip.is-low { border-color: var(--warning); }
+#hud .hx-res .k-chip.is-danger {
+  border-color: var(--danger);
+  border-style: dashed;
+  animation: hx-danger var(--dur-pulse) var(--ease-in-out) infinite alternate;
+}
+@keyframes hx-danger {
+  from { box-shadow: 0 0 0 var(--border-w) var(--warning); }
+  to { box-shadow: 0 0 0 var(--ring-w) var(--danger); }
+}
+#hud .hx-res.empty .k-chip { background: color-mix(in srgb, var(--danger) 18%, var(--surface-1)); }
+
+/* "+3 more": hangs off the bar's lower edge (adds no row); visually small, a full hit area. */
+#hud .hx-more {
+  position: absolute;
+  top: 100%;
+  inset-inline-start: 50%;
+  translate: -50% calc(-1 * var(--sp-3));
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--sp-5);
+  padding: 0 var(--sp-3);
+  border: var(--border-w) solid var(--border);
+  border-radius: var(--r-full);
+  background: var(--surface-2);
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: calc(var(--type-caption) * var(--fs, 1));
+  font-weight: var(--weight-medium);
+  white-space: nowrap;
+  cursor: pointer;
+}
+[dir='rtl'] #hud .hx-more { translate: 50% calc(-1 * var(--sp-3)); }
+#hud .hx-more::after { content: ''; position: absolute; inset: calc((var(--hx-hit) - var(--sp-5)) / -2) 0; }
+#hud .hx-more[aria-expanded='true'] { color: var(--primary); border-color: var(--primary); }
+
+/* ---------- the info row ---------- */
+
+#hud .hx-info {
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+  gap: var(--sp-2);
+  width: 100%;
+  max-width: calc(var(--sp-8) * 9);
+  margin-inline: auto;
+}
+#hud .hx-chip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  min-height: var(--hx-h);
+  padding: var(--sp-1) var(--sp-2);
+  border: var(--border-w) solid var(--border);
+  border-radius: var(--r-panel);
+  background: var(--surface-1);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: calc(var(--type-body) * var(--fs, 1));
+  line-height: var(--lh-tight);
+  text-align: start;
+  cursor: pointer;
+}
+#hud .hx-chip:active { transform: scale(var(--press-scale)); }
+#hud .hx-chip:focus-visible { outline: var(--ring-w) solid var(--primary); outline-offset: var(--border-w); }
+#hud .hx-stat__icon { display: inline-flex; line-height: 0; }
+#hud .hx-stat__icon .ic { width: var(--icon-m); height: var(--icon-m); }
+#hud .hx-stat { flex: 0 0 auto; padding-inline: var(--sp-1) var(--sp-2); }
+#hud .hx-stat .hx-stat__icon .ic { width: var(--icon-s); height: var(--icon-s); }
+#hud .hx-stat__text { display: flex; flex-direction: column; min-width: 0; overflow: hidden; }
+#hud .hx-stat { min-width: 0; }
+#hud .hx-people { flex-shrink: 1; }
+#hud .hx-stat__value { font-weight: var(--weight-bold); font-variant-numeric: var(--num-tabular); unicode-bidi: isolate; white-space: nowrap; }
+#hud .hx-stat__caption {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: calc(var(--type-caption) * var(--fs, 1));
+  color: var(--text-secondary);
+  white-space: nowrap;
+  font-variant-numeric: var(--num-tabular);
+}
+#hud .hx-stat__caption .ic { width: var(--sp-3); height: var(--sp-3); }
+#hud .hx-chip.is-full .hx-stat__caption { color: var(--danger-text); }
+#hud .hx-chip.is-lock .hx-stat__caption { color: var(--text-secondary); }
+#hud .hx-morale.is-up .hx-stat__value { color: var(--success); }
+#hud .hx-morale.is-down .hx-stat__value { color: var(--danger-text); }
+#hud .hx-people .hx-stat__icon { color: var(--text-secondary); }
+
+/* The Act: name + % over a slim bar; takes the room that is left. */
+#hud .hx-act { flex: 1 1 0; min-width: calc(var(--sp-8) + var(--sp-5)); flex-direction: column; align-items: stretch; justify-content: center; gap: var(--sp-1); }
+#hud .hx-act__head { display: flex; align-items: baseline; gap: var(--sp-1); min-width: 0; font-size: calc(var(--type-caption) * var(--fs, 1)); }
+#hud .hx-act__name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-secondary); }
+#hud .hx-act__pct { font-weight: var(--weight-bold); color: var(--primary); font-variant-numeric: var(--num-tabular); unicode-bidi: isolate; }
+#hud .hx-act__bar { height: calc(var(--sp-1) + var(--border-w)); }
+
+/* Wide screens only: the shop's credits and the clock. */
+#hud .hx-credits, #hud .hx-clock { display: none; }
+#hud .hx-credits .hx-stat__icon { color: var(--res-credits); }
+#hud .hx-clock { align-items: center; gap: var(--sp-1); color: var(--text-secondary); font-size: calc(var(--type-caption) * var(--fs, 1)); }
+@media (min-width: 600px) {
+  #hud .hx-credits { display: inline-flex; }
+  #hud .hx-clock { display: inline-flex; }
+  #hud .hx-info, #hud .hx-res-row { max-width: calc(var(--sp-8) * 11); }
+  #hud .hx-act { min-width: calc(var(--sp-8) * 3); }
+}
+
+/* Alerts: an icon (a word too on wide screens) and a count; the count is red only when there is something to do now. */
+#hud .hx-alerts { flex: 0 0 auto; min-width: var(--hx-hit); justify-content: center; }
+#hud .hx-alerts__label { display: none; }
+@media (min-width: 600px) { #hud .hx-alerts__label { display: inline; } }
+#hud .hx-alerts .k-badge { position: absolute; top: calc(-1 * var(--sp-1)); inset-inline-end: calc(-1 * var(--sp-1)); }
+#hud .hx-alerts .k-badge.is-news { background: var(--surface-2); color: var(--text-primary); border: var(--border-w) solid var(--border); }
+#hud .hx-alerts.has-action { border-color: var(--primary); }
+#hud .hx-alerts[aria-expanded='true'] { border-color: var(--primary); color: var(--primary); }
+
+/* Every chip reaches the full hit area, also when the visual is slimmer (short screens). */
+#hud .hx-chip::after { content: ''; position: absolute; inset: calc((var(--hx-h) - var(--hx-hit)) / 2 - var(--border-w)) calc(-1 * var(--border-w)); }
+
+/* ---------- the small list (alerts, more resources) ---------- */
+
+/* On <body>, over the toasts (a toast must not cover the list) and under the dialogs. */
+#hud-pop {
+  --hx-hit: max(var(--hit-min), var(--tap, var(--hit-min)));
+  position: fixed;
+  inset-inline-end: max(var(--sp-2), env(safe-area-inset-right));
+  z-index: calc(var(--z-toasts) + 1);
+  pointer-events: auto;
+  width: min(calc(var(--sp-8) * 5), calc(100vw - 2 * var(--sp-2)));
+  max-height: 60vh;
+  overflow-y: auto;
+  margin-top: var(--sp-1);
+  padding-block: var(--sp-1);
+  border: var(--border-w) solid var(--border);
+  border-radius: var(--r-card);
+  background: var(--surface-1);
+  box-shadow: var(--elev-2);
+  animation: hx-pop-in var(--dur-popup-in) var(--ease-out);
+}
+@keyframes hx-pop-in { from { opacity: 0; transform: scale(var(--popup-from-scale)); } }
+#hud-pop .hx-pop__row { min-height: var(--hx-hit); }
+#hud-pop .hx-pop__row:last-child { border-bottom: 0; }
+#hud-pop .hx-pop__row .k-row__icon .ic { width: var(--icon-m); height: var(--icon-m); }
+#hud-pop .hx-pop__row.is-action .k-row__label { font-weight: var(--weight-bold); }
+#hud-pop .hx-pop__dot { line-height: 0; color: var(--primary); }
+#hud-pop .hx-pop__dot .ic { width: var(--icon-s); height: var(--icon-s); }
+
+/* ---------- #35: short screens (16:9 phones) — a slimmer bar ---------- */
+
+@media (max-height: 700px) {
+  /* Tiles and chips are 40 px plates; their hit areas still reach 48 px (they meet in the 4 px gap between the two rows). */
+  #hud .hx-top { --hx-h: calc(var(--sp-6) + var(--sp-2)); gap: var(--sp-1); padding-bottom: var(--sp-2); }
+  #hud .hx-res .k-chip { min-height: var(--hx-h); padding-block: var(--border-w) var(--sp-1); }
+  #hud .hx-res { min-height: var(--hx-h); position: relative; }
+  #hud .hx-res::after { content: ''; position: absolute; inset: calc((var(--hx-h) - var(--hx-hit)) / 2) 0; }
+  #hud .hx-chip { padding-block: 0; }
+  #hud .hx-stat__caption { display: none; }
+  #hud .hx-act__head { font-size: calc(var(--type-caption) * var(--fs, 1)); }
+}
+
+/* Large text: the tiles go 2 x 2 so the numbers keep their size. */
+#hud .hx-top.fs-big .hx-res-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+/* ---------- nav console ---------- */
+
+#hud-nav {
+  display: flex;
+  justify-content: stretch;
+  align-items: stretch;
+  gap: 0;
+  padding-block: 0 env(safe-area-inset-bottom);
+  padding-inline: env(safe-area-inset-left) env(safe-area-inset-right);
+  background: var(--surface-0);
+  border-top: var(--border-w) solid var(--border);
+  box-shadow: var(--elev-2);
+}
+#hud-nav .hx-tab {
+  position: relative;
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: calc(var(--hx-hit) + var(--sp-2));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-1);
+  margin: 0;
+  padding: var(--sp-1) 0;
+  border: 0;
+  background: none;
+  color: var(--text-secondary);
+  font: inherit;
+  cursor: pointer;
+  isolation: isolate;
+}
+/* The visible plate sits inside the key, so the gap between plates is not a dead strip. */
+#hud-nav .hx-tab::before {
+  content: '';
+  position: absolute;
+  inset: var(--sp-1) calc(var(--sp-1) / 2);
+  z-index: -1;
+  border-radius: var(--r-l);
+  background: transparent;
+  transition: background var(--dur-release) var(--ease-out);
+}
+#hud-nav .hx-tab:active::before { background: var(--surface-2); }
+#hud-nav .hx-tab:active .hx-tab__icon { transform: scale(var(--press-scale)); }
+#hud-nav .hx-tab:focus-visible { outline: none; }
+#hud-nav .hx-tab:focus-visible::before { box-shadow: inset 0 0 0 var(--ring-w) var(--primary); }
+#hud-nav .hx-tab__icon { position: relative; display: inline-flex; line-height: 0; transition: transform var(--dur-release) var(--ease-out-back); }
+#hud-nav .hx-tab__icon .ic { width: var(--icon-l); height: var(--icon-l); filter: grayscale(0.6); opacity: 0.85; }
+#hud-nav .hx-tab__label {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-title);
+  font-size: calc(var(--type-caption) * var(--fs, 1));
+  line-height: var(--lh-tight);
+}
+/* The open panel's key: icon 12 % larger, in full colour, an amber label and a bar over it (shape as well as colour). */
+#hud-nav .hx-tab[aria-current='page'] { color: var(--primary); }
+#hud-nav .hx-tab[aria-current='page']::before { background: var(--primary-glow); }
+#hud-nav .hx-tab[aria-current='page']::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  inset-inline: 25%;
+  height: var(--ring-w);
+  border-radius: var(--r-full);
+  background: var(--primary);
+}
+#hud-nav .hx-tab[aria-current='page'] .hx-tab__icon { transform: scale(1.12); }
+#hud-nav .hx-tab[aria-current='page'] .hx-tab__icon .ic { filter: none; opacity: 1; }
+#hud-nav .hx-tab[aria-current='page'] .hx-tab__label { font-weight: var(--weight-bold); }
+#hud-nav .hx-tab__badge { position: absolute; top: calc(-1 * var(--sp-1)); inset-inline-end: calc(-1 * var(--sp-3)); }
+#hud-nav .hx-tab--menu { flex: 0.8 1 0; }
+
+@media (max-height: 700px) {
+  #hud-nav .hx-tab { min-height: var(--hx-hit); padding: 0; flex-direction: row; gap: var(--sp-1); }
+  #hud-nav .hx-tab__icon .ic { width: var(--icon-m); height: var(--icon-m); }
+}
+@media (max-height: 700px) and (max-width: 420px) {
+  #hud-nav .hx-tab { flex-direction: column; gap: 0; }
+}
+
+/* ---------- landscape phone: the bar and the console become side columns (touch.css sets the columns) ---------- */
+
+@media (pointer: coarse) and (orientation: landscape) and (max-height: 499px) {
+  #hud .hx-top { position: fixed; background: linear-gradient(to right, var(--surface-0) 80%, transparent); }
+  #hud .hx-res-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  #hud .hx-info { flex-wrap: wrap; }
+  #hud .hx-more { position: static; translate: none; align-self: center; }
+  #hud-nav { flex-direction: column; justify-content: center; border-top: 0; border-inline-start: var(--border-w) solid var(--border); }
+  #hud-nav .hx-tab { flex: 0 1 auto; width: 100%; }
+}
+
+/* ---------- accessibility layers ---------- */
+
+:root[data-motion='reduced'] #hud .hx-res .k-chip.is-danger { animation: none; box-shadow: 0 0 0 var(--ring-w) var(--danger); }
+:root[data-motion='reduced'] #hud-pop { animation: none; }
+:root[data-motion='reduced'] #hud-nav .hx-tab[aria-current='page'] .hx-tab__icon { transform: none; }
+@media (prefers-reduced-motion: reduce) {
+  :root:not([data-motion]) #hud .hx-res .k-chip.is-danger { animation: none; box-shadow: 0 0 0 var(--ring-w) var(--danger); }
+}
+:root[data-contrast='high'] #hud .hx-top { background: var(--surface-0); }
+:root[data-contrast='high'] #hud .hx-res .k-chip,
+:root[data-contrast='high'] #hud .hx-chip,
+:root[data-contrast='high'] #hud-nav .hx-tab::before { border: calc(var(--border-w) * 2) solid var(--text-secondary); }
+:root[data-contrast='high'] #hud .hx-res .k-chip__amount { color: var(--text-primary); }
+:root[data-large='on'] #hud .hx-info { gap: var(--sp-2); }
