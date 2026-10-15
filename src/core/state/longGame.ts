@@ -25,6 +25,11 @@ export interface MetaState {
   legacy: boolean;
   /** [P3-5, save v6] Bunkers of earlier timelines that still send part of the income home (see data/scenarios.ts). */
   homes: { scenario: string; act: number; run: number; ending?: string }[];
+  /**
+   * [phase3] The Act whose stores were last settled (ResourceSystem.settleActStock: stock above the cap drops to it when the Act
+   * changes). Absent in older saves and new games: the first tick then only trims piles above OVERFILL_CAPS times the cap.
+   */
+  stockAct?: number;
 }
 
 /** [Economy lane] Digging a new floor: paid in stages, takes time and a crew. */

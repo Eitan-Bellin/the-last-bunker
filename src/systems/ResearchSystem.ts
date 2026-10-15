@@ -1,4 +1,5 @@
 import { loreBonus } from '../data/lore';
+import { forkOpen } from '../data/acts';
 import { projectQueueSlots, projectRefineDiscount, projectResourceBonus } from '../data/projects'; // [LateGame B1]
 import type { BuildingType, GameState, ResourceType } from '../core/GameState';
 import type { StateManager } from '../core/StateManager';
@@ -130,6 +131,7 @@ export class ResearchSystem {
     const def = getResearch(id);
     if (!def) return null;
     if (def.act && (state.longGame?.meta.act ?? 99) < def.act) return 'act';
+    if (def.fork && !forkOpen(state, def.fork)) return 'act'; // [phase3] the unlock schedule
     if (def.fork) {
       const pending = new Set([this.activeId(state), ...this.queue(state)]);
       const taken = RESEARCH.find(r => r.fork === def.fork && r.id !== id && (isResearched(state, r.id) || pending.has(r.id)));
@@ -244,6 +246,7 @@ export class ResearchSystem {
     const def = this.defOf(state, id);
     if (!def || state.research[id]?.completed || state.research[id]?.isResearching || this.queue(state).includes(id)) return false;
     if (!this.requirementsMet(state, def) || this.blockReason(state, id) || this.surplusHidden(state, id)) return false;
+    if (!baseStands(state)) return false; // [phase3] the first minutes: one thing at a time
     if (this.activeId(state) && this.queue(state).length >= this.queueSlots(state)) return false;
     return this.resources.canAfford(state, def.cost as Record<string, number>);
   }
@@ -368,4 +371,14 @@ export class ResearchSystem {
     const def = getDef(type);
     return def?.name[locale] ?? def?.name.en ?? type;
   }
+}
+
+/**
+ * [phase3] "The base stands" (same rule as ObjectiveSystem.baseStands, kept here to avoid an import cycle): research waits until the
+ * generator, the pump and the farm work and are staffed. A bunker that already researched or sent a team never locks again.
+ */
+function baseStands(s: GameState): boolean {
+  if (s.stats.totalMissionsCompleted > 0 || Object.values(s.research).some(r => r.completed || r.isResearching)) return true;
+  const works = (t: BuildingType) => s.buildings.some(b => b.type === t && !(b.isConstructing && b.level === 1) && b.assignedSurvivorIds.length > 0);
+  return works('generator') && works('waterPump') && works('farm');
 }

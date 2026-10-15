@@ -6,10 +6,10 @@ import type { BuildingInstance, GameState, ResourceType, ResourceState } from '.
 import type { StateManager, StateDelta } from '../core/StateManager';
 import { getDef, effectiveLevel, levelMultiplier, shapeFactor, synergyTable, workforceMultiplier } from '../data/buildingDefs';
 import { researchBuildingMult, researchCapBonus, researchResourceMult } from './ResearchSystem';
-import { chainFactor, chainInputs, inputFed, inputRate } from '../data/chains';
+import { SURPLUS_BAND, SURPLUS_RESERVE, SURPLUS_DRAIN_SECONDS, chainFactor, chainInputs, inputFed, inputRate, surplusShare } from '../data/chains';
 import { incidentBlocks } from '../data/incidents';
 import { specOf } from '../data/specializations';
-import { BASE_CAPS, OVERFLOW_CREDITS, POWER_FLOOR, TICKED_RESOURCES } from '../data/resources';
+import { BASE_CAPS, OVERFLOW_CREDITS, POWER_FLOOR, TICKED_RESOURCES, resourceDef } from '../data/resources';
 import { modifierBreakdown, modifierProduct, prepareModifiers, registerModifier } from './modifiers';
 import { difficultyOf } from '../data/difficulty';
 import { actCapBonus } from '../data/pricing';
@@ -18,6 +18,8 @@ import { scenarioOf } from '../data/scenarios';
 import { infraPowerDraw } from './InfraSystem'; // plan4:ST-14/15
 import { isTier2 } from './economy';
 import { moraleOutputMult, moraleRawAverage, worldClock } from './morale';
+import { CONTRACT_CREDITS } from '../data/shop';
+import { actCreditScale } from '../data/orders';
 
 const EMERGENCY_EFFICIENCY = 0.25;
 /**
@@ -29,6 +31,19 @@ const ACT1_BUFFERED: ResourceType[] = ['food', 'water', 'knowledge'];
 export const OVERFILL_CAPS = 3;
 const FOOD_PER_SURVIVOR = 0.08;
 const WATER_PER_SURVIVOR = 0.08;
+
+/**
+ * [phase3] How much more a person eats and drinks in this Act than in Act I: TUNING.appetitePerAct per Act, the step to the new
+ * Act coming in over TUNING.appetiteRampHours of world time.
+ */
+export function actAppetite(state: GameState): number {
+  const meta = state.longGame?.meta;
+  const act = Math.max(1, meta?.act ?? 1);
+  if (act <= 1) return 1;
+  const k = TUNING.appetitePerAct;
+  const ramp = TUNING.appetiteRampHours > 0 ? Math.min(1, Math.max(0, ((meta?.worldT ?? 0) - (meta?.actSince ?? 0)) / (TUNING.appetiteRampHours * 3600))) : 1;
+  return Math.pow(k, act - 2) * (1 + (k - 1) * ramp);
+}
 
 // Blackout floors, base storage and overflow values live in the resource table (src/data/resources.ts).
 export { BASE_CAPS, OVERFLOW_CREDITS } from '../data/resources';
@@ -132,6 +147,7 @@ export class ResourceSystem {
   update(sm: StateManager, dt: number): void {
     const state = sm.state;
     const caps = this.computeCaps(state);
+    this.settleActStock(sm, caps);
     prepareModifiers(state);
 
     let powerProd = 0;
@@ -168,7 +184,7 @@ export class ResourceSystem {
       }
     }
 
-    const appetite = difficultyOf(state).consumption * lawAppetite(state);
+    const appetite = difficultyOf(state).consumption * lawAppetite(state) * actAppetite(state); // [phase3] x per Act
     for (const s of state.survivors) {
       if (s.isOnMission) continue;
       const glutton = s.traits.includes('glutton') ? 2 : 1;
@@ -178,9 +194,12 @@ export class ResourceSystem {
     }
 
     // Production chains draw their inputs; specialized rooms add their side products.
+    const surplusDraw: Partial<Record<ResourceType, number>> = {};
     for (const b of state.buildings) {
       if (effectiveLevel(b) <= 0 || incidentBlocks(state, b)) continue;
-      for (const input of chainInputs(b)) {
+      for (const input of chainInputs(b, state)) {
+        // [phase3] Surplus draws are summed here and served below, from what is left over.
+        if (input.surplus) { surplusDraw[input.resource] = (surplusDraw[input.resource] ?? 0) + inputRate(input, b); continue; }
         if (inputFed(state, input)) consumption[input.resource] = (consumption[input.resource] ?? 0) + inputRate(input, b) * (1 - inputSaving(b, input.resource));
       }
       const spec = specOf(b);
@@ -190,6 +209,29 @@ export class ResourceSystem {
     }
 
     const deltas: StateDelta[] = [];
+    // [phase3] Surplus feeds the Act: each basic's surplus draw gets the share the bunker can spare: the net surplus (passed on in
+    // full once the store is a band above the reserve) plus the stock above the reserve, fed over SURPLUS_DRAIN_SECONDS.
+    // It is kept out of consumptionRate (that stays "what the bunker needs", so a store fed to the Act rooms never reads as short)
+    // and reported as resources.<r>.surplusRate instead.
+    const shares: Partial<Record<ResourceType, number>> = {};
+    const surplusUse: Partial<Record<ResourceType, number>> = {};
+    for (const [r, draw] of Object.entries(surplusDraw) as [ResourceType, number][]) {
+      if (!(draw > 0)) continue;
+      const res = state.resources[r];
+      const cap = caps[r] ?? res?.cap ?? 0;
+      const reserve = cap * SURPLUS_RESERVE;
+      const above = Math.max(0, (res?.amount ?? 0) - reserve);
+      const net = (production[r] ?? 0) - (consumption[r] ?? 0);
+      const band = Math.min(1, above / Math.max(1, cap * SURPLUS_BAND));
+      const share = Math.min(1, (Math.max(0, net) * band + above / SURPLUS_DRAIN_SECONDS) / draw);
+      if (share <= 1e-4) continue;
+      shares[r] = +share.toFixed(4);
+      surplusUse[r] = draw * shares[r]!;
+    }
+    const prevShares = state.surplusShare ?? {};
+    if (Object.keys(shares).length !== Object.keys(prevShares).length || Object.entries(shares).some(([r, v]) => prevShares[r as ResourceType] !== v)) {
+      deltas.push({ path: 'surplusShare', value: shares });
+    }
     // [plan4:BL-25] The pre-war vault makes blueprints: whole numbers and not a ticked resource, so the fraction builds up in stats.planDust and each whole plan moves over.
     const plans = production.blueprints ?? 0;
     if (plans > 0) {
@@ -202,13 +244,14 @@ export class ResourceSystem {
       const res = state.resources[rt];
       const prod = production[rt] ?? 0;
       const cons = consumption[rt] ?? 0;
+      const use = surplusUse[rt] ?? 0; // [phase3]
       const cap = caps[rt] ?? res.cap;
-      const raw = res.amount + (prod - cons) * dt;
+      const raw = res.amount + (prod - cons - use) * dt;
       // [ux-wp2 R1] Stock above the cap (a reward that came in "overfilled") is kept until it is used; production never adds to it.
       const hold = Math.max(cap, res.amount);
       const newAmount = Math.max(0, Math.min(hold, raw));
       // [Economy A1/A3] Production beyond the cap is not thrown away: a project may absorb it first, the rest becomes credits.
-      const over = Math.min(raw - hold, (prod - cons) * dt);
+      const over = Math.min(raw - hold, (prod - cons - use) * dt);
       if (over > 1e-9 && OVERFLOW_CREDITS[rt]) this.convertOverflow(state, rt, over, deltas);
       deltas.push(
         { path: `resources.${rt}.amount`, value: newAmount },
@@ -216,8 +259,10 @@ export class ResourceSystem {
         { path: `resources.${rt}.consumptionRate`, value: cons },
         { path: `resources.${rt}.cap`, value: cap },
       );
+      if (use > 0 || res.surplusRate) deltas.push({ path: `resources.${rt}.surplusRate`, value: use });
     }
     this.flushCredits(state, deltas);
+    this.payContracts(state, deltas);
     deltas.push({ path: 'powerRatio', value: powerRatio });
     // [phase1] When the lights went out (the darkness morale penalty ramps in from here, see darknessPenalty).
     const dark = powerRatio < 0.99;
@@ -255,9 +300,49 @@ export class ResourceSystem {
       if (used > 0) { left -= used; log.absorbed += used; }
     }
     if (left <= 0) return;
+    // [phase3] After Act I the basics earn no credits: what the project did not take is not "converted" (the welcome-back report
+    // counts it as wasted).
+    if (resourceDef(rt)?.tier === 1 && (state.longGame?.meta.act ?? 1) > TUNING.basicOverflowCreditsLastAct) return;
     log.converted += left;
     // [Q10] From Act IV the overflow is worth a quarter: credits piled up (median 126K a return) with nothing worth buying.
     this.pendingCredits += left * (OVERFLOW_CREDITS[rt] ?? 0) * ((state.longGame?.meta.act ?? 1) >= TUNING.overflowDecayAct ? TUNING.overflowDecay : 1);
+  }
+
+  /**
+   * [phase3] When the Act changes, stock held above its cap (old overflow, Act I's production-sized stores) drops to the cap, so no
+   * six-figure pile carries into the new Act. A save from before this rule only has its pile cut to OVERFILL_CAPS times the cap
+   * (what a reward may overfill) on its first tick. The Act last settled is kept in longGame.meta.stockAct.
+   */
+  private settleActStock(sm: StateManager, caps: Partial<Record<ResourceType, number>>): void {
+    const meta = sm.state.longGame?.meta;
+    if (!meta || meta.stockAct === meta.act) return;
+    const share = meta.stockAct === undefined ? OVERFILL_CAPS : 1;
+    const deltas: StateDelta[] = [{ path: 'longGame.meta.stockAct', value: meta.act }];
+    for (const rt of TICKED_RESOURCES) {
+      if (rt === 'power') continue;
+      const res = sm.state.resources[rt];
+      const cap = caps[rt] ?? res?.cap ?? 0;
+      if (!res || !(cap > 0)) continue;
+      const limit = cap * share;
+      if (res.amount > limit) deltas.push({ path: `resources.${rt}.amount`, value: limit });
+    }
+    sm.applyDeltas(deltas);
+  }
+
+  /**
+   * [phase3] Every finished contract (stats.contractsDone, counted by ContractSystem online and away) pays CONTRACT_CREDITS at the
+   * Act's credit scale. stats.contractsPaid remembers how many were paid; a save without it starts from its current count (no back pay).
+   */
+  private payContracts(state: GameState, deltas: StateDelta[]): void {
+    const done = state.stats.contractsDone ?? 0;
+    const paid = state.stats.contractsPaid;
+    if (paid === done) return;
+    deltas.push({ path: 'stats.contractsPaid', value: done });
+    if (paid === undefined || done <= paid) return;
+    // After flushCredits: read what it already added this tick.
+    const flushed = deltas.filter(d => d.path === 'resources.credits.amount').pop()?.value as number | undefined;
+    const pay = Math.round((done - paid) * CONTRACT_CREDITS * actCreditScale(state));
+    deltas.push({ path: 'resources.credits.amount', value: (flushed ?? state.resources.credits?.amount ?? 0) + pay });
   }
 
   private flushCredits(state: GameState, deltas: StateDelta[]): void {
@@ -312,12 +397,14 @@ export class ResourceSystem {
       }
       add(src, b.type, v + flat);
       if (v > 0 && (!top || v > top.v)) top = { b, v };
-      if (!incidentBlocks(state, b)) for (const input of chainInputs(b)) {
-        if (input.resource === r && inputFed(state, input)) add(snk, b.type, inputRate(input, b) * (1 - inputSaving(b, input.resource)));
+      if (!incidentBlocks(state, b)) for (const input of chainInputs(b, state)) {
+        if (input.resource !== r) continue;
+        if (input.surplus) add(snk, b.type, inputRate(input, b) * surplusShare(state, r)); // [phase3]
+        else if (inputFed(state, input)) add(snk, b.type, inputRate(input, b) * (1 - inputSaving(b, input.resource)));
       }
     }
     if (r === 'food' || r === 'water') {
-      const appetite = difficultyOf(state).consumption * lawAppetite(state);
+      const appetite = difficultyOf(state).consumption * lawAppetite(state) * actAppetite(state); // [phase3]
       let people = 0;
       for (const s of state.survivors) {
         if (s.isOnMission) continue;

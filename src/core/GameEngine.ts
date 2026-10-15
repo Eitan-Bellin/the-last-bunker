@@ -330,7 +330,7 @@ export class GameEngine {
           // Whatever the rooms made beyond the cap this step was thrown away.
           if (waste && pre) WASTE_TRACKED.forEach((r, i) => {
             const res = sm.state.resources[r];
-            const lost = pre[i] + (res.productionRate - res.consumptionRate) * dt * eff - res.amount;
+            const lost = pre[i] + (res.productionRate - res.consumptionRate - (res.surplusRate ?? 0)) * dt * eff - res.amount; // [phase3] surplusRate
             if (lost > 0.001 && res.amount >= res.cap - 0.001) waste[r] = (waste[r] ?? 0) + lost;
           });
         },

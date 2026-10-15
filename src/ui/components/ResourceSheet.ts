@@ -7,6 +7,7 @@ import { resourceDef } from '../../data/resources';
 import { BUILDING_ICONS, RESOURCE_ICONS, el } from '../dom';
 import { Sheet } from './Sheet';
 import { bindPress } from '../kit';
+import { lifeSupportOk } from '../HUD'; // [phase3]
 
 /** [phase2] The stores the switcher row offers (the HUD's four tiles and its overflow), in the HUD's order; an Act opens the later ones. */
 const SWITCH: ResourceType[] = ['food', 'water', 'power', 'materials', 'medicine', 'knowledge', 'scrap', 'components', 'alloys', 'data', 'influence', 'seedCores'];
@@ -72,6 +73,8 @@ export class ResourceSheet {
     if (net > 0.005 && isFinite(res.cap) && res.cap > res.amount) head.appendChild(this.row(i18n.t('res.full'), fmtDuration((res.cap - res.amount) / net)));
     if (net < -0.005 && res.amount > 0) head.appendChild(this.row(i18n.t('res.empty'), fmtDuration(res.amount / -net), 'negative'));
     if (res.amount >= res.cap - 0.5 && net > 0.005) head.appendChild(el('div', 'bp-hint', `[[storage]] ${i18n.t('res.atCap')}`));
+    // [phase3] Why the HUD folds this store into the life-support tile (it makes twice what is used and holds 30 minutes of it).
+    if ((r === 'food' || r === 'water' || r === 'power') && lifeSupportOk(state, r)) head.appendChild(el('div', 'bp-hint', `[[heart]] ${i18n.t('p3p.life.sheet')}`));
     root.appendChild(head);
 
     const list = (title: string, items: { key: string; value: number; count: number }[], sign: string) => {

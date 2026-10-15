@@ -1,4 +1,5 @@
 import type { GameState, ResourceType } from '../core/GameState';
+import { systemOpen } from './acts';
 
 /**
  * [LateGame B2] Trade with the settlements the story has made friends with.
@@ -106,7 +107,7 @@ export function getPartner(id: string | null | undefined): PartnerDef | undefine
 }
 
 export function partnerOpen(state: GameState, p: PartnerDef): boolean {
-  return p.flags.some(f => state.storyFlags.includes(f));
+  return p.flags.some(f => state.storyFlags.includes(f)) && systemOpen(state, 'caravans'); // [phase3] the unlock schedule
 }
 
 export function openPartners(state: GameState): PartnerDef[] {

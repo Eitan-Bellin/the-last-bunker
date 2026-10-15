@@ -3,6 +3,39 @@ import type { IconName } from '../ui/icons';
 import type { ChainInput } from './chains';
 
 /**
+ * [phase3] "Surplus feeds the Act": the rooms that make the Act's currency also burn the basics, but only the surplus: what the
+ * bunker makes beyond what it uses, plus slowly what is stored above 90% of the store (chains.ts surplusShare; nobody goes hungry for
+ * it). The draw is large on purpose: a bunker with a small surplus covers part of it and the room's output rises in step, so one more
+ * farm or pump means more of the Act currency, until the draw is met.
+ * Rates are per second at level 1 (perLevel as every chain input). Shared by the Act rooms (chains.ts CHAIN_INPUTS) and the roles below.
+ */
+export const SURPLUS = {
+  /** Act II on: workshops run on rations, coolant, power tools and manuals (the Act II currency is materials). */
+  workshopFood: { resource: 'food', base: 20, perLevel: 0.3, boost: true, surplus: true, mult: 1.15, fromAct: 2 },
+  workshopWater: { resource: 'water', base: 15, perLevel: 0.3, boost: true, surplus: true, mult: 1.1, fromAct: 2 },
+  workshopPower: { resource: 'power', base: 100, perLevel: 0.3, boost: true, surplus: true, mult: 1.1, fromAct: 2 },
+  workshopKnowledge: { resource: 'knowledge', base: 4, perLevel: 0.3, boost: true, surplus: true, mult: 1.05, fromAct: 2 },
+  /** Act III components (on top of the workshop's own draws for the assembly line): crews, cooled presses, power. */
+  componentsFood: { resource: 'food', base: 50, perLevel: 0.3, boost: true, surplus: true, mult: 1.1 },
+  componentsWater: { resource: 'water', base: 40, perLevel: 0.3, boost: true, surplus: true, mult: 1.05 },
+  componentsPower: { resource: 'power', base: 200, perLevel: 0.3, boost: true, surplus: true, mult: 1.05 },
+  /** Act IV alloys: the water quench. Power only for the Alloy Foundry room: the Arc Furnace role sits on a generator, whose own output the boost would lift. */
+  alloysWater: { resource: 'water', base: 50, perLevel: 0.3, boost: true, surplus: true, mult: 1.2 },
+  alloysPower: { resource: 'power', base: 300, perLevel: 0.3, boost: true, surplus: true, mult: 1.1 },
+  /** Act V data: servers draw power and cooling water. */
+  dataPower: { resource: 'power', base: 500, perLevel: 0.3, boost: true, surplus: true, mult: 1.2 },
+  dataWater: { resource: 'water', base: 40, perLevel: 0.3, boost: true, surplus: true, mult: 1.1 },
+  /** Act VI influence: the council's feasts, in a lit hall. */
+  influenceFood: { resource: 'food', base: 60, perLevel: 0.3, boost: true, surplus: true, mult: 1.2 },
+  influenceWater: { resource: 'water', base: 40, perLevel: 0.3, boost: true, surplus: true, mult: 1.1 },
+  influencePower: { resource: 'power', base: 400, perLevel: 0.3, boost: true, surplus: true, mult: 1.1 },
+  /** Act VII seed cores: growing beds (power only for the Seed Lab room: the Seed Forge role sits on a reactor). */
+  seedWater: { resource: 'water', base: 60, perLevel: 0.3, boost: true, surplus: true, mult: 1.2 },
+  seedFood: { resource: 'food', base: 60, perLevel: 0.3, boost: true, surplus: true, mult: 1.1 },
+  seedPower: { resource: 'power', base: 500, perLevel: 0.3, boost: true, surplus: true, mult: 1.1 },
+} as const satisfies Record<string, ChainInput>;
+
+/**
  * Room specialization (Sprint 6): a room at its top level can be fitted out for one of two roles.
  * The choice is permanent for that room and changes how it pulls its weight.
  */
@@ -96,7 +129,7 @@ export const SPECIALIZATIONS: SpecDef[] = [
     // [Long game] Tier 2: alloys, the currency of Act IV. The furnace burns most of the generator's own power.
     id: 'arcFurnace', type: 'generator', icon: 'fire', act: 4, outputMult: 0.4, levelScaled: true, risk: 1.5,
     extra: { alloys: 0.012 },
-    inputs: [{ resource: 'materials', base: 0.4, perLevel: 0.4 }, { resource: 'scrap', base: 0.04, perLevel: 0.3 }],
+    inputs: [{ resource: 'materials', base: 0.4, perLevel: 0.4 }, { resource: 'scrap', base: 0.04, perLevel: 0.3 }, SURPLUS.alloysWater], // [phase3] + surplus
     name: { he: 'כבשן קשת', en: 'Arc Furnace' },
     desc: { he: 'מתיך חומרים וגרוטאות לסגסוגות · 40% מהחשמל', en: 'Smelts materials and scrap into alloys · 40% of the power' },
   },
@@ -112,7 +145,7 @@ export const SPECIALIZATIONS: SpecDef[] = [
     // [Long game] Tier 2: components, the currency of Act III. The line eats scrap and leaves less raw materials.
     id: 'assemblyLine', type: 'workshop', icon: 'settings', act: 3, outputMult: 0.6, levelScaled: true,
     extra: { components: 0.03 },
-    inputs: [{ resource: 'scrap', base: 0.05, perLevel: 0.3 }],
+    inputs: [{ resource: 'scrap', base: 0.05, perLevel: 0.3 }, SURPLUS.componentsFood, SURPLUS.componentsWater, SURPLUS.componentsPower], // [phase3] + surplus
     name: { he: 'פס הרכבה', en: 'Assembly Line' },
     desc: { he: 'מייצר רכיבים מגרוטאות · 60% מהחומרים', en: 'Makes components from scrap · 60% of the materials' },
   },
@@ -120,7 +153,7 @@ export const SPECIALIZATIONS: SpecDef[] = [
     // [P5] Data: the archive of the new world, mined from the lab's knowledge.
     id: 'dataVault', type: 'laboratory', icon: 'knowledge', act: 5, outputMult: 0.5, levelScaled: true,
     extra: { data: 0.006 },
-    inputs: [{ resource: 'knowledge', base: 0.3, perLevel: 0.3 }],
+    inputs: [{ resource: 'knowledge', base: 0.3, perLevel: 0.3 }, SURPLUS.dataPower, SURPLUS.dataWater], // [phase3] + surplus
     name: { he: 'כספת נתונים', en: 'Data Vault' },
     desc: { he: 'הופך ידע לנתונים · 50% מהידע', en: 'Turns knowledge into data · 50% of the knowledge' },
   },
@@ -128,7 +161,7 @@ export const SPECIALIZATIONS: SpecDef[] = [
     // [P5] Influence: where the bunker meets its neighbours and decides together.
     id: 'councilHall', type: 'canteen', icon: 'chat', act: 6, levelScaled: true,
     extra: { influence: 0.004 },
-    inputs: [{ resource: 'food', base: 0.3, perLevel: 0.3 }],
+    inputs: [{ resource: 'food', base: 0.3, perLevel: 0.3 }, SURPLUS.influenceFood, SURPLUS.influenceWater, SURPLUS.influencePower], // [phase3] + surplus
     name: { he: 'אולם המועצה', en: 'Council Hall' },
     desc: { he: 'מייצר השפעה מארוחות משותפות עם השכנים', en: 'Makes influence from shared meals with the neighbours' },
   },
@@ -136,7 +169,7 @@ export const SPECIALIZATIONS: SpecDef[] = [
     // [P5] Seed cores: the matter of the next world, forged from the bunker's best goods.
     id: 'seedForge', type: 'reactor', icon: 'isotope7', act: 7, outputMult: 0.5, levelScaled: true, risk: 1.5,
     extra: { seedCores: 0.0025 },
-    inputs: [{ resource: 'alloys', base: 0.006, perLevel: 0.2 }, { resource: 'data', base: 0.004, perLevel: 0.2 }],
+    inputs: [{ resource: 'alloys', base: 0.006, perLevel: 0.2 }, { resource: 'data', base: 0.004, perLevel: 0.2 }, SURPLUS.seedWater, SURPLUS.seedFood], // [phase3] + surplus
     name: { he: 'כור זרעים', en: 'Seed Forge' },
     desc: { he: 'מתיך סגסוגות ונתונים לליבות זרע · 50% מהחשמל', en: 'Fuses alloys and data into seed cores · 50% of the power' },
   },

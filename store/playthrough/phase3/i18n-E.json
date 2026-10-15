@@ -1,0 +1,14 @@
+{
+  "en": {},
+  "he": {},
+  "replace": {
+    "en": {
+      "shop.intro": "Trade credits come from daily orders and finished contracts. Trade them for things that are hard to find.",
+      "res.atCap": "Storage is full: the extra feeds the active project, and the Act's rooms use what is spare."
+    },
+    "he": {
+      "shop.intro": "זיכויי סחר מגיעים מהזמנות יומיות ומחוזים שהושלמו. אפשר להחליף אותם בדברים שקשה להשיג.",
+      "res.atCap": "המחסן מלא: העודף מזין את הפרויקט הפעיל, וחדרי המערכה משתמשים במה שנשאר."
+    }
+  }
+}

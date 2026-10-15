@@ -14,7 +14,11 @@ export interface ResourceDef {
   ticked: boolean;
   /** Storage before any room or research adds to it. */
   baseCap?: number;
-  /** [Economy A1] Trade credits per unit of storage overflow (power is never stored, so it never converts). */
+  /**
+   * [Economy A1] Trade credits per unit of storage overflow (power is never stored, so it never converts). [phase3] The tier-1
+   * basics convert only up to TUNING.basicOverflowCreditsLastAct (Act I); from then on their overflow still feeds the active project
+   * and the rest is lost: credits come from daily orders and contracts.
+   */
   overflowCredits?: number;
   /** S3: share of output a room keeps in a blackout (farms and pumps 70%, workshops 50%: hand tools). */
   powerFloor?: number;

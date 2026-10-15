@@ -461,7 +461,7 @@
   "welcome.toShop": "To the shop",
   "shop.tab": "Shop",
   "shop.balance": "You have {n} Trade credits",
-  "shop.intro": "Overflow that doesn't fit in storage turns into credits. Trade them for things that are hard to find.",
+  "shop.intro": "Trade credits come from daily orders and finished contracts. Trade them for things that are hard to find.",
   "shop.ramp": "Each purchase makes the same item 10% dearer until midnight.",
   "shop.cantBuy": "Can't buy that right now",
   "shop.weekLeft": "Left this week: {n}",
@@ -1454,7 +1454,7 @@
   "res.net": "Net change",
   "res.full": "Full in",
   "res.empty": "Empty in",
-  "res.atCap": "Storage is full: the extra turns into trade credits or feeds the active project.",
+  "res.atCap": "Storage is full: the extra feeds the active project, and the Act's rooms use what is spare.",
   "res.none": "Nothing right now",
   "res.sources": "Made by",
   "res.sinks": "Used by",
@@ -2014,5 +2014,11 @@
   "p2s.research.needRoom": "Your first research needs {n} {icon} {name}: build a {room}.",
   "p2s.research.build": "Build a {room}",
   "p2s.research.wait": "Your first research is close. {what}",
-  "p2s.research.soon": "Almost there."
+  "p2s.research.soon": "Almost there.",
+  "p3p.life.ok": "OK",
+  "p3p.life.short": "Life support",
+  "p3p.life.title": "Life support: food, water and power are fine",
+  "p3p.life.label": "Life support OK: {list} make at least twice what is used. Tap for details",
+  "p3p.life.sheet": "Life support: this makes at least twice what is used and holds 30 minutes of it, so the top bar folds it into one tile. Its own tile comes back the moment it runs short.",
+  "p3p.lock.base": "Opens once the generator, the pump and the farm are working"
 }

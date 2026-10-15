@@ -16,8 +16,8 @@ export function refIncome(act: number): number {
 }
 
 /**
- * The price of `hours` of Act `act`'s income. From Act III on, part of the price is still asked in the earlier
- * currencies (materials, then components), so the older goods keep a use.
+ * The price of `hours` of Act `act`'s income. From Act III on, part of the price is still asked in materials ([phase3] only:
+ * the older tier-2 goods are no longer asked, so a price lists at most two goods).
  */
 export function actPrice(act: number, hours: number): Record<string, number> {
   const a = Math.max(1, act);
@@ -25,7 +25,7 @@ export function actPrice(act: number, hours: number): Record<string, number> {
   const out: Record<string, number> = {};
   const add = (r: ResourceType, v: number) => { if (v >= 1) out[r] = (out[r] ?? 0) + Math.round(v); };
   add(ACT_CURRENCY[a], hours * refIncome(a));
-  if (a >= 3) add('materials', hours * refIncome(2) * TUNING.olderCurrencyShare);
+  if (a >= 3) add('materials', hours * refIncome(2) * TUNING.materialsShare); // [phase3] materials keep their share; the older tier-2 goods do not
   if (a >= 4) add('components', hours * refIncome(3) * TUNING.olderCurrencyShare);
   if (a >= 5) add('alloys', hours * refIncome(4) * TUNING.olderCurrencyShare);
   if (a >= 6) add('data', hours * refIncome(5) * TUNING.olderCurrencyShare);
@@ -42,7 +42,7 @@ export function actBundle(act: number, hours: number): Partial<Record<ResourceTy
   const out: Partial<Record<ResourceType, number>> = {};
   const add = (r: ResourceType, v: number) => { if (v >= 1) out[r] = (out[r] ?? 0) + Math.round(v); };
   add(ACT_CURRENCY[a], hours * refIncome(a));
-  if (a >= 3) add('materials', hours * refIncome(2) * TUNING.olderCurrencyShare);
+  if (a >= 3) add('materials', hours * refIncome(2) * TUNING.materialsShare); // [phase3] materials keep their share; the older tier-2 goods do not
   if (a >= 4) add('components', hours * refIncome(3) * TUNING.olderCurrencyShare);
   if (a >= 5) add('alloys', hours * refIncome(4) * TUNING.olderCurrencyShare);
   if (a >= 6) add('data', hours * refIncome(5) * TUNING.olderCurrencyShare);
