@@ -7,6 +7,7 @@ import { HUB_FLIGHTS_PER_FLOOR, HUB_STAIR_AMP, hubStairFor } from '../world/nav/
 import { GFX } from './gfxFeatures';
 import { occupancy } from './occupancy';
 import { ANNEX_X, hasAnnex, voidBoundaries } from './voids';
+import { planCityRoute } from '../world/nav/graph';
 
 /**
  * [plan4:ST-18] Route planning for people walking between rooms, floors and the lift. Purely cosmetic (decision D4): nothing here
@@ -23,7 +24,8 @@ export const LEG_LIFT = 1;
 export const LEG_STAIRS = 2;
 export const LEG_LADDER = 3;
 
-export const MAX_WP = 16;
+/** [world:M2] 32 (was 16): a city trip through a gallery transfer has more legs; classic plans never reach 16. */
+export const MAX_WP = 32;
 
 export class Route {
   n = 0;
@@ -62,10 +64,15 @@ export const STAIR_SPEED = 22;
 export const LADDER_SPEED = 15;
 /** Longest trip we draw; anything slower is not worth watching and the survivor just appears. */
 export const MAX_TRIP_S = 60;
+/**
+ * [world:M2 camera-nav] The same cap in the city (nav graph): the hub and its two vestibules make every crossing of the spine ~130 units (4-9 s)
+ * longer than in the classic tower, so a far-east to far-east trip between strata with wide frames needs a little more to stay drawn.
+ */
+export const CITY_MAX_TRIP_S = 75;
 /** [world:C1] City: share of one- and two-storey hops (with the lift running) that take the hub stairs instead; the atrium is built to be walked. */
 export const CITY_HUB_STAIR_SHARE = 0.5;
 /** Rough wait for the lift to come, load and arrive, in seconds (the car's trip itself takes ~2 s whatever the distance). */
-const LIFT_EST_S = 10;
+export const LIFT_EST_S = 10;
 
 /** Where people stand to wait for and board the lift (the middle of the car), and where the shaft ladder is. */
 export const LANDING_X = SHAFT_W / 2;
@@ -192,6 +199,11 @@ export function towerColumnX(state: GameState, lo: number, hi: number, nearX: nu
 export const SCRATCH = new Route();
 
 function push(r: Route, kind: number, floor: number, x: number, y: number): void {
+  pushWaypoint(r, kind, floor, x, y);
+}
+
+/** [world:M2] Appends a waypoint (the nav graph emits through it; walkers.ts keeps its own copy). */
+export function pushWaypoint(r: Route, kind: number, floor: number, x: number, y: number): void {
   const i = r.n++;
   r.kind[i] = kind;
   r.floor[i] = floor;
@@ -205,7 +217,7 @@ function push(r: Route, kind: number, floor: number, x: number, y: number): void
  * Adds a walk along the current floor to x (skipped when already there). False when a closed door is in the way. [airy2:D1] With the corridor on, a walk of any length
  * steps out of the room onto the lane of the front corridor, follows it, and steps back in at the other end (`yEnd`: the line of the room, the tower's landing...).
  */
-function walkTo(r: Route, x: number, yEnd?: number): boolean {
+export function walkTo(r: Route, x: number, yEnd?: number): boolean {
   const i = r.n - 1;
   const f = r.floor[i];
   const y1 = yEnd ?? r.y[i];
@@ -303,6 +315,11 @@ function hop(r: Route, state: GameState, toFloor: number, liftOk: boolean, rnd: 
  * `liftOk` is whether the lift is running (power, the cage lift exists, at least two floors); with it off only stairs and the ladder remain.
  */
 export function route(state: GameState, from: Stop, to: Stop, liftOk: boolean, rnd: number, out: Route = SCRATCH): Route | null {
+  // [world:M2 camera-nav] City: the nav graph (src/world/nav/graph.ts) plans every trip it covers; classic never gets here.
+  if (PROJECTION === 'city') {
+    const c = planCityRoute(state, from, to, liftOk, rnd, out);
+    if (c !== undefined) return c;
+  }
   out.n = 0;
   out.seconds = 0;
   push(out, LEG_WALK, from.floor, from.x, from.y);

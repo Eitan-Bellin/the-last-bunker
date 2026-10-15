@@ -24,6 +24,7 @@ import {
 } from '../world/life/lanterns';
 import { crewPlace, digSite, digSlotOfCrew, newDigSite, type DigSite } from '../world/life/digCrew';
 import { lifeHints } from '../world/life/ambience';
+import type { FollowSource } from '../world/nav/followGesture'; // [world:M2 camera-nav]
 
 /**
  * [plan4:ST-18] People walking between rooms, floors and the lift. COSMETIC (decision D4): the survivor's room, job and everything the
@@ -983,6 +984,71 @@ export class Walkers {
     this.sendBack(s, state, views);
     views.clear();
     return !!s.person;
+  }
+
+  // ===================================================================================================================================
+  // [world:M2 camera-nav] Follow-survivor: read-only views of the walkers for the camera (no state changes, no allocation per call).
+  // ===================================================================================================================================
+
+  /**
+   * The walking survivor (a walk between rooms, a loiterer or a digger out of their room) whose figure is at world (wx, wy), give or take
+   * `slop` world units, or null. The figure stands on (px, py) and is about 16 wide and standHeight tall; the nearest one wins.
+   */
+  pickAt(wx: number, wy: number, slop: number): Person | null {
+    let best: Person | null = null, bestD = Infinity;
+    for (const s of this.slots) {
+      const p = s.person;
+      if (!p || p.container.destroyed || !p.container.visible || s.mode === M_RIDE) continue;
+      const h = p.standHeight;
+      const dx = Math.abs(wx - s.px), top = s.py - h - slop, bottom = s.py + slop;
+      if (dx > 8 + slop || wy < top || wy > bottom) continue;
+      const d = dx + Math.abs(wy - (s.py - h / 2)) * 0.5;
+      if (d < bestD) { bestD = d; best = p; }
+    }
+    return best;
+  }
+
+  /**
+   * Where a person's figure is right now (its centre, world units): a walker from its slot (in the lift car while riding: the car's centre),
+   * anyone else from their figure in their room. False when the person is unknown or gone.
+   */
+  locate(id: string, people: ReadonlyMap<string, Person>, world: Container, out: { x: number; y: number }): boolean {
+    for (const s of this.slots) {
+      const p = s.person;
+      if (!p || p.id !== id) continue;
+      if (p.container.destroyed) return false;
+      if (s.mode === M_RIDE && this.lift) {
+        out.x = s.px;
+        out.y = this.lift.carY();
+      } else {
+        out.x = s.px;
+        out.y = s.py - p.standHeight / 2;
+      }
+      return true;
+    }
+    const p = people.get(id);
+    const c = p?.container;
+    if (!p || !c || c.destroyed || !c.parent) return false;
+    // The figure's place in the world: its position through its parents up to the world container (room views translate, never rotate).
+    let x = c.x, y = c.y;
+    for (let q: Container | null = c.parent; q && q !== world; q = q.parent) {
+      x = q.x + q.scale.x * (x - q.pivot.x);
+      y = q.y + q.scale.y * (y - q.pivot.y);
+    }
+    out.x = x;
+    out.y = y - p.standHeight / 2;
+    return true;
+  }
+
+  /**
+   * The camera's follow source (CameraController.setFollowSource): hit tests the walking survivors, locates anyone by id. `people` is the
+   * renderer's survivor id -> Person map, `world` its world container. Built once (BunkerRenderer wiring, see M2-N-notes.md).
+   */
+  followSource(people: ReadonlyMap<string, Person>, world: Container): FollowSource {
+    return {
+      pickAt: (wx, wy, slop) => this.pickAt(wx, wy, slop)?.id ?? null,
+      locate: (id, out) => this.locate(id, people, world, out),
+    };
   }
 }
 

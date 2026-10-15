@@ -9,6 +9,7 @@ import { CAMERA, LAYERS } from '../world/tokens';
 import { cityCameraFrame, type CityCameraFrame } from '../world/nav/cameraFrame';
 import type { CityLayout, Rect } from '../world/render/layoutTypes';
 import type { ParallaxInfo } from '../world/render/layers';
+import { FollowTracker, type FollowSource } from '../world/nav/followGesture'; // [world:M2 camera-nav]
 
 // [plan4 X-1] Split out of BunkerRenderer.ts with no change in behaviour: everything about the camera (constants, pan / pinch / fling /
 // double tap input, bounds, zoom springs, shake and punch) lives here. BunkerRenderer stays the public facade and builds this class
@@ -149,6 +150,15 @@ export class CameraController {
   private focusRate = 0;
   /** [world:C1 camera-nav] follow(): where the followed thing is now (null = it is gone, follow ends). */
   private followGet: (() => { x: number; y: number } | null) | null = null;
+  /** [world:M2 camera-nav] Follow-survivor: who knows the survivors (walkers.ts followSource), the tracker, who is followed, the zoom to reach. */
+  private followSrc: FollowSource | null = null;
+  private readonly tracker = new FollowTracker();
+  private followId: string | null = null;
+  private followZoom = 0;
+  private readonly followPt = { x: 0, y: 0 };
+  private readonly camPt = { x: 0, y: 0 };
+  /** Called when follow starts or ends (the id followed, or null): the UX session's follow chip listens here. */
+  onFollowChange: ((id: string | null) => void) | null = null;
   private readonly pinfo: ParallaxInfo = { cx: 0, cy: 0, z: 1, ox: 0, oy: 0, sw: 1, sh: 1 };
   /** [world:C1 camera-nav] The layout's dressing bounds: what the parallax planes' content covers (reduced-motion anchor). */
   private planeBounds: Rect | null = null;
@@ -404,30 +414,102 @@ export class CameraController {
   }
 
   /**
-   * [M2 stub] Follow something that moves (a survivor): while get() returns a point the camera glides (CAMERA.follow.spring) to keep
-   * it inside the central CAMERA.follow.deadZone of the screen; null ends the follow. A drag, a pinch or the wheel ends it as well
-   * (CAMERA.follow.cancelOnDrag). Pass null to stop.
+   * [world:M2 camera-nav] Follow something that moves: while get() returns a point (world units) the camera keeps it inside the central
+   * CAMERA.follow.deadZone of the view, lift rides included (followGesture.ts FollowTracker: a glide to it first, then an eased lead with a
+   * hard hold; reduced motion: cuts only). get() returning null ends the follow, and so does a pan, a pinch, the wheel or a tap elsewhere in
+   * the world (CAMERA.follow.cancelOnDrag). Pass null to stop. `zoomTo`: zoom in to at least this while following (0 = keep the zoom).
    */
-  follow(get: (() => { x: number; y: number } | null) | null): void {
+  follow(get: (() => { x: number; y: number } | null) | null, zoomTo = 0): void {
+    const was = this.followId;
     this.followGet = get;
-    if (get) this.cancelTour();
+    this.followId = null;
+    this.tracker.reset();
+    this.followZoom = get && zoomTo > this.zoom ? this.clampZoom(zoomTo) : 0;
+    if (get) {
+      this.cancelTour();
+      this.stopCamera();
+      this.untouched = false;
+    }
+    if (was !== null) this.onFollowChange?.(null);
+  }
+
+  /**
+   * [world:M2 camera-nav] Follow a survivor by id (the person sheet's "follow" for the UX session; the double tap on a walking survivor uses
+   * it too). Needs the follow source (BunkerRenderer wires walkers.followSource). The camera zooms in to CAMERA.follow.minZoom at least, so
+   * the walk stays drawn. False when the survivor is not known (or no source is wired).
+   */
+  startFollow(personId: string): boolean {
+    const src = this.followSrc;
+    if (!src || !src.locate(personId, this.followPt)) return false;
+    const pt = this.followPt;
+    this.follow(() => (src.locate(personId, pt) ? pt : null), CAMERA.follow.minZoom);
+    this.followId = personId;
+    this.onFollowChange?.(personId);
+    return true;
+  }
+
+  /** [world:M2 camera-nav] Stop following (no-op when not following). */
+  stopFollow(): void {
+    if (this.followGet) this.follow(null);
+  }
+
+  /** [world:M2 camera-nav] Who knows where the survivors are (BunkerRenderer: `this.cam.setFollowSource(this.walkers.followSource(...))`). */
+  setFollowSource(src: FollowSource | null): void {
+    this.followSrc = src;
+    if (!src && this.followId !== null) this.stopFollow();
   }
 
   get following(): boolean {
     return this.followGet !== null;
   }
 
-  private stepFollow(): void {
+  /** [world:M2 camera-nav] The survivor being followed (startFollow), or null (not following, or following a plain point). */
+  get followedId(): string | null {
+    return this.followGet ? this.followId : null;
+  }
+
+  /** The walking survivor under a screen point (the follow gesture's hit test), or null. */
+  private pickSurvivor(sx: number, sy: number): string | null {
+    if (!this.followSrc) return null;
+    const { width } = this.host.app.screen;
+    const wx = this.camX + (sx - width / 2) / this.zoom, wy = this.camY + (sy - this.viewCY()) / this.zoom;
+    return this.followSrc.pickAt(wx, wy, CAMERA.follow.pickSlopPx / this.zoom);
+  }
+
+  /** Whether a screen point is on the followed survivor's figure (walking or standing in a room), give or take the pick slop. */
+  private tapOnFollowed(sx: number, sy: number): boolean {
+    const id = this.followId;
+    if (!id || !this.followSrc) return false;
+    if (this.pickSurvivor(sx, sy) === id) return true;
+    const p = this.camPt;
+    if (!this.followSrc.locate(id, p)) return false;
+    const { width } = this.host.app.screen;
+    const wx = this.camX + (sx - width / 2) / this.zoom, wy = this.camY + (sy - this.viewCY()) / this.zoom;
+    const slop = CAMERA.follow.pickSlopPx / this.zoom;
+    return Math.abs(wx - p.x) <= 8 + slop && Math.abs(wy - p.y) <= CAMERA.city.personH / 2 + slop;
+  }
+
+  private stepFollow(dt: number): void {
     const p = this.followGet!();
-    if (!p) { this.followGet = null; return; }
+    if (!p) { this.follow(null); return; }
     const { width, height } = this.host.app.screen;
-    const F = CAMERA.follow, z = this.zoom;
-    const dx = (p.x - this.camX) * z, dy = (p.y - this.camY) * z;
-    const hw = (width * F.deadZone) / 2, hh = ((height - hudTop() - hudBottom()) * F.deadZone) / 2;
-    if (Math.abs(dx) <= hw && Math.abs(dy) <= hh && !this.focusTarget) return;
-    if (this.calm) { this.glideTo(p.x, p.y, z); return; }
-    this.focusTo(p.x, p.y, this.focusTarget?.z ?? z);
-    this.focusRate = F.spring;
+    const vh = height - hudTop() - hudBottom();
+    // Zoom in first if asked (eased around the view centre; reduced motion: at once).
+    if (this.followZoom > 0) {
+      const lz = Math.log(this.zoom), tz = Math.log(this.followZoom);
+      const next = this.calm || Math.abs(tz - lz) < 0.002 ? tz : lz + (tz - lz) * (1 - Math.exp(-dt * CAMERA.follow.catchUp));
+      this.zoom = Math.exp(next);
+      if (next === tz) this.followZoom = 0;
+    }
+    const c = this.camPt;
+    c.x = this.camX;
+    c.y = this.camY;
+    this.tracker.step(c, p.x, p.y, dt, this.zoom, width, vh, this.calm);
+    this.camX = c.x;
+    this.camY = c.y;
+    this.focusTarget = null;
+    this.camVX = this.camVY = 0;
+    this.clampCamera();
   }
 
   // ───────────────────────────── [camera] input ─────────────────────────────
@@ -449,7 +531,7 @@ export class CameraController {
       if (e.isPrimary) { const r = canvas.getBoundingClientRect(); this.carryX = e.clientX - r.left; this.carryY = e.clientY - r.top; }
       this.untouched = false;
       this.cancelTour(); // a touch is the player taking the camera back
-      if (CAMERA.follow.cancelOnDrag) this.followGet = null; // [world:C1 camera-nav]
+      // [world:M2 camera-nav] A touch alone no longer ends a follow: a drag, a pinch or a tap elsewhere does (below).
       // A touch catches a gliding camera; that touch only stops it (no room tap).
       // (Not when this touch may be the second half of a double tap.)
       const pendingTap = performance.now() - this.lastTap.t < relaxedMs(DOUBLE_TAP_MS); // plan4:AC-13
@@ -484,7 +566,10 @@ export class CameraController {
       const dx = e.clientX - this.dragStartX;
       const dy = e.clientY - this.dragStartY;
       this.pushSample(e.timeStamp, e.clientX, e.clientY);
-      if (!this.isDragging && Math.hypot(dx, dy) > DRAG_THRESHOLD) this.isDragging = true;
+      if (!this.isDragging && Math.hypot(dx, dy) > DRAG_THRESHOLD) {
+        this.isDragging = true;
+        if (CAMERA.follow.cancelOnDrag) this.stopFollow(); // [world:M2 camera-nav] the player pans: the camera is theirs
+      }
       if (!this.isDragging) return;
       this.camBounds(this.zoom);
       const b = this.bnd;
@@ -518,6 +603,8 @@ export class CameraController {
       } else if (this.pointerDown && e.type === 'pointerup' && e.timeStamp - this.downAt < 300) {
         const r = canvas.getBoundingClientRect();
         host.canvasTap?.(e.clientX - r.left, e.clientY - r.top);
+        // [world:M2 camera-nav] A tap anywhere in the world but on the followed survivor ends the follow (a double tap may start another).
+        if (this.followGet && this.followId !== null && !this.tapOnFollowed(e.clientX, e.clientY)) this.stopFollow();
         this.tapAt(e.clientX, e.clientY, true);
       }
       this.pointerDown = false;
@@ -537,7 +624,7 @@ export class CameraController {
       const dy = e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY;
       this.untouched = false;
       this.cancelTour();
-      this.followGet = null; // [world:C1 camera-nav]
+      this.stopFollow(); // [world:C1 camera-nav]
       const from = this.wheelZoom ?? this.zoom;
       this.focusTarget = null;
       this.camVX = this.camVY = 0;
@@ -589,6 +676,7 @@ export class CameraController {
     this.isDragging = true;
     this.pointerDown = true;
     this.pinched = true;
+    if (CAMERA.follow.cancelOnDrag) this.stopFollow(); // [world:M2 camera-nav] a pinch ends a follow
   }
 
   /** Pinch: the world point under the fingers stays under them while they spread and move. */
@@ -667,6 +755,11 @@ export class CameraController {
 
   /** Double tap: frame the room (or ruin) under the finger above any open sheet; again to zoom back out. Empty space zooms in. */
   private onDoubleTap(sx: number, sy: number): void {
+    // [world:M2 camera-nav] City: a double tap on a walking survivor follows them (instead of framing the room behind them).
+    if (CITY) {
+      const who = this.pickSurvivor(sx, sy);
+      if (who && this.startFollow(who)) return;
+    }
     const { width, height } = this.host.app.screen;
     const id = this.host.targetAt(sx, sy);
     const rect = id ? this.host.targetRect(id) : null;
@@ -980,7 +1073,7 @@ export class CameraController {
   /** One time step of the camera: focus glide, wheel zoom, zoom-limit spring, coasting, edge springs, shake. */
   stepCamera(dt: number): void {
     if (this.tour) this.stepTour(dt);
-    if (this.followGet && this.pointers.size === 0) this.stepFollow(); // [world:C1 camera-nav]
+    if (this.followGet && this.pointers.size === 0) this.stepFollow(dt); // [world:C1 camera-nav]
     if (this.trauma > 0) this.trauma = Math.max(0, this.trauma - this.traumaDecay * dt);
     if (this.punchT < 1) this.punchT += dt;
     // While a sheet lets the camera rest lower, check now and then whether it closed (then glide back).

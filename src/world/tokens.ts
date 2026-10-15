@@ -571,13 +571,26 @@ export const CAMERA = {
   },
   wheel: { step: 0.0016, pinchGain: 1 },
   springs: { focus: 7.5, zoom: 14 },
+  /**
+   * [world:M2 camera-nav] Follow a survivor (CameraController.follow / startFollow, src/world/nav/followGesture.ts). Started by a double tap on a
+   * walking survivor (or the person sheet later); a pan, a pinch, the wheel or a tap elsewhere in the world ends it.
+   *  - spring: how fast (1/s) the camera eases toward the survivor (plus the look-ahead) once it holds them;
+   *  - catchUp: the rate of the first glide to them (no hard hold until they sit inside the dead zone);
+   *  - lookAhead: seconds of the survivor's velocity the camera leads by, capped at maxLead of the dead zone's half size;
+   *  - deadZone: the central fraction of the view (each axis) the survivor never leaves while held, lift rides included (a hard hold, not a spring);
+   *  - minZoom: following zooms in to at least this (walkers stop being drawn below 0.7);
+   *  - pickSlopPx: the screen px around a survivor's figure that still count as a tap on them;
+   *  - jumpPx: a target that moves further than this many screen px in one frame (it was placed, not walked) is glided to, not held.
+   */
   follow: {
-    /** Following a survivor / a moving event: critically damped spring rate (1/s). */
     spring: 5,
-    /** Look ahead along the walker's velocity (seconds). */
+    catchUp: 6,
     lookAhead: 0.25,
-    /** Re-centre only when the target leaves this central fraction of the screen. */
-    deadZone: 0.2,
+    maxLead: 0.5,
+    deadZone: 0.3,
+    minZoom: 1,
+    pickSlopPx: 14,
+    jumpPx: 240,
     /** A user drag cancels follow; follow resumes only on an explicit tap. */
     cancelOnDrag: true,
   },
