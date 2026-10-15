@@ -9,8 +9,8 @@ import type { BuildingInstance, BuildingType, GameState, Position, Ruin, Survivo
 import { effectiveLevel, isDistrict, roomFloors, roomSlots } from '../data/buildingDefs';
 import { i18n } from '../i18n/I18nManager';
 import { BASE_EAST, BUILDING_W, FLOOR_H, ROOM_H, SHAFT_W, SLOT_W, TOPSOIL, buildingH, extentsFor, floorExtent, floorIndexAt, floorTop, type Ext } from './layout';
-import { buildingX, districtXAt, eastmostSlotX, slotX, stripX, westmostSlotX } from '../world/project';
-import { CITY } from '../world/flag'; // [world:C1] the city renderer behind ?city
+import { buildingX, districtXAt, eastmostSlotX, slotX, stripX, useClassicProjection, westmostSlotX } from '../world/project';
+import { CITY, disableCityForSession } from '../world/flag'; // [world:C1] the city renderer behind ?city [world:M1] session fallback
 import type { CityHost } from '../world/render/cityHost'; // [world:C1] loaded on demand (mountCity): classic never downloads the city renderer
 import { setLightSink } from '../world/life/lanterns'; // [world:C1-Li] // [world:C2] the real city layout and shell into the seams
 import { PEOPLE_RENDER } from '../world/tokensRender'; // [world:C1]
@@ -66,6 +66,16 @@ import { KIT_KEYS, buildBays,buildCasing, depthGains, structureAmbient, gfx2Enab
 
 /** [world:C2] World units the camera may pan past a city edge site or district cavern. */
 const CITY_EDGE_PAD = 90;
+/** [world:M1] A city chunk that has not arrived after this long counts as failed (the boot falls back to classic rather than hang). */
+const CITY_CHUNK_TIMEOUT_MS = 12_000;
+
+/** [world:M1] The two city chunks, or a rejection when either fails (offline, 404 after an update) or takes longer than the timeout. */
+function loadCityChunks(): Promise<[typeof import('../world/render/cityHost'), typeof import('../world/render/cityWiring')]> {
+  let timer = 0;
+  const timeout = new Promise<never>((_, reject) => { timer = window.setTimeout(() => reject(new Error('city chunk timeout')), CITY_CHUNK_TIMEOUT_MS); });
+  const load = Promise.all([import('../world/render/cityHost'), import('../world/render/cityWiring')]);
+  return Promise.race([load, timeout]).finally(() => window.clearTimeout(timer));
+}
 
 interface Burst {
   s: Sprite;
@@ -494,7 +504,7 @@ export class BunkerRenderer {
 
     this.surface = buildSurface();
     if (CITY) await this.mountCity(canvas); // [world:C1] the city's layer stack around the same holders (its own chunk)
-    else this.worldContainer.addChild(
+    if (!this.cityHost) this.worldContainer.addChild( // [world:M1] classic, or the city chunk could not be loaded (mountCity fell back)
       this.surfaceHolder, this.projectSites.layer, this.projectSites.smokeLayer, this.projectSites.glowLayer, this.projectSites.crew, this.projectSites.signLayer, this.undergroundHolder, this.bayHolder, this.slotLayer, this.highlightLayer,
       this.roomLayer, this.shaftHolder, this.utilitiesHolder, this.walkers.layer, this.dust.container, this.digHolder, this.wingSigns.container, this.districtSignHolder, this.fxLayer, this.incidents.fx, this.disasterFx.fx,
       this.labelLayer, this.incidents.badges, this.ghost.layer,
@@ -538,7 +548,18 @@ export class BunkerRenderer {
    * replaced by a neutral one (life-systems owns walkers.ts; this override goes when their city lighting lands).
    */
   private async mountCity(canvas: HTMLCanvasElement): Promise<void> {
-    const [{ CityHost }, { installCityWorld }] = await Promise.all([import('../world/render/cityHost'), import('../world/render/cityWiring')]);
+    let mods: [typeof import('../world/render/cityHost'), typeof import('../world/render/cityWiring')];
+    try {
+      mods = await loadCityChunks();
+    } catch (err) {
+      // [world:M1] Offline before the service worker had the city chunks (or a flaky first load): never a dead boot. This session runs the
+      // classic tower (flag and projection both flip before anything is projected for drawing); the next visit tries the city again.
+      logCrash('city-chunk', err, { fallback: 'classic' });
+      disableCityForSession(String((err as Error)?.message ?? err));
+      useClassicProjection();
+      return;
+    }
+    const [{ CityHost }, { installCityWorld }] = mods;
     installCityWorld(); // [world:C2] cityLayout + shell (the stub layout stays the seams' fallback)
     const host = new CityHost(this.app.renderer, isLiteMode() ? 'lite' : startQuality(), canvas);
     this.cityHost = host;

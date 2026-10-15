@@ -49,12 +49,12 @@ export const ZOOM_SPRING = 14;
 export const SHAKE_PX = 16;
 export const DOUBLE_TAP_MS = 320;
 // [world:C1 camera-nav] City mode reads the feel from tokens (CAMERA); classic keeps the constants above, byte for byte.
-const PAN_FRICTION = CITY ? CAMERA.pan.friction : FRICTION;
-const PAN_EDGE_SPRING = CITY ? CAMERA.pan.edgeSpring : EDGE_SPRING;
-const FOCUS_RATE = CITY ? CAMERA.springs.focus : FOCUS_SPRING;
-const ZOOM_RATE = CITY ? CAMERA.springs.zoom : ZOOM_SPRING;
-const Z_MIN = CITY ? CAMERA.zoom.min : MIN_ZOOM;
-const Z_MAX = CITY ? CAMERA.zoom.max : MAX_ZOOM;
+const PAN_FRICTION = (): number => (CITY ? CAMERA.pan.friction : FRICTION);
+const PAN_EDGE_SPRING = (): number => (CITY ? CAMERA.pan.edgeSpring : EDGE_SPRING);
+const FOCUS_RATE = (): number => (CITY ? CAMERA.springs.focus : FOCUS_SPRING);
+const ZOOM_RATE = (): number => (CITY ? CAMERA.springs.zoom : ZOOM_SPRING);
+const Z_MIN = (): number => (CITY ? CAMERA.zoom.min : MIN_ZOOM);
+const Z_MAX = (): number => (CITY ? CAMERA.zoom.max : MAX_ZOOM);
 /** City: the home and overview zooms never fall into the far map (CAMERA.zoom.far with its hysteresis, plus a little). */
 const CITY_Z_FLOOR = CAMERA.zoom.far * CAMERA.zoom.farHysteresis * 1.04;
 
@@ -228,7 +228,7 @@ export class CameraController {
   /** The old default: the whole building width on screen (desktop keeps it, up to its cap of 1.6). */
   private fitZoom(): number {
     const { width } = this.host.app.screen;
-    return Math.max(Z_MIN, Math.min(1.6, (width - 8) / (BUILDING_W + SIDE_MARGIN * 2)));
+    return Math.max(Z_MIN(), Math.min(1.6, (width - 8) / (BUILDING_W + SIDE_MARGIN * 2)));
   }
 
   /** Floor overview: the widest floor fits the screen width (never above the default, never below MIN_ZOOM). */
@@ -237,7 +237,7 @@ export class CameraController {
     // [world:C1 camera-nav] City: the whole dug city across (never into the far map).
     if (this.cityFrame) return Math.max(CITY_Z_FLOOR, Math.min(this.baseZoom, width / (this.cityFrame.content.w + 2 * SIDE_MARGIN)));
     const sp = this.host.floorSpan();
-    return Math.max(Z_MIN, Math.min(this.baseZoom, width / (sp.r - sp.l + 2 * SIDE_MARGIN)));
+    return Math.max(Z_MIN(), Math.min(this.baseZoom, width / (sp.r - sp.l + 2 * SIDE_MARGIN)));
   }
 
   /** The default zoom of this screen (also what baseZoom holds): sector zoom on a phone, fit-to-width elsewhere. */
@@ -675,7 +675,7 @@ export class CameraController {
     const wy = this.camY + (sy - this.viewCY()) / this.zoom;
     if (rect) {
       const visH = height - hudTop() - hudBottom() - inset;
-      const z = this.clampZoom(Math.min(width * 0.9 / rect.w, visH * 0.82 / rect.h, Z_MAX));
+      const z = this.clampZoom(Math.min(width * 0.9 / rect.w, visH * 0.82 / rect.h, Z_MAX()));
       const cx = rect.x + rect.w / 2, cy = rect.y + rect.h / 2;
       // Already framed: the second double tap goes back to the overview.
       const framed = this.framedId === id && Math.abs(this.zoom / z - 1) < 0.08;
@@ -885,13 +885,13 @@ export class CameraController {
   }
 
   clampZoom(z: number): number {
-    return Math.max(Z_MIN, Math.min(Z_MAX, z));
+    return Math.max(Z_MIN(), Math.min(Z_MAX(), z));
   }
 
   /** Pinching past the zoom limits gives way with resistance, then springs back on release. */
   private softZoom(z: number): number {
-    const lo = Z_MIN;
-    if (z > Z_MAX) return Z_MAX * Math.exp(Math.log(z / Z_MAX) * 0.3);
+    const lo = Z_MIN();
+    if (z > Z_MAX()) return Z_MAX() * Math.exp(Math.log(z / Z_MAX()) * 0.3);
     if (z < lo) return lo * Math.exp(Math.log(z / lo) * 0.3);
     return z;
   }
@@ -993,7 +993,7 @@ export class CameraController {
     } else if (this.focusTarget) {
       const f = this.focusTarget;
       // [world:C1 camera-nav] glideTo / follow use a gentler rate; city reduced motion settles faster.
-      const w = this.focusRate || (CITY && this.calm ? CAMERA.city.calmFocusSpring : FOCUS_RATE);
+      const w = this.focusRate || (CITY && this.calm ? CAMERA.city.calmFocusSpring : FOCUS_RATE());
       const lz = crit(Math.log(this.zoom), this.zoomV, Math.log(f.z), w, dt);
       this.zoom = Math.exp(lz);
       this.zoomV = SPRING_V;
@@ -1017,7 +1017,7 @@ export class CameraController {
       // Past the zoom limits (after a pinch): spring back around the last pinch point.
       const zc = this.clampZoom(this.zoom);
       if (zc !== this.zoom || this.zoomV !== 0) {
-        const lz = crit(Math.log(this.zoom), this.zoomV, Math.log(zc), ZOOM_RATE, dt);
+        const lz = crit(Math.log(this.zoom), this.zoomV, Math.log(zc), ZOOM_RATE(), dt);
         this.zoomV = SPRING_V;
         const settled = Math.abs(lz - Math.log(zc)) < 0.0005 && Math.abs(this.zoomV) < 0.01;
         this.zoomAround(settled ? zc : Math.exp(lz), this.zoomAnchorX, this.zoomAnchorY);
@@ -1047,7 +1047,7 @@ export class CameraController {
   private axisStep(x: number, v: number, lo: number, hi: number, dt: number): number {
     if (x < lo || x > hi) {
       const t = x < lo ? lo : hi;
-      const nx = crit(x, v, t, PAN_EDGE_SPRING, dt);
+      const nx = crit(x, v, t, PAN_EDGE_SPRING(), dt);
       if (Math.abs(nx - t) * this.zoom < 0.2 && Math.abs(SPRING_V) * this.zoom < 4) {
         SPRING_V = 0;
         return t;
@@ -1058,8 +1058,8 @@ export class CameraController {
       SPRING_V = 0;
       return x;
     }
-    const e = Math.exp(-PAN_FRICTION * dt);
-    const nx = x + (v * (1 - e)) / PAN_FRICTION;
+    const e = Math.exp(-PAN_FRICTION() * dt);
+    const nx = x + (v * (1 - e)) / PAN_FRICTION();
     SPRING_V = Math.abs(v * e) * this.zoom < 8 ? 0 : v * e;
     return nx;
   }
