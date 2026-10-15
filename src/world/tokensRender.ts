@@ -224,3 +224,12 @@ export const PINS = {
   findRevealR: 150,
   findGlowD: 160,
 } as const;
+
+/**
+ * [world:M1] The shell's big vector Graphics (300-5000 vertices) are forced into the batcher only while the bunker is small. Measured on a
+ * 4x CPU-throttled phone (375x812@2, Medium): a fresh game gains 9-18 draw calls at no CPU cost, but at e55 (20 floors) forcing them
+ * cost 12-27 ms more draw CPU per idle picture (about 20 %) and more while panning, for no steady draw-call gain.
+ */
+export const SHELL_RENDER = {
+  forceBatchMaxFloors: 8,
+} as const;
