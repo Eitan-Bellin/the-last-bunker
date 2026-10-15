@@ -44,8 +44,8 @@ export function formatChecks(): { problems: string[]; notes: string[] } {
     }
     // ---- fmtDuration
     const D = lang === 'he'
-      ? [[2 * 86400 + 4 * 3600 + 59, '2י 4ש'], [4 * 3600 + 12 * 60 + 30, '4ש 12ד'], [12 * 60 + 5, '12:05'], [45, '45שנ׳'], [0, '0שנ׳'], [0.2, '1שנ׳'],
-        [60, '1:00'], [3600, '1ש'], [86400, '1י'], [59.5, '1:00']]
+      ? [[2 * 86400 + 4 * 3600 + 59, '2י׳ 4ש׳'], [4 * 3600 + 12 * 60 + 30, '4ש׳ 12ד׳'], [12 * 60 + 5, '12:05'], [45, '45שנ׳'], [0, '0שנ׳'], [0.2, '1שנ׳'],
+        [60, '1:00'], [3600, '1ש׳'], [86400, '1י׳'], [59.5, '1:00']]
       : [[2 * 86400 + 4 * 3600 + 59, '2d 4h'], [4 * 3600 + 12 * 60 + 30, '4h 12m'], [12 * 60 + 5, '12:05'], [45, '45s'], [0, '0s'], [0.2, '1s'],
         [60, '1:00'], [3600, '1h'], [86400, '1d'], [59.5, '1:00']];
     for (const [s, want] of D as [number, string][]) eq(`${lang} fmtDuration(${s})`, fmtDuration(s), want);
@@ -54,11 +54,11 @@ export function formatChecks(): { problems: string[]; notes: string[] } {
 
   // ---- plural (Intl.PluralRules; Hebrew has a dual)
   i18n.setLocale('he');
-  eq('he plural 1', plural('kit.survivors', 1), 'שורד אחד');
-  eq('he plural 2', plural('kit.survivors', 2), 'שני שורדים');
-  eq('he plural 5', plural('kit.survivors', 5), '5 שורדים');
-  eq('he plural 20', plural('kit.survivors', 20), '20 שורדים'); // CLDR once said "many" for 20: falls back to .other
-  eq('he plural 1500', plural('kit.survivors', 1500), '1,500 שורדים');
+  eq('he plural 1', plural('kit.survivors', 1), 'ניצול אחד');
+  eq('he plural 2', plural('kit.survivors', 2), 'שני ניצולים');
+  eq('he plural 5', plural('kit.survivors', 5), '5 ניצולים');
+  eq('he plural 20', plural('kit.survivors', 20), '20 ניצולים'); // CLDR once said "many" for 20: falls back to .other
+  eq('he plural 1500', plural('kit.survivors', 1500), '1,500 ניצולים');
   eq('he plural minutes 2', plural('kit.minutes', 2), 'שתי דקות');
   i18n.setLocale('en');
   eq('en plural 1', plural('kit.survivors', 1), '1 survivor');

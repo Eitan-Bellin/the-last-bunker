@@ -7,13 +7,12 @@ import { BUILD_CATEGORIES, buildCategoryOf, type BuildCategory } from '../../dat
 import { allowedFloors, zoneForFloor } from '../../data/zones';
 import { actOf } from '../../data/acts';
 import { isBuildingUnlocked, unlockingResearch } from '../../systems/ResearchSystem';
-import { floorRangesLabel } from '../../systems/placementRank';
 import { Sheet } from './Sheet';
 import { ArtLibrary } from '../../art/ArtLibrary';
 import { buildingArtKey } from '../../art/registry';
 import { BUILDING_ICONS, RESOURCE_ICONS, el, rateText } from '../dom';
 import { describeMissing, missingList } from '../missing';
-import { floorTag } from '../floorTag';
+import { floorRangesTag, floorTag, floorTagIso } from '../floorTag';
 import { BATTERY_ROOMS, BED_ROOMS, KID_ROOMS, MORALE_ROOMS, NEED_ROOMS } from '../../systems/BuildAdvice'; // [ux-redesign w2fix] one source for the lists
 import { fmtCost, fmtDuration, plural } from '../format';
 import { kButton } from '../kit';
@@ -79,7 +78,7 @@ export function noSpaceText(state: GameState, type: BuildingType, route: NoSpace
     case 'clear': return i18n.t('ux2c.noSpace.clear', { floor: iso(floorTag(route.ruin.floor)) });
     case 'dig': return i18n.t('ux2c.noSpace.dig');
     case 'digging': return i18n.t('ux2c.noSpace.digging');
-    default: return i18n.t('ux2c.noSpace.none', { floors: iso(floorRangesLabel(allowedFloors(type, state.currentFloors))) });
+    default: return i18n.t('ux2c.noSpace.none', { floors: iso(floorRangesTag(allowedFloors(type, state.currentFloors))) });
   }
 }
 
@@ -520,7 +519,7 @@ export class BuildMenu {
       const floors = allowedFloors(type);
       if (floors.length === 1) {
         const zone = zoneForFloor(floors[0]);
-        meta.appendChild(el('span', 'zone-chip', place === 'entrance' ? `${zone.icon} ${i18n.t('build.entranceOnly')}` : `${zone.icon} B${zone.floor + 1} ${zone.name[locale] ?? zone.name.en}`));
+        meta.appendChild(el('span', 'zone-chip', place === 'entrance' ? `${zone.icon} ${i18n.t('build.entranceOnly')}` : `${zone.icon} ${floorTagIso(zone.floor)} ${zone.name[locale] ?? zone.name.en}`));
       }
     }
     meta.appendChild(el('span', '', `[[clock]] ${i18n.formatDuration(def.constructionTime)}`));

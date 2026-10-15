@@ -108,7 +108,7 @@ export class CouponPanel {
       case 'rush': return plural('coupon.rush.have', e.rushSystem.count(state));
       case 'research': {
         const id = e.researchSystem.activeId(state);
-        return id ? i18n.t('coupon.research.on', { n: 1 + e.researchSystem.queue(state).length }) : i18n.t('coupon.none');
+        return id ? plural('coupon.research.on', 1 + e.researchSystem.queue(state).length) : i18n.t('coupon.none');
       }
       case 'build': {
         const n = state.buildings.filter(b => b.isConstructing).length;

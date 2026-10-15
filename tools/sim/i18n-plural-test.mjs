@@ -37,7 +37,7 @@ walk(join(ROOT, 'src'));
 let calls = 0;
 const HAND_SPLIT = /===\s*1\s*\?\s*'([\w.]+)'\s*:\s*'([\w.]+)'/g;
 // Pairs that are not one-vs-many counts of the same phrase (a name instead of a number, or two numbers in one sentence): kept by design.
-const ALLOWED_SPLIT = new Set(['night.raidLostOne|night.raidsLost']);
+const ALLOWED_SPLIT = new Set([]); // [final] night.raidsLost now takes its counts from night.raidsLostPart
 for (const file of files) {
   const text = readFileSync(file, 'utf8');
   const rel = relative(ROOT, file).split(sep).join('/');

@@ -3,6 +3,7 @@ import { bus } from '../../core/EventBus'; // [plan4:GP-1]
 import { statusTint } from '../../utils/a11y';
 import { HUD, actLock } from '../../ui/HUD';
 import { i18n } from '../../i18n/I18nManager';
+import { floorRangesTag } from '../floorTag';
 import { fmtNum, plural } from '../format';
 import { getDef } from '../../data/buildingDefs';
 import { allowedFloors } from '../../data/zones';
@@ -15,7 +16,7 @@ import type { StructurePanel } from '../components/StructurePanel'; // [ux-wp4] 
 import { getHudInsets } from '../../utils/hudInsets';
 import { RUIN_KINDS } from '../../data/ruins';
 import type { PlaceBlock } from '../../systems/BuildingSystem';
-import { bestSpot, floorRangesLabel, nameOf, nearestSpot, placeEffects, spotForTap, validSpots } from '../../systems/placementRank';
+import { bestSpot, nameOf, nearestSpot, placeEffects, spotForTap, validSpots } from '../../systems/placementRank';
 import { RELOCATE_SECONDS, relocateBlock, relocateCost, stateWithout } from '../../systems/relocate';
 import { ROOM_H, SLOT_W, buildingH, floorTop, slotX } from '../../rendering/geom';
 import { hasFreeSpot, missingText, noSpaceRoute, noSpaceText } from '../components/BuildMenu'; // [ux-redesign w2c #2]
@@ -225,7 +226,7 @@ export class WorldController {
   private reasonText(block: PlaceBlock | 'same', type: BuildingType): string {
     const state = this.app.state;
     const def = getDef(type);
-    if (block === 'zone') return i18n.t('placement.r.zone', { floors: `\u2066${floorRangesLabel(allowedFloors(type, state.currentFloors))}\u2069` }); // LRI..PDI keeps "B3–B14" in one piece inside a Hebrew line
+    if (block === 'zone') return i18n.t('placement.r.zone', { floors: `\u2068${floorRangesTag(allowedFloors(type, state.currentFloors))}\u2069` }); // [final F7] FSI..PDI keeps "B3–B14" / "קומות 3–14" in one piece
     if (block === 'adjacency') {
       const need = def?.place?.adjacentTo;
       return i18n.t('placement.r.adjacency', { room: need ? nameOf(need, i18n.currentLocale) : '' });
@@ -522,7 +523,7 @@ export class WorldController {
 
   /** A collected resource icon arcs up into its HUD counter (the pooled fx layer; [w4fix] the old .fly-icon element is gone). */
   flyToHud(r: ResourceType, x: number, y: number, label: string): void {
-    this.app.feedback.fly.fly(r, { x, y }, 0, label);
+    this.app.feedback.fly.fly(r, { x, y }, 10, label); // no amount here: 10 goods' worth (7 particles)
   }
 
   // ───────────────────────────── [ux-wp4] HUD and panel shortcuts ─────────────────────────────
