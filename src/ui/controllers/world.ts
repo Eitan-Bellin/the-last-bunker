@@ -42,10 +42,13 @@ export class WorldController {
   constructor(app: GameApp) {
     this.app = app;
     // [ux-redesign w2c #17] A sheet opened for a ruin (RuinPanel.show) frames it in the strip of world left above the sheet.
+    // [ux-redesign w2fix] The same for a room's own sheet (BuildingPanel.show).
     window.addEventListener('lb:sheet-target', (ev) => {
-      const id = (ev as CustomEvent<{ ruinId?: string }>).detail?.ruinId;
-      const ruin = id ? this.app.state.ruins.find(r => r.id === id) : undefined;
+      const d = (ev as CustomEvent<{ ruinId?: string; buildingId?: string }>).detail;
+      const ruin = d?.ruinId ? this.app.state.ruins.find(r => r.id === d.ruinId) : undefined;
       if (ruin) this.frameRuin(ruin);
+      const b = d?.buildingId ? this.app.state.buildings.find(x => x.id === d.buildingId) : undefined;
+      if (b) this.frameRoom(b.type, b.position);
     });
   }
 
@@ -55,6 +58,12 @@ export class WorldController {
    */
   frameRuin(ruin: Ruin): void {
     const go = () => this.app.renderer.revealRect(slotX(ruin.x), floorTop(ruin.floor), ruin.w * SLOT_W, ROOM_H, 0);
+    requestAnimationFrame(() => requestAnimationFrame(go));
+  }
+
+  /** [ux-redesign w2fix] The same framing for a built room whose sheet just opened (its full width and height, tall rooms too). */
+  frameRoom(type: BuildingType, pos: Position): void {
+    const go = () => this.app.renderer.revealRect(slotX(pos.x), floorTop(pos.floor), roomSlots(type) * SLOT_W, buildingH(type), 0);
     requestAnimationFrame(() => requestAnimationFrame(go));
   }
 

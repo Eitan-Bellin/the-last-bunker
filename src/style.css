@@ -43,8 +43,9 @@ button {
 #game-canvas {
   position: absolute;
   inset: 0;
-  width: 100%;
-  height: 100%;
+  /* [ux-redesign w2fix] Pixi writes the backing size as inline px on resize; the box must still follow the viewport (#26), so these win. */
+  width: 100% !important;
+  height: 100% !important;
   z-index: var(--z-world);
 }
 

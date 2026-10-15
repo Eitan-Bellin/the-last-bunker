@@ -80,6 +80,8 @@ export class BuildingPanel {
     this.signature = '';
     this.refresh(this.engine.stateManager.state);
     this.sheet.show();
+    // [ux-redesign w2fix] Like a ruin's sheet: the world controller frames the room in the strip of world left above the sheet.
+    window.dispatchEvent(new CustomEvent('lb:sheet-target', { detail: { buildingId } }));
   }
 
   hide(): void {
