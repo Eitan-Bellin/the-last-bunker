@@ -387,7 +387,7 @@ export class SurfacePanel {
     const biome = BIOMES[h.biome as BiomeId];
     const poi = h.poi ? POIS[h.poi] : undefined;
     const label = `${h.explored ? '' : '[[question]] '}${biome.name[locale]}${poi ? ` · ${poi.icon} ${poi.name[locale]}` : ''}`;
-    const value = `[[clock]] ${fmtDuration(ex.missionDuration(state, h))}`;
+    const value = `[[clock]] ${i18n.formatDuration(ex.missionDuration(state, h))}`;
     const go = teamOut ? `[[walker]] ${i18n.t('ux2d.surface.out')}` : full ? '' : `${i18n.t('ux2d.surface.plan')} ${flowArrow()}`;
     const row = kRow({ label, value, trailing: el('span', 'surface-region__go', go), onPress: () => this.select(h.x, h.y) });
     row.classList.add('surface-region');
@@ -443,7 +443,7 @@ export class SurfacePanel {
     const info = el('div', 'surface-info');
     info.append(
       el('span', '', `[[ruler]] ${hexDistance(hex.x, hex.y)}`),
-      el('span', '', `[[clock]] ${fmtDuration(ex.missionDuration(state, hex))}`),
+      el('span', '', `[[clock]] ${i18n.formatDuration(ex.missionDuration(state, hex))}`),
       el('span', '', hex.explored ? `[[check]] ${i18n.t('surface.explored')}` : `[[question]] ${i18n.t('surface.unexplored')}`),
     );
     box.appendChild(info);

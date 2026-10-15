@@ -67,7 +67,7 @@ export class JournalPanel {
     if (sig === this.signature) return;
     this.signature = sig;
     const locale = i18n.currentLocale;
-    this.sheet.setTitle(`[[journal]] ${i18n.t('journal.title')} · ${state.lore.length}/${LORE.length}`);
+    this.sheet.setTitle(`[[journal]] ${i18n.t('journal.title')} · ${state.lore.length}/${LORE.length}`);
     const root = el('div', 'journal');
     const told = CHAPTERS.filter(c => state.storyFlags.includes(`story:${c.id}`)).length;
     const tabs = kTabs([

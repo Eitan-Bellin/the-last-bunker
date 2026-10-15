@@ -1,7 +1,7 @@
 import type { GameState } from '../../core/GameState';
 import type { GameEngine } from '../../core/GameEngine';
 import { i18n } from '../../i18n/I18nManager';
-import { fmtDuration, fmtNum, plural } from '../format';
+import { fmtNum, plural } from '../format';
 import { ACHIEVEMENTS } from '../../data/achievements';
 import { PRESTIGE_UPGRADES, upgradeCost } from '../../data/prestige';
 import { ERAS } from '../../data/eras';
@@ -640,7 +640,7 @@ export class MenuPanel {
   private renderStats(state: GameState): HTMLElement {
     const card = el('div', 'bp-card');
     const rows: [string, string][] = [
-      ['[[clock]] ' + i18n.t('stats2.playTime'), fmtDuration(state.stats.totalPlayTime)],
+      ['[[clock]] ' + i18n.t('stats2.playTime'), i18n.formatDuration(state.stats.totalPlayTime)],
       ['[[food]] ' + i18n.t('stats2.food'), fmtNum(state.stats.totalFoodProduced)],
       ['[[build]] ' + i18n.t('stats2.buildings'), String(state.stats.totalBuildingsBuilt)],
       ['[[people]] ' + i18n.t('stats2.recruited'), String(state.stats.totalSurvivorsRecruited)],

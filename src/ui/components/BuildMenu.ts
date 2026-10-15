@@ -523,7 +523,7 @@ export class BuildMenu {
         meta.appendChild(el('span', 'zone-chip', place === 'entrance' ? `${zone.icon} ${i18n.t('build.entranceOnly')}` : `${zone.icon} B${zone.floor + 1} ${zone.name[locale] ?? zone.name.en}`));
       }
     }
-    meta.appendChild(el('span', '', `[[clock]] ${fmtDuration(def.constructionTime)}`));
+    meta.appendChild(el('span', '', `[[clock]] ${i18n.formatDuration(def.constructionTime)}`));
     if (def.powerConsumption > 0) meta.appendChild(el('span', '', `[[power]] \u2212${def.powerConsumption}`));
     if (def.maxWorkers > 0) meta.appendChild(el('span', '', `[[worker]] ${def.maxWorkers}`));
     if (def.maxCopies !== undefined) meta.appendChild(el('span', '', `[[district]] ${i18n.t('build.copies', { n: e.count, max: def.maxCopies })}`));

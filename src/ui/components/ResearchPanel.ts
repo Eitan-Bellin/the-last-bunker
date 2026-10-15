@@ -345,7 +345,7 @@ export class ResearchPanel {
       const row = el('div', 'research-queue-row');
       row.append(
         el('span', 'research-queue-name', `${i + 1}. ${def.icon} ${this.name(def)}`),
-        el('span', 'bp-hint', `[[clock]] ${fmtDuration(rs.etaSeconds(state, id))}`),
+        el('span', 'bp-hint', `[[clock]] ${i18n.formatDuration(rs.etaSeconds(state, id))}`),
       );
       const cancel = kButton({
         variant: 'close',
@@ -434,7 +434,7 @@ export class ResearchPanel {
       card.appendChild(el('div', 'research-done active', `[[clock]] ${i18n.t('research.queued', { n: pos })}`));
     } else {
       const meta = el('div', 'bp-upgrade-info');
-      meta.append(costRow(state, def.cost as Record<string, number>), el('span', 'bp-hint', `[[clock]] ${fmtDuration(def.time / rs.speed(state))}`));
+      meta.append(costRow(state, def.cost as Record<string, number>), el('span', 'bp-hint', `[[clock]] ${i18n.formatDuration(def.time / rs.speed(state))}`));
       card.appendChild(meta);
       const pending = new Set([rs.activeId(state), ...rs.queue(state)]);
       const missing = def.requires.filter(r => !state.research[r]?.completed && !pending.has(r));

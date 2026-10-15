@@ -198,7 +198,7 @@ export class PeoplePanel {
   }
 
   private render(state: GameState): void {
-    this.sheet.setTitle(`[[people]] ${i18n.t('people.title')} · ${state.survivors.length}/${state.maxPopulation}`);
+    this.sheet.setTitle(`[[people]] ${i18n.t('people.title')} · ${state.survivors.length}/${state.maxPopulation}`);
     this.bars.clear();
     this.levels.clear();
     const tabs = el('div', 'tab-row');
