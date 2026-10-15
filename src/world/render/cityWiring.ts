@@ -10,7 +10,7 @@
 import { buildCityLayout, cityLayoutSig, cityProgress } from '../model/cityLayout';
 import { buildShell } from './shell';
 import { onWorldKitLoaded } from '../../art/worldKit';
-import type { Container } from 'pixi.js';
+import { Graphics, type Container } from 'pixi.js';
 import type { Rect } from './layoutTypes';
 import { setCityLayoutProvider, setShellMounter, type ShellMounter } from './citySeams';
 
@@ -20,6 +20,7 @@ const mountCityShell: ShellMounter = ctx => {
   ctx.front.addChild(parts.front);
   const ids = parts.lights.map(l => ctx.addLight(l));
   batchOrder(parts.back, parts.front);
+  forceBatch(parts.back, parts.front);
   const cull = cullList(parts.back, parts.front);
   let destroyed = false;
   // The rock chunks bake into texture caches (cacheAsTexture): a world-kit painting that arrives after a bake would leave the stand-in baked in
@@ -97,6 +98,21 @@ function batchOrder(...roots: Container[]): void {
     piece.removeChildren();
     for (const k of sorted) piece.addChild(k.c);
   }
+}
+
+/**
+ * Pixi batches a Graphics only under 200 vertices ('auto'); a bigger one is drawn on its own AND breaks the batch around it. The shell's
+ * vector dressing (an edge's tunnel floors and plates, the hub's posts and props, pocket cracks) is a handful of Graphics of 300-5000
+ * vertices each: on a fresh game they cost ~24 draw calls at the overview. They are static (built once per layout), so they join the
+ * batcher: their vertices are copied when the play group's draw list is rebuilt, not every frame. Same shader, same pixels.
+ */
+function forceBatch(...roots: Container[]): void {
+  const walk = (o: Container): void => {
+    if (o.label === 'shell:rock') return; // (cached chunks: one sprite each)
+    if (o instanceof Graphics && o.context.batchMode === 'auto') o.context.batchMode = 'batch';
+    for (const c of o.children) walk(c);
+  };
+  for (const r of roots) walk(r);
 }
 
 let installed = false;
