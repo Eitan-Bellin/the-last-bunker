@@ -21,6 +21,8 @@ import { kButton, kRow, kTabs, MS } from '../kit'; // [ux2e]
 type SettingsGroup = 'game' | 'display' | 'saves' | 'more' | 'about';
 /** [ux2e #25] How long New Game must be held: two long presses (~0.9 s). */
 const HOLD_MS = 2 * MS['long-press'];
+/** [ux-redesign w2fix] A click this soon after Enter/Space came from the keyboard (its hold already ran), not from a screen reader. */
+const KEY_CLICK_MS = MS['long-press'];
 
 /** [ux2e #25] The build id of the running service worker (production only), or '' when there is none or it does not answer. */
 function appBuild(): Promise<string> {
@@ -446,9 +448,15 @@ export class MenuPanel {
       start();
     });
     for (const ev of ['pointerup', 'pointerleave', 'pointercancel', 'blur'] as const) btn.addEventListener(ev, cancel);
-    btn.addEventListener('keydown', (e) => { if ((e.key === 'Enter' || e.key === ' ') && !e.repeat) { e.preventDefault(); start(); } });
-    btn.addEventListener('keyup', (e) => { if (e.key === 'Enter' || e.key === ' ') cancel(); });
-    btn.addEventListener('click', (e) => e.stopPropagation());
+    let keyAt = 0;
+    btn.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { keyAt = performance.now(); if (!e.repeat) { e.preventDefault(); start(); } } });
+    btn.addEventListener('keyup', (e) => { if (e.key === 'Enter' || e.key === ' ') { keyAt = performance.now(); cancel(); } });
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      // [ux-redesign w2fix] A click with no pointer (detail 0) and no held key is a screen reader or switch "activate": it cannot hold,
+      // so it goes straight on (the app's own confirmation dialog still follows). A keyboard hold already handled its own keys.
+      if (e.detail === 0 && performance.now() - keyAt > KEY_CLICK_MS && !timer) { haptic('success'); uiSound('confirm'); onDone(); }
+    });
     btn.addEventListener('contextmenu', (e) => e.preventDefault()); // a long touch must not open the phone's menu
     return btn;
   }

@@ -249,3 +249,17 @@ Every plural key needs all three forms in both languages (the i18n parity lint e
   l10n-a11y pass (file outside this wave's scope).
 * `touch.css` declares `:root { --fs; --fs-hud; --tap; --chip-h }` and the high-contrast overrides (outside scope; they still work).
 * Roughly 340 hex and 380 rgba literals remain in the older sheets; Wave 2 screen work should replace them as each screen is rebuilt.
+
+## Notes from wave 2 (w2fix)
+
+* **Floating numbers default (audit #36).** `defaultA11y().popups` in `src/core/GameState.ts` is now `'important'` (was `'all'`), so the
+  routine "+2.9" numbers no longer scatter over the rooms. Only new players get it: a saved setting is kept as the player chose it.
+* **Timing constants that are logic, not motion tokens.** These milliseconds decide *when* something may happen, not how it moves, so
+  they stay named constants in TypeScript and are not tokens (reduced motion must not zero them):
+  `popupRules.ts` (`MODAL_TAP_GUARD_MS`, `GESTURE_QUIET_MS`, `CRITICAL_PATIENCE_MS`, `SHEET_SETTLE_MS`, `SHEET_IDLE_MS`, `LOST_POINTER_MS`,
+  `LOW_REPEAT_MS`, `GOAL_FOLD_MS`, `STALE_SAVE_MS`), `ceremony.ts` (each moment's length, `WAIT_POLL_MS`, `WAIT_STALE_MS`),
+  `controllers/feedback.ts` (`LEVEL_TOAST_GAP_MS`, `LEVEL_DIGEST_MIN_MS`, `LEVEL_QUIET_START_S`), `controllers/story.ts`
+  (`STORY_WAIT_POLL_MS`) and `dialogQueue.ts` (snoozes). Durations of visible movement (fades, slides, presses) remain tokens.
+* **Sheet motion** lives in `style.css` (it used to be injected by `Sheet.ts` as `<style id="sheet-motion">`): in `--dur-popup-in`,
+  out `--dur-popup-out`; the old 300 ms (`--dur-screen`) sheet rules are gone and the CRT flash of `bunker-os.css` runs for `--dur-popup-in`.
+* **Floor tags** are the i18n key `floor.tag` (he "קומה {n}", en "B{n}"); `floorTagIso()` wraps one in a bidi isolate for mixed strings.

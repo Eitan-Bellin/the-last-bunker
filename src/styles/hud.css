@@ -8,6 +8,8 @@
  */
 
 #hud .hx-top, #hud-nav { --hx-hit: max(var(--hit-min), var(--tap, var(--hit-min))); --hx-h: var(--hx-hit); }
+/* [ux-redesign w2fix B7] The bar's bottom padding: the "+N more" pill hangs from exactly there, so it never covers the info row. */
+#hud .hx-top { --hx-pad-b: var(--sp-3); }
 
 /* ---------- the bar ---------- */
 
@@ -17,7 +19,7 @@
   display: flex;
   flex-direction: column;
   gap: var(--sp-2);
-  padding: var(--sp-2) var(--sp-2) var(--sp-3);
+  padding: var(--sp-2) var(--sp-2) var(--hx-pad-b);
   padding-top: max(var(--sp-2), env(safe-area-inset-top));
   padding-inline: max(var(--sp-2), env(safe-area-inset-left)) max(var(--sp-2), env(safe-area-inset-right));
   background: linear-gradient(to bottom, var(--surface-0) 0%, color-mix(in srgb, var(--surface-0) 88%, transparent) 75%, transparent 100%);
@@ -93,6 +95,14 @@
   unicode-bidi: isolate;
 }
 [dir='rtl'] #hud .hx-res__line2 { justify-content: flex-end; }
+/*
+ * [ux-redesign w2fix #7] Phones: a calm tile is its icon and amount only (the rate line is one number too many on a 375 px bar); the
+ * second line comes back when the tile has something to say: low, danger or a countdown. Wide screens keep the rate.
+ */
+@media (max-width: 599px) {
+  #hud .hx-res .k-chip:not(.is-low):not(.is-danger):not(.is-countdown) { grid-template-areas: 'icon amount'; align-content: center; }
+  #hud .hx-res .k-chip:not(.is-low):not(.is-danger):not(.is-countdown) .hx-res__line2 { display: none; }
+}
 #hud .hx-res .k-chip__rate { font-size: inherit; color: inherit; font-variant-numeric: var(--num-tabular); }
 #hud .hx-res .k-chip__rate .ic { width: var(--icon-s); height: var(--icon-s); }
 #hud .hx-trend { font-size: calc(var(--type-caption) * var(--fs, 1) * 0.75); line-height: 1; }
@@ -136,7 +146,7 @@
   position: absolute;
   top: 100%;
   inset-inline-start: 50%;
-  translate: -50% calc(-1 * var(--sp-3));
+  translate: -50% calc(-1 * var(--hx-pad-b));
   z-index: 1;
   display: inline-flex;
   align-items: center;
@@ -152,8 +162,9 @@
   white-space: nowrap;
   cursor: pointer;
 }
-[dir='rtl'] #hud .hx-more { translate: 50% calc(-1 * var(--sp-3)); }
-#hud .hx-more::after { content: ''; position: absolute; inset: calc((var(--hx-hit) - var(--sp-5)) / -2) 0; }
+[dir='rtl'] #hud .hx-more { translate: 50% calc(-1 * var(--hx-pad-b)); }
+/* The hit area grows downward only (over the world), never up into the population / morale chips. */
+#hud .hx-more::after { content: ''; position: absolute; inset: 0 0 calc(var(--sp-5) - var(--hx-hit)); }
 #hud .hx-more[aria-expanded='true'] { color: var(--primary); border-color: var(--primary); }
 
 /* ---------- the info row ---------- */
@@ -209,12 +220,26 @@
 #hud .hx-morale.is-down .hx-stat__value { color: var(--danger-text); }
 #hud .hx-people .hx-stat__icon { color: var(--text-secondary); }
 
-/* The Act: name + % over a slim bar; takes the room that is left. */
-#hud .hx-act { flex: 1 1 0; min-width: calc(var(--sp-8) + var(--sp-5)); flex-direction: column; align-items: stretch; justify-content: center; gap: var(--sp-1); }
-#hud .hx-act__head { display: flex; align-items: baseline; gap: var(--sp-1); min-width: 0; font-size: calc(var(--type-caption) * var(--fs, 1)); }
-#hud .hx-act__name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-secondary); }
+/*
+ * The Act, on two short lines ([ux-redesign w2fix B1]): "Act III  38%" over the Act's word ("Settle"), with the progress as a slim bar
+ * along the chip's bottom edge. It takes the room that is left, and never less than the longest Act word needs.
+ */
+#hud .hx-act {
+  flex: 1 1 0;
+  min-width: calc(var(--sp-8) + var(--sp-6));
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: center;
+  gap: 0;
+  overflow: hidden;
+  padding-block-end: calc(var(--sp-1) + var(--border-w));
+}
+#hud .hx-act__head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--sp-1); min-width: 0; font-size: calc(var(--type-caption) * var(--fs, 1)); color: var(--text-secondary); white-space: nowrap; }
+#hud .hx-act__num { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+#hud .hx-act__roman { unicode-bidi: isolate; font-weight: var(--weight-bold); }
+#hud .hx-act__name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: calc(var(--type-caption) * var(--fs, 1)); font-weight: var(--weight-bold); color: var(--text-primary); }
 #hud .hx-act__pct { font-weight: var(--weight-bold); color: var(--primary); font-variant-numeric: var(--num-tabular); unicode-bidi: isolate; }
-#hud .hx-act__bar { height: calc(var(--sp-1) + var(--border-w)); }
+#hud .hx-act__bar { position: absolute; inset-inline: 0; bottom: 0; height: calc(var(--sp-1) - var(--border-w)); border-radius: 0 0 var(--r-panel) var(--r-panel); }
 
 /* Wide screens only: the shop's credits and the clock. */
 #hud .hx-credits, #hud .hx-clock { display: none; }
@@ -271,7 +296,7 @@
 
 @media (max-height: 700px) {
   /* Tiles and chips are 40 px plates; their hit areas still reach 48 px (they meet in the 4 px gap between the two rows). */
-  #hud .hx-top { --hx-h: calc(var(--sp-6) + var(--sp-2)); gap: var(--sp-1); padding-bottom: var(--sp-2); }
+  #hud .hx-top { --hx-h: calc(var(--sp-6) + var(--sp-2)); --hx-pad-b: var(--sp-2); gap: var(--sp-1); }
   #hud .hx-res .k-chip { min-height: var(--hx-h); padding-block: var(--border-w) var(--sp-1); }
   #hud .hx-res { min-height: var(--hx-h); position: relative; }
   #hud .hx-res::after { content: ''; position: absolute; inset: calc((var(--hx-h) - var(--hx-hit)) / 2) 0; }

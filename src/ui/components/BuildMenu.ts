@@ -14,6 +14,7 @@ import { buildingArtKey } from '../../art/registry';
 import { BUILDING_ICONS, RESOURCE_ICONS, el, rateText } from '../dom';
 import { describeMissing, missingList } from '../missing';
 import { floorTag } from '../floorTag';
+import { BATTERY_ROOMS, BED_ROOMS, KID_ROOMS, MORALE_ROOMS, NEED_ROOMS } from '../../systems/BuildAdvice'; // [ux-redesign w2fix] one source for the lists
 import { fmtCost, fmtDuration } from '../format';
 import { kButton } from '../kit';
 import { haptic } from '../../utils/haptics';
@@ -108,13 +109,6 @@ interface Rec {
 }
 
 const net = (state: GameState, r: ResourceType): number => (state.resources[r]?.productionRate ?? 0) - (state.resources[r]?.consumptionRate ?? 0);
-
-/** The rooms that answer each running-out store, best first (the lists systems/BuildAdvice.ts uses). */
-const NEED_ROOMS: Record<'food' | 'water' | 'power', BuildingType[]> = {
-  power: ['generator', 'reactor', 'solarArray', 'windTurbine'],
-  water: ['waterPump', 'condenser', 'waterPurifier'],
-  food: ['farm', 'hydroponics', 'mushroomFarm'],
-};
 
 /** What one card needs to know about a room right now. */
 interface Entry {
@@ -324,16 +318,16 @@ export class BuildMenu {
       else if (isFinite(x.empty)) add(`ux2c.rec.${x.r}`, NEED_ROOMS[x.r], { time: iso(fmtDuration(x.empty)) });
       else add(`build.rec.${x.r}`, NEED_ROOMS[x.r]);
     }
-    if (state.survivors.length >= state.maxPopulation - 1) add('build.rec.beds', ['quarters', 'barracks']);
+    if (state.survivors.length >= state.maxPopulation - 1) add('build.rec.beds', BED_ROOMS);
     const p = state.resources.power;
-    if (p && p.cap > 0 && p.amount < p.cap * 0.25 && net(state, 'power') >= 0.5) add('build.rec.battery', ['batteryBank']);
+    if (p && p.cap > 0 && p.amount < p.cap * 0.25 && net(state, 'power') >= 0.5) add('build.rec.battery', BATTERY_ROOMS);
     if (state.survivors.length >= 4) {
       const mood = state.survivors.reduce((s, x) => s + x.happiness, 0) / state.survivors.length;
-      if (mood < 55) add('build.rec.morale', ['commons', 'canteen']);
+      if (mood < 55) add('build.rec.morale', MORALE_ROOMS);
     }
     // [plan4:BL-26/30] Children need a place of their own: a nursery first, then a school.
-    if (state.survivors.some(x => x.child) && !state.buildings.some(b => b.type === 'nursery')) add('build.rec.kids', ['nursery']);
-    else if (state.survivors.filter(x => x.child).length >= 3 && !state.buildings.some(b => b.type === 'school')) add('build.rec.kids', ['school']);
+    if (state.survivors.some(x => x.child) && !state.buildings.some(b => b.type === 'nursery')) add('build.rec.kids', KID_ROOMS.first);
+    else if (state.survivors.filter(x => x.child).length >= 3 && !state.buildings.some(b => b.type === 'school')) add('build.rec.kids', KID_ROOMS.then);
     return out;
   }
 
@@ -350,7 +344,8 @@ export class BuildMenu {
       return b;
     };
     this.chips.replaceChildren(
-      chip('now', '[[check]]', i18n.t('wp4.canBuild'), all.filter(e => e.unlocked).length),
+      // [ux-redesign w2fix B8] The count is the rooms with a free spot right now (a "No space" card is open but cannot be built yet).
+      chip('now', '[[check]]', i18n.t('wp4.canBuild'), all.filter(e => e.placeable).length),
       chip('all', '[[build]]', i18n.t('build.cat.all'), all.length),
       ...present.map(c => chip(c.id, c.icon, i18n.t(`build.cat.${c.id}`), all.filter(e => buildCategoryOf(e.type) === c.id).length)),
     );

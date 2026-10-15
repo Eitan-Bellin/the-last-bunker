@@ -12,24 +12,18 @@ let openCount = 0;
 let titleSeq = 0;
 const behind = (): Element[] => [document.getElementById('hud'), document.getElementById('game-canvas')].filter((n): n is HTMLElement => !!n);
 
-/**
- * [ux-w2f #38] Sheet motion: 250 ms in, 180 ms out (motion tokens; the older rules in style.css / bunker-os.css said 300 ms and a 400 ms
- * CRT flash). Injected from here because this task may only touch Sheet.ts; fold into style.css when that file is open. A sheet that is
- * replaced by another one closes with `.sheet-instant`, so two panels never slide over each other.
+/*
+ * [ux-w2f #38] Sheet motion (250 ms in, 180 ms out, `.sheet-instant` when one sheet replaces another) lives in style.css
+ * ([ux-redesign w2fix]: it used to be injected from here as <style id="sheet-motion">).
  */
-function injectMotion(): void {
-  if (document.getElementById('sheet-motion')) return;
-  const st = document.createElement('style');
-  st.id = 'sheet-motion';
-  st.textContent = `
-.sheet-overlay { transition-duration: var(--dur-popup-out); }
-.sheet-overlay.open { transition-duration: var(--dur-popup-in); }
-.sheet-overlay .sheet { transition: transform var(--dur-popup-out) var(--ease-in), visibility 0s linear var(--dur-popup-out); }
-.sheet-overlay.open .sheet { transition: transform var(--dur-popup-in) var(--ease-out); animation-duration: var(--dur-popup-in); }
-.sheet-overlay .sheet.dragging { transition: none; animation: none; }
-.sheet-overlay.sheet-instant, .sheet-overlay.sheet-instant .sheet { transition: none; animation: none; }`;
-  document.head.appendChild(st);
-}
+
+/**
+ * [ux-redesign w2fix] Sheets that open OVER the sheet that asked for them instead of replacing it: the Bunker Book (help) and the
+ * Chronicle (opened from the Menu, which is still there when it closes). Every other sheet replaces the open one (coupon and projects
+ * close the others themselves before they open).
+ */
+const STACKING = ['help-sheet', 'chronicle-sheet'];
+const stacks = (s: Sheet): boolean => STACKING.some(c => s.panelHas(c));
 
 /** How far (px) or how fast (px/ms) a pull-down must go to dismiss the sheet. */
 const DISMISS_PX = 90;
@@ -54,7 +48,6 @@ export class Sheet {
   static onHelp: ((topic: string) => void) | null = null;
 
   constructor(extraClass = '', helpTopic: string | null = null) {
-    injectMotion();
     this.overlay = el('div', 'sheet-overlay');
     this.overlay.addEventListener('click', (e) => {
       if (e.target === this.overlay) this.hide();
@@ -226,9 +219,9 @@ export class Sheet {
       if (modal && modal.parentElement === document.body) document.body.insertBefore(this.overlay, modal);
       else document.body.appendChild(this.overlay);
     }
-    // [ux-w2f #38] Switching sheets: the old one goes at once (the Bunker Book is the exception, it opens over the sheet that asked for it).
-    if (!this.panel.classList.contains('help-sheet')) {
-      for (const other of [...openSheets]) if (other !== this && !other.panel.classList.contains('help-sheet')) other.hideNow();
+    // [ux-w2f #38] Switching sheets: the old one goes at once (the stacking readers are the exception: see STACKING).
+    if (!stacks(this)) {
+      for (const other of [...openSheets]) if (other !== this && !stacks(other)) other.hideNow();
     }
     this.open = true;
     this.panel.style.transform = '';
@@ -271,5 +264,10 @@ export class Sheet {
 
   get isVisible(): boolean {
     return this.open;
+  }
+
+  /** The panel carries this class (which kind of sheet it is). */
+  panelHas(cls: string): boolean {
+    return this.panel.classList.contains(cls);
   }
 }

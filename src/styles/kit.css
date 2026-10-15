@@ -252,7 +252,9 @@
 
 /* ---- Tabs ---------------------------------------------------------------------------------------------------------------------------- */
 
-.k-tab { position: relative; display: inline-flex; align-items: center; gap: var(--sp-1); min-height: var(--hit-min); }
+.k-tab { position: relative; display: inline-flex; align-items: center; justify-content: center; gap: var(--sp-1); min-height: var(--hit-min); min-width: var(--hit-min); } /* [ux-redesign w2fix B5] a short label ("עוד") is still a full hit-min wide */
+/* One class more than touch.css's legacy `.tab { min-height: var(--tap) }` (44): a kit tab is a full hit-min tall too (large targets still win). */
+.tab.k-tab { min-height: max(var(--hit-min), var(--tap, var(--hit-min))); min-width: var(--hit-min); }
 
 /* ---- Empty state --------------------------------------------------------------------------------------------------------------------- */
 

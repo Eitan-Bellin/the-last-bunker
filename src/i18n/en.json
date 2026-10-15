@@ -644,6 +644,7 @@
   "build.surfaceOnly": "Surface row only",
   "build.entranceOrSurface": "Entrance or surface row",
   "floor.surface": "Surface",
+  "floor.tag": "B{n}",
   "build.actPrice": "Price x{n} in this Act",
   "build.noMatch": "No room matches. Try another word or category.",
   "build.width": "Width: {n} slots",

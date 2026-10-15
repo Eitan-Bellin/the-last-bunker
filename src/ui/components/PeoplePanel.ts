@@ -1,5 +1,5 @@
 import type { BuildingInstance, BuildingType, GameState, SurvivorState } from '../../core/GameState';
-import { floorTag } from '../floorTag'; // plan4:ST-16
+import { floorTag, floorTagIso } from '../floorTag'; // plan4:ST-16
 import type { GameEngine } from '../../core/GameEngine';
 import { i18n } from '../../i18n/I18nManager';
 import { crewCount, getDef, traitBonus } from '../../data/buildingDefs';
@@ -686,7 +686,7 @@ export class PeoplePanel {
       const full = used >= cap && !b.assignedSurvivorIds.includes(s.id);
       const statVal = def.optimalStat ? `${STAT_ICONS[def.optimalStat]} ${s.stats[def.optimalStat]}` : '';
       const star = traitBonus(s.traits, b.type) > 0 ? ' [[star]]' : '';
-      const label = `${floorTag(b.position.floor)} · ${BUILDING_ICONS[b.type] ?? ''} ${def.name[locale] ?? def.name.en} (${used}/${cap}) ${statVal}${star}`;
+      const label = `${floorTagIso(b.position.floor)} · ${BUILDING_ICONS[b.type] ?? ''} ${def.name[locale] ?? def.name.en} (${used}/${cap}) ${statVal}${star}`;
       rows.push({ b, full, score: fitScore(s, b.type), label });
     }
     const cur = (r: { b: BuildingInstance }) => (r.b.id === s.assignedBuildingId ? 1 : 0);

@@ -1,5 +1,5 @@
 import { VIEW } from './rendering/perfFx'; // [perf]
-import { floorTag } from './ui/floorTag'; // plan4:ST-16
+import { floorTag, floorTagIso } from './ui/floorTag'; // plan4:ST-16
 import { GameEngine, type OfflineReport } from './core/GameEngine';
 import { ProjectsPanel } from './ui/components/ProjectsPanel'; // [LateGame B1]
 import { PROJECTS, projectDone, stagesDone } from './data/projects'; // [LateGame B1]
@@ -286,7 +286,7 @@ export class GameApp {
     this.resourceSheet = new ResourceSheet(this.engine);
     this.modal = new Modal();
     this.toasts = new Toasts();
-    this.dialogs = new DialogQueue(this.dialogSources(), this.modal, c => this.dialogGate(c), () => this.engine.stateManager.state?.stats.totalPlayTime ?? 0);
+    this.dialogs = new DialogQueue(this.dialogSources(), this.modal, (c, w) => this.dialogGate(c, w), () => this.engine.stateManager.state?.stats.totalPlayTime ?? 0);
   }
 
   async start(): Promise<void> {
@@ -555,14 +555,14 @@ export class GameApp {
    * a pinch, a carried survivor), a gesture ended less than 1.5 s ago, a sheet is sliding, a ceremony is playing, or (for anything that is not an
    * emergency) a sheet is open under the player's hands. A sheet left open and untouched for 20 s no longer holds the dialogs back.
    */
-  dialogGate(critical = false): boolean {
+  dialogGate(critical = false, waitedMs = 0): boolean {
     const now = performance.now();
     for (const [id, t] of this.pointersDown) if (now - t > LOST_POINTER_MS) this.pointersDown.delete(id); // a lost pointerup must not block forever
     // [ux-redesign w2a #5] The rules live in popupRules.gateBlock: 1.5 s after any touch, and never while a sheet is still moving.
     const why = gateBlock({
       now, critical, placing: !!this.placementMode, touring: !!this.tour?.active, pointersDown: this.pointersDown.size,
       lastGestureAt: this.lastGestureAt, ceremony: this.ceremonyActive(now), panelOpen: this.anyPanelOpen(),
-      sheetMovingUntil: this.sheetMovingUntil, tipShowing: this.tips.isShowing,
+      sheetMovingUntil: this.sheetMovingUntil, tipShowing: this.tips.isShowing, waitedMs,
     });
     this.lastGateBlock = why;
     if (why) return false;
@@ -598,8 +598,12 @@ export class GameApp {
   /** [ux-redesign w2a #7] "Welcome back" only after more than 10 minutes away; people at the door are asked about regardless. */
   private queueWelcome(report: OfflineReport | null): void {
     const away = report ? report.realSeconds ?? report.seconds : null;
-    if (!wantsWelcome(away, this.state.doorWaiting?.length ?? 0)) return;
-    this.pendingWelcome = { report: wantsWelcome(away, 0) ? report : null };
+    // [ux-redesign w2fix] A raid, a disaster or a hurt survivor while away is worth the report even after a short absence.
+    const dg = report?.danger, nd = report?.nightDanger;
+    const hadDanger = !!dg && (dg.raids > 0 || dg.disasters.length > 0 || dg.hurt > 0 || dg.died.length > 0)
+      || !!nd && (nd.hurt.length > 0 || Object.values(nd.lost).some(v => (v ?? 0) !== 0));
+    if (!wantsWelcome(away, this.state.doorWaiting?.length ?? 0, hadDanger)) return;
+    this.pendingWelcome = { report: wantsWelcome(away, 0, hadDanger) ? report : null };
   }
 
   /**
@@ -760,7 +764,8 @@ export class GameApp {
     // [ux-wp1 C1] The chip names the Act only ("I·34% Survive"); the era stays the bunker's look (banner, Command panel).
     const actName = act.name[i18n.currentLocale];
     const short = actName.split('·').pop()?.trim() || actName;
-    this.hud.setEra(era.key, short, `${roman}·${pct}%`, `${actName} · ${pct}%`);
+    // [ux-redesign w2fix] Numeral and percent as data: the HUD isolates them (no "I·20%" string mixed into right-to-left text).
+    this.hud.setEra(era.key, short, { roman, pct }, `${actName} · ${pct}%`);
   }
 
   private updateAudio(): void {
@@ -1276,7 +1281,7 @@ export class GameApp {
   roomName(buildingId: string): string {
     const b = this.state.buildings.find(x => x.id === buildingId);
     if (!b) return '';
-    return `${getDef(b.type)?.name[i18n.currentLocale] ?? b.type} · ${floorTag(b.position.floor)}`; // plan4:ST-16
+    return `${getDef(b.type)?.name[i18n.currentLocale] ?? b.type} · ${floorTagIso(b.position.floor)}`; // plan4:ST-16 [ux-redesign w2fix] isolated
   }
 
   private specialize(buildingId: string, specId: string): void {

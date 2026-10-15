@@ -31,7 +31,7 @@ const PANEL_MS = 6500;
  * Opening sequence: three painted story panels with slow camera drift and narration,
  * the title card, then a flashlight sweep that reveals the dead bunker behind the overlay.
  */
-export function playIntro(opts: { play: (s: 'siren' | 'wind' | 'door' | 'click') => void; onDone: () => void }): void {
+export function playIntro(opts: { play: (s: 'siren' | 'wind' | 'door' | 'click') => void; onDone: () => void; unlock?: () => void }): void {
   const base = import.meta.env.BASE_URL;
   const overlay = el('div', 'intro');
   const stage = el('div', 'intro-stage');
@@ -140,6 +140,7 @@ export function playIntro(opts: { play: (s: 'siren' | 'wind' | 'door' | 'click')
   overlay.addEventListener('click', (e) => {
     if (e.target === skip || finished || opening) return;
     if (index < 0) {
+      opts.unlock?.(); // [ux-redesign w2fix] "Tap to enter" is a known gesture: unlock audio here too (iOS), not only in the global listeners
       // The camera pushes into the vault door, then the story begins.
       opening = true;
       opts.play('click');

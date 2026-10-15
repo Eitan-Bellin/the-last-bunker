@@ -43,6 +43,8 @@ export function causeText(state: import('../../core/GameState').GameState, cause
 const LEVEL_TOAST_GAP_MS = 60_000;
 /** [ux-redesign w2a #22] The first digest of a quiet minute still waits this long, so a burst of level-ups becomes one line. */
 const LEVEL_DIGEST_MIN_MS = 8_000;
+/** [ux-redesign w2fix B9 / #22] No level-up toast at all in a new game's first minutes (play seconds): the star over the head says it. */
+const LEVEL_QUIET_START_S = 300;
 
 /** What the player sees and hears when something happens in the bunker: toasts, sounds, little bursts over the rooms. */
 export class FeedbackController {
@@ -59,6 +61,7 @@ export class FeedbackController {
 
   private levelToast(text: string): void {
     if (this.app.engine.awayRunning) return; // [ux-wp3 D2] the hours away are told by the welcome report, not by a pile of level-ups
+    if (this.app.state.stats.totalPlayTime < LEVEL_QUIET_START_S) return;
     const now = performance.now();
     // [ux-redesign w2a #22] Never at once: the star over the person's head is the moment; the toast is a digest at the end of the minute.
     this.levelWaiting.push(text);
@@ -67,7 +70,7 @@ export class FeedbackController {
       this.levelTimer = 0;
       const list = this.levelWaiting;
       this.levelWaiting = [];
-      if (!list.length) return;
+      if (!list.length || this.app.state.stats.totalPlayTime < LEVEL_QUIET_START_S) return;
       this.levelShownAt = performance.now();
       this.app.toasts.show(list.length === 1 ? list[0] : `[[star]] ${i18n.t('wp3.levelUps', { n: list.length })}`, 'good');
     }, Math.max(LEVEL_DIGEST_MIN_MS, LEVEL_TOAST_GAP_MS - (now - this.levelShownAt)));

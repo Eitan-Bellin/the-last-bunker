@@ -46,10 +46,13 @@ export class DialogQueue {
 
   private readonly sources: DialogSource[];
   private readonly modal: Modal;
-  private readonly gate: (critical: boolean) => boolean;
+  private readonly gate: (critical: boolean, waitedMs: number) => boolean;
+  /** [ux-redesign w2fix] Since when the current top source has been held back (for popupRules.CRITICAL_PATIENCE_MS). */
+  private heldId = '';
+  private heldSince = 0;
   private readonly playSeconds: () => number;
 
-  constructor(sources: DialogSource[], modal: Modal, gate: (critical: boolean) => boolean, playSeconds: () => number) {
+  constructor(sources: DialogSource[], modal: Modal, gate: (critical: boolean, waitedMs: number) => boolean, playSeconds: () => number) {
     this.sources = orderSources(sources);
     this.modal = modal;
     this.gate = gate;
@@ -71,10 +74,12 @@ export class DialogQueue {
       return;
     }
     const top = list[0];
-    if (!this.gate(!!top.critical)) {
+    if (this.heldId !== top.id) { this.heldId = top.id; this.heldSince = now; }
+    if (!this.gate(!!top.critical, now - this.heldSince)) {
       this.lastDecision = 'blocked';
       return;
     }
+    this.heldId = '';
     const soft = list.filter(s => !s.critical);
     if (!top.critical && !this.working && soft.length >= FOLD_AT && this.playSeconds() > FOLD_AFTER_PLAY_S) {
       this.lastDecision = 'fold';
