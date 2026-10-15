@@ -129,8 +129,18 @@ export function entryX(roomX: number, roomW: number, fromX: number): number {
 
 // --- Stairs ----------------------------------------------------------------------------------------------------------------------
 
-/** The world x of the middle of a stairwell column that runs through every floor from lo to hi, or NaN when there is none. */
+/** True when two floors place every slot at the same x (classic: always; city: same stratum frame). */
+function sameFrame(a: number, b: number): boolean {
+  return roomsEastX(a) === roomsEastX(b) && roomsWestX(a) === roomsWestX(b);
+}
+
+/**
+ * The world x of the middle of a stairwell column that runs through every floor from lo to hi, or NaN when there is none.
+ * The x is read in lo's frame, so lo and hi must share one horizontal frame (one stratum, or strata with the same frame): a column that
+ * crosses a frame change is not vertical, and is refused (NaN) rather than drawn at lo's x on floors where the slot sits elsewhere.
+ */
 export function stairColumnX(state: GameState, lo: number, hi: number): number {
+  if (!sameFrame(lo, hi)) return NaN;
   for (const inf of state.layout?.infra ?? []) {
     if ((inf.kind === 'stairs' || inf.kind === 'stairwell') && inf.floor <= lo && inf.floor + (inf.floors ?? 1) - 1 >= hi) return slotX(lo, inf.x) + SLOT_W / 2;
   }

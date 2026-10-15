@@ -170,7 +170,7 @@ function cityChecks(fail: (m: string) => void, notes: string[]): void {
     const ks = (): number[] => Array.from(r.kind.slice(0, r.n));
     const eastX = hubStairX(1, 'e');
     // Blackout 0 -> 2 from the first room (nearer the hub than the first void tower): the east hub stairs, entered and left on the right landing, 8 flights, lane to lane.
-    let o = route(st, stop(0, roomsEastX(0) + 10), stop(2, roomsEastX(2) + 60), false, 0.5, r);
+    let o = route(st, stop(0, roomsEastX(0) + 10), stop(2, roomsEastX(2) + 60), false, 0.5, r); // floor-0: the walk starts on B1, the slice's top storey
     if (!o) fail('city: blackout 0->2 has no route (the survivor would teleport)');
     else {
       const k = ks().indexOf(LEG_STAIRS);
@@ -185,7 +185,7 @@ function cityChecks(fail: (m: string) => void, notes: string[]): void {
       }
     }
     // With the lift: a high roll rides from the landing on the balcony lane to the other balcony.
-    o = route(st, stop(2, roomsEastX(2) + 60), stop(0, roomsEastX(0) + 300), true, 0.9, r);
+    o = route(st, stop(2, roomsEastX(2) + 60), stop(0, roomsEastX(0) + 300), true, 0.9, r); // floor-0: the lift ride ends on B1's balcony lane
     if (!o || !ks().includes(LEG_LIFT)) fail(`city: a high roll with power should ride the lift, got ${o ? ks().join('') : 'null'}`);
     else {
       const k = ks().indexOf(LEG_LIFT);
@@ -218,7 +218,8 @@ function cityChecks(fail: (m: string) => void, notes: string[]): void {
     if (!o || r.x[ks().indexOf(LEG_LADDER)] !== LADDER_X) fail('city: surface -> floor 2 should climb the shaft ladder to floor 0 first');
     // A closed bulkhead still blocks the walk (acceptance 6.4: closing a bulkhead blocks the walk).
     setDoorBlocked((fl, x0, x1) => fl === 2 && x0 === 3 && x1 === 4);
-    if (route(st, stop(0, roomsEastX(0) + 30), stop(2, slotX(2, 6) + 10), true, 0.9, r) !== null) fail('city: a closed door between the landing and the room must block the walk');
+    if (route(st, stop(0, roomsEastX(0) + 30), stop(2, slotX(2, 6) + 10), true, 0.9, r) !== null) fail( // floor-0: from B1 down to the bulkhead on B3
+      'city: a closed door between the landing and the room must block the walk');
     setDoorBlocked(null);
 
     // The camera frame from the layout: content inside bounds, the hub inside content, the bounds tighter than the dressing bounds.
