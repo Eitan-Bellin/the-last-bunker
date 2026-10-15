@@ -56,6 +56,15 @@ const lookups = legacy.filter(l => l.includes('FLOOR_H'));
 const counts = legacy.filter(l => l.includes('SLOTS_PER_FLOOR'));
 for (const l of lookups) problems.push(`geometry: ${l} (use floorAtY in rendering/geom.ts)`);
 if (counts.length) console.log(`lint warning: ${counts.length} use(s) of SLOTS_PER_FLOOR outside rendering/geom.ts (use floorExtent)`);
+// [world:C0] The x-conversion ratchet: legacy floor-less x conversions (geom.ts slotX / slotAtX / buildingX / districtXAt, ROOMS_X / SHAFT_GAP maths)
+// outside rendering/geom.ts and world/project.ts may only go down; when it drops, lower LEGACY_X_BASELINE in lint.ts.
+const legacyX = mod.legacyXUses(srcFiles);
+if (legacyX.length > mod.LEGACY_X_BASELINE) problems.push(`projection: ${legacyX.length} legacy x conversion(s), the ratchet allows ${mod.LEGACY_X_BASELINE} (use src/world/project.ts with the floor):\n   ${legacyX.join('\n   ')}`);
+else if (legacyX.length < mod.LEGACY_X_BASELINE) console.log(`lint note: legacy x conversions are down to ${legacyX.length}: lower LEGACY_X_BASELINE in tools/sim/lint.ts to ${legacyX.length}`);
+// [world:C0] A literal floor 0 in a projection call needs a "// floor-0: <reason>" comment (the floor-argument rule).
+const simFiles = readdirSync(HERE).filter(f => f.endsWith('.ts')).map(f => ({ rel: `../tools/sim/${f}`, text: readFileSync(join(HERE, f), 'utf8') }));
+const floor0 = mod.floorZeroWarnings([...srcFiles, ...simFiles]);
+if (floor0.length) console.log(`lint warning: ${floor0.length} projection call(s) with a literal floor 0 and no "// floor-0:" reason:\n - ${floor0.join('\n - ')}`);
 // [ux-wp4] I1: a signed number written straight into textContent skips the left-to-right isolate setRich adds, so in Hebrew "+30%" shows
 // as "30%+" and "−3" as "3−". UI code that sets textContent with a sign before a template value, or a rate, must wrap it (bidiNumbers or
 // signed in src/ui/dom.ts) or use setRich. The toast "×N" counter is isolated in CSS (.toast-count, ux-wp4.css).
@@ -70,6 +79,7 @@ for (const f of srcFiles) {
   });
 }
 if (process.argv.includes('--verbose')) console.log(`legacy geometry: ${lookups.length} reverse lookup(s), ${counts.length} slot-count use(s)` + (legacy.length ? '\n - ' + legacy.join('\n - ') : ''));
+if (process.argv.includes('--verbose')) console.log(`legacy x conversions (ratchet ${mod.LEGACY_X_BASELINE}): ${legacyX.length}` + (legacyX.length ? '\n - ' + legacyX.join('\n - ') : ''));
 
 if (problems.length) {
   console.error(`lint: ${problems.length} problem(s)\n - ${problems.join('\n - ')}`);

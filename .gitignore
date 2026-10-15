@@ -29,6 +29,7 @@ store/compare/
 store/screenshots/
 store/sim/*
 !store/sim/saves-v6/
+!store/sim/saves-v7/
 store/gfx-audit/shots/
 
 # Personal save exports never go to the public repo
