@@ -284,11 +284,12 @@ export class CityHost {
    */
   tapPocket(x: number, y: number): boolean {
     const a = this.city.areaAt(x, y);
-    if (!a || a.kind !== 'pocket' || a.state === 'revealed') return false;
+    // [world:M1 review] Only a GLIMPSED pocket is findable: one still in hidden rock (its stratum not reached) cannot be found blind.
+    if (!a || a.kind !== 'pocket' || a.state !== 'glimpsed') return false;
     const sys = activeCitySystem();
     if (!sys || !sys.find(a.id)) return false;
     const at = pinAnchor(this.layout ?? { areas: [a] } as CityLayout, a.id) ?? { x, y };
-    const cx = a.label ? a.label.x : at.x, cy = a.label ? a.label.y + 12 : at.y;
+    const cx = a.label ? a.label.x : at.x, cy = a.label ? a.label.y + PINS.labelDy : at.y;
     this.city.reveal(cx, cy, PINS.findRevealR);
     this.pins.flash(cx, cy, this.t);
     uiSound('reveal');

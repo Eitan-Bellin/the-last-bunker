@@ -48,7 +48,7 @@ import { coneTexture } from '../art/ArtLibrary';
 import { buildRuinVisual } from './ruinArt';
 import { iconSprite } from './richText';
 import { glowTexture, moteTexture } from '../art/ArtLibrary';
-import { Sprite, Texture } from 'pixi.js';
+import { Sprite, Texture, type GraphicsContext } from 'pixi.js';
 import { IncidentLayer, DisasterLayer } from './incidentFx';
 import { PopulationSystem } from '../systems/PopulationSystem';
 /** [Danger C5] Only used to turn a stored name into its Hebrew form for the plaque. */
@@ -68,7 +68,7 @@ import { KIT_KEYS, buildBays,buildCasing, depthGains, structureAmbient, gfx2Enab
 const CITY_EDGE_PAD = 90;
 /**
  * [world:M1] After a lost GL context: blanks every sprite (plain, tiling, nine-slice) whose texture was destroyed and clears every
- * Graphics that fills with one. Returns how many it fixed. A destroyed texture has no source, and Pixi's batcher reads
+ * Graphics that fills with one (or, for a shared context, swaps the dead fill for an empty one). Returns how many it fixed. A destroyed texture has no source, and Pixi's batcher reads
  * `texture._source.alphaMode` for every element, so one stale reference threw on every picture after a restore.
  */
 export function dropDeadTextures(root: Container): number {
@@ -82,16 +82,30 @@ export function dropDeadTextures(root: Container): number {
     const sp = o as unknown as { texture?: Texture };
     const tx = o instanceof Text || o instanceof Graphics ? undefined : sp.texture; // a Text owns and remakes its texture
     if (tx && dead(tx)) { sp.texture = Texture.EMPTY; n++; }
-    const ctx = o instanceof Graphics ? o.context : null;
-    if (ctx && !ctx.destroyed) {
-      for (const ins of ctx.instructions) {
-        const t = (ins.data as { style?: { texture?: Texture } }).style?.texture;
-        if (t && dead(t)) { ctx.clear(); n++; break; }
-      }
+    if (o instanceof Graphics && !o.context.destroyed) {
+      const ctx = o.context;
+      const users = (byCtx.get(ctx) ?? []).concat(o);
+      byCtx.set(ctx, users);
     }
     for (const c of o.children) walk(c);
   };
+  // [world:M1 review] Graphics are gathered first, by context: a context can be shared (Graphics.clone(), new Graphics(ctx), a cached
+  // context), and clearing a shared one would blank every other user too. Only a context its single Graphics owns is cleared; a shared or
+  // borrowed one keeps its geometry, has each dead fill texture swapped for Texture.EMPTY in place, and its GPU data invalidated.
+  const byCtx = new Map<GraphicsContext, Graphics[]>();
   walk(root);
+  for (const [ctx, users] of byCtx) {
+    const deadIns = ctx.instructions.filter(ins => {
+      const t = (ins.data as { style?: { texture?: Texture } }).style?.texture;
+      return !!t && dead(t);
+    });
+    if (!deadIns.length) continue;
+    const owned = users.length === 1 && (users[0] as unknown as { _ownedContext: GraphicsContext | null })._ownedContext === ctx;
+    if (owned) { ctx.clear(); n++; continue; }
+    for (const ins of deadIns) (ins.data as { style: { texture: Texture } }).style.texture = Texture.EMPTY;
+    (ctx as unknown as { onUpdate(): void }).onUpdate(); // dirty: the GPU batches of this context are rebuilt with the empty texture
+    n++;
+  }
   return n;
 }
 

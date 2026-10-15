@@ -177,6 +177,9 @@ export class Walkers {
     this.layer.label = 'walkers';
     this.layer.isRenderGroup = true;
     this.layer.sortableChildren = true;
+    // [world:M1 review] Sized once, at construction: when the city chunk then fails and the session falls back to classic
+    // (project.ts fallbackToClassic) the LIFE_SLOTS extra stay allocated but are never used (the city life systems never start). A few
+    // idle records, deliberately not resized: slot indices (idx) must stay stable for the life of the pool.
     const n = CITY ? MAX_WALKERS + LIFE_SLOTS : MAX_WALKERS;
     for (let i = 0; i < n; i++) {
       this.slots.push({

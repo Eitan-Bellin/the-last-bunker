@@ -28,6 +28,7 @@ export class ForeSilhouettes {
   private keep: Box[] = [];
   private plane: Container | null = null;
   private tried = 0;
+  private last = -1;
 
   constructor(layout: CityLayout) {
     this.root.label = 'shell:fore';
@@ -95,8 +96,11 @@ export class ForeSilhouettes {
     }
   }
 
-  update(from: Container, view: Rect): void {
+  /** `now` in ms (performance.now): the fade-in eases by elapsed time, not per frame. */
+  update(from: Container, view: Rect, now: number): void {
     if (!this.items.length) return;
+    const dt = this.last < 0 ? 1 / 60 : Math.min(0.25, Math.max(0, (now - this.last) / 1000));
+    this.last = now;
     if (!this.plane) {
       if (this.tried++ % 30 === 0) this.attach(from);
       if (!this.plane) return;
@@ -105,6 +109,7 @@ export class ForeSilhouettes {
     // Where parallax puts an authored point now: W = c + pk (x - c), c = the view centre, k = the plane's scale.
     const pk = P_FORE * this.plane.scale.x;
     const cx = view.x + view.w / 2, cy = view.y + view.h / 2;
+    const ease = 1 - Math.exp(-dt / F.fadeTau);
     const vx0 = view.x - 60, vy0 = view.y - 60, vx1 = view.x + view.w + 60, vy1 = view.y + view.h + 60;
     for (const it of this.items) {
       const x0 = cx + pk * (it.x0 - cx), x1 = cx + pk * (it.x1 - cx), y0 = cy + pk * (it.y0 - cy), y1 = cy + pk * (it.y1 - cy);
@@ -115,7 +120,7 @@ export class ForeSilhouettes {
         for (const k of this.keep) if (x1 > k.x0 && x0 < k.x1 && y1 > k.y0 && y0 < k.y1) { target = 0; break; }
       }
       // Out at once (never over a room, not even for a frame), in with a short ease.
-      it.a = target === 0 ? 0 : it.a + (1 - it.a) / F.fade;
+      it.a = target === 0 ? 0 : it.a + (1 - it.a) * ease;
       if (1 - it.a < 0.02) it.a = target;
       it.s.alpha = it.a;
       it.s.visible = it.a > 0.01;
@@ -123,6 +128,8 @@ export class ForeSilhouettes {
   }
 
   destroy(): void {
+    // [world:M1 review] Drop the DEV probe handle, or it keeps the destroyed plane (and its layout) alive.
+    if (import.meta.env.DEV) { const g = globalThis as unknown as { __fore?: unknown }; if (g.__fore === this) delete g.__fore; }
     this.root.parent?.removeChild(this.root);
     this.root.destroy({ children: true });
     this.items = [];

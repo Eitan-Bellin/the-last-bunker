@@ -1105,9 +1105,10 @@ export const CITY = {
   transfer: { lampEvery: 70, deckH: 8, plateW: 34, plateH: 12 },
   /**
    * [world:M1] The foreground plane (layer `fore`, p 1.32): silhouettes stand only in the rock between strata and past the edges, and fade
-   * out whenever their projected box would cross a storey, a sign or the dig face. `keepClear` pads those boxes (world units).
+   * out whenever their projected box would cross a storey, a sign or the dig face. `keepClear` pads those boxes (world units). `fadeTau` is
+   * the fade-in time constant in seconds (frame-rate independent; 0.09 s matches the old 1/6-per-frame ease at 60 fps); fading out is instant.
    */
-  fore: { keepClear: 18, fade: 6, maxItems: 22, sideRun: 320, tint: 0x24262c },
+  fore: { keepClear: 18, fadeTau: 0.09, maxItems: 22, sideRun: 320, tint: 0x24262c },
 } as const;
 
 /**

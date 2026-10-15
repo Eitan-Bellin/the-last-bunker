@@ -94,7 +94,7 @@ export class DiscoveryPins {
     glow.anchor.set(0.5);
     glow.tint = PINS.glow;
     glow.blendMode = 'add';
-    const ring = new Graphics().circle(0, 0, PINS.r).stroke({ color: PINS.color, width: 1.5 });
+    const ring = new Graphics().circle(0, 0, PINS.r).stroke({ color: PINS.color, width: PINS.ringW });
     const dot = new Graphics()
       .moveTo(0, -PINS.r).lineTo(PINS.r * 0.8, 0).lineTo(0, PINS.r).lineTo(-PINS.r * 0.8, 0).closePath().fill(PINS.color)
       .circle(0, 0, PINS.r * 0.35).fill(PINS.core);

@@ -101,7 +101,7 @@ export function buildShell(layout: CityLayout, state: Pick<GameState, 'era'> & P
     back, front, lights, stats,
     update(view: Rect, now: number) {
       rock.update(view, now);
-      fore.update(front, view);
+      fore.update(front, view, now);
       stats.rockChunks = rock.manager.stats.built;
       stats.rockShown = rock.manager.stats.shown;
     },

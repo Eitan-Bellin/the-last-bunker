@@ -204,6 +204,8 @@ export const PINS = {
   glow: 0xffa83a as Hex,
   /** Marker radius and glow diameter at zoom 1 (world units). */
   r: 7,
+  /** Stroke width of the pulsing ring (world units at zoom 1). */
+  ringW: 1.5,
   glowD: 48,
   glowAlpha: 0.45,
   /** Pulse: period (s) and the scale / alpha swing of the ring. */
@@ -222,6 +224,8 @@ export const PINS = {
   fade: 0.5,
   /** A found pocket: the fog reveal brush radius (world units) and the found sparkle. */
   findRevealR: 150,
+  /** A found pocket with a label: the reveal and the sparkle sit this far below the label's anchor (on the pocket, not its name). */
+  labelDy: 12,
   findGlowD: 160,
 } as const;
 
