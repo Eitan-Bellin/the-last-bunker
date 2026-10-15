@@ -189,7 +189,7 @@ export class Toasts {
     if (node) {
       if (slide) node.style.setProperty('--dx', `${slide}px`);
       node.classList.remove('in');
-      window.setTimeout(() => node.remove(), FADE_MS);
+      window.setTimeout(() => requestAnimationFrame(() => node.remove()), FADE_MS); // [w4fix] one frame after the fade, never mid-fade
     }
     // (a slot freed by a replacement goes straight to the newcomer, not to the queue)
     if (pump) this.next();

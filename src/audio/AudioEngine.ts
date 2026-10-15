@@ -661,10 +661,15 @@ export class AudioEngine {
     }
   }
 
-  /** Briefly lowers the music under an important sound. */
+  /** [w4fix] When the current duck lifts (audio-clock seconds): a shorter duck never cuts a longer one short. */
+  private duckEnd = 0;
+
+  /** Briefly lowers the music under an important sound (a duck already running longer is kept; a longer one extends it). */
   duck(seconds = 2): void {
     if (!this.ctx || !this.musicBus) return;
     const t = this.ctx.currentTime;
+    if (t + seconds <= this.duckEnd) return;
+    this.duckEnd = t + seconds;
     const g = this.musicBus.gain;
     g.cancelScheduledValues(t);
     g.setValueAtTime(g.value, t);
