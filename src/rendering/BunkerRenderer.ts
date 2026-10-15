@@ -11,8 +11,7 @@ import { i18n } from '../i18n/I18nManager';
 import { BASE_EAST, BUILDING_W, FLOOR_H, ROOM_H, SHAFT_W, SLOT_W, TOPSOIL, buildingH, extentsFor, floorExtent, floorIndexAt, floorTop, type Ext } from './layout';
 import { buildingX, districtXAt, eastmostSlotX, slotX, stripX, westmostSlotX } from '../world/project';
 import { CITY } from '../world/flag'; // [world:C1] the city renderer behind ?city
-import { CityHost } from '../world/render/cityHost'; // [world:C1]
-import { installCityWorld } from '../world/render/cityWiring';
+import type { CityHost } from '../world/render/cityHost'; // [world:C1] loaded on demand (mountCity): classic never downloads the city renderer
 import { setLightSink } from '../world/life/lanterns'; // [world:C1-Li] // [world:C2] the real city layout and shell into the seams
 import { PEOPLE_RENDER } from '../world/tokensRender'; // [world:C1]
 import { hashString, seeded } from './draw';
@@ -494,7 +493,7 @@ export class BunkerRenderer {
     this.utilitiesHolder.eventMode = 'none';
 
     this.surface = buildSurface();
-    if (CITY) this.mountCity(canvas); // [world:C1] the city's layer stack around the same holders
+    if (CITY) await this.mountCity(canvas); // [world:C1] the city's layer stack around the same holders (its own chunk)
     else this.worldContainer.addChild(
       this.surfaceHolder, this.projectSites.layer, this.projectSites.smokeLayer, this.projectSites.glowLayer, this.projectSites.crew, this.projectSites.signLayer, this.undergroundHolder, this.bayHolder, this.slotLayer, this.highlightLayer,
       this.roomLayer, this.shaftHolder, this.utilitiesHolder, this.walkers.layer, this.dust.container, this.digHolder, this.wingSigns.container, this.districtSignHolder, this.fxLayer, this.incidents.fx, this.disasterFx.fx,
@@ -538,7 +537,8 @@ export class BunkerRenderer {
    * signs, the fog, the fore plane, then labels, badges and the ghost. The people are lit by the lightmap: the walkers' depth tint is
    * replaced by a neutral one (life-systems owns walkers.ts; this override goes when their city lighting lands).
    */
-  private mountCity(canvas: HTMLCanvasElement): void {
+  private async mountCity(canvas: HTMLCanvasElement): Promise<void> {
+    const [{ CityHost }, { installCityWorld }] = await Promise.all([import('../world/render/cityHost'), import('../world/render/cityWiring')]);
     installCityWorld(); // [world:C2] cityLayout + shell (the stub layout stays the seams' fallback)
     const host = new CityHost(this.app.renderer, isLiteMode() ? 'lite' : startQuality(), canvas);
     this.cityHost = host;
@@ -1818,6 +1818,12 @@ export class BunkerRenderer {
   }
 
   destroy(): void {
+    // [world:C1] The city first: its shell, lightmap, fog and plane caches hold GPU textures, and the life systems' light sink points at it.
+    if (this.cityHost) {
+      setLightSink(null);
+      this.cityHost.destroy();
+      this.cityHost = null;
+    }
     this.app.destroy(true);
   }
 }
