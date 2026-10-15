@@ -48,7 +48,7 @@ import { coneTexture } from '../art/ArtLibrary';
 import { buildRuinVisual } from './ruinArt';
 import { iconSprite } from './richText';
 import { glowTexture, moteTexture } from '../art/ArtLibrary';
-import { Sprite } from 'pixi.js';
+import { Sprite, Texture } from 'pixi.js';
 import { IncidentLayer, DisasterLayer } from './incidentFx';
 import { PopulationSystem } from '../systems/PopulationSystem';
 /** [Danger C5] Only used to turn a stored name into its Hebrew form for the plaque. */
@@ -66,6 +66,35 @@ import { KIT_KEYS, buildBays,buildCasing, depthGains, structureAmbient, gfx2Enab
 
 /** [world:C2] World units the camera may pan past a city edge site or district cavern. */
 const CITY_EDGE_PAD = 90;
+/**
+ * [world:M1] After a lost GL context: blanks every sprite (plain, tiling, nine-slice) whose texture was destroyed and clears every
+ * Graphics that fills with one. Returns how many it fixed. A destroyed texture has no source, and Pixi's batcher reads
+ * `texture._source.alphaMode` for every element, so one stale reference threw on every picture after a restore.
+ */
+export function dropDeadTextures(root: Container): number {
+  let n = 0;
+  const dead = (t: Texture): boolean => t.destroyed || !t.source || t.source.destroyed;
+  const walk = (o: Container): void => {
+    if (o.destroyed) return;
+    // A render group keeps its draw list (and the batches' texture sources) until its structure changes: rebuild every one.
+    const rg = (o as unknown as { renderGroup?: { structureDidChange: boolean } | null }).renderGroup;
+    if (rg && o.isRenderGroup) rg.structureDidChange = true;
+    const sp = o as unknown as { texture?: Texture };
+    const tx = o instanceof Text || o instanceof Graphics ? undefined : sp.texture; // a Text owns and remakes its texture
+    if (tx && dead(tx)) { sp.texture = Texture.EMPTY; n++; }
+    const ctx = o instanceof Graphics ? o.context : null;
+    if (ctx && !ctx.destroyed) {
+      for (const ins of ctx.instructions) {
+        const t = (ins.data as { style?: { texture?: Texture } }).style?.texture;
+        if (t && dead(t)) { ctx.clear(); n++; break; }
+      }
+    }
+    for (const c of o.children) walk(c);
+  };
+  walk(root);
+  return n;
+}
+
 /** [world:M1] A city chunk that has not arrived after this long counts as failed (the boot falls back to classic rather than hang). */
 const CITY_CHUNK_TIMEOUT_MS = 12_000;
 
@@ -1355,8 +1384,21 @@ export class BunkerRenderer {
     this.utilitiesSig = '';
     this.surfaceSig = '';
     this.cityMapSig = '';
+    // [world:M1] Every holder that is rebuilt from a signature: after a context restore ArtLibrary.reset() has destroyed the paintings and
+    // kit pieces they were built with (the dig sign, the wing and district signs, the drop ring kept pointing at dead textures).
+    this.digSig = '';
+    this.wingSig = '';
+    this.districtSig = '';
+    this.dropRingSig = '';
     this.refreshSurface();
+    // [world:M1] Safety net: anything still drawing a destroyed texture (a sprite built outside the signatures above, a texture fill) is
+    // blanked, so the batcher never meets a texture without a source ('alphaMode of null' on every frame, both classic and city).
+    dropDeadTextures(this.app.stage);
+    this.deadSweeps = 3; // and again for the next few pictures (late arrivals rebuild against the reset library)
   }
+
+  /** [world:M1] Pictures left in which recoverGraphics' dead-texture sweep runs again. */
+  private deadSweeps = 0;
 
   /** Updates the scene, then draws it; the picture is drawn even when the update threw halfway. */
   render(state: GameState, dt: number, alpha: number): void {
@@ -1378,6 +1420,7 @@ export class BunkerRenderer {
   private draw(): void {
     const gl = (this.app.renderer as { gl?: WebGL2RenderingContext }).gl;
     if (this.contextLost || gl?.isContextLost()) return;
+    if (this.deadSweeps > 0) { this.deadSweeps--; dropDeadTextures(this.app.stage); } // [world:M1] context restore
     try {
       this.app.render();
       this.drawFails = 0;
