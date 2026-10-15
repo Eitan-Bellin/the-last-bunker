@@ -6,6 +6,7 @@ import { GFX, gfxLevel } from './gfxFeatures';
 import { BASE_EAST, ROOM_H, SLAB, SLAB_CLASSIC, SLOT_W, floorTop, type Ext } from './geom';
 import { roomsEastX, roomsWestX, slotX } from '../world/project';
 import { CITY } from '../world/flag';
+import { PROPS } from '../world/tokens';
 import { VIEW } from './perfFx';
 import { hashString } from './draw';
 import { occupancy } from './occupancy';
@@ -177,6 +178,17 @@ export class InfraLayer implements Animated {
         if (it.kind === 'stairwell') this.addStairwell(it, tintAt, glow);
         else if (it.kind === 'ventStack') this.addVent(it, tintAt);
       }
+      // [world:M2] City: where a column (one item over several floors, or items stacked in the same slot) runs on past a stratum seam, it
+      // jogs through the gallery band to the next stratum's frame.
+      if (CITY) {
+        const at = new Set<string>();
+        for (const it of items) if (it.kind === 'stairwell' || it.kind === 'ventStack') for (let k = 0; k < Math.max(1, Math.min(24, it.floors ?? 1)); k++) at.add(`${it.kind}:${it.floor + k}:${it.x}`);
+        for (const key of at) {
+          const [kind, fs, xs] = key.split(':');
+          const f = +fs;
+          if (f + 1 < floors && at.has(`${kind}:${f + 1}:${xs}`)) this.addJog(kind === 'stairwell' ? 'stairwell' : 'vent', +xs, f, tintAt);
+        }
+      }
       // Bulkhead doors: every key of layout.doors plus every infra bulkhead (a door without a state is open).
       const keys = new Set<string>();
       for (const k in l.doors) keys.add(k);
@@ -242,6 +254,40 @@ export class InfraLayer implements Animated {
         this.fans.push({ s: fan, floor: f, y0: top, y1: top + ROOM_H, angle: (it.x * 0.7) % 6.28 });
       }
     }
+  }
+
+  /**
+   * [world:M2] City: each stratum has its own frame, so a column (a stairwell, a vent stack) that runs on past a stratum seam stands at a
+   * different x below it. In the service gallery band between the two it jogs across: the vent as a duct with an elbow each end, the
+   * stairwell as a caged walkway along the catwalk. Drawing only (the logic column is the same slot on every floor). No jog in classic, or
+   * where the frames happen to agree, or with the galleries off (no band: the sections meet at the slab).
+   */
+  private addJog(kind: 'stairwell' | 'vent', slot: number, f: number, tintAt: (y: number, v?: number) => number): void {
+    if (!CITY) return;
+    const x0 = slotX(f, slot), x1 = slotX(f + 1, slot);
+    const y0 = floorTop(f) + ROOM_H + SLAB, y1 = floorTop(f + 1);
+    if (Math.abs(x1 - x0) < 0.5 || y1 - y0 < 8) return;
+    const J = PROPS.infraJog;
+    const g = new Graphics();
+    const ym = (y0 + y1) / 2;
+    if (kind === 'vent') {
+      const w = J.ductW, ca = x0 + SLOT_W / 2, cb = x1 + SLOT_W / 2, xa = Math.min(ca, cb), xb = Math.max(ca, cb);
+      g.rect(ca - w / 2, y0 - 2, w, ym - y0 + w / 2 + 2).fill(J.duct).stroke({ width: 1, color: J.edge, alpha: 0.9 });
+      g.rect(cb - w / 2, ym - w / 2, w, y1 - ym + w / 2 + 2).fill(J.duct).stroke({ width: 1, color: J.edge, alpha: 0.9 });
+      g.rect(xa - w / 2, ym - w / 2, xb - xa + w, w).fill(J.duct).stroke({ width: 1, color: J.edge, alpha: 0.9 });
+      g.rect(xa - w / 2, ym - w / 2, xb - xa + w, 2).fill({ color: J.lit, alpha: 0.5 });
+      for (let x = xa + J.flangeEvery; x < xb - 4; x += J.flangeEvery) g.rect(x - 1, ym - w / 2 - 1.5, 2.4, w + 3).fill(J.edge);
+    } else {
+      const xa = Math.min(x0, x1) + 4, xb = Math.max(x0, x1) + SLOT_W - 4;
+      // The walkway deck on the catwalk line with its hazard edge, the cage posts and the handrail, an opening into each section.
+      g.rect(xa, y1 - 6, xb - xa, 6).fill(J.cage).stroke({ width: 1, color: J.edge, alpha: 0.9 });
+      for (let x = xa + 2; x < xb - 6; x += 10) g.rect(x, y1 - 6, 5, 1.6).fill(J.hazard);
+      g.rect(xa, y0 + 2, xb - xa, 2).fill(J.cage);
+      for (let x = xa; x <= xb; x += J.postEvery) g.rect(x - 0.8, y0 + 2, 1.6, y1 - y0 - 8).fill({ color: J.cage, alpha: 0.85 });
+      g.rect(xa, y1 - 18, xb - xa, 1.6).fill(J.hazard);
+    }
+    g.tint = tintAt(ym, 0.9);
+    this.container.addChild(g);
   }
 
   // ------------------------------------------------------------------------------------------------ bulkhead doors

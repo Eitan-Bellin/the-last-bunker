@@ -6,7 +6,7 @@
  *               a rowboat moored in the open water past the room;
  *   metro       an old station: a tiled tunnel vault behind, the room on the platform (yellow edge), the track in its trench, a dead
  *               coach on the rails past the room with its windows lit (a market stall now), the enamel plate, sodium lamps, a signal;
- *   geothermal  a magma seam under the ledge lighting it from below, steam;  oldVault  the vault's ring door in the cavern wall.
+ *   geothermal, oldVault  [world:M2] the Service Network's two districts, see service.ts.
  * Glimpsed (on offer) and being dug, each shows one hint of itself past the rubble: water, rails, dripstone.
  * Every function draws into the cavern piece's layers: `back` (behind the rock: what shows through the open cavern), `g` (in front,
  * under the people) and the additive `lit` glow; lights go in `lights` with the district's area id.
@@ -14,7 +14,8 @@
 import { Container, Graphics } from 'pixi.js';
 import { PROPS, type StratumPalette } from '../../tokens';
 import type { LightDef } from './types';
-import { OUTLINE, contactShadow, lamp, mix, rng, rod, shade, tile, vfill } from './kit';
+import { OUTLINE, contactShadow, lamp, rng, rod, shade, tile, vfill } from './kit';
+import { geothermal, hintService, oldVault } from './service';
 
 const D = PROPS.district;
 const ST = PROPS.kit.station;
@@ -43,14 +44,15 @@ export function dressDistrict(c: DistrictCtx): boolean {
     case 'cave': cave(c); return false;
     case 'lake': lake(c); return true;
     case 'metro': metro(c); return true;
-    case 'geothermal': geothermal(c); return false;
-    case 'oldVault': oldVault(c); return false;
+    case 'geothermal': return geothermal(c);
+    case 'oldVault': return oldVault(c);
     default: return false;
   }
 }
 
 /** Glimpsed or being dug: one hint of the place past the rubble. */
 export function hintDistrict(c: DistrictCtx): void {
+  if (hintService(c)) return;
   const { g, lit, lane } = c;
   const x0 = c.room.x0 + 40, x1 = c.room.x1 + 30;
   if (c.kind === 'lake') {
@@ -208,26 +210,4 @@ function metro(c: DistrictCtx): void {
   contactShadow(g, room.x1 + 4, lane, 16);
 }
 
-// -------------------------------------------------------------------------------------------------------------------------- deeper districts
-
-function geothermal(c: DistrictCtx): void {
-  const { lit, cb, lane, bottom } = c;
-  const r = rng(c.seed + 3);
-  const pts: number[] = [cb.x0 + 14, bottom - 4];
-  for (let x = cb.x0 + 14; x <= cb.x1 - 14; x += 9) pts.push(x, lane + 12 + r() * 6);
-  pts.push(cb.x1 - 14, bottom - 4);
-  lit.poly(pts).fill({ color: PROPS.kit.forge.magma, alpha: 0.45 });
-  for (let i = 0; i < 4; i++) lit.ellipse(cb.x0 + 30 + i * ((cb.x1 - cb.x0 - 60) / 3), lane - 30 - (i % 2) * 14, 14, 9).fill({ color: 0xffffff, alpha: 0.04 });
-  for (const t of [0.25, 0.75]) c.lights.push({ x: cb.x0 + (cb.x1 - cb.x0) * t, y: lane + 16, preset: 'magma', kind: 'shell', area: c.area, radius: 150 });
-}
-
-function oldVault(c: DistrictCtx): void {
-  const { cb, room, top } = c;
-  const x = room.x1 + 28, y = top + 44, R = 24;
-  if (x + R > cb.x1 - 4) return;
-  const g = new Graphics();
-  g.circle(x, y, R).fill(vfill(PROPS.kit.forge.brass, y - R, y + R, 1.1, 0.55)).stroke(OUTLINE);
-  g.circle(x, y, R - 6).stroke({ width: 2.4, color: shade(PROPS.kit.forge.brass, 0.7) });
-  for (let i = 0; i < 8; i++) { const a = (i / 8) * Math.PI * 2; g.circle(x + Math.cos(a) * (R - 3), y + Math.sin(a) * (R - 3), 1).fill(mix(PROPS.kit.forge.brass, 0xffffff, 0.3)); }
-  c.back.addChild(g);
-}
+// [world:M2] The stratum-2 districts (Old Vault, Geothermal) live in service.ts with the rest of the Service Network kit.

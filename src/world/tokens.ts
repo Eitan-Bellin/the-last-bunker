@@ -989,14 +989,29 @@ export interface CityFrameTokens {
 /** The classic tower: no hub beyond the shaft, a 6-unit gap each side (geom.ts SHAFT_GAP), an 18-unit district tunnel. */
 const CLASSIC_FRAME: CityFrameTokens = { hubL: 0, hubR: 58, vestW: 6, vestE: 6, tunnel: 18 };
 /**
- * Every underground stratum through C and M1 (architecture D5: one shared frame; distinct frames arrive with the nav graph in M2).
- * The atrium is 186 wide: the 58 shaft plus 64 each side, room for a stair column (CITY.hub.stairW) and a balcony landing.
+ * [world:M2] Each underground stratum has its own frame (architecture D5 lifted; M2-L-notes.md 0.1). A hub side is never narrower than 64
+ * (hubL <= -64, hubR >= 122): the wall, the stair column (CITY.hub.stairW) and its landing on the balcony must fit beside the spine.
+ * Inside a stratum everything stays vertical (D4); at each service gallery x jumps, and the gallery transfers walk the jog.
  */
-const UNDER_FRAME: CityFrameTokens = { hubL: -64, hubR: 122, vestW: 36, vestE: 36, tunnel: 18 };
+const UNDER_FRAMES: readonly CityFrameTokens[] = [
+  CLASSIC_FRAME,
+  /** 1 Bell Square: the civic plaza, wide and symmetric. */
+  { hubL: -84, hubR: 142, vestW: 36, vestE: 36, tunnel: 18 },
+  /** 2 Service Network: the narrow pump hall, long service corridors out to the rooms, a longer district tunnel. */
+  { hubL: -64, hubR: 122, vestW: 96, vestE: 110, tunnel: 30 },
+  /** 3 Old Metro: the wide station hall, short tiled passages. */
+  { hubL: -168, hubR: 226, vestW: 30, vestE: 30, tunnel: 22 },
+  /** 4 Mines: a lopsided hewn chamber, east-heavy; a long west drift, a short east one. */
+  { hubL: -76, hubR: 204, vestW: 70, vestE: 18, tunnel: 40 },
+  /** 5 Deep Caves: a natural cavern leaning west; a long east crawl. */
+  { hubL: -150, hubR: 140, vestW: 22, vestE: 70, tunnel: 34 },
+  /** 6 Core: the compact forge between heavy shielding. */
+  { hubL: -100, hubR: 170, vestW: 60, vestE: 60, tunnel: 26 },
+];
 
 export const CITY = {
   /** Indexed by stratum id. Stratum 0 (the surface row) always keeps the classic frame. */
-  frames: [CLASSIC_FRAME, UNDER_FRAME, UNDER_FRAME, UNDER_FRAME, UNDER_FRAME, UNDER_FRAME, UNDER_FRAME] as readonly CityFrameTokens[],
+  frames: UNDER_FRAMES,
   classic: CLASSIC_FRAME,
   hub: {
     /** Thickness of the atrium's side walls, drawn inside hubL / hubR. */
@@ -1062,7 +1077,7 @@ export const CITY = {
      * [world:M1] How much further east than the room (past `cavernPad`) a district's cavern reaches, per kind: room for the lake's open
      * water and jetty, the metro's track and dead car. The floor's east dark edge opens past it.
      */
-    districtReach: { cave: 24, lake: 64, metro: 92, geothermal: 0, oldVault: 0 } as Record<string, number>,
+    districtReach: { cave: 24, lake: 64, metro: 92, geothermal: 84, oldVault: 78 } as Record<string, number>,
     /** [world:M1] Extra rise of a district cavern's roof above `cavernRise`, per kind (the cave's dripstone hall is the tallest). */
     districtRise: { cave: 10, lake: 0, metro: -18, geothermal: 0, oldVault: 0 } as Record<string, number>,
   },
@@ -1073,8 +1088,8 @@ export const CITY = {
    */
   entrance: {
     /** The hatch shaft through the soil and the vault crown (x span, top just above the ground line). */
-    hatchX0: 68,
-    hatchX1: 106,
+    hatchX0: 88,
+    hatchX1: 126,
     hatchTop: -3,
     /** How far below the vault line the hatch shaft cuts (so its mouth reads as a hole in the vault). */
     hatchDip: 10,
@@ -1102,7 +1117,17 @@ export const CITY = {
     { vault: 'forge', deck: 'gantry', vaultRag: 10, frame: 'steel' },
   ] as readonly { vault: 'none' | 'hub' | 'service' | 'station' | 'mine' | 'cavern' | 'forge'; deck: 'balcony' | 'gantry' | 'timber' | 'stilts'; vaultRag: number; frame: 'concrete' | 'tile' | 'timber' | 'none' | 'steel' }[],
   /** [world:M1] The transfer at each service gallery (the strata seams): the landing across the hub, its signal lamps per metre. */
-  transfer: { lampEvery: 70, deckH: 8, plateW: 34, plateH: 12 },
+  transfer: {
+    lampEvery: 70, deckH: 8, plateW: 34, plateH: 12,
+    /** [world:M2] The catwalk line in the gallery band (y below galleryTop; gallery.ts CATWALK_Y): where a transfer run walks level. */
+    deckDy: 27,
+    /** [world:M2] The stair well cut around a transfer's flights (padding past the flight ends, world units). */
+    wellPad: 8,
+    /** [world:M2] The service pipe bundle the landing hall keeps behind the flights (y below galleryTop, height) and its flange pitch. */
+    pipeY: 2,
+    pipeH: 13,
+    flangeEvery: 46,
+  },
   /**
    * [world:M1] The foreground plane (layer `fore`, p 1.32): silhouettes stand only in the rock between strata and past the edges, and fade
    * out whenever their projected box would cross a storey, a sign or the dig face. `keepClear` pads those boxes (world units). `fadeTau` is
@@ -1194,7 +1219,11 @@ export const PROPS = {
   /** [world:M1] Hub, vestibule and edge dressing of the strata 2-6 kits (painted colour before the lightmap). */
   kit: {
     /** Service Network: insulated pipe racks, red valve wheels, the big wall fan, gantry grating. */
-    service: { pipe: 0x7a8288, pipeLag: 0x8a7a5e, valve: 0x8a3a2a, fan: 0x3a4046, fanBlade: 0x5b636b, grate: 0x4a5056, gauge: 0xd8d0b8 },
+    service: {
+      pipe: 0x7a8288, pipeLag: 0x8a7a5e, valve: 0x8a3a2a, fan: 0x3a4046, fanBlade: 0x5b636b, grate: 0x4a5056, gauge: 0xd8d0b8,
+      /** [world:M2] The colour code of the service gallery: the yellow gas line, the green water main, the stencil paint. */
+      gas: 0xc8a030, water: 0x3f6a4e, stencil: 0xe8e0c8,
+    },
     /** Old Metro: dirty glazed tile, teal enamel trim, cast iron, the enamel station plate, the platform clock face. */
     station: { tile: 0xbcb59c, trim: 0x2f6b5c, iron: 0x3a3e44, plate: 0x1f4a40, plateRim: 0xd8d0b8, clockFace: 0xe8e0c8 },
     /** Mines: rough timber, rope, ore carts, copper veins and gold flecks in the rock. */
@@ -1222,6 +1251,19 @@ export const PROPS = {
     carBody: 0x3f5a52,
     carRoof: 0x2a3634,
     carWindow: 0xffb060,
+    /**
+     * [world:M2] The Old Vault (stratum 2, floor 5): board-formed crown, riveted steel lining (plate pitch), safe-deposit boxes, the great
+     * round door (radius, leaf thickness seen edge-on), the stone floor, dust; how far the lining sits under the storey's ceiling line.
+     */
+    vault: {
+      concrete: 0x5a5650, steel: 0x4e555c, steelLit: 0x8a939b, steelDark: 0x23272c, rivet: 0x9aa2aa, inside: 0x0c0d0e,
+      boxFace: 0x6e6658, boxDark: 0x141210, stone: 0x8a8478, stoneDark: 0x3e3a34, dust: 0xd8ccb0,
+      crownDrop: 22, plateW: 34, boxW: 9, boxH: 7, doorR: 26, leafW: 12, motes: 18,
+      /** How far past the room the great door's opening starts. */
+      doorDx: 52,
+    },
+    /** [world:M2] The Geothermal plant (stratum 2, floor 6): heat-cracked crust, steam, the orange heat; the wellhead's distance past the room. */
+    geo: { crust: 0x6a4e40, steam: 0xe8ece8, steamAlpha: 0.16, heat: 0xff7a2a, wellDx: 64 },
   },
   /** [world:M1 review] Lamp globes painted on the props (the light itself is a LIGHT preset; these are the glass and its additive halo). */
   globe: {
@@ -1240,6 +1282,11 @@ export const PROPS = {
   tunnelDark: 0x07080a as Hex,
   /** [world:M1 review] Pocket interiors: shrine candles, the canary, a dead lab screen. */
   pocket: { candle: 0xe8e0c8 as Hex, canary: 0xe8c840 as Hex, screen: 0x0a1410 as Hex },
+  /**
+   * [world:M2] A stairwell or vent stack crossing a stratum seam jogs through the gallery band (rendering/infra.ts): the duct (width, flange
+   * pitch) and the caged walkway (post pitch). Painted colour before the lightmap.
+   */
+  infraJog: { duct: 0x5b636b as Hex, edge: 0x1a1c20 as Hex, lit: 0xa8b0b8 as Hex, cage: 0x4a5056 as Hex, hazard: 0xd1a62b as Hex, ductW: 16, flangeEvery: 30, postEvery: 14 },
   /** [world:M1] Doors in the city: a shut bulkhead's amber lamp, a sealed one's red emergency lamp. */
   doors: { shut: 0xffa040 as Hex, sealed: 0xff3a2a as Hex },
 } as const;

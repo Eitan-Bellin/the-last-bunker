@@ -7,6 +7,7 @@ import type { Graphics } from 'pixi.js';
 import { PROPS, type StratumPalette } from '../../tokens';
 import type { LightDef } from './types';
 import { OUTLINE, rod, shade, vfill } from './kit';
+import { servicePocket } from './service';
 
 export function pocketInside(id: string, g: Graphics, lit: Graphics, b: { x0: number; y0: number; x1: number; y1: number }, P: StratumPalette, lights: LightDef[]): boolean {
   const name = id.split(':')[2] ?? '';
@@ -18,6 +19,8 @@ export function pocketInside(id: string, g: Graphics, lit: Graphics, b: { x0: nu
     g.rect(b.x0 + 10, y, w - 20, fy + 4 - y).fill(vfill(D.water, y, fy + 4, 1.2, 0.5));
     for (let x = b.x0 + 14; x < b.x1 - 20; x += 16) lit.rect(x, y + 1, 8, 0.8).fill({ color: D.waterLine, alpha: 0.4 });
   };
+  // [world:M2] The Service Network's pockets (pump gallery, valve vault, crawlway) are dressed by its kit.
+  if (servicePocket(name, g, lit, b, P, lights, area)) return true;
   switch (name) {
     case 'wellRoom': {
       floorLine();
@@ -42,17 +45,6 @@ export function pocketInside(id: string, g: Graphics, lit: Graphics, b: { x0: nu
         lit.ellipse(cx + dx + 1, fy - 18, 1.4, 2.4).fill({ color: PROPS.hub.flameCore, alpha: 0.9 });
       }
       lights.push({ x: cx, y: fy - 18, preset: 'lantern', kind: 'shell', area, radius: 90 });
-      return true;
-    }
-    case 'pumpGallery':
-    case 'valveVault': {
-      floorLine();
-      g.rect(b.x0 + 10, fy - 30, w - 20, 6).fill(vfill(K.service.pipe, fy - 30, fy - 24)).stroke({ ...OUTLINE, width: 1 });
-      for (let x = b.x0 + 24; x < b.x1 - 20; x += name === 'valveVault' ? 18 : 40) {
-        rod(g, x, fy - 24, x, fy, 3, K.service.pipe);
-        g.circle(x, fy - 36, 4.6).stroke({ width: 1.8, color: K.service.valve });
-      }
-      lights.push({ x: cx, y: fy - 40, preset: 'fluoroTube', kind: 'shell', area, radius: 90 });
       return true;
     }
     case 'ghostPlatform':

@@ -20,13 +20,20 @@ import { allPockets, pocketStratum, stratumOf, strataReached, STRATA as STRATA_D
 import { digAt, wingBlock } from '../../data/wings';
 import { GALLERY_ABOVE_FLOORS, MAX_FLOORS } from '../../data/zones';
 import { GFX } from '../../rendering/gfxFeatures';
-import { CORR_LANE, FLIGHT_RISE, GALLERY_H, ROOM_H, SHAFT_W, SLAB, SLOT_W, floorTop, galleryTop } from '../../rendering/geom';
+import { CORR_LANE, FLIGHT_RISE, FLIGHT_RUN, GALLERY_H, ROOM_H, SHAFT_W, SLAB, SLOT_W, floorTop, galleryTop } from '../../rendering/geom';
 import { PROJECTION, buildingRect, frameOfStratum, roomsEastX, roomsWestX, slotX } from '../project';
 import { CITY } from '../tokens';
 import type { AreaState, CityArea, CityLayout, Cavity, EdgeSite, HubGeom } from '../render/layoutTypes';
 import { archPoints, blobPoly, noise1, polyBounds, q8, raggedPoly, rectPoly, seedOf } from './outline';
+import { galleryTransfers, type GalleryTransfer, type TransferRun } from './transfers';
 
-export type { CityLayout, CityArea, Cavity, EdgeSite, HubGeom, AreaState };
+export type { CityLayout, CityArea, Cavity, EdgeSite, HubGeom, AreaState, GalleryTransfer, TransferRun };
+
+/**
+ * [world:M2] What buildCityLayout returns: the renderer's CityLayout (layoutTypes.ts) plus the gallery transfers (model/transfers.ts),
+ * the walk from each stratum's hub down through the service gallery to the next one's (the nav graph's inter-stratum edges).
+ */
+export type CityModel = CityLayout & { transfers: GalleryTransfer[] };
 
 type Side = 'w' | 'e';
 type Block = EdgeSite['block'];
@@ -250,7 +257,7 @@ function vaultYAt(hubL: number, hubR: number, y: number, x: number): number {
   return y;
 }
 
-export function buildCityLayout(state: GameState): CityLayout {
+export function buildCityLayout(state: GameState): CityModel {
   OVERHANG = overhangs(state);
   try {
     return buildLayout(state);
@@ -259,7 +266,7 @@ export function buildCityLayout(state: GameState): CityLayout {
   }
 }
 
-function buildLayout(state: GameState): CityLayout {
+function buildLayout(state: GameState): CityModel {
   const n = Math.max(0, state.currentFloors | 0);
   const exts = Array.from({ length: n }, (_, f) => floorExtent(state, f));
   const extOf = (f: number) => (f < n ? exts[f] : { w: 0, e: BASE_EAST });
@@ -357,6 +364,16 @@ function buildLayout(state: GameState): CityLayout {
       areas.push({ id: `g:${g}`, kind: 'gallery', s, state: dug ? 'revealed' : 'hidden', poly: dug ? rectPoly(xw, y0, xe, y1) : rectPoly(fullX0, y0, fullX1, y1) });
       if (dug) cavities.push({ id: `c:gal:${g}`, s, back: 'concrete', poly: rectPoly(xw, y0, xe, y1) });
     });
+  }
+
+  // ------------------------------------------------------------------------------------------------------------------- transfers
+  // [world:M2] The stair wells and the catwalk run of each gallery transfer (the flights go through the upper hub's plaza slab).
+  const transfers = galleryTransfers(n);
+  for (const t of transfers) for (const r of t.runs) {
+    const wp = CITY.transfer.wellPad, a = FLIGHT_RUN / 2 + wp;
+    cavities.push({ id: `c:xfer:${r.g}:${r.side}:u`, s: t.upper, back: 'concrete', poly: rectPoly(r.upper.column - a, r.upper.y - FLIGHT_RISE, r.upper.column + a, t.y1) });
+    cavities.push({ id: `c:xfer:${r.g}:${r.side}:run`, s: t.upper, back: 'concrete', poly: rectPoly(Math.min(r.run.x0, r.run.x1) - a, t.y0, Math.max(r.run.x0, r.run.x1) + a, t.y1) });
+    cavities.push({ id: `c:xfer:${r.g}:${r.side}:l`, s: t.lower, back: 'concrete', poly: rectPoly(r.lower.column - a, t.y0, r.lower.column + a, r.lower.y) });
   }
 
   // ------------------------------------------------------------------------------------------------------------------- storey areas
@@ -478,7 +495,7 @@ function buildLayout(state: GameState): CityLayout {
   return {
     sig: cityLayoutSig(state),
     frames: [0, 1, 2, 3, 4, 5, 6].map(s => ({ ...frameOfStratum(s as StratumId) })),
-    hubs, cavities, areas, edges, bounds, strata,
+    hubs, cavities, areas, edges, bounds, strata, transfers,
   };
 }
 

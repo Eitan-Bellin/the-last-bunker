@@ -15,7 +15,8 @@ import { laneY } from '../../model/cityLayout';
 import type { Cavity } from '../layoutTypes';
 import type { LightDef, ShellPiece } from './types';
 import { OUTLINE, grain, lamp, mix, palette, rod, shade, sprite, tile, vfill } from './kit';
-import { polyBounds } from '../../model/outline';
+import { polyBounds, seedOf } from '../../model/outline';
+import { serviceVestibule } from './service';
 
 const K = PROPS.kit;
 
@@ -64,6 +65,8 @@ export function buildVestibules(cavs: readonly Cavity[], failing: ReadonlySet<st
       pipes.circle(vx, py + 15, 4.2).stroke({ width: 1.6, color: PROPS.vestibule.valveWheel }).stroke({ width: 0.6, color: OUTLINE.color, alpha: 0.6 });
       // The tube: cool work light; the failing one flickers out now and then.
       lights.push(...lamp(back, glow, 'lamp-tube', b.x0 + w / 2, top + 13, { kind: 'shell', preset: failing.has(id) ? 'failingTube' : 'fluoroTube', area }));
+      // [world:M2] The Service Network's long corridors: the colour-coded pipe gallery, drops and valve wheels, gauges, a leaking flange.
+      if (kit === 'service') serviceVestibule(pipes, lit, lights, b, top, floor, side as 'w' | 'e', area, seedOf(c.id));
     } else if (kit === 'station') {
       // A teal frieze and a sodium globe.
       pipes.rect(b.x0, top + 8, w, 5).fill(vfill(K.station.trim, top + 8, top + 13)).stroke({ ...OUTLINE, width: 0.8 });
