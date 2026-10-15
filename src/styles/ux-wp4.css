@@ -4,11 +4,7 @@
 /* ---------- W2: the low-power banner and the morale chip are buttons now ---------- */
 button.hud-banner.power { font: inherit; font-size: calc(12px * var(--fs, 1)); font-weight: 600; cursor: pointer; min-height: 36px; }
 button.hud-banner.power .ic { opacity: 0.85; }
-button.info-item.morale-chip { font: inherit; color: inherit; cursor: pointer; }
 button.info-item.morale-chip:focus-visible, button.hud-banner.power:focus-visible { outline: 2px solid var(--accent, #ffb547); outline-offset: 2px; }
-
-/* R3: the Act's limit is a fact, not an alarm: neutral grey, no pulse. */
-.info-arrival.act-lock { color: #c9c2b2; animation: none; }
 
 /* I1: the toast's "×3" counter reads left to right in Hebrew too. */
 .toast-count { direction: ltr; }
@@ -105,7 +101,6 @@ button.info-item.morale-chip:focus-visible, button.hud-banner.power:focus-visibl
 .pr-name { font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .pr-job { font-size: calc(11.5px * var(--fs, 1)); color: var(--text-secondary, #b8ad96); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .pr-job.warn { color: #ffb547; }
-.pr-stat { flex: 0 0 auto; font-size: calc(12px * var(--fs, 1)); font-variant-numeric: tabular-nums; }
 .person-card.open { border-color: var(--accent, #ffb547); }
 .person-head .pp-fold { margin-inline-start: auto; min-width: 44px; min-height: 44px; }
 .stat-chip { display: inline-flex; flex-direction: column; align-items: center; min-width: 44px; line-height: 1.15; }

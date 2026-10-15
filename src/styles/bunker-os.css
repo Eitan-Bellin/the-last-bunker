@@ -14,56 +14,9 @@
     linear-gradient(to bottom, rgba(6, 7, 9, 0.92) 0%, rgba(6, 7, 9, 0.75) 70%, transparent 100%);
 }
 
-.resource-item {
-  background:
-    var(--rivet) 3px 3px / 6px 6px no-repeat,
-    var(--rivet) calc(100% - 3px) 3px / 6px 6px no-repeat,
-    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.025) 0 1px, transparent 1px 3px),
-    linear-gradient(180deg, var(--steel-1), var(--steel-2) 55%, var(--steel-3));
-  border: 1px solid #0c0d0f;
-  border-radius: 4px;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14), inset 0 -2px 0 rgba(0, 0, 0, 0.45), 0 2px 4px rgba(0, 0, 0, 0.5);
-  padding: 5px 10px 8px;
-}
-.resource-value {
-  font-family: 'Rubik', sans-serif;
-  font-weight: 800;
-  font-size: calc(14px * var(--fs, 1));
-  color: #f4ecd8;
-  text-shadow: 0 1px 0 #000;
-  font-variant-numeric: tabular-nums;
-}
-.resource-fill-track { height: 4px; background: #0a0b0c; box-shadow: inset 0 1px 1px rgba(0, 0, 0, 0.8); }
-.resource-fill-bar {
-  background: repeating-linear-gradient(90deg, #ffb547 0 5px, transparent 5px 6px);
-  box-shadow: 0 0 6px rgba(255, 181, 71, 0.6);
-}
-.resource-fill-bar.full { background: repeating-linear-gradient(90deg, #ffe27a 0 5px, transparent 5px 6px); }
-.resource-fill-bar.low { background: repeating-linear-gradient(90deg, var(--bad, #ff5a4a) 0 5px, transparent 5px 6px); box-shadow: 0 0 6px rgba(255, 80, 60, 0.7); }
-.resource-item.empty { border-color: var(--bad, #ff5a4a); }
 
-.info-row { gap: 12px; }
-.info-item {
-  background: rgba(0, 0, 0, 0.45);
-  border: 1px solid rgba(255, 255, 255, 0.07);
-  border-radius: 3px;
-  padding: 2px 7px;
-}
-.info-label { color: #b8ad96; }
-.info-arrival { margin-inline-start: 5px; color: #ffb547; font-variant-numeric: tabular-nums; font-size: 0.92em; }
-.info-arrival:empty { display: none; }
-.info-arrival.negative { color: var(--bad, #ff6a5a); animation: arrival-pulse 1.2s ease-in-out infinite; }
 @keyframes arrival-pulse { 50% { opacity: 0.45; } }
 
-.lang-btn {
-  background: linear-gradient(180deg, var(--steel-1), var(--steel-3));
-  border: 1px solid #0c0d0f;
-  border-radius: 4px;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14), 0 2px 3px rgba(0, 0, 0, 0.5);
-  color: #f0e6d2;
-  padding: 3px 9px;
-}
-.lang-btn:active { transform: translateY(1px); box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.6); }
 
 /* Objective: a strip of embossed label tape riveted under the HUD. */
 .objective {
@@ -101,37 +54,6 @@
   gap: 6px;
   padding-inline: 8px;
 }
-.nav-btn {
-  flex: 1;
-  max-width: 96px;
-  margin: 2px 0;
-  border-radius: 6px;
-  background: linear-gradient(180deg, #3a3d42, #222428);
-  border: 1px solid #0c0d0f;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14), inset 0 -3px 0 rgba(0, 0, 0, 0.45), 0 3px 4px rgba(0, 0, 0, 0.5);
-  color: #d8ccb4;
-  position: relative;
-}
-.nav-btn::after {
-  content: '';
-  position: absolute;
-  top: 5px;
-  inset-inline-start: 6px;
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: #3a2a14;
-  box-shadow: inset 0 1px 1px rgba(0, 0, 0, 0.6);
-}
-.nav-btn:active {
-  transform: translateY(2px);
-  background: linear-gradient(180deg, #2a2c30, #1a1b1e);
-  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.6);
-  color: var(--amber);
-}
-.nav-btn:active::after { background: #ffb547; box-shadow: 0 0 6px #ffb547; }
-.nav-label { font-family: var(--font-title); font-size: calc(12.5px * var(--fs, 1)); letter-spacing: 0.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
-.nav-badge { background: #b3261e; color: #fff; box-shadow: 0 0 8px rgba(255, 74, 58, 0.8); } /* [plan4:AC-3] white on #ff4a3a was 3.3:1, on #b3261e it is 6.5:1 */
 
 /* ---------- CRT terminal panels ---------- */
 
@@ -272,8 +194,6 @@
   text-shadow: none;
   box-shadow: none;
 }
-.nav-btn.locked { opacity: 1; color: var(--text-disabled); border-style: dashed; }
-.nav-btn.locked .nav-icon { filter: grayscale(1); opacity: 0.7; }
 .btn-primary .ic { filter: none; }
 .btn-secondary { background: linear-gradient(180deg, #2c3a30, #18241c); color: var(--text-primary); border-color: rgba(110, 255, 160, 0.25); }
 .btn-ghost { background: transparent; box-shadow: none; border-color: rgba(110, 255, 160, 0.25); color: var(--text-primary); }
@@ -377,70 +297,22 @@
 .sheet-close .ic { width: 18px; height: 18px; }
 .sheet-close:active { transform: translateY(1px); box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.6); color: var(--amber); }
 
-/* ---------- gfx-p0: menu bolt-on at the end of the nav console ---------- */
-
-.nav-btn.nav-menu { flex: 0 0 46px; max-width: 46px; padding-inline: 0; justify-content: center; }
-.nav-menu .nav-icon .ic { width: 22px; height: 22px; }
-
 /* ---------- gfx-p0: value chips keep numbers readable in RTL ---------- */
 
 .cost-chip, .stat-chip, .gain-chip, .worker-stat, .bp-value, .objective-meta, .era-goal-count { font-variant-numeric: tabular-nums; }
 
 /* ---------- gfx-p0: the HUD fits a phone (360–430 px) ---------- */
 
-.info-row { gap: 6px; flex-wrap: nowrap; }
 .info-item, .info-row .lang-btn, .era-chip { flex: 0 0 auto; }
 .era-chip .ic { width: 15px; height: 15px; }
 
-@media (max-width: 599px) {
-  /* Icons carry population and morale; the words come back on wide screens. */
-  .info-label { display: none; }
-}
-
 @media (max-width: 479px) {
   .hud-top { padding-inline: 8px; }
-  .resource-row { gap: 4px; }
-  .resource-item { padding: 5px 7px 8px; gap: 3px; }
-  .info-row { gap: 4px; margin-top: 6px; }
-  .info-item { padding: 2px 6px; font-size: calc(12px * var(--fs, 1)); gap: 3px; }
-  .info-icon .ic { width: 14px; height: 14px; }
-  .info-arrival { margin-inline-start: 3px; }
-  .info-row .lang-btn { padding: 3px 7px; }
   /* The era chip keeps its colour-coded flag; the name lives in the era panel and the tooltip. */
   .era-chip { padding: 3px 7px; }
   .era-chip .era-name { display: none; }
   .hud-bottom { gap: 4px; padding-inline: 6px; }
-  .nav-btn { padding: 6px 2px; min-width: 0; }
 }
-
-@media (max-width: 374px) {
-  .info-clock .info-icon { display: none; }
-  .resource-value { font-size: calc(13px * var(--fs, 1)); }
-  .resource-rate { font-size: calc(11px * var(--fs, 1)); } /* [plan4:AC-3] >= 11px */
-}
-
-/* Short screens (landscape phones): a slimmer console. */
-@media (max-height: 560px) {
-  .nav-label { display: none; }
-  .nav-btn { padding-block: 4px; }
-}
-
-/* ---------- plan 2026-10 M7: worn, brushed steel on the HUD plates and console buttons ---------- */
-
-.resource-item, .nav-btn, .lang-btn, .info-item { isolation: isolate; }
-.nav-btn, .lang-btn, .info-item { position: relative; }
-.resource-item::before, .nav-btn::before, .lang-btn::before, .info-item::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  border-radius: inherit;
-  background: var(--mat-steel, none) 0 0 / 128px 128px;
-  mix-blend-mode: overlay;
-  opacity: 0.55;
-  pointer-events: none;
-}
-.info-item::before { opacity: 0.3; }
 
 /* ---------- plan 2026-10 Q11/Q12: nothing clipped at 360 / 320 px, and a thinner HUD ---------- */
 
@@ -462,17 +334,6 @@
 .res-more:active { transform: translateY(1px); }
 .hud-top.res-collapsible .res-more { display: block; min-height: 16px; margin-top: 2px; font-size: 9.5px; line-height: 14px; }
 .hud-top.res-collapsible { padding-bottom: 6px; }
-.hud-top.res-collapsible .info-row { margin-top: 3px; }
-
-/* The info row may never overflow on both sides (it used to centre its overflow and cut the first and last buttons). */
-.info-row { justify-content: safe center; }
-@media (max-width: 399px) {
-  /* Compact chips; when even so many are showing at once that they do not fit, the row wraps instead of clipping. */
-  .hud-top .info-row { gap: 3px; flex-wrap: wrap; justify-content: center; row-gap: 4px; }
-  .info-clock .info-icon { display: none; }
-  .hud-top .info-row .lang-btn { min-width: 30px; padding: 3px 5px; }
-  .info-item { padding: 2px 5px; }
-}
 
 @media (prefers-reduced-motion: reduce) {
   .sheet-overlay.open .sheet, .modal-overlay.open .modal { animation: none; }
