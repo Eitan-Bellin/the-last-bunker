@@ -15,6 +15,8 @@ import { SEASONS } from '../../data/seasons';
 import { POIS } from '../../data/surface';
 import { DISASTERS } from '../../data/incidents';
 import { WELCOME_MIN_AWAY_S } from '../popupRules';
+import { resourceDef } from '../../data/resources';
+import { TUNING } from '../../data/tuning';
 
 /** [ux-wp5 C14] The night log shows at most this many lines. */
 const NIGHT_LINES = 6;
@@ -124,7 +126,7 @@ export class WelcomeController {
         }
         body.appendChild(el('p', 'bp-hint', i18n.t('welcome.convertedHint')));
       }
-      const wasted = report.wasted ?? {};
+      const wasted = this.realWaste(report, state);
       if (Object.keys(wasted).length > 0) {
         body.appendChild(el('p', 'modal-sub negative-text', `[[storage]] ${i18n.t('welcome.wasted')}`));
         body.appendChild(this.gainsList(Object.fromEntries(Object.entries(wasted).map(([r, v]) => [r, -(v ?? 0)]))));
@@ -360,7 +362,7 @@ export class WelcomeController {
       line.append(el('span', 'checkin-line-text', `[[hourglass]] ${i18n.t('checkin.produced')}`), this.gainsList(Object.fromEntries(top) as Partial<Record<ResourceType, number>>));
       out.push(line);
     }
-    const lost = Object.keys(report.wasted ?? {}).length > 0;
+    const lost = Object.keys(this.realWaste(report, this.app.state)).length > 0;
     if ((report.credits ?? 0) > 0 || lost) {
       const text = [(report.credits ?? 0) > 0 ? i18n.t('checkin.converted', { credits: report.credits }) : '', lost ? i18n.t('checkin.wasted') : ''].filter(Boolean).join(' · ');
       out.push(el('p', `checkin-line${lost ? ' negative-text' : ''}`, `[[storage]] ${text}`));
@@ -482,5 +484,15 @@ export class WelcomeController {
     body.appendChild(el('p', 'modal-sub', `[[fire]] ${i18n.t('supply.streak', { n: claim.streak })}`));
     body.appendChild(el('p', 'bp-hint', i18n.t('supply.tomorrow')));
     this.app.modal.show({ icon: '[[gift]]', title: i18n.t('supply.title'), body, actions: [{ label: i18n.t('event.ok'), onClick: () => this.app.modal.hide() }] });
+  }
+
+  /**
+   * [phase3] What was really lost to full stores. From Act II the basics' overflow is meant to spill (the Act rooms take the surplus),
+   * so it is not reported as a loss: the red line with "build storage" would send the player after storage that buys nothing.
+   */
+  private realWaste(report: OfflineReport, state: GameState): Partial<Record<ResourceType, number>> {
+    const act = state.longGame?.meta.act ?? 1;
+    return Object.fromEntries(Object.entries(report.wasted ?? {})
+      .filter(([r]) => !(resourceDef(r as ResourceType)?.tier === 1 && act > TUNING.basicOverflowCreditsLastAct))) as Partial<Record<ResourceType, number>>;
   }
 }
