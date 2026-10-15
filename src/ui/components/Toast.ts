@@ -23,7 +23,7 @@ const MAX_QUEUED = 6;
 /** How often a paused lane (a room being placed) looks whether it may go on. */
 const PAUSE_POLL_MS = 400;
 /** [ux-redesign W1] How long a leaving toast stays in the page: the --dur-screen token (its fade is the shorter --dur-toast). */
-const FADE_MS = MS['dur-screen'];
+const FADE_MS = MS['dur-toast']; // [ux-redesign W4] in and out in --dur-toast (200 ms), as the CSS transition
 /** [ux-wp3 D2] Messages kept back while the bunker works through time away (the welcome report tells that story). */
 const MAX_HELD = 40;
 /** A sideways drag past this (px), or a quick flick, dismisses the toast. */

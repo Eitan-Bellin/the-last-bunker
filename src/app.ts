@@ -20,7 +20,7 @@ import { Toasts } from './ui/components/Toast';
 import { NumberPopupManager } from './ui/components/NumberPopup';
 import { DepthRuler } from './ui/components/DepthRuler'; // [plan4:ST-12]
 import { AudioEngine } from './audio/AudioEngine';
-import { setUiSound } from './audio/uiSound';
+import { setUiSound, soundRate } from './audio/uiSound';
 import { timeOfDay } from './ui/HUD';
 import { i18n } from './i18n/I18nManager';
 import { bus } from './core/EventBus';
@@ -1170,6 +1170,14 @@ export class GameApp {
 
     this.world.installHud({ openPeople: () => this.peoplePanel.show(), structure: this.structurePanel }); // [ux-wp4] W2, R3, B3, M5 hooks
     this.feedback.install();
+    // [ux-redesign W4] Motion and sound: UI sounds vary their pitch (±5 %) and collect sounds climb in a combo; goods fly to their
+    // HUD tile through the pooled fx layer (the bubbles' and the stash's own fly-to-HUD now use it too).
+    setUiSound((name, volume, rate) => this.audio.play(name, { volume, rate }));
+    this.audio.rateOf = name => soundRate(name);
+    this.world.flyToHud = (r, x, y, label) => { this.feedback.fly.fly(r, { x, y }, 10, label); }; // no amount here: 10 goods' worth (7 particles)
+    const flashAttr = (): void => { document.documentElement.dataset.flash = getA11y().flash; }; // fx.css: no CRT flash in "no flashes"
+    flashAttr();
+    subscribeA11y(flashAttr);
     this.inbox.install();
     this.daily.install(); // [plan4:GP-1]
     this.watchGestures(); // [plan4:UX-10]

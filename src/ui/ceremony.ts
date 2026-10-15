@@ -1,4 +1,4 @@
-import { reducedMotion } from '../utils/a11y';
+import { flashOk, reducedMotion } from '../utils/a11y';
 import { haptic, type HapticKind } from '../utils/haptics';
 import { el } from './dom';
 import { i18n } from '../i18n/I18nManager';
@@ -63,10 +63,11 @@ interface Def {
 
 export const CEREMONIES: Record<CeremonyKind, Def> = {
   build: { ms: 1600, prio: 35, sound: 'complete', haptic: [{ kind: 'success', at: 0 }] },
-  roomLevel: { ms: 1200, prio: 30, sound: 'levelup', haptic: [{ kind: 'success', at: 0 }] },
+  // [ux-redesign W4] An upgrade is a medium knock (FEEL.upgrade); level ups and victories are the success tick.
+  roomLevel: { ms: 1200, prio: 30, sound: 'levelup', haptic: [{ kind: 'impact', at: 0 }] },
   research: { ms: 1400, prio: 40, sound: 'research', haptic: [{ kind: 'success', at: 0 }] },
   // [ux-wp3 D1/F5] Its own small sound (two knocks and a bell), no longer the shop's 'coin'.
-  person: { ms: 900, prio: 10, sound: 'rankUp', haptic: [{ kind: 'tap', at: 0 }] },
+  person: { ms: 900, prio: 10, sound: 'rankUp', haptic: [{ kind: 'success', at: 0 }] },
   act: { ms: 4500, prio: 90, sound: 'era', haptic: [{ kind: 'success', at: 0 }, { kind: 'success', at: 260 }], beatAt: 1500 },
   dig: { ms: 2000, prio: 50, sound: 'dig', haptic: [{ kind: 'success', at: 0 }] },
   // 'lore' (soft bells over a low pad) stands in for the mourning tone.
@@ -77,7 +78,8 @@ export const CEREMONIES: Record<CeremonyKind, Def> = {
   // [ux-wp3 F15] A badge card at the top with the count ("Achievement · 12/28").
   achievement: { ms: 1600, prio: 45, sound: 'achievement', haptic: [{ kind: 'success', at: 0 }] },
   // [ux-wp3 F2] The raiders reach the gate: siren, the camera at the entrance, the impact (a shake, sparks, a soft warm flash).
-  raid: { ms: 2600, prio: 85, sound: 'siren', haptic: [{ kind: 'warning', at: 0 }, { kind: 'error', at: 900 }] },
+  // [ux-redesign W4] The siren and the impact are heavy (FEEL.raid / FEEL.explosion).
+  raid: { ms: 2600, prio: 85, sound: 'siren', haptic: [{ kind: 'heavy', at: 0 }, { kind: 'heavy', at: 900 }] },
   genesis: { ms: 6000, prio: 100, block: true, sound: 'era', haptic: [{ kind: 'success', at: 0 }, { kind: 'success', at: 900 }, { kind: 'success', at: 1800 }] },
 };
 
@@ -91,6 +93,9 @@ const WAIT_POLL_MS = 400;
 /** Small moments (below this priority) that waited longer than WAIT_STALE_MS are dropped: the toast already told them. */
 const WAIT_KEEP_PRIO = 50;
 const WAIT_STALE_MS = 8000;
+/** [ux-redesign W4] Moments at least this important duck the music for their length (at most DUCK_MAX_MS). */
+const DUCK_PRIO = 30;
+const DUCK_MAX_MS = 3000;
 
 interface Item {
   spec: CeremonySpec;
@@ -229,6 +234,8 @@ export class Ceremonies {
     document.body.appendChild(root);
 
     // Sound and the buzz at the start (a power plant brings its own sound; a merged moment plays once).
+    // [ux-redesign W4] The music steps back under the moment, first, so a sound that ducks for longer (the siren, an era) wins (small moments are too short to need it).
+    if (def.prio >= DUCK_PRIO) this.app.audio.duck(Math.min(ms, DUCK_MAX_MS) / 1000);
     this.app.audio.play(spec.sound ?? def.sound);
     if (spec.kind === 'build' && !spec.sound) later(() => this.app.audio.play('hiss', { volume: 0.6 }), 260);
     for (const h of def.haptic) { if (h.at === 0) haptic(h.kind); else later(() => haptic(h.kind), h.at); }
@@ -432,13 +439,14 @@ export class Ceremonies {
         later(() => {
           r.shake(5, 0.6);
           r.burstAt(gate.x, gate.y, 90, 10);
+          if (!flashOk('cer-raid')) return; // [ux-redesign W4] the flash budget and the "no flashes" setting
           const flash = el('div', 'cer-flash');
           flash.style.cssText = 'position:absolute;inset:0;background:rgba(255,196,120,1);opacity:0;pointer-events:none';
           root.appendChild(flash);
           flash.animate([{ opacity: 0 }, { opacity: 0.28, offset: 0.25 }, { opacity: 0 }], { duration: 650, easing: 'ease-out' });
         }, 900);
         later(() => r.burstAt(gate.x + 24, gate.y - 6, 70, 8), 1250);
-        if (spec.win !== undefined) later(() => this.app.audio.play(spec.win ? 'cheer' : 'crumble'), 1700);
+        if (spec.win !== undefined) later(() => { this.app.audio.play(spec.win ? 'cheer' : 'crumble'); if (spec.win) haptic('success'); }, 1700);
         break;
       }
     }
