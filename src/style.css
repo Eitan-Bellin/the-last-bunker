@@ -186,9 +186,9 @@ body.placement-mode #game-canvas { cursor: crosshair; }
   justify-content: center;
   z-index: var(--z-panels);
   pointer-events: none;
-  transition: background var(--dur-popup-in) var(--ease-out);
+  transition: background var(--dur-popup-out) var(--ease-in);
 }
-.sheet-overlay.open { background: var(--overlay-soft); pointer-events: auto; }
+.sheet-overlay.open { background: var(--overlay-soft); pointer-events: auto; transition: background var(--dur-popup-in) var(--ease-out); }
 
 .sheet {
   background: var(--bg-panel);
@@ -208,9 +208,18 @@ body.placement-mode #game-canvas { cursor: crosshair; }
   border: 1px solid var(--border);
   border-bottom: none;
   transform: translateY(100%);
-  transition: transform var(--dur-screen) var(--ease-out);
 }
 .sheet-overlay.open .sheet { transform: translateY(0); }
+/*
+ * [ux-w2f #38] Sheet motion: in --dur-popup-in (250 ms) easing out, out --dur-popup-out (180 ms) easing in; a parked sheet hides once it
+ * is down. [ux-redesign w2fix] Moved here from the <style id="sheet-motion"> Sheet.ts used to inject; the old 300 ms (--dur-screen)
+ * rules here and in bunker-os.css are gone, and the CRT flash there now runs for --dur-popup-in. A sheet replaced by another one closes
+ * with `.sheet-instant`, so two panels never slide over each other; a dragged sheet follows the finger with no transition.
+ */
+.sheet-overlay .sheet { transition: transform var(--dur-popup-out) var(--ease-in), visibility 0s linear var(--dur-popup-out); }
+.sheet-overlay.open .sheet { transition: transform var(--dur-popup-in) var(--ease-out); }
+.sheet-overlay .sheet.dragging, .sheet-overlay.open .sheet.dragging { transition: none; animation: none; }
+.sheet-overlay.sheet-instant, .sheet-overlay.sheet-instant .sheet { transition: none; animation: none; }
 /* [plan4:UX-7] dvh follows the browser bars (100vh on iOS Safari is the tallest state, so a 72vh sheet could reach under the toolbar). */
 @supports (height: 100dvh) {
   .sheet { max-height: min(78dvh, calc(100dvh - var(--kb-inset, 0px) - 16px)); }
