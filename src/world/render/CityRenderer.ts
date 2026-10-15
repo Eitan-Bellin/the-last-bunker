@@ -160,7 +160,6 @@ export class CityRenderer {
   setUvMode(mode: LightmapUvMode): void {
     this.uvMode = mode;
     this.lighting.filter.mode = mode;
-    if (mode === 'global') (this.litGroup as { filterArea: Rectangle | null }).filterArea = null;
   }
 
   private syncFilter(): void {
@@ -228,7 +227,9 @@ export class CityRenderer {
   update(cam: ParallaxInfo, t: number, dt: number, opts?: CityFrameOptions): void {
     const t0 = performance.now();
     this.stats.frame++;
-    const covers = !!opts?.mapCovers || cam.z < CAMERA.zoom.far;
+    // [world:M2] The host says when its map covers (the map has faded in): during the crossfade the scene keeps drawing under it. Hosts
+    // without a map (the lab) fall back to the zoom threshold.
+    const covers = opts?.mapCovers !== undefined ? opts.mapCovers : cam.z < CAMERA.zoom.far;
     if (covers !== this.mapCovers) this.mapCovers = covers;
     this.syncFilter();
     const P = this.planes;
@@ -264,13 +265,14 @@ export class CityRenderer {
     this.lighting.glowLayer.visible = T.glow;
     this.lighting.teaseLayer.visible = T.glow && this.fogEnabled;
     if (T.lightmap || T.glow) this.lighting.update(v, t, dt);
-    if (this.uvMode === 'area') {
-      this.area.x = v.x0;
-      this.area.y = v.y0;
-      this.area.width = v.x1 - v.x0;
-      this.area.height = v.y1 - v.y0;
-      this.litGroup.filterArea = this.area;
-    }
+    // [world:M2 perf] The filter area is pinned to the view in BOTH uv modes. Without it Pixi measures the lit group's bounds every frame
+    // (getFastGlobalBounds over every room, walker and shell piece): 3-4 ms of CPU per picture at e55, the biggest single cost of the city
+    // over classic. In 'global' mode the shader derives screen UV from the output frame, so any frame that covers the view is correct.
+    this.area.x = v.x0;
+    this.area.y = v.y0;
+    this.area.width = v.x1 - v.x0;
+    this.area.height = v.y1 - v.y0;
+    if (this.litGroup.filterArea !== this.area) this.litGroup.filterArea = this.area;
     this.fog.layer.visible = this.fogEnabled;
     if (this.fogEnabled) this.fog.update(this.renderer, t, dt);
     if (P.far.needsBake(cam, t)) { P.far.bake(this.renderer, cam, t); this.stats.bakes++; }
