@@ -1764,5 +1764,23 @@
   "ux2b.popFull": "אין מיטה",
   "ux2b.popLock": "מגבלת המערכה",
   "ux2b.moraleTop": "הכי משפיע: {cause} ({v}).",
-  "ux2b.moraleMore": "הקישו לכל הסיבות."
+  "ux2b.moraleMore": "הקישו לכל הסיבות.",
+  "ux3b.arrow.fire": "שריפה",
+  "ux3b.arrow.flood": "הצפה",
+  "ux3b.arrow.blackout": "הפסקת חשמל",
+  "ux3b.arrow.roaches": "ג׳וקים",
+  "ux3b.arrow.breach": "פריצה",
+  "ux3b.arrow.disaster": "אסון מתקרב",
+  "ux3b.arrow.raid": "שודדים בשער",
+  "ux3b.arrow.built": "החדר מוכן",
+  "ux3b.arrow.upgraded": "השדרוג הושלם",
+  "ux3b.arrow.restored": "החדר שוקם",
+  "ux3b.arrow.bonus": "בונוס מחכה",
+  "ux3b.arrow.aria": "{what}: הראו לי",
+  "ux3b.home": "לבונקר",
+  "ux3b.home.aria": "חזרה לבונקר",
+  "ux3b.leave.title": "לצאת מהמשחק?",
+  "ux3b.leave.body": "הבונקר ממשיך לעבוד גם כשאתם לא כאן. ההתקדמות נשמרה.",
+  "ux3b.leave.stay": "הישארו",
+  "ux3b.leave.go": "יציאה"
 }

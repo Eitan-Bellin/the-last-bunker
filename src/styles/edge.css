@@ -1,0 +1,89 @@
+/* [ux-redesign W3b] Off-screen event arrows (src/ui/edgeArrows.ts) and the "Back to the bunker" button (src/ui/backToBunker.ts).
+   Every value is a token. Layer: the HUD's (over the world, under the sheets, the nav and the dialogs). */
+
+/* The arrows point at physical places on the screen: the layer is laid out left-to-right in both languages (only the chips' place and
+   angle come from code, as --edge-x / --edge-y / --edge-a). */
+.edge-layer {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-hud);
+  pointer-events: none;
+  direction: ltr;
+}
+.edge-layer[hidden] { display: none; }
+
+.edge-arrow {
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline-start: 0;
+  inline-size: max(var(--hit-min), var(--tap, 0px));
+  block-size: max(var(--hit-min), var(--tap, 0px));
+  padding: 0;
+  border: 0;
+  background: none;
+  pointer-events: auto;
+  cursor: pointer;
+  transform: translate(var(--edge-x, 0px), var(--edge-y, 0px)) translate(-50%, -50%);
+  transition: transform var(--dur-popup-in) var(--ease-out);
+  -webkit-tap-highlight-color: transparent;
+}
+.edge-arrow[hidden] { display: none; }
+
+/* The face: a round chip with the event's icon. Danger = dashed red edge (a shape, not only a colour); ready = solid amber edge. */
+.edge-arrow__face {
+  position: absolute;
+  inset: var(--sp-1);
+  display: grid;
+  place-items: center;
+  border-radius: var(--r-full);
+  background: var(--surface-2);
+  border: var(--ring-w) solid var(--primary);
+  color: var(--primary);
+  box-shadow: var(--elev-1);
+  transition: scale var(--dur-release) var(--ease-out-back);
+}
+.edge-arrow[data-tone="danger"] .edge-arrow__face {
+  border-style: dashed;
+  border-color: var(--danger);
+  color: var(--danger-text);
+  animation: k-breathe var(--dur-breathe) var(--ease-in-out) infinite alternate;
+}
+.edge-arrow__icon { display: grid; place-items: center; inline-size: var(--icon-m); block-size: var(--icon-m); }
+.edge-arrow__icon svg, .edge-arrow__icon img { inline-size: 100%; block-size: 100%; }
+.edge-arrow:active .edge-arrow__face { scale: var(--press-scale); filter: brightness(var(--press-darken)); transition-duration: var(--dur-press); }
+.edge-arrow:focus-visible { outline: var(--ring-w) solid var(--primary); outline-offset: calc(var(--sp-1) * -1); border-radius: var(--r-full); }
+
+/* The pointer: a small wedge on the rim, turned toward the target. */
+.edge-arrow__pointer {
+  position: absolute;
+  inset: 0;
+  rotate: var(--edge-a, 0deg);
+  transition: rotate var(--dur-popup-in) var(--ease-out);
+}
+.edge-arrow__pointer::after {
+  content: '';
+  position: absolute;
+  inset-inline-end: calc(var(--sp-2) * -1);
+  inset-block-start: calc(50% - var(--sp-2));
+  border-block: var(--sp-2) solid transparent;
+  border-inline-start: var(--sp-3) solid var(--primary);
+}
+.edge-arrow[data-tone="danger"] .edge-arrow__pointer::after { border-inline-start-color: var(--danger); }
+
+:root[data-motion="reduced"] .edge-arrow,
+:root[data-motion="reduced"] .edge-arrow__pointer { transition: none; }
+:root[data-motion="reduced"] .edge-arrow[data-tone="danger"] .edge-arrow__face { animation: none; }
+
+/* "Back to the bunker": bottom, inline end, above the nav, the objective strip and the section chips (the thumb zone). */
+.btn.back-home {
+  position: fixed;
+  z-index: var(--z-hud);
+  inset-block-end: calc(var(--nav-h, 0px) + var(--obj-h, 0px) + var(--chips-h, 0px) + var(--sp-3));
+  inset-inline-end: calc(var(--sp-3) + var(--sp-5));
+  min-block-size: var(--hit-min);
+  padding-inline: var(--sp-4);
+  border-radius: var(--r-full);
+  box-shadow: var(--elev-2);
+  font-size: calc(var(--type-body) * min(var(--fs, 1), 1.3));
+}
+.btn.back-home[hidden] { display: none; }

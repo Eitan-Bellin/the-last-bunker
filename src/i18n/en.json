@@ -1764,5 +1764,23 @@
   "ux2b.popFull": "No bed",
   "ux2b.popLock": "Act limit",
   "ux2b.moraleTop": "Biggest effect: {cause} ({v}).",
-  "ux2b.moraleMore": "Tap for every cause."
+  "ux2b.moraleMore": "Tap for every cause.",
+  "ux3b.arrow.fire": "Fire",
+  "ux3b.arrow.flood": "Flood",
+  "ux3b.arrow.blackout": "Blackout",
+  "ux3b.arrow.roaches": "Roaches",
+  "ux3b.arrow.breach": "Break-in",
+  "ux3b.arrow.disaster": "Disaster coming",
+  "ux3b.arrow.raid": "Raiders at the gate",
+  "ux3b.arrow.built": "Room ready",
+  "ux3b.arrow.upgraded": "Upgrade done",
+  "ux3b.arrow.restored": "Room restored",
+  "ux3b.arrow.bonus": "Bonus waiting",
+  "ux3b.arrow.aria": "{what}: show me",
+  "ux3b.home": "To the bunker",
+  "ux3b.home.aria": "Back to the bunker",
+  "ux3b.leave.title": "Leave the game?",
+  "ux3b.leave.body": "The bunker keeps going while you are away. Your progress is saved.",
+  "ux3b.leave.stay": "Stay",
+  "ux3b.leave.go": "Leave"
 }
