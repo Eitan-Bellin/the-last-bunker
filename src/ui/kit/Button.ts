@@ -66,15 +66,27 @@ const SKIN: Record<KButtonVariant, string> = {
   purchase: 'btn-primary',
 };
 
-/** True when the pointer that ended this click was released outside the button's hit area (a press dragged out). */
-function releasedOutside(b: HTMLElement, e: MouseEvent): boolean {
-  if (e.detail === 0) return false; // keyboard or script click: no pointer
+/** [phase1] A rectangle in client px (the hit area where a press started). */
+type Box = { left: number; right: number; top: number; bottom: number };
+
+/** The control's hit area now: the union of the button and its `.k-hit` child (which may reach past a small button). */
+function hitBox(b: HTMLElement): Box {
   const hit = b.querySelector<HTMLElement>(':scope > .k-hit') ?? b;
   const r = hit.getBoundingClientRect();
   const o = b.getBoundingClientRect();
-  const left = Math.min(r.left, o.left), right = Math.max(r.right, o.right);
-  const top = Math.min(r.top, o.top), bottom = Math.max(r.bottom, o.bottom);
-  return e.clientX < left || e.clientX > right || e.clientY < top || e.clientY > bottom;
+  return { left: Math.min(r.left, o.left), right: Math.max(r.right, o.right), top: Math.min(r.top, o.top), bottom: Math.max(r.bottom, o.bottom) };
+}
+
+const inside = (x: number, y: number, r: Box): boolean => x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
+
+/**
+ * True when the pointer that ended this click was released outside the button's hit area (a press dragged out).
+ * [phase1] Judged against the rectangle snapshotted at pointerdown (`box`), before the pressed look moved anything: the pressed
+ * button is smaller, and a finger that landed near its edge used to count as "outside" on release.
+ */
+function releasedOutside(b: HTMLElement, e: MouseEvent, box: Box | null): boolean {
+  if (e.detail === 0) return false; // keyboard or script click: no pointer
+  return !inside(e.clientX, e.clientY, box ?? hitBox(b));
 }
 
 function deny(b: HTMLButtonElement, reason: string): void {
@@ -132,21 +144,39 @@ export function bindPress(target: HTMLElement, onPress: () => void, o: PressOpti
   const state = o.state ?? ((): 'ok' => 'ok');
   const debounce = o.debounceMs ?? MS.debounce;
   let lastFire = -Infinity;
+  // [phase1] The hit area as it was when the press started (null: no press under way). The release, a drag out and the pressed look
+  // are judged against it, never against the (smaller) pressed rectangle.
+  let box: Box | null = null;
+  let downId = -1;
+  const captured = (e: PointerEvent): boolean => {
+    try { return target.hasPointerCapture(e.pointerId); } catch { return false; }
+  };
   const release = (): void => target.classList.remove('is-pressed');
   target.addEventListener('pointerdown', (e) => {
     if (e.button !== 0) return;
-    // Touch captures the pointer to the element implicitly: release it so leaving the element is noticed.
-    try { if (target.hasPointerCapture(e.pointerId)) target.releasePointerCapture(e.pointerId); } catch { /* synthetic pointer */ }
+    box = hitBox(target);
+    downId = e.pointerId;
+    // [phase1] Touch keeps its implicit pointer capture: the release (and so the click) comes to this control even when the finger
+    // lifts on the edge the pressed look shrank away from. Leaving is judged by pointermove against `box`, not by pointerleave.
     if (state() === 'ok') target.classList.add('is-pressed');
   });
+  target.addEventListener('pointermove', (e) => {
+    if (!box || e.pointerId !== downId || !captured(e)) return;
+    target.classList.toggle('is-pressed', state() === 'ok' && inside(e.clientX, e.clientY, box));
+  });
   target.addEventListener('pointerenter', (e) => { if (e.buttons === 1 && state() === 'ok') target.classList.add('is-pressed'); });
-  target.addEventListener('pointerleave', release);
+  target.addEventListener('pointerleave', (e) => {
+    if (box && e.pointerId === downId && captured(e)) return; // a captured (touch) pointer: pointermove decides
+    release();
+  });
   target.addEventListener('pointerup', release);
-  target.addEventListener('pointercancel', release);
+  target.addEventListener('pointercancel', () => { release(); box = null; });
   target.addEventListener('click', (e) => {
     if (o.stopPropagation !== false) e.stopPropagation();
+    const pressBox = box;
+    box = null;
     const s = state();
-    if (releasedOutside(target, e) || s === 'ignore') return;
+    if (releasedOutside(target, e, pressBox) || s === 'ignore') return;
     if (s === 'deny') {
       o.onDeny?.();
       return;

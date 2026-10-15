@@ -17,9 +17,12 @@ export const crewKey = (id: string) => `p_${id}`;
 const PAID_SLACK = 1;
 
 /** Part of each store that a hand delivery leaves alone, so a project can never starve the bunker. */
-const RESERVE: Partial<Record<ResourceType, number>> = {
+export const RESERVE: Partial<Record<ResourceType, number>> = {
   food: 0.4, water: 0.4, medicine: 0.5, materials: 0.1, knowledge: 0.1, scrap: 0.1,
 };
+
+/** [phase1] Share of each store the pledge (auto-delivery) never touches: it feeds only the top half, the rest is for building. */
+export const PLEDGE_KEEP = 0.5;
 
 /**
  * [LateGame B1] Big projects. Progress needs two things at once, and both keep running while the player is away:
@@ -211,31 +214,57 @@ export class ProjectSystem {
     return out;
   }
 
-  /** How much of a missing resource can be delivered by hand now (storage keeps its reserve). */
-  deliverable(state: GameState, resource: ResourceType, missing: number): number {
+  /**
+   * How much of a missing resource can be delivered now (storage keeps its reserve). [phase1] The pledge keeps at least PLEDGE_KEEP of
+   * each store (or the hand reserve if that is higher): it feeds the top of the stores, so building and upgrading still have stock to use.
+   */
+  deliverable(state: GameState, resource: ResourceType, missing: number, pledge = false): number {
     const res = state.resources[resource];
     if (!res) return 0;
-    const reserve = Number.isFinite(res.cap) ? (RESERVE[resource] ?? 0) * res.cap : 0;
+    const share = Math.max(RESERVE[resource] ?? 0, pledge ? PLEDGE_KEEP : 0);
+    const reserve = Number.isFinite(res.cap) ? share * res.cap : 0;
     return Math.max(0, Math.min(missing, res.amount - reserve));
   }
 
   /** Hand delivery: moves stock into the active project's stage. Returns the delivered amounts. */
   deposit(id: string): Partial<Record<ResourceType, number>> {
+    return this.feed(id, false);
+  }
+
+  /**
+   * Moves stock above the reserve into the active project's stage. A hand delivery (`fractions` false) moves whole units, or the exact
+   * remainder when the store covers it ([ux-wp1 E1]); the pledge ([phase1]) moves any amount, every tick.
+   */
+  private feed(id: string, fractions: boolean): Partial<Record<ResourceType, number>> {
     const state = this.sm.state;
     const given: Partial<Record<ResourceType, number>> = {};
     if (state.activeProjectId !== id) return given;
     const stage = this.stageOf(state, id);
     for (const r of Object.keys(this.missing(state, id)) as ResourceType[]) {
-      // [ux-wp1 E1] The exact remainder (fractions too) goes in when the store covers it; otherwise whole units.
       const left = (stage?.cost[r] ?? 0) - (this.progressOf(this.sm.state, id).paid[r] ?? 0);
-      const can = this.deliverable(this.sm.state, r, left);
-      const amount = can >= left ? left : Math.floor(can);
-      if (amount < 1) continue;
+      const can = this.deliverable(this.sm.state, r, left, fractions);
+      const amount = can >= left || fractions ? Math.min(can, left) : Math.floor(can);
+      if (fractions ? amount <= 1e-6 : amount < 1) continue;
       this.sm.applyDelta({ path: `resources.${r}.amount`, value: this.sm.state.resources[r].amount - amount });
       this.absorb(this.sm.state, r, amount);
       given[r] = amount;
     }
     return given;
+  }
+
+  // ---- pledge (auto-delivery) ----
+
+  /** [phase1] Whether a project is fed automatically from stock above the reserve (per project; untouched ones follow `pledgeDefault`). */
+  pledged(state: GameState, id: string): boolean {
+    return state.lateGame.pledges?.[id] ?? !!state.lateGame.pledgeDefault;
+  }
+
+  /** [phase1] The player's pledge toggle for one project. */
+  setPledge(id: string, on: boolean): boolean {
+    if (!getProject(id)) return false;
+    const state = this.sm.state;
+    this.sm.applyDelta({ path: 'lateGame.pledges', value: { ...(state.lateGame.pledges ?? {}), [id]: on } });
+    return true;
   }
 
   /** Shop hook: gives the active stage a share of what it needs, in work and in resources. */
@@ -273,6 +302,8 @@ export class ProjectSystem {
     }
     const stage = def.stages[this.progressOf(state, id).stage];
     if (!stage) return;
+    // [phase1] A pledged project takes what the stores can spare above their reserve, every tick (online and away).
+    if (this.pledged(state, id) && !this.paidUp(state, id)) this.feed(id, true);
     const need = stage.hours * 3600;
     let prog = this.progressOf(state, id);
     const sp = this.speed(state, id);

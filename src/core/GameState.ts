@@ -486,6 +486,8 @@ export interface GameState {
   nextArrivalAt: number;
   moraleBuffs: MoraleBuff[];
   powerRatio: number;
+  /** [phase1] World seconds (worldT, or play seconds without a long game) when the lights went out; absent while powered. The darkness morale penalty ramps in over a minute from here. */
+  darkSince?: number;
   missionReports: MissionReport[];
   ruins: Ruin[];
   ruinsCleared: number;
@@ -574,6 +576,10 @@ export interface LateGameState {
   projectsPaused?: boolean;
   /** [P2-2] The design ('a' or 'b') the player chose for a project (absent = 'a'). */
   designs?: Record<string, 'a' | 'b'>;
+  /** [phase1] Auto-delivery ("pledge") per project: the stage is fed from stock above the reserve every tick. Absent = `pledgeDefault`. */
+  pledges?: Record<string, boolean>;
+  /** [phase1] Pledge for projects the player never toggled: on for games started after the pledge existed, absent (off) for older saves. */
+  pledgeDefault?: boolean;
   /** [Q1] Play seconds before which no story chapter may start (kept in the save: closing the game must not shorten the gap). */
   storyUntil?: number;
 }
@@ -671,7 +677,8 @@ export function createInitialState(): GameState {
     resources: {
       food: { amount: 150, cap: 150, productionRate: 0, consumptionRate: 0 },
       water: { amount: 100, cap: 100, productionRate: 0, consumptionRate: 0 },
-      power: { amount: 10, cap: 50, productionRate: 0, consumptionRate: 0 },
+      // [phase1] A full battery (was 10): the quarters' 1/s lasts the 50 s it takes to find and restore the generator.
+      power: { amount: 50, cap: 50, productionRate: 0, consumptionRate: 0 },
       materials: { amount: 70, cap: 200, productionRate: 0, consumptionRate: 0 },
       medicine: { amount: 5, cap: 30, productionRate: 0, consumptionRate: 0 },
       knowledge: { amount: 0, cap: 100, productionRate: 0, consumptionRate: 0 },
@@ -749,7 +756,7 @@ export function createInitialState(): GameState {
     danger: createDanger(), // [Danger]
     shop: { day: null, bought: {}, week: null, weekBought: {} },
     activeProjectId: null,
-    lateGame: createLateGame(),
+    lateGame: { ...createLateGame(), pledgeDefault: true }, // [phase1] new games auto-deliver to projects (migrateState leaves old saves off)
     daily: createDaily(), // [plan4:GP-1]
     longGame: createLongGame(),
   };

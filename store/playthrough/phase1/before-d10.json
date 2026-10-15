@@ -1,0 +1,115 @@
+{
+ "wallSeconds": 165,
+ "gameMinutes": 6,
+ "dialogs": 0,
+ "story": 0,
+ "spotlights": 0,
+ "toasts": 11,
+ "sheets": 36,
+ "blocking": [],
+ "state": {
+  "paused": false,
+  "morale": 100,
+  "people": 65,
+  "power": 1700,
+  "food": 25800,
+  "playSeconds": 74733
+ },
+ "samples": [
+  {
+   "paused": false,
+   "morale": 100,
+   "people": 65,
+   "power": 1700,
+   "food": 25800,
+   "playSeconds": 74433
+  },
+  {
+   "paused": false,
+   "morale": 100,
+   "people": 65,
+   "power": 1700,
+   "food": 25800,
+   "playSeconds": 74463
+  },
+  {
+   "paused": false,
+   "morale": 100,
+   "people": 65,
+   "power": 1700,
+   "food": 25800,
+   "playSeconds": 74493
+  },
+  {
+   "paused": false,
+   "morale": 100,
+   "people": 65,
+   "power": 1700,
+   "food": 25800,
+   "playSeconds": 74523
+  },
+  {
+   "paused": false,
+   "morale": 100,
+   "people": 65,
+   "power": 1700,
+   "food": 25800,
+   "playSeconds": 74553
+  },
+  {
+   "paused": false,
+   "morale": 100,
+   "people": 65,
+   "power": 1700,
+   "food": 25800,
+   "playSeconds": 74583
+  },
+  {
+   "paused": false,
+   "morale": 100,
+   "people": 65,
+   "power": 1700,
+   "food": 25800,
+   "playSeconds": 74613
+  },
+  {
+   "paused": false,
+   "morale": 100,
+   "people": 65,
+   "power": 1700,
+   "food": 25800,
+   "playSeconds": 74643
+  },
+  {
+   "paused": false,
+   "morale": 100,
+   "people": 65,
+   "power": 1700,
+   "food": 25800,
+   "playSeconds": 74673
+  },
+  {
+   "paused": false,
+   "morale": 100,
+   "people": 65,
+   "power": 1700,
+   "food": 25800,
+   "playSeconds": 74703
+  },
+  {
+   "paused": false,
+   "morale": 100,
+   "people": 65,
+   "power": 1700,
+   "food": 25800,
+   "playSeconds": 74733
+  }
+ ],
+ "config": {
+  "base": "http://localhost:5180",
+  "minutes": 6,
+  "speed": 2,
+  "stage": "d10",
+  "lang": "he"
+ }
+}

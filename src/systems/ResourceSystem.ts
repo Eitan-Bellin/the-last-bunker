@@ -17,7 +17,7 @@ import { TUNING } from '../data/tuning';
 import { scenarioOf } from '../data/scenarios';
 import { infraPowerDraw } from './InfraSystem'; // plan4:ST-14/15
 import { isTier2 } from './economy';
-import { moraleOutputMult, moraleRawAverage } from './morale';
+import { moraleOutputMult, moraleRawAverage, worldClock } from './morale';
 
 const EMERGENCY_EFFICIENCY = 0.25;
 /**
@@ -219,6 +219,10 @@ export class ResourceSystem {
     }
     this.flushCredits(state, deltas);
     deltas.push({ path: 'powerRatio', value: powerRatio });
+    // [phase1] When the lights went out (the darkness morale penalty ramps in from here, see darknessPenalty).
+    const dark = powerRatio < 0.99;
+    if (dark && state.darkSince === undefined) deltas.push({ path: 'darkSince', value: worldClock(state) });
+    else if (!dark && state.darkSince !== undefined) deltas.push({ path: 'darkSince', value: undefined });
     if (production.food) {
       deltas.push({ path: 'stats.totalFoodProduced', value: state.stats.totalFoodProduced + production.food * dt });
     }

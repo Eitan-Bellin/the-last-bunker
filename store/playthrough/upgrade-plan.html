@@ -1,0 +1,277 @@
+<title>תכנית השדרוג של הבונקר</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Secular+One&family=Assistant:wght@400;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a field manual. One column of topic sections, each item a ruled row with effort + phase stamps. */
+:root{
+  --bg:#ECEEEB; --panel:#F7F8F6; --fg:#1D211F; --muted:#59605B; --rule:#C9CEC9;
+  --accent:#A85F00; --accent-soft:#F3E3CB; --ux:#2F5D62; --ux-soft:#D7E6E6; --logic:#7A3E2C; --logic-soft:#F0DDD5;
+  --s:#2E7D4F; --m:#A86A00; --l:#A23A2A;
+  --f-display:"Secular One","Assistant",system-ui,sans-serif;
+  --f-body:"Assistant",system-ui,"Segoe UI",sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,Consolas,monospace;
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#141715; --panel:#1C201D; --fg:#E3E6E2; --muted:#9AA39C; --rule:#323833;
+  --accent:#F0A637; --accent-soft:#3A2D17; --ux:#7FB7BC; --ux-soft:#1E3133; --logic:#E09378; --logic-soft:#3A241D;
+  --s:#6CC28F; --m:#E8AE4C; --l:#EC8070; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#141715; --panel:#1C201D; --fg:#E3E6E2; --muted:#9AA39C; --rule:#323833;
+  --accent:#F0A637; --accent-soft:#3A2D17; --ux:#7FB7BC; --ux-soft:#1E3133; --logic:#E09378; --logic-soft:#3A241D;
+  --s:#6CC28F; --m:#E8AE4C; --l:#EC8070; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font-family:var(--f-body);font-size:17px;line-height:1.6;margin:0}
+.wrap{max-width:980px;margin:0 auto;padding-inline:20px;padding-block:28px 64px}
+h1,h2,h3{font-family:var(--f-display);font-weight:400;line-height:1.2;text-wrap:balance;margin:0}
+h1{font-size:clamp(30px,6vw,46px)}
+h2{font-size:clamp(23px,4vw,30px)}
+h3{font-size:19px;font-family:var(--f-body);font-weight:700}
+p{margin:0}
+.lede{color:var(--muted);max-width:62ch;margin-top:10px;font-size:18px}
+.eyebrow{font-size:13px;letter-spacing:.06em;color:var(--accent);font-weight:700}
+header{display:grid;gap:6px;padding-bottom:22px;border-bottom:3px solid var(--fg)}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:1px;background:var(--rule);border:1px solid var(--rule);margin-top:24px}
+.stat{background:var(--panel);padding:14px 16px;display:grid;gap:2px;align-content:start}
+.stat b{font-family:var(--f-display);font-weight:400;font-size:30px;color:var(--accent);font-variant-numeric:tabular-nums;line-height:1.1}
+.stat span{font-size:14px;color:var(--muted);line-height:1.4}
+section{margin-top:44px;display:grid;gap:14px}
+.how{background:var(--panel);border:1px solid var(--rule);padding:18px 20px;display:grid;gap:10px}
+.how ol{margin:0;padding-inline-start:22px;display:grid;gap:6px}
+code,.mono{font-family:var(--f-mono);font-size:13.5px;direction:ltr;unicode-bidi:isolate}
+.loops{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px}
+.loop{border-top:3px solid var(--accent);background:var(--panel);padding:14px 16px;display:grid;gap:6px;align-content:start}
+.loop h3{font-size:18px}
+.loop p{font-size:15.5px;color:var(--muted)}
+.toc{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
+.toc a{text-decoration:none;color:var(--fg);font-size:14.5px;padding:4px 10px;border:1px solid var(--rule);background:var(--panel);border-radius:3px}
+.toc a:hover,.toc a:focus-visible{border-color:var(--accent);outline:none}
+.toc .ux{border-inline-start:4px solid var(--ux)}
+.toc .lg{border-inline-start:4px solid var(--logic)}
+.group-head{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;padding-bottom:6px;border-bottom:1px solid var(--rule)}
+.tag-ux,.tag-lg{font-size:13px;font-weight:700;padding:2px 9px;border-radius:2px}
+.tag-ux{background:var(--ux-soft);color:var(--ux)}
+.tag-lg{background:var(--logic-soft);color:var(--logic)}
+.topic{display:grid;gap:0;border:1px solid var(--rule);background:var(--panel)}
+.topic>header{border:0;padding:14px 18px 10px;display:grid;gap:4px}
+.topic>header p{color:var(--muted);font-size:15.5px}
+.topic.ux>header{border-inline-start:5px solid var(--ux)}
+.topic.lg>header{border-inline-start:5px solid var(--logic)}
+.item{display:grid;grid-template-columns:1fr auto;gap:4px 16px;padding:12px 18px;border-top:1px solid var(--rule)}
+.item .t{font-weight:700}
+.item .d{grid-column:1/2;color:var(--fg);font-size:15.5px;min-width:0}
+.item .d em{font-style:normal;color:var(--muted)}
+.item .f{grid-column:1/2;color:var(--muted);min-width:0;overflow-wrap:anywhere}
+.stamps{grid-row:1/4;grid-column:2;display:flex;flex-direction:column;gap:6px;align-items:flex-end}
+.eff,.ph{font-family:var(--f-mono);font-size:12.5px;font-weight:500;padding:2px 7px;border:1.5px solid currentColor;border-radius:2px;white-space:nowrap}
+.eff.S{color:var(--s)}.eff.M{color:var(--m)}.eff.L{color:var(--l)}
+.ph{color:var(--muted)}
+.road{display:grid;gap:0;border-inline-start:3px solid var(--accent);padding-inline-start:0}
+.step{display:grid;grid-template-columns:auto 1fr;gap:4px 16px;padding:14px 0 14px 0;padding-inline-start:18px;position:relative}
+.step::before{content:"";position:absolute;inset-inline-start:-9px;top:20px;width:15px;height:15px;background:var(--bg);border:3px solid var(--accent);border-radius:50%}
+.step .n{font-family:var(--f-display);font-size:22px;color:var(--accent);grid-row:1/3}
+.step h3{font-size:18px}
+.step p{grid-column:2;color:var(--muted);font-size:15.5px}
+.gate{background:var(--accent-soft);padding:14px 18px;display:grid;gap:6px}
+.gate ul{margin:0;padding-inline-start:20px;display:grid;gap:4px}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:14px;color:var(--muted);align-items:center}
+footer{margin-top:48px;padding-top:14px;border-top:1px solid var(--rule);color:var(--muted);font-size:14px}
+@media (max-width:560px){
+  .item{grid-template-columns:1fr}
+  .stamps{grid-row:auto;grid-column:1;flex-direction:row;justify-content:flex-start}
+  .item .d,.item .f{grid-column:1}
+}
+@media (prefers-reduced-motion:reduce){*{scroll-behavior:auto!important}}
+html{scroll-behavior:smooth}
+</style>
+
+<div class="wrap" dir="rtl" lang="he">
+<header>
+  <div class="eyebrow">הבונקר האחרון · מעבר מלא על המשחק · 15.10.2026</div>
+  <h1>תכנית שדרוג: פחות מערכות, יותר החלטות</h1>
+  <p class="lede">עברתי על כל המשחק כשחקן, בעזרת "צ'יט" שמריץ את לוגיקת המשחק האמיתית במהירות. במקביל שלושה בודקים קראו את הקוד ואת נתוני הסימולציות. המסקנה: העומס הוא קודם כל בעיית תוכן ועיצוב משחק, ורק אחר כך בעיית מסך.</p>
+  <div class="stats">
+    <div class="stat"><b>39</b><span>מערכות משחק, מתוכן כ־30 שהשחקן נוגע בהן</span></div>
+    <div class="stat"><b>16</b><span>מטבעות ומשאבים. בכל רגע רק כ־3 באמת חשובים</span></div>
+    <div class="stat"><b>6 / 25</b><span>בחירות עם החלטה אמיתית. השאר ברורות מראש או חסרות השפעה</span></div>
+    <div class="stat"><b>12–18</b><span>חלונות קופצים שעוצרים את המשחק ב־30 הדקות הראשונות</span></div>
+    <div class="stat"><b>55%</b><span>מזמן המשחק אין שום דבר שווה לעשות</span></div>
+    <div class="stat"><b>2 ש׳ → 34 ש׳</b><span>מערכה I: שעתיים של משחק ואז המתנה ארוכה למערכה II</span></div>
+  </div>
+</header>
+
+<section id="how">
+  <h2>איך עברתי על כל המשחק</h2>
+  <div class="how">
+    <ol>
+      <li><b>הצ'יט:</b> בוט הסימולציה של המשחק (<code>tools/sim</code>) משחק כשחקן פעיל עם הלוגיקה האמיתית, במהירות של שעות בדקה, ושומר תמונת מצב בכל שלב: יום 1, 4, 10, 35, 50 ו־70. השמירות ב־<code>store/playthrough/saves</code>.</li>
+      <li>כל שמירה נטענה בדפדפן בסלוט נפרד, כך שהשמירה שלך לא נגעה. במסך טלפון ובעברית עברתי על המסך הראשי ועל כל הלשוניות: בנייה, ניצולים, מחקר, שטח ותפריט.</li>
+      <li>שלושה בודקים במקביל: כלכלה וקצב, אסטרטגיה ועומק החלטות, ומפת המסכים והחלונות הקופצים. הדוחות המלאים, עם מספרי שורות בקוד, ב־<code>store/playthrough/review/</code>.</li>
+    </ol>
+    <p><b>דברים שראיתי בעיניים:</b> ביום 1 יש 156 אלף אוכל ומסך הבנייה מציג 42 חדרים שאף אחד מהם לא ניתן לבנייה. לשונית המחקר ריקה. בלשונית השטח 12 שורות כמעט זהות. כרטיס ניצול מציג חמישה מספרים בלי כותרת. בשמירה של יום 30 קפצו שלושה חלונות ברצף.</p>
+  </div>
+</section>
+
+<section id="loops">
+  <h2>על מה המשחק צריך להיות: 4 לולאות</h2>
+  <p class="lede" style="margin-top:0">כל מערכת שלא משרתת אחת מהן מתמזגת באחרת, מוסתרת, או יוצאת. הפרסים היומיים, השבועיים וההישגים הם עטיפה ולא לולאה, ולכן יהיו פאנל אחד.</p>
+  <div class="loops">
+    <div class="loop"><h3>א. לחפור עמוק יותר</h3><p>לאן הולכת השעה הזאת של חומרים: למטה, לרוחב, או לשדרוג? (בנייה, שדרוג, חפירה, מחוזות)</p></div>
+    <div class="loop"><h3>ב. להשאיר אותם בחיים</h3><p>כמה אני מוכן לבלוט? עושר, רדיו ואוכלוסייה מושכים שודדים. (איום, פשיטות, תקלות, מורל)</p></div>
+    <div class="loop"><h3>ג. לצאת החוצה</h3><p>את מי אני שולח, ולאן, כשאולי לא יחזור? (משלחות, מאחזים)</p></div>
+    <div class="loop"><h3>ד. מי אנחנו</h3><p>מבצר, חבר העמים, הגן או התיבה? (דוקטרינות, חוקים, סופים, בראשית)</p></div>
+  </div>
+</section>
+
+<section id="toc">
+  <h2>הנושאים</h2>
+  <div class="toc">
+    <a class="ux" href="#t1">1. תקלות מגע</a><a class="ux" href="#t2">2. חלונות קופצים</a><a class="ux" href="#t3">3. המסך הראשי</a><a class="ux" href="#t4">4. ניווט ופאנלים</a><a class="ux" href="#t5">5. השעה הראשונה</a><a class="ux" href="#t6">6. שפה ובהירות</a>
+    <a class="lg" href="#t7">7. כלכלה ומשאבים</a><a class="lg" href="#t8">8. קצב והתקדמות</a><a class="lg" href="#t9">9. החלטות וזהות</a><a class="lg" href="#t10">10. סכנה ומתח</a><a class="lg" href="#t11">11. העולם שבחוץ</a><a class="lg" href="#t12">12. מטרות ופרסים</a><a class="lg" href="#t13">13. המערכות כסיפור</a><a class="lg" href="#t14">14. בראשית וריצה שנייה</a><a class="lg" href="#t15">15. מדידה וכלים</a>
+  </div>
+  <div class="legend">גודל: <span class="eff S">S</span> קטן (שעות) <span class="eff M">M</span> בינוני (יום–יומיים) <span class="eff L">L</span> גדול (כמה ימים) · <span class="ph">שלב 1–5</span> מתי, לפי מפת הדרכים בסוף</div>
+</section>
+
+<!-- ================= UX / UI ================= -->
+<section>
+  <div class="group-head"><h2>חוויית משתמש וממשק</h2><span class="tag-ux">UX / UI</span></div>
+
+  <div class="topic ux" id="t1">
+    <header><h3>1. תקלות שגורמות למשחק להרגיש שבור</h3><p>חלק מההרגשה ה"מסורבלת" הוא באג אמיתי: לחיצות שלא נקלטות.</p></header>
+    <div class="item"><div class="t">לחיצה על קצה כפתור לא נקלטת</div><div class="d">הכפתור מתכווץ כשלוחצים, ולכן אצבע שנחתה ליד הקצה "יוצאת" ממנו. כ־15–20% משטח הכפתורים בחלונות מתים. <em>תיקון:</em> לשמור את גבולות הכפתור ברגע הלחיצה, ולהזיז רק את הציור הפנימי ולא את אזור המגע.</div><div class="f mono">ui/kit/Button.ts · kit.css</div><div class="stamps"><span class="eff S">S</span><span class="ph">שלב 1</span></div></div>
+    <div class="item"><div class="t">0.6 שניות שבהן חלון חדש מתעלם מלחיצות</div><div class="d">הכפתור נראה לחוץ אבל לא קורה כלום, במיוחד כשחלונות מגיעים ברצף. <em>תיקון:</em> להתעלם רק מלחיצה שהתחילה לפני שהחלון נפתח, ולא להראות "לחוץ" בזמן ההגנה.</div><div class="f mono">ui/components/Modal.ts · popupRules.ts</div><div class="stamps"><span class="eff S">S</span><span class="ph">שלב 1</span></div></div>
+    <div class="item"><div class="t">הזרקור של ההדרכה מעל חלונות</div><div class="d">לרגע קצר הוא חוסם לחיצות על חלון שנפתח ישירות. <em>תיקון:</em> להסתיר את הזרקור באותו רגע שחלון נפתח.</div><div class="f mono">onboarding/spotlight.ts</div><div class="stamps"><span class="eff S">S</span><span class="ph">שלב 1</span></div></div>
+  </div>
+
+  <div class="topic ux" id="t2">
+    <header><h3>2. חלונות קופצים והפרעות</h3><p>בכל רגע יש רק חלון אחד, אבל אין גבול לכמה חלונות מגיעים בסך הכול.</p></header>
+    <div class="item"><div class="t">תקציב הפרעות</div><div class="d">לכל היותר חלון אחד שאינו דחוף כל 3 דקות (5 דקות בחצי השעה הראשונה). כל השאר מחכה בשקט בתיבה. רק סכנה אמיתית עוקפת את התקציב.</div><div class="f mono">popupRules.ts · dialogQueue.ts · app.ts</div><div class="stamps"><span class="eff M">M</span><span class="ph">שלב 2</span></div></div>
+    <div class="item"><div class="t">דפיקות בדלת בלי חלון</div><div class="d">במערכה I מגיע חלון כמעט כל 75 שניות. במקום זה: סימן על הדלת ושורה בתיבה, ומתג "קבל אוטומטית". רק הדפיקה הראשונה מקבלת חלון כדי ללמד.</div><div class="f mono">inbox.ts · events.ts</div><div class="stamps"><span class="eff M">M</span><span class="ph">שלב 2</span></div></div>
+    <div class="item"><div class="t">טיפים, "מה חדש", מערכות חדשות וממצאים</div><div class="d">יהפכו לכרטיס קטן שנעלם מעצמו, או לשורה בתיבה, ולא יגיעו בשרשרת. במעבר מערכה יש כרטיס אחד שמונה את כל מה שנפתח.</div><div class="f mono">controllers/systems.ts · lore.ts · whatsnew.ts</div><div class="stamps"><span class="eff M">M</span><span class="ph">שלב 2</span></div></div>
+    <div class="item"><div class="t">שחקן חוזר: שתי דקות של שקט</div><div class="d">קודם כרטיס "ברוך שובך" ואחריו כלום אוטומטי במשך 2 דקות. הצעת חיסכון הסוללה תיבדק לפי זמן הסשן ולא לפי זמן השמירה, ולכן לא תקפוץ בשנייה הראשונה של שמירה ישנה.</div><div class="f mono">pwa.ts · tips.ts · app.ts</div><div class="stamps"><span class="eff S">S</span><span class="ph">שלב 1</span></div></div>
+  </div>
+
+  <div class="topic ux" id="t3">
+    <header><h3>3. המסך הראשי: ממשק ועולם</h3><p>כ־14 דברים לחיצים על מסך של 375 פיקסלים, ובעיה אחת שמוצגת בחמישה מקומות.</p></header>
+    <div class="item"><div class="t">ממשק עליון בשורה אחת</div><div class="d">שורה אחת עם ארבעת המשאבים שחשובים עכשיו ותיבה. המערכה, הניצולים והמורל יתאחדו לשבב "מצב" אחד שפותח את מרכז הפיקוד. בלי "+3 עוד" במערכה I, וסדר קבוע בלי קפיצות.</div><div class="f mono">HUD.ts · hud.css · touch.css</div><div class="stamps"><span class="eff M">M</span><span class="ph">שלב 2</span></div></div>
+    <div class="item"><div class="t">לכל בעיה מקום אחד</div><div class="d">היום מחסור בחשמל מופיע כבאנר, כספירה מהבהבת, ברצועת היעד, כהודעה וכזרקור. מעכשיו: הרצועה בלבד, עם ספירה לאחור. האריח רק משנה צבע.</div><div class="f mono">HUD.ts · app.ts checkShortages · advisor.ts</div><div class="stamps"><span class="eff S">S</span><span class="ph">שלב 1</span></div></div>
+    <div class="item"><div class="t">"מערכות חיים" במקום אוכל, מים וחשמל</div><div class="d">כשיש עודף גדול, שלושת המספרים יתאחדו לשבב אחד: תקין / נמוך / משבר. המספרים יוצגו רק כשאחד מהם עומד להיגמר.</div><div class="f mono">HUD.ts · ResourceSheet.ts</div><div class="stamps"><span class="eff M">M</span><span class="ph">שלב 3</span></div></div>
+    <div class="item"><div class="t">העולם קריא ומתגמל</div><div class="d">המצלמה תיפתח על החדרים של השחקן ולא על הפיר הריק. שמות חדרים גדולים יותר. אחרי הצלחה (חדר משוחזר, קומה חדשה) יבואו רגע חגיגה ומצלמה שממסגרת את התוצאה, ולא חצי מסך שחור.</div><div class="f mono">rendering/camera · BuildingPanel.ts · motion</div><div class="stamps"><span class="eff M">M</span><span class="ph">שלב 2</span></div></div>
+  </div>
+
+  <div class="topic ux" id="t4">
+    <header><h3>4. ניווט ופאנלים</h3><p>תכונות מרכזיות קבורות 3–4 לחיצות עמוק, ולשוניות שלמות ריקות.</p></header>
+    <div class="item"><div class="t">מסך בנייה בלי קיר של אפשרויות מתות</div><div class="d">ביום 1 מוצגים 42 חדרים, ואף אחד מהם לא ניתן לבנייה. מעכשיו: קודם רק מה שאפשר לבנות עכשיו. כשאין מקום, כפתור גדול אחד "חפרו קומה חדשה" במקום 42 כרטיסים שאומרים "אין מקום". פחות סמלים בכל כרטיס.</div><div class="f mono">BuildMenu.ts</div><div class="stamps"><span class="eff M">M</span><span class="ph">שלב 2</span></div></div>
+    <div class="item"><div class="t">לשונית לא מופיעה לפני שיש בה משהו</div><div class="d">המחקר במערכה I ריק ("נפתח במערכה 2"). לשונית ריקה מוסתרת או מוצגת נעולה עם תאריך. אותו דבר לבראשית בתפריט, שמוצגת מהיום הראשון.</div><div class="f mono">HUD.ts nav · MenuPanel.ts · ResearchPanel.ts</div><div class="stamps"><span class="eff S">S</span><span class="ph">שלב 2</span></div></div>
+    <div class="item"><div class="t">כרטיס ניצול שאפשר לקרוא</div><div class="d">חמישה מספרים בלי כותרת. במקומם: התכונה הכי חזקה בשם, ופס אחד "מתאים לעבודה הנוכחית".</div><div class="f mono">PeoplePanel.ts</div><div class="stamps"><span class="eff S">S</span><span class="ph">שלב 2</span></div></div>
+    <div class="item"><div class="t">לשונית השטח</div><div class="d">12 שורות כמעט זהות ("שממה · 8 דק׳ · שלחו") מתוך 69 אזורים. במקומן: 3 יעדים מומלצים ושונים (ביטחון, שלל, סיפור), והמפה למי שרוצה. המסחר הופך ללשונית ולא לשורה האחרונה ברשימה.</div><div class="f mono">SurfacePanel.ts · TradePanel.ts</div><div class="stamps"><span class="eff M">M</span><span class="ph">שלב 2</span></div></div>
+    <div class="item"><div class="t">תיבה אחת</div><div class="d">הפעמון, "החלטות ממתינות" והתיבה הם שלושה שמות לאותו דבר. במקומם תיבה אחת עם שורות שאפשר לפעול עליהן בלבד. היומן, הכרוניקה וספר הבונקר יתאחדו ל"ארכיון" בתפריט.</div><div class="f mono">HUD.alerts · inbox.ts · i18n</div><div class="stamps"><span class="eff M">M</span><span class="ph">שלב 2</span></div></div>
+    <div class="item"><div class="t">מרכז פיקוד עם לשוניות</div><div class="d">עכשיו · פרויקטים · מדיניות · סופים. הפרויקטים והחוקים יהיו במרחק לחיצה אחת ולא בתחתית של פאנל ארוך.</div><div class="f mono">EraPanel.ts · ProjectsPanel.ts</div><div class="stamps"><span class="eff M">M</span><span class="ph">שלב 2</span></div></div>
+  </div>
+
+  <div class="topic ux" id="t5">
+    <header><h3>5. השעה הראשונה</h3><p>הרושם הראשון היום הוא "הכול קורס", במקום "להחזיר את המקום לחיים".</p></header>
+    <div class="item"><div class="t">דקה ראשונה שאפשר לשרוד</div><div class="d">החשמל נגמר אחרי 10 שניות, ובתוך דקה המורל יורד מ־65 ל־45 עוד לפני שהשחקן יכול לעשות משהו. ההדרכה מבקשת לאייש את הגנרטור רק בצעד 7. <em>תיקון:</em> לאייש מיד אחרי השחזור, בלי עונש על "אין עבודה" בעשר הדקות הראשונות, והחושך יכבד בהדרגה.</div><div class="f mono">GameState.ts · ObjectiveSystem.ts · PopulationSystem.ts</div><div class="stamps"><span class="eff S">S</span><span class="ph">שלב 1</span></div></div>
+    <div class="item"><div class="t">ההנחיה לא סוטה הצידה</div><div class="d">אחרי הגנרטור ההנחיה קפצה ל"ארגז אספקה מוכן", כי איסוף מדורג מעל המטרה. סדר חדש: סכנה, אחריה מטרה, אחריה איסוף, והאיסוף יופיע כנקודה על הפעמון בלבד.</div><div class="f mono">advisorRules.ts</div><div class="stamps"><span class="eff S">S</span><span class="ph">שלב 1</span></div></div>
+    <div class="item"><div class="t">זרקור רק בצעדי ההדרכה</div><div class="d">היום הזרקור נועל את המסך בכל פעם שההנחיה משתנה. מעכשיו רק 5 הצעדים המתוכננים. "דלג על ההדרכה" עובר לתוך הבועה ולא יושב על הבאנר.</div><div class="f mono">onboarding/index.ts · spotlight.ts</div><div class="stamps"><span class="eff S">S</span><span class="ph">שלב 1</span></div></div>
+    <div class="item"><div class="t">פחות דברים בשש הדקות הראשונות</div><div class="d">עד דקה 6 נפתחים 9 מבנים, משלחות, מחקר, הריסות וסיפור. המשלחות והמחקר יחכו עד שהבסיס עומד.</div><div class="f mono">ObjectiveSystem.ts · acts.ts</div><div class="stamps"><span class="eff M">M</span><span class="ph">שלב 3</span></div></div>
+  </div>
+
+  <div class="topic ux" id="t6">
+    <header><h3>6. שפה ובהירות</h3><p>אותו דבר בשמות שונים, ושמות שונים לאותו דבר.</p></header>
+    <div class="item"><div class="t">מעבר שמות אחד</div><div class="d">הצעת הסוללה אומרת "המשחק צורך הרבה חשמל" ליד משאב החשמל, אז נכתוב "סוללת הטלפון". שבב "מערכה" פותח פאנל בשם "פיקוד", אז יהיה שם אחד. "ניצולים" ו"אנשים" יהיו שם אחד. ל"בראשית" יש 4 משמעויות. מבחן מילון ימנע חזרה.</div><div class="f mono">he.json · en.json · tools/sim/glossary-lint</div><div class="stamps"><span class="eff S">S</span><span class="ph">שלב 2</span></div></div>
+    <div class="item"><div class="t">מחירים קצרים</div><div class="d">במערכה VII מחיר מציג עד 6 משאבים. המטרה: לכל היותר 2, החומרים ומשאב המערכה (ראו נושא 7).</div><div class="f mono">pricing.ts</div><div class="stamps"><span class="eff S">S</span><span class="ph">שלב 3</span></div></div>
+  </div>
+</section>
+
+<!-- ================= LOGIC / STRATEGY ================= -->
+<section>
+  <div class="group-head"><h2>לוגיקה, כלכלה ואסטרטגיה</h2><span class="tag-lg">משחקיות</span></div>
+
+  <div class="topic lg" id="t7">
+    <header><h3>7. כלכלה ומשאבים</h3><p>אוכל, מים וחשמל מיוצרים פי 7 עד 26 מהצריכה. ביום 4 יש 125 אלף אוכל מול תקרה של 5,250, ו־144 אלף קרדיטים.</p></header>
+    <div class="item"><div class="t">הבסיס צריך לחזור להיות חשוב</div><div class="d">הצריכה לאדם תעלה בכל מערכה, ותהיה תקרה לבונוסי הייצור. העודף בכניסה למערכה ייחתך לתקרה. כך לחווה נוספת יש סיבה להיבנות.</div><div class="f mono">ResourceSystem.ts · tuning.ts</div><div class="stamps"><span class="eff M">M</span><span class="ph">שלב 3</span></div></div>
+    <div class="item"><div class="t">העודף מזין את משאב המערכה</div><div class="d">חדרי משאב המערכה יצרכו הרבה משאבי בסיס, כך ש"עוד חווה" פירושו "יותר השפעה". זה מחיה כ־60% מהבחירות הקיימות בלי להוסיף מערכת.</div><div class="f mono">chains.ts · specializations.ts</div><div class="stamps"><span class="eff M">M</span><span class="ph">שלב 3</span></div></div>
+    <div class="item"><div class="t">בלי קרדיטים מגלישה</div><div class="d">קרדיטים יגיעו רק מהזמנות וחוזים. גלישה של מחסן תמלא מד "ארגז אספקה" ולא מספר שגדל למיליונים.</div><div class="f mono">resources.ts · ResourceSystem.ts · shop.ts</div><div class="stamps"><span class="eff M">M</span><span class="ph">שלב 3</span></div></div>
+    <div class="item"><div class="t">חמישה מטבעות מתקדמים יהפכו לשניים</div><div class="d">רכיבים, סגסוגות, נתונים, השפעה וגרעינים עושים אותו תפקיד. במקומם "חלקים" למערכות III–IV ו"אמנה" למערכות V–VII. צעד ראשון וזול: המחירים יפסיקו לבקש מטבעות של מערכות קודמות.</div><div class="f mono">pricing.ts · resources.ts · tuning.ts olderCurrencyShare</div><div class="stamps"><span class="eff L">L</span><span class="ph">שלב 3</span></div></div>
+    <div class="item"><div class="t">ניקוי</div><div class="d">מטבע הכספת לא נצבר ולא מוצא אף פעם, אז יימחק. השרטוטים נערמים ומיותרים. מחקרי הזיקוק לאוכל, מים וחשמל מגיעים לרמה 9 בלי תועלת. התקופה (Era) כפולה למערכה, ולכן יהיה פס התקדמות אחד.</div><div class="f mono">resources.ts · shop.ts · research*.ts · eras.ts</div><div class="stamps"><span class="eff S">S</span><span class="ph">שלב 1</span></div></div>
+  </div>
+
+  <div class="topic lg" id="t8">
+    <header><h3>8. קצב והתקדמות</h3><p>יותר מחצי מהזמן אין מה לעשות, ובמקומות אחרים שש מערכות נפתחות בבת אחת.</p></header>
+    <div class="item"><div class="t">לסגור את "השטח המת" של מערכה I</div><div class="d">אחרי שעתיים כל היעדים של מערכה I הושלמו, וחותם הכספת דורש 42 שעות צוות. <em>תיקון:</em> לקצר ל־1/2/3 שעות, או לפתוח את מערכה II אחרי השלב הראשון של החותם. המערכה תתקדם גם כשהמשחק סגור.</div><div class="f mono">projects.ts · acts.ts · GameEngine.ts</div><div class="stamps"><span class="eff S">S</span><span class="ph">שלב 1</span></div></div>
+    <div class="item"><div class="t">מערכת חדשה אחת ביום</div><div class="d">במערכה II יבואו לפי הסדר: מנהל עבודה, צומת החשמל, עמדה מול פשיטות, צומת המזון. חוזים וסחר יחכו למערכה III יחד עם המאחזים. גם במערכה III הפתיחה תהיה מדורגת, והעונות יגיעו במערכה IV או לא בכלל.</div><div class="f mono">acts.ts · controllers/systems.ts</div><div class="stamps"><span class="eff S">S</span><span class="ph">שלב 3</span></div></div>
+    <div class="item"><div class="t">בלי "בית מלא ושבוע ריק"</div><div class="d">שחקן מזדמן נתקע 10 ימים על 30 ניצולים. תקרת מערכה II תעלה ל־40, ומי שמגיע לדלת כשהבית מלא ימתין בתור.</div><div class="f mono">acts.ts popCap</div><div class="stamps"><span class="eff S">S</span><span class="ph">שלב 3</span></div></div>
+    <div class="item"><div class="t">פרויקטים שמוזנים לבד</div><div class="d">הבוט ביצע 1,124 מסירות ידניות ב־4 ימים, וזו הפעולה הכי חוזרת במשחק. במקומן מתג "התחייבות" שמזין את השלב מהעודף.</div><div class="f mono">ProjectSystem.ts · ProjectsPanel.ts</div><div class="stamps"><span class="eff S">S</span><span class="ph">שלב 1</span></div></div>
+  </div>
+
+  <div class="topic lg" id="t9">
+    <header><h3>9. החלטות וזהות הבונקר</h3><p>חמש מערכות של "בחר שינוי מתוך N": דוקטרינות, חוקים, עיצובי פרויקטים, התמחויות ואבני יסוד. אף אחת לא מוצגת ליד האחרות, והסוף נקבע מהן בשקט.</p></header>
+    <div class="item"><div class="t">מסך "פרשת דרכים"</div><div class="d">הדוקטרינות, הרעיון הכי טוב במשחק, קבורות היום כצמתי מחקר. כל פיצול יגיע כמסך מלא עם 3 עמודות. בכל עמודה: שינוי של חוק משחק (לא אחוזים), המספר "אצלכם בבונקר", ולאיזה סוף זה מקרב. במרכז הפיקוד תוצג ספירה חיה של ארבעת הסופים.</div><div class="f mono">researchLong.ts · researchLate.ts · endings.ts · ResearchPanel.ts</div><div class="stamps"><span class="eff M">M</span><span class="ph">שלב 4</span></div></div>
+    <div class="item"><div class="t">פאנל "מדיניות" אחד</div><div class="d">דוקטרינות (קבועות) וחוקים (משבצות עם עלות שעתית וצינון של 12 שעות) יהיו בפאנל אחד. ההתמחות תיבחר פעם אחת לכל סוג חדר ולא לכל חדר, וזה חוסך כ־75 בחירות בריצה. זוגות עיצוב שאחד מהם תמיד עדיף יימחקו.</div><div class="f mono">laws.ts · specializations.ts · projects.ts · EraPanel.ts</div><div class="stamps"><span class="eff M">M</span><span class="ph">שלב 4</span></div></div>
+    <div class="item"><div class="t">מנהל העבודה כמקום של אסטרטגיה</div><div class="d">מה שהוא עושה אוטומטית ייעלם מהמסך: תחזוקה, אימון ואיוש. בתוכו יהיו 3–4 מדיניות אמיתיות: מה עושים בפשיטה כשאני לא כאן, איזה משאב קודם, ועד איזה סכום לשלם על תקלה.</div><div class="f mono">ForemanSystem.ts · MaintenanceSystem.ts</div><div class="stamps"><span class="eff S">S</span><span class="ph">שלב 4</span></div></div>
+    <div class="item"><div class="t">עץ מחקר של כ־60 צמתים</div><div class="d">היום יש כ־123 צמתים, ורובם מילוי ליניארי. יישארו הפיצולים ופתיחת חדרים או תכונות. יעדי מערכה בסגנון "השלימו N מחקרים" יוחלפו בפתיחות ספציפיות.</div><div class="f mono">research*.ts · acts.ts</div><div class="stamps"><span class="eff M">M</span><span class="ph">שלב 4</span></div></div>
+  </div>
+
+  <div class="topic lg" id="t10">
+    <header><h3>10. סכנה ומתח</h3><p>מוות נדיר, ובא מהיעדרות ולא מהחלטה. סיכויי פשיטה הם תמיד 0% או 100%.</p></header>
+    <div class="item"><div class="t">מד "חשיפה" גלוי</div><div class="d">מד האיום, המתח הכי טוב במשחק (צמיחה מושכת תשומת לב), מוסתר היום. הוא יוצג עם 4 הגורמים שלו ועם זמן משוער לפשיטה הבאה. אפשר יהיה להוריד אותו בכוונה: "להסתיר מלאי" או "שקט ברדיו".</div><div class="f mono">ThreatSystem.ts · HUD.ts · EraPanel.ts</div><div class="stamps"><span class="eff M">M</span><span class="ph">שלב 4</span></div></div>
+    <div class="item"><div class="t">פשיטות עם סיכוי אמיתי</div><div class="d">סיכוי רציף ("72%") שתלוי בהגנה. הסתתרות שומרת על האנשים אבל עוצרת ייצור לשעה. מס יחושב באחוז ממשאב המערכה. קרב שהפסדת יכול לעלות בחיים של אדם עם שם. אזהרה אחת לפחות כל ~3 סשנים כשהשחקן כן מחובר.</div><div class="f mono">EventSystem.ts · AwayDanger.ts · danger.ts</div><div class="stamps"><span class="eff M">M</span><span class="ph">שלב 4</span></div></div>
+    <div class="item"><div class="t">תקלות במחיר שמרגישים</div><div class="d">שריפה, הצפה ומגפה יתומחרו במשאב המערכה ולא במשהו שיש ממנו מאות אלפים. הדלתות והפתחים יישארו החידה המרחבית היחידה במשחק, ולכן כדאי להבליט אותם.</div><div class="f mono">incidents.ts · IncidentSystem</div><div class="stamps"><span class="eff S">S</span><span class="ph">שלב 4</span></div></div>
+  </div>
+
+  <div class="topic lg" id="t11">
+    <header><h3>11. העולם שבחוץ</h3><p>חמש זרימות נפרדות: משלחות, מאחזים, שיירות, חוזים ויחסים. כולן הופכות אנשים וזמן למשאבים שכבר יש מהם עודף.</p></header>
+    <div class="item"><div class="t">מסך שטח אחד, שתי פעולות</div><div class="d">"שלח" (משלחת או שיירה) ו"החזק" (מאחז). חוזים יהפכו לבקשות של שותף, שמופיעות על הסמן שלו במפה. כפתור התיבה של החוזים יוסר.</div><div class="f mono">ContractSystem.ts · OutpostSystem.ts · SurfacePanel.ts · InboxSystem.ts</div><div class="stamps"><span class="eff L">L</span><span class="ph">שלב 4</span></div></div>
+    <div class="item"><div class="t">מאחז הוא החלטה של מיקום</div><div class="d">התפוקה תלויה בסוג השטח ובמרחק, והכרטיס יראה "מחזיר את עצמו בעוד X שעות". היום כל משושה מניב אותו דבר.</div><div class="f mono">OutpostSystem.ts</div><div class="stamps"><span class="eff S">S</span><span class="ph">שלב 4</span></div></div>
+  </div>
+
+  <div class="topic lg" id="t12">
+    <header><h3>12. מטרות ופרסים</h3><p>שש רשימות של "עשה X וקבל Y": יעדי מערכה, יעדים אינסופיים, הזמנות יומיות, אתגר שבועי, הישגים וארגז אספקה.</p></header>
+    <div class="item"><div class="t">רשימת יעדים אחת, המערכה</div><div class="d">היעדים האינסופיים יתמזגו ביעדי המערכה. ההזמנות היומיות, האתגר השבועי והארגז יהיו כרטיס "היום" אחד עם איסוף אחד. ההישגים יהיו הודעה שקטה ועמוד בספר.</div><div class="f mono">ObjectiveSystem.ts · DailySystem.ts · SupplySystem.ts · challenges.ts</div><div class="stamps"><span class="eff M">M</span><span class="ph">שלב 4</span></div></div>
+    <div class="item"><div class="t">"טובות" במקום חנות ותאוצות</div><div class="d">מטבע אחד להוצאה, בלי מגבלות יומיות, ובמחיר שעולה בכל קנייה.</div><div class="f mono">ShopSystem.ts · shop.ts</div><div class="stamps"><span class="eff S">S</span><span class="ph">שלב 4</span></div></div>
+  </div>
+
+  <div class="topic lg" id="t13">
+    <header><h3>13. המערכות כסיפור ולא כצ'קליסט</h3><p>שש מתוך שבע מערכות מבקשות "חפרו N קומות". מערכות V–VII לא מוסיפות רמת חדר, והסיפור שותק 14–17 ימים.</p></header>
+    <div class="item"><div class="t">בעיה מזוהה אחת לכל מערכה</div><div class="d">עד 2 מונים ויעד אחד שקורה כאירוע. II: לשרוד את החורף הראשון או לקלוט את השבט. III: לבחור את החוק שמגדיר את המושבה. IV: להחזיק את החומה במצור. VI: הצבעה אמיתית. "חפרו N" ייעלם משלוש מערכות לפחות.</div><div class="f mono">acts.ts · ActSystem.ts · story.ts</div><div class="stamps"><span class="eff L">L</span><span class="ph">שלב 5</span></div></div>
+    <div class="item"><div class="t">רגע סיפור באמצע כל מערכה</div><div class="d">פרק או החלטה שנפתחים בכ־50% מההתקדמות במערכה, וקשורים לבעיה של אותה מערכה.</div><div class="f mono">story.ts · StorySystem.ts</div><div class="stamps"><span class="eff M">M</span><span class="ph">שלב 5</span></div></div>
+  </div>
+
+  <div class="topic lg" id="t14">
+    <header><h3>14. בראשית והריצה השנייה</h3><p>חנות בראשית מלאה מוסיפה 0% לצוואר הבקבוק. המוטציות הן "כסף חינם".</p></header>
+    <div class="item"><div class="t">ריצה שנייה שמרגישה אחרת</div><div class="d">אבני יסוד יהיו הקנייה הראשונה, ובתחילת ריצה 2 תהיה בחירת "מעמד". שדרוגי איזוטופ ישפיעו על משאב המערכה ועל זמני חפירה. כל מוטציה תוריד קב: "בלי מס", "מאחזים אובדים בפשיטה".</div><div class="f mono">prestige.ts · MetaSystem.ts · mutators.ts</div><div class="stamps"><span class="eff M">M</span><span class="ph">שלב 5</span></div></div>
+  </div>
+
+  <div class="topic lg" id="t15">
+    <header><h3>15. מדידה וכלים</h3><p>כדי שה"מרגיש מסורבל" יהפוך למספר שאפשר לשפר.</p></header>
+    <div class="item"><div class="t">הצ'יט נשאר ככלי</div><div class="d">סקריפט אחד שמריץ את הבוט, מייצר שמירות לכל מערכה ופותח אותן בדפדפן בסלוט נפרד. כך אפשר לבדוק כל שינוי מקצה לקצה בכמה דקות.</div><div class="f mono">tools/sim · store/playthrough</div><div class="stamps"><span class="eff S">S</span><span class="ph">שלב 1</span></div></div>
+    <div class="item"><div class="t">מדדי חוויה בסימולציה</div><div class="d">יימדדו: חלונות שעוצרים את המשחק ב־30 הדקות הראשונות, אחוז הזמן בלי מה לעשות, אחוז הפעולות שהן החלטות, מוות שנבע מבחירה, והפער בין שחקן פעיל למזניח. כל שלב חייב לשפר אותם לפני שהוא עולה לאוויר.</div><div class="f mono">tools/sim/core.ts · gates.ts</div><div class="stamps"><span class="eff M">M</span><span class="ph">שלב 1</span></div></div>
+  </div>
+</section>
+
+<!-- ================= ROADMAP ================= -->
+<section id="road">
+  <h2>מפת דרכים</h2>
+  <div class="road">
+    <div class="step"><span class="n">1</span><h3>"זה כבר לא שבור" · ניצחונות מהירים</h3><p>תקלות המגע, בעיה אחת במקום אחד, זרקור והנחיה, שקט לשחקן חוזר, דקה ראשונה שאפשר לשרוד, חותם הכספת, הזנה אוטומטית של פרויקטים, ניקוי מטבעות מתים, ומדדי החוויה בסימולציה. כמעט הכול בגודל S.</p></div>
+    <div class="step"><span class="n">2</span><h3>מסך נקי · ממשק וניווט</h3><p>תקציב הפרעות, כרטיסים שלא חוסמים, ממשק עליון בשורה אחת, תיבה אחת, מסך בנייה, לשוניות ומרכז פיקוד, עולם קריא עם חגיגות, ומעבר שמות.</p></div>
+    <div class="step"><span class="n">3</span><h3>כלכלה שמשמעותית</h3><p>מערכות חיים, העודף שמזין את המערכה, בלי קרדיטים מגלישה, איחוד מטבעות, קצב פתיחה מדורג ותקרות אוכלוסייה.</p></div>
+    <div class="step"><span class="n">4</span><h3>החלטות אמיתיות</h3><p>פרשת דרכים, מדיניות, מנהל עבודה, חשיפה ופשיטות, מסך שטח אחד, כרטיס "היום", ועץ מחקר מקוצץ.</p></div>
+    <div class="step"><span class="n">5</span><h3>תוכן וזיכרון</h3><p>בעיה מזוהה לכל מערכה, רגעי סיפור באמצע מערכה, וריצה שנייה אחרת.</p></div>
+  </div>
+  <div class="gate">
+    <h3>כל שלב מסתיים באותו שער</h3>
+    <ul>
+      <li>מעבר מלא עם הצ'יט, משמירה של יום 1 ועד יום 70, במסך טלפון ובעברית.</li>
+      <li>סימולציות של שחקן פעיל, מזדמן ומזניח: המדדים משתפרים ולא נשבר שום דבר.</li>
+      <li>שמירות ישנות נטענות בלי איבוד, והשמירה שלך לא נוגעת.</li>
+      <li>רק אחרי שהשער עובר: מיזוג ל־main, שעולה לאוויר.</li>
+    </ul>
+  </div>
+</section>
+
+<footer>
+  הדוחות המלאים, עם מספרי שורות בקוד: <code>store/playthrough/review/economy-pacing.md</code> · <code>strategy-systems.md</code> · <code>ui-architecture.md</code>. נתוני הבוט: <code>store/playthrough/d*.txt</code>.
+</footer>
+</div>

@@ -22,6 +22,8 @@ export interface ResourceDef {
   wasteTracked?: boolean;
   /** The Act (long-game chapter) from which the resource matters to the player; earlier it stays hidden. */
   act?: number;
+  /** [phase1] Never shown anywhere (kept only so old saves load unchanged). */
+  hidden?: boolean;
 }
 
 export const RESOURCES: readonly ResourceDef[] = [
@@ -44,7 +46,8 @@ export const RESOURCES: readonly ResourceDef[] = [
   { id: 'seedCores', tier: 2, ticked: true, baseCap: 20, overflowCredits: 4, wasteTracked: true, act: 7 },
   { id: 'isotope7', tier: 'meta', ticked: false },
   { id: 'blueprints', tier: 'meta', ticked: false },
-  { id: 'vaultCoins', tier: 'meta', ticked: false },
+  // [phase1] Dead: never earned, never spent. The field stays in the save type (old saves carry it); nothing may display it.
+  { id: 'vaultCoins', tier: 'meta', ticked: false, hidden: true },
   // [Economy A1] Trade credits: what storage overflow turns into (no cap); spent in the shop.
   { id: 'credits', tier: 'meta', ticked: false },
 ];
@@ -62,6 +65,9 @@ const pick = <K extends keyof ResourceDef>(key: K): Partial<Record<ResourceType,
 };
 
 export const ALL_RESOURCES: ResourceType[] = RESOURCES.map(r => r.id);
+/** [phase1] Resources a panel may list (everything but the dead `hidden` ones). */
+export const SHOWN_RESOURCES: ResourceType[] = RESOURCES.filter(r => !r.hidden).map(r => r.id);
+export const isHiddenResource = (id: ResourceType): boolean => !!BY_ID.get(id)?.hidden;
 export const TICKED_RESOURCES: ResourceType[] = RESOURCES.filter(r => r.ticked).map(r => r.id);
 export const WASTE_TRACKED: ResourceType[] = RESOURCES.filter(r => r.wasteTracked).map(r => r.id);
 export const TIER2_RESOURCES: ResourceType[] = RESOURCES.filter(r => r.tier === 2).map(r => r.id);

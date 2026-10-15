@@ -1,7 +1,9 @@
 // Save-migration check: loads an older save the way the game does (migrateState + a real GameEngine start) and reports
 // anything the migration lost or broke. Used by tools/sim/migrate-test.mjs on the sample saves in store/sim/saves-v4/.
 import { GameEngine } from '../../src/core/GameEngine';
-import { SAVE_VERSION, createLayout, migrateState, type GameState, type ResourceType } from '../../src/core/GameState';
+import { SAVE_VERSION, createInitialState, createLayout, migrateState, type GameState, type ResourceType } from '../../src/core/GameState';
+import { PROJECTS } from '../../src/data/projects';
+import { RESERVE } from '../../src/systems/ProjectSystem';
 import { revealedAreaIds } from '../../src/core/state/city';
 import { installDeterminism } from './core';
 
@@ -12,7 +14,7 @@ export interface MigrateCheck {
   legacy: boolean | null;
   problems: string[];
   /** A short picture of the game after migration and a simulated hour. */
-  after: { era: number; buildings: number; people: number; floors: number; playTime: number };
+  after: { era: number; act: number | null; buildings: number; people: number; floors: number; playTime: number };
 }
 
 /** Stable JSON (object keys sorted) for byte-level comparisons that do not depend on key order. */
@@ -89,6 +91,10 @@ export async function checkMigration(json: string): Promise<MigrateCheck> {
     problems.push(...cityMigrationProblems(old, m, from));
     // Only for saves from before the Acts existed (no longGame slice): those were placed in Act 4. A v5+ save keeps the Act it was in. [plan4:QA-1]
     if (m.longGame && !old.longGame && (old.era ?? 0) >= 3 && m.longGame.meta.act !== 4) problems.push(`era 3 save placed in Act ${m.longGame.meta.act}`);
+    // [phase1] Auto-delivery: an old save keeps hand delivery (pledge off unless it was saved on); a new game starts with it on.
+    if (!old.lateGame?.pledgeDefault && m.lateGame.pledgeDefault) problems.push('pledge: switched on for an old save');
+    if (JSON.stringify(old.lateGame?.pledges ?? {}) !== JSON.stringify(m.lateGame.pledges ?? {})) problems.push('pledge: per-project choices changed by migration');
+    if (!createInitialState().lateGame.pledgeDefault || !migrateState(createInitialState()).lateGame.pledgeDefault) problems.push('pledge: a new game does not start with it on');
 
     // Then start it like the app does (adoptState through init, an hour of time away) and play ten minutes.
     const e = new GameEngine();
@@ -108,9 +114,40 @@ export async function checkMigration(json: string): Promise<MigrateCheck> {
     if (crashes.length) problems.push(`systems threw: ${crashes.join(' | ')}`);
     const s = e.stateManager.state;
     if (s.survivors.length === 0 && old.survivors.length > 0) problems.push('everyone gone after an hour');
+    // [phase1] Crew work never sits above what its stage needs (the Vault Seal's hours were cut: a save mid-seal finishes the stage).
+    for (const p of PROJECTS) {
+      const prog = s.lateGame.projects[p.id];
+      const st = prog ? p.stages[prog.stage] : undefined;
+      if (prog && st && prog.work > st.hours * 3600 + 1 && e.projectSystem.paidUp(s, p.id) && s.activeProjectId === p.id) problems.push(`project ${p.id}: stage ${prog.stage + 1} has all its work and resources but did not finish`);
+    }
+    // [phase1] Pledge: switched on, a minute feeds the active stage and never takes a store below its reserve.
+    const active = s.activeProjectId;
+    if (active && !e.projectSystem.paidUp(s, active)) {
+      const ps = e.projectSystem;
+      const paidBefore = Object.values(ps.progressOf(s, active).paid).reduce((a, v) => a + (v ?? 0), 0);
+      const stageBefore = ps.progressOf(s, active).stage;
+      const could = Object.entries(ps.missing(s, active)).some(([r, left]) => ps.deliverable(s, r as ResourceType, left as number) > 0.01);
+      ps.setPledge(active, true);
+      const low: string[] = [];
+      for (let i = 0; i < 60; i++) {
+        const before = { ...ps.progressOf(s, active).paid };
+        e.advance(1, 'online');
+        const after = ps.progressOf(s, active).paid;
+        for (const [r, v] of Object.entries(after) as [ResourceType, number][]) {
+          const res = s.resources[r];
+          const reserve = Number.isFinite(res.cap) ? (RESERVE[r] ?? 0) * res.cap : 0;
+          // Fed this second (paid went up) and the store ends under its reserve: the pledge dug into it. (Overflow absorbs only above the cap.)
+          if (v > (before[r] ?? 0) + 1e-6 && res.amount < reserve - 1 && !low.includes(r)) low.push(r);
+        }
+      }
+      const prog = ps.progressOf(s, active);
+      const paidAfter = Object.values(prog.paid).reduce((a, v) => a + (v ?? 0), 0);
+      if (could && prog.stage === stageBefore && paidAfter <= paidBefore) problems.push(`pledge: a minute fed nothing into ${active}`);
+      if (low.length) problems.push(`pledge: took ${low.join(', ')} below the reserve`);
+    }
     return {
       from, to: m.version, act: m.longGame?.meta.act ?? null, legacy: m.longGame?.meta.legacy ?? null, problems,
-      after: { era: s.era, buildings: s.buildings.length, people: s.survivors.length, floors: s.currentFloors, playTime: Math.round(s.stats.totalPlayTime) },
+      after: { era: s.era, act: s.longGame?.meta.act ?? null, buildings: s.buildings.length, people: s.survivors.length, floors: s.currentFloors, playTime: Math.round(s.stats.totalPlayTime) },
     };
   } finally {
     det.restore();

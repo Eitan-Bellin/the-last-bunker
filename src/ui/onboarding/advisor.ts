@@ -67,6 +67,15 @@ export class Advisor {
     return this.last;
   }
 
+  /**
+   * [phase1] The strip shows this store's (or the power) crisis right now, so a "running low" toast for it would be a second copy.
+   * Recomputes (call it on the rare warning, not every frame).
+   */
+  showsStore(resource: string): boolean {
+    const p = this.advice(true).pick;
+    return !!p && (p.kind === 'crisis' || !!p.urgent) && p.resource === resource;
+  }
+
   /** A crisis leads the strip (raid, incident, store about to empty, power short, or a goal standing in for one). */
   crisis(): boolean {
     const p = this.advice().pick;
@@ -125,6 +134,8 @@ export class Advisor {
       goal: { id: o.id, fixes: [...fixes] },
       idleResearch: hasLab && !rs.activeId(state) && RESEARCH.some(r => rs.canStart(state, r.id)),
       upgrade: this.affordableUpgrade(state) !== null,
+      // [phase1] Tutorial or Act I (a legacy save has no Acts to speak of): collect items are a bell badge only.
+      early: os.inTutorial(state) || (!!state.longGame && !state.longGame.meta.legacy && state.longGame.meta.act <= 1),
     };
   }
 
@@ -144,7 +155,8 @@ export class Advisor {
     const click = () => app.audio.play('click');
     const view = (icon: string, text: string, go: () => void, extra: Partial<StripView> = {}): Advice => ({
       pick, go,
-      view: { key: pick.key, kind: pick.kind, icon, text, progress: null, reward: '', ...extra },
+      // [phase1] The store / power this line is about: the HUD then leaves its countdown and its banner to the strip.
+      view: { key: pick.key, kind: pick.kind, icon, text, progress: null, reward: '', resource: pick.resource, ...extra },
     });
     switch (pick.kind) {
       case 'crisis': {
@@ -154,7 +166,9 @@ export class Advisor {
             d ? { urgent: `[[clock]] ${clock(d.left)}` } : {});
         }
         if (pick.key === 'incident') return view('[[fire]]', i18n.t('ux3a.crisis.incident'), () => { click(); hud.onIncident?.(); });
-        if (pick.key === 'power') return view('[[power]]', i18n.t('ux3a.crisis.power'), () => { click(); hud.onPowerTap?.(); });
+        // [phase1] The strip is the one place for the power shortage (the banner is gone while it shows): it carries the level.
+        if (pick.key === 'power') return view('[[power]]', i18n.t('ux3a.crisis.power'), () => { click(); hud.onPowerTap?.(); },
+          { urgent: `[[power]] ${Math.round((state.powerRatio ?? 1) * 100)}%` });
         const r = pick.resource as ResourceType;
         return view(RESOURCE_ICONS[r] ?? '[[warning]]', i18n.t('ux3a.crisis.store', { res: i18n.t(`resources.${r}`) }),
           () => { click(); hud.onResourceTap?.(r); }, { urgent: `[[clock]] ${clock(pick.seconds ?? 0)}` });

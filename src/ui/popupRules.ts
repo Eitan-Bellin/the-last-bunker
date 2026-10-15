@@ -6,7 +6,9 @@
 import { MS } from './kit/tokens';
 
 /** A dialog that just opened ignores taps this long (a tap meant for the screen under it must not pick a choice blind). */
-export const MODAL_TAP_GUARD_MS = 600;
+export const MODAL_TAP_GUARD_MS = 250; // [phase1] was 600; a press that began before the dialog is swallowed regardless (tapBlocked)
+/** [phase1] Window event fired (synchronously) whenever a dialog layer opens: Modal.show, the story scene, the lore reader. */
+export const MODAL_OPEN_EVENT = 'lastbunker:dialog-open';
 /** No dialog opens by itself within this long of the player's last touch, drag, wheel or key. */
 export const GESTURE_QUIET_MS = 1500;
 /** A sheet that starts to open or close counts as moving for this long. */
@@ -23,6 +25,24 @@ export const CRITICAL_PATIENCE_MS = 4000;
  * (the spotlight steps aside for it and comes back when the screen is calm). Logic timing, not a motion token.
  */
 export const SPOTLIGHT_PATIENCE_MS = 20_000;
+/**
+ * [phase1] After a welcome-back closes, no other ordinary dialog (or tip card) opens by itself for this long: the returning player first
+ * does what they came back for. Emergencies still come. Logic timing, not a motion token.
+ */
+export const RETURNING_QUIET_MS = 120_000;
+/** [phase1] Offers (phone battery saver, install, backup) wait until THIS session has run this long (s), whatever the save's age. */
+export const OFFER_SESSION_S = 600;
+
+/** [phase1] The quiet stretch after a welcome-back holds this source back (`closedAt`: when the welcome closed, -Infinity: never). */
+export function returningQuiet(now: number, closedAt: number, critical: boolean): boolean {
+  return !critical && now - closedAt < RETURNING_QUIET_MS;
+}
+
+/** [phase1] An offer may come only once this session has lasted OFFER_SESSION_S. */
+export function offerSessionReady(sessionSeconds: number): boolean {
+  return sessionSeconds >= OFFER_SESSION_S;
+}
+
 /** A pointer whose "up" was lost stops blocking after this long. */
 export const LOST_POINTER_MS = 12_000;
 
@@ -101,9 +121,20 @@ export function gateBlock(g: GateInput): string {
   return '';
 }
 
-/** A tap (pointer click) on a dialog that opened less than MODAL_TAP_GUARD_MS ago is swallowed. Keyboard clicks (detail 0) pass. */
-export function tapBlocked(openedAt: number, now: number, detail: number): boolean {
-  return detail > 0 && now - openedAt < MODAL_TAP_GUARD_MS;
+/**
+ * A tap (pointer click) on a dialog is swallowed when it was meant for what was there before. Keyboard clicks (detail 0) pass.
+ * [phase1] The real hazard is a press that STARTED before the dialog (or its new content) appeared: that one is swallowed whatever its
+ * timing (`downAt` = the time of the pointerdown that led to this click; -Infinity when the dialog never saw one). A press that started
+ * on the open dialog passes, unless it came inside the first MODAL_TAP_GUARD_MS (now 250 ms, was 600: a reflex tap on the fade-in).
+ */
+export function tapBlocked(openedAt: number, now: number, detail: number, downAt = now): boolean {
+  if (detail === 0) return false;
+  return downAt < openedAt || now - openedAt < MODAL_TAP_GUARD_MS;
+}
+
+/** [phase1] A press starting this soon after the dialog appeared gets no pressed look (it will be swallowed: no "press, no result"). */
+export function pressGuarded(openedAt: number, downAt: number): boolean {
+  return downAt < openedAt || downAt - openedAt < MODAL_TAP_GUARD_MS;
 }
 
 // ---- back / Escape ----------------------------------------------------------------------------------------------------------

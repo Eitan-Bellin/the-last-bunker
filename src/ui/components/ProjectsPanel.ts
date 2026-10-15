@@ -47,6 +47,7 @@ export class ProjectsPanel {
       // Coarse: the numbers move every tick, the panel redraws a few times a minute.
       Math.floor(state.stats.totalPlayTime / 5),
       JSON.stringify(state.lateGame.weekly),
+      JSON.stringify(state.lateGame.pledges ?? {}), // [phase1]
     ].join('|');
     if (sig === this.sig) return;
     this.sig = sig;
@@ -178,6 +179,17 @@ export class ProjectsPanel {
         this.rerender();
       }));
       card.appendChild(row);
+      // [phase1] Auto-delivery ("pledge"): feeds the stage from stock above the reserve every tick; the button above stays for a burst.
+      const pledged = ps.pledged(state, def.id);
+      const pledge = button(`[[recycle]] ${i18n.t(pledged ? 'phase1.proj.pledgeOn' : 'phase1.proj.pledgeOff')}`, `btn-small pledge-toggle ${pledged ? 'btn-primary' : 'btn-secondary'}`, () => {
+        uiSound('switch');
+        ps.setPledge(def.id, !pledged);
+        this.engine.requestSave();
+        this.rerender();
+      });
+      pledge.setAttribute('aria-pressed', String(pledged));
+      card.appendChild(pledge);
+      card.appendChild(el('div', 'bp-hint', i18n.t('phase1.proj.pledgeHint')));
       card.appendChild(el('div', 'bp-hint', `[[recycle]] ${i18n.t('proj.fedHint')}`));
     } else {
       row.appendChild(button(i18n.t('proj.setActive'), 'btn-primary', () => {

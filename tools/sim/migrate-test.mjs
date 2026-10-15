@@ -23,7 +23,7 @@ for (const f of files) {
   const r = await mod.checkMigration(readFileSync(join(dir, f), 'utf8'));
   const ok = r.problems.length === 0;
   if (!ok) failed++;
-  console.log(`${ok ? 'ok  ' : 'FAIL'} ${f.padEnd(24)} v${r.from}->v${r.to} act ${r.act} legacy ${r.legacy} | after 1h away + 10 min: era ${r.after.era}, rooms ${r.after.buildings}, people ${r.after.people}, floors ${r.after.floors}`);
+  console.log(`${ok ? 'ok  ' : 'FAIL'} ${f.padEnd(24)} v${r.from}->v${r.to} act ${r.act} legacy ${r.legacy} | after 1h away + 10 min: era ${r.after.era}, act ${r.after.act}, rooms ${r.after.buildings}, people ${r.after.people}, floors ${r.after.floors}`);
   for (const p of r.problems) console.log(`       - ${p}`);
 }
 try { rmSync(file); } catch { /* cache file */ }

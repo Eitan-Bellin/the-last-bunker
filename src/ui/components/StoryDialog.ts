@@ -6,6 +6,7 @@ import type { ResourceType } from '../../core/GameState';
 import type { ChapterOutcome } from '../../systems/StorySystem';
 import { RESOURCE_ICONS, el, setRich } from '../dom';
 import { nameGender } from '../../data/portraits';
+import { MODAL_OPEN_EVENT } from '../popupRules';
 
 export interface StoryPlayOptions {
   chapter: Chapter;
@@ -59,6 +60,7 @@ export class StoryDialog {
     );
     this.overlay.appendChild(card);
     this.overlay.classList.add('open');
+    window.dispatchEvent(new Event(MODAL_OPEN_EVENT)); // [phase1] the tutorial spotlight steps aside at once
     opts.sfx('story');
     this.queue = shownLines(opts.chapter.lines);
     window.setTimeout(() => this.next(), 1700);

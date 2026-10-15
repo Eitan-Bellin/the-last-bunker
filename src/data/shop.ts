@@ -29,7 +29,8 @@ export const ACT_GOODS_HOURS = 1;
 
 export const SHOP_ITEMS: ShopItem[] = [
   // [Q10] A few a day: the shop's two unlimited items let credits buy any amount of progress.
-  { id: 'blueprint', icon: '[[blueprints]]', price: 150, dailyLimit: 3 },
+  // [phase1] 1 a day (was 3): about 25 plans are needed in the whole game and a bunker held 25 by day 4.
+  { id: 'blueprint', icon: '[[blueprints]]', price: 150, dailyLimit: 1 },
   { id: 'scrap20', icon: '[[scrap]]', price: 40, dailyLimit: 5 },
   // [Long game] Boosts are a treat, not a way around the game: a few a day.
   { id: 'researchBoost', icon: '[[research]]', price: 60, dailyLimit: 3 },

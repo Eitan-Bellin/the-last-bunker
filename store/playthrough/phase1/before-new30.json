@@ -1,0 +1,224 @@
+{
+ "wallSeconds": 360,
+ "gameMinutes": 29,
+ "dialogs": 3,
+ "story": 0,
+ "spotlights": 2,
+ "toasts": 26,
+ "sheets": 77,
+ "blocking": [
+  "0m dialog: כמה קשה העולם שם בחוץ? \"שומר\" הוא המשחק כפי שתוכנן. הבחירה קבועה לבונקר הזה: אי אפשר לשנות",
+  "1m dialog: ארגז אספקה ארגז עם מצנח נחת ליד הפתח. מישהו שם בחוץ עוד זוכר את בונקר 17. ⁦+15⁩ ⁦+10⁩ ⁦+30",
+  "1m dialog: מצאתם משהו! קלטת: איך מתניעים את הזקן · ד\"ר נועה הלפרין קראו עכשיו אחר כך"
+ ],
+ "state": {
+  "paused": false,
+  "morale": 47,
+  "people": 3,
+  "power": 0,
+  "food": 405,
+  "playSeconds": 1757
+ },
+ "samples": [
+  {
+   "paused": false,
+   "morale": 56,
+   "people": 3,
+   "power": 0,
+   "food": 143,
+   "playSeconds": 30
+  },
+  {
+   "paused": false,
+   "morale": 55,
+   "people": 3,
+   "power": 50,
+   "food": 140,
+   "playSeconds": 105
+  },
+  {
+   "paused": false,
+   "morale": 56,
+   "people": 3,
+   "power": 50,
+   "food": 134,
+   "playSeconds": 180
+  },
+  {
+   "paused": false,
+   "morale": 60,
+   "people": 3,
+   "power": 34,
+   "food": 163,
+   "playSeconds": 256
+  },
+  {
+   "paused": false,
+   "morale": 60,
+   "people": 3,
+   "power": 0,
+   "food": 176,
+   "playSeconds": 331
+  },
+  {
+   "paused": false,
+   "morale": 55,
+   "people": 3,
+   "power": 0,
+   "food": 185,
+   "playSeconds": 406
+  },
+  {
+   "paused": false,
+   "morale": 51,
+   "people": 3,
+   "power": 0,
+   "food": 192,
+   "playSeconds": 481
+  },
+  {
+   "paused": false,
+   "morale": 50,
+   "people": 3,
+   "power": 0,
+   "food": 200,
+   "playSeconds": 556
+  },
+  {
+   "paused": false,
+   "morale": 49,
+   "people": 3,
+   "power": 0,
+   "food": 208,
+   "playSeconds": 631
+  },
+  {
+   "paused": false,
+   "morale": 48,
+   "people": 3,
+   "power": 0,
+   "food": 215,
+   "playSeconds": 706
+  },
+  {
+   "paused": false,
+   "morale": 48,
+   "people": 3,
+   "power": 0,
+   "food": 222,
+   "playSeconds": 781
+  },
+  {
+   "paused": false,
+   "morale": 48,
+   "people": 3,
+   "power": 0,
+   "food": 229,
+   "playSeconds": 856
+  },
+  {
+   "paused": false,
+   "morale": 48,
+   "people": 3,
+   "power": 0,
+   "food": 238,
+   "playSeconds": 931
+  },
+  {
+   "paused": false,
+   "morale": 48,
+   "people": 3,
+   "power": 0,
+   "food": 246,
+   "playSeconds": 1006
+  },
+  {
+   "paused": false,
+   "morale": 48,
+   "people": 3,
+   "power": 0,
+   "food": 254,
+   "playSeconds": 1081
+  },
+  {
+   "paused": false,
+   "morale": 48,
+   "people": 3,
+   "power": 0,
+   "food": 263,
+   "playSeconds": 1156
+  },
+  {
+   "paused": false,
+   "morale": 48,
+   "people": 3,
+   "power": 0,
+   "food": 271,
+   "playSeconds": 1231
+  },
+  {
+   "paused": false,
+   "morale": 45,
+   "people": 3,
+   "power": 0,
+   "food": 279,
+   "playSeconds": 1307
+  },
+  {
+   "paused": false,
+   "morale": 42,
+   "people": 3,
+   "power": 0,
+   "food": 287,
+   "playSeconds": 1382
+  },
+  {
+   "paused": false,
+   "morale": 41,
+   "people": 3,
+   "power": 0,
+   "food": 294,
+   "playSeconds": 1457
+  },
+  {
+   "paused": false,
+   "morale": 41,
+   "people": 3,
+   "power": 0,
+   "food": 300,
+   "playSeconds": 1532
+  },
+  {
+   "paused": false,
+   "morale": 43,
+   "people": 3,
+   "power": 0,
+   "food": 307,
+   "playSeconds": 1607
+  },
+  {
+   "paused": false,
+   "morale": 46,
+   "people": 3,
+   "power": 0,
+   "food": 396,
+   "playSeconds": 1682
+  },
+  {
+   "paused": false,
+   "morale": 47,
+   "people": 3,
+   "power": 0,
+   "food": 405,
+   "playSeconds": 1757
+  }
+ ],
+ "config": {
+  "base": "http://localhost:5180",
+  "minutes": 30,
+  "speed": 5,
+  "stage": "",
+  "away": 0,
+  "lang": "he"
+ }
+}

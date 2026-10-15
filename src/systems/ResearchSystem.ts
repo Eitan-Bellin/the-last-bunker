@@ -13,6 +13,9 @@ export type ResearchStatus = 'done' | 'active' | 'queued' | 'available' | 'locke
 
 /** Queue slots after the active research: 1 at the start, +1 per "Second Lab Bench" prestige level. */
 const BASE_QUEUE_SLOTS = 1;
+/** [phase1] Refinements that are put away while their resource runs a big surplus (see surplusHidden). */
+const SURPLUS_HIDDEN = new Set<ResourceType>(['food', 'water', 'power']);
+const SURPLUS_HIDE = 3;
 
 export function isResearched(state: GameState, id: string): boolean {
   return !!state.research[id]?.completed;
@@ -167,13 +170,26 @@ export class ResearchSystem {
     return !!getRefinement(id);
   }
 
+  /**
+   * [phase1] A food, water or power refinement is put away while that resource's surplus (production minus consumption) is more than
+   * SURPLUS_HIDE times what the bunker consumes: another level there would only add to a pile nobody can use. It shows as locked
+   * (the refinement list skips locked level-0 cards) and cannot be started or queued; one already queued or running finishes.
+   */
+  surplusHidden(state: GameState, id: string): boolean {
+    const ref = getRefinement(id);
+    if (!ref || !SURPLUS_HIDDEN.has(ref.resource)) return false;
+    const res = state.resources[ref.resource];
+    if (!res || res.consumptionRate <= 0) return false;
+    return res.productionRate - res.consumptionRate > SURPLUS_HIDE * res.consumptionRate;
+  }
+
   status(state: GameState, id: string): ResearchStatus {
     const node = state.research[id];
     if (node?.completed) return 'done';
     if (node?.isResearching) return 'active';
     if (this.queue(state).includes(id)) return 'queued';
     const def = this.defOf(state, id);
-    if (!def || this.blockReason(state, id)) return 'locked';
+    if (!def || this.blockReason(state, id) || this.surplusHidden(state, id)) return 'locked';
     return def.requires.every(req => isResearched(state, req)) ? 'available' : 'locked';
   }
 
@@ -227,7 +243,7 @@ export class ResearchSystem {
   canStart(state: GameState, id: string): boolean {
     const def = this.defOf(state, id);
     if (!def || state.research[id]?.completed || state.research[id]?.isResearching || this.queue(state).includes(id)) return false;
-    if (!this.requirementsMet(state, def) || this.blockReason(state, id)) return false;
+    if (!this.requirementsMet(state, def) || this.blockReason(state, id) || this.surplusHidden(state, id)) return false;
     if (this.activeId(state) && this.queue(state).length >= this.queueSlots(state)) return false;
     return this.resources.canAfford(state, def.cost as Record<string, number>);
   }

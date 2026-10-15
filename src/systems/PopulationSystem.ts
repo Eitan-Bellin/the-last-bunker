@@ -15,6 +15,7 @@ import { specMax, specTotal } from '../data/specializations';
 import { griefFor } from './DeathSystem'; // [Danger C5]
 import { MAX_RANK, MENTOR_BOOST, rankOf, rankOfXp, trainingCost, trainingGain } from '../data/mastery'; // [LateGame B3]
 import type { ResourceSystem } from './ResourceSystem';
+import { darknessPenalty, noJobPenalty } from './morale'; // [phase1]
 
 import { localizeName, pickName } from '../data/names'; // [ux-wp5 C5] a large pool, unique among the living
 
@@ -282,7 +283,9 @@ export class PopulationSystem {
     const factors: MoraleFactor[] = [{ key: 'base', value: 45 }];
 
     if (!s.isOnMission) {
-      factors.push(s.assignedBuildingId ? { key: 'hasJob', value: 15 } : { key: 'noJob', value: -10 });
+      // [phase1] No job costs nothing in a new bunker's first 10 minutes (noJobPenalty).
+      if (s.assignedBuildingId) factors.push({ key: 'hasJob', value: 15 });
+      else if (noJobPenalty(state) > 0) factors.push({ key: 'noJob', value: -noJobPenalty(state) });
     }
     if (state.resources.food.amount <= 0) factors.push({ key: 'noFood', value: -30 });
     if (state.resources.water.amount <= 0) factors.push({ key: 'noWater', value: -30 });
@@ -290,7 +293,9 @@ export class PopulationSystem {
     // A bigger bunker is louder and more cramped: gardens, the lake and the canteen have to make up for it.
     const crowd = crowdingPenalty(state);
     if (crowd > 0) factors.push({ key: 'crowding', value: -crowd });
-    if ((state.powerRatio ?? 1) < 0.99) factors.push({ key: 'darkness', value: -Math.round(15 * (1 - state.powerRatio)) - 5 });
+    // [phase1] The darkness penalty ramps in over a minute (darknessPenalty).
+    const dark = darknessPenalty(state);
+    if (dark > 0) factors.push({ key: 'darkness', value: -dark });
     if (s.health < 50) factors.push({ key: 'injured', value: -10 });
 
     const canteen = this.getCanteenBonus(state);
@@ -457,7 +462,7 @@ export function sharedMoodOf(state: GameState): SharedMood {
   if (state.survivors.length > state.maxPopulation) sum -= 15;
   const crowd = crowdingPenalty(state);
   if (crowd > 0) sum -= crowd;
-  if ((state.powerRatio ?? 1) < 0.99) sum -= Math.round(15 * (1 - state.powerRatio)) + 5;
+  sum -= darknessPenalty(state); // [phase1] ramped in over a minute
   const canteen = moraleBreakdown(state).total;
   if (canteen > 0) sum += Math.round(canteen);
   const now = state.stats.totalPlayTime;
@@ -485,7 +490,7 @@ export function sharedMoodOf(state: GameState): SharedMood {
 /** What is personal in one survivor's mood (job, health, partner, grief, leaders, temper), on top of the shared part. */
 export function personalMood(state: GameState, s: SurvivorState, mood: SharedMood): number {
   let total = 0;
-  if (!s.isOnMission) total += s.assignedBuildingId ? 15 : -10;
+  if (!s.isOnMission) total += s.assignedBuildingId ? 15 : -noJobPenalty(state); // [phase1] no penalty in a new bunker's first 10 min
   if (s.health < 50) total -= 10;
   if (s.partnerId && mood.ids.has(s.partnerId)) total += 6;
   total += griefFor(state, s.id);

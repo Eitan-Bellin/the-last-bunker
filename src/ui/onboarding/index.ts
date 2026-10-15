@@ -7,6 +7,7 @@ import { kButton } from '../kit';
 import { Advisor } from './advisor';
 import { ftueActive, ftueFinished, idleHintDue, type FtueInput } from './advisorRules';
 import { IdleHand, Spotlight, type SpotStep } from './spotlight';
+import { MODAL_OPEN_EVENT } from '../popupRules';
 import '../../styles/onboarding.css';
 
 /**
@@ -62,7 +63,7 @@ export class OnboardingController {
   private installed = false;
   private profile = readProfile();
   private stage: Stage | null = null;
-  /** Strip spotlights already answered this session (`<step>:<advice key>`). */
+  /** Strip spotlights already answered this session (`step:<tutorial step>`). */
   private answered = new Set<string>();
   private queue: Guided[] = [];
   private lastTouch = performance.now();
@@ -85,6 +86,9 @@ export class OnboardingController {
     this.app = app;
     this.advisor = new Advisor(app);
     window.setInterval(() => this.tick(), TICK_MS);
+    // [phase1] A dialog, story scene or lore page opening puts the spotlight away at once (it used to wait for the next tick, and its
+    // blockers, z 90 over the dialog's z 40, ate the first taps). It comes back when the screen is calm.
+    window.addEventListener(MODAL_OPEN_EVENT, () => this.defer());
   }
 
   /** A spotlight is up: ordinary dialogs and tip cards wait (TipsController.isShowing). */
@@ -210,9 +214,11 @@ export class OnboardingController {
         if (now < st.until && panel) return null;
         this.stage = null;
       }
+      // [phase1] Only the scripted tutorial steps get a spotlight, once each (keyed on the step, not on the advisor line): a crisis or a
+      // crate taking the strip no longer re-locks the screen; those get the idle hand. The step's goal must be what the strip shows.
       const pick = this.advisor.advice().pick;
-      const key = `${f.tutorialStep}:${pick?.key ?? 'none'}`;
-      if (!panel && pick && !this.answered.has(key) && !this.goalsOpen()) {
+      const key = `step:${f.tutorialStep}`;
+      if (!panel && pick?.kind === 'goal' && !this.answered.has(key) && !this.goalsOpen()) {
         return { stage: { kind: 'strip', key }, spot: { target: () => this.app.hud.objectiveTarget, text: i18n.t('ux3a.spot.strip'), mode: 'tap' } };
       }
       return null;

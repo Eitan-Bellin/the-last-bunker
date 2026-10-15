@@ -1302,9 +1302,9 @@
   "settings.popupsHint": "\"Important\": only bubbles, events and upgrades, without the numbers every room throws out every few seconds.",
   "settings.powerSaver": "Battery saver",
   "settings.powerSaverHint": "Up to 24 pictures a second, no glow or effects. The phone stays cooler and the battery lasts longer.",
-  "power.title": "Save battery?",
-  "power.body": "The game uses a lot of power. Battery saver lowers the picture rate and turns off glow and effects, so the phone stays cooler.",
-  "power.bodyLow": "Your phone seems to be saving energy and the game is struggling. Battery saver adapts the game: fewer effects, a gentler rate.",
+  "power.title": "Save your phone battery?",
+  "power.body": "This is about your phone, not the bunker. The game works your phone hard: battery saver lowers the picture rate and turns off glow and effects, so the phone battery lasts longer and the phone stays cooler.",
+  "power.bodyLow": "Your phone seems to be saving its battery and the game is struggling. Battery saver adapts the game to the phone: fewer effects, a gentler rate.",
   "power.turnOn": "Turn on saver",
   "power.notNow": "Not now",
   "power.on": "Battery saver is on. You can turn it off in Settings.",
@@ -1872,8 +1872,7 @@
   "ux2b.popFull": "No bed",
   "ux2b.popLock": "Act limit",
   "ux2b.moraleTop": "Biggest effect: {cause} ({v}).",
-  "ux2b.moraleMore": "Tap for every cause."
-,
+  "ux2b.moraleMore": "Tap for every cause.",
   "ux3b.arrow.fire": "Fire",
   "ux3b.arrow.flood": "Flood",
   "ux3b.arrow.blackout": "Blackout",
@@ -1892,7 +1891,6 @@
   "ux3b.leave.body": "The bunker keeps going while you are away. Your progress is saved.",
   "ux3b.leave.stay": "Stay",
   "ux3b.leave.go": "Leave",
-  "ux2b.moraleMore": "Tap for every cause.",
   "ux3a.goals": "Goals",
   "ux3a.goalsMore": "Show the active goals",
   "ux3a.next": "Next",
@@ -1936,5 +1934,8 @@
   "ux3a.obj.canteen": "Restore the canteen on {f}",
   "ux3a.obj.upgrade": "Upgrade a room to level 3",
   "ux3a.obj.radio": "Build a Radio Room",
-  "ux3a.obj.research5": "Complete 5 researches"
+  "ux3a.obj.research5": "Complete 5 researches",
+  "phase1.proj.pledgeOn": "Auto-deliver: on",
+  "phase1.proj.pledgeOff": "Auto-deliver: off",
+  "phase1.proj.pledgeHint": "Auto-deliver feeds this stage from your stores all the time, even while you are away, but always leaves half of each store for building. \"Deliver resources\" still sends a batch at once."
 }
