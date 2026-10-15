@@ -9,7 +9,10 @@ import type { BuildingInstance, BuildingType, GameState, Position, Ruin, Survivo
 import { effectiveLevel, isDistrict, roomFloors, roomSlots } from '../data/buildingDefs';
 import { i18n } from '../i18n/I18nManager';
 import { BASE_EAST, BUILDING_W, FLOOR_H, ROOM_H, SHAFT_W, SLOT_W, TOPSOIL, buildingH, extentsFor, floorExtent, floorIndexAt, floorTop, type Ext } from './layout';
-import { buildingX, districtXAt, eastmostSlotX, slotX, westmostSlotX } from '../world/project';
+import { buildingX, districtXAt, eastmostSlotX, slotX, stripX, westmostSlotX } from '../world/project';
+import { CITY } from '../world/flag'; // [world:C1] the city renderer behind ?city
+import { CityHost } from '../world/render/cityHost'; // [world:C1]
+import { PEOPLE_RENDER } from '../world/tokensRender'; // [world:C1]
 import { hashString, seeded } from './draw';
 import { PEOPLE_STYLE, Person, ROOM_ACTIVITY, type Activity, type Lane } from './people';
 import { crowdFor, restCountFor, settleCrowds } from './workSpots'; // gfx-p0 people
@@ -153,6 +156,10 @@ export class BunkerRenderer {
   /** [Danger] disaster countdown washes and rust on worn rooms. */
   private disasterFx = new DisasterLayer();
   postfx: PostFX | null = null;
+  /** [world:C1] The city renderer behind `?city` (lightmap, parallax planes, fog); null in classic mode, where every city path is skipped. */
+  private cityHost: CityHost | null = null;
+  /** [world:C1] Cheap key of what the city layout depends on (floors, wings, districts): the provider's signature is asked only when it moves. */
+  private cityKey = -1;
 
   // [plan4 X-1] The camera, the empty-slot pad / placement highlight and the room views live in their own modules (CameraController.ts,
   // PlacementController.ts, RoomViews.ts); this class stays the facade the rest of the game talks to.
@@ -482,7 +489,8 @@ export class BunkerRenderer {
     this.utilitiesHolder.eventMode = 'none';
 
     this.surface = buildSurface();
-    this.worldContainer.addChild(
+    if (CITY) this.mountCity(canvas); // [world:C1] the city's layer stack around the same holders
+    else this.worldContainer.addChild(
       this.surfaceHolder, this.projectSites.layer, this.projectSites.smokeLayer, this.projectSites.glowLayer, this.projectSites.crew, this.projectSites.signLayer, this.undergroundHolder, this.bayHolder, this.slotLayer, this.highlightLayer,
       this.roomLayer, this.shaftHolder, this.utilitiesHolder, this.walkers.layer, this.dust.container, this.digHolder, this.wingSigns.container, this.districtSignHolder, this.fxLayer, this.incidents.fx, this.disasterFx.fx,
       this.labelLayer, this.incidents.badges, this.ghost.layer,
@@ -517,6 +525,28 @@ export class BunkerRenderer {
       this.app.renderer.resize(window.innerWidth, window.innerHeight);
       this.cam.onResize(); // [plan4:ST-12] keeps zoom and centre for small changes (Safari's address bar)
     });
+  }
+
+  /**
+   * [world:C1] City mode (architecture section 5): far and back planes, the surface and project sites, the lit group (mid plane, rock, bays,
+   * rooms, shaft, shell front, utilities, walkers: all multiplied by the lightmap), the slot pads and highlight, the glow, dust / effects /
+   * signs, the fog, the fore plane, then labels, badges and the ghost. The people are lit by the lightmap: the walkers' depth tint is
+   * replaced by a neutral one (life-systems owns walkers.ts; this override goes when their city lighting lands).
+   */
+  private mountCity(canvas: HTMLCanvasElement): void {
+    const host = new CityHost(this.app.renderer, isLiteMode() ? 'lite' : startQuality(), canvas);
+    this.cityHost = host;
+    const P = this.projectSites;
+    host.mount(this.worldContainer, {
+      surface: [this.surfaceHolder, P.layer, P.smokeLayer, P.glowLayer, P.crew, P.signLayer],
+      play: [this.undergroundHolder, this.bayHolder, this.roomLayer, this.shaftHolder, this.utilitiesHolder, this.walkers.layer],
+      shaft: this.shaftHolder,
+      overLit: [this.slotLayer, this.highlightLayer],
+      overGlow: [this.dust.container, this.fxLayer, this.incidents.fx, this.disasterFx.fx, this.digHolder, this.districtSignHolder, this.wingSigns.container],
+      top: [this.labelLayer, this.incidents.badges, this.ghost.layer],
+    });
+    (this.walkers as unknown as { ambientAt(y: number): number }).ambientAt = () => PEOPLE_RENDER.cityAmbient;
+    if (import.meta.env.DEV) (window as unknown as Record<string, unknown>).__city = host;
   }
 
   /**
@@ -631,14 +661,18 @@ export class BunkerRenderer {
     const districts = districtList.map(b => b.position.floor);
     const districtSlot: Record<number, number> = {};
     for (const b of districtList) districtSlot[b.position.floor] = b.position.x; // [plan4:ST-8]
+    // [world:C1] City mode: the level-builder's shell (citySeams.setShellMounter) replaces the classic rock and casing; until it is plugged in,
+    // the classic underground stays as the stand-in.
+    if (!this.cityHost?.current || !this.cityHost.mountShell(state, this.undergroundHolder, this.surfaceEra)) {
     const casing = this.gfx2 && kitReady() ? buildCasing(this.floors, kitState(this.surfaceEra), exts) : null;
     this.undergroundHolder.addChild(buildUnderground(this.floors, i18n.currentLocale, this.gloom, ArtLibrary.get('backdrops/rock'), districts, casing, exts, districtSlot, this.rowOpen ? 11 : 0)); // plan4:ST-16
+    }
     this.undergroundSig = this.structureSig(state);
     this.structureGloom = this.gloom;
     this.shaftHolder.removeChildren().forEach(c => c.destroy({ children: true }));
     // G3 shaft hook: the painted industrial lift with the new look.
     this.shaft = this.gfx2 && kitReady()
-      ? buildShaft2(this.floors, this.surfaceEra, () => this.onElevator?.(), exts.map(x => x.w > 0), GFX.airy ? Array.from({ length: this.floors }, (_, f) => signZone(f, state.buildings, i18n.currentLocale).color) : []) // [plan4:ST-4] a second landing door where a floor has a west wing [airy:B3] zone colours for the landing beacons
+      ? buildShaft2(this.floors, this.surfaceEra, () => this.onElevator?.(), exts.map(x => x.w > 0), GFX.airy ? Array.from({ length: this.floors }, (_, f) => signZone(f, state.buildings, i18n.currentLocale).color) : [], !!this.cityHost) // [world:C1] spineOnly in city mode [plan4:ST-4] a second landing door where a floor has a west wing [airy:B3] zone colours for the landing beacons
       : buildShaft(this.floors, () => this.onElevator?.());
     this.shaftHolder.addChild(this.shaft.container);
     this.walkers.setLift((this.shaft as Partial<ShaftAnimated>).lift ?? null); // plan4:ST-18
@@ -774,6 +808,7 @@ export class BunkerRenderer {
 
   setSelected(buildingId: string | null): void {
     this.selectedId = buildingId;
+    this.cityHost?.select(buildingId); // [world:C1] the selected room's readability floor lifts
     for (const [id, v] of this.views) v.outline.visible = id === buildingId;
     // [camera] The sheet that opens for the room must not hide it: glide it into the space above the sheet.
     if (buildingId) window.setTimeout(() => this.cam.keepInSight(buildingId), 60);
@@ -960,7 +995,8 @@ export class BunkerRenderer {
       const cv = view as unknown as { width: number; visualSig: string; height?: number };
       person.setCrowd(crowdFor(view.people, view.lane, cv.visualSig, cv.width, this.gfx2, cv.height ?? ROOM_H));
       person.dress(ruinView ? 'ruin' : usable ? job!.type : null);
-      if (this.gfx2) {
+      if (this.cityHost && !siteView) person.setAmbient(PEOPLE_RENDER.cityAmbient); // [world:C1] lit by the lightmap, not by a lamp tint
+      else if (this.gfx2) {
         // Warm lamp-lit ambient, dimmer when the power sags and in the wrecked rooms.
         // Warm ambient, coloured a little by the room's lamps; dimmer when the power sags and in the wrecks.
         // G4 lighting: people dim with the power and dip with their room's lamp flicker, like the room and the structure.
@@ -1283,6 +1319,7 @@ export class BunkerRenderer {
   /** Everything that holds GPU state is rebuilt from the game state: the cure for a scene left half-broken. */
   recoverGraphics(): void {
     this.resetScene();
+    this.cityHost?.invalidate(); // [world:C1]
     this.undergroundSig = '';
     this.utilitiesSig = '';
     this.surfaceSig = '';
@@ -1334,6 +1371,7 @@ export class BunkerRenderer {
     }
     hashLayout(state); // [perf] one cheap pass instead of strings joined from every building several times per picture
     this.updateSpan(state);
+    if (this.cityHost) this.syncCityLayout(state); // [world:C1]
     if (state.currentFloors !== this.floors || this.structureGloom !== this.gloom || this.undergroundSig !== this.structureSig(state)) this.rebuildStructure(state);
     this.cam.stepCamera(dt); // [camera]
     this.ghost.update(dt); // [plan4:ST-19]
@@ -1402,7 +1440,7 @@ export class BunkerRenderer {
       v.label.y = floorTop(r?.floor ?? 0) + ROOM_H * 0.3 + Math.sin(this.time * 2.2 + v.root.x) * 2;
     }
     this.incidents.quality = this.postfx?.quality ?? 'high'; // gfx-p0 crisis: particle budget follows the quality ladder
-    this.incidents.update(state, this.time, dt, id => this.roomRect(id), f => { const ex = floorExtent(state, f); return { x: slotX(f, -ex.w), y: floorTop(f), w: (ex.w + ex.e) * SLOT_W }; }); // [plan4:ST-4] a floor reaches as far as its wings
+    this.incidents.update(state, this.time, dt, id => this.roomRect(id), f => { const ex = floorExtent(state, f); if (this.cityHost) { const s = stripX(f, ex); return { x: s.x0, y: floorTop(f), w: s.x1 - s.x0 }; } return { x: slotX(f, -ex.w), y: floorTop(f), w: (ex.w + ex.e) * SLOT_W }; }); // [world:C1] in the city a floor's strip includes the hub // [plan4:ST-4] a floor reaches as far as its wings
     this.disasterFx.update(state, this.time, id => this.roomRect(id)); // [Danger]
     this.updateBlockers(state); // [camera]
     this.updateBursts(dt);
@@ -1411,10 +1449,39 @@ export class BunkerRenderer {
     this.animateBubbles();
     // Battery saver drops the free-floating dust.
     const low = this.postfx?.quality === 'low';
-    this.dust.container.visible = !low && !this.mapCovers;
-    if (!low) this.dust.update(dt, this.time);
+    // [world:C1] In the city the lit motes of the glow layer are the dust (lit by the lamps they drift through): the flat Dust is not drawn.
+    const dustOn = !low && !this.cityHost;
+    this.dust.container.visible = dustOn && !this.mapCovers;
+    if (dustOn) this.dust.update(dt, this.time);
+    if (this.cityHost) this.updateCity(state, dt); // [world:C1] every camera and position write of the picture is done: parallax, lights, fog
     this.postfx?.update(now);
   }
+
+  /** [world:C1] The layout follows the provider; a new one (or a new era / kit) rebuilds the structure, so the shell is mounted again. */
+  private syncCityLayout(state: GameState): void {
+    const host = this.cityHost!;
+    const key = (Math.imul(LAYOUT.ext, 31) ^ Math.imul(LAYOUT.rooms, 17) ^ Math.imul(this.surfaceEra + 2, 7919) ^ state.currentFloors) >>> 0;
+    if (key === this.cityKey && host.current) return;
+    this.cityKey = key;
+    if (host.syncLayout(state, `${this.surfaceEra}|${this.gfx2 && kitReady()}`)) this.undergroundSig = '';
+  }
+
+  /** [world:C1] Rooms into the lightmap (4x a second at most), then the city's frame. Lite mode: no lightmap, a flat tint. */
+  private updateCity(state: GameState, dt: number): void {
+    const host = this.cityHost!;
+    this.probeState = state;
+    if (host.current) host.syncRooms(state, this.roomProbe, this.time, LAYOUT.rooms);
+    const tier = isLiteMode() ? 'lite' : this.postfx?.quality ?? 'high';
+    host.frame(this.worldContainer, this.app.screen.width, this.app.screen.height, this.time, dt, tier, this.mapCovers, this.surfaceEra, this.nightNow);
+  }
+
+  /** [world:C1] What the city's room lights read of the room views (one object for the renderer's life). */
+  private probeState: GameState | null = null;
+  private readonly roomProbe = {
+    rect: (id: string) => this.roomRect(id),
+    people: (id: string) => this.views.get(id)?.people.children.length ?? 0,
+    mirrored: (b: BuildingInstance) => !!this.probeState && this.roomViews.compoundIndex(this.probeState, b) % 2 === 1,
+  };
 
   /** [plan4:ST-12] Widest floor reach from the side wings (state.layout.ext); no allocation (this runs every picture). */
   private updateSpan(state: GameState): void {
@@ -1481,7 +1548,7 @@ export class BunkerRenderer {
     if (this.gfx2) {
       // [gfx2 surface] painted entrance, topsoil and props: src/rendering/surface2.ts
       const s2 = buildSurface2(tex, coneTexture(), RAYS[Math.max(0, Math.min(3, this.surfaceEra))], Math.max(0, this.surfaceEra), () => this.nightNow, this.surfaceLeft, this.rowOpen); // plan4:ST-16
-      mountSurface2(s2, this.worldContainer, this.undergroundHolder, this.shaftHolder);
+      mountSurface2(s2, this.undergroundHolder.parent ?? this.worldContainer, this.undergroundHolder, this.shaftHolder); // [world:C1] in city mode the holders sit in the lit group
       this.surface = s2;
     } else this.surface = buildSurface(tex, coneTexture(), RAYS[Math.max(0, Math.min(3, this.surfaceEra))], this.surfaceLeft);
     this.surfaceHolder.addChild(this.surface.container);
@@ -1699,7 +1766,8 @@ export class BunkerRenderer {
       const r = this.blockRects[n] ?? (this.blockRects[n] = { x: 0, y: 0, w: 0, h: 0 });
       if (inc.kind === 'blackout') {
         const ff = floorIndexAt(v.root.y), fx = floorExtent(state, ff); // [plan4:ST-4] the whole floor, wings included
-        r.x = slotX(ff, -fx.w); r.y = v.root.y; r.w = (fx.w + fx.e) * SLOT_W; r.h = v.height;
+        if (this.cityHost) { const s = stripX(ff, fx); r.x = s.x0; r.w = s.x1 - s.x0; } else { r.x = slotX(ff, -fx.w); r.w = (fx.w + fx.e) * SLOT_W; } // [world:C1]
+        r.y = v.root.y; r.h = v.height;
       } else {
         r.x = v.root.x; r.y = v.root.y; r.w = v.width; r.h = v.height;
       }

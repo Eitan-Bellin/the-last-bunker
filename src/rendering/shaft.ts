@@ -85,7 +85,8 @@ function kit(m: string, st: KitState): Texture | null {
 }
 
 /** A collapsible lattice gate leaf, drawn from x = 0 to w (it folds toward x = 0 by scaling). */
-function gateLeaf(w: number, h: number, steel: number): Graphics {
+/** [world:C1] `lite`: no highlight pass and no rivets, so the leaf stays under Pixi's batchable-geometry limit (200 vertices) and every gate batches. */
+function gateLeaf(w: number, h: number, steel: number, lite = false): Graphics {
   const g = new Graphics();
   const bars = 3;
   const step = w / bars;
@@ -99,7 +100,7 @@ function gateLeaf(w: number, h: number, steel: number): Graphics {
     }
   }
   g.stroke({ color: 0x141513, width: 0.9, alpha: 0.8 });
-  for (let i = 0; i < bars; i++) {
+  for (let i = 0; i < (lite ? 0 : bars); i++) {
     const x0 = i * step, x1 = x0 + step;
     for (let y = 3; y < h - 6; y += P) {
       const y1 = Math.min(h - 5, y + P);
@@ -108,7 +109,7 @@ function gateLeaf(w: number, h: number, steel: number): Graphics {
   }
   g.stroke({ color: steel, width: 0.5, alpha: 0.5 });
   // Pivot rivets where the lattice crosses.
-  for (let i = 0; i < bars; i++) for (let y = 3 + P / 2; y < h - 6; y += P) g.circle(i * step + step / 2, y, 0.7).fill({ color: steel, alpha: 0.7 });
+  if (!lite) for (let i = 0; i < bars; i++) for (let y = 3 + P / 2; y < h - 6; y += P) g.circle(i * step + step / 2, y, 0.7).fill({ color: steel, alpha: 0.7 });
   for (let i = 0; i <= bars; i++) {
     const x = Math.min(w - 0.8, i * step);
     g.rect(x - 0.6, 0, 1.3, h).fill(0x262724);
@@ -121,7 +122,12 @@ function gateLeaf(w: number, h: number, steel: number): Graphics {
   return g;
 }
 
-export function buildShaft2(floors: number, era: number, onArrive?: () => void, westFloors: readonly boolean[] = [], zoneColors: readonly number[] = []): ShaftAnimated {
+/**
+ * [world:C1] `spineOnly` (the city, behind `?city`): the shaft stands in the hub atrium, so its own back wall, grime, side shadows and
+ * the airy spine glow and daylight cone are left out (the hub shell is the back, the lightmap lights it); the rails, risers, car, cables,
+ * landings with their gates and lamps, the zone beacons and the pulley head stay.
+ */
+export function buildShaft2(floors: number, era: number, onArrive?: () => void, westFloors: readonly boolean[] = [], zoneColors: readonly number[] = [], spineOnly = false): ShaftAnimated {
   const st = kitState(era);
   const S = STYLE[st];
   const root = new Container();
@@ -138,7 +144,7 @@ export function buildShaft2(floors: number, era: number, onArrive?: () => void, 
   // The wall in floor-high bands so the depth fog can darken it level by level.
   const bands: [number, number][] = [[TOP, floorTop(0)]];
   for (let f = 0; f < floors; f++) bands.push([floorTop(f), floorTop(f) + ROOM_H + SLAB + (floorTop(f + 1) - floorTop(f) - FLOOR_H)]); // [plan4:ST-1] a gallery under the floor is part of the band: the shaft passes through it
-  for (const [y0, y1] of bands) {
+  for (const [y0, y1] of spineOnly ? [] : bands) {
     if (wallTex) {
       const w = new TilingSprite({ texture: wallTex, width: SHAFT_W, height: y1 - y0 });
       w.position.set(0, y0);
@@ -154,7 +160,7 @@ export function buildShaft2(floors: number, era: number, onArrive?: () => void, 
   }
   const grime = new Graphics();
   // Side shadows: the shaft is a deep slot, its corners stay dark (gfx-p0 light: one smooth gradient each side).
-  for (const right of [false, true]) {
+  for (const right of spineOnly ? [] : [false, true]) {
     const side = new Sprite(softTexture('fadeH'));
     side.tint = 0x000000;
     side.alpha = GFX.airy ? 0.2 : 0.4; // [airy:B3] a lighter slot: the shaft is the spine, not a hole
@@ -165,7 +171,7 @@ export function buildShaft2(floors: number, era: number, onArrive?: () => void, 
     back.addChild(side);
   }
   // Water stains and oil runs down the wall (more in the wrecked era).
-  const stains = Math.round(6 + 26 * S.grime) * Math.max(1, floors / 3);
+  const stains = spineOnly ? 0 : Math.round(6 + 26 * S.grime) * Math.max(1, floors / 3);
   for (let i = 0; i < stains; i++) {
     const x = 3 + rnd() * (SHAFT_W - 6), y = TOP + rnd() * (bottomY - TOP);
     const len = 8 + rnd() * 40 * (0.5 + S.grime);
@@ -174,14 +180,14 @@ export function buildShaft2(floors: number, era: number, onArrive?: () => void, 
       grime.rect(x + (rnd() - 0.5) * 0.8, y + (k * len) / 5, w * (1 - k * 0.12), len / 5 + 0.5).fill({ color: 0x0c0a08, alpha: (0.1 + 0.18 * S.grime) * (1 - k / 6) });
     }
   }
-  for (let i = 0; i < Math.round(10 * S.grime * floors); i++) {
+  for (let i = 0; i < (spineOnly ? 0 : Math.round(10 * S.grime * floors)); i++) {
     const x = rnd() * SHAFT_W, y = TOP + rnd() * (bottomY - TOP);
     grime.ellipse(x, y, 3 + rnd() * 6, 2 + rnd() * 5).fill({ color: rnd() < 0.3 ? 0x2a3020 : 0x0a0908, alpha: 0.12 + rnd() * 0.12 });
   }
   back.addChild(grime);
   // [airy:B3] The spine: the shaft is lit from within (a warm lift over the whole wall, a light strip down each rail, bright jambs), the same at every
   // depth (it is not run through the fog), so from the surface to the bottom level the eye can follow one clear line that the floors hang from.
-  if (GFX.airy) {
+  if (GFX.airy && !spineOnly) {
     const spine = new Graphics();
     spine.blendMode = 'add';
     spine.rect(0, TOP, SHAFT_W, bottomY - TOP).fill({ color: 0xffd9a0, alpha: 0.09 });
@@ -250,9 +256,14 @@ export function buildShaft2(floors: number, era: number, onArrive?: () => void, 
 
   // Guide rails: steel columns in floor-long lengths joined by fishplates.
   const rails = new Container();
+  // [world:C1] spineOnly: every rail length is a texture fill in ONE Graphics (a TilingSprite is a draw call of its own: 2 per floor band).
+  const railG = spineOnly ? new Graphics() : null;
+  if (railG) rails.addChild(railG);
   for (const rx of RAILS) {
     for (const [y0, y1] of bands) {
-      if (colTex) {
+      if (railG) {
+        railG.rect(rx, y0, RAIL_W, y1 - y0).fill(colTex ? { texture: colTex, color: tintAt(S.steel, (y0 + y1) / 2) } : { color: tintAt(0x5a5e66, (y0 + y1) / 2) });
+      } else if (colTex) {
         const r = new TilingSprite({ texture: colTex, width: RAIL_W, height: y1 - y0 });
         r.position.set(rx, y0);
         r.tileScale.set((RAIL_W * 2.2) / colTex.width);
@@ -408,9 +419,9 @@ export function buildShaft2(floors: number, era: number, onArrive?: () => void, 
   for (let f = 0; f < floors; f++) {
     const top = floorTop(f);
     const midY = top + ROOM_H / 2;
-    const l = gateLeaf(gateW, gateH, S.gate);
+    const l = gateLeaf(gateW, gateH, S.gate, spineOnly);
     l.position.set(GATE_X0, top + HEADER_Y + HEADER_H);
-    const r = gateLeaf(gateW, gateH, S.gate);
+    const r = gateLeaf(gateW, gateH, S.gate, spineOnly);
     r.scale.x = -1;
     r.position.set(GATE_X1, top + HEADER_Y + HEADER_H);
     l.tint = r.tint = tintAt(0xffffff, midY);
@@ -423,7 +434,13 @@ export function buildShaft2(floors: number, era: number, onArrive?: () => void, 
     leaves.push({ l, r });
     // Frame: two posts and a header beam from the steel kit, with a sill and soft contact shadows.
     const frame = new Container();
-    if (colTex) {
+    if (colTex && spineOnly) {
+      // [world:C1] spineOnly: the posts and the header as texture fills of one Graphics (no TilingSprites: 3 draw calls a landing otherwise).
+      const pg = new Graphics();
+      for (const px of [GATE_X0 - 4, GATE_X1]) pg.rect(px, top + HEADER_Y, 4, FLOOR_LIP - HEADER_Y).fill({ texture: colTex, color: tintAt(S.steel, midY) });
+      pg.rect(1, top + HEADER_Y, SHAFT_W - 2, HEADER_H).fill({ texture: colTex, color: tintAt(S.steel, midY) });
+      frame.addChild(pg);
+    } else if (colTex) {
       for (const px of [GATE_X0 - 4, GATE_X1]) {
         const p = new TilingSprite({ texture: colTex, width: 4, height: FLOOR_LIP - HEADER_Y });
         p.position.set(px, top + HEADER_Y);

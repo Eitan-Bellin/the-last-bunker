@@ -87,11 +87,16 @@ export const TIER_RENDER: Record<RenderTier, {
   planes: 'live' | 'cached' | 'merged' | 'off';
   /** Glow layer (halos, cones, motes). */
   glow: boolean;
+  /**
+   * Pixel density of the far/back plane caches relative to the renderer (the planes are hazed and soft: half density is invisible and
+   * a quarter of the memory; in the game at Medium the two caches were 13 MB at 1x on a 1280x800 desktop).
+   */
+  planeRes: number;
 }> = {
-  high: { lightmap: true, fogHalos: 2, fogHz: 30, planes: 'live', glow: true },
-  medium: { lightmap: true, fogHalos: 1, fogHz: 15, planes: 'cached', glow: true },
-  low: { lightmap: true, fogHalos: 1, fogHz: 0, planes: 'merged', glow: true },
-  lite: { lightmap: false, fogHalos: 0, fogHz: 0, planes: 'off', glow: false },
+  high: { lightmap: true, fogHalos: 2, fogHz: 30, planes: 'live', glow: true, planeRes: 1 },
+  medium: { lightmap: true, fogHalos: 1, fogHz: 15, planes: 'cached', glow: true, planeRes: 0.5 },
+  low: { lightmap: true, fogHalos: 1, fogHz: 0, planes: 'merged', glow: true, planeRes: 0.5 },
+  lite: { lightmap: false, fogHalos: 0, fogHz: 0, planes: 'off', glow: false, planeRes: 0.5 },
 };
 
 /** Flicker means: what a light holds when its flicker kind does not animate on the tier (fraction of intensity). */
@@ -119,6 +124,12 @@ export const FOG_RENDER = {
   noiseCells: 4,
   /** A reveal brush grows from this fraction of its radius. */
   brushStart: 0.25,
+} as const;
+
+/** People in the city (BunkerRenderer behind `?city`): they stand in the lit group, so the lightmap lights them; their own tint is this neutral. */
+export const PEOPLE_RENDER = {
+  /** Replaces the classic lamp-pool / depth tint of room people and walkers (a touch warm so skin never reads grey). */
+  cityAmbient: 0xf4eee6 as Hex,
 } as const;
 
 /** Procedural backdrop (far / back / mid / fore) dressing. Counts per chunk scale with DETAIL. */

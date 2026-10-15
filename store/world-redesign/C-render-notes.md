@@ -194,3 +194,193 @@ Line numbers are for `src/rendering/BunkerRenderer.ts` at commit bd4fdcf.
   - the warm rim on the undiscovered edge;
   - the god-ray;
   - the people's rim light. That one is life-systems' job; `lightAt()` is their hook.
+
+## Phase 2: game integration (tech-artist, branch `world/c1-T`, 2026-10-15)
+
+Everything below runs only with `?city` (`CITY` from `src/world/flag.ts`). Classic mode builds no city object and takes no new code path (see "Classic parity").
+
+### What was built
+
+| File | Change |
+|---|---|
+| `src/world/render/cityHost.ts` (new) | The glue between BunkerRenderer and CityRenderer: mounts the layer stack, syncs the layout, mounts the shell, feeds the rooms to the lightmap, runs the city frame, and wraps `renderer.extract` for snapshots |
+| `src/world/render/citySeams.ts` (new) | The two seams (below) |
+| `src/world/render/stubLayout.ts` (new) | The default layout provider |
+| `src/world/render/CityRenderer.ts` | `beginSnapshot` / `endSnapshot` switch to the 'area' UV mode for extracts; the planes are hidden while the map covers |
+| `src/world/render/layers.ts`, `tokensRender.ts` | `TIER_RENDER.planeRes`: the far and back caches render at 0.5x density on Medium and Low. Also adds `PEOPLE_RENDER.cityAmbient` |
+| `src/world/render/backdrop.ts` | Far lifts: all rails go in one Graphics, all car dots after it. That is 2 draw calls; it was 2 per lift (32 at e55) |
+| `src/rendering/BunkerRenderer.ts` | Adds `mountCity()`, `syncCityLayout()`, `updateCity()` and the shell seam in `rebuildStructure()`. Also the people tint, the incident and blocker floor rects, and Dust off. All of it sits behind `this.cityHost` |
+| `src/rendering/shaft.ts` | `buildShaft2(..., spineOnly)`, detailed below |
+| `src/rendering/postfx.ts` | `CITY_NIGHT_GRADE.underground` 0.45: in city mode the composite's underground night mood runs at 45%, because the lightmap carries the civic night |
+
+What `spineOnly` changes in `buildShaft2`:
+- it drops the back wall, the grime, the side shadows, the airy spine glow and the daylight cone;
+- the rails and the landing frames become texture fills of one Graphics instead of TilingSprites;
+- the gate leaves lose the highlight pass and the rivets, which keeps them under Pixi's batchable-geometry limit;
+- result: the landings went from 55 draw calls to 4 at e55.
+
+`cityMap.ts` needed no change for C.
+
+### The 12 steps, as done
+
+1. **Construct.** When `CITY` is set, `init()` calls `mountCity(canvas)`, which runs `new CityHost(renderer, isLiteMode() ? 'lite' : startQuality(), canvas)`.
+2. **Mount.** `worldContainer` holds, in order:
+   - far, back;
+   - surface and the 5 project-site layers;
+   - `city:lit` { mid, play { underground, bays, rooms, shaft, *shellFront*, utilities, walkers } };
+   - slots, highlight;
+   - `city:glow`;
+   - dust, fx, incidentFx, disasterFx, dig, districtSign, wingSigns;
+   - `city:fog`, `city:tease`, fore;
+   - cityMap (inserted before labels, as before);
+   - labels, badges, ghost.
+
+   `mountSurface2` is handed `undergroundHolder.parent`, so the soil and the surface front land inside the lit group. In classic mode that parent is the same `worldContainer` as before.
+3. **Render groups.** Unchanged. Nested render groups inside the filtered lit group render correctly (checked in the shots and the draw-call probe).
+4. **Layout.** `syncCityLayout()` runs every frame on a numeric key made of `LAYOUT.ext`, `LAYOUT.rooms`, the era and the floor count.
+   - The provider's `sig(state)` is asked only when the key moves.
+   - `build(state)` runs only when the sig changes.
+   - A new layout, era or kit readiness rebuilds the structure, which calls the shell seam.
+   - With no mounter set, the classic underground stands in.
+5. **Rooms.** `CityHost.syncRooms()` checks at most 4 times a second and rebuilds only when its cheap signature changes. The signature covers the layout hash, floors, blackout floors, power < 5%, a state letter per room and a started flag per ruin.
+   - Room states:
+     - building: `isConstructing`;
+     - unpowered: power < 5%, or a blackout incident on its floor;
+     - working: people in the room view;
+     - idle;
+     - ruin.
+   - Lamps come from `ArtLibrary.lightsFor(entry)` and are mirrored like `worldLamps` (`compoundIndex`).
+   - Each dug floor gets a walkway strip at `LIGHT.read.walkway`, from the hub's west edge to the strip's east end.
+   - The selection goes through `setSelected` → `select()`.
+6. **Frame.** `updateCity()` runs right before `postfx.update()` and calls `host.frame(wc, screen, t, dt, tier, mapCovers, era, night)`.
+   - `parallaxInfo` is derived locally: `CityHost.parallaxInfo` is `parallaxFromWorld`, anchored at the screen centre.
+   - `CameraController` was not touched. Camera-nav's official `parallaxInfo()` can replace the local version in one line.
+   - Era and night go to `setEra` only when they change (night is quantised to 0.02).
+7. **LOD.** `mapCovers` is passed through. While the map covers, the city skips the light, fog and glow work and hides its four planes. The lit group stays visible so rooms under the map stay tappable.
+8. **People.**
+   - Room people get `PEOPLE_RENDER.cityAmbient` instead of the lamp-pool tint. Project crews on the surface keep their old tint.
+   - The walkers get the same neutral through a runtime override of `walkers.ambientAt`. walkers.ts belongs to life-systems: **remove this override when their city lighting lands.**
+   - `CityHost.lightAt(x, y)` is the hook for self-light.
+9. **Context loss.** The city listens to `webglcontextrestored` itself, registered after the renderer's own listener. `recoverGraphics()` calls `cityHost.invalidate()`, so the rooms and the shell re-sync.
+   - Note: in headless Chrome, `WEBGL_lose_context` followed by a restore leaves **both classic and city** throwing `alphaMode of null` in the batcher on every frame (`drawFails` > 200).
+   - This already happens on the classic path, so C1 did not cause it. It needs a separate investigation.
+10. **Snapshots.** `CityHost` wraps `renderer.extract.canvas`, `.texture` and `.pixels`, with a depth counter (base64 and image go through canvas).
+    - Inside an extract, the filter switches to the 'area' UV mode, with `filterArea` set to the current view, and the light texture is redrawn.
+    - Afterwards the previous mode is restored.
+    - `share.ts` and the dev shot tools need no change.
+    - Checked: an `extract.canvas` with an inset frame matches the screen.
+11. **Dust.** In city mode the classic `Dust` is neither drawn nor updated. The glow layer's lit motes are the dust, and this saves 5 draw calls.
+12. **Night grade.** `CITY_NIGHT_GRADE` lives in postfx.ts. The era's civic light rides on `city.setEra`.
+
+**Quality tiers.** The city tier is `isLiteMode() ? 'lite' : postfx.quality`.
+- `postfx.quality` is the live level. It follows QUALITY_PROFILE / TOUCH_PROFILE, the player's pick and battery saver. This is the same rule PostFX uses for its effects.
+- Pixel density keeps following `baseLevel` in PostFX.
+- Lite means no lightmap, no planes and no glow, with the flat `liteTint`.
+
+**Incidents.** In city mode, a blackout's floor rect and the popup blocker's rect are `stripX(f, ext)`, which includes the hub. Classic mode keeps its old rect.
+
+### The two seams (for the level-builder at merge)
+
+```ts
+// src/world/render/citySeams.ts
+setCityLayoutProvider({ sig: cityLayoutSig, build: buildCityLayout }); // default: stubLayoutProvider
+setShellMounter(mountShell);                                           // default: null (classic underground stand-in)
+```
+
+**`CityLayoutProvider`**
+- `sig(state)` must change whenever `build(state)` would return something different, in geometry or in area states.
+- The renderer calls `city.setLayout()` on every new build.
+  - The fog tweens state changes.
+  - Geometry is rebuilt only when `layout.sig` changes, so put only geometry into `layout.sig`.
+- The stub's areas:
+  - `surface`;
+  - `f:<k>` for each dug floor (revealed);
+  - `d:<kind>` (digging while it is under construction);
+  - the dig face `f:<currentFloors>` (glimpsed);
+  - `e:<f>:w|e`: edge strips 3 slots past each end of a floor (glimpsed);
+  - `s:below` (hidden).
+- The stub's strata bands meet at the middle of each gallery gap, with the ground at y 0.
+- It makes one flat-vault hub per reached stratum, clipped to the dug floors, and no cavities.
+
+**`ShellMounter(ctx) → MountedShell | null`**
+- `ctx` holds `state`, `layout`, `era` and `tier`, plus two holders and the light calls:
+  - `back` = `undergroundHolder`: emptied before the call, behind the rooms, inside the lit group. `RoomViews.collectStructureCullables` and the airy rock parallax read its first child;
+  - `front` = `shellFront`: emptied before the call, after the shaft and before utilities and walkers;
+  - `addLight` / `removeLight` for the shell's own lamps.
+- It returns `{ update?(t, dt), destroy() }`. `destroy` must remove the shell's lights.
+- It is called on every structure rebuild: a new layout sig, era or kit state, or anything else in `structureSig`.
+- Returning `null` still counts as mounted, so the classic underground is NOT drawn. To keep the stand-in, leave the mounter unset.
+
+### Classic parity
+
+Run with `tools/compare/run.mjs` on saves-v6 `e30-seed1` and `c-seed1`, 390x844@2x, 17 shots. The baseline is a detached worktree at 7cbb372.
+
+| Pair | Mean | Max |
+|---|---|---|
+| base vs base2 (noise floor) | 2.33 % | 7.29 % |
+| base vs head (first integration, captured under CPU load) | 2.92 % | 11.15 % |
+| base2 vs head2 (same code, quiet machine) | 2.59 % | 8.04 % |
+| base vs head3 (final code) | 2.50 % | 9.28 % |
+
+The diff images show only animated people, smoke and the corridor lamp flicker. No structure, room or shell edge moved.
+
+In classic mode every city path sits behind `this.cityHost`, which is null. The new `spineOnly` flag of `buildShaft2` and `lite` flag of `gateLeaf` both default to false.
+
+### Performance in the game
+
+**Method**
+- Production build (`vite build`), headless Chrome on the iGPU (UHD 630, ANGLE D3D11).
+- A2's `frames.mjs` method (scratch `ct-frames.mjs`). Classic and city were measured on the same machine in the same session.
+- e55 = `saves-v7/e55-seed1`: 20 floors, 190 people.
+- Desktop is 1280x800 at DPR 1. Phone is 375x812 at DPR 2 with touch.
+- Raw = 60 × `render()` + `gl.finish()`.
+
+| Scenario, Medium | Draw calls idle, classic → city | GPU tex MB, classic → city | Raw frame med (p95) ms, classic → city | Idle CPU update ms, classic → city |
+|---|---|---|---|---|
+| fresh desktop | 203 → **203** | 157 → 167 | 2.8 (16.3) → 5.6 (18.2) | 0.8 → 1.5 |
+| e55 desktop | 528 → **468** | 241 → 253 | 15.4 (28.1) → 15.6 (26.1) | 3.6 → 4.5 |
+| fresh phone | 190 → **175** | 383 → **365** | 3.2 (21.3) → 4.6 (18.5) | 0.9 → 1.6 |
+| e55 phone | 499 → **426** | 461 → **448** | 19.8 (34.0) → 15.9 (20.8) | 5.7 → 4.5 |
+
+| Scenario, High | Draw calls idle, classic → city | GPU tex MB, classic → city | Raw frame med ms, classic → city |
+|---|---|---|---|
+| fresh desktop | 207 → 225 | 173 → 154 | 59.1 → 61.7 |
+| e55 desktop | 540 → 500 | 230 → 238 | 56.7 → 79.4 (an earlier city run gave 57.3; MSAA High on this iGPU is noisy) |
+| fresh phone | 194 → 187 | 319 → 361 | 3.7 → 6.5 |
+| e55 phone | 512 → 448 | 397 → 444 | 18.6 → 18.3 |
+
+**Medium target**
+- **Draw calls: met.** City is equal or lower in every scenario.
+  - The city's lightmap, fog, glow and planes add about 25 calls.
+  - The shaft and backdrop batching and the dropped Dust pay for them.
+- **GPU memory on phones: met.** City is 13 to 18 MB lower.
+- **GPU memory on desktop: not met.** City is +10 to 12 MB (+5 to 6 %). What remains:
+  - the lit group's filter texture, a screen-size intermediate: 3.9 MB at 1280x800;
+  - the two plane caches: 3.3 MB at 0.5x;
+  - the light texture: 0.5 MB;
+  - the fog texture: about 2 MB;
+  - the generated light textures.
+- The texture estimate itself moves by about ±10 MB between runs, depending on when textures are garbage-collected. Phone High is an example: city is +42 MB there.
+
+**CPU.** The city's update costs 0.5 to 4 ms per picture. It culls the lights every frame; at e55 High up to 101 are in view.
+
+**Next savings, if wanted**
+- Merge far into back on Medium, as Low does (−1.6 MB).
+- Clip the fog sprite to the bounds of the non-revealed areas.
+- When the level-builder's shell replaces the classic underground, the underground's 59 draw calls at e55 go away with it.
+
+### Shots
+
+- `shots/C1-T-fresh-overview.png`: fresh game, High, zoom 0.6×fit. Shows the lit rooms and the dark hub gap; the shell is not merged yet.
+- `shots/C1-T-e55-hub-medium.png`: e55 at Medium, zoom 1. Shows the spine-only shaft, worked rooms at the 0.70 floor plus their lamps, and the walkway strips.
+- `shots/C1-T-e55-wide-medium.png`: e55 at Medium, zoom 0.55. Shows the stratum ambient on the rock.
+
+### Open items
+
+- **life-systems:**
+  - replace the walkers' `ambientAt` override;
+  - add lanterns via `addLight({ dynamic: true })` + `moveLight`;
+  - add the rim light from `lightAt`.
+- **camera-nav:** an official `parallaxInfo()`.
+- **level-builder:** plug in both seams. Shell lamps go through `ctx.addLight`.
+- **Everyone:** the context-restore crash in the batcher, which also happens in classic mode.

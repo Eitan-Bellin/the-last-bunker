@@ -14,7 +14,7 @@
  */
 import { Container, RenderTexture, Sprite, type Renderer } from 'pixi.js';
 import { DETAIL, LAYERS, LAYER_CACHE, type LayerId, type LayerTokens } from '../tokens';
-import { baseTier, type RenderTier } from '../tokensRender';
+import { TIER_RENDER, baseTier, type RenderTier } from '../tokensRender';
 import type { Rect } from './layoutTypes';
 
 /** The camera as the planes need it: the world point under the screen anchor, the zoom, and worldContainer's transform. */
@@ -64,6 +64,7 @@ export class ParallaxPlane {
   private bakedZ = NaN;
   private bakedAt = -1e9;
   private zoomVisible = true;
+  private tier: RenderTier = 'high';
   /** Content changed since the last bake (re-baked at the next LAYER_CACHE.minInterval). */
   private stale = false;
   readonly stats = { bakes: 0 };
@@ -85,6 +86,7 @@ export class ParallaxPlane {
 
   /** Applies the parallax transform and the zoom/tier visibility. */
   apply(pi: ParallaxInfo, tier: RenderTier): void {
+    this.tier = tier;
     const L = this.token;
     const A = Math.pow(pi.z, L.p * L.zoomCoupling);
     const k = A / pi.z;
@@ -151,7 +153,7 @@ export class ParallaxPlane {
   bake(renderer: Renderer, pi: ParallaxInfo, t: number): void {
     const ov = LAYER_CACHE.overscan;
     const W = Math.ceil(pi.sw * (1 + ov * 2)), H = Math.ceil(pi.sh * (1 + ov * 2));
-    const res = renderer.resolution;
+    const res = renderer.resolution * TIER_RENDER[this.tier].planeRes;
     if (!this.cacheRT || this.cacheRT.width !== W || this.cacheRT.height !== H || this.cacheRT.source.resolution !== res) {
       this.cacheRT?.destroy(true);
       this.cacheRT = RenderTexture.create({ width: W, height: H, resolution: res });
