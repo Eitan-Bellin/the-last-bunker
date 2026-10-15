@@ -1,7 +1,7 @@
 import { i18n } from '../../i18n/I18nManager';
+import { fmtNum } from '../format';
 import { BIOMES, POIS, type BiomeId } from '../../data/surface';
 import { RESOURCE_ICONS, el } from '../../ui/dom';
-import { fmtNum } from '../format';
 import type { MissionReport, ResourceType, SurvivorState } from '../../core/GameState';
 import { genderOf, portraitFor, portraitUrl } from '../../data/portraits';
 import { biomeImage, journalTimeline } from '../../ui/expeditionText';

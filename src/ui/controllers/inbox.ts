@@ -1,4 +1,5 @@
 import { i18n } from '../../i18n/I18nManager';
+import { plural } from '../format';
 import { bus } from '../../core/EventBus';
 import { button, el, costRow } from '../../ui/dom';
 import { Sheet } from '../../ui/components/Sheet';
@@ -197,7 +198,7 @@ export class InboxController {
           if (n > 0) {
             this.app.engine.requestSave();
             this.app.audio.play('click');
-            this.app.toasts.show(`[[cart]] ${i18n.t('contract.safeTaken', { n })}`, 'good');
+            this.app.toasts.show(`[[cart]] ${plural('contract.safeTaken', n)}`, 'good');
           }
         }));
       }

@@ -2,6 +2,7 @@ import type { BuildingInstance, BuildingType, GameState, SurvivorState } from '.
 import { floorTag, floorTagIso } from '../floorTag'; // plan4:ST-16
 import type { GameEngine } from '../../core/GameEngine';
 import { i18n } from '../../i18n/I18nManager';
+import { plural } from '../format';
 import { crewCount, getDef, traitBonus } from '../../data/buildingDefs';
 import { childCapacityOf } from '../../data/roomEffects'; // [plan4:BL-4]
 import { MORALE_KINDS, STAT_KEYS, xpForNextLevel } from '../../systems/PopulationSystem';
@@ -197,7 +198,7 @@ export class PeoplePanel {
   }
 
   private render(state: GameState): void {
-    this.sheet.setTitle(`[[people]] ${i18n.t('people.title')} · ${state.survivors.length}/${state.maxPopulation}`);
+    this.sheet.setTitle(`[[people]] ${i18n.t('people.title')} · ${state.survivors.length}/${state.maxPopulation}`);
     this.bars.clear();
     this.levels.clear();
     const tabs = el('div', 'tab-row');
@@ -244,13 +245,13 @@ export class PeoplePanel {
         onPress: () => {
           const placed = this.assignIdle();
           uiSound(placed ? 'assign' : 'error');
-          this.assignedNote = placed ? i18n.t('wp4.assignedN', { n: placed }) : i18n.t('wp4.assignedNone');
+          this.assignedNote = placed ? plural('wp4.assignedN', placed) : i18n.t('wp4.assignedNone');
           this.engine.requestSave();
           this.redraw();
         },
       }));
     } else if (idle > 0) {
-      box.appendChild(el('div', 'pp-nojob', `[[worker]] ${i18n.t('wp4.noJobs', { n: idle })}`));
+      box.appendChild(el('div', 'pp-nojob', `[[worker]] ${plural('wp4.noJobs', idle)}`));
     }
     if (this.assignedNote) box.appendChild(el('div', 'bp-hint pp-note', `[[check]] ${this.assignedNote}`));
     return box;

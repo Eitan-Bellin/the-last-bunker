@@ -3,6 +3,7 @@ import type { ShopSystem, ShopOffer } from '../../systems/ShopSystem';
 import { ACT_GOODS_HOURS, SCRAP_BUNDLE, type ShopItemId } from '../../data/shop';
 import { actGoods } from '../../data/pricing';
 import { i18n } from '../../i18n/I18nManager';
+import { fmtCost, fmtNum } from '../format';
 import { RESOURCE_ICONS, el } from '../dom';
 import { kButton, kEmpty } from '../kit';
 import { Sheet } from './Sheet';
@@ -79,7 +80,7 @@ export class ShopPanel {
 
   /** Exactly what one purchase adds, when it is a resource ("+20 [[scrap]]"); empty for the boosts and the crate (their line says it). */
   private gets(state: GameState, id: ShopItemId): string {
-    const one = (r: string, n: number) => `+${i18n.formatCompact(n)} ${RESOURCE_ICONS[r] ?? ''} ${i18n.t(`resources.${r}`)}`;
+    const one = (r: string, n: number) => `+${fmtNum(n)} ${RESOURCE_ICONS[r] ?? ''} ${i18n.t(`resources.${r}`)}`;
     switch (id) {
       case 'blueprint': return one('blueprints', 1);
       case 'isotope': return one('isotope7', 1);
@@ -92,7 +93,7 @@ export class ShopPanel {
   render(state: GameState, shop: ShopSystem): HTMLElement {
     const root = el('div', 'shop');
     const credits = Math.floor(state.resources.credits?.amount ?? 0);
-    root.appendChild(el('p', 'shop-balance', `[[credits]] ${i18n.t('shop.balance', { n: i18n.formatCompact(credits) })}`));
+    root.appendChild(el('p', 'shop-balance', `[[credits]] ${i18n.t('shop.balance', { n: fmtNum(credits) })}`));
     root.appendChild(el('p', 'bp-hint', i18n.t('shop.intro')));
     const offers = shop.offers(state).filter(o => this.open(state, o));
     if (offers.length === 0) root.appendChild(kEmpty('credits', i18n.t('ux2d.shop.empty')));
@@ -108,13 +109,13 @@ export class ShopPanel {
       if (o.item.weeklyLimit) text.appendChild(el('div', 'bp-hint', i18n.t('shop.weekLeft', { n: Math.max(0, o.left ?? 0) })));
       if (o.item.dailyLimit) text.appendChild(el('div', 'bp-hint', i18n.t('shop.dayLeft', { n: Math.max(0, o.left ?? 0) })));
       const why = !o.block ? null
-        : o.block === 'credits' ? i18n.t('ux2d.shop.needCredits', { n: i18n.formatCompact(Math.ceil(o.price - credits)) })
+        : o.block === 'credits' ? i18n.t('ux2d.shop.needCredits', { n: fmtCost(o.price - credits) })
         : i18n.t(`shop.block.${o.block}`);
       if (why && o.block !== 'credits') text.appendChild(el('div', 'bp-hint negative-text', why));
       const buy = kButton({
         variant: 'purchase',
         className: 'btn-primary shop-buy',
-        label: `[[credits]] ${i18n.formatCompact(o.price)}`,
+        label: `[[credits]] ${fmtCost(o.price)}`,
         ariaLabel: i18n.t('ux2d.shop.buyAria', { name: i18n.t(`shop.item.${o.item.id}`), n: o.price }),
         disabledReason: why,
         onPress: () => this.onBuy?.(o.item.id),

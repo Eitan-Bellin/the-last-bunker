@@ -1,6 +1,7 @@
 import type { BuildingType, GameState, ResourceType } from '../../core/GameState';
 import type { GameEngine } from '../../core/GameEngine';
 import { i18n } from '../../i18n/I18nManager';
+import { fmtDuration, fmtNum } from '../format';
 import { getDef } from '../../data/buildingDefs';
 import { BUILDING_ICONS, RESOURCE_ICONS, el } from '../dom';
 import { Sheet } from './Sheet';
@@ -52,11 +53,11 @@ export class ResourceSheet {
 
     const head = el('div', 'bp-card');
     head.append(
-      this.row(i18n.t('res.stock'), `${i18n.formatCompact(res.amount)} / ${isFinite(res.cap) && res.cap > 0 ? i18n.formatCompact(res.cap) : '∞'}`),
+      this.row(i18n.t('res.stock'), `${fmtNum(res.amount)} / ${isFinite(res.cap) && res.cap > 0 ? fmtNum(res.cap) : '∞'}`),
       this.row(i18n.t('res.net'), `${i18n.formatRate(net)} ${i18n.t('resources.perSecond')}`, net > 0.005 ? 'positive' : net < -0.005 ? 'negative' : ''),
     );
-    if (net > 0.005 && isFinite(res.cap) && res.cap > res.amount) head.appendChild(this.row(i18n.t('res.full'), i18n.formatDuration((res.cap - res.amount) / net)));
-    if (net < -0.005 && res.amount > 0) head.appendChild(this.row(i18n.t('res.empty'), i18n.formatDuration(res.amount / -net), 'negative'));
+    if (net > 0.005 && isFinite(res.cap) && res.cap > res.amount) head.appendChild(this.row(i18n.t('res.full'), fmtDuration((res.cap - res.amount) / net)));
+    if (net < -0.005 && res.amount > 0) head.appendChild(this.row(i18n.t('res.empty'), fmtDuration(res.amount / -net), 'negative'));
     if (res.amount >= res.cap - 0.5 && net > 0.005) head.appendChild(el('div', 'bp-hint', `[[storage]] ${i18n.t('res.atCap')}`));
     root.appendChild(head);
 

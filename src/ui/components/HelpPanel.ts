@@ -1,4 +1,5 @@
 import { i18n } from '../../i18n/I18nManager';
+import { plural } from '../format';
 import { lazyChunk } from '../../utils/lazy';
 import type { GameState } from '../../core/GameState';
 import { BUILDING_DEFS, isInfra } from '../../data/buildingDefs';
@@ -121,7 +122,7 @@ export class HelpPanel {
         items.push({ node: d, hay: `${e.title[locale]} ${e.text[locale]} ${extra.join(' ')}`.toLowerCase() });
       }
       if (hidden > 0) {
-        const more = el('div', 'bp-hint book-more', `[[lock]] ${i18n.t('wp6.book.more', { n: hidden })}`);
+        const more = el('div', 'bp-hint book-more', `[[lock]] ${plural('wp6.book.more', hidden)}`);
         box.appendChild(more);
         locked.push(more);
       }

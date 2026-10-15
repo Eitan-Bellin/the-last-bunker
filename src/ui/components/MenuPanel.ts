@@ -1,6 +1,7 @@
 import type { GameState } from '../../core/GameState';
 import type { GameEngine } from '../../core/GameEngine';
 import { i18n } from '../../i18n/I18nManager';
+import { fmtNum, plural } from '../format';
 import { ACHIEVEMENTS } from '../../data/achievements';
 import { PRESTIGE_UPGRADES, upgradeCost } from '../../data/prestige';
 import { ERAS } from '../../data/eras';
@@ -402,7 +403,7 @@ export class MenuPanel {
         const r = el('div', 'bp-row backup-row');
         const t = new Date(bk.timestamp).toLocaleString(locale, { dateStyle: 'short', timeStyle: 'short' });
         r.append(
-          el('span', 'backup-text', i18n.t('settings.backups.row', { kind: i18n.t(`save.kind.${bk.kind}`), time: t, n: bk.people })),
+          el('span', 'backup-text', plural('settings.backups.row', bk.people, { kind: i18n.t(`save.kind.${bk.kind}`), time: t })),
           kButton({ variant: 'secondary', className: 'btn-secondary ux2e-48', label: i18n.t('settings.backups.restore'), onPress: () => this.actions.restoreBackup(bk.kind) }),
         );
         backupCard.appendChild(r);
@@ -640,7 +641,7 @@ export class MenuPanel {
     const card = el('div', 'bp-card');
     const rows: [string, string][] = [
       ['[[clock]] ' + i18n.t('stats2.playTime'), i18n.formatDuration(state.stats.totalPlayTime)],
-      ['[[food]] ' + i18n.t('stats2.food'), i18n.formatCompact(state.stats.totalFoodProduced)],
+      ['[[food]] ' + i18n.t('stats2.food'), fmtNum(state.stats.totalFoodProduced)],
       ['[[build]] ' + i18n.t('stats2.buildings'), String(state.stats.totalBuildingsBuilt)],
       ['[[people]] ' + i18n.t('stats2.recruited'), String(state.stats.totalSurvivorsRecruited)],
       ['[[walker]] ' + i18n.t('stats2.missions'), String(state.stats.totalMissionsCompleted)],

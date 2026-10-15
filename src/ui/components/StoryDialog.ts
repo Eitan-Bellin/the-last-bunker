@@ -1,4 +1,5 @@
 import { i18n } from '../../i18n/I18nManager';
+import { plural } from '../format';
 import { haptic } from '../../utils/haptics';
 import { CHARACTERS, shownChoices, shownLines, type Chapter, type StoryEffect, type StoryLine } from '../../data/story';
 import type { ResourceType } from '../../core/GameState';
@@ -202,7 +203,7 @@ export class StoryDialog {
       this.joinedFemale = out.joined ? nameGender(out.joined.name) === 'f' : false;
       const text = this.summary(gains as [ResourceType, number][], out.joined ? opts.joinedName?.(out.joined.name) ?? out.joined.name : null);
       const people: string[] = [];
-      if (out.newcomers) people.push(i18n.t('story.newcomers', { n: out.newcomers }));
+      if (out.newcomers) people.push(plural('story.newcomers', out.newcomers));
       if (out.left?.length) people.push(i18n.t('story.left', { names: out.left.map(n => opts.joinedName?.(n) ?? n).join(', ') }));
       if (out.hurt) people.push(i18n.t('story.hurt', { n: out.hurt }));
       const all = [text, ...people].filter(Boolean).join(' · ');
@@ -220,7 +221,7 @@ export class StoryDialog {
   /** What a choice does to the people, shown on its button so the hard choices are informed ones. */
   private peopleHint(e: StoryEffect): string {
     const parts: string[] = [];
-    if (e.group) parts.push(`[[people]] ${i18n.t('story.hintGroup', { n: e.group })}`);
+    if (e.group) parts.push(`[[people]] ${plural('story.hintGroup', e.group)}`);
     if (e.leaves) parts.push(`[[door]] ${i18n.t('story.hintLeaves', { n: e.leaves })}`);
     if (e.hurt) parts.push(`[[bandage]] ${i18n.t('story.hintHurt')}`);
     return parts.join(' · ');

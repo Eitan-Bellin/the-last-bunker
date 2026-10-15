@@ -3,6 +3,7 @@ import { bus } from '../../core/EventBus'; // [plan4:GP-1]
 import { statusTint } from '../../utils/a11y';
 import { HUD, actLock } from '../../ui/HUD';
 import { i18n } from '../../i18n/I18nManager';
+import { fmtNum, plural } from '../format';
 import { getDef } from '../../data/buildingDefs';
 import { allowedFloors } from '../../data/zones';
 import { BUILDING_ICONS, RESOURCE_ICONS, costRow, el } from '../../ui/dom';
@@ -21,7 +22,6 @@ import { hasFreeSpot, missingText, noSpaceRoute, noSpaceText } from '../componen
 import type { IconName } from '../../ui/icons';
 import type { GameApp } from '../../app';
 import { popupMode } from '../components/NumberPopup'; // [plan4:UX-21]
-import { fmtNum } from '../format'; // [w4fix C4]
 
 /** A bubble is worth two minutes of the room's output (NICE1), so a tap still matters after the first hour. */
 const BUBBLE_SECONDS = 120;
@@ -243,7 +243,7 @@ export class WorldController {
     const chips: Chip[] = [];
     if (fx.compound > 0) chips.push({ kind: 'good', text: i18n.t('placement.chip.compound', { pct: fx.compound * 10 }) });
     if (fx.synergy > 0) chips.push({ kind: 'good', text: i18n.t('placement.chip.synergy', { pct: Math.round(fx.synergy * 100) }) });
-    chips.push({ kind: 'info', text: fx.liftDist === 0 ? i18n.t('placement.chip.liftNear') : i18n.t('placement.chip.lift', { n: fx.liftDist }) });
+    chips.push({ kind: 'info', text: fx.liftDist === 0 ? i18n.t('placement.chip.liftNear') : plural('placement.chip.lift', fx.liftDist) });
     if (fx.fire) {
       chips.push({
         kind: 'warn',

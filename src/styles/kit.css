@@ -275,15 +275,22 @@
 
 .k-timer { font-family: var(--font-mono); font-variant-numeric: var(--num-tabular); direction: ltr; unicode-bidi: isolate; }
 .k-timer.is-done { color: var(--success); font-family: inherit; }
+/* [w5] The last 10 s: the digits pulse (static under reduced motion: the countdown itself says it). */
+.k-timer.is-ending { color: var(--danger-text); animation: k-tick var(--dur-pulse) var(--ease-in-out) infinite; }
+@keyframes k-tick { 50% { opacity: 0.55; } }
 
 /* ---- Reduced motion: no pulses or spins; the dashed edge / text carry the state ------------------------------------------------------ */
 :root[data-motion="reduced"] .k-chip.is-danger,
+:root[data-motion="reduced"] .k-timer.is-ending,
+:root[data-motion="reduced"] .k-chip.is-ending .hx-res__line2,
 :root[data-motion="reduced"] .k-btn.is-shaking,
 :root[data-motion="reduced"] .k-btn.is-highlighted,
 :root[data-motion="reduced"] .k-btn.is-loading > .k-btn__spinner { animation: none; }
 /* Before utils/a11y.ts has set data-motion (first paint), the system setting decides. */
 @media (prefers-reduced-motion: reduce) {
   :root:not([data-motion="full"]) .k-chip.is-danger,
+  :root:not([data-motion="full"]) .k-timer.is-ending,
+  :root:not([data-motion="full"]) .k-chip.is-ending .hx-res__line2,
   :root:not([data-motion="full"]) .k-btn.is-shaking,
   :root:not([data-motion="full"]) .k-btn.is-highlighted,
   :root:not([data-motion="full"]) .k-btn.is-loading > .k-btn__spinner { animation: none; }

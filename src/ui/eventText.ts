@@ -1,6 +1,7 @@
 import type { GameState } from '../core/GameState';
 import type { EventChoice } from '../systems/EventSystem';
 import { i18n } from '../i18n/I18nManager';
+import { fmtNum } from './format';
 import { costRow, el } from './dom';
 
 /**
@@ -11,7 +12,7 @@ export function choiceDetail(state: GameState, c: EventChoice, params: Record<st
   const cost = c.cost ? costRow(state, c.cost as Record<string, number>) : undefined;
   if (!c.hint) return cost;
   const vars: Record<string, string | number> = { ...params };
-  for (const [k, v] of Object.entries(c.hintParams ?? {})) vars[k] = typeof v === 'number' ? i18n.formatCompact(v) : v;
+  for (const [k, v] of Object.entries(c.hintParams ?? {})) vars[k] = typeof v === 'number' ? fmtNum(v) : v;
   const hint = el('span', 'exp-hints', i18n.t(c.hint, vars));
   if (!cost) return hint;
   const box = el('div');

@@ -1,5 +1,6 @@
 import type { GameState } from '../../core/GameState';
 import { i18n } from '../../i18n/I18nManager';
+import { plural } from '../format';
 import { LORE, getLore, type LoreEntry, type LoreKind } from '../../data/lore';
 import { getDef } from '../../data/buildingDefs';
 import { Sheet } from './Sheet';
@@ -66,7 +67,7 @@ export class JournalPanel {
     if (sig === this.signature) return;
     this.signature = sig;
     const locale = i18n.currentLocale;
-    this.sheet.setTitle(`[[journal]] ${i18n.t('journal.title')} · ${state.lore.length}/${LORE.length}`);
+    this.sheet.setTitle(`[[journal]] ${i18n.t('journal.title')} · ${state.lore.length}/${LORE.length}`);
     const root = el('div', 'journal');
     const told = CHAPTERS.filter(c => state.storyFlags.includes(`story:${c.id}`)).length;
     const tabs = kTabs([
@@ -109,7 +110,7 @@ export class JournalPanel {
       root.appendChild(item);
     }
     const missing = LORE.length - state.lore.length;
-    if (missing > 0) root.appendChild(el('div', 'journal-missing', `[[question]] ${i18n.t('journal.missing', { n: missing })}`));
+    if (missing > 0) root.appendChild(el('div', 'journal-missing', `[[question]] ${plural('journal.missing', missing)}`));
     this.sheet.body.replaceChildren(root);
   }
 

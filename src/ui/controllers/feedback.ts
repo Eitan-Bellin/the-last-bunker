@@ -3,7 +3,6 @@ import { SEASONS, nextSeason, seasonAt } from '../../data/seasons';
 import { ACTS } from '../../data/acts';
 import { feel, haptic } from '../../utils/haptics';
 import { FLY_MS, FlyToHud, type Point } from '../fx/flyToHud'; // [ux-redesign W4]
-import { fmtNum } from '../format';
 import { floorTop, slotX, SLOT_W } from '../../rendering/geom';
 import '../../styles/fx.css';
 import { reducedMotion } from '../../utils/a11y'; // [plan4:GP-2]
@@ -13,6 +12,7 @@ import { getProject } from '../../data/projects';
 import { getPartner } from '../../data/trade';
 import { WEEKLY_CREDITS } from '../../data/challenges';
 import { i18n } from '../../i18n/I18nManager';
+import { fmtNum, plural } from '../format';
 import { bus } from '../../core/EventBus';
 import { getDef, isPowerPlant } from '../../data/buildingDefs';
 import { getResearch } from '../../data/research';
@@ -141,7 +141,7 @@ export class FeedbackController {
       this.levelWaiting = [];
       if (!list.length || this.app.state.stats.totalPlayTime < LEVEL_QUIET_START_S) return;
       this.levelShownAt = performance.now();
-      this.app.toasts.show(list.length === 1 ? list[0] : `[[star]] ${i18n.t('wp3.levelUps', { n: list.length })}`, 'good');
+      this.app.toasts.show(list.length === 1 ? list[0] : `[[star]] ${plural('wp3.levelUps', list.length)}`, 'good');
     }, Math.max(LEVEL_DIGEST_MIN_MS, LEVEL_TOAST_GAP_MS - (now - this.levelShownAt)));
   }
 
@@ -158,7 +158,7 @@ export class FeedbackController {
       this.goalsWaiting = [];
       if (!names.length) return;
       this.app.audio.play('complete');
-      this.app.toasts.show(`[[target]] ${goalLine(names, n => i18n.t('toast.objective', { name: n }), n => i18n.t('ux2a.goals', { n }))}`, 'good');
+      this.app.toasts.show(`[[target]] ${goalLine(names, n => i18n.t('toast.objective', { name: n }), n => plural('ux2a.goals', n))}`, 'good');
     }, GOAL_FOLD_MS);
   }
 

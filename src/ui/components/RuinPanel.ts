@@ -2,6 +2,7 @@ import type { GameState, ResourceType, Ruin } from '../../core/GameState';
 import { floorTag, floorTagIso } from '../floorTag'; // plan4:ST-16
 import type { GameEngine } from '../../core/GameEngine';
 import { i18n } from '../../i18n/I18nManager';
+import { plural } from '../format';
 import { getDef, isPowerPlant } from '../../data/buildingDefs';
 import { roomPowerDraw } from '../../systems/ResourceSystem'; // [ux-wp4] P4
 import { MAX_RUIN_WORKERS, RUIN_KINDS } from '../../data/ruins';
@@ -144,7 +145,7 @@ export class RuinPanel {
       }
       const idle = rs.pickIdle(state, MAX_RUIN_WORKERS).length;
       const est = r.total / Math.max(1, idle);
-      card.appendChild(el('div', 'bp-hint', `[[clock]] ${i18n.t('ruin.estimate', { time: i18n.formatDuration(est) })} · [[worker]] ${i18n.t('ruin.crewSize', { n: MAX_RUIN_WORKERS })}`));
+      card.appendChild(el('div', 'bp-hint', `[[clock]] ${i18n.t('ruin.estimate', { time: i18n.formatDuration(est) })} · [[worker]] ${plural('ruin.crewSize', MAX_RUIN_WORKERS)}`));
       if (idle === 0) card.appendChild(el('div', 'bp-hint negative-text', `[[warning]] ${i18n.t('ruin.noIdle')}`));
       root.appendChild(card);
       // The one main action; disabled with the reason (the pump, or what the price lacks).

@@ -1,4 +1,5 @@
 import { i18n } from '../i18n/I18nManager';
+import { plural } from './format';
 import { el } from './dom';
 import type { Modal } from './components/Modal';
 import { allowedNow, orderSources, type PopupTier } from './popupRules';
@@ -106,7 +107,7 @@ export class DialogQueue {
     body.appendChild(ul);
     this.modal.show({
       icon: '[[inbox]]',
-      title: i18n.t('dq.title', { n: soft.length }),
+      title: plural('dq.title', soft.length),
       body,
       actions: [
         { label: i18n.t('dq.start'), className: 'btn-primary', onClick: () => { this.working = true; this.modal.hide(); this.openOne(soft[0]); } },

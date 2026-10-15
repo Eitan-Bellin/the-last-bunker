@@ -1,4 +1,5 @@
 import { i18n } from '../../i18n/I18nManager';
+import { fmtNum, plural } from '../format';
 import { bus } from '../../core/EventBus';
 import { RESOURCE_ICONS, bar, button, el, setBar } from '../dom';
 import { Sheet } from '../components/Sheet';
@@ -88,7 +89,7 @@ export class DailyController {
 
   private shown(v: number, scale: number): string {
     const x = v / scale;
-    return scale > 1 ? String(Math.round(x * 10) / 10) : i18n.formatCompact(Math.round(x));
+    return scale > 1 ? String(Math.round(x * 10) / 10) : fmtNum(Math.round(x));
   }
 
   /** "Collect 10 production bubbles" with the day's number in it. */
@@ -135,7 +136,7 @@ export class DailyController {
     const d = this.app.state.daily;
     const live = this.sys.liveStreak(d.day);
     const days = d.lastClaim === d.day ? d.streak : live;
-    return days > 0 ? i18n.t('daily.streak', { n: days, pct: Math.round(this.sys.currentBonus() * 100) }) : i18n.t('daily.streak0');
+    return days > 0 ? plural('daily.streak', days, { pct: Math.round(this.sys.currentBonus() * 100) }) : i18n.t('daily.streak0');
   }
 
   // ---- the sheet ----------------------------------------------------------------------------------------------------------------

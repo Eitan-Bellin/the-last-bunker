@@ -1,6 +1,7 @@
 import type { GameState, ResourceType } from '../../core/GameState';
 import type { GameEngine } from '../../core/GameEngine';
 import { i18n } from '../../i18n/I18nManager';
+import { plural } from '../format';
 import { PROJECTS, designOf, projectDone, stagesDone, type ProjectDef } from '../../data/projects';
 import { Sheet } from './Sheet';
 import { RESOURCE_ICONS, bar, button, el } from '../dom';
@@ -81,7 +82,7 @@ export class ProjectsPanel {
           chip.style.setProperty('--cos', COSMETIC_COLORS[c] ?? '#c9a35a');
           shelf.appendChild(chip);
         }
-        card.append(el('div', 'bp-hint', `[[star]] ${i18n.t('weekly.cosmetics', { n: cos.length })}`), shelf);
+        card.append(el('div', 'bp-hint', `[[star]] ${plural('weekly.cosmetics', cos.length)}`), shelf);
       }
       root.appendChild(card);
     }

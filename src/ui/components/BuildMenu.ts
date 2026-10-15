@@ -15,7 +15,7 @@ import { BUILDING_ICONS, RESOURCE_ICONS, el, rateText } from '../dom';
 import { describeMissing, missingList } from '../missing';
 import { floorTag } from '../floorTag';
 import { BATTERY_ROOMS, BED_ROOMS, KID_ROOMS, MORALE_ROOMS, NEED_ROOMS } from '../../systems/BuildAdvice'; // [ux-redesign w2fix] one source for the lists
-import { fmtCost, fmtDuration } from '../format';
+import { fmtCost, fmtDuration, plural } from '../format';
 import { kButton } from '../kit';
 import { haptic } from '../../utils/haptics';
 import { uiSound } from '../../audio/uiSound';
@@ -495,7 +495,7 @@ export class BuildMenu {
     const slots = roomSlots(type);
     const dots = el('span', 'bm-dots');
     dots.setAttribute('role', 'img');
-    dots.setAttribute('aria-label', i18n.t('build.width', { n: slots }));
+    dots.setAttribute('aria-label', plural('build.width', slots));
     for (let i = 0; i < slots; i++) dots.appendChild(el('span', 'bm-dot'));
     head.appendChild(dots);
     info.appendChild(head);
