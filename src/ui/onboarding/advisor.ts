@@ -115,8 +115,8 @@ export class Advisor {
       }
     }
     const net = (r: ResourceType) => (state.resources[r]?.productionRate ?? 0) - (state.resources[r]?.consumptionRate ?? 0);
-    const inbox = this.app.inbox.defers(state)
-      ? this.app.inbox.entries(state).filter(e => e.key !== 'daily').length : 0;
+    // [phase2] Waiting cards are counted on the bell (Messages), never as the strip's line: the strip keeps the goal.
+    const inbox = 0;
     const ds = engine.dailySystem;
     const rs = engine.researchSystem;
     const hasLab = state.buildings.some(b => b.type === 'laboratory');

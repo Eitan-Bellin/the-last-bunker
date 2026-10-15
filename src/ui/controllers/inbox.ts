@@ -41,11 +41,14 @@ export class InboxController {
   /** Cards already announced with a toast (by key), so each one is announced once. */
   private seen = new Set<string>();
   private lastCount = -1;
+  private lastVisible = false;
   /**
    * [ux-wp4] B7: a card was opened from the inbox. Once its dialog has come and gone (answered, or put off with "Later"), the inbox opens
    * again on the next card instead of dropping the player back to the bunker. Dropped when the card led somewhere else (a sheet).
    */
   private resume: { at: number; sawDialog: boolean } | null = null;
+  /** [phase2] News cards that hid unanswered (a system that opened, what's new): a line each until opened (this session). */
+  private kept: { key: string; icon: string; title: string; open: () => void }[] = [];
 
   constructor(app: GameApp) {
     this.app = app;
@@ -76,10 +79,20 @@ export class InboxController {
     return (state.longGame?.meta.act ?? ((state.era ?? 0) >= 1 ? 2 : 1)) >= 2;
   }
 
-  /** Should the event on the table open by itself? Raids and other never-expiring events always do. */
+  /**
+   * Should the event on the table open by itself? Raids and other never-expiring events always do. [phase2] A knock at the door after
+   * the first one never does: it is a card above the nav and a line here (EventController.watchDoor).
+   */
   autoOpenEvent(state: GameState): boolean {
     const ev = state.activeEvent;
-    return !!ev && (!this.defers(state) || eventDeadline(ev) === null);
+    if (!ev) return false;
+    if (this.app.events.isKnock(ev) && this.app.events.doorTaught(state)) return false;
+    return !this.defers(state) || eventDeadline(ev) === null;
+  }
+
+  /** [phase2] A news card that hid unanswered stays here as a line until it is opened (nothing is lost when a card goes). */
+  keepNews(item: { key: string; icon: string; title: string; open: () => void }): void {
+    if (!this.kept.some(k => k.key === item.key)) this.kept.push(item);
   }
 
   entries(state: GameState): Entry[] {
@@ -114,6 +127,14 @@ export class InboxController {
         open: () => this.openItem(item.id),
       });
     }
+    // [phase2] Finds told this session and not read yet (one line), and news cards that hid unanswered.
+    const finds = this.app.lore.sessionUnread();
+    if (finds.length) {
+      out.push({ key: 'finds', icon: '[[note]]', title: plural('p2p.inbox.finds', finds.length), left: null, urgent: false, open: () => this.app.lore.readLore(finds[0]) });
+    }
+    for (const k of this.kept) {
+      out.push({ key: `news:${k.key}`, icon: k.icon, title: k.title, left: null, urgent: false, open: () => { this.kept = this.kept.filter(x => x !== k); k.open(); } });
+    }
     // [plan4:GP-1] The daily orders: one card, always (the badge counts it only while something can be taken).
     const daily = this.app.daily.inboxEntry(state);
     if (daily) {
@@ -128,16 +149,26 @@ export class InboxController {
 
   /** Called a few times a second: keeps the HUD count and the open list current, and announces new cards once. */
   refresh(state: GameState): void {
+    // [phase2] The non-blocking news: later knocks at the door, systems that opened mid-Act, what's new (each a card, never a dialog).
+    this.app.events.watchDoor(state);
+    this.app.systems.offerNews(state);
+    this.app.whatsNew.offer(state);
     const deferring = this.defers(state);
-    const list = deferring ? this.entries(state) : [];
+    // [phase2] In Act I too, whatever waits (a knock, an event the interruption budget holds back, a find) is a line in the bell: the
+    // budget never loses anything. The line shows only while something waits; from Act II it is always there, as before.
+    const list = this.entries(state);
     // [plan4:GP-1] The daily orders card is a standing card: it counts on the badge only while a reward waits, and is never announced.
     const waiting = list.filter(e => e.key !== 'daily' || this.app.engine.dailySystem.summary(state).claimable > 0).length;
-    if (waiting !== this.lastCount) {
+    const visible = deferring || waiting > 0;
+    if (waiting !== this.lastCount || visible !== this.lastVisible) {
       this.lastCount = waiting;
-      this.app.hud.setInbox(deferring, waiting);
+      this.lastVisible = visible;
+      this.app.hud.setInbox(visible, waiting);
     }
     for (const e of list) {
       if (e.key === 'daily') continue;
+      // [phase2] Announced with a toast only where the inbox replaces dialogs (Act II on); a knock has its own card, finds and news theirs.
+      if (!deferring || e.key === 'finds' || e.key.startsWith('news:') || (e.key.startsWith('event:') && this.app.events.isKnock(state.activeEvent))) continue;
       if (this.seen.has(e.key)) continue;
       this.seen.add(e.key);
       this.app.audio.play('paper');

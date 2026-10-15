@@ -17,7 +17,7 @@ One Hebrew name per game concept. Applies to `src/i18n/he.json` and the Bunker B
 | Era | עידן | | המראה של הבונקר; לא ציר התקדמות |
 | Act project / charter | פרויקט המערכה | אמנה, אמנות | ProjectsPanel: "פרויקטים" |
 | Command panel | מרכז הפיקוד | לוח הפיקוד | מיקום: "(הדגל למעלה)" |
-| Decisions inbox | תיבת ההחלטות | "תיבה" לבד, "בתיבה" | תמיד בשם המלא |
+| Decisions inbox | הודעות | "תיבה" לבד, "בתיבה" | תמיד בשם המלא |
 | Day chest (daily orders) | מטמון היום | תיבת יום | |
 | Supply crate (daily) | ארגז אספקה | משלוח אספקה | גם כותרת וכפתור |
 | The Ark (ending) | התיבה | | השימוש היחיד במילה "תיבה" לבד |

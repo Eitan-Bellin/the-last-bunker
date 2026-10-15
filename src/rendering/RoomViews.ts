@@ -521,7 +521,11 @@ export class RoomViews {
         const w = (v.labelFull?.visible ? v.labelFullW : v.labelShort?.visible ? v.labelShortW : v.labelMiniW) ?? 0;
         const half = (w * v.label.scale.x) / 2;
         let row = 0;
-        while (row < 2 && ends[row] !== undefined && v.label.x - half < ends[row] + 2) row++;
+        while (row < 3 && ends[row] !== undefined && v.label.x - half < ends[row] + 2) row++;
+        // [phase2] No free row left: this tag is not drawn rather than drawn over its neighbour (the room keeps its colour chip).
+        const fits = row < 3;
+        if (v.label.renderable !== fits) v.label.renderable = fits;
+        if (!fits) continue;
         ends[row] = v.label.x + half;
         const y = v.root.y - SLAB / 2 - row * (15 * v.label.scale.x + 2);
         if (v.label.y !== y) v.label.y = y;

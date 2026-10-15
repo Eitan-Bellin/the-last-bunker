@@ -1,0 +1,58 @@
+{
+  "en": {
+    "p2h.inbox": "Inbox",
+    "p2h.inboxAct": "Inbox: {n} to do now",
+    "p2h.inboxNews": "Inbox: {n} new",
+    "p2h.inboxEmpty": "Nothing waits for you right now.",
+    "p2h.finds.one": "1 new find to read",
+    "p2h.finds.two": "2 new finds to read",
+    "p2h.finds.other": "{n} new finds to read",
+    "p2h.status": "{act}. {people}. {morale}. Tap for Command",
+    "p2h.people": "{n} of {max} survivors",
+    "p2h.morale": "Morale {pct}%",
+    "p2h.lock.research": "Opens once a {name} is built",
+    "p2h.resSwitch": "All resources",
+    "p2h.archive": "Archive",
+    "p2h.book": "Bunker Book",
+    "p2h.inboxRow": "Cards waiting for you"
+  },
+  "he": {
+    "p2h.inbox": "תיבה",
+    "p2h.inboxAct": "תיבה: {n} לטפל עכשיו",
+    "p2h.inboxNews": "תיבה: {n} חדשים",
+    "p2h.inboxEmpty": "כרגע שום דבר לא מחכה לכם.",
+    "p2h.finds.one": "ממצא חדש אחד לקריאה",
+    "p2h.finds.two": "שני ממצאים חדשים לקריאה",
+    "p2h.finds.other": "{n} ממצאים חדשים לקריאה",
+    "p2h.status": "{act}. {people}. {morale}. הקישו למרכז הפיקוד",
+    "p2h.people": "{n} מתוך {max} ניצולים",
+    "p2h.morale": "מורל {pct}%",
+    "p2h.lock.research": "נפתח אחרי בניית {name}",
+    "p2h.resSwitch": "כל המשאבים",
+    "p2h.archive": "ארכיון",
+    "p2h.book": "ספר הבונקר",
+    "p2h.inboxRow": "כרטיסים שמחכים לכם"
+  },
+  "replace": {
+    "en": {
+      "ux2b.alerts": "Inbox",
+      "ux2b.alertsAct": "Inbox: {n} to do now",
+      "ux2b.alertsNews": "Inbox: {n} new",
+      "ux2b.inbox": "Decisions",
+      "sys.inbox.title": "New: the Inbox",
+      "sys.contracts.body": "Partners outside send offers to the Inbox: they ask for goods or a crew for a few hours, and pay in what this Act's prices ask for. Safe ones can be taken in one tap, or left to the Foreman. An offer that lapses costs nothing.",
+      "orders.inbox2": "Answer {n} cards in the Inbox",
+      "ux3a.walk.alerts": "The Inbox: rewards and decisions wait here"
+    },
+    "he": {
+      "ux2b.alerts": "תיבה",
+      "ux2b.alertsAct": "תיבה: {n} לטפל עכשיו",
+      "ux2b.alertsNews": "תיבה: {n} חדשים",
+      "ux2b.inbox": "החלטות",
+      "sys.inbox.title": "חדש: התיבה",
+      "sys.contracts.body": "שותפים בחוץ שולחים הצעות לתיבה: הם מבקשים סחורה או צוות לכמה שעות, ומשלמים במה שהמחירים של המערכה הזו דורשים. חוזים בטוחים אפשר לקבל בלחיצה אחת, או להשאיר למנהל העבודה. הצעה שפגה לא עולה כלום.",
+      "orders.inbox2": "ענו על {n} כרטיסים בתיבה",
+      "ux3a.walk.alerts": "התיבה: פרסים והחלטות מחכים כאן"
+    }
+  }
+}

@@ -8,7 +8,9 @@ import { biomeImage, journalTimeline } from '../../ui/expeditionText';
 import { expeditionEvent } from '../../data/expeditionEvents';
 import type { ActiveMission } from '../../core/GameState';
 import type { GameApp } from '../../app';
-import { eventDescKey } from '../../systems/EventSystem';
+import { eventDeadline, eventDescKey } from '../../systems/EventSystem';
+import { knockWay } from '../popupRules';
+import type { GameState } from '../../core/GameState';
 import { choiceDetail } from '../../ui/eventText'; // [ux-wp5 C1/C2] text variants and choice hints
 
 export const EVENT_ICONS: Record<string, string> = {
@@ -28,17 +30,113 @@ export const EVENT_ICONS: Record<string, string> = {
   returning: '[[door]]',
 };
 
+/** [phase2] Save flags (UI-side, no new state): the first knock was taught by its dialog; newcomers may walk in by themselves. */
+const DOOR_TAUGHT = 'ui:doorTaught';
+const DOOR_AUTO = 'ui:autoDoor';
+/** [phase2] Set when the player turned automatic entry off: after the first knock taught the door, entry is automatic by default. */
+const DOOR_MANUAL = 'ui:manualDoor';
+/** [phase2] A save this far in (play seconds) has met the door already, whether or not it carries the flag (older saves). */
+const DOOR_TAUGHT_AFTER_S = 1800;
+
 /** Bunker events (the door, traders, radio...) and expedition choices and reports. */
 export class EventController {
   private app: GameApp;
+  /** [phase2] Knocks already told (card or walk-in), by event key, so each knock is told once. */
+  private toldKnocks = new Set<string>();
 
   constructor(app: GameApp) {
     this.app = app;
   }
 
+  // ---- [phase2] the door: the first knock is a dialog (it teaches), later ones a card and a bell line, or they walk in by themselves ----
+
+  /** The event on the table is a knock at the door (the door clock's wanderer or pair). */
+  isKnock(ev: GameState['activeEvent'] | undefined): boolean {
+    return !!ev?.data?.knock;
+  }
+
+  /** The player has met the door (the first knock's dialog was shown), so later knocks need no dialog. */
+  doorTaught(state: GameState): boolean {
+    return state.storyFlags.includes(DOOR_TAUGHT) || state.stats.totalPlayTime > DOOR_TAUGHT_AFTER_S;
+  }
+
+  /** "Let newcomers in by themselves while there is a bed" (a save preference; the Menu may show it too: setAutoDoor). */
+  get autoDoor(): boolean {
+    const flags = this.app.state?.storyFlags;
+    if (!flags) return false;
+    // [phase2 lead] A card left on "Later" holds the event slot, so after the door is taught newcomers walk in by default.
+    return flags.includes(DOOR_AUTO) || (this.doorTaught(this.app.state) && !flags.includes(DOOR_MANUAL));
+  }
+
+  setAutoDoor(on: boolean): void {
+    const flags = this.app.state.storyFlags.filter(f => f !== DOOR_AUTO && f !== DOOR_MANUAL);
+    this.app.engine.stateManager.applyDelta({ path: 'storyFlags', value: [...flags, on ? DOOR_AUTO : DOOR_MANUAL] });
+    this.app.engine.requestSave();
+  }
+
+  /** Dialog queue: this event may skip the interruption budget (a raid at the door never waits; the first knock teaches the door). */
+  budgetExempt(state: GameState): boolean {
+    const ev = state.activeEvent;
+    if (!ev) return false;
+    return eventDeadline(ev) === null || (this.isKnock(ev) && !this.doorTaught(state));
+  }
+
+  /** The "let them in" choice that is possible now (both of a pair, else one of them), or null (no bed, or the food is short). */
+  private acceptKey(): string | null {
+    const es = this.app.engine.eventSystem;
+    const c = es.getChoices().find(x => (x.key === 'accept' || x.key === 'one') && es.isChoiceAvailable(x));
+    return c?.key ?? null;
+  }
+
+  /**
+   * Called a few times a second (inbox.refresh). A knock after the first one: walks in by itself (auto on, a bed and the price there),
+   * or comes as a card (Let in / Later) above the nav; it also stays in the bell until answered, or until it lapses (the door's own
+   * deadline turns them away, as before).
+   */
+  watchDoor(state: GameState): void {
+    const ev = state.activeEvent;
+    if (!ev || !this.isKnock(ev) || !this.doorTaught(state) || this.app.engine.awayRunning) return;
+    const key = `${ev.id}:${ev.at ?? 0}`;
+    if (this.toldKnocks.has(key)) return;
+    this.toldKnocks.add(key);
+    const params = this.eventParams(ev.data);
+    const accept = this.acceptKey();
+    if (knockWay(true, this.autoDoor, accept !== null) === 'auto') {
+      this.letIn(ev.id, accept!, params, true);
+      return;
+    }
+    const still = () => { const now = this.app.state.activeEvent; return !!now && `${now.id}:${now.at ?? 0}` === key; };
+    const actions: { label: string; primary?: boolean; onPress: () => void }[] = [
+      { label: i18n.t('inbox.later'), onPress: () => undefined },
+      accept
+        ? { label: i18n.t(`event.${ev.id}.choice.accept`, params), primary: true, onPress: () => { if (still()) { const k = this.acceptKey(); if (k) this.letIn(ev.id, k, params, false); else this.showEvent(); } } }
+        : { label: i18n.t('p2p.door.details'), primary: true, onPress: () => { if (still()) this.showEvent(); } },
+    ];
+    if (!this.autoDoor) actions.push({ label: i18n.t('p2p.door.always'), onPress: () => { this.setAutoDoor(true); this.app.toasts.show(`[[door]] ${i18n.t('p2p.door.alwaysOn')}`, 'good'); if (still()) { const k = this.acceptKey(); if (k) this.letIn(ev.id, k, params, false); } } });
+    this.app.tips.pushNews({
+      key: `door:${key}`, icon: EVENT_ICONS[ev.id] ?? '[[door]]', urgent: true, valid: still, sound: 'click',
+      text: ev.id === 'group' ? i18n.t('p2p.door.knockTwo', params) : i18n.t('p2p.door.knock', params),
+      actions,
+    });
+  }
+
+  /** Lets the newcomer(s) in without a dialog: a toast says who (and that they walked in by themselves). */
+  private letIn(eventId: string, choiceKey: string, params: Record<string, string>, auto: boolean): void {
+    const result = this.app.engine.eventSystem.resolve(choiceKey);
+    if (!result) return;
+    this.app.engine.requestSave();
+    this.app.audio.play('cheer', { volume: 0.7 });
+    const text = i18n.t(`event.${eventId}.result.${result.key}`, params);
+    this.app.toasts.show(`[[door]] ${text}${auto ? ` · ${i18n.t('p2p.door.auto')}` : ''}`, 'good');
+  }
+
   showEvent(): void {
     const ev = this.app.state.activeEvent;
     if (!ev) return;
+    // [phase2] The first knock's dialog teaches the door: later knocks come as a card.
+    if (this.isKnock(ev) && !this.app.state.storyFlags.includes(DOOR_TAUGHT)) {
+      this.app.engine.stateManager.applyDelta({ path: 'storyFlags', value: [...this.app.state.storyFlags, DOOR_TAUGHT] });
+    }
     const params = this.eventParams(ev.data);
     const choices = this.app.engine.eventSystem.getChoices();
 

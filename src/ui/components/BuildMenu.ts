@@ -18,6 +18,8 @@ import { fmtCost, fmtDuration, plural } from '../format';
 import { kButton } from '../kit';
 import { haptic } from '../../utils/haptics';
 import { uiSound } from '../../audio/uiSound';
+import { flowArrow } from '../rtl'; // [phase2]
+import '../../styles/screens-p2.css'; // [phase2]
 
 /** [ux-wp4] B2: what a price still lacks and roughly when the bunker will have it (the shared helper, src/ui/missing.ts); empty when nothing is. */
 export function missingText(state: GameState, cost: Record<string, number>): string {
@@ -156,6 +158,8 @@ export class BuildMenu {
   private lockedOpen = false;
   private query = '';
   private onlyAvailable = false;
+  /** [phase2] Cards whose detail (width, floors, time, power, crew, every effect) the player opened; reset on open. */
+  private openDetail = new Set<BuildingType>();
   /** [w2c] Free-spot answers per room type, kept while the bunker's layout is the same (the refresh runs twice a second). */
   private spotKey = '';
   private spotCache = new Map<BuildingType, boolean>();
@@ -196,6 +200,7 @@ export class BuildMenu {
     this.signature = '';
     this.category = 'now';
     this.lockedOpen = false;
+    this.openDetail.clear(); // [phase2]
     this.refresh(state);
     this.sheet.show();
   }
@@ -269,7 +274,7 @@ export class BuildMenu {
 
     const routeSig = (e: Entry) => (e.route ? `${e.route.kind}${'ruin' in e.route ? `:${e.route.ruin.id}:${e.route.ruin.started}` : ''}` : '');
     const sig = [
-      locale, this.category, this.query, this.onlyAvailable, actOf(state).id, this.lockedOpen,
+      locale, this.category, this.query, this.onlyAvailable, actOf(state).id, this.lockedOpen, [...this.openDetail].join(','), // [phase2]
       shown.map(e => `${e.type}:${e.unlocked}:${e.affordable}:${e.count}:${e.placeable}:${routeSig(e)}:${JSON.stringify(e.cost)}`).join('|'),
       recs.map(r => `${r.type}:${r.why}:${r.params?.time ?? ''}:${r.wreck?.id ?? ''}`).join(','),
       present.map(c => c.id).join(','),
@@ -419,11 +424,22 @@ export class BuildMenu {
     }
     // Rooms you can build come first; [ux-wp4] B2/P7 the locked ones fold under one "Locked (N)" row (open while searching).
     // [w2c] Among the open ones, the rooms with a free spot before those that need space first (same order otherwise).
-    const open = shown.filter(e => e.unlocked).sort((a, b) => Number(!!b.placeable) - Number(!!a.placeable));
+    let open = shown.filter(e => e.unlocked).sort((a, b) => Number(!!b.placeable) - Number(!!a.placeable));
     const locked = shown.filter(e => !e.unlocked);
-    for (const e of open) this.list.appendChild(this.card(state, e, locale));
+    // [phase2] "Can build now" means it: the rooms with a free spot (and a wreck of the room to restore). Every room that waits for space
+    // folds into ONE card that says where the space is (dig a floor, clear rubble), instead of a card per room that each say "No space".
+    const nowView = this.category === 'now' && !this.query;
+    if (nowView) {
+      const waiting = open.filter(e => e.route && e.route.kind !== 'wreck');
+      open = open.filter(e => !waiting.includes(e));
+      for (const e of open) this.list.appendChild(this.card(state, e, locale));
+      if (waiting.length) this.list.appendChild(this.spaceCard(state, waiting, open.length === 0));
+      else if (!open.length) this.list.appendChild(el('div', 'bm-empty', i18n.t('p2s.build.nothingNow')));
+    } else {
+      for (const e of open) this.list.appendChild(this.card(state, e, locale));
+    }
     if (!open.length && !locked.length) return;
-    if (!open.length) this.list.appendChild(el('div', 'bm-empty', i18n.t('build.noMatch')));
+    if (!open.length && !nowView) this.list.appendChild(el('div', 'bm-empty', i18n.t('build.noMatch')));
     if (!locked.length) return;
     const expanded = this.lockedOpen || !!this.query;
     const fold = el('button', `bm-locked${expanded ? ' open' : ''}`);
@@ -437,6 +453,41 @@ export class BuildMenu {
     });
     this.list.appendChild(fold);
     if (expanded) for (const e of locked) this.list.appendChild(this.card(state, e, locale));
+  }
+
+  /**
+   * [phase2] The one card for every open room that has no free spot: the way to space (dig a new floor first, then rubble to clear, or the
+   * dig already running), how many rooms wait for it, and a link to see them all. `alone` = nothing else can be built now (a bigger card).
+   */
+  private spaceCard(state: GameState, waiting: Entry[], alone: boolean): HTMLElement {
+    const kind = (k: NoSpaceRoute['kind']) => waiting.find(e => e.route?.kind === k);
+    const clears = waiting.filter(e => e.route?.kind === 'clear').sort((a, b) => Number((b.route as { ruin: Ruin }).ruin.started) - Number((a.route as { ruin: Ruin }).ruin.started));
+    const via = kind('dig') ?? clears[0] ?? kind('digging');
+    const card = el('div', `bm-card p2s-space${alone ? ' is-alone' : ''}`);
+    card.setAttribute('role', 'group');
+    const title = el('div', 'p2s-space__title', `[[pick]] ${i18n.t(via?.route?.kind === 'clear' ? 'p2s.build.spaceClear' : via?.route?.kind === 'digging' ? 'p2s.build.spaceDigging' : via ? 'p2s.build.spaceDig' : 'p2s.build.spaceNone')}`);
+    title.id = 'bm-space-title';
+    card.setAttribute('aria-labelledby', title.id);
+    card.appendChild(title);
+    card.appendChild(el('div', 'build-item-desc', plural('p2s.build.waiting', waiting.length)));
+    if (via?.route) {
+      const r = via.route;
+      card.appendChild(kButton({
+        variant: 'primary',
+        className: 'btn-primary bm-route',
+        icon: r.kind === 'clear' ? 'broom' : 'pick',
+        label: r.kind === 'clear' ? i18n.t('p2s.build.clearGo', { floor: iso(floorTag(r.ruin.floor)) }) : r.kind === 'digging' ? i18n.t('p2s.build.diggingGo') : i18n.t('p2s.build.digGo'),
+        sound: 'click',
+        onPress: () => this.pick(this.lastState ?? state, via),
+      }));
+    }
+    card.appendChild(kButton({
+      variant: 'tertiary',
+      className: 'btn-ghost p2s-space__all',
+      label: `${i18n.t('p2s.build.seeAll', { n: waiting.length })} ${flowArrow()}`,
+      onPress: () => { this.category = 'all'; this.redraw(); },
+    }));
+    return card;
   }
 
   /** The room's main results as short chips with an icon (a number alone would not say what it is). */
@@ -461,18 +512,28 @@ export class BuildMenu {
     return out.slice(0, 4);
   }
 
+  /**
+   * [phase2] A card shows four things: name, one-line purpose, price and the room's main effect (plus why it cannot be built, when so).
+   * The rest (width, floors, build time, power, crew, copies, every other effect) sits in the card's detail behind the (i) button.
+   * The card is a group: its main part is the button that picks the room, the (i) button sits beside it (no button inside a button).
+   */
   private card(state: GameState, e: Entry, locale: string): HTMLElement {
     const { def, type } = e;
     const full = e.count >= e.max;
     const noSpace = !!e.route;
-    const card = el('div', `bm-card${e.unlocked ? '' : ' locked'}${e.unlocked && (!e.affordable || full || noSpace) ? ' disabled' : ''}${noSpace ? ' no-space' : ''}`);
-    // [plan4:AC-8] A room you can build is a button named by the room; a locked one holds its own "what opens it" button, so it is a group
-    // (a button inside a button is invalid), and a card that cannot be picked now says so (the grey look was the only sign).
-    // [w2c #2] A card with no free spot holds its own "where the space is" button: a group as well.
+    const detailOpen = this.openDetail.has(type);
+    const card = el('div', `bm-card p2s-card${e.unlocked ? '' : ' locked'}${e.unlocked && (!e.affordable || full || noSpace) ? ' disabled' : ''}${noSpace ? ' no-space' : ''}${detailOpen ? ' is-open' : ''}`);
+    // [plan4:AC-8] A room you can build is a button named by the room; a locked one holds its own "what opens it" button, and a card that
+    // cannot be picked now says so (the grey look was the only sign). [w2c #2] A card with no free spot holds its "where the space is" button.
     const pickable = e.unlocked && !full && e.affordable && !noSpace;
-    card.setAttribute('role', e.unlocked && !noSpace ? 'button' : 'group');
-    if (e.unlocked && !noSpace) card.tabIndex = 0;
-    if (e.unlocked && !noSpace && !pickable) card.setAttribute('aria-disabled', 'true');
+    const asButton = e.unlocked && !noSpace;
+    const main = el('div', 'p2s-card__main');
+    card.setAttribute('role', 'group');
+    if (asButton) {
+      main.setAttribute('role', 'button');
+      main.tabIndex = 0;
+      if (!pickable) main.setAttribute('aria-disabled', 'true');
+    }
 
     const thumb = el('div', 'build-icon build-thumb bm-thumb');
     const art = buildingArtKey(type, 0);
@@ -486,28 +547,76 @@ export class BuildMenu {
     }
 
     const info = el('div', 'build-info bm-info');
-    const head = el('div', 'bm-head');
     const nameEl = el('div', 'build-item-name', def.name[locale] ?? def.name.en);
     nameEl.id = `bm-name-${type}`; // [plan4:AC-8] the card's accessible name
     card.setAttribute('aria-labelledby', nameEl.id);
-    head.appendChild(nameEl);
-    const slots = roomSlots(type);
-    const dots = el('span', 'bm-dots');
-    dots.setAttribute('role', 'img');
-    dots.setAttribute('aria-label', plural('build.width', slots));
-    for (let i = 0; i < slots; i++) dots.appendChild(el('span', 'bm-dot'));
-    head.appendChild(dots);
-    info.appendChild(head);
-    const descEl = el('div', 'build-item-desc', def.description[locale] ?? def.description.en);
+    if (asButton) main.setAttribute('aria-labelledby', nameEl.id);
+    info.appendChild(nameEl);
+    const descEl = el('div', `build-item-desc${detailOpen ? '' : ' p2s-oneline'}`, def.description[locale] ?? def.description.en);
     descEl.id = `bm-desc-${type}`;
-    card.setAttribute('aria-describedby', descEl.id);
+    (asButton ? main : card).setAttribute('aria-describedby', descEl.id);
     info.appendChild(descEl);
 
+    // One main effect on the face, the price next to it.
     const outs = this.outputs(def);
-    if (outs.length) {
+    const face = el('div', 'p2s-card__face');
+    if (outs.length) face.appendChild(el('span', 'bm-out', outs[0]));
+    if (e.unlocked) face.appendChild(costChips(state, e.cost, 'bm-cost'));
+    if (face.childElementCount) info.appendChild(face);
+
+    if (e.unlocked) {
+      if (full) info.appendChild(el('div', 'bp-hint bm-limit', `[[lock]] ${i18n.t('build.copiesFull', { n: e.count, max: e.max })}`));
+      else if (e.route) info.appendChild(this.noSpaceLine(state, e));
+    } else {
+      info.appendChild(this.lockLine(type, def, locale));
+    }
+
+    main.append(thumb, info);
+    card.appendChild(main);
+
+    // The (i) button and, when open, the detail.
+    const more = kButton({
+      variant: 'icon',
+      className: 'btn-ghost p2s-card__more',
+      icon: 'info',
+      ariaLabel: `${i18n.t(detailOpen ? 'p2s.build.lessAbout' : 'p2s.build.moreAbout')}: ${def.name[locale] ?? def.name.en}`,
+      onPress: () => {
+        if (this.openDetail.has(type)) this.openDetail.delete(type);
+        else this.openDetail.add(type);
+        this.redraw();
+      },
+    });
+    more.setAttribute('aria-expanded', String(detailOpen));
+    card.appendChild(more);
+    if (detailOpen) card.appendChild(this.detail(state, e, outs, locale));
+
+    if (!asButton) return card;
+    const activate = () => this.pick(this.lastState ?? state, e, card);
+    main.addEventListener('click', activate);
+    main.addEventListener('keydown', (ev) => {
+      if (ev.key === 'Enter' || ev.key === ' ') {
+        ev.preventDefault();
+        activate();
+      }
+    });
+    return card;
+  }
+
+  /** [phase2] A card's detail: width, where it may stand, build time, power, crew, copies, the price rising with the Act, every effect. */
+  private detail(state: GameState, e: Entry, outs: string[], locale: string): HTMLElement {
+    const { def, type } = e;
+    const box = el('div', 'p2s-card__detail');
+    const slots = roomSlots(type);
+    const dots = el('span', 'bm-dots');
+    dots.setAttribute('aria-hidden', 'true');
+    for (let i = 0; i < slots; i++) dots.appendChild(el('span', 'bm-dot'));
+    const width = el('div', 'p2s-card__width');
+    width.append(dots, el('span', 'bp-hint', plural('build.width', slots)));
+    box.appendChild(width);
+    if (outs.length > 1) {
       const row = el('div', 'bm-outs');
       for (const o of outs) row.appendChild(el('span', 'bm-out', o));
-      info.appendChild(row);
+      box.appendChild(row);
     }
 
     const meta = el('div', 'build-meta');
@@ -523,34 +632,15 @@ export class BuildMenu {
       }
     }
     meta.appendChild(el('span', '', `[[clock]] ${i18n.formatDuration(def.constructionTime)}`));
-    if (def.powerConsumption > 0) meta.appendChild(el('span', '', `[[power]] \u2212${def.powerConsumption}`));
+    if (def.powerConsumption > 0) meta.appendChild(el('span', '', `[[power]] −${def.powerConsumption}`));
     if (def.maxWorkers > 0) meta.appendChild(el('span', '', `[[worker]] ${def.maxWorkers}`));
     if (def.maxCopies !== undefined) meta.appendChild(el('span', '', `[[district]] ${i18n.t('build.copies', { n: e.count, max: def.maxCopies })}`));
-    info.appendChild(meta);
-
-    if (e.unlocked) {
-      info.appendChild(costChips(state, e.cost, 'bm-cost'));
-      if (def.priceByAct) {
-        const m = actMult(actOf(state).id);
-        if (m > 1) info.appendChild(el('div', 'bp-hint bm-act', `[[flag]] ${i18n.t('build.actPrice', { n: m })}`));
-      }
-      if (full) info.appendChild(el('div', 'bp-hint bm-limit', `[[lock]] ${i18n.t('build.copiesFull', { n: e.count, max: e.max })}`));
-      else if (e.route) info.appendChild(this.noSpaceLine(state, e));
-    } else {
-      info.appendChild(this.lockLine(type, def, locale));
+    box.appendChild(meta);
+    if (e.unlocked && def.priceByAct) {
+      const m = actMult(actOf(state).id);
+      if (m > 1) box.appendChild(el('div', 'bp-hint bm-act', `[[flag]] ${i18n.t('build.actPrice', { n: m })}`));
     }
-
-    card.append(thumb, info);
-    if (!e.unlocked || noSpace) return card;
-    const activate = () => this.pick(this.lastState ?? state, e, card);
-    card.addEventListener('click', activate);
-    card.addEventListener('keydown', (ev) => {
-      if (ev.key === 'Enter' || ev.key === ' ') {
-        ev.preventDefault();
-        activate();
-      }
-    });
-    return card;
+    return box;
   }
 
   /** [w2c #2] The card's one action when the room has no free spot: where the space is, or (nowhere) a plain line saying so. */

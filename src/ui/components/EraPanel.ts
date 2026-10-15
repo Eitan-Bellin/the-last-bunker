@@ -19,9 +19,16 @@ import { lawImpact } from '../../systems/morale';
 import { labourBonus } from '../../systems/economy';
 import { kButton, kTabs } from '../kit'; // [ux2e]
 import { flowArrow } from '../rtl';
+import { PROJECTS } from '../../data/projects'; // [phase2]
+import { RESEARCH } from '../../data/research'; // [phase2]
+import { ProjectsView } from './ProjectsPanel'; // [phase2]
+import '../../styles/screens-p2.css'; // [phase2]
 
-/** [ux2e #32] The Command panel's tabs: the next step and three goals; the whole Act; where the ending leans. */
-type CommandTab = 'now' | 'act' | 'endings';
+/**
+ * [ux2e #32] The Command panel's tabs. [phase2] Now (the next step, three goals, and the whole Act behind one button) · Projects (the big
+ * projects, drawn here) · Policies (laws, the Foreman's orders, the doctrines chosen) · Endings: Projects and Laws are one tap from the Act chip.
+ */
+export type CommandTab = 'now' | 'projects' | 'policies' | 'endings';
 /** [ux2e #32] How many of the Act's goals the Now tab shows. */
 const NOW_GOALS = 3;
 
@@ -95,9 +102,16 @@ export class EraPanel {
   private safetyBox: HTMLElement | null = null;
   /** [ux2e #32] The tab on screen (Now whenever the panel opens). */
   private tab: CommandTab = 'now';
+  /** [phase2] The Now tab shows the whole Act (every goal, the timeline, the forecast) instead of three goals. Folded on open. */
+  private actOpen = false;
+  /** [phase2] The Projects tab's view and box (redrawn when the projects' signature changes). */
+  private projectsView: ProjectsView | null = null;
+  private projectsBox: HTMLElement | null = null;
+  private projectsSig = '';
 
   show(state: GameState): void {
     this.tab = 'now';
+    this.actOpen = false; // [phase2]
     this.signature = '';
     this.refresh(state);
     this.sheet.show();
@@ -107,11 +121,21 @@ export class EraPanel {
     this.sheet.hide();
   }
 
+  /**
+   * [phase2] Opens the panel on a tab (the app can send the Act chip's "Projects" or a surface lot here). A tab this bunker does not have
+   * yet falls back to Now.
+   */
+  showTab(state: GameState, tab: CommandTab): void {
+    this.show(state);
+    if (tab !== 'now') this.switchTab(tab);
+  }
+
   /** [plan4:ST-9] Scrolls the wing line into view and lets it glow for a moment (the "what's new" card's "Show me"). */
   revealWings(): void {
-    // [ux2e #32] The wing line lives on the Act tab.
-    if (this.tab !== 'act' && this.lastState) {
-      this.tab = 'act';
+    // [ux2e #32] The wing line lives on the Act card. [phase2] It is the Now tab's "whole Act" view now.
+    if ((this.tab !== 'now' || !this.actOpen) && this.lastState) {
+      this.tab = 'now';
+      this.actOpen = true;
       this.signature = '';
       this.refresh(this.lastState);
     }
@@ -139,11 +163,22 @@ export class EraPanel {
     const orders = FOREMAN_ORDERS.map(o => (state.longGame?.foreman.orders[o] ? 1 : 0)).join('') + (state.longGame?.policy.laws ?? []).join(',');
     // [ux2e] The requirements are read once per refresh; the Now tab rebuilds when its three goals change.
     const reqs = act && this.engine ? actRequirements(this.engine, state, act) : [];
-    const goals = this.tab === 'now' ? topGoals(reqs).map(r => r.id).join(',') : '';
-    const sig = `${era.id}|${act?.id ?? 0}|${orders}|${state.tutorialStep}|${i18n.currentLocale}|${this.tab}|${goals}`;
+    const goals = this.tab === 'now' && !this.actOpen ? topGoals(reqs).map(r => r.id).join(',') : '';
+    const tabs = this.tabs(state).map(t => t.id).join(','); // [phase2] a tab appears when its system opens
+    const doctrines = this.tab === 'policies' && this.engine ? RESEARCH.filter(r => r.fork).map(r => this.engine!.researchSystem.status(state, r.id)).join(',') : '';
+    const sig = `${era.id}|${act?.id ?? 0}|${orders}|${state.tutorialStep}|${i18n.currentLocale}|${this.tab}|${this.actOpen}|${goals}|${tabs}|${doctrines}|${this.tab === 'policies' ? lawSlots(state) : ''}`;
     if (sig !== this.signature) {
       this.signature = sig;
+      this.projectsSig = '';
       this.render(era, act, reqs);
+    }
+    // [phase2] The Projects tab redraws on its own signature (the stage numbers move every few seconds).
+    if (this.tab === 'projects' && this.projectsView && this.projectsBox?.isConnected) {
+      const ps = this.projectsView.signature(state);
+      if (ps !== this.projectsSig) {
+        this.projectsSig = ps;
+        this.projectsBox.replaceChildren(this.projectsView.render(state));
+      }
     }
     if (act && this.engine) this.refreshAct(state, act, reqs);
     this.refreshForeman(state);
@@ -467,12 +502,46 @@ export class EraPanel {
     card.appendChild(kButton({
       variant: 'tertiary', className: 'btn-ghost ux2e-48 ux2e-link-btn',
       label: `${i18n.t('ux2e.cmd.allGoals', { n: reqs.length, open })} ${flowArrow()}`,
-      onPress: () => this.switchTab('act'),
+      onPress: () => { this.actOpen = true; this.switchTab('now'); }, // [phase2] the whole Act opens in place
     }));
     return card;
   }
 
+  /** [phase2] The tabs this bunker has now: Projects once one can be worked on, Policies once laws or the Foreman open. */
+  private tabs(state: GameState): { id: CommandTab; label: string }[] {
+    if (!state.longGame || !this.engine) return [];
+    const act = actOf(state);
+    const ps = this.engine.projectSystem;
+    const out: { id: CommandTab; label: string }[] = [{ id: 'now', label: `[[target]] ${i18n.t('ux2e.cmd.now')}` }];
+    if (PROJECTS.some(d => ps.isAvailable(state, d))) out.push({ id: 'projects', label: `[[build]] ${i18n.t('p2s.cmd.projects')}` });
+    if ((act.id >= FOREMAN_ACT && !!this.foreman) || lawSlots(state) > 0) out.push({ id: 'policies', label: `[[books]] ${i18n.t('p2s.cmd.policies')}` });
+    out.push({ id: 'endings', label: `[[star]] ${i18n.t('ux2e.cmd.endings')}` });
+    return out;
+  }
+
+  /** [phase2] The doctrines this run has chosen (research forks), read-only: they are picked in Research. */
+  private renderDoctrines(state: GameState): HTMLElement | null {
+    const rs = this.engine!.researchSystem;
+    const forks = RESEARCH.filter(r => r.fork);
+    if (!forks.some(r => rs.blockReason(state, r.id) !== 'act' || rs.status(state, r.id) !== 'locked')) return null;
+    const locale = i18n.currentLocale;
+    const box = el('div', 'foreman p2s-doctrines');
+    box.appendChild(el('div', 'bp-section-title', `[[flag]] ${i18n.t('p2s.cmd.doctrines')}`));
+    const chosen = forks.filter(r => ['done', 'active', 'queued'].includes(rs.status(state, r.id)));
+    for (const r of chosen) {
+      const row = el('div', 'foreman-row');
+      const text = el('span', 'foreman-text');
+      text.append(el('div', '', `${r.icon} ${r.name[locale] ?? r.name.en}`), el('div', 'bp-hint', r.desc[locale] ?? r.desc.en));
+      row.appendChild(text);
+      box.appendChild(row);
+    }
+    box.appendChild(el('div', 'bp-hint', i18n.t(chosen.length ? 'p2s.cmd.doctrinesHint' : 'p2s.cmd.doctrinesNone')));
+    box.appendChild(kButton({ variant: 'tertiary', className: 'btn-ghost ux2e-48 ux2e-link-btn', label: `[[research]] ${i18n.t('p2s.cmd.toResearch')} ${flowArrow()}`, onPress: () => this.onGo?.({ kind: 'research' }) }));
+    return box;
+  }
+
   private switchTab(tab: CommandTab): void {
+    if (this.lastState && !this.tabs(this.lastState).some(t => t.id === tab)) tab = 'now'; // [phase2]
     this.tab = tab;
     this.signature = '';
     if (this.lastState) this.refresh(this.lastState);
@@ -496,35 +565,46 @@ export class EraPanel {
     this.reqRows = [];
     this.bars = [];
     this.labels = [];
+    this.projectsBox = null;
     if (act && this.engine && state) {
+      const tabs = this.tabs(state);
+      if (!tabs.some(t => t.id === this.tab)) this.tab = 'now'; // [phase2]
       // [ux2e #32] Three tabs instead of one 3.5K-character wall: Now (the next step and three goals), Act, Endings.
       const panel = el('div', 'ux2e-cmd-panel');
       panel.id = 'command-tabpanel';
-      root.appendChild(kTabs([
-        { id: 'now', label: `[[target]] ${i18n.t('ux2e.cmd.now')}` },
-        { id: 'act', label: `[[flag]] ${i18n.t('ux2e.cmd.act')}` },
-        { id: 'endings', label: `[[star]] ${i18n.t('ux2e.cmd.endings')}` },
-      ], this.tab, (id) => this.switchTab(id as CommandTab), i18n.t('era.title'), panel));
+      // [phase2] Now · Projects · Policies · Endings (a tab shows once its system is open); the whole Act folds into Now.
+      const tabRow = kTabs(tabs, this.tab, (id) => this.switchTab(id as CommandTab), i18n.t('era.title'), panel);
+      tabRow.classList.add('p2s-cmd-tabs');
+      root.appendChild(tabRow);
       if (this.tab === 'now') {
         panel.appendChild(this.renderNow());
-        panel.appendChild(this.renderGoals(act, reqs));
+        if (this.actOpen) {
+          panel.appendChild(this.renderAct(act, reqs));
+          panel.appendChild(this.renderForecast());
+          const homes = (state.longGame?.meta.homes ?? []) as HomeSite[];
+          if (homes.length > 0) panel.appendChild(this.renderHomes(homes));
+          panel.appendChild(kButton({ variant: 'tertiary', className: 'btn-ghost ux2e-48 ux2e-link-btn', label: i18n.t('p2s.cmd.fewerGoals'), onPress: () => { this.actOpen = false; this.switchTab('now'); } }));
+        } else {
+          panel.appendChild(this.renderGoals(act, reqs));
+        }
         this.safetyBox = el('div', 'safety-box'); panel.appendChild(this.safetyBox); // plan4:ST-14/15
-      } else if (this.tab === 'act') {
-        panel.appendChild(this.renderAct(act, reqs));
-        panel.appendChild(kButton({ variant: 'primary', className: 'btn-primary', icon: 'build', label: i18n.t('proj.open'), onPress: () => this.onOpenProjects?.() })); // [LateGame B1]
-        panel.appendChild(this.renderForecast());
-        const homes = (state.longGame?.meta.homes ?? []) as HomeSite[];
-        if (homes.length > 0) panel.appendChild(this.renderHomes(homes));
+      } else if (this.tab === 'projects') {
+        this.projectsView ??= new ProjectsView(this.engine, () => { this.projectsSig = ''; if (this.lastState) this.refresh(this.engine!.stateManager.state); });
+        this.projectsBox = el('div', 'p2s-cmd-projects');
+        panel.appendChild(this.projectsBox);
+      } else if (this.tab === 'policies') {
         const extras = el('div', 'bp-card');
-        if (act.id >= FOREMAN_ACT && this.foreman) extras.appendChild(this.renderForeman(state));
         if (lawSlots(state) > 0) extras.appendChild(this.renderLaws(state));
-        if (extras.childElementCount > 0) panel.appendChild(extras);
+        if (act.id >= FOREMAN_ACT && this.foreman) extras.appendChild(this.renderForeman(state));
+        const doctrines = this.renderDoctrines(state);
+        if (doctrines) extras.appendChild(doctrines);
+        panel.appendChild(extras);
       } else {
         if (act.id >= 2) panel.appendChild(this.renderEndings());
         else panel.appendChild(el('div', 'bp-card bp-hint', i18n.t('ux2e.cmd.endingsLater')));
       }
       root.appendChild(panel);
-      if (this.tab !== 'act') {
+      if (this.tab !== 'now' || !this.actOpen) {
         this.sheet.body.replaceChildren(root);
         return;
       }

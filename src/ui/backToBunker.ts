@@ -101,15 +101,8 @@ export class BackToBunker {
 
   /** The home view (what the game opens on), as a glide. */
   private goHome(): void {
-    const cam = this.host.renderer.camera;
-    const { width, height } = this.host.renderer.app.screen;
-    const z = cam.baseZoom;
-    const ins = getHudInsets();
-    const sp = this.host.renderer.floorSpan;
-    const x = width < PHONE_W ? width / 2 / z - SIDE_MARGIN : (sp.l + sp.r) / 2;
-    const y = VIEW_TOP + (height - ins.top - ins.bottom) / 2 / z;
     this.host.click?.();
-    cam.focusTo(x, y, z);
+    this.host.renderer.camera.goHome(); // [phase2] the same home view the game opens on (the player's busy rooms in city mode)
     this.quietUntil = Date.now() + GLIDE_QUIET_MS;
     this.show(false);
   }

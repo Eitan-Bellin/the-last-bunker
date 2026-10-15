@@ -183,6 +183,8 @@ export class GameApp {
   welcomeOpen = false;
   /** [plan4:UX-10] A welcome-back report waiting for the gate (the report, or null for people only at the door). */
   pendingWelcome: { report: OfflineReport | null } | null = null;
+  /** [phase2] An Act that began while the game was closed (the cold-start report's log): its title card comes after the welcome-back. */
+  pendingActCard: number | null = null;
   /** [plan4:UX-10] Every auto-opening dialog is a source in this queue; dialogGate decides when one may land. */
   dialogs!: DialogQueue;
   private lastDialogCheck = 0;
@@ -256,6 +258,11 @@ export class GameApp {
         clearLiteMode(); // a hand-picked level ends the automatic lite mode
       },
       copyDiagnostics: () => this.copyDiagnostics(),
+      // [phase2] The Menu's Archive row (Journal, Shop) and the door setting.
+      openJournal: () => this.hud.onJournal?.(),
+      openShop: () => this.hud.onShop?.(),
+      autoDoor: () => this.events.autoDoor,
+      setAutoDoor: (on: boolean) => this.events.setAutoDoor(on),
       brightness: () => i18n.t(`settings.bright.${this.renderer.postfx?.brightness ?? 'bright'}`),
       cycleBrightness: () => {
         const fx = this.renderer.postfx;
@@ -295,7 +302,8 @@ export class GameApp {
     this.resourceSheet = new ResourceSheet(this.engine);
     this.modal = new Modal();
     this.toasts = new Toasts();
-    this.dialogs = new DialogQueue(this.dialogSources(), this.modal, (c, w, t) => this.dialogGate(c, w, t), () => this.engine.stateManager.state?.stats.totalPlayTime ?? 0);
+    this.dialogs = new DialogQueue(this.dialogSources(), this.modal, (c, w, t) => this.dialogGate(c, w, t), () => this.engine.stateManager.state?.stats.totalPlayTime ?? 0,
+      () => this.tutorialDoneAt()); // [phase2] the interruption budget is stricter during and right after the tutorial
   }
 
   async start(): Promise<void> {
@@ -361,6 +369,9 @@ export class GameApp {
     // dialog queue (top priority) so a gesture or placement under way is not interrupted; it is set before the loop starts, or the first
     // frame would open the door-only welcome without the report.
     if (this.state.storyFlags.includes('intro:done')) this.queueWelcome(this.engine.offlineReport);
+    // [phase2] An Act that began while the game was closed: the catch-up ran before feedback listened for 'act:advance', so its title card
+    // is owed. It comes right after the welcome-back (dialog source 'actCard').
+    { const acts = (this.engine.offlineReport?.log ?? []).filter(e => e.k === 'act').map(e => e.n ?? 0); if (acts.length) this.pendingActCard = Math.max(...acts); }
     this.engine.start();
     this.installBackNavigation();
     // [ux-redesign W3b] main-screen helpers (DOM only; the camera is driven through the renderer's public focus API)
@@ -633,6 +644,22 @@ export class GameApp {
     }, { capture: true, passive: true });
   }
 
+  /**
+   * [phase2] Play seconds when the tutorial ended (null: it is still running), kept in the save as a flag `ui:tutDone@<t>` (UI-side, no
+   * new state). A save that finished it before this flag existed counts from now if it is young, else from long ago.
+   */
+  private tutorialDoneAt(): number | null {
+    const s = this.engine.stateManager.state;
+    if (!s) return null;
+    const f = s.storyFlags.find(x => x.startsWith('ui:tutDone@'));
+    if (f) return Number(f.slice('ui:tutDone@'.length)) || 0;
+    if (!this.engine.objectiveSystem.tutorialDone(s)) return null;
+    const t = Math.round(s.stats.totalPlayTime);
+    const at = t < 3600 ? t : 0;
+    this.engine.stateManager.applyDelta({ path: 'storyFlags', value: [...s.storyFlags, `ui:tutDone@${at}`] });
+    return at;
+  }
+
   /** [ux-redesign w2a #7] "Welcome back" only after more than 10 minutes away; people at the door are asked about regardless. */
   private queueWelcome(report: OfflineReport | null): void {
     const away = report ? report.realSeconds ?? report.seconds : null;
@@ -670,6 +697,13 @@ export class GameApp {
         label: () => i18n.t('welcome.title'),
       },
       {
+        // [phase2] The title card of an Act that began while the game was closed: right after the welcome-back (it skips the quiet after it).
+        id: 'actCard', priority: 95, tier: 'offline', snoozeMs: 30_000, critical: true, icon: '[[flag]]',
+        ready: () => this.pendingActCard !== null && !this.pendingWelcome && !this.welcomeOpen,
+        open: () => { const n = this.pendingActCard!; this.pendingActCard = null; this.feedback.showActCard(n); },
+        label: () => i18n.t('act.new'),
+      },
+      {
         id: 'memorial', priority: 90, tier: 'crisis', snoozeMs: 60_000, critical: true, icon: '[[heart]]',
         ready: () => memorialN() > 0,
         open: () => this.danger.showMemorial(), // [Danger C5]
@@ -690,6 +724,7 @@ export class GameApp {
       {
         id: 'event', priority: 60, tier: 'story', snoozeMs: 120_000, icon: '[[inbox]]',
         ready: () => this.inbox.autoOpenEvent(st()),
+        exempt: () => this.events.budgetExempt(st()), // [phase2] a raid at the door, or the first knock (it teaches the door)
         open: () => this.events.showEvent(),
         label: () => { const ev = st().activeEvent; return ev ? i18n.t(`event.${ev.id}.title`, this.events.eventParams(ev.data)) : ''; },
       },
@@ -712,23 +747,13 @@ export class GameApp {
         label: () => { const c = this.pendingChapter ? getChapter(this.pendingChapter) : undefined; return c ? c.title[i18n.currentLocale] : i18n.t('dq.chapter'); },
       },
       {
+        // [phase2] One card per Act transition listing everything that opened; later systems of the Act are news cards.
         id: 'system', priority: 20, tier: 'unlock', snoozeMs: 300_000, icon: '[[sparkle]]',
         ready: () => this.systems.hasDue(st()),
         open: () => this.systems.update(st()),
         label: () => this.systems.dueTitle(st()),
       },
-      {
-        id: 'lore', priority: 15, tier: 'unlock', snoozeMs: 300_000, icon: '[[note]]',
-        ready: () => this.lore.hasQueued,
-        open: () => this.lore.flushLoreQueue(),
-        label: () => i18n.t('journal.found'),
-      },
-      {
-        id: 'whatsNew', priority: 5, tier: 'unlock', snoozeMs: 600_000, icon: '[[build]]', // [plan4:ST-9] last in line: every other dialog goes first
-        ready: () => this.whatsNew.hasDue(st()),
-        open: () => this.whatsNew.open(st()),
-        label: () => this.whatsNew.label(),
-      },
+      // [phase2] Finds (lore) and "what's new" are no longer dialogs: news cards above the nav (tips.pushNews), lines in the bell.
       {
         id: 'district', priority: 10, tier: 'unlock', snoozeMs: 300_000, icon: '[[pick]]',
         ready: () => this.districtFoundQueue.length > 0,
@@ -844,7 +869,7 @@ export class GameApp {
         ?? (action.ruinKind ? state.ruins.find(r => r.kind === action.ruinKind) : undefined);
       if (target) this.openRuin(target.id, true);
       else if (action.restoresTo) this.buildMenu.show(state);
-    } else if (action.kind === 'projects') this.projectsPanel.show();
+    } else if (action.kind === 'projects') { this.closeSheets(); this.eraPanel.showTab(this.state, 'projects'); } // [phase2] Projects live in Command
     else if (action.kind === 'dig') this.dig.confirmDig();
     else if (action.kind === 'command') this.eraPanel.show(state);
     else if (action.kind === 'genesis') this.menuPanel.show('genesis');
@@ -1070,7 +1095,7 @@ export class GameApp {
       this.renderer.focusOn(r.x + r.w / 2, r.y + 50, 1.6);
     };
     this.ruinPanel.onStart = (id: string) => this.startRuin(id);
-    this.renderer.onProjectClick = () => { this.closeSheets(); this.projectsPanel.show(); }; // [LateGame B1] tap a lot on the surface
+    this.renderer.onProjectClick = () => { this.closeSheets(); this.eraPanel.showTab(this.state, 'projects'); }; // [phase2] Projects live in Command // [LateGame B1] tap a lot on the surface
     this.renderer.onRuinClick = (ruinId: string) => {
       this.engine.notifyInteraction();
       if (this.placementMode) {

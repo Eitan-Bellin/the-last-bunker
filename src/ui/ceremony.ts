@@ -64,7 +64,7 @@ interface Def {
 }
 
 export const CEREMONIES: Record<CeremonyKind, Def> = {
-  build: { ms: 1600, prio: 35, sound: 'complete', haptic: [{ kind: 'success', at: 0 }] },
+  build: { ms: 1200, prio: 35, sound: 'complete', haptic: [{ kind: 'success', at: 0 }] },
   // [ux-redesign W4] An upgrade is a medium knock (FEEL.upgrade); level ups and victories are the success tick.
   roomLevel: { ms: 1200, prio: 30, sound: 'levelup', haptic: [{ kind: 'impact', at: 0 }] },
   research: { ms: 1400, prio: 40, sound: 'research', haptic: [{ kind: 'success', at: 0 }] },
@@ -364,7 +364,7 @@ export class Ceremonies {
         this.track(frame, () => this.rectOf(room), undo);
         const c = { x: rect.x + rect.w / 2, y: rect.y + rect.h * 0.55 };
         r.burstAt(c.x, c.y, rect.w, 8); // eight sparks
-        if (this.cameraFree()) this.visit(c.x, c.y - 10, 1.5, 1100, later);
+        if (this.cameraFree()) this.visit(c.x, c.y - 10, 1.5, 800, later);
         break;
       }
       case 'roomLevel': {

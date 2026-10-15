@@ -2,7 +2,7 @@ import { i18n } from '../i18n/I18nManager';
 import { plural } from './format';
 import { el } from './dom';
 import type { Modal } from './components/Modal';
-import { allowedNow, orderSources, returningQuiet, type PopupTier } from './popupRules';
+import { allowedNow, budgetBlocks, budgetGapMs, orderSources, returningQuiet, type PopupTier } from './popupRules';
 
 /**
  * [plan4:UX-10] Every dialog that opens by itself (welcome, memorial, raid result, danger prompt, events, expedition questions and
@@ -21,6 +21,8 @@ export interface DialogSource {
   snoozeMs: number;
   /** Emergencies (a countdown is running) ignore an open sheet; they still wait for a gesture, a placement or a ceremony to end. */
   critical?: boolean;
+  /** [phase2] Passes the interruption budget right now (a raid at the door, the first knock that teaches the door). Critical ones always do. */
+  exempt?: () => boolean;
   /** Something is waiting from this source (no side effects). */
   ready: () => boolean;
   /** Opens the dialog (the source consumes its own queue entry). */
@@ -57,12 +59,28 @@ export class DialogQueue {
    * closes, since update() only runs while no dialog is up).
    */
   private welcomeClosedAt = -Infinity;
+  /** [phase2] When the last ordinary (budgeted) dialog opened by itself (-Infinity: none this session). */
+  lastAutoAt = -Infinity;
+  /** [phase2] Play seconds when the tutorial ended (null: still running); picks the stricter early budget gap. */
+  private readonly tutorialDoneAt: () => number | null;
 
-  constructor(sources: DialogSource[], modal: Modal, gate: (critical: boolean, waitedMs: number, tier?: PopupTier) => boolean, playSeconds: () => number) {
+  constructor(sources: DialogSource[], modal: Modal, gate: (critical: boolean, waitedMs: number, tier?: PopupTier) => boolean, playSeconds: () => number,
+    tutorialDoneAt: () => number | null = () => 0) {
     this.sources = orderSources(sources);
     this.modal = modal;
     this.gate = gate;
     this.playSeconds = playSeconds;
+    this.tutorialDoneAt = tutorialDoneAt;
+  }
+
+  /** [phase2] This source may skip the budget: an emergency, an exempt one, or the player asked for the pile ("Open them"). */
+  private free(s: DialogSource): boolean {
+    return !!s.critical || !!s.exempt?.() || this.working;
+  }
+
+  /** [phase2] The interruption budget holds ordinary dialogs back right now (tests and the HUD may ask). */
+  budgetHolds(now = performance.now()): boolean {
+    return budgetBlocks(now, this.lastAutoAt, budgetGapMs(this.playSeconds(), this.tutorialDoneAt()), false);
   }
 
   /** The sources with something to say right now and not snoozed, best first. */
@@ -84,6 +102,12 @@ export class DialogQueue {
     // [phase1] The returning player's first two minutes after the welcome: only emergencies (and another welcome) come by themselves.
     if (this.quietAfterWelcome(now, !!top.critical)) {
       this.lastDecision = 'returning';
+      return;
+    }
+    // [phase2] The interruption budget: one ordinary dialog per few minutes. It waits silently (still ready, in the bell), never dropped.
+    if (!this.free(top) && this.budgetHolds(now)) {
+      this.heldId = ''; // the gate's patience counts from when the budget lets it go, not from now
+      this.lastDecision = 'budget';
       return;
     }
     if (this.heldId !== top.id) { this.heldId = top.id; this.heldSince = now; }
@@ -110,12 +134,14 @@ export class DialogQueue {
 
   private openOne(s: DialogSource): void {
     if (s.tier === 'offer') this.offersShown++;
+    if (!s.critical && !s.exempt?.()) this.lastAutoAt = performance.now(); // [phase2] spends the budget
     if (s.tier === 'offline') this.welcomeClosedAt = Infinity; // [phase1] the quiet starts when it closes
     s.open();
   }
 
   /** One card for the whole pile: what waits, "start" (one by one, most important first) or "later". */
   private showFolded(soft: DialogSource[], now: number): void {
+    this.lastAutoAt = now; // [phase2] the folded card is one auto-dialog too
     const body = el('div', 'dq-fold');
     body.appendChild(el('p', 'modal-body', i18n.t('dq.body', { n: soft.length })));
     const ul = el('ul', 'dq-list');

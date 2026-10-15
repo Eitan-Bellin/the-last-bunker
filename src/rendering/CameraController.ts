@@ -91,6 +91,11 @@ export interface CameraHost {
   cancelPress(): void;
   /** [plan4:ST-19] A quick tap on the canvas (not a drag), in canvas px; true when something took it. Optional. */
   canvasTap?(sx: number, sy: number): void;
+  /**
+   * [phase2] Where a phone's home view should look: the middle of the player's own busy rooms (people and work), given the view size in world
+   * units; null when there are none yet. Optional.
+   */
+  homeFocus?(viewW: number, viewH: number): { x: number; y: number } | null;
 }
 
 export class CameraController {
@@ -270,29 +275,69 @@ export class CameraController {
     this.baseZoom = this.defaultZoom();
     this.zoom = this.baseZoom;
     this.untouched = true;
-    const sp = this.host.floorSpan();
-    const usable = height - hudTop() - hudBottom();
-    if (this.cityFrame) {
-      // [world:C1 camera-nav] City home view. Phone: spine-centred on the hub, the surface strip on top when the hub fits under it.
-      // Wider screens: the whole dug city, centred.
-      const fr = this.cityFrame, viewH = usable / this.zoom;
-      if (width < PHONE_W) {
-        const hub = fr.hub ?? fr.content;
-        this.camX = this.coreX();
-        const top = CAMERA.city.topY, bottom = hub.y + hub.h;
-        this.camY = bottom - top <= viewH ? top + viewH / 2 : hub.y + hub.h / 2;
-      } else {
-        this.camX = fr.content.x + fr.content.w / 2;
-        this.camY = fr.content.y + fr.content.h / 2;
-      }
-    } else {
-      // Phone: the shaft and the first rooms next to it, just under the top HUD. Wider screens: the whole building, centred.
-      this.camX = width < PHONE_W ? this.coreX() : (sp.l + sp.r) / 2;
-      this.camY = VIEW_TOP + usable / 2 / this.zoom;
-    }
+    const c = this.homeCentre(this.zoom);
+    this.camX = c.x;
+    this.camY = c.y;
     this.stopCamera();
     this.clampCamera();
     this.updateTransform();
+  }
+
+  /** The home view's centre at zoom z (what fitToScreen opens on; goHome glides back to it). */
+  private homeCentre(z: number): { x: number; y: number } {
+    const { width, height } = this.host.app.screen;
+    const sp = this.host.floorSpan();
+    const usable = height - hudTop() - hudBottom();
+    let x: number, y: number;
+    if (this.cityFrame) {
+      // [world:C1 camera-nav] City home view. Phone: spine-centred on the hub, the surface strip on top when the hub fits under it.
+      // Wider screens: the whole dug city, centred.
+      const fr = this.cityFrame, viewH = usable / z;
+      if (width < PHONE_W) {
+        const hub = fr.hub ?? fr.content;
+        x = this.coreX();
+        const top = CAMERA.city.topY, bottom = hub.y + hub.h;
+        y = bottom - top <= viewH ? top + viewH / 2 : hub.y + hub.h / 2;
+      } else {
+        x = fr.content.x + fr.content.w / 2;
+        y = fr.content.y + fr.content.h / 2;
+      }
+    } else {
+      // Phone: the shaft and the first rooms next to it, just under the top HUD. Wider screens: the whole building, centred.
+      x = width < PHONE_W ? width / 2 / z - SIDE_MARGIN : (sp.l + sp.r) / 2;
+      y = VIEW_TOP + usable / 2 / z;
+    }
+    // [phase2] A phone opens on the player's own rooms (the floors with people and work), not on the empty hub shaft or the sky.
+    // The bounds clamp it afterwards; with no rooms yet (a new game) the view above stays.
+    if (width < PHONE_W) {
+      const f = this.host.homeFocus?.(width / z, usable / z);
+      if (f) { x = f.x; y = f.y; }
+    }
+    return { x, y };
+  }
+
+  /**
+   * [phase2] The rooms the home view frames became known (the first pictures after a load build them): an untouched camera refits so it opens
+   * on them. Once the player (or a story move) has taken the camera, nothing happens.
+   */
+  homeReady(): void {
+    if (this.untouched && this.pointers.size === 0) this.fitToScreen();
+  }
+
+  /** [phase2] Glide back to the home view (the "back to the bunker" button); reduced motion cuts. */
+  goHome(): void {
+    this.baseZoom = this.defaultZoom();
+    const c = this.homeCentre(this.baseZoom);
+    this.glideTo(c.x, c.y, this.baseZoom, FOCUS_RATE());
+  }
+
+  /**
+   * [phase2] Celebration framing: ease just enough to bring a world rectangle (a room that was just built, upgraded or restored) fully into
+   * view. Never while a finger is on the glass, a glide, a tour or a follow is running (the player's camera wins), never under reduced motion.
+   */
+  frameRect(r: { x: number; y: number; w: number; h: number }): void {
+    if (this.calm || this.pointers.size || this.focusTarget || this.tour || this.followGet) return;
+    this.keepRectInSight(r);
   }
 
   /**
