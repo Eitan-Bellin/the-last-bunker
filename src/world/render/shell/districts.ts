@@ -132,16 +132,16 @@ function lake(c: DistrictCtx): void {
   // A lamp on a post at the jetty's end.
   const lx = jx1 - 4;
   rod(g, lx, lane, lx, lane - 70, 2.2, D.jettyPost);
-  g.circle(lx, lane - 72, 3.4).fill(0xffd8a0).stroke({ width: 1, color: OUTLINE.color, alpha: 0.6 });
-  lit.circle(lx, lane - 72, 7).fill({ color: 0xffc27a, alpha: 0.35 });
+  g.circle(lx, lane - 72, 3.4).fill(PROPS.globe.warm).stroke({ width: 1, color: OUTLINE.color, alpha: 0.6 });
+  lit.circle(lx, lane - 72, 7).fill({ color: PROPS.globe.warmHalo, alpha: 0.35 });
   c.lights.push({ x: lx, y: lane - 70, preset: 'streetLamp', kind: 'civic', area: c.area });
   // Reflections: the room's warm light and each lamp's, broken streaks down the water; ripples.
   const streak = (x: number, w: number, col: number, a: number) => {
     for (let y = wy + 3, i = 0; y < bottom - 3; y += 4, i++) lit.rect(x - w / 2 + Math.sin(i * 1.7) * 2.5, y, w * (1 - i * 0.06), 1.4).fill({ color: col, alpha: a * (1 - i * 0.08) });
   };
-  for (let x = room.x0 + 24; x < room.x1 - 10; x += 46) streak(x, 22, 0xffc27a, 0.22);
-  streak(lx, 10, 0xffc27a, 0.35);
-  streak(bx - 14, 8, 0xffcc80, 0.3);
+  for (let x = room.x0 + 24; x < room.x1 - 10; x += 46) streak(x, 22, PROPS.globe.warmHalo, 0.22);
+  streak(lx, 10, PROPS.globe.warmHalo, 0.35);
+  streak(bx - 14, 8, PROPS.globe.warmStreak, 0.3);
   for (let x = x0 + 8; x < x1 - 8; x += 26) lit.rect(x, wy + 10 + ((x * 7) % 18), 12, 0.7).fill({ color: D.waterLine, alpha: 0.18 });
 }
 
@@ -196,8 +196,8 @@ function metro(c: DistrictCtx): void {
   for (const x of [room.x0 - 12, Math.min(cb.x1 - 20, room.x1 + 110)]) {
     const y = top + 12;
     rod(g, x, y - 10, x, y - 4, 1, ST.iron);
-    g.circle(x, y, 4.2).fill(0xffb060).stroke({ width: 1, color: ST.iron });
-    lit.circle(x, y, 8).fill({ color: 0xff9a3c, alpha: 0.35 });
+    g.circle(x, y, 4.2).fill(PROPS.globe.sodium).stroke({ width: 1, color: ST.iron });
+    lit.circle(x, y, 8).fill({ color: PROPS.globe.sodiumHalo, alpha: 0.35 });
     c.lights.push({ x, y: y + 4, preset: 'sodium', kind: 'civic', area: c.area });
   }
   const sx = cb.x1 - 18, sy = trench - 28;

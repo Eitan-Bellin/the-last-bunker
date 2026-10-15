@@ -1222,6 +1222,23 @@ export const PROPS = {
     carRoof: 0x2a3634,
     carWindow: 0xffb060,
   },
+  /** [world:M1 review] Lamp globes painted on the props (the light itself is a LIGHT preset; these are the glass and its additive halo). */
+  globe: {
+    /** Sodium globe (station platforms, metro district) and its orange halo. */
+    sodium: 0xffb060 as Hex,
+    sodiumHalo: 0xff9a3c as Hex,
+    /** Warm street-lamp globe (the lake jetty) and its halo, also the warm reflection streaks on water. */
+    warm: 0xffd8a0 as Hex,
+    warmHalo: 0xffc27a as Hex,
+    /** A softer warm streak (the room's own light on the water). */
+    warmStreak: 0xffcc80 as Hex,
+  },
+  /** [world:M1 review] A green status LED / instrument glow (service junction box, sealed-lab screens). */
+  signal: 0x58d070 as Hex,
+  /** [world:M1 review] The black inside a dead metro tunnel mouth. */
+  tunnelDark: 0x07080a as Hex,
+  /** [world:M1 review] Pocket interiors: shrine candles, the canary, a dead lab screen. */
+  pocket: { candle: 0xe8e0c8 as Hex, canary: 0xe8c840 as Hex, screen: 0x0a1410 as Hex },
   /** [world:M1] Doors in the city: a shut bulkhead's amber lamp, a sealed one's red emergency lamp. */
   doors: { shut: 0xffa040 as Hex, sealed: 0xff3a2a as Hex },
 } as const;

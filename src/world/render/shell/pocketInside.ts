@@ -38,7 +38,7 @@ export function pocketInside(id: string, g: Graphics, lit: Graphics, b: { x0: nu
       g.poly([cx - 16, fy, cx - 16, ny + 12, cx - 10, ny + 2, cx, ny - 2, cx + 10, ny + 2, cx + 16, ny + 12, cx + 16, fy]).fill(vfill(shade(P.builtDark, 0.8), ny, fy)).stroke({ ...OUTLINE, width: 1 });
       g.rect(cx - 12, fy - 10, 24, 10).fill(vfill(PROPS.hub.benchSeat, fy - 10, fy)).stroke({ ...OUTLINE, width: 0.8 });
       for (const dx of [-8, -3, 2, 7]) {
-        g.rect(cx + dx, fy - 16, 2, 6).fill(0xe8e0c8);
+        g.rect(cx + dx, fy - 16, 2, 6).fill(PROPS.pocket.candle);
         lit.ellipse(cx + dx + 1, fy - 18, 1.4, 2.4).fill({ color: PROPS.hub.flameCore, alpha: 0.9 });
       }
       lights.push({ x: cx, y: fy - 18, preset: 'lantern', kind: 'shell', area, radius: 90 });
@@ -82,7 +82,7 @@ export function pocketInside(id: string, g: Graphics, lit: Graphics, b: { x0: nu
       rod(g, cx, b.y0 + 12, cx, fy - 34, 0.7, K.mine.rope);
       g.roundRect(cx - 6, fy - 34, 12, 14, 4).stroke({ width: 1, color: K.forge.brass });
       for (let x = cx - 4; x <= cx + 4; x += 2.6) rod(g, x, fy - 33, x, fy - 21, 0.4, K.forge.brass);
-      g.ellipse(cx, fy - 25, 2.4, 1.6).fill(0xe8c840);
+      g.ellipse(cx, fy - 25, 2.4, 1.6).fill(PROPS.pocket.canary);
       lights.push({ x: cx + 12, y: fy - 16, preset: 'lantern', kind: 'shell', area });
       return true;
     }
@@ -99,8 +99,8 @@ export function pocketInside(id: string, g: Graphics, lit: Graphics, b: { x0: nu
       g.circle(b.x0 + 26, fy - 24, 18).fill(vfill(K.forge.brass, fy - 42, fy - 6, 1.1, 0.55)).stroke(OUTLINE);
       g.circle(b.x0 + 26, fy - 24, 12).stroke({ width: 2, color: shade(K.forge.brass, 0.7) });
       for (let i = 0; i < 2; i++) {
-        g.rect(cx + i * 22 - 4, fy - 30, 16, 12).fill(0x0a1410).stroke({ ...OUTLINE, width: 1 });
-        lit.rect(cx + i * 22 - 3, fy - 29, 14, 10).fill({ color: 0x58d070, alpha: 0.3 });
+        g.rect(cx + i * 22 - 4, fy - 30, 16, 12).fill(PROPS.pocket.screen).stroke({ ...OUTLINE, width: 1 });
+        lit.rect(cx + i * 22 - 3, fy - 29, 14, 10).fill({ color: PROPS.signal, alpha: 0.3 });
       }
       lights.push({ x: cx + 10, y: fy - 24, preset: 'signal', kind: 'shell', area });
       return true;

@@ -61,6 +61,8 @@ if (counts.length) console.log(`lint warning: ${counts.length} use(s) of SLOTS_P
 const legacyX = mod.legacyXUses(srcFiles);
 if (legacyX.length > mod.LEGACY_X_BASELINE) problems.push(`projection: ${legacyX.length} legacy x conversion(s), the ratchet allows ${mod.LEGACY_X_BASELINE} (use src/world/project.ts with the floor):\n   ${legacyX.join('\n   ')}`);
 else if (legacyX.length < mod.LEGACY_X_BASELINE) console.log(`lint note: legacy x conversions are down to ${legacyX.length}: lower LEGACY_X_BASELINE in tools/sim/lint.ts to ${legacyX.length}`);
+// [world:M1 review] No 0xRRGGBB colour literal in src/world/render/** (black and white excepted): colours live in the world tokens.
+problems.push(...mod.renderHexLiterals(srcFiles));
 // [world:C0] A literal floor 0 in a projection call needs a "// floor-0: <reason>" comment (the floor-argument rule).
 const simFiles = readdirSync(HERE).filter(f => f.endsWith('.ts')).map(f => ({ rel: `../tools/sim/${f}`, text: readFileSync(join(HERE, f), 'utf8') }));
 const floor0 = mod.floorZeroWarnings([...srcFiles, ...simFiles]);

@@ -125,7 +125,7 @@ function serviceFront(c: HubCtx): void {
   const jx = b - 52;
   g.rect(jx, by - 30, 18, 22).fill(vfill(K.service.fan, by - 30, by - 8)).stroke(OUTLINE);
   g.rect(jx + 3, by - 26, 12, 2).fill(c.P.hazard);
-  g.circle(jx + 14, by - 12, 1.2).fill(0x58d070);
+  g.circle(jx + 14, by - 12, 1.2).fill(PROPS.signal);
   contactShadow(g, b - 20, by, 22);
   g.rect(b - 30, by - 16, 20, 10).fill(vfill(K.service.valve, by - 16, by - 6)).stroke({ ...OUTLINE, width: 1 });
   for (const wx of [b - 27, b - 13]) g.circle(wx, by - 3, 3).fill(shade(K.service.fan, 0.8)).stroke({ ...OUTLINE, width: 0.8 });
@@ -162,7 +162,7 @@ function stationBack(c: HubCtx): void {
   const f0 = c.h.floors[0];
   const mb = floorLineY(f0), half = 62;
   const arch = archPoints(c.cx - half, c.cx + half, mb - 58, 36, 16);
-  g.poly([c.cx - half, mb, ...arch, c.cx + half, mb]).fill(vfill(0x07080a, mb - 94, mb, 1, 1.4));
+  g.poly([c.cx - half, mb, ...arch, c.cx + half, mb]).fill(vfill(PROPS.tunnelDark, mb - 94, mb, 1, 1.4));
   g.poly([c.cx - half, mb, ...arch, c.cx + half, mb], false).stroke({ width: 7, color: shade(K.station.tile, 0.95) }).stroke({ width: 1.2, color: OUTLINE.color, alpha: 0.8 });
   g.poly(arch, false).stroke({ width: 2.4, color: K.station.trim });
   for (const dx of [-26, 26]) g.moveTo(c.cx + dx, mb).lineTo(c.cx + dx * 0.25, mb - 30).stroke({ width: 1.4, color: PROPS.district.rail, alpha: 0.5 });
@@ -212,8 +212,8 @@ function stationFront(c: HubCtx): void {
     for (const x of [a + 34, b - 34]) {
       const y = floorTop(f) + 26;
       rod(globes, x, floorTop(f) + 4, x, y - 5, 1, K.station.iron);
-      globes.circle(x, y, 5).fill(0xffb060).stroke({ width: 1, color: K.station.iron });
-      lit.circle(x, y, 9).fill({ color: 0xff9a3c, alpha: 0.35 });
+      globes.circle(x, y, 5).fill(PROPS.globe.sodium).stroke({ width: 1, color: K.station.iron });
+      lit.circle(x, y, 9).fill({ color: PROPS.globe.sodiumHalo, alpha: 0.35 });
       c.lights.push({ x, y: y + 4, preset: 'sodium', kind: 'civic', area: c.area(f) });
     }
   }

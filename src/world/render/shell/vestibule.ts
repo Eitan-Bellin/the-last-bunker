@@ -70,8 +70,8 @@ export function buildVestibules(cavs: readonly Cavity[], failing: ReadonlySet<st
       pipes.rect(b.x0, floor - 36, w, 4).fill(K.station.trim);
       const gx = b.x0 + w / 2, gy = top + 24;
       rod(pipes, gx, top + 13, gx, gy - 5, 1, K.station.iron);
-      pipes.circle(gx, gy, 4.5).fill(0xffb060).stroke({ width: 1, color: K.station.iron });
-      lit.circle(gx, gy, 8).fill({ color: 0xff9a3c, alpha: 0.3 });
+      pipes.circle(gx, gy, 4.5).fill(PROPS.globe.sodium).stroke({ width: 1, color: K.station.iron });
+      lit.circle(gx, gy, 8).fill({ color: PROPS.globe.sodiumHalo, alpha: 0.3 });
       lights.push({ x: gx, y: gy + 4, preset: 'sodium', kind: 'shell', area, radius: 120 });
     } else if (kit === 'mine') {
       // A timber set at the drift's mouth and a carbide lantern on a nail.

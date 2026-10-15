@@ -226,6 +226,26 @@ export function legacyXUses(files: { rel: string; text: string }[]): string[] {
   return hits;
 }
 
+/**
+ * [world:M1 review] Colours in the world renderer come from the tokens (src/world/tokens*.ts), never from a literal: any 0xRRGGBB in
+ * src/world/render/** other than 0x000000 / 0xffffff (pure masks, shadows and identity tints) fails the lint. Comments are ignored.
+ */
+export function renderHexLiterals(files: { rel: string; text: string }[]): string[] {
+  const hits: string[] = [];
+  for (const { rel, text } of files) {
+    if (!rel.startsWith('world/render/') || /(^|\/)tokens[^/]*\.ts$/.test(rel)) continue;
+    text.split(/\r?\n/).forEach((l, i) => {
+      if (/^\s*(\/\/|\*|\/\*)/.test(l)) return;
+      const code = l.replace(/\/\/.*$/, '');
+      for (const m of code.matchAll(/\b0x([0-9a-fA-F]{6})\b/g)) {
+        const v = m[1].toLowerCase();
+        if (v !== '000000' && v !== 'ffffff') hits.push(`src/${rel}:${i + 1}: colour literal ${m[0]} (use a token from src/world/tokens.ts)`);
+      }
+    });
+  }
+  return hits;
+}
+
 /** [world:C0] A literal floor 0 in a projection call (slotX(0, ...)) needs a "// floor-0: <reason>" on the line (the floor-argument rule: never invent a 0). */
 export function floorZeroWarnings(files: { rel: string; text: string }[]): string[] {
   const hits: string[] = [];
