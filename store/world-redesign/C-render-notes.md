@@ -576,3 +576,48 @@ All at High, 1600x900:
 - `C-dig`: slice-dig at 59 %, with the crew on the hub stairs.
 
 `C-phone-hub` is the mobile preset, 375x812@2.
+
+## Round 1 fixes: perf re-measure (fixer, world-redesign, 2026-10-15)
+
+Same method as Phase 2c: production build (`vite build` into the scratchpad), headless Chrome on the iGPU, `ct-frames7.mjs` (A2 `frames.mjs` at the same absolute zoom: overview 0.8 desktop, 0.62 phone). Classic rows come from the full run at `a47ecd3`; city rows were re-run at `43b6744`, which only touches city code. Baseline `6a7ff3b` (before round 1) was re-measured in the same session for the phone rows, because GPU MB drifts between sessions.
+
+### What changed for the renderer
+- **Shell Graphics batch** (`cityWiring.forceBatch`). Pixi only batches a Graphics under 200 vertices. The edge chokes, hub front, dig front and pockets are 300–5000 vertices each, so each drew alone and broke the batch around it. Their contexts now use `batchMode: 'batch'`.
+- **Shell holders are render groups** (`cityHost`). With the vertices batched, the lit group's per-frame draw-list rebuild copied them every frame: e55 phone idle draw went 10.1 → 14.1 ms. In their own groups the copy happens only when the shell changes.
+- The city renderer now loads as its own chunks: `cityHost` and `cityWiring`, about 17 KB gzip each.
+
+### Medium
+
+| Medium | Draw calls, classic → city | GPU MB, classic → city | Raw frame med ms, classic → city | Idle CPU draw med ms, classic → city |
+|---|---|---|---|---|
+| fresh desktop | 204 → **197 (−7)** | 173 → 199 | 3.4 → 6.3 | 2.3 → 3.4 |
+| e55 desktop | 632 → **579** | 256 → 360 | 17.1 → 22.7 | 5.7 → 10.6 |
+| fresh phone | 205 → **194 (−11)** | 384 → 411 | 2.6 → 6.9 | 2.4 → 2.7 |
+| e55 phone | 644 → **538** | 389 → **372** | 18.0 → 20.0 | 6.9 → 9.1 |
+
+City before round 1 (`6a7ff3b`), same session, phone:
+- fresh: 216 calls, 398 MB, 5.5 ms, idle draw 2.8 ms.
+- e55: 559 calls, 505 MB, 18.4 ms, idle draw 10.1 ms.
+
+### High
+
+| High | Draw calls, classic → city | GPU MB, classic → city | Raw frame med ms, classic → city |
+|---|---|---|---|
+| fresh desktop | 208 → 238 | 151 → 174 | 30.4 → 27.7 |
+| e55 desktop | 650 → 656 | 251 → 315 | 41.0 → 40.5 |
+| fresh phone | 208 → 219 | 384 → 343 | 3.9 → 7.6 |
+| e55 phone | 665 → 583 | 376 → 351 | 20.4 → 22.2 |
+
+### Budgets at Medium
+- **Fresh-game draw calls: met.** The budget is classic + 10. The city is now below classic: −7 on desktop, −11 on phone. Before this round it was +16 / +12.
+- **Phone memory:** the budget is classic + 20 MB.
+  - fresh: three runs of this build gave 400, 397 and 411 MB against classic 384, so +13 to +27. Baseline `6a7ff3b` gave 398 MB in the same session.
+  - None of this round's changes allocate textures. The spread is lazy art loading in the first sweep. Treat it as at the edge of the budget, not over it, and re-check on a device.
+  - e55: −17 MB.
+- **Frame time:** the "raw full" median is bimodal on this iGPU. Fresh classic often reads below its own Pixi-only time, so read it next to the idle CPU draw column. Against the same-session baseline, city phone idle draw is 2.8 → 2.7 ms fresh and 10.1 → 9.1 ms e55. The full-frame average at e55 is 18.5 → 19.8 ms.
+
+Classic compare: `tools/compare/run.mjs` on saves-v6 e30 and c, 390x844@2x, 17 shots.
+- Baseline `6a7ff3b` against itself (noise floor): 1.84 % mean, 4.52 % max.
+- Baseline against round 1: **1.45 % mean, 4.04 % max.** Classic is unchanged.
+
+Shots refreshed: `C-hub` (slice; the loiterer is on the B1 balcony, not in the west tunnel) and `C-dig` (slice-dig; both diggers at the face, headlamps on, dig at 74 %).
