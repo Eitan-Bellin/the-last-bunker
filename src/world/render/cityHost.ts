@@ -82,6 +82,11 @@ export class CityHost {
     this.shellFront.eventMode = 'none';
     this.shellBack.label = 'shellBack';
     this.shellBack.eventMode = 'none';
+    // [world:C2] Each shell holder is a render group of its own: the shell's Graphics are batched (cityWiring forceBatch), and a batched
+    // element's vertices are copied whenever its group's draw list is rebuilt. Inside the lit group that was every frame (something in the
+    // play layer changes every frame); here it is only when the shell itself changes (a cull flip, a dig step).
+    this.shellBack.isRenderGroup = true;
+    this.shellFront.isRenderGroup = true;
     this.wrapExtract(renderer);
   }
 
