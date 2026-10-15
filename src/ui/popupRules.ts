@@ -18,6 +18,11 @@ export const SHEET_IDLE_MS = 20_000;
  * keeps tapping would otherwise never see it). It still waits for a finger to lift and for a placement to end.
  */
 export const CRITICAL_PATIENCE_MS = 4000;
+/**
+ * [ux-redesign w3fix] A tutorial spotlight holds ordinary dialogs back, but not forever: one that has waited this long lands anyway
+ * (the spotlight steps aside for it and comes back when the screen is calm). Logic timing, not a motion token.
+ */
+export const SPOTLIGHT_PATIENCE_MS = 20_000;
 /** A pointer whose "up" was lost stops blocking after this long. */
 export const LOST_POINTER_MS = 12_000;
 
@@ -66,6 +71,8 @@ export interface GateInput {
   panelOpen: boolean;
   sheetMovingUntil: number;
   tipShowing: boolean;
+  /** [ux-redesign w3fix] A tutorial spotlight is up (onboarding). Holds ordinary dialogs until they waited SPOTLIGHT_PATIENCE_MS. */
+  spotlightShowing?: boolean;
   /** [ux-redesign w2fix] How long this dialog has been ready and held back (ms; 0 or absent = it just became ready). */
   waitedMs?: number;
 }
@@ -81,6 +88,7 @@ export function gateBlock(g: GateInput): string {
   if (g.ceremony) return 'ceremony';
   if (!g.critical && g.panelOpen && g.now - g.lastGestureAt < SHEET_IDLE_MS) return 'sheet';
   if (!g.critical && g.tipShowing) return 'tip';
+  if (!g.critical && g.spotlightShowing && (g.waitedMs ?? 0) <= SPOTLIGHT_PATIENCE_MS) return 'spotlight';
   return '';
 }
 
@@ -100,14 +108,23 @@ export interface BackInput {
   readerOpen: boolean;
   surfaceOpen: boolean;
   sheetOpen: boolean;
+  /** [ux-redesign w3fix] A small floating list is open: the strip's goals list, a locked tab's popover, the HUD's alerts list. */
+  popoverOpen?: boolean;
+  /** [ux-redesign w3fix] A tutorial spotlight is up. */
+  spotlight?: boolean;
 }
 
-export type BackAction = 'tour' | 'modalDismiss' | 'modalStay' | 'placement' | 'reader' | 'surface' | 'sheet' | 'leave';
+export type BackAction = 'tour' | 'modalDismiss' | 'modalStay' | 'popover' | 'spotlight' | 'placement' | 'reader' | 'surface' | 'sheet' | 'leave';
 
-/** What the phone's back button (or Escape) does: always the top layer only. */
+/**
+ * What the phone's back button (or Escape) does: always the top layer only. [w3fix] A floating list closes before anything under it;
+ * a spotlight takes back as "stay" (`spotlight`: nothing happens, never "Leave the game?"; Skip is the way out of the tutorial).
+ */
 export function backAction(b: BackInput): BackAction {
   if (b.touring) return 'tour';
   if (b.modalOpen) return b.modalDismiss === null ? 'modalStay' : 'modalDismiss';
+  if (b.popoverOpen) return 'popover';
+  if (b.spotlight) return 'spotlight';
   if (b.placing) return 'placement';
   if (b.readerOpen) return 'reader';
   if (b.surfaceOpen) return 'surface';

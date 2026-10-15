@@ -22,6 +22,7 @@ export const MS = {
 /** Pixels. */
 export const PX = {
   'hit-min': 48,
+  'sp-2': 8,
 } as const;
 
 /** A resource amount under this share of its cap is "low" (amber); under DANGER_RATIO it is "danger" (red, pulsing). */

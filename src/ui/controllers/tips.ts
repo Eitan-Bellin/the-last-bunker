@@ -143,9 +143,12 @@ export class TipsController {
     return !!this.card;
   }
 
-  /** [ux-redesign W3a] Also true while an onboarding spotlight holds the screen: ordinary dialogs wait for it as they wait for a tip. */
+  /**
+   * A tip card is on screen (ordinary dialogs wait for it). [ux-redesign w3fix] The onboarding spotlight is no longer folded in here: it
+   * is its own gate input (popupRules `spotlightShowing`), which stops holding a dialog back after SPOTLIGHT_PATIENCE_MS.
+   */
   get isShowing(): boolean {
-    return !!this.card || !!this.app.onboarding?.holdsScreen;
+    return !!this.card;
   }
 
   /** Called every frame; looks about twice a second. Shows at most one tip, and only in a calm moment. */

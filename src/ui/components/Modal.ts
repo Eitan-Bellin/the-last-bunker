@@ -151,8 +151,9 @@ export class Modal {
       this.opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
       // Everything else on the page (the HUD, the canvas, the sheets) leaves the tab order and the screen reader while the dialog is up.
       // [ux-redesign w2fix B2] A story scene on screen (z 60, over this dialog's z 40) is never made inert: the dialog waits behind it.
+      // [ux-redesign w3fix] Parts the tutorial spotlight made inert (data-ob-inert) are taken over: the spotlight leaves them to the dialog.
       for (const n of [...document.body.children]) {
-        if (n === this.overlay || n.tagName === 'SCRIPT' || n.matches('.toast-stack, .sr-only, #splash, .story-overlay.open') || (n as HTMLElement).inert || n.hasAttribute('aria-hidden')) continue;
+        if (n === this.overlay || n.tagName === 'SCRIPT' || n.matches('.toast-stack, .sr-only, #splash, .story-overlay.open') || ((n as HTMLElement).inert && !n.hasAttribute('data-ob-inert')) || n.hasAttribute('aria-hidden')) continue;
         setInert(n, true);
         this.inerted.push(n);
       }
@@ -183,7 +184,7 @@ export class Modal {
       this.focusFirst();
       // the scene itself was left out of the inert walk at show(): take it (and anything new) out now that this dialog is on top
       for (const n of [...document.body.children]) {
-        if (n === this.overlay || this.inerted.includes(n) || n.tagName === 'SCRIPT' || n.matches('.toast-stack, .sr-only, #splash, .story-overlay.open') || (n as HTMLElement).inert || n.hasAttribute('aria-hidden')) continue;
+        if (n === this.overlay || this.inerted.includes(n) || n.tagName === 'SCRIPT' || n.matches('.toast-stack, .sr-only, #splash, .story-overlay.open') || ((n as HTMLElement).inert && !n.hasAttribute('data-ob-inert')) || n.hasAttribute('aria-hidden')) continue;
         setInert(n, true);
         this.inerted.push(n);
       }

@@ -19,7 +19,7 @@ export interface NativeBackHost {
   /** What is open now (the same facts installBackNavigation reads). */
   input: () => BackInput;
   /** Carries out every action but 'leave' and 'modalStay' (the same steps the popstate handler takes). */
-  act: (action: Exclude<BackAction, 'leave' | 'modalStay'>) => void;
+  act: (action: Exclude<BackAction, 'leave' | 'modalStay' | 'spotlight'>) => void;
   /** Shows the leave dialog: Stay (the back choice) and Leave. */
   confirmLeave: (title: string, body: string, stay: string, leave: string, onLeave: () => void) => void;
 }
@@ -30,7 +30,7 @@ export function installNativeBack(host: NativeBackHost): boolean {
   if (!app || typeof app.addListener !== 'function') return false;
   app.addListener('backButton', () => {
     const act = backAction(host.input());
-    if (act === 'modalStay') return; // a decision waits for its answer
+    if (act === 'modalStay' || act === 'spotlight') return; // a decision waits for its answer; [w3fix] a spotlight stays (Skip leaves it)
     if (act !== 'leave') { host.act(act); return; }
     host.confirmLeave(i18n.t('ux3b.leave.title'), i18n.t('ux3b.leave.body'), i18n.t('ux3b.leave.stay'), i18n.t('ux3b.leave.go'), () => {
       void Promise.resolve(app.exitApp()).catch(() => undefined);

@@ -7,6 +7,8 @@
 /* ---------- spotlight ---------- */
 
 .ob-spot {
+  /* Documented constant (not a design token): the shade is the cut-out's outer shadow, spread this far so it covers any screen. */
+  --ob-shade-reach: 200vmax;
   position: fixed;
   inset: 0;
   z-index: var(--z-tutorial);
@@ -25,7 +27,7 @@
 }
 .ob-spot__hole {
   border-radius: var(--r-card);
-  box-shadow: 0 0 0 var(--ring-w) var(--primary), 0 0 0 200vmax var(--overlay);
+  box-shadow: 0 0 0 var(--ring-w) var(--primary), 0 0 0 var(--ob-shade-reach) var(--overlay);
 }
 /* A soft ring that breathes around the cut-out (still under reduced motion: --breathe-scale is 1 there). */
 .ob-spot__hole::after {
@@ -36,6 +38,8 @@
   box-shadow: 0 0 0 var(--ring-w) var(--primary-glow);
   animation: obBreathe var(--dur-breathe) var(--ease-in-out) infinite;
 }
+/* [w3fix] Reduced motion (spotlight.ts sets .is-still): the ring stands still at full strength. */
+.ob-spot.is-still .ob-spot__hole::after { animation: none; }
 .ob-spot__block { pointer-events: auto; background: transparent; touch-action: none; }
 .ob-spot__block[hidden] { display: none; }
 /* The element is not on screen yet (a sheet still sliding): the whole screen dims and waits. */
@@ -66,10 +70,12 @@
 .ob-bubble__actions { display: flex; justify-content: flex-end; }
 .ob-bubble__actions:empty { display: none; }
 
+/* [w3fix B5] Under the HUD's status rows (--hud-top-h, measured by HUD.ts, includes the top safe area), not over the resource tiles the
+   step may be about; the inline end in either direction, clear of both side safe areas. */
 .ob-skip {
   position: absolute;
-  inset-block-start: calc(env(safe-area-inset-top) + var(--sp-2));
-  inset-inline-end: max(var(--sp-2), env(safe-area-inset-right));
+  inset-block-start: calc(var(--hud-top-h, var(--sp-8)) + var(--sp-2));
+  inset-inline-end: max(var(--sp-2), env(safe-area-inset-left), env(safe-area-inset-right));
   pointer-events: auto;
 }
 .ob-skip .ob-skip__btn {
@@ -104,6 +110,7 @@
   height: var(--icon-l);
   color: var(--text-primary);
   filter: drop-shadow(0 0 var(--sp-1) var(--primary));
+  /* Documented constant: the fingertip of the hand glyph (where the tap lands), as a share of the glyph box. */
   transform-origin: 30% 10%;
 }
 .ob-hand__glyph .ic { width: var(--icon-l); height: var(--icon-l); }
@@ -162,7 +169,7 @@
 /* A tab that just opened: a short pulse (reduced motion: --breathe-scale is 1, so only the glow fades in and out). */
 #hud-nav .hx-tab.ob-unlock .hx-tab__icon { animation: obUnlock var(--dur-pulse) var(--ease-out) 2; }
 
-@keyframes obBreathe { 0%, 100% { transform: scale(1); opacity: 0.4; } 50% { transform: scale(var(--breathe-scale)); opacity: 1; } }
+@keyframes obBreathe { 0%, 100% { transform: scale(1); opacity: var(--ghost-opacity); } 50% { transform: scale(var(--breathe-scale)); opacity: 1; } }
 @keyframes obTap { 0%, 100% { transform: translate(0, 0) scale(1); } 40% { transform: translate(0, 0) scale(var(--press-scale)); } }
 @keyframes obUnlock {
   0%, 100% { transform: scale(1); filter: none; }
