@@ -13,6 +13,11 @@ export const GESTURE_QUIET_MS = 1500;
 export const SHEET_SETTLE_MS = 450;
 /** A sheet left open and untouched this long no longer holds ordinary dialogs back. */
 export const SHEET_IDLE_MS = 20_000;
+/**
+ * [ux-redesign w2fix] An emergency that has waited this long no longer waits for a quiet moment after the last touch (a player who
+ * keeps tapping would otherwise never see it). It still waits for a finger to lift and for a placement to end.
+ */
+export const CRITICAL_PATIENCE_MS = 4000;
 /** A pointer whose "up" was lost stops blocking after this long. */
 export const LOST_POINTER_MS = 12_000;
 
@@ -61,6 +66,8 @@ export interface GateInput {
   panelOpen: boolean;
   sheetMovingUntil: number;
   tipShowing: boolean;
+  /** [ux-redesign w2fix] How long this dialog has been ready and held back (ms; 0 or absent = it just became ready). */
+  waitedMs?: number;
 }
 
 /** Why a dialog may not land right now ('' = it may). Emergencies ignore an open sheet and push a tip away; nothing ignores a finger. */
@@ -68,7 +75,8 @@ export function gateBlock(g: GateInput): string {
   if (g.placing) return 'placement';
   if (g.touring) return 'tour';
   if (g.pointersDown > 0) return 'finger';
-  if (g.now - g.lastGestureAt < GESTURE_QUIET_MS) return 'gesture';
+  const patient = g.critical && (g.waitedMs ?? 0) > CRITICAL_PATIENCE_MS;
+  if (!patient && g.now - g.lastGestureAt < GESTURE_QUIET_MS) return 'gesture';
   if (g.now < g.sheetMovingUntil) return 'sheetMoving';
   if (g.ceremony) return 'ceremony';
   if (!g.critical && g.panelOpen && g.now - g.lastGestureAt < SHEET_IDLE_MS) return 'sheet';
@@ -195,6 +203,7 @@ export function saveLooksStale(pending: number, saved: number, savedAt: number |
 /** "Welcome back" only after an absence longer than this (seconds); people at the door are asked about regardless. */
 export const WELCOME_MIN_AWAY_S = 600;
 
-export function wantsWelcome(awaySeconds: number | null, doorWaiting: number): boolean {
-  return doorWaiting > 0 || (awaySeconds ?? 0) > WELCOME_MIN_AWAY_S;
+/** [ux-redesign w2fix] `hadDanger`: a raid or disaster struck while away (or someone was hurt): the report shows however short the absence. */
+export function wantsWelcome(awaySeconds: number | null, doorWaiting: number, hadDanger = false): boolean {
+  return doorWaiting > 0 || (awaySeconds !== null && hadDanger) || (awaySeconds ?? 0) > WELCOME_MIN_AWAY_S;
 }

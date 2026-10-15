@@ -71,6 +71,14 @@ eq(P.gateBlock({ ...base, panelOpen: true, lastGestureAt: base.now - 5000, criti
 eq(P.gateBlock({ ...base, panelOpen: true, lastGestureAt: base.now - P.SHEET_IDLE_MS - 1 }), '', 'an idle sheet stops holding');
 eq(P.gateBlock({ ...base, tipShowing: true }), 'tip', 'a tip holds an ordinary dialog');
 eq(P.gateBlock({ ...base, tipShowing: true, critical: true }), '', 'a crisis pushes a tip away');
+// [ux-redesign w2fix] an emergency that waited over CRITICAL_PATIENCE_MS stops waiting for a quiet moment, never for a finger or a placement
+const tapping = { ...base, critical: true, lastGestureAt: base.now - 200 };
+eq(P.gateBlock({ ...tapping, waitedMs: 1000 }), 'gesture', 'a fresh crisis waits for a quiet moment');
+eq(P.gateBlock({ ...tapping, waitedMs: P.CRITICAL_PATIENCE_MS }), 'gesture', 'a crisis at exactly the patience limit still waits');
+eq(P.gateBlock({ ...tapping, waitedMs: P.CRITICAL_PATIENCE_MS + 1 }), '', 'a crisis that waited over 4 s lands between taps');
+eq(P.gateBlock({ ...tapping, waitedMs: 60_000, pointersDown: 1 }), 'finger', 'a patient crisis still waits for the finger');
+eq(P.gateBlock({ ...tapping, waitedMs: 60_000, placing: true }), 'placement', 'a patient crisis still waits for a placement');
+eq(P.gateBlock({ ...base, lastGestureAt: base.now - 200, waitedMs: 60_000 }), 'gesture', 'an ordinary dialog never skips the quiet moment');
 
 // ---- tap guard of a fresh dialog ----------------------------------------------------------------------------------------------------
 ok(P.tapBlocked(1000, 1000 + 100, 1), 'tap 100 ms after open is swallowed');
@@ -129,6 +137,9 @@ eq(P.wantsWelcome(600, 0), false, '10 minutes away: no welcome');
 eq(P.wantsWelcome(601, 0), true, 'over 10 minutes: welcome');
 eq(P.wantsWelcome(60, 2), true, 'people at the door are asked about');
 eq(P.wantsWelcome(null, 0), false, 'no report, no door: nothing');
+eq(P.wantsWelcome(120, 0, true), true, '[w2fix] 2 minutes away with a raid: the report shows');
+eq(P.wantsWelcome(120, 0, false), false, '[w2fix] 2 minutes away, nothing happened: no report');
+eq(P.wantsWelcome(null, 0, true), false, '[w2fix] no report at all: nothing to show');
 
 if (problems.length) {
   console.error(`popup-test: ${problems.length} problem(s)\n - ${problems.join('\n - ')}`);
