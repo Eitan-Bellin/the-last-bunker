@@ -9,7 +9,7 @@
  * Called from src/main.ts inside an `import.meta.env.DEV` block, before the GameApp exists.
  */
 import { GameEngine } from '../core/GameEngine';
-import { SaveManager } from '../core/SaveManager';
+import { SaveManager, hasValidSlot } from '../core/SaveManager';
 import { seedCity } from '../core/state/city';
 import type { BuildingType, GameState } from '../core/GameState';
 
@@ -100,8 +100,9 @@ export async function runCityScenario(search: string = location.search): Promise
   const q = new URLSearchParams(search);
   const id = q.get('scenario') as CityScenarioId | null;
   if (id !== 'slice' && id !== 'slice-dig') return false;
-  if (!q.get('slot')) {
-    console.warn('[cityScenario] refused: a scenario needs ?slot=<name> (it never writes the main save)');
+  // SaveManager's own test (dev build + /^[a-z0-9_-]{1,20}$/i): an invalid name would fall back to the main save key.
+  if (!hasValidSlot()) {
+    console.warn('[cityScenario] refused: a scenario needs a valid ?slot=<name> (letters, digits, _ or -, up to 20; it never writes the main save)');
     return false;
   }
   const state = buildSliceState(id);
