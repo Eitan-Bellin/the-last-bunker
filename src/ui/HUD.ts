@@ -16,6 +16,7 @@ import { initViewportUi } from './viewportUi';
 import { kResourceChip, kProgress, setProgress, kBadge, setBadge, kRow, kTooltip, bindPress } from './kit';
 import { fmtDuration, fmtNum } from './format';
 import '../styles/hud.css';
+import { CountUp } from './fx/countUp'; // [ux-redesign W4]
 
 /** [Long game] Every resource the top bar can show; the Act decides which are in play (components, alloys... join from their Act on). */
 const VISIBLE_RESOURCES: ResourceType[] = ['food', 'water', 'power', 'materials', 'medicine', 'knowledge', 'scrap', 'components', 'alloys', 'data', 'influence', 'seedCores'];
@@ -127,6 +128,8 @@ export class HUD {
   private lastText = new WeakMap<HTMLElement, string>();
   private lastAttr = new WeakMap<HTMLElement, Map<string, string>>();
   private shown = new Map<ResourceType, number>();
+  /** [ux-redesign W4] Big jumps count up over 300..1000 ms (and may wait for goods flying in); small ones roll as before. */
+  readonly counts = new CountUp<ResourceType>();
   /** Which resources the current Act opens. */
   private actShow = new Map<ResourceType, boolean>();
   private topBar!: HTMLElement;
@@ -773,13 +776,27 @@ export class HUD {
 
   /** Where a resource's tile is (fly-to-HUD); a resource without a tile flies to the "more" handle. */
   resourceRect(r: ResourceType): DOMRect | null {
+    if (r === 'credits' && !this.resourceEls.has(r)) return this.creditsBtn.isConnected ? this.creditsBtn.getBoundingClientRect() : null; // [ux-redesign W4]
     const root = this.resourceEls.get(r)?.root;
     if (root && root.style.display !== 'none') return root.getBoundingClientRect();
     return this.moreBtn.style.display !== 'none' ? this.moreBtn.getBoundingClientRect() : null;
   }
 
+  /** [ux-redesign W4] Goods are flying to this tile: its number waits `ms` for them before it counts up. */
+  holdCount(r: ResourceType, ms: number): void {
+    this.counts.hold(r, ms);
+  }
+
+  /** [ux-redesign W4] The first of the flying goods landed: the icon pulses (fx.css) and the number starts counting. */
+  landResource(r: ResourceType): void {
+    this.counts.release(r);
+    this.pulseResource(r);
+  }
+
   pulseResource(r: ResourceType): void {
-    const root = this.resourceEls.get(r)?.root;
+    // [ux-redesign W4] The tile the goods flew to: the store's own, the credits chip, or the "more" handle of a store without a tile.
+    const own = this.resourceEls.get(r)?.root;
+    const root = own && own.style.display !== 'none' ? own : r === 'credits' ? this.creditsBtn : this.moreBtn.style.display !== 'none' ? this.moreBtn : null;
     if (!root) return;
     root.classList.remove('pulse');
     void root.offsetWidth;
@@ -881,6 +898,7 @@ export class HUD {
     const ariaDue = nowMs - this.lastAria >= 250;
     if (ariaDue) this.lastAria = nowMs;
 
+    this.counts.instant = reducedMotion(); // [ux-redesign W4]
     const tiles = this.pickTiles(state, act);
     const tileSig = tiles.join(',');
     const hidden: ResourceType[] = [];
@@ -890,10 +908,9 @@ export class HUD {
       if (!visible && this.actShow.get(rt)) hidden.push(rt);
       this.setStyle(els.root, 'display', visible ? '' : 'none');
       if (visible) this.setStyle(els.root, 'order', String(tiles.indexOf(rt)));
-      // Counters roll toward their value instead of jumping.
+      // Counters roll toward their value instead of jumping; [ux-redesign W4] a jump of more than 5 % counts up (fx/countUp.ts).
       const prev = this.shown.get(rt) ?? res.amount;
-      const diff = res.amount - prev;
-      const next = Math.abs(diff) < 0.5 ? res.amount : prev + diff * Math.min(1, dtRoll * 9);
+      const next = this.counts.step(rt, prev, res.amount, nowMs, dtRoll);
       this.shown.set(rt, next);
       if (!visible) continue;
       this.updateTile(rt, els, next, ariaDue);
