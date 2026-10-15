@@ -10,7 +10,7 @@
  * Over the cache sits a crisp live rim: the light lip of the cut (UNIFY.cutEdge rim, stratum rockRim) on every cut edge that faces rock,
  * never on the seam where two cavities meet.
  */
-import { Container, Graphics } from 'pixi.js';
+import { Container, Graphics, Rectangle } from 'pixi.js';
 import { WORLD_KIT_IDS, rockBandId, rockTileId } from '../../tokensAssets';
 import { DETAIL, UNIFY, type StratumId } from '../../tokens';
 import { baseTier, type RenderTier } from '../../tokensRender';
@@ -33,6 +33,9 @@ const ROCK_TINT = 0x9a948e;
 
 interface CavityInfo { c: Cavity; b: { x0: number; y0: number; x1: number; y1: number }; cw: boolean }
 
+/** [world:C2] World units the rock extends past the layout bounds on each side. */
+const ROCK_SIDE_RUN = 2400;
+
 export class RockLayer implements ChunkSource {
   readonly manager: ChunkManager;
   readonly container = new Container();
@@ -46,8 +49,10 @@ export class RockLayer implements ChunkSource {
     this.cav = layout.cavities.map(c => ({ c, b: polyBounds(c.poly), cw: polyArea(c.poly) >= 0 }));
     this.bands = layout.strata.filter(s => s.s > 0).map(s => ({ s: s.s, y0: s.y0, y1: s.y1 }));
     const B = layout.bounds;
-    this.extent = { x: B.x, y: 0, w: B.w, h: B.y + B.h };
-    this.manager = new ChunkManager(this, { size: CHUNK, maxBuilds: 2, parkAfterMs: 12000, keep: 0.6 });
+    // [world:C2 tech-artist] The rock runs on ROCK_SIDE_RUN past the layout bounds each side: zoomed out (or panned to a far wing), the camera
+    // sees past the bounds, and without the classic underground there was a hard seam onto the parallax planes. Chunks build only near the view.
+    this.extent = { x: B.x - ROCK_SIDE_RUN, y: 0, w: B.w + ROCK_SIDE_RUN * 2, h: B.y + B.h + ROCK_SIDE_RUN }; // (and below the bounds)
+    this.manager = new ChunkManager(this, { size: CHUNK, maxBuilds: 2, parkAfterMs: 4000, keep: 0.6 }); // [world:C2] parked after 4 s (was 12): two texture caches a chunk
     this.manager.setExtent(this.extent);
     this.container.label = 'shell:rock';
     this.container.eventMode = 'none';
@@ -98,6 +103,10 @@ export class RockLayer implements ChunkSource {
     for (const k of near) holes.poly(k.c.poly).fill(0xffffff);
     holes.blendMode = 'erase';
     rock.addChild(holes);
+    // [world:C2 tech-artist] The cache covers the chunk only: without boundsArea it took the bounds of every whole cavity polygon near the
+    // chunk (the hub, the floor strips), 1024x2048 px per cache in the game (2 caches a chunk, 16 MB), 236 MB more GPU memory at e55.
+    const area = new Rectangle(x0 - OVERLAP, y0 - OVERLAP, x1 - x0 + OVERLAP * 2, y1 - y0 + OVERLAP * 2);
+    rock.boundsArea = area;
     rock.cacheAsTexture({ resolution: this.res, antialias: false });
 
     // 4. trim everything to the chunk.
@@ -109,6 +118,7 @@ export class RockLayer implements ChunkSource {
     frame.rect(fx1, fy0, SPILL * 2, fy1 - fy0).fill(0xffffff);
     frame.blendMode = 'erase';
     baked.addChild(ao, rock, frame);
+    baked.boundsArea = area;
     baked.cacheAsTexture({ resolution: this.res, antialias: false });
 
     // The crisp rim over the cache: only the segments whose middle lies in this chunk (each drawn once).

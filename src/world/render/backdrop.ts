@@ -42,6 +42,7 @@ export class Backdrop {
   private far: ChunkManager;
   private back: ChunkManager;
   private fore: ChunkManager;
+  private seen = new Set<number>();
   private midC = new Container();
   private bands: Band[] = [];
   private bounds: Rect = { x: 0, y: 0, w: 1, h: 1 };
@@ -98,6 +99,10 @@ export class Backdrop {
   setLayout(layout: CityLayout): void {
     this.layout = layout;
     this.bands = layout.strata.map(s => ({ s: s.s, y0: s.y0, y1: s.y1 })).sort((a, b) => a.y0 - b.y0);
+    // [world:C2] Strata with a storey the player can see (not hidden): the fore lip only stands at seams the player has dug down to; over the
+    // undiscovered dark its lit rim read as stray wire lines in front of the fog.
+    this.seen.clear();
+    for (const a of layout.areas) if (a.kind === 'storey' && a.state !== 'hidden') this.seen.add(a.s);
     this.bounds = layout.bounds;
     const B = layout.bounds;
     for (const [m, plane] of [[this.far, this.planes.far], [this.back, this.planes.back], [this.fore, this.planes.fore]] as const) {
@@ -318,7 +323,7 @@ export class Backdrop {
     const seams: { y: number; s: StratumId }[] = [];
     for (let i = 0; i < this.bands.length; i++) {
       const b = this.bands[i];
-      if (b.s === 0) continue;
+      if (b.s === 0 || !this.seen.has(b.s + 1)) continue;
       seams.push({ y: b.y1 * p, s: b.s });
     }
     const g = new Graphics();
