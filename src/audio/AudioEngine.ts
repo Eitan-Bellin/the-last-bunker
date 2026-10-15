@@ -38,6 +38,8 @@ const SFX_LEVEL = 0.8;
 const AMBIENCE_LEVEL = 0.55;
 /** Long loops have little energy above 12 kHz, so they render at a lower rate (less work and memory). */
 const LOOP_RATE = 32000;
+/** [world:C1-Li] One looping city bed: its source (stopped when released), its gain, and since when (audio time) it has been silent (-1: playing). */
+interface CityVoice { src: AudioBufferSourceNode; gain: GainNode; quietSince: number }
 const MUSIC_RATE = 24000;
 
 /** One theme per era: Remnant, Restoration, Colony, Undercity. */
@@ -140,8 +142,8 @@ export class AudioEngine {
   private fxOut: GainNode | null = null;
   private volumes = { music: 1, fx: 1 };
   /** [world:C1-Li] The city's stratum beds (rendered when the camera first visits a stratum) and the hub crowd, on the ambience bus. */
-  private cityBeds = new Map<number, GainNode>();
-  private cityCrowd: GainNode | null = null;
+  private cityBeds = new Map<number, CityVoice>();
+  private cityCrowd: CityVoice | null = null;
   private readonly cityTarget = newCityMix();
 
   constructor() {
@@ -681,15 +683,30 @@ export class AudioEngine {
     const t = ctx.currentTime, tc = AUDIO.crossfade / 3;
     for (let s = 0; s < STRATA_N; s++) {
       const want = mix.beds[s];
-      const g = this.cityBeds.get(s);
-      if (g) g.gain.setTargetAtTime(want, t, tc);
-      else if (want > 0.02) this.enqueueCityBed(s);
+      const v = this.cityBeds.get(s);
+      if (v) {
+        v.gain.gain.setTargetAtTime(want, t, tc);
+        if (this.cityQuiet(v, want, t)) this.cityBeds.delete(s);
+      } else if (want > AUDIO.bedSilent) this.enqueueCityBed(s);
     }
-    if (this.cityCrowd) this.cityCrowd.gain.setTargetAtTime(mix.crowd, t, tc);
-    else if (mix.crowd > 0.02) this.enqueueCityCrowd();
+    if (this.cityCrowd) {
+      this.cityCrowd.gain.gain.setTargetAtTime(mix.crowd, t, tc);
+      if (this.cityQuiet(this.cityCrowd, mix.crowd, t)) this.cityCrowd = null;
+    } else if (mix.crowd > AUDIO.bedSilent) this.enqueueCityCrowd();
   }
 
-  private cityLoop(buffer: AudioBuffer): GainNode {
+  /** Tracks how long a city loop has been silent; past AUDIO.bedReleaseAfter it is stopped and released (true: drop it). */
+  private cityQuiet(v: CityVoice, want: number, t: number): boolean {
+    if (want > AUDIO.bedSilent) { v.quietSince = -1; return false; }
+    if (v.quietSince < 0) { v.quietSince = t; return false; }
+    if (t - v.quietSince < AUDIO.bedReleaseAfter) return false;
+    try { v.src.stop(); } catch { /* already stopped */ }
+    v.src.disconnect();
+    v.gain.disconnect(); // (the stopped, disconnected source and its buffer are left to the GC)
+    return true;
+  }
+
+  private cityLoop(buffer: AudioBuffer): CityVoice {
     const ctx = this.ctx!;
     const src = ctx.createBufferSource();
     src.buffer = buffer;
@@ -698,7 +715,7 @@ export class AudioEngine {
     g.gain.value = 0;
     src.connect(g).connect(this.ambBus!);
     src.start(ctx.currentTime, Math.random() * buffer.duration);
-    return g;
+    return { src, gain: g, quietSince: -1 };
   }
 
   private enqueueCityBed(s: number): void {

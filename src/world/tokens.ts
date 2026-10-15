@@ -879,6 +879,13 @@ export const AUDIO = {
   fogQuiet: { crowd: 0.4, resonance: 1.3 },
   /** Era beds (audio/bedKeys.ts ERA_BEDS) stay underneath at this share. */
   eraBedShare: 0.5,
+  /**
+   * [world:C2] A city bed (or the crowd loop) that has been silent this long (s of audio time) is stopped and its buffer released (each
+   * is ~4 MB of PCM); it is rendered again the next time the camera wants it.
+   */
+  bedReleaseAfter: 30,
+  /** Below this gain a bed counts as silent (and is not rendered when first wanted). */
+  bedSilent: 0.02,
 } as const;
 
 // =================================================================================================================================
