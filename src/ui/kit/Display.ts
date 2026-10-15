@@ -86,10 +86,17 @@ export function kProgress(value: number, max: number, label?: string): HTMLDivEl
 export function setProgress(track: HTMLElement, value: number, max: number): void {
   const pct = max > 0 ? Math.max(0, Math.min(100, (value / max) * 100)) : 0;
   const prev = parseFloat(track.style.getPropertyValue('--k-progress') || '0');
-  track.classList.toggle('is-dropping', pct < prev);
-  track.style.setProperty('--k-progress', `${pct}%`);
-  track.setAttribute('aria-valuemax', String(Math.max(0, Math.round(max))));
-  track.setAttribute('aria-valuenow', String(Math.max(0, Math.min(Math.round(max), Math.round(value)))));
+  // [ux-redesign final F8] Only what changed is written (a HUD bar is set every second; an unchanged attribute is still a DOM mutation).
+  if (pct !== prev) {
+    if (track.classList.contains('is-dropping') !== pct < prev) track.classList.toggle('is-dropping', pct < prev);
+    track.style.setProperty('--k-progress', `${pct}%`);
+  }
+  setAttrIfNew(track, 'aria-valuemax', String(Math.max(0, Math.round(max))));
+  setAttrIfNew(track, 'aria-valuenow', String(Math.max(0, Math.min(Math.round(max), Math.round(value)))));
+}
+
+function setAttrIfNew(n: HTMLElement, name: string, value: string): void {
+  if (n.getAttribute(name) !== value) n.setAttribute(name, value);
 }
 
 // ---- Badge --------------------------------------------------------------------------------------------------------------------------
