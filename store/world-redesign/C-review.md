@@ -65,3 +65,27 @@ Note: `?city` also works in production builds. This is intended until M1.
 - `vite build` to the scratchpad: passes, and `cityScenario` is not in the bundle.
 - Lint: no floor-0 warnings.
 - Classic compare: 1.45 % mean / 4.04 % max, against a noise floor of 1.84 % / 4.52 %.
+
+## M1 review
+
+Findings from the M1 reviewer, the fix for each, and the commit.
+
+| # | Finding | Fix | Commit |
+|---|---|---|---|
+| 1 (major) | About 10 `0xRRGGBB` literals came back into `shell/districts.ts`, `hubKits.ts`, `vestibule.ts` and `pocketInside.ts`. | Moved into `PROPS.globe` (`sodium`, `sodiumHalo`, `warm`, `warmHalo`, `warmStreak`), `PROPS.signal`, `PROPS.tunnelDark` and `PROPS.pocket` (`candle`, `canary`, `screen`). Same values, so nothing looks different. New lint rule `renderHexLiterals` in `tools/sim/lint.ts`: any `0xRRGGBB` other than black or white in `src/world/render/**` fails `npm run check` (tokens files excepted, comments ignored). A scan found nothing else. | `8edc736` |
+| 2 | The kill switch had two entry points: the flag and the projection. | `fallbackToClassic(reason)` in `src/world/project.ts` turns `CITY` off and resets `PROJECTION` together. `BunkerRenderer.mountCity` uses it. `worldModeConsistent()` is asserted in DEV once the world is chosen. | `1af7f00` |
+| 3 | `dropDeadTextures` cleared GraphicsContexts that could be shared. | Graphics are grouped by context first. A context is cleared only when its single Graphics owns it (`_ownedContext`). A shared or borrowed context keeps its geometry: each dead fill texture becomes `Texture.EMPTY` in place, then `onUpdate()` invalidates its GPU data. Checked in the browser with `WEBGL_lose_context` (lose, then restore), in city (`?slot=city-slice&scenario=slice`) and classic (`?city=0`): both draw again, and the only console error is the expected crashGuard `gl-context-lost` log. | `737cf02` |
+| 4 | `shell/fore.ts` left the DEV `__fore` global set and faded per frame. | `destroy()` deletes `__fore` when it points at this instance. The fade-in now uses elapsed time: `CITY.fore.fadeTau` = 0.09 s, the same as the old 1/6-per-frame ease at 60 fps. Fade-out is still instant. | `737cf02` |
+| 5 | Literal sizes in `pins.ts:97` and `cityHost.ts:291`. | Replaced with `PINS.ringW` (1.5) and `PINS.labelDy` (12). | `737cf02` |
+| 6 | `tapPocket` could find a pocket still hidden in rock. | Only a pocket in the `'glimpsed'` state can be found. | `737cf02` |
+| 7 | `walkers.ts` sizes its slot table for the city before a possible fallback. | Added a comment: the table is sized once and deliberately not resized, because slot indices must stay stable. After a fallback the extra `LIFE_SLOTS` sit idle. | `737cf02` |
+
+**Gates**
+- `npm run check:full`: green, including the new lint rule.
+- `npx tsc --noEmit`: clean.
+- `vite build` to the scratchpad: passes.
+- Browser:
+  - The slice boots in city, with `CITY === (PROJECTION === 'city')`.
+  - `?city=0` boots classic.
+  - No console errors apart from the logs from the forced context loss.
+  - The remembered `?city` choice was cleared after the test.
