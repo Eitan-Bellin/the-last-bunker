@@ -1,6 +1,6 @@
 import type { Grid } from './occupancy';
 import { cellAt } from './occupancy';
-import { slotX } from '../world/project';
+import { PROJECTION, slotX } from '../world/project';
 
 /**
  * [airy2:D3] Cluster voids: the bunker's floors are split into clusters of 3 to 5 slots by narrow shafts of cut rock (a stair tower stands in each, a catwalk crosses
@@ -19,11 +19,12 @@ export const TOWER_W = 54;
 /**
  * The stair annex: with no west wing on any floor, the casing beside the shaft is cut open into a stair hall (a rock shaft with a tower in it, like a void), so the
  * lift has an open stairwell next to it. x is the middle of the hall (west of the shaft's wall at x = 0).
+ * [world:C1] Never in the city projection: the hub atrium has its own stair columns (src/world/nav/hubStairs.ts) where the annex stood.
  */
 export const ANNEX_X = -22;
 export const ANNEX_W = 50;
 export function hasAnnex(grid: Grid): boolean {
-  return grid.length > 0 && grid.ext.every(e => e.w === 0);
+  return PROJECTION !== 'city' && grid.length > 0 && grid.ext.every(e => e.w === 0);
 }
 
 const memo = new WeakMap<Grid, number[]>();

@@ -539,6 +539,8 @@ export const FOG = {
 
 // =================================================================================================================================
 // CAMERA (defaults; the camera agent tunes. Current controller values kept where they exist.)
+// [world:C1 camera-nav] Read by CameraController in city mode only: zoom.min/max, pan.friction/edgeSpring/maxFling*, springs, follow, city.
+// homeDesktop / homePhone are superseded in the city by the framing rules in `city` (fit the slice / hub + 4 slots); kept for reference.
 // =================================================================================================================================
 
 export const CAMERA = {
@@ -586,6 +588,29 @@ export const CAMERA = {
   shake: { px: 16, decay: 6 },
   /** Phone: people must be at least this many CSS px tall at the home zoom (adult 48 u x zoom). */
   minPersonPx: 30,
+  /**
+   * [world:C1 camera-nav] City mode framing and limits (CameraController with `?city`; classic ignores this block).
+   *  - phoneSlots: the phone home view is spine-centred and shows the hub with its two vestibules plus this many slots across;
+   *  - phoneMaxZoom: cap of that home zoom on wide phones (people get large past it);
+   *  - desktopPad: the desktop home view fits the whole dug city (strips, edges, districts) with this fraction of the screen as margin;
+   *  - desktopMaxZoom: cap of that fit (a 1-floor city on a big monitor);
+   *  - topY: the world y the home view's top may show (the surface strip above the hub; classic VIEW_TOP);
+   *  - personH: an adult's height in world units (for minPersonPx);
+   *  - glide: spring rate (1/s) of glideTo, the gentle move for later follow / story moves (focus spring is 7.5);
+   *  - calmFocusSpring: reduced motion: focus moves settle faster (no long drifting glide);
+   *  - calmFling: reduced motion: release velocity is dropped (no coasting), the rubber band still springs back without overshoot.
+   */
+  city: {
+    phoneSlots: 4,
+    phoneMaxZoom: 1.25,
+    desktopPad: 0.04,
+    desktopMaxZoom: 1.6,
+    topY: -140,
+    personH: 48,
+    glide: 4,
+    calmFocusSpring: 12,
+    calmFling: false,
+  },
 } as const;
 
 // =================================================================================================================================
