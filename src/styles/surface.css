@@ -22,7 +22,8 @@
   justify-content: flex-start;
   gap: var(--sp-2);
 }
-.surface-overlay.is-locked .surface-close { position: static; margin-inline-start: auto; }
+/* [ux-redesign w2fix B3] relative, not static: the kit hit area (.k-hit) needs the button as its box to reach the full hit-min. */
+.surface-overlay.is-locked .surface-close { position: relative; margin-inline-start: auto; }
 .surface-overlay.is-locked .surface-map {
   flex: 0 0 auto;
   border-block-start: 0;
