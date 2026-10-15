@@ -13,8 +13,11 @@ import { buildSliceState } from '../../src/dev/cityScenario';
 import { hasAnnex } from '../../src/rendering/voids';
 import { occupancy } from '../../src/rendering/occupancy';
 import { extentsFor } from '../../src/rendering/geom';
+import { MAX_WP } from '../../src/rendering/routes';
+import { resetNavGraph, setNavLayoutSource } from '../../src/world/nav/graph';
+import { followChecks, navChecks } from './nav-test';
 
-export function routeChecks(): { problems: string[]; notes: string[] } {
+export function routeChecks(e55json: string | null = null): { problems: string[]; notes: string[] } {
   const problems: string[] = [];
   const notes: string[] = [];
   const fail = (m: string): void => { problems.push(m); };
@@ -107,6 +110,8 @@ export function routeChecks(): { problems: string[]; notes: string[] } {
   notes.push('routes: 20+ plans checked (same floor, wings, lift, stairs, ladder, doors, surface, length cap)');
   notes.push(`routes: classic digest ${classicDigest()}`);
   cityChecks(fail, notes);
+  navChecks(e55json, fail, notes); // [world:M2 camera-nav]
+  followChecks(fail, notes);
   return { problems, notes };
 }
 
@@ -149,6 +154,9 @@ function cityChecks(fail: (m: string) => void, notes: string[]): void {
   const airyWas = GFX.airy;
   GFX.airy = true;
   __setProjectionForTests('city');
+  // [world:M2] The nav graph reads the hubs (and transfers) from the level-builder's layout, as the game's provider does.
+  setNavLayoutSource(s => buildCityLayout(s));
+  resetNavGraph();
   setDoorBlocked(null);
   try {
     const st = buildSliceState('slice');
@@ -185,7 +193,8 @@ function cityChecks(fail: (m: string) => void, notes: string[]): void {
       }
     }
     // With the lift: a high roll rides from the landing on the balcony lane to the other balcony.
-    o = route(st, stop(2, roomsEastX(2) + 60), stop(0, roomsEastX(0) + 300), true, 0.9, r); // floor-0: the lift ride ends on B1's balcony lane
+    // [world:M2] The graph weighs time: from beside the hub the lift is clearly quicker than two storeys of stairs for a walker who is not lift-shy.
+    o = route(st, stop(2, roomsEastX(2) + 10), stop(0, roomsEastX(0) + 10), true, 0.9, r); // floor-0: the lift ride ends on B1's balcony lane
     if (!o || !ks().includes(LEG_LIFT)) fail(`city: a high roll with power should ride the lift, got ${o ? ks().join('') : 'null'}`);
     else {
       const k = ks().indexOf(LEG_LIFT);
@@ -205,7 +214,7 @@ function cityChecks(fail: (m: string) => void, notes: string[]): void {
         o = route(st, stop(a, roomsEastX(a) + sa * 46 + 23), stop(b, roomsEastX(b) + sb * 46 + 23), lift, rnd, r);
         if (!o) { fail(`city: ${a}:${sa} -> ${b}:${sb} (lift ${lift}, roll ${rnd}) has no route: the survivor would teleport`); continue; }
         if (ks().includes(LEG_LADDER)) fail(`city: ${a}:${sa} -> ${b}:${sb} uses the shaft ladder`);
-        if (r.n > 16) fail('city: waypoint list overflow');
+        if (r.n > MAX_WP) fail('city: waypoint list overflow');
         if (r.seconds > MAX_TRIP_S) fail('city: a trip over MAX_TRIP_S was returned');
         worst = Math.max(worst, r.seconds);
         if (ks().includes(LEG_STAIRS)) stairs++;
@@ -216,10 +225,11 @@ function cityChecks(fail: (m: string) => void, notes: string[]): void {
     // The surface still joins floor 0 by the shaft ladder (LADDER_X), then hub stairs or the lift.
     o = route(st, { floor: -1, x: -40, y: -8 }, stop(2, roomsEastX(2) + 60), true, 0.9, r);
     if (!o || r.x[ks().indexOf(LEG_LADDER)] !== LADDER_X) fail('city: surface -> floor 2 should climb the shaft ladder to floor 0 first');
-    // A closed bulkhead still blocks the walk (acceptance 6.4: closing a bulkhead blocks the walk).
-    setDoorBlocked((fl, x0, x1) => fl === 2 && x0 === 3 && x1 === 4);
+    // A closed bulkhead still blocks the walk (acceptance 6.4: closing a bulkhead blocks the walk). [world:M2] With the graph a survivor walks
+    // around one shut door when another floor leads past it, so the room is shut in on both sides here.
+    setDoorBlocked((fl, x0, x1) => fl === 2 && ((x0 === 5 && x1 === 6) || (x0 === 6 && x1 === 7)));
     if (route(st, stop(0, roomsEastX(0) + 30), stop(2, slotX(2, 6) + 10), true, 0.9, r) !== null) fail( // floor-0: from B1 down to the bulkhead on B3
-      'city: a closed door between the landing and the room must block the walk');
+      'city: a room shut in by closed doors must not be reachable');
     setDoorBlocked(null);
 
     // The camera frame from the layout: content inside bounds, the hub inside content, the bounds tighter than the dressing bounds.
@@ -233,6 +243,8 @@ function cityChecks(fail: (m: string) => void, notes: string[]): void {
     notes.push(`routes (city): camera frame bounds ${JSON.stringify(cf.bounds)} content ${JSON.stringify(cf.content)} hub ${JSON.stringify(cf.hub)}`);
   } finally {
     __setProjectionForTests('classic');
+    setNavLayoutSource(null);
+    resetNavGraph();
     GFX.airy = airyWas;
     setDoorBlocked(null);
   }
