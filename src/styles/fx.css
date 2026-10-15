@@ -73,19 +73,19 @@
 :root[data-motion="reduced"] .modal-overlay.open .modal { animation: none; }
 :root[data-motion="reduced"] .modal { --popup-overshoot: 1; }
 
-/* ---- Lists: the first eight rows of a sheet that just opened come in one after the other (Sheet.ts adds .fx-stagger for a moment) -- */
-.sheet-body.fx-stagger > :nth-child(-n + 8) { animation: fx-row-in var(--dur-popup-in) var(--ease-out) backwards; }
-.sheet-body.fx-stagger > :nth-child(2) { animation-delay: var(--stagger); }
-.sheet-body.fx-stagger > :nth-child(3) { animation-delay: calc(var(--stagger) * 2); }
-.sheet-body.fx-stagger > :nth-child(4) { animation-delay: calc(var(--stagger) * 3); }
-.sheet-body.fx-stagger > :nth-child(5) { animation-delay: calc(var(--stagger) * 4); }
-.sheet-body.fx-stagger > :nth-child(6) { animation-delay: calc(var(--stagger) * 5); }
-.sheet-body.fx-stagger > :nth-child(7) { animation-delay: calc(var(--stagger) * 6); }
-.sheet-body.fx-stagger > :nth-child(8) { animation-delay: calc(var(--stagger) * 7); }
+/* ---- Lists: the first eight rows of a sheet that just opened come in one after the other (Sheet.ts adds .fx-stagger to the panel's row list for a moment) -- */
+.fx-stagger > :nth-child(-n + 8) { animation: fx-row-in var(--dur-popup-in) var(--ease-out) backwards; }
+.fx-stagger > :nth-child(2) { animation-delay: var(--stagger); }
+.fx-stagger > :nth-child(3) { animation-delay: calc(var(--stagger) * 2); }
+.fx-stagger > :nth-child(4) { animation-delay: calc(var(--stagger) * 3); }
+.fx-stagger > :nth-child(5) { animation-delay: calc(var(--stagger) * 4); }
+.fx-stagger > :nth-child(6) { animation-delay: calc(var(--stagger) * 5); }
+.fx-stagger > :nth-child(7) { animation-delay: calc(var(--stagger) * 6); }
+.fx-stagger > :nth-child(8) { animation-delay: calc(var(--stagger) * 7); }
 @keyframes fx-row-in {
   from { opacity: 0; translate: 0 var(--sp-2); }
 }
-:root[data-motion="reduced"] .sheet-body.fx-stagger > * { animation: none; }
+:root[data-motion="reduced"] .fx-stagger > * { animation: none; }
 
 /* ---- "No flashes" (Accessibility; data-flash set by the app): the CRT switch-on of sheets and dialogs brightens to 2.2x, so it goes --- */
 :root[data-flash="safe"] .sheet-overlay.open .sheet { animation: none; }
