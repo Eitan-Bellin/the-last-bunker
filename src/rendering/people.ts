@@ -939,14 +939,15 @@ export class Person implements CrowdMember {
     const k = 1 / this.baseScale;
     if (kind === 1) {
       const x = LIFE.lantern.hand.x * k, y = LIFE.lantern.hand.y * k;
-      g.moveTo(x, y - 6).lineTo(x, y - 3).stroke({ width: 0.8, color: 0x2a2420 });
-      g.roundRect(x - 2.4, y - 3.2, 4.8, 6.4, 1.1).fill(0x3a3028);
-      g.roundRect(x - 1.6, y - 2.4, 3.2, 4.6, 0.8).fill(0xffe2a0);
-      g.rect(x - 2.8, y + 2.6, 5.6, 1.1).fill(0x2a2420);
+      const C = LIFE.lantern.prop;
+      g.moveTo(x, y - 6).lineTo(x, y - 3).stroke({ width: 0.8, color: C.wire });
+      g.roundRect(x - 2.4, y - 3.2, 4.8, 6.4, 1.1).fill(C.body);
+      g.roundRect(x - 1.6, y - 2.4, 3.2, 4.6, 0.8).fill(C.glass);
+      g.rect(x - 2.8, y + 2.6, 5.6, 1.1).fill(C.wire);
     } else {
       const x = LIFE.lantern.head.x * k, y = (-this.height() + LIFE.lantern.head.y) * k;
-      g.rect(x - 4.2, y - 0.7, 3.2, 1.4).fill(0x2a2420);
-      g.circle(x, y, 1.7).fill(0xfff4d8);
+      g.rect(x - 4.2, y - 0.7, 3.2, 1.4).fill(LIFE.lantern.prop.headBand);
+      g.circle(x, y, 1.7).fill(LIFE.lantern.prop.headLens);
     }
     this.figure.addChild(g); // (re-added on top: the 3D body may have come in after the last call)
     g.visible = true;

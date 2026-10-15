@@ -14,7 +14,7 @@ import {
 } from './routes';
 // [world:C1-Li] City life (presentation only): loitering, the dig crew at work, carried light, rim, self-light, the ambience hints.
 import { CITY } from '../world/flag';
-import { LIFE, PEOPLE, STRATA } from '../world/tokens';
+import { LIFE, LIGHT, PEOPLE, STRATA } from '../world/tokens';
 import { PEOPLE_RENDER } from '../world/tokensRender';
 import { stratumOf } from '../data/strata';
 import { cityLayoutProvider } from '../world/render/citySeams';
@@ -628,7 +628,7 @@ export class Walkers {
       if (s.carry === CARRY_HEADLAMP) moveLight(s.lightId, s.lightGen, s.px + f * LIFE.lantern.head.x, s.py - p.standHeight + LIFE.lantern.head.y);
       else moveLight(s.lightId, s.lightGen, s.px + f * LIFE.lantern.hand.x, s.py + LIFE.lantern.hand.y);
     }
-    if (s.selfId >= 0) moveLight(s.selfId, s.selfGen, s.px, s.py - 22);
+    if (s.selfId >= 0) moveLight(s.selfId, s.selfGen, s.px, s.py - LIFE.selfLight.dy);
     if ((this.frame + s.idx) % LIFE.rim.every !== 0) return;
     const R = LIFE.rim, S = LIFE.selfLight;
     const here = lightAt(s.px, s.py + R.sampleY);
@@ -636,7 +636,7 @@ export class Walkers {
     // Self-light where no walkway floor holds them up: below the dug city (the pit), on a stair flight between lanes, out at an edge.
     const offBand = s.mode === M_CLIMB || floorIndexAt(s.py) >= this.floorsN || (s.life === LIFE_DIG && this.sites[s.site]?.kind === 'edge');
     if (s.selfId < 0 && s.lightId < 0 && dark && offBand) {
-      const id = addSelfLight(s.px, s.py - 22);
+      const id = addSelfLight(s.px, s.py - LIFE.selfLight.dy);
       if (id >= 0) { s.selfId = id; s.selfGen = lightGen(); s.selfT = t; }
     } else if (s.selfId >= 0 && (!offBand || here > S.below + S.intensity * 0.7) && t - s.selfT > S.hold) {
       removeLight(s.selfId, s.selfGen, true);
@@ -649,7 +649,7 @@ export class Walkers {
     const lr = lightAt(s.px + R.sampleDx, s.py + R.sampleY), ll = lightAt(s.px - R.sampleDx, s.py + R.sampleY);
     const dir = lr > ll + 0.02 ? 1 : ll > lr + 0.02 ? -1 : 0;
     const fl = floorIndexAt(s.py);
-    const color = s.lightId >= 0 ? (s.carry === CARRY_HEADLAMP ? 0xfff0d0 : 0xffcc80) : STRATA[stratumOf(Math.max(0, fl))].light.key;
+    const color = s.lightId >= 0 ? (s.carry === CARRY_HEADLAMP ? LIGHT.presets.headlamp.color : LIGHT.presets.lantern.color) : STRATA[stratumOf(Math.max(0, fl))].light.key;
     const o = PEOPLE.rim.offset;
     p.setRim(color, dark ? PEOPLE.rim.darkAlpha : PEOPLE.rim.alpha, dir * o, dir === 0 ? -o : -o * 0.5);
   }

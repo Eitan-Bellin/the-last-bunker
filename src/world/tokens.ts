@@ -806,6 +806,8 @@ export const LIFE = {
     head: { x: 3, y: 7 },
     /** Strata counted as deep for PEOPLE.lanternShareDeep. */
     deepFrom: 4,
+    /** The carried prop drawn on the person (people.ts setCarry): hook wire, iron body, lit glass, base; the headlamp's band and lens. */
+    prop: { wire: 0x2a2420 as Hex, body: 0x3a3028 as Hex, glass: 0xffe2a0 as Hex, headBand: 0x2a2420 as Hex, headLens: 0xfff4d8 as Hex },
   },
   /** Self-light (style guide 7): somebody standing in a pool darker than `below` (lightAt, pools only) gets a faint light of their own. */
   selfLight: {
@@ -816,6 +818,8 @@ export const LIFE = {
     color: 0xffe2c0,
     /** Kept at least this long once lit (s), so it never flickers on and off at a pool's edge. */
     hold: 3,
+    /** The light sits this far above the feet (world units: about the chest of a 48 u adult). */
+    dy: 22,
   },
   /** Rim (style guide 7): an additive copy of the body, offset toward the brighter side and tinted by the stratum's key light. */
   rim: {
