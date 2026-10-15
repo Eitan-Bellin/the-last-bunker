@@ -37,6 +37,8 @@ export function layerToken(id: LayerId): LayerTokens {
 }
 
 const TIER_RANK: Record<string, number> = { high: 0, medium: 1, low: 2 };
+/** Transparent clear for a plane cache (hoisted: no array per bake). */
+const CLEAR: [number, number, number, number] = [0, 0, 0, 0];
 
 export class ParallaxPlane {
   /** On stage (child of worldContainer), counter-transformed. */
@@ -59,6 +61,8 @@ export class ParallaxPlane {
   private cacheRT: RenderTexture | null = null;
   private bakeRoot = new Container();
   private holders: Container[] = [];
+  /** This plane then its merged planes, refilled per bake (no array per bake). */
+  private bakeList: ParallaxPlane[] = [];
   private bakedSx = NaN;
   private bakedSy = NaN;
   private bakedZ = NaN;
@@ -159,7 +163,10 @@ export class ParallaxPlane {
       this.cacheRT = RenderTexture.create({ width: W, height: H, resolution: res });
       this.cacheSprite.texture = this.cacheRT;
     }
-    const planes = this.merged.length ? [this, ...this.merged] : [this];
+    const planes = this.bakeList;
+    planes.length = 0;
+    planes.push(this);
+    for (const m of this.merged) planes.push(m);
     while (this.holders.length < planes.length) {
       const h = new Container();
       this.holders.push(h);
@@ -173,7 +180,7 @@ export class ParallaxPlane {
       h.visible = true;
     }
     for (let i = planes.length; i < this.holders.length; i++) this.holders[i].visible = false;
-    renderer.render({ container: this.bakeRoot, target: this.cacheRT, clear: true, clearColor: [0, 0, 0, 0] });
+    renderer.render({ container: this.bakeRoot, target: this.cacheRT, clear: true, clearColor: CLEAR });
     // The sprite sits in this plane's own units: screen = (sx, sy) + A * u.
     const A = this.absScale;
     this.cacheSprite.scale.set(1 / A);

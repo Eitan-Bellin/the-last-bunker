@@ -31,6 +31,8 @@ interface FogArea {
 interface Brush { s: Sprite; x: number; y: number; r: number; t: number }
 
 const outCubic = (x: number): number => 1 - Math.pow(1 - x, 3);
+/** Transparent clear for the fog texture (hoisted: no array per redraw). */
+const CLEAR: [number, number, number, number] = [0, 0, 0, 0];
 
 /** The 'known' memory look as one overlay: out = P * (1 - darken) * (1 - tintA) + tint * tintA  ->  alpha and premultiplied colour. */
 function knownLook(): { a: number; c: number } {
@@ -294,7 +296,7 @@ export class FogLayer {
     this.dirty = false;
     this.lastDraw = t;
     this.stats.redraws++;
-    renderer.render({ container: this.root, target: this.rt, clear: true, clearColor: [0, 0, 0, 0] });
+    renderer.render({ container: this.root, target: this.rt, clear: true, clearColor: CLEAR });
   }
 
   private makeTarget(w: number, h: number): void {
