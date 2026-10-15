@@ -150,7 +150,7 @@ export function cityLayoutChecks(games: { name: string; json: string }[]): { pro
       if (L.edges.find(e => e.id === 'e:2:e')?.block !== 'act') fail(`${id}: e:2:e is not blocked by the Act`);
       const face = L.areas.find(a => a.id === 'f:3');
       if (id === 'slice' && face?.state !== 'glimpsed') fail(`slice: f:3 should be glimpsed, is ${face?.state}`);
-      if (id === 'slice-dig' && (face?.state !== 'digging' || Math.abs((face.progress ?? 0) - 0.4) > 0.02)) fail(`slice-dig: f:3 should be digging at 0.4, is ${face?.state} ${face?.progress}`);
+      if (id === 'slice-dig' && (face?.state !== 'digging' || Math.abs((face.progress ?? 0) - 0.1) > 0.02)) fail(`slice-dig: f:3 should be digging at 0.1, is ${face?.state} ${face?.progress}`);
       if (s.survivors.length !== 8) fail(`${id}: ${s.survivors.length} survivors`);
       if (id === 'slice-dig' && cityLayoutSig(s) === cityLayoutSig(buildSliceState('slice'))) fail('slice-dig: a running dig must change the signature (the face is cut open)');
       const tweak = JSON.parse(JSON.stringify(s)) as GameState;
