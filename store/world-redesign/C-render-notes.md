@@ -691,3 +691,39 @@ Flag, boot fallback, pins and pocket finds, context loss: see `M1-T-notes.md`. T
 - **Open:** the e55 idle CPU draw is still about 2x classic in the matrix (13.4 vs 5.5 ms desktop). It needs a profile in M2. Suspects: the lit group's draw list, the shell culling flips.
 
 **Machine note.** Other worktrees were building during this session. The frame-time columns are noisier than in Round 1; the draw calls and GPU MB are not affected.
+
+## M2 (tech-artist, branch `world/m2-T`, 2026-10-15)
+
+Strata map, toggle cost and the idle-draw profile: details in `M2-T-notes.md`. This section is the perf record.
+
+### Idle draw: the profile and the fix
+
+- **Profile** (CDP Profiler, unminified production build, e55 desktop Medium, idle overview): 24 % of the city's draw time was `FilterSystem._calculateFilterArea → getFastGlobalBounds` on the lit group (no `filterArea` in the default 'global' UV mode, so Pixi walked every room, walker and shell piece for its bounds each picture: about 3.5 ms at e55). Classic pays 0: PostFX pins its own filter area.
+- **Fix** (`CityRenderer.update`): the lit group's filter area is pinned to the view in both UV modes.
+
+### Performance
+
+Production build, headless Chrome on the UHD 630, Medium, overview zoom (0.8 desktop / 0.62 phone), 10 s idle, 3 runs per cell, interleaved in one session (`m2-ab.mjs`). Classic is `?city=0` (city is the default on this branch). CPU p10 = 10th percentile of `draw()` over 120 back-to-back frames with `gl.finish()` after each.
+
+| Medium | Idle draw med ms, classic | City before (c692979) | City M2 | M2 / classic | CPU p10 ms, classic → before → M2 | Draw calls, classic → city |
+|---|---|---|---|---|---|---|
+| e55 desktop | 5.0 | 8.4 | **5.7** | **1.14x** (1.30x against the lowest classic run) | 3.9 → 7.8 → 5.6 | 626–629 → 608–614 |
+| fresh desktop | 2.5 | 3.4 | **2.7** | 1.08x | 1.0 → 2.0 → 1.6 | 207 → 207 |
+| e55 phone | 5.2 | 8.1 | **6.0** | 1.15x | 5.3 → 9.7 → 5.8 | 641 → 567–572 |
+| fresh phone | 2.6 | 3.1 | **2.8** | 1.08x | 1.4 → 2.6 → 2.0 | 207–208 → 207 |
+
+**Target ≤ 1.3x classic idle draw at Medium: met** (was 1.7–1.9x at e55; the M1 matrix had 13.4 vs 5.5 ms).
+
+### Map toggle (budget < 8 ms in one frame)
+
+Desktop e55, Medium, pinch-like zoom 0.75 → 0.34 → 0.75, 3 runs:
+- `updateLod` worst frame in the city: **0.8–3.2 ms** (map build 2.3–3.5 ms ahead of the switch, warm-up steps 0.2–4 ms, the cover flip). Classic builds its map in the switch frame: 5–19.5 ms.
+- While the map covers, the lightmap, fog, glow and planes are skipped (unchanged); during the crossfade the scene now keeps drawing under the map (it used to drop at the zoom threshold).
+- The first world picture when the map uncovers costs about +10 ms draw in both modes (rooms un-culled, groups rebuilt): world work, not map work.
+
+### Classic parity
+
+`tools/compare/run.mjs` (a scratch copy that pins `lastbunker_city = '0'`), saves-v6 e30 and c, 390x844@2x, 17 shots, baseline c692979 as a `git archive` copy:
+- base vs head: 2.55 % mean, 9.28 % max;
+- base vs a second base capture (noise floor): 2.29 % mean, 7.87 % max.
+- The same shots top both lists (cam2-floors-close, cam11-evac: walkers in motion). Classic is unchanged; its code path in `updateLod` is the old one.
