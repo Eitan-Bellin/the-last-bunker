@@ -1,9 +1,15 @@
 import type { Application, Container } from 'pixi.js';
-import { BUILDING_W, ROOM_H, SIDE_MARGIN, SLOT_W, floorTop } from './layout';
+import { BUILDING_W, ROOM_H, SHAFT_W, SIDE_MARGIN, SLOT_W, floorTop } from './layout';
 import { reducedMotion, relaxedMs } from '../utils/a11y';
 import { ROW_X0, ROW_X1 } from './surfaceRow'; // plan4:ST-16
 import { GFX } from './gfxFeatures'; // [airy:A5]
 import { getHudInsets, subscribeHudInsets } from '../utils/hudInsets';
+import { CITY } from '../world/flag'; // [world:C1 camera-nav]
+import { CAMERA, LAYERS } from '../world/tokens';
+import { cityCameraFrame, type CityCameraFrame } from '../world/nav/cameraFrame';
+import type { CityLayout, Rect } from '../world/render/layoutTypes';
+import type { ParallaxInfo } from '../world/render/layers';
+import { FollowTracker, type FollowSource } from '../world/nav/followGesture'; // [world:M2 camera-nav]
 
 // [plan4 X-1] Split out of BunkerRenderer.ts with no change in behaviour: everything about the camera (constants, pan / pinch / fling /
 // double tap input, bounds, zoom springs, shake and punch) lives here. BunkerRenderer stays the public facade and builds this class
@@ -43,6 +49,15 @@ export const FOCUS_SPRING = 7.5;
 export const ZOOM_SPRING = 14;
 export const SHAKE_PX = 16;
 export const DOUBLE_TAP_MS = 320;
+// [world:C1 camera-nav] City mode reads the feel from tokens (CAMERA); classic keeps the constants above, byte for byte.
+const PAN_FRICTION = (): number => (CITY ? CAMERA.pan.friction : FRICTION);
+const PAN_EDGE_SPRING = (): number => (CITY ? CAMERA.pan.edgeSpring : EDGE_SPRING);
+const FOCUS_RATE = (): number => (CITY ? CAMERA.springs.focus : FOCUS_SPRING);
+const ZOOM_RATE = (): number => (CITY ? CAMERA.springs.zoom : ZOOM_SPRING);
+const Z_MIN = (): number => (CITY ? CAMERA.zoom.min : MIN_ZOOM);
+const Z_MAX = (): number => (CITY ? CAMERA.zoom.max : MAX_ZOOM);
+/** City: the home and overview zooms never fall into the far map (CAMERA.zoom.far with its hysteresis, plus a little). */
+const CITY_Z_FLOOR = CAMERA.zoom.far * CAMERA.zoom.farHysteresis * 1.04;
 
 /** What the camera needs to know about the scene it looks at (implemented by BunkerRenderer). */
 export interface CameraHost {
@@ -129,6 +144,24 @@ export class CameraController {
   private framedId: string | null = null;
   private insetCheck = 0;
   private bnd = { x0: 0, x1: 0, y0: 0, y1: 0 };
+  /** [world:C1 camera-nav] City mode: bounds, the whole dug city and the hub, from the layout (null in classic and until the first layout). */
+  private cityFrame: CityCameraFrame | null = null;
+  /** [world:C1 camera-nav] Spring rate of the current focus glide (0 = the focus spring); glideTo and follow set a gentler one. */
+  private focusRate = 0;
+  /** [world:C1 camera-nav] follow(): where the followed thing is now (null = it is gone, follow ends). */
+  private followGet: (() => { x: number; y: number } | null) | null = null;
+  /** [world:M2 camera-nav] Follow-survivor: who knows the survivors (walkers.ts followSource), the tracker, who is followed, the zoom to reach. */
+  private followSrc: FollowSource | null = null;
+  private readonly tracker = new FollowTracker();
+  private followId: string | null = null;
+  private followZoom = 0;
+  private readonly followPt = { x: 0, y: 0 };
+  private readonly camPt = { x: 0, y: 0 };
+  /** Called when follow starts or ends (the id followed, or null): the UX session's follow chip listens here. */
+  onFollowChange: ((id: string | null) => void) | null = null;
+  private readonly pinfo: ParallaxInfo = { cx: 0, cy: 0, z: 1, ox: 0, oy: 0, sw: 1, sh: 1 };
+  /** [world:C1 camera-nav] The layout's dressing bounds: what the parallax planes' content covers (reduced-motion anchor). */
+  private planeBounds: Rect | null = null;
   private trauma = 0;
   private traumaDecay = 1;
   private punchT = 9;
@@ -205,18 +238,21 @@ export class CameraController {
   /** The old default: the whole building width on screen (desktop keeps it, up to its cap of 1.6). */
   private fitZoom(): number {
     const { width } = this.host.app.screen;
-    return Math.max(MIN_ZOOM, Math.min(1.6, (width - 8) / (BUILDING_W + SIDE_MARGIN * 2)));
+    return Math.max(Z_MIN(), Math.min(1.6, (width - 8) / (BUILDING_W + SIDE_MARGIN * 2)));
   }
 
   /** Floor overview: the widest floor fits the screen width (never above the default, never below MIN_ZOOM). */
   overviewZoom(): number {
     const { width } = this.host.app.screen;
+    // [world:C1 camera-nav] City: the whole dug city across (never into the far map).
+    if (this.cityFrame) return Math.max(CITY_Z_FLOOR, Math.min(this.baseZoom, width / (this.cityFrame.content.w + 2 * SIDE_MARGIN)));
     const sp = this.host.floorSpan();
-    return Math.max(MIN_ZOOM, Math.min(this.baseZoom, width / (sp.r - sp.l + 2 * SIDE_MARGIN)));
+    return Math.max(Z_MIN(), Math.min(this.baseZoom, width / (sp.r - sp.l + 2 * SIDE_MARGIN)));
   }
 
   /** The default zoom of this screen (also what baseZoom holds): sector zoom on a phone, fit-to-width elsewhere. */
   private defaultZoom(): number {
+    if (this.cityFrame) return this.cityHomeZoom(); // [world:C1 camera-nav]
     return this.host.app.screen.width < PHONE_W ? this.sectorZoom() : this.fitZoom();
   }
 
@@ -235,10 +271,25 @@ export class CameraController {
     this.zoom = this.baseZoom;
     this.untouched = true;
     const sp = this.host.floorSpan();
-    // Phone: the shaft and the first rooms next to it, just under the top HUD. Wider screens: the whole building, centred.
-    this.camX = width < PHONE_W ? this.coreX() : (sp.l + sp.r) / 2;
     const usable = height - hudTop() - hudBottom();
-    this.camY = VIEW_TOP + usable / 2 / this.zoom;
+    if (this.cityFrame) {
+      // [world:C1 camera-nav] City home view. Phone: spine-centred on the hub, the surface strip on top when the hub fits under it.
+      // Wider screens: the whole dug city, centred.
+      const fr = this.cityFrame, viewH = usable / this.zoom;
+      if (width < PHONE_W) {
+        const hub = fr.hub ?? fr.content;
+        this.camX = this.coreX();
+        const top = CAMERA.city.topY, bottom = hub.y + hub.h;
+        this.camY = bottom - top <= viewH ? top + viewH / 2 : hub.y + hub.h / 2;
+      } else {
+        this.camX = fr.content.x + fr.content.w / 2;
+        this.camY = fr.content.y + fr.content.h / 2;
+      }
+    } else {
+      // Phone: the shaft and the first rooms next to it, just under the top HUD. Wider screens: the whole building, centred.
+      this.camX = width < PHONE_W ? this.coreX() : (sp.l + sp.r) / 2;
+      this.camY = VIEW_TOP + usable / 2 / this.zoom;
+    }
     this.stopCamera();
     this.clampCamera();
     this.updateTransform();
@@ -263,6 +314,204 @@ export class CameraController {
     this.updateTransform();
   }
 
+  // ───────────────────────────── [world:C1 camera-nav] city mode ─────────────────────────────
+  // With ?city the camera's bounds, home view and overview come from the city layout (src/world/nav/cameraFrame.ts); classic never
+  // sets a frame, so none of this runs there.
+
+  /** The city layout changed (BunkerRenderer's syncCityLayout): bounds, home view and overview follow it. */
+  setCityLayout(layout: CityLayout): void {
+    if (!CITY) return;
+    this.planeBounds = layout.bounds;
+    this.setCityBounds(cityCameraFrame(layout));
+  }
+
+  /**
+   * Sets the city frame directly: a full frame, or just a bounds rectangle (then it is also the content to frame, with no hub).
+   * An untouched camera refits to the new home view; a camera the player has moved keeps its view, inside the new bounds.
+   */
+  setCityBounds(frame: CityCameraFrame | Rect): void {
+    const fr: CityCameraFrame = 'bounds' in frame ? frame : { bounds: frame, content: frame, hub: null };
+    const old = this.cityFrame;
+    if (old && sameRect(old.bounds, fr.bounds) && sameRect(old.content, fr.content) && (old.hub === fr.hub || (!!old.hub && !!fr.hub && sameRect(old.hub, fr.hub)))) return;
+    this.cityFrame = fr;
+    if (this.untouched) { this.fitToScreen(); return; }
+    this.baseZoom = this.defaultZoom();
+    this.clampCamera();
+    this.updateTransform();
+  }
+
+  /** The current city frame (null in classic). */
+  get cityBounds(): Readonly<CityCameraFrame> | null {
+    return this.cityFrame;
+  }
+
+  /**
+   * The city home zoom. Phone: the hub with its vestibules plus CAMERA.city.phoneSlots slots across, people at least
+   * CAMERA.minPersonPx tall. Wider screens: the whole dug city fits between the HUD bands with CAMERA.city.desktopPad margin.
+   */
+  private cityHomeZoom(): number {
+    const { width, height } = this.host.app.screen;
+    const C = CAMERA.city, fr = this.cityFrame!;
+    if (width < PHONE_W) {
+      const hubW = fr.hub ? fr.hub.w : SHAFT_W + 2 * SIDE_MARGIN;
+      const z = width / (hubW + C.phoneSlots * SLOT_W);
+      return Math.max(CITY_Z_FLOOR, CAMERA.minPersonPx / C.personH, Math.min(C.phoneMaxZoom, z));
+    }
+    const usable = height - hudTop() - hudBottom();
+    const k = 1 - 2 * C.desktopPad;
+    const z = Math.min((width * k) / Math.max(1, fr.content.w), (usable * k) / Math.max(1, fr.content.h));
+    return Math.max(CITY_Z_FLOOR, Math.min(C.desktopMaxZoom, z));
+  }
+
+  /**
+   * The camera for the parallax planes (architecture 5.2): the world point at the camera centre (cx, cy), the zoom and the world
+   * container's screen offset, all read from the world container, so the shake and the punch are included. One reused object.
+   * Reduced motion: the anchor stays put at the middle of the city, so the planes move rigidly with the world (no parallax drift);
+   * the zoom stays live, the screen math the planes do for culling depends on it. Near the far edges at high zoom, where a still
+   * anchor would run the far plane out of content, the anchor slides along (see calmAnchor).
+   */
+  parallaxInfo(): ParallaxInfo {
+    const wc = this.host.worldContainer;
+    const { width, height } = this.host.app.screen;
+    const p = this.pinfo, z = wc.scale.x || 1;
+    p.z = z;
+    p.ox = wc.x;
+    p.oy = wc.y;
+    p.sw = width;
+    p.sh = height;
+    const lx = (width / 2 - wc.x) / z, ly = (this.viewCY() - wc.y) / z;
+    const fr = this.cityFrame, B = fr ? this.planeBounds ?? fr.content : null;
+    if (fr && B && this.calm) {
+      // The still anchor is the middle of the city. The planes' content covers the layout's dressing bounds plus half their larger side
+      // (backdrop.ts setLayout); calmAnchor keeps the slowest plane (CALM_P) covering the view and slides the anchor only past that.
+      const k = Math.pow(z, CALM_P - 1), pad = Math.max(B.w, B.h) * 0.5;
+      p.cx = calmAnchor(lx, fr.content.x + fr.content.w / 2, B.x + B.w / 2, (B.w / 2 + pad) * CALM_P, k, width / 2 / z);
+      p.cy = calmAnchor(ly, fr.content.y + fr.content.h / 2, B.y + B.h / 2, (B.h / 2 + pad) * CALM_P, k, height / 2 / z);
+    } else {
+      p.cx = lx;
+      p.cy = ly;
+    }
+    return p;
+  }
+
+  /**
+   * A gentle glide to a world point (and zoom), for story moves and the follow mode: the same critically damped spring as focusTo, at
+   * the slower CAMERA.city.glide rate (or rate). Reduced motion cuts straight there. A touch or the wheel takes the camera back.
+   */
+  glideTo(x: number, y: number, z: number = this.focusTarget?.z ?? this.zoom, rate: number = CAMERA.city.glide): void {
+    if (this.calm) {
+      this.stopCamera();
+      this.untouched = false;
+      this.zoom = this.clampZoom(z);
+      this.camX = x;
+      this.camY = y;
+      this.clampCamera();
+      this.updateTransform();
+      return;
+    }
+    this.focusTo(x, y, z);
+    this.focusRate = rate;
+  }
+
+  /**
+   * [world:M2 camera-nav] Follow something that moves: while get() returns a point (world units) the camera keeps it inside the central
+   * CAMERA.follow.deadZone of the view, lift rides included (followGesture.ts FollowTracker: a glide to it first, then an eased lead with a
+   * hard hold; reduced motion: cuts only). get() returning null ends the follow, and so does a pan, a pinch, the wheel or a tap elsewhere in
+   * the world (CAMERA.follow.cancelOnDrag). Pass null to stop. `zoomTo`: zoom in to at least this while following (0 = keep the zoom).
+   */
+  follow(get: (() => { x: number; y: number } | null) | null, zoomTo = 0): void {
+    const was = this.followId;
+    this.followGet = get;
+    this.followId = null;
+    this.tracker.reset();
+    this.followZoom = get && zoomTo > this.zoom ? this.clampZoom(zoomTo) : 0;
+    if (get) {
+      this.cancelTour();
+      this.stopCamera();
+      this.untouched = false;
+    }
+    if (was !== null) this.onFollowChange?.(null);
+  }
+
+  /**
+   * [world:M2 camera-nav] Follow a survivor by id (the person sheet's "follow" for the UX session; the double tap on a walking survivor uses
+   * it too). Needs the follow source (BunkerRenderer wires walkers.followSource). The camera zooms in to CAMERA.follow.minZoom at least, so
+   * the walk stays drawn. False when the survivor is not known (or no source is wired).
+   */
+  startFollow(personId: string): boolean {
+    const src = this.followSrc;
+    if (!src || !src.locate(personId, this.followPt)) return false;
+    const pt = this.followPt;
+    this.follow(() => (src.locate(personId, pt) ? pt : null), CAMERA.follow.minZoom);
+    this.followId = personId;
+    this.onFollowChange?.(personId);
+    return true;
+  }
+
+  /** [world:M2 camera-nav] Stop following (no-op when not following). */
+  stopFollow(): void {
+    if (this.followGet) this.follow(null);
+  }
+
+  /** [world:M2 camera-nav] Who knows where the survivors are (BunkerRenderer: `this.cam.setFollowSource(this.walkers.followSource(...))`). */
+  setFollowSource(src: FollowSource | null): void {
+    this.followSrc = src;
+    if (!src && this.followId !== null) this.stopFollow();
+  }
+
+  get following(): boolean {
+    return this.followGet !== null;
+  }
+
+  /** [world:M2 camera-nav] The survivor being followed (startFollow), or null (not following, or following a plain point). */
+  get followedId(): string | null {
+    return this.followGet ? this.followId : null;
+  }
+
+  /** The walking survivor under a screen point (the follow gesture's hit test), or null. */
+  private pickSurvivor(sx: number, sy: number): string | null {
+    if (!this.followSrc) return null;
+    const { width } = this.host.app.screen;
+    const wx = this.camX + (sx - width / 2) / this.zoom, wy = this.camY + (sy - this.viewCY()) / this.zoom;
+    return this.followSrc.pickAt(wx, wy, CAMERA.follow.pickSlopPx / this.zoom);
+  }
+
+  /** Whether a screen point is on the followed survivor's figure (walking or standing in a room), give or take the pick slop. */
+  private tapOnFollowed(sx: number, sy: number): boolean {
+    const id = this.followId;
+    if (!id || !this.followSrc) return false;
+    if (this.pickSurvivor(sx, sy) === id) return true;
+    const p = this.camPt;
+    if (!this.followSrc.locate(id, p)) return false;
+    const { width } = this.host.app.screen;
+    const wx = this.camX + (sx - width / 2) / this.zoom, wy = this.camY + (sy - this.viewCY()) / this.zoom;
+    const slop = CAMERA.follow.pickSlopPx / this.zoom;
+    return Math.abs(wx - p.x) <= 8 + slop && Math.abs(wy - p.y) <= CAMERA.city.personH / 2 + slop;
+  }
+
+  private stepFollow(dt: number): void {
+    const p = this.followGet!();
+    if (!p) { this.follow(null); return; }
+    const { width, height } = this.host.app.screen;
+    const vh = height - hudTop() - hudBottom();
+    // Zoom in first if asked (eased around the view centre; reduced motion: at once).
+    if (this.followZoom > 0) {
+      const lz = Math.log(this.zoom), tz = Math.log(this.followZoom);
+      const next = this.calm || Math.abs(tz - lz) < 0.002 ? tz : lz + (tz - lz) * (1 - Math.exp(-dt * CAMERA.follow.catchUp));
+      this.zoom = Math.exp(next);
+      if (next === tz) this.followZoom = 0;
+    }
+    const c = this.camPt;
+    c.x = this.camX;
+    c.y = this.camY;
+    this.tracker.step(c, p.x, p.y, dt, this.zoom, width, vh, this.calm);
+    this.camX = c.x;
+    this.camY = c.y;
+    this.focusTarget = null;
+    this.camVX = this.camVY = 0;
+    this.clampCamera();
+  }
+
   // ───────────────────────────── [camera] input ─────────────────────────────
   // One finger drags 1:1 with a rubber band past the edges and glides on release; two fingers pinch around the
   // point between them (and pan); the wheel zooms around the cursor; a double tap frames a room. Everything is
@@ -282,6 +531,7 @@ export class CameraController {
       if (e.isPrimary) { const r = canvas.getBoundingClientRect(); this.carryX = e.clientX - r.left; this.carryY = e.clientY - r.top; }
       this.untouched = false;
       this.cancelTour(); // a touch is the player taking the camera back
+      // [world:M2 camera-nav] A touch alone no longer ends a follow: a drag, a pinch or a tap elsewhere does (below).
       // A touch catches a gliding camera; that touch only stops it (no room tap).
       // (Not when this touch may be the second half of a double tap.)
       const pendingTap = performance.now() - this.lastTap.t < relaxedMs(DOUBLE_TAP_MS); // plan4:AC-13
@@ -316,7 +566,10 @@ export class CameraController {
       const dx = e.clientX - this.dragStartX;
       const dy = e.clientY - this.dragStartY;
       this.pushSample(e.timeStamp, e.clientX, e.clientY);
-      if (!this.isDragging && Math.hypot(dx, dy) > DRAG_THRESHOLD) this.isDragging = true;
+      if (!this.isDragging && Math.hypot(dx, dy) > DRAG_THRESHOLD) {
+        this.isDragging = true;
+        if (CAMERA.follow.cancelOnDrag) this.stopFollow(); // [world:M2 camera-nav] the player pans: the camera is theirs
+      }
       if (!this.isDragging) return;
       this.camBounds(this.zoom);
       const b = this.bnd;
@@ -350,6 +603,8 @@ export class CameraController {
       } else if (this.pointerDown && e.type === 'pointerup' && e.timeStamp - this.downAt < 300) {
         const r = canvas.getBoundingClientRect();
         host.canvasTap?.(e.clientX - r.left, e.clientY - r.top);
+        // [world:M2 camera-nav] A tap anywhere in the world but on the followed survivor ends the follow (a double tap may start another).
+        if (this.followGet && this.followId !== null && !this.tapOnFollowed(e.clientX, e.clientY)) this.stopFollow();
         this.tapAt(e.clientX, e.clientY, true);
       }
       this.pointerDown = false;
@@ -369,6 +624,7 @@ export class CameraController {
       const dy = e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY;
       this.untouched = false;
       this.cancelTour();
+      this.stopFollow(); // [world:C1 camera-nav]
       const from = this.wheelZoom ?? this.zoom;
       this.focusTarget = null;
       this.camVX = this.camVY = 0;
@@ -420,6 +676,7 @@ export class CameraController {
     this.isDragging = true;
     this.pointerDown = true;
     this.pinched = true;
+    if (CAMERA.follow.cancelOnDrag) this.stopFollow(); // [world:M2 camera-nav] a pinch ends a follow
   }
 
   /** Pinch: the world point under the fingers stays under them while they spread and move. */
@@ -470,9 +727,12 @@ export class CameraController {
     let vy = (s[last + 2] - s[first + 2]) / dt;
     const sp = Math.hypot(vx, vy);
     if (sp < 60) return;
-    if (sp > 5000) {
-      vx *= 5000 / sp;
-      vy *= 5000 / sp;
+    // [world:C1 camera-nav] City: the fling cap comes from the tokens (phones lower); reduced motion does not coast at all.
+    if (CITY && this.calm && !CAMERA.city.calmFling) return;
+    const cap = CITY ? (this.host.app.screen.width < PHONE_W ? CAMERA.pan.maxFlingPhone : CAMERA.pan.maxFlingDesktop) : 5000;
+    if (sp > cap) {
+      vx *= cap / sp;
+      vy *= cap / sp;
     }
     this.camVX = -vx / this.zoom;
     this.camVY = -vy / this.zoom;
@@ -495,6 +755,11 @@ export class CameraController {
 
   /** Double tap: frame the room (or ruin) under the finger above any open sheet; again to zoom back out. Empty space zooms in. */
   private onDoubleTap(sx: number, sy: number): void {
+    // [world:M2 camera-nav] City: a double tap on a walking survivor follows them (instead of framing the room behind them).
+    if (CITY) {
+      const who = this.pickSurvivor(sx, sy);
+      if (who && this.startFollow(who)) return;
+    }
     const { width, height } = this.host.app.screen;
     const id = this.host.targetAt(sx, sy);
     const rect = id ? this.host.targetRect(id) : null;
@@ -503,7 +768,7 @@ export class CameraController {
     const wy = this.camY + (sy - this.viewCY()) / this.zoom;
     if (rect) {
       const visH = height - hudTop() - hudBottom() - inset;
-      const z = this.clampZoom(Math.min(width * 0.9 / rect.w, visH * 0.82 / rect.h, MAX_ZOOM));
+      const z = this.clampZoom(Math.min(width * 0.9 / rect.w, visH * 0.82 / rect.h, Z_MAX()));
       const cx = rect.x + rect.w / 2, cy = rect.y + rect.h / 2;
       // Already framed: the second double tap goes back to the overview.
       const framed = this.framedId === id && Math.abs(this.zoom / z - 1) < 0.08;
@@ -555,6 +820,7 @@ export class CameraController {
 
   /** Camera x that puts the shaft and the first rooms at the left edge of the screen (the default phone view). */
   private coreX(): number {
+    if (this.cityFrame) return this.cityFrame.hub ? this.cityFrame.hub.x + this.cityFrame.hub.w / 2 : SHAFT_W / 2; // [world:C1 camera-nav] the spine
     return this.host.app.screen.width / 2 / this.zoom - SIDE_MARGIN;
   }
 
@@ -675,6 +941,7 @@ export class CameraController {
   stopCamera(): void {
     this.camVX = this.camVY = this.zoomV = 0;
     this.focusTarget = null;
+    this.focusRate = 0;
     this.wheelZoom = null;
   }
 
@@ -697,24 +964,27 @@ export class CameraController {
     const halfW = width / 2 / z;
     const halfH = (height - hudTop() - hudBottom()) / 2 / z;
     const b = this.bnd;
-    const minX = Math.min(0, this.host.floorSpan().l, this.host.extentL?.() ?? 0) - SIDE_MARGIN, maxX = this.host.extentR() + SIDE_MARGIN;
+    let minX = Math.min(0, this.host.floorSpan().l, this.host.extentL?.() ?? 0) - SIDE_MARGIN, maxX = this.host.extentR() + SIDE_MARGIN;
+    const cb = this.cityFrame?.bounds;
+    // [world:C1 camera-nav] City: the layout's reach (strips, edges, districts, pockets; see nav/cameraFrame.ts), and still the surface row and project sites.
+    if (cb) { minX = Math.min(cb.x, (this.host.extentL?.() ?? 0) - SIDE_MARGIN); maxX = Math.max(cb.x + cb.w, this.host.extentR() + SIDE_MARGIN); }
     if (maxX - minX <= halfW * 2) b.x0 = b.x1 = (minX + maxX) / 2;
     else { b.x0 = minX + halfW; b.x1 = maxX - halfW; }
     // An open sheet lets the camera go lower, so the deepest rooms can sit above it.
     // Tall project buildings on the surface let the camera rise to their tops.
-    const minY = Math.min(VIEW_TOP, this.host.projectTop()) - 60, maxY = this.host.contentBottom() + this.bottomInset / z;
+    const minY = Math.min(VIEW_TOP, this.host.projectTop()) - 60, maxY = (cb ? cb.y + cb.h : this.host.contentBottom()) + this.bottomInset / z;
     if (maxY - minY <= halfH * 2) b.y0 = b.y1 = minY + halfH;
     else { b.y0 = minY + halfH; b.y1 = maxY - halfH; }
   }
 
   clampZoom(z: number): number {
-    return Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, z));
+    return Math.max(Z_MIN(), Math.min(Z_MAX(), z));
   }
 
   /** Pinching past the zoom limits gives way with resistance, then springs back on release. */
   private softZoom(z: number): number {
-    const lo = MIN_ZOOM;
-    if (z > MAX_ZOOM) return MAX_ZOOM * Math.exp(Math.log(z / MAX_ZOOM) * 0.3);
+    const lo = Z_MIN();
+    if (z > Z_MAX()) return Z_MAX() * Math.exp(Math.log(z / Z_MAX()) * 0.3);
     if (z < lo) return lo * Math.exp(Math.log(z / lo) * 0.3);
     return z;
   }
@@ -739,6 +1009,7 @@ export class CameraController {
 
   /** Glide (critically damped spring) to a camera centre and zoom; the target is kept inside the bounds. */
   focusTo(x: number, y: number, z: number): void {
+    this.stopFollow(); // [world:M2] a scripted move (crisis, dig, placement, sheet) wins over a follow; stepFollow never calls focusTo
     z = this.clampZoom(z);
     this.untouched = false;
     this.camBounds(z);
@@ -749,6 +1020,7 @@ export class CameraController {
     f.z = z;
     this.focusTarget = f;
     this.wheelZoom = null;
+    this.focusRate = 0;
   }
 
   /**
@@ -757,6 +1029,7 @@ export class CameraController {
    * it was cancelled (by the player, or by another tourPath). Under reduced motion the camera cuts from point to point instead of gliding.
    */
   tourPath(points: { x: number; y: number; z?: number }[], dwellMs = 1500): Promise<boolean> {
+    this.stopFollow(); // [world:M2] a tour ends a follow
     this.cancelTour();
     if (!points.length) return Promise.resolve(true);
     return new Promise<boolean>(resolve => {
@@ -802,6 +1075,7 @@ export class CameraController {
   /** One time step of the camera: focus glide, wheel zoom, zoom-limit spring, coasting, edge springs, shake. */
   stepCamera(dt: number): void {
     if (this.tour) this.stepTour(dt);
+    if (this.followGet && this.pointers.size === 0) this.stepFollow(dt); // [world:C1 camera-nav]
     if (this.trauma > 0) this.trauma = Math.max(0, this.trauma - this.traumaDecay * dt);
     if (this.punchT < 1) this.punchT += dt;
     // While a sheet lets the camera rest lower, check now and then whether it closed (then glide back).
@@ -813,12 +1087,14 @@ export class CameraController {
       // The fingers own the camera.
     } else if (this.focusTarget) {
       const f = this.focusTarget;
-      const lz = crit(Math.log(this.zoom), this.zoomV, Math.log(f.z), FOCUS_SPRING, dt);
+      // [world:C1 camera-nav] glideTo / follow use a gentler rate; city reduced motion settles faster.
+      const w = this.focusRate || (CITY && this.calm ? CAMERA.city.calmFocusSpring : FOCUS_RATE());
+      const lz = crit(Math.log(this.zoom), this.zoomV, Math.log(f.z), w, dt);
       this.zoom = Math.exp(lz);
       this.zoomV = SPRING_V;
-      this.camX = crit(this.camX, this.camVX, f.x, FOCUS_SPRING, dt);
+      this.camX = crit(this.camX, this.camVX, f.x, w, dt);
       this.camVX = SPRING_V;
-      this.camY = crit(this.camY, this.camVY, f.y, FOCUS_SPRING, dt);
+      this.camY = crit(this.camY, this.camVY, f.y, w, dt);
       this.camVY = SPRING_V;
       if (Math.abs(this.camX - f.x) * this.zoom < 0.3 && Math.abs(this.camY - f.y) * this.zoom < 0.3 && Math.abs(lz - Math.log(f.z)) < 0.0005) {
         this.camX = f.x;
@@ -836,7 +1112,7 @@ export class CameraController {
       // Past the zoom limits (after a pinch): spring back around the last pinch point.
       const zc = this.clampZoom(this.zoom);
       if (zc !== this.zoom || this.zoomV !== 0) {
-        const lz = crit(Math.log(this.zoom), this.zoomV, Math.log(zc), ZOOM_SPRING, dt);
+        const lz = crit(Math.log(this.zoom), this.zoomV, Math.log(zc), ZOOM_RATE(), dt);
         this.zoomV = SPRING_V;
         const settled = Math.abs(lz - Math.log(zc)) < 0.0005 && Math.abs(this.zoomV) < 0.01;
         this.zoomAround(settled ? zc : Math.exp(lz), this.zoomAnchorX, this.zoomAnchorY);
@@ -858,14 +1134,15 @@ export class CameraController {
   /** [perf] The camera (or a carried person) is moving right now: the engine draws at its motion rate (60) while this holds. */
   get moving(): boolean {
     return this.host.carryPointer() !== null || (this.pointers.size > 0 && (this.isDragging || this.pinch !== null)) || this.focusTarget !== null
-      || this.camVX !== 0 || this.camVY !== 0 || this.zoomV !== 0 || this.wheelZoom !== null || this.trauma > 0 || this.punchT < 1;
+      || this.camVX !== 0 || this.camVY !== 0 || this.zoomV !== 0 || this.wheelZoom !== null || this.trauma > 0 || this.punchT < 1
+      || this.followGet !== null; // [world:C1 camera-nav]
   }
 
   /** One axis of the free camera; the new velocity is left in SPRING_V. */
   private axisStep(x: number, v: number, lo: number, hi: number, dt: number): number {
     if (x < lo || x > hi) {
       const t = x < lo ? lo : hi;
-      const nx = crit(x, v, t, EDGE_SPRING, dt);
+      const nx = crit(x, v, t, PAN_EDGE_SPRING(), dt);
       if (Math.abs(nx - t) * this.zoom < 0.2 && Math.abs(SPRING_V) * this.zoom < 4) {
         SPRING_V = 0;
         return t;
@@ -876,8 +1153,8 @@ export class CameraController {
       SPRING_V = 0;
       return x;
     }
-    const e = Math.exp(-FRICTION * dt);
-    const nx = x + (v * (1 - e)) / FRICTION;
+    const e = Math.exp(-PAN_FRICTION() * dt);
+    const nx = x + (v * (1 - e)) / PAN_FRICTION();
     SPRING_V = Math.abs(v * e) * this.zoom < 8 ? 0 : v * e;
     return nx;
   }
@@ -953,6 +1230,28 @@ export class CameraController {
     // [camera] A glide (critically damped spring), not a jump.
     this.focusTo(x, y, Math.max(this.zoom, this.baseZoom * zoomBoost));
   }
+}
+
+/** [world:C1 camera-nav] Reduced motion: the slowest underground plane (far) and the share of its coverage the still anchor may use. */
+const CALM_P = Math.min(...LAYERS.filter(l => l.id === 'far' || l.id === 'back').map(l => l.p));
+const CALM_SAFE = 0.85;
+
+/**
+ * The reduced-motion parallax anchor on one axis. A plane (factor p = CALM_P, scale k) anchored at A shows its content point
+ * u = (live - A) / k + A * p at the camera centre; its content spans centre * p +- ext (plane units). The anchor stays at `mid` while the
+ * view (half size hv, world) stays inside CALM_SAFE of that span, and otherwise slides just enough to stay inside (continuous).
+ */
+function calmAnchor(live: number, mid: number, centre: number, ext: number, k: number, hv: number): number {
+  const lim = ext * CALM_SAFE - hv / k;
+  if (lim <= 0) return live;
+  const p = CALM_P;
+  const o = (live - mid) / k + (mid - centre) * p;
+  if (Math.abs(o) <= lim) return mid;
+  return ((o > 0 ? lim : -lim) - live / k + centre * p) / (p - 1 / k);
+}
+
+function sameRect(a: Rect, b: Rect): boolean {
+  return a.x === b.x && a.y === b.y && a.w === b.w && a.h === b.h;
 }
 
 // [camera] Spring and rubber-band helpers (allocation-free: crit() leaves the new velocity in SPRING_V).

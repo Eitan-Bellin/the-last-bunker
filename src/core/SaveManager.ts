@@ -12,6 +12,14 @@ function slotSuffix(): string {
   return slot && /^[a-z0-9_-]{1,20}$/i.test(slot) ? `_${slot}` : '';
 }
 
+/**
+ * True when this page plays on a separate `?slot=` save: the exact test the save keys use. Anything that must never write the main
+ * save (dev scenarios) checks this, never the raw query param (an invalid name, or a production build, falls back to the main key).
+ */
+export function hasValidSlot(): boolean {
+  return slotSuffix() !== '';
+}
+
 // The main save keeps its key and its format (LZ-compressed JSON, UTF-16): every older build and every save already on a phone stays readable.
 const AUTO_SAVE_KEY = `lastbunker_auto${slotSuffix()}`;
 const SAVE_SLOT_PREFIX = `lastbunker_slot${slotSuffix()}_`;

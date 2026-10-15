@@ -1,7 +1,8 @@
 import type { GameState } from '../core/GameState';
 import { floorExtent } from '../core/GameState';
 import type { BunkerRenderer } from '../rendering/BunkerRenderer';
-import { BASE_EAST, ROOM_H, SLOT_W, floorTop, slotX } from '../rendering/layout';
+import { BASE_EAST, ROOM_H, SLOT_W, floorTop } from '../rendering/layout';
+import { slotX } from '../world/project';
 import { ROW_X0, ROW_X1 } from '../rendering/surfaceRow';
 import { reducedMotion } from '../utils/a11y';
 import { i18n } from '../i18n/I18nManager';
@@ -185,8 +186,8 @@ export class TourMode {
           const f = Number(k);
           if (!Number.isFinite(f) || f < 0) continue;
           const ex = floorExtent(st, f);
-          if (ex.w > 0) wings.push({ f, mid: (slotX(-ex.w) + slotX(0)) / 2, width: ex.w * SLOT_W });
-          if (ex.e > BASE_EAST) wings.push({ f, mid: (slotX(BASE_EAST) + slotX(ex.e)) / 2, width: (ex.e - BASE_EAST) * SLOT_W });
+          if (ex.w > 0) wings.push({ f, mid: (slotX(f, -ex.w) + slotX(f, 0)) / 2, width: ex.w * SLOT_W });
+          if (ex.e > BASE_EAST) wings.push({ f, mid: (slotX(f, BASE_EAST) + slotX(f, ex.e)) / 2, width: (ex.e - BASE_EAST) * SLOT_W });
         }
         wings.sort((a, b) => b.width - a.width || b.f - a.f);
         const w = wings[cycle % Math.max(1, wings.length)];

@@ -8,7 +8,12 @@ import type { EraDef } from '../data/eras';
 import type { BuildingInstance, BuildingType, GameState, Position, Ruin, SurvivorState } from '../core/GameState';
 import { effectiveLevel, isDistrict, roomFloors, roomSlots } from '../data/buildingDefs';
 import { i18n } from '../i18n/I18nManager';
-import { BASE_EAST, BUILDING_W, districtXAt, FLOOR_H, ROOM_H, SHAFT_GAP, SHAFT_W, SLOT_W, TOPSOIL, buildingH, buildingX, extentsFor, floorExtent, floorIndexAt, floorTop, slotX, ROOMS_X, type Ext } from './layout';
+import { BASE_EAST, BUILDING_W, FLOOR_H, ROOM_H, SHAFT_W, SLOT_W, TOPSOIL, buildingH, extentsFor, floorExtent, floorIndexAt, floorTop, type Ext } from './layout';
+import { buildingX, districtXAt, eastmostSlotX, fallbackToClassic, slotX, stripX, westmostSlotX, worldModeConsistent } from '../world/project';
+import { CITY } from '../world/flag'; // [world:C1] the city renderer behind ?city [world:M1] session fallback
+import type { CityHost } from '../world/render/cityHost'; // [world:C1] loaded on demand (mountCity): classic never downloads the city renderer
+import { setLightSink } from '../world/life/lanterns'; // [world:C1-Li] // [world:C2] the real city layout and shell into the seams
+import { PEOPLE_RENDER } from '../world/tokensRender'; // [world:C1]
 import { hashString, seeded } from './draw';
 import { PEOPLE_STYLE, Person, ROOM_ACTIVITY, type Activity, type Lane } from './people';
 import { crowdFor, restCountFor, settleCrowds } from './workSpots'; // gfx-p0 people
@@ -43,7 +48,7 @@ import { coneTexture } from '../art/ArtLibrary';
 import { buildRuinVisual } from './ruinArt';
 import { iconSprite } from './richText';
 import { glowTexture, moteTexture } from '../art/ArtLibrary';
-import { Sprite } from 'pixi.js';
+import { Sprite, Texture, type GraphicsContext } from 'pixi.js';
 import { IncidentLayer, DisasterLayer } from './incidentFx';
 import { PopulationSystem } from '../systems/PopulationSystem';
 /** [Danger C5] Only used to turn a stored name into its Hebrew form for the plaque. */
@@ -58,6 +63,62 @@ import { FrontChunks } from './frontChunks'; // [plan4:ST-7]
 import { KIT_KEYS, buildBays,buildCasing, depthGains, structureAmbient, gfx2Enabled, kitReady, kitState, occupancy, type WorldLamp } from './structure';
 
 
+
+/** [world:C2] World units the camera may pan past a city edge site or district cavern. */
+const CITY_EDGE_PAD = 90;
+/**
+ * [world:M1] After a lost GL context: blanks every sprite (plain, tiling, nine-slice) whose texture was destroyed and clears every
+ * Graphics that fills with one (or, for a shared context, swaps the dead fill for an empty one). Returns how many it fixed. A destroyed texture has no source, and Pixi's batcher reads
+ * `texture._source.alphaMode` for every element, so one stale reference threw on every picture after a restore.
+ */
+export function dropDeadTextures(root: Container): number {
+  let n = 0;
+  const dead = (t: Texture): boolean => t.destroyed || !t.source || t.source.destroyed;
+  const walk = (o: Container): void => {
+    if (o.destroyed) return;
+    // A render group keeps its draw list (and the batches' texture sources) until its structure changes: rebuild every one.
+    const rg = (o as unknown as { renderGroup?: { structureDidChange: boolean } | null }).renderGroup;
+    if (rg && o.isRenderGroup) rg.structureDidChange = true;
+    const sp = o as unknown as { texture?: Texture };
+    const tx = o instanceof Text || o instanceof Graphics ? undefined : sp.texture; // a Text owns and remakes its texture
+    if (tx && dead(tx)) { sp.texture = Texture.EMPTY; n++; }
+    if (o instanceof Graphics && !o.context.destroyed) {
+      const ctx = o.context;
+      const users = (byCtx.get(ctx) ?? []).concat(o);
+      byCtx.set(ctx, users);
+    }
+    for (const c of o.children) walk(c);
+  };
+  // [world:M1 review] Graphics are gathered first, by context: a context can be shared (Graphics.clone(), new Graphics(ctx), a cached
+  // context), and clearing a shared one would blank every other user too. Only a context its single Graphics owns is cleared; a shared or
+  // borrowed one keeps its geometry, has each dead fill texture swapped for Texture.EMPTY in place, and its GPU data invalidated.
+  const byCtx = new Map<GraphicsContext, Graphics[]>();
+  walk(root);
+  for (const [ctx, users] of byCtx) {
+    const deadIns = ctx.instructions.filter(ins => {
+      const t = (ins.data as { style?: { texture?: Texture } }).style?.texture;
+      return !!t && dead(t);
+    });
+    if (!deadIns.length) continue;
+    const owned = users.length === 1 && (users[0] as unknown as { _ownedContext: GraphicsContext | null })._ownedContext === ctx;
+    if (owned) { ctx.clear(); n++; continue; }
+    for (const ins of deadIns) (ins.data as { style: { texture: Texture } }).style.texture = Texture.EMPTY;
+    (ctx as unknown as { onUpdate(): void }).onUpdate(); // dirty: the GPU batches of this context are rebuilt with the empty texture
+    n++;
+  }
+  return n;
+}
+
+/** [world:M1] A city chunk that has not arrived after this long counts as failed (the boot falls back to classic rather than hang). */
+const CITY_CHUNK_TIMEOUT_MS = 12_000;
+
+/** [world:M1] The two city chunks, or a rejection when either fails (offline, 404 after an update) or takes longer than the timeout. */
+function loadCityChunks(): Promise<[typeof import('../world/render/cityHost'), typeof import('../world/render/cityWiring')]> {
+  let timer = 0;
+  const timeout = new Promise<never>((_, reject) => { timer = window.setTimeout(() => reject(new Error('city chunk timeout')), CITY_CHUNK_TIMEOUT_MS); });
+  const load = Promise.all([import('../world/render/cityHost'), import('../world/render/cityWiring')]);
+  return Promise.race([load, timeout]).finally(() => window.clearTimeout(timer));
+}
 
 interface Burst {
   s: Sprite;
@@ -156,6 +217,10 @@ export class BunkerRenderer {
   /** [Danger] disaster countdown washes and rust on worn rooms. */
   private disasterFx = new DisasterLayer();
   postfx: PostFX | null = null;
+  /** [world:C1] The city renderer behind `?city` (lightmap, parallax planes, fog); null in classic mode, where every city path is skipped. */
+  private cityHost: CityHost | null = null;
+  /** [world:C1] Cheap key of what the city layout depends on (floors, wings, districts): the provider's signature is asked only when it moves. */
+  private cityKey = -1;
 
   // [plan4 X-1] The camera, the empty-slot pad / placement highlight and the room views live in their own modules (CameraController.ts,
   // PlacementController.ts, RoomViews.ts); this class stays the facade the rest of the game talks to.
@@ -308,7 +373,7 @@ export class BunkerRenderer {
     this.districtSignHolder.removeChildren().forEach(c => c.destroy({ children: true }));
     if (!info) return;
     const top = floorTop(info.floor);
-    const wallX = slotX(info.slot ?? BASE_EAST), DX = districtXAt(info.slot ?? BASE_EAST);
+    const wallX = slotX(info.floor, info.slot ?? BASE_EAST), DX = districtXAt(info.floor, info.slot ?? BASE_EAST);
     const w = 4 * SLOT_W;
     const g = new Graphics();
     // [gfx2 signage] Miners' spray marks on the rock instead of a dashed UI box (see signage.ts).
@@ -485,7 +550,10 @@ export class BunkerRenderer {
     this.utilitiesHolder.eventMode = 'none';
 
     this.surface = buildSurface();
-    this.worldContainer.addChild(
+    if (CITY) await this.mountCity(canvas); // [world:C1] the city's layer stack around the same holders (its own chunk)
+    // [world:M1 review] The flag and the projection must agree once the world is chosen (one kill switch: project.ts fallbackToClassic).
+    if (import.meta.env.DEV && !worldModeConsistent()) console.error('[world] CITY flag and PROJECTION disagree after init');
+    if (!this.cityHost) this.worldContainer.addChild( // [world:M1] classic, or the city chunk could not be loaded (mountCity fell back)
       this.surfaceHolder, this.projectSites.layer, this.projectSites.smokeLayer, this.projectSites.glowLayer, this.projectSites.crew, this.projectSites.signLayer, this.undergroundHolder, this.bayHolder, this.slotLayer, this.highlightLayer,
       this.roomLayer, this.shaftHolder, this.utilitiesHolder, this.walkers.layer, this.dust.container, this.digHolder, this.wingSigns.container, this.districtSignHolder, this.fxLayer, this.incidents.fx, this.disasterFx.fx,
       this.labelLayer, this.incidents.badges, this.ghost.layer,
@@ -512,6 +580,7 @@ export class BunkerRenderer {
     });
     this.setupRenderGroups(); // [perf]
     this.cam.setup();
+    this.cam.setFollowSource(this.walkers.followSource(this.people, this.worldContainer)); // [world:M2] follow-survivor
     setPopupBlocker((x, y) => this.inIncident(x, y)); // [camera]
     this.cam.fitToScreen();
     // gfx-p0 light: the composite takes over the era grade and reads the era/night for vignette and night lighting.
@@ -520,6 +589,43 @@ export class BunkerRenderer {
       this.app.renderer.resize(viewportW(), viewportH()); // [ux-w2f #26]
       this.cam.onResize(); // [plan4:ST-12] keeps zoom and centre for small changes (Safari's address bar)
     });
+  }
+
+  /**
+   * [world:C1] City mode (architecture section 5): far and back planes, the surface and project sites, the lit group (mid plane, rock, bays,
+   * rooms, shaft, shell front, utilities, walkers: all multiplied by the lightmap), the slot pads and highlight, the glow, dust / effects /
+   * signs, the fog, the fore plane, then labels, badges and the ghost. The people are lit by the lightmap: the walkers' depth tint is
+   * replaced by a neutral one (life-systems owns walkers.ts; this override goes when their city lighting lands).
+   */
+  private async mountCity(canvas: HTMLCanvasElement): Promise<void> {
+    let mods: [typeof import('../world/render/cityHost'), typeof import('../world/render/cityWiring')];
+    try {
+      mods = await loadCityChunks();
+    } catch (err) {
+      // [world:M1] Offline before the service worker had the city chunks (or a flaky first load): never a dead boot. This session runs the
+      // classic tower (flag and projection both flip before anything is projected for drawing); the next visit tries the city again.
+      logCrash('city-chunk', err, { fallback: 'classic' });
+      fallbackToClassic(String((err as Error)?.message ?? err)); // [world:M1 review] flag and projection together
+      return;
+    }
+    const [{ CityHost }, { installCityWorld }] = mods;
+    installCityWorld(); // [world:C2] cityLayout + shell (the stub layout stays the seams' fallback)
+    const host = new CityHost(this.app.renderer, isLiteMode() ? 'lite' : startQuality(), canvas);
+    this.cityHost = host;
+    const P = this.projectSites;
+    host.mount(this.worldContainer, {
+      surface: [this.surfaceHolder, P.layer, P.smokeLayer, P.glowLayer, P.crew, P.signLayer],
+      // [world:C2] The slot pad (an invisible tap area over every slot) stays UNDER the rooms, as in classic, or it eats the room and ruin taps.
+      play: [this.undergroundHolder, this.bayHolder, this.slotLayer, this.roomLayer, this.shaftHolder, this.utilitiesHolder, this.walkers.layer],
+      shaft: this.shaftHolder,
+      overLit: [this.highlightLayer],
+      overGlow: [this.dust.container, this.fxLayer, this.incidents.fx, this.disasterFx.fx, this.digHolder, this.districtSignHolder, this.wingSigns.container],
+      top: [this.labelLayer, this.incidents.badges, this.ghost.layer],
+    });
+    // [world:C1-Li] Lanterns and headlamps are real moving lights; walkers.ts picks the city ambient itself.
+    setLightSink({ add: l => host.city.addLight(l), remove: id => host.city.removeLight(id), move: (id, x, y) => host.city.moveLight(id, x, y), lightAt: (x, y) => host.lightAt(x, y) });
+    host.parallaxSource = () => this.cam.parallaxInfo(); // [world:C1 camera-nav] the official parallax camera
+    if (import.meta.env.DEV) (window as unknown as Record<string, unknown>).__city = host;
   }
 
   /**
@@ -612,7 +718,7 @@ export class BunkerRenderer {
   }
 
   slotCenter(pos: Position): { x: number; y: number } {
-    return { x: slotX(pos.x) + SLOT_W / 2, y: floorTop(pos.floor) + ROOM_H / 2 };
+    return { x: slotX(pos.floor, pos.x) + SLOT_W / 2, y: floorTop(pos.floor) + ROOM_H / 2 };
   }
 
   private rebuildStructure(state: GameState): void {
@@ -620,20 +726,23 @@ export class BunkerRenderer {
     // [plan4:ST-4] How far every floor reaches (layout.ext): the camera's world edges follow the widest ones.
     const exts = this.extsFor(state);
     this.exts = exts;
-    this.extentL = exts.reduce((m, x) => Math.max(m, x.w), 0) > 0 ? slotX(-exts.reduce((m, x) => Math.max(m, x.w), 0)) - 14 : 0;
+    this.extentL = exts.reduce((m, x) => Math.max(m, x.w), 0) > 0 ? westmostSlotX(-exts.reduce((m, x) => Math.max(m, x.w), 0)) - 14 : 0; // [world:C0] global extents
     this.extentL = Math.min(this.extentL, this.rowOpen ? ROW_X0 - 14 : -280); // plan4:ST-16 the camera may pan to the row's west end, or (closed) to the ruin of the old gate house
-    this.extentWingR = slotX(exts.reduce((m, x) => Math.max(m, x.e), 12));
+    this.extentWingR = eastmostSlotX(exts.reduce((m, x) => Math.max(m, x.e), 12));
     this.extentR = Math.max(BUILDING_W, this.extentWingR, this.projectSites.right);
+    this.applyCityExtents(); // [world:C2]
     // [plan4:ST-4] A west wing past the classic edge: the sky, ground and dark edge of the surface move out with the rock (rebuilt once per two-slot step).
     const rowWas = this.rowOpen;
     this.rowOpen = !!state.layout?.surfaceOpen; // plan4:ST-16
-    const wl = worldLeft(Math.max(this.rowOpen ? 11 : 0, exts.reduce((m, x) => Math.max(m, x.w), 0))); // plan4:ST-16 the row's slots -11..-4 need the world to reach west
+    let wl = worldLeft(Math.max(this.rowOpen ? 11 : 0, exts.reduce((m, x) => Math.max(m, x.w), 0))); // plan4:ST-16 the row's slots -11..-4 need the world to reach west
+    if (this.cityHost?.current) wl = Math.min(wl, Math.floor(this.cityHost.current.bounds.x)); // [world:C2] the city reaches further west: so do the sky and the ground
     if (wl !== this.surfaceLeft || rowWas !== this.rowOpen) { this.surfaceLeft = wl; this.surfaceSig = ''; this.refreshSurface(); }
     this.undergroundHolder.removeChildren().forEach(c => c.destroy({ children: true }));
     const districtList = state.buildings.filter(b => isDistrict(b.type));
     const districts = districtList.map(b => b.position.floor);
     const districtSlot: Record<number, number> = {};
     for (const b of districtList) districtSlot[b.position.floor] = b.position.x; // [plan4:ST-8]
+    // [world:C2] In city mode buildUnderground / buildCasing draw nothing (world.ts, structure.ts); the shell lives in CityHost's own holders.
     const casing = this.gfx2 && kitReady() ? buildCasing(this.floors, kitState(this.surfaceEra), exts) : null;
     this.undergroundHolder.addChild(buildUnderground(this.floors, i18n.currentLocale, this.gloom, ArtLibrary.get('backdrops/rock'), districts, casing, exts, districtSlot, this.rowOpen ? 11 : 0)); // plan4:ST-16
     this.undergroundSig = this.structureSig(state);
@@ -641,7 +750,7 @@ export class BunkerRenderer {
     this.shaftHolder.removeChildren().forEach(c => c.destroy({ children: true }));
     // G3 shaft hook: the painted industrial lift with the new look.
     this.shaft = this.gfx2 && kitReady()
-      ? buildShaft2(this.floors, this.surfaceEra, () => this.onElevator?.(), exts.map(x => x.w > 0), GFX.airy ? Array.from({ length: this.floors }, (_, f) => signZone(f, state.buildings, i18n.currentLocale).color) : []) // [plan4:ST-4] a second landing door where a floor has a west wing [airy:B3] zone colours for the landing beacons
+      ? buildShaft2(this.floors, this.surfaceEra, () => this.onElevator?.(), exts.map(x => x.w > 0), GFX.airy ? Array.from({ length: this.floors }, (_, f) => signZone(f, state.buildings, i18n.currentLocale).color) : [], !!this.cityHost) // [world:C1] spineOnly in city mode [plan4:ST-4] a second landing door where a floor has a west wing [airy:B3] zone colours for the landing beacons
       : buildShaft(this.floors, () => this.onElevator?.());
     this.shaftHolder.addChild(this.shaft.container);
     this.walkers.setLift((this.shaft as Partial<ShaftAnimated>).lift ?? null); // plan4:ST-18
@@ -769,6 +878,7 @@ export class BunkerRenderer {
   private onCanvasTap(sx: number, sy: number): void {
     if (this.ghostDrag || this.drag) return;
     const p = this.worldContainer.toLocal({ x: sx, y: sy });
+    if (this.cityHost && !this.mapCovers && this.cityHost.tapPocket(p.x, p.y)) return; // [world:M1] a glimpsed pocket: found (cosmetic)
     const r = this.ghost.rect();
     if (r && p.x >= r.x && p.x <= r.x + r.w && p.y >= r.y && p.y <= r.y + r.h) return;
     if (this.placement.insideBunker(p.x, p.y)) return;
@@ -777,6 +887,7 @@ export class BunkerRenderer {
 
   setSelected(buildingId: string | null): void {
     this.selectedId = buildingId;
+    this.cityHost?.select(buildingId); // [world:C1] the selected room's readability floor lifts
     for (const [id, v] of this.views) v.outline.visible = id === buildingId;
     // [camera] The sheet that opens for the room must not hide it: glide it into the space above the sheet.
     if (buildingId) window.setTimeout(() => this.cam.keepInSight(buildingId), 60);
@@ -896,6 +1007,7 @@ export class BunkerRenderer {
     this.walkers.power = state.powerRatio ?? 1; // plan4:polish
     this.walkers.refreshHot(state); // plan4:polish rooms on fire or collapsing: their crew walks out
     this.walkers.update(dt, this.time, this.cam.zoom); // plan4:ST-18 (before the placement below, so a finished walk is placed this picture)
+    if (this.cityHost) this.walkers.life(state, this.people, this.views, this.cam.zoom, this.nightNow, isLiteMode() ? 'lite' : this.postfx?.quality ?? 'high'); // [world:C1-Li] loiterers, the dig crew
     const quarters = state.buildings.filter(b => b.type === 'quarters' && !(b.isConstructing && b.level === 1));
     const seen = new Set<string>();
     const sleeping = new Map<string, number>();
@@ -963,7 +1075,8 @@ export class BunkerRenderer {
       const cv = view as unknown as { width: number; visualSig: string; height?: number };
       person.setCrowd(crowdFor(view.people, view.lane, cv.visualSig, cv.width, this.gfx2, cv.height ?? ROOM_H));
       person.dress(ruinView ? 'ruin' : usable ? job!.type : null);
-      if (this.gfx2) {
+      if (this.cityHost && !siteView) person.setAmbient(PEOPLE_RENDER.cityAmbient); // [world:C1] lit by the lightmap, not by a lamp tint
+      else if (this.gfx2) {
         // Warm lamp-lit ambient, dimmer when the power sags and in the wrecked rooms.
         // Warm ambient, coloured a little by the room's lamps; dimmer when the power sags and in the wrecks.
         // G4 lighting: people dim with the power and dip with their room's lamp flicker, like the room and the structure.
@@ -1286,12 +1399,26 @@ export class BunkerRenderer {
   /** Everything that holds GPU state is rebuilt from the game state: the cure for a scene left half-broken. */
   recoverGraphics(): void {
     this.resetScene();
+    this.cityHost?.invalidate(); // [world:C1]
     this.undergroundSig = '';
     this.utilitiesSig = '';
     this.surfaceSig = '';
     this.cityMapSig = '';
+    // [world:M1] Every holder that is rebuilt from a signature: after a context restore ArtLibrary.reset() has destroyed the paintings and
+    // kit pieces they were built with (the dig sign, the wing and district signs, the drop ring kept pointing at dead textures).
+    this.digSig = '';
+    this.wingSig = '';
+    this.districtSig = '';
+    this.dropRingSig = '';
     this.refreshSurface();
+    // [world:M1] Safety net: anything still drawing a destroyed texture (a sprite built outside the signatures above, a texture fill) is
+    // blanked, so the batcher never meets a texture without a source ('alphaMode of null' on every frame, both classic and city).
+    dropDeadTextures(this.app.stage);
+    this.deadSweeps = 3; // and again for the next few pictures (late arrivals rebuild against the reset library)
   }
+
+  /** [world:M1] Pictures left in which recoverGraphics' dead-texture sweep runs again. */
+  private deadSweeps = 0;
 
   /** Updates the scene, then draws it; the picture is drawn even when the update threw halfway. */
   render(state: GameState, dt: number, alpha: number): void {
@@ -1313,6 +1440,7 @@ export class BunkerRenderer {
   private draw(): void {
     const gl = (this.app.renderer as { gl?: WebGL2RenderingContext }).gl;
     if (this.contextLost || gl?.isContextLost()) return;
+    if (this.deadSweeps > 0) { this.deadSweeps--; dropDeadTextures(this.app.stage); } // [world:M1] context restore
     try {
       this.app.render();
       this.drawFails = 0;
@@ -1337,6 +1465,7 @@ export class BunkerRenderer {
     }
     hashLayout(state); // [perf] one cheap pass instead of strings joined from every building several times per picture
     this.updateSpan(state);
+    if (this.cityHost) this.syncCityLayout(state); // [world:C1]
     if (state.currentFloors !== this.floors || this.structureGloom !== this.gloom || this.undergroundSig !== this.structureSig(state)) this.rebuildStructure(state);
     this.cam.stepCamera(dt); // [camera]
     this.ghost.update(dt); // [plan4:ST-19]
@@ -1405,7 +1534,7 @@ export class BunkerRenderer {
       v.label.y = floorTop(r?.floor ?? 0) + ROOM_H * 0.3 + Math.sin(this.time * 2.2 + v.root.x) * 2;
     }
     this.incidents.quality = this.postfx?.quality ?? 'high'; // gfx-p0 crisis: particle budget follows the quality ladder
-    this.incidents.update(state, this.time, dt, id => this.roomRect(id), f => { const ex = floorExtent(state, f); return { x: slotX(-ex.w), y: floorTop(f), w: (ex.w + ex.e) * SLOT_W }; }); // [plan4:ST-4] a floor reaches as far as its wings
+    this.incidents.update(state, this.time, dt, id => this.roomRect(id), f => { const ex = floorExtent(state, f); if (this.cityHost) { const s = stripX(f, ex); return { x: s.x0, y: floorTop(f), w: s.x1 - s.x0 }; } return { x: slotX(f, -ex.w), y: floorTop(f), w: (ex.w + ex.e) * SLOT_W }; }); // [world:C1] in the city a floor's strip includes the hub // [plan4:ST-4] a floor reaches as far as its wings
     this.disasterFx.update(state, this.time, id => this.roomRect(id)); // [Danger]
     this.updateBlockers(state); // [camera]
     this.updateBursts(dt);
@@ -1414,18 +1543,68 @@ export class BunkerRenderer {
     this.animateBubbles();
     // Battery saver drops the free-floating dust.
     const low = this.postfx?.quality === 'low';
-    this.dust.container.visible = !low && !this.mapCovers;
-    if (!low) this.dust.update(dt, this.time);
+    // [world:C1] In the city the lit motes of the glow layer are the dust (lit by the lamps they drift through): the flat Dust is not drawn.
+    const dustOn = !low && !this.cityHost;
+    this.dust.container.visible = dustOn && !this.mapCovers;
+    if (dustOn) this.dust.update(dt, this.time);
+    if (this.cityHost) this.updateCity(state, dt); // [world:C1] every camera and position write of the picture is done: parallax, lights, fog
     this.postfx?.update(now);
   }
+
+  /** [world:C1] The layout follows the provider; a new one (or a new era / kit) flags the shell, mounted in updateCity (CityHost.ensureShell). */
+  private syncCityLayout(state: GameState): void {
+    const host = this.cityHost!;
+    const key = (Math.imul(LAYOUT.ext, 31) ^ Math.imul(LAYOUT.rooms, 17) ^ Math.imul(this.surfaceEra + 2, 7919) ^ state.currentFloors ^ Math.imul((state.city?.found.length ?? 0) + 1, 104729)) >>> 0; // [world:M1] a found pocket opens in the layout
+    if (key === this.cityKey && host.current) return;
+    this.cityKey = key;
+    if (host.syncLayout(state, `${this.surfaceEra}|${this.gfx2 && kitReady()}`)) this.applyCityExtents();
+    if (host.current) this.cam.setCityLayout(host.current); // [world:C1 camera-nav] city bounds, home view, overview (returns early when unchanged)
+  }
+
+  /**
+   * [world:C2] City mode: the camera may pan out to the edge sites (the dark ends past each floor's last room, with their tape, rubble and cold
+   * light) and the district caverns, which lie beyond the classic reach of the floors.
+   */
+  private applyCityExtents(): void {
+    const L = this.cityHost?.current;
+    if (!L) return;
+    let l = this.extentL, r = this.extentR;
+    for (const e of L.edges) { if (e.side === 'e') r = Math.max(r, e.x + CITY_EDGE_PAD); else l = Math.min(l, e.x - CITY_EDGE_PAD); }
+    for (const c of L.cavities) if (c.id.startsWith('c:dist:')) for (let i = 0; i < c.poly.length; i += 2) r = Math.max(r, c.poly[i] + CITY_EDGE_PAD);
+    this.extentL = l;
+    this.extentWingR = Math.max(this.extentWingR, r);
+    this.extentR = Math.max(this.extentR, r);
+  }
+
+  /** [world:C1] Rooms into the lightmap (4x a second at most), then the city's frame. Lite mode: no lightmap, a flat tint. */
+  private updateCity(state: GameState, dt: number): void {
+    const host = this.cityHost!;
+    this.probeState = state;
+    if (host.current) {
+      host.ensureShell(state, this.surfaceEra); // [world:C2] new layout / era / kit / tier: the shell is rebuilt
+      host.syncProgress(state, this.time); // [world:C2] digs and districts move the fog and the rubble (2x a second)
+      host.syncRooms(state, this.roomProbe, this.time, LAYOUT.rooms);
+      host.syncPins(state, this.time); // [world:M1] "new" discovery pins
+    }
+    const tier = isLiteMode() ? 'lite' : this.postfx?.quality ?? 'high';
+    host.frame(this.worldContainer, this.app.screen.width, this.app.screen.height, this.time, dt, tier, this.mapCovers, this.surfaceEra, this.nightNow);
+  }
+
+  /** [world:C1] What the city's room lights read of the room views (one object for the renderer's life). */
+  private probeState: GameState | null = null;
+  private readonly roomProbe = {
+    rect: (id: string) => this.roomRect(id),
+    people: (id: string) => this.views.get(id)?.people.children.length ?? 0,
+    mirrored: (b: BuildingInstance) => !!this.probeState && this.roomViews.compoundIndex(this.probeState, b) % 2 === 1,
+  };
 
   /** [plan4:ST-12] Widest floor reach from the side wings (state.layout.ext); no allocation (this runs every picture). */
   private updateSpan(state: GameState): void {
     let w = 0, e = floorExtent(state, -1 /* a floor with no entry: the default extent */).e;
     const ext = state.layout?.ext;
     if (ext) for (const k in ext) { const x = ext[k]; if (x.w > w) w = x.w; if (x.e > e) e = x.e; }
-    const l = w > 0 ? -SHAFT_GAP - w * SLOT_W : 0;
-    const r = ROOMS_X + e * SLOT_W;
+    const l = w > 0 ? westmostSlotX(-w) : 0; // [world:C0] global extents over every stratum's frame
+    const r = eastmostSlotX(e);
     if (l !== this.span.l || r !== this.span.r) { this.span.l = l; this.span.r = r; }
   }
 
@@ -1484,7 +1663,7 @@ export class BunkerRenderer {
     if (this.gfx2) {
       // [gfx2 surface] painted entrance, topsoil and props: src/rendering/surface2.ts
       const s2 = buildSurface2(tex, coneTexture(), RAYS[Math.max(0, Math.min(3, this.surfaceEra))], Math.max(0, this.surfaceEra), () => this.nightNow, this.surfaceLeft, this.rowOpen); // plan4:ST-16
-      mountSurface2(s2, this.worldContainer, this.undergroundHolder, this.shaftHolder);
+      mountSurface2(s2, this.undergroundHolder.parent ?? this.worldContainer, this.undergroundHolder, this.shaftHolder); // [world:C1] in city mode the holders sit in the lit group
       this.surface = s2;
     } else this.surface = buildSurface(tex, coneTexture(), RAYS[Math.max(0, Math.min(3, this.surfaceEra))], this.surfaceLeft);
     this.surfaceHolder.addChild(this.surface.container);
@@ -1584,7 +1763,7 @@ export class BunkerRenderer {
     const root = new Container();
     root.label = 'ruin';
     root.isRenderGroup = true; // [perf]
-    root.position.set(slotX(r.x), floorTop(r.floor));
+    root.position.set(slotX(r.floor, r.x), floorTop(r.floor));
     const people = new Container();
     people.sortableChildren = true;
     root.addChild(people);
@@ -1595,7 +1774,7 @@ export class BunkerRenderer {
       if (!this.cam.isDragging) this.onRuinClick?.(r.id);
     });
     const label = new Container();
-    label.position.set(slotX(r.x) + width / 2, floorTop(r.floor) + ROOM_H * 0.3);
+    label.position.set(slotX(r.floor, r.x) + width / 2, floorTop(r.floor) + ROOM_H * 0.3);
     label.eventMode = 'none';
     return { root, visual: null, people, label, visualSig: '', labelSig: '', width, bar: null, attached: true, lane: { x0: 14, x1: width - 14 } };
   }
@@ -1701,8 +1880,9 @@ export class BunkerRenderer {
       if (!v) continue;
       const r = this.blockRects[n] ?? (this.blockRects[n] = { x: 0, y: 0, w: 0, h: 0 });
       if (inc.kind === 'blackout') {
-        const fx = floorExtent(state, floorIndexAt(v.root.y)); // [plan4:ST-4] the whole floor, wings included
-        r.x = slotX(-fx.w); r.y = v.root.y; r.w = (fx.w + fx.e) * SLOT_W; r.h = v.height;
+        const ff = floorIndexAt(v.root.y), fx = floorExtent(state, ff); // [plan4:ST-4] the whole floor, wings included
+        if (this.cityHost) { const s = stripX(ff, fx); r.x = s.x0; r.w = s.x1 - s.x0; } else { r.x = slotX(ff, -fx.w); r.w = (fx.w + fx.e) * SLOT_W; } // [world:C1]
+        r.y = v.root.y; r.h = v.height;
       } else {
         r.x = v.root.x; r.y = v.root.y; r.w = v.width; r.h = v.height;
       }
@@ -1720,10 +1900,16 @@ export class BunkerRenderer {
   }
 
   ruinCenter(r: Ruin): { x: number; y: number } {
-    return { x: slotX(r.x) + (r.w * SLOT_W) / 2, y: floorTop(r.floor) + ROOM_H / 2 };
+    return { x: slotX(r.floor, r.x) + (r.w * SLOT_W) / 2, y: floorTop(r.floor) + ROOM_H / 2 };
   }
 
   destroy(): void {
+    // [world:C1] The city first: its shell, lightmap, fog and plane caches hold GPU textures, and the life systems' light sink points at it.
+    if (this.cityHost) {
+      setLightSink(null);
+      this.cityHost.destroy();
+      this.cityHost = null;
+    }
     this.app.destroy(true);
   }
 }

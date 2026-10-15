@@ -4,7 +4,8 @@ import { bus } from '../core/EventBus';
 import type { BuildingType, GameState, Ruin } from '../core/GameState';
 import { windAt } from '../data/dayCycle';
 import { reducedMotion } from '../utils/a11y';
-import { ROOM_H, SLOT_W, slotX } from './geom';
+import { ROOM_H, SLOT_W } from './geom';
+import { slotX } from '../world/project';
 import { hGradient, mix, seeded, shade, vGradient } from './draw';
 import type { RoomVisual } from './roomArt';
 import type { RuinVisual } from './ruinArt';
@@ -21,8 +22,8 @@ import type { RuinVisual } from './ruinArt';
  */
 
 /** West and east edge (world x) of the row's slots -11..-4, and of the concrete apron it stands on. */
-export const ROW_X0 = slotX(-11);
-export const ROW_X1 = slotX(-4) + SLOT_W;
+export const ROW_X0 = slotX(-1, -11);
+export const ROW_X1 = slotX(-1, -4) + SLOT_W;
 
 /** What the sky is doing, written by surface2.animate every picture and read by every block (module state: one surface at a time). */
 export const surfaceLive = { light: 0xffffff, night: 0, wind: 0.6, rain: 0, play: 0 };
@@ -493,11 +494,11 @@ export function buildYardApron(): Container {
   g.rect(x0, -1, x1 - x0, 12).fill(vGradient([[0, 0x8a857a], [0.25, 0x5e5a52], [1, 0x2c2a26]]));
   g.rect(x0, -3.4, x1 - x0, 3.4).fill(vGradient([[0, 0xc2bcae], [1, 0x8a857a]]));
   g.rect(x0, -3.4, x1 - x0, 1.2).fill({ color: 0xf0eadc, alpha: 0.5 });
-  for (let x = slotX(-11); x <= ROW_X1; x += SLOT_W) g.rect(x - 0.5, -3, 1, 4).fill({ color: 0x24221e, alpha: 0.5 });
+  for (let x = ROW_X0; x <= ROW_X1; x += SLOT_W) g.rect(x - 0.5, -3, 1, 4).fill({ color: 0x24221e, alpha: 0.5 });
   const rnd = seeded(1616);
   for (let i = 0; i < 9; i++) g.rect(x0 + rnd() * (x1 - x0), 1 + rnd() * 6, 1.1, 3 + rnd() * 4).fill({ color: 0x6a3a1e, alpha: 0.3 });
   // Surveyor's stakes with orange tape at the row's slot lines (every second one): the yard is ready to be built on; rooms stand in front of them.
-  for (let x = slotX(-11); x <= ROW_X1; x += SLOT_W * 2) {
+  for (let x = ROW_X0; x <= ROW_X1; x += SLOT_W * 2) {
     g.rect(x - 0.7, -17, 1.4, 14).fill(0x5a4a34);
     g.poly([x - 0.7, -17, x + 5.6, -15.4, x + 4.4, -12.6, x - 0.7, -13.6]).fill({ color: 0xff7a2a, alpha: 0.9 });
   }
@@ -621,7 +622,7 @@ export function readInside(state: GameState, out: Inside): Inside {
   for (const i of state.layout?.infra ?? []) {
     if (i.kind !== 'ventStack' || out.stacks.length >= 3) continue;
     // The stack stands over its slot, but never in front of the entrance hill: those slots move east of it, west ones to the end of the yard.
-    let x = slotX(i.x) + SLOT_W / 2;
+    let x = slotX(i.floor, i.x) + SLOT_W / 2;
     if (x > -110 && x < 176) x = x < 30 ? -128 : 184;
     out.stacks.push(x);
   }

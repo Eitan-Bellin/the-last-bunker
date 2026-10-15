@@ -1,7 +1,8 @@
 // Save-migration check: loads an older save the way the game does (migrateState + a real GameEngine start) and reports
 // anything the migration lost or broke. Used by tools/sim/migrate-test.mjs on the sample saves in store/sim/saves-v4/.
 import { GameEngine } from '../../src/core/GameEngine';
-import { SAVE_VERSION, migrateState, type GameState, type ResourceType } from '../../src/core/GameState';
+import { SAVE_VERSION, createLayout, migrateState, type GameState, type ResourceType } from '../../src/core/GameState';
+import { revealedAreaIds } from '../../src/core/state/city';
 import { installDeterminism } from './core';
 
 export interface MigrateCheck {
@@ -12,6 +13,48 @@ export interface MigrateCheck {
   problems: string[];
   /** A short picture of the game after migration and a simulated hour. */
   after: { era: number; buildings: number; people: number; floors: number; playTime: number };
+}
+
+/** Stable JSON (object keys sorted) for byte-level comparisons that do not depend on key order. */
+function canon(v: unknown): string {
+  return JSON.stringify(v, (_k, x) => (x && typeof x === 'object' && !Array.isArray(x) ? Object.fromEntries(Object.entries(x).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))) : x));
+}
+
+/**
+ * [world:C0] v8: the city slice is well-formed and seeded from the bunker (everything revealed is seen, nothing found), the layout and every
+ * room / ruin position are byte-identical, the migration is idempotent, `found` survives a round trip and `whatsnew:v8` is owed exactly once.
+ */
+function cityMigrationProblems(old: GameState, m: GameState, from: number): string[] {
+  const p: string[] = [];
+  const c = m.city;
+  const sortedUnique = (a: unknown) => Array.isArray(a) && a.every(x => typeof x === 'string') && a.every((x, i) => i === 0 || a[i - 1] < x);
+  if (!c || c.v !== 1 || !sortedUnique(c.seen) || !sortedUnique(c.found)) return ['city: slice missing or malformed (v 1, sorted unique seen / found)'];
+  if (!old.city) {
+    const seen = new Set(c.seen);
+    const missing = revealedAreaIds(m).filter(id => !seen.has(id));
+    if (missing.length) p.push(`city: revealed but not seen after seeding: ${missing.slice(0, 6).join(', ')}`);
+    for (const id of ['surface', 's:0', 's:1']) if (!seen.has(id)) p.push(`city: seen lacks ${id}`);
+    for (let f = 0; f < m.currentFloors; f++) if (!seen.has(`f:${f}`)) { p.push(`city: seen lacks f:${f}`); break; }
+    if (c.found.length) p.push(`city: found is not empty after seeding (${c.found.join(', ')})`);
+  }
+  // Positions are never rewritten: the layout (v 1) and every room and ruin stand where they stood.
+  const wantLayout = { ...createLayout(), ...(old.layout ?? {}), v: 1 };
+  if (canon(m.layout) !== canon(wantLayout)) p.push('city: layout changed by the migration');
+  const pos = (s: GameState) => canon([...s.buildings.map(b => [b.id, b.type, b.position]), ...(s.ruins ?? []).map(r => [r.id, r.floor, r.x, r.w])]);
+  if (old.version >= 4 && pos(m) !== pos(old)) p.push('city: a room or ruin position changed');
+  // Idempotent: migrating the migrated game changes nothing.
+  const again = migrateState(JSON.parse(JSON.stringify(m)) as GameState);
+  if (canon(again.city) !== canon(m.city) || canon(again.layout) !== canon(m.layout) || canon(again.storyFlags) !== canon(m.storyFlags)) p.push('city: migrating twice is not idempotent (city / layout / flags)');
+  // A found pocket survives a save round trip.
+  const withFound = JSON.parse(JSON.stringify(m)) as GameState;
+  withFound.city = { ...withFound.city, found: ['p:1:wellRoom'] };
+  const rt = migrateState(JSON.parse(JSON.stringify(withFound)) as GameState);
+  if (!rt.city.found.includes('p:1:wellRoom')) p.push('city: a found pocket is lost on a round trip');
+  // The "what's new" card for v8 is owed once to a save from before v8 (and never twice).
+  const owed = m.storyFlags.filter(f => f === 'whatsnew:v8').length;
+  if (from < 8 && owed !== 1) p.push(`city: whatsnew:v8 flagged ${owed} times, expected once`);
+  if (again.storyFlags.filter(f => f === 'whatsnew:v8').length !== owed) p.push('city: whatsnew:v8 added again on a second migration');
+  return p;
 }
 
 /** Old format in, problems out. `json` is the save as the game stores it (uncompressed JSON). */
@@ -43,6 +86,7 @@ export async function checkMigration(json: string): Promise<MigrateCheck> {
     for (const f of old.storyFlags ?? []) if (!m.storyFlags.includes(f)) problems.push(`flag ${f} lost`);
     if ((m.currentFloors ?? 0) < (old.currentFloors ?? 0)) problems.push(`floors ${old.currentFloors} -> ${m.currentFloors}`);
     if ((m.prestige?.rebirthCount ?? 0) !== (old.prestige?.rebirthCount ?? 0)) problems.push('rebirth count changed');
+    problems.push(...cityMigrationProblems(old, m, from));
     // Only for saves from before the Acts existed (no longGame slice): those were placed in Act 4. A v5+ save keeps the Act it was in. [plan4:QA-1]
     if (m.longGame && !old.longGame && (old.era ?? 0) >= 3 && m.longGame.meta.act !== 4) problems.push(`era 3 save placed in Act ${m.longGame.meta.act}`);
 

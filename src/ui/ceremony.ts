@@ -3,7 +3,8 @@ import { haptic, type HapticKind } from '../utils/haptics';
 import { el } from './dom';
 import { i18n } from '../i18n/I18nManager';
 import { plural } from './format';
-import { buildingH, buildingX, floorTop, slotX, SLOT_W } from '../rendering/geom';
+import { buildingH, floorTop, SLOT_W } from '../rendering/geom';
+import { buildingX, slotX } from '../world/project';
 import { floorExtent, type BuildingInstance } from '../core/GameState';
 import { roomSlots } from '../data/buildingDefs';
 import type { Sfx } from '../audio/sfx';
@@ -402,7 +403,7 @@ export class Ceremonies {
         if (spec.floor === undefined) break;
         const s = this.app.state;
         const ext = floorExtent(s, spec.floor);
-        const x = spec.side === 'w' ? slotX(-ext.w) : spec.side === 'e' ? slotX(ext.e) : slotX(0) + SLOT_W * 3;
+        const x = spec.side === 'w' ? slotX(spec.floor, -ext.w) : spec.side === 'e' ? slotX(spec.floor, ext.e) : slotX(spec.floor, 0) + SLOT_W * 3;
         const y = floorTop(spec.floor) + 50;
         // The work light opens at the new edge: a warm wedge that widens, held, then faded.
         const light = el('div', 'cer-light');
@@ -435,7 +436,7 @@ export class Ceremonies {
       case 'raid': {
         // [ux-wp3 F2] At the gate: the siren is already sounding; at the impact the picture shakes, sparks fly at the door,
         // and a soft warm flash (never white, never above 30%) passes over the screen.
-        const gate = { x: slotX(0) + SLOT_W, y: floorTop(0) + 30 };
+        const gate = { x: slotX(0, 0) + SLOT_W, y: floorTop(0) + 30 }; // floor-0: the gate opens onto the top floor
         if (this.cameraFree()) this.visit(gate.x, gate.y - 20, 1.25, 2200, later);
         later(() => {
           r.shake(5, 0.6);

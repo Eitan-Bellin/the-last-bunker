@@ -4,7 +4,8 @@ import { getDef, roomSlots } from '../data/buildingDefs';
 import { ArtLibrary } from '../art/ArtLibrary';
 import { artEntry, buildingArtKey } from '../art/registry';
 import { statusTint, reducedMotion } from '../utils/a11y';
-import { SLOT_W, buildingH, floorTop, slotX } from './geom';
+import { SLOT_W, buildingH, floorTop } from './geom';
+import { slotX } from '../world/project';
 import { hashString, seeded } from './draw';
 import { buildPaintedRoom } from './paintedRoom';
 import { buildRoomVisual } from './roomArt';
@@ -72,7 +73,7 @@ export class PlacementGhost {
   /** World rectangle the ghost occupies (at its target spot). */
   rect(): { x: number; y: number; w: number; h: number } | null {
     if (!this.layer.visible || !this.type) return null;
-    return { x: slotX(this.pos.x), y: floorTop(this.pos.floor), w: this.w, h: this.h };
+    return { x: slotX(this.pos.floor, this.pos.x), y: floorTop(this.pos.floor), w: this.w, h: this.h };
   }
 
   /** Shows the ghost of `type` on a spot (`jump` = no glide: first appearance). */
@@ -86,7 +87,7 @@ export class PlacementGhost {
     this.h = buildingH(type);
     this.root.hitArea = { contains: (x: number, y: number) => x >= 0 && x <= this.w && y >= 0 && y <= this.h };
     if (fresh || reducedMotion()) {
-      this.curX = slotX(pos.x);
+      this.curX = slotX(pos.floor, pos.x);
       this.curY = floorTop(pos.floor);
     }
     this.layer.visible = true;
@@ -121,7 +122,7 @@ export class PlacementGhost {
   }
 
   private place(dt: number): void {
-    const tx = slotX(this.pos.x), ty = floorTop(this.pos.floor);
+    const tx = slotX(this.pos.floor, this.pos.x), ty = floorTop(this.pos.floor);
     if (dt > 0 && !reducedMotion()) {
       const k = 1 - Math.exp(-dt * 20);
       this.curX += (tx - this.curX) * k;
@@ -142,7 +143,7 @@ export class PlacementGhost {
 
   /** True while the ghost still moves (the engine keeps drawing at the motion rate). */
   get moving(): boolean {
-    return this.layer.visible && (this.shakeT > 0 || Math.abs(slotX(this.pos.x) - this.curX) > 0.3 || Math.abs(floorTop(this.pos.floor) - this.curY) > 0.3);
+    return this.layer.visible && (this.shakeT > 0 || Math.abs(slotX(this.pos.floor, this.pos.x) - this.curX) > 0.3 || Math.abs(floorTop(this.pos.floor) - this.curY) > 0.3);
   }
 
   private buildArt(type: BuildingType): void {

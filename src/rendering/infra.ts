@@ -3,7 +3,10 @@ import type { GameState } from '../core/GameState';
 import { glowTexture } from '../art/ArtLibrary';
 import { i18n } from '../i18n/I18nManager';
 import { GFX, gfxLevel } from './gfxFeatures';
-import { BASE_EAST, ROOMS_X, ROOM_H, SHAFT_GAP, SLAB, SLAB_CLASSIC, SLOT_W, floorTop, slotX, type Ext } from './geom';
+import { BASE_EAST, ROOM_H, SLAB, SLAB_CLASSIC, SLOT_W, floorTop, type Ext } from './geom';
+import { roomsEastX, roomsWestX, slotX } from '../world/project';
+import { CITY } from '../world/flag';
+import { PROPS } from '../world/tokens';
 import { VIEW } from './perfFx';
 import { hashString } from './draw';
 import { occupancy } from './occupancy';
@@ -175,6 +178,17 @@ export class InfraLayer implements Animated {
         if (it.kind === 'stairwell') this.addStairwell(it, tintAt, glow);
         else if (it.kind === 'ventStack') this.addVent(it, tintAt);
       }
+      // [world:M2] City: where a column (one item over several floors, or items stacked in the same slot) runs on past a stratum seam, it
+      // jogs through the gallery band to the next stratum's frame.
+      if (CITY) {
+        const at = new Set<string>();
+        for (const it of items) if (it.kind === 'stairwell' || it.kind === 'ventStack') for (let k = 0; k < Math.max(1, Math.min(24, it.floors ?? 1)); k++) at.add(`${it.kind}:${it.floor + k}:${it.x}`);
+        for (const key of at) {
+          const [kind, fs, xs] = key.split(':');
+          const f = +fs;
+          if (f + 1 < floors && at.has(`${kind}:${f + 1}:${xs}`)) this.addJog(kind === 'stairwell' ? 'stairwell' : 'vent', +xs, f, tintAt);
+        }
+      }
       // Bulkhead doors: every key of layout.doors plus every infra bulkhead (a door without a state is open).
       const keys = new Set<string>();
       for (const k in l.doors) keys.add(k);
@@ -198,7 +212,7 @@ export class InfraLayer implements Animated {
       if (f >= (this.ctx?.floors ?? 0)) break;
       const top = floorTop(f);
       const s = new Sprite(tex);
-      s.position.set(slotX(it.x), top);
+      s.position.set(slotX(f, it.x), top);
       s.width = SLOT_W;
       s.height = ROOM_H + SLAB;
       s.tint = tintAt(top + ROOM_H / 2, 0.8);
@@ -210,7 +224,7 @@ export class InfraLayer implements Animated {
       g.width = 44;
       g.height = 34;
       g.alpha = 0.4;
-      g.position.set(slotX(it.x) + 9.4, top + 19.3 * ART_K);
+      g.position.set(slotX(f, it.x) + 9.4, top + 19.3 * ART_K);
       this.container.addChild(s, g);
       this.sections.push({ s, glow: g, floor: f, y0: top, y1: top + ROOM_H + SLAB, ph: (it.x * 1.7 + f * 0.9) % 6.28 });
     }
@@ -224,7 +238,7 @@ export class InfraLayer implements Animated {
       const top = floorTop(f);
       const first = i === 0;
       const s = new Sprite(ventTexture(first));
-      s.position.set(slotX(it.x), top);
+      s.position.set(slotX(f, it.x), top);
       s.width = SLOT_W;
       s.height = ROOM_H + SLAB;
       s.tint = tintAt(top + ROOM_H / 2);
@@ -233,7 +247,7 @@ export class InfraLayer implements Animated {
       if (first) {
         const fan = new Sprite(fanTexture());
         fan.anchor.set(0.5);
-        fan.position.set(slotX(it.x) + 23, top + 24 * ART_K);
+        fan.position.set(slotX(f, it.x) + 23, top + 24 * ART_K);
         fan.width = fan.height = 20;
         fan.tint = tintAt(top + 24 * ART_K);
         this.container.addChild(fan);
@@ -242,10 +256,44 @@ export class InfraLayer implements Animated {
     }
   }
 
+  /**
+   * [world:M2] City: each stratum has its own frame, so a column (a stairwell, a vent stack) that runs on past a stratum seam stands at a
+   * different x below it. In the service gallery band between the two it jogs across: the vent as a duct with an elbow each end, the
+   * stairwell as a caged walkway along the catwalk. Drawing only (the logic column is the same slot on every floor). No jog in classic, or
+   * where the frames happen to agree, or with the galleries off (no band: the sections meet at the slab).
+   */
+  private addJog(kind: 'stairwell' | 'vent', slot: number, f: number, tintAt: (y: number, v?: number) => number): void {
+    if (!CITY) return;
+    const x0 = slotX(f, slot), x1 = slotX(f + 1, slot);
+    const y0 = floorTop(f) + ROOM_H + SLAB, y1 = floorTop(f + 1);
+    if (Math.abs(x1 - x0) < 0.5 || y1 - y0 < 8) return;
+    const J = PROPS.infraJog;
+    const g = new Graphics();
+    const ym = (y0 + y1) / 2;
+    if (kind === 'vent') {
+      const w = J.ductW, ca = x0 + SLOT_W / 2, cb = x1 + SLOT_W / 2, xa = Math.min(ca, cb), xb = Math.max(ca, cb);
+      g.rect(ca - w / 2, y0 - 2, w, ym - y0 + w / 2 + 2).fill(J.duct).stroke({ width: 1, color: J.edge, alpha: 0.9 });
+      g.rect(cb - w / 2, ym - w / 2, w, y1 - ym + w / 2 + 2).fill(J.duct).stroke({ width: 1, color: J.edge, alpha: 0.9 });
+      g.rect(xa - w / 2, ym - w / 2, xb - xa + w, w).fill(J.duct).stroke({ width: 1, color: J.edge, alpha: 0.9 });
+      g.rect(xa - w / 2, ym - w / 2, xb - xa + w, 2).fill({ color: J.lit, alpha: 0.5 });
+      for (let x = xa + J.flangeEvery; x < xb - 4; x += J.flangeEvery) g.rect(x - 1, ym - w / 2 - 1.5, 2.4, w + 3).fill(J.edge);
+    } else {
+      const xa = Math.min(x0, x1) + 4, xb = Math.max(x0, x1) + SLOT_W - 4;
+      // The walkway deck on the catwalk line with its hazard edge, the cage posts and the handrail, an opening into each section.
+      g.rect(xa, y1 - 6, xb - xa, 6).fill(J.cage).stroke({ width: 1, color: J.edge, alpha: 0.9 });
+      for (let x = xa + 2; x < xb - 6; x += 10) g.rect(x, y1 - 6, 5, 1.6).fill(J.hazard);
+      g.rect(xa, y0 + 2, xb - xa, 2).fill(J.cage);
+      for (let x = xa; x <= xb; x += J.postEvery) g.rect(x - 0.8, y0 + 2, 1.6, y1 - y0 - 8).fill({ color: J.cage, alpha: 0.85 });
+      g.rect(xa, y1 - 18, xb - xa, 1.6).fill(J.hazard);
+    }
+    g.tint = tintAt(ym, 0.9);
+    this.container.addChild(g);
+  }
+
   // ------------------------------------------------------------------------------------------------ bulkhead doors
 
   private addDoor(key: string, floor: number, slot: number, tintAt: (y: number, v?: number) => number, glow: Texture): void {
-    const x = slotX(slot);
+    const x = slotX(floor, slot);
     const top = floorTop(floor);
     const floorY = top + ROOM_H - LIP;
     const y1 = floorY, y0 = floorY - PASS_H;
@@ -331,9 +379,10 @@ export class InfraLayer implements Animated {
     if (closedish) {
       // Red, breathing slowly (never a hard flash).
       const breathe = instant || gfxLevel() === 'low' || reducedMotion() ? 0.6 /* plan4:AC-2 steady */ : 0.5 + 0.5 * Math.sin(t * 1.6 + d.x * 0.01);
-      d.lamp.tint = statusTint('bad'); // plan4:AC-6 (the leaf pose and the SEALED sign carry the state too)
+      const kind = CITY && d.state === 'closed' ? 'warn' : 'bad'; // [world:M1] the city: a shut bulkhead burns amber, a sealed one red
+      d.lamp.tint = statusTint(kind); // plan4:AC-6 (the leaf pose and the SEALED sign carry the state too)
       d.lamp.alpha = 0.7 + 0.3 * breathe;
-      d.glow.tint = statusTint('bad');
+      d.glow.tint = statusTint(kind);
       d.glow.alpha = d.state === 'sealed' ? 0.5 : 0.22 + 0.2 * breathe;
     } else {
       d.lamp.tint = statusTint('ok');
@@ -381,16 +430,16 @@ export class InfraLayer implements Animated {
       for (const o of ops) if (o.kind === 'room' && this.readDoor(`${f}:${o.slot}`) !== 'open') cutX.push(o.x);
       for (const k in this.state.layout.doors) {
         const p = parseKey(k);
-        if (p && p.floor === f && this.readDoor(k) !== 'open') cutX.push(slotX(p.slot));
+        if (p && p.floor === f && this.readDoor(k) !== 'open') cutX.push(slotX(f, p.slot));
       }
       // East part and west part of the floor each run from the shaft out to the end of the last room; a cut makes everything beyond dead.
       const runs: { dir: 1 | -1; x0: number; x1: number }[] = [];
       let last = -1;
       for (let s = ext.e - 1; s >= 0; s--) if (cell(s)) { last = s; break; }
-      if (last >= 0) runs.push({ dir: 1, x0: ROOMS_X - 2, x1: slotX(last + 1) - 2 });
+      if (last >= 0) runs.push({ dir: 1, x0: roomsEastX(f) - 2, x1: slotX(f, last + 1) - 2 });
       let first = 1;
       for (let s = -ext.w; s < 0; s++) if (cell(s)) { first = s; break; }
-      if (first < 0) runs.push({ dir: -1, x0: -SHAFT_GAP + 2, x1: slotX(first) + 2 });
+      if (first < 0) runs.push({ dir: -1, x0: roomsWestX(f) + 2, x1: slotX(f, first) + 2 });
       for (const r of runs) {
         // Cuts along this run, nearest the shaft first.
         const cuts = cutX.filter(x => (r.dir > 0 ? x > r.x0 && x < r.x1 : x < r.x0 && x > r.x1)).sort((a, b) => (r.dir > 0 ? a - b : b - a));

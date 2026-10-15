@@ -1,7 +1,8 @@
 import { Container, type Graphics } from 'pixi.js';
 import { BASE_EAST, SURFACE_EXT, SURFACE_FLOOR, type Position } from '../core/GameState';
 import { statusTint } from '../utils/a11y';
-import { ROOM_H, SLAB, SLOT_W, SURFACE_TOP, TOPSOIL, floorAtY, floorTop, slotAtX, slotX } from './geom';
+import { ROOM_H, SLAB, SLOT_W, SURFACE_TOP, TOPSOIL, floorAtY, floorTop } from './geom';
+import { slotAtX, slotX, stripX } from '../world/project';
 
 // [plan4 X-1] Split out of BunkerRenderer.ts with no change in behaviour: the empty-slot tap pad (one tappable area that works out
 // which slot was hit) and the green highlight of the slots where the room being placed fits.
@@ -74,8 +75,8 @@ export class PlacementController {
 
   /** [plan4:ST-19] The slot a world point falls in (null over the shaft, a slab, a gallery or outside what the floors reach). */
   slotAtWorld(px: number, py: number): Position | null {
-    const s = slotAtX(px);
-    const { floor: f, offset } = floorAtY(py);
+    const { floor: f, offset } = floorAtY(py); // [world:C0] y first, then the slot on that floor's line (the surface row is floor -1)
+    const s = slotAtX(f, px);
     if (s !== null && py < TOPSOIL && py >= SURFACE_TOP && this.surfaceOpen && s >= -SURFACE_EXT.w && s < SURFACE_EXT.e) return { x: s, y: 0, floor: SURFACE_FLOOR }; // plan4:ST-16 the surface row
     if (s === null || f < 0 || f >= this.floorCount || offset >= ROOM_H) return null;
     const ext = this.extentOf(f);
@@ -86,9 +87,13 @@ export class PlacementController {
   /** [plan4:ST-19] Is a world point anywhere inside the bunker's outline (slots, shaft, slabs): a tap there is not a tap on "empty space". */
   insideBunker(px: number, py: number): boolean {
     if (this.floorCount <= 0) return false;
-    let w = 0, e = BASE_EAST;
-    for (let f = 0; f < this.floorCount; f++) { const x = this.extentOf(f); if (x.w > w) w = x.w; if (x.e > e) e = x.e; }
-    return px >= (w > 0 ? slotX(-w) : 0) - 8 && px <= slotX(e) + 4 && py >= floorTop(0) - 6 && py <= floorTop(this.floorCount - 1) + ROOM_H + SLAB;
+    let x0 = Infinity, x1 = -Infinity;
+    for (let f = 0; f < this.floorCount; f++) {
+      const x = this.extentOf(f), sx = stripX(f, { w: x.w, e: Math.max(BASE_EAST, x.e) });
+      if (sx.x0 < x0) x0 = sx.x0;
+      if (sx.x1 > x1) x1 = sx.x1;
+    }
+    return px >= x0 - 8 && px <= x1 + 4 && py >= floorTop(0) - 6 && py <= floorTop(this.floorCount - 1) + ROOM_H + SLAB;
   }
 
   setHighlight(isValid: ((pos: Position) => boolean) | null, levels: number, floors: number): void {
@@ -103,7 +108,7 @@ export class PlacementController {
       const ext = this.extentOf(f);
       for (let s = -ext.w; s < ext.e; s++) {
         if (!isValid({ x: s, y: 0, floor: f })) continue;
-        const x = slotX(s), y = floorTop(f);
+        const x = slotX(f, s), y = floorTop(f);
         g.rect(x + 2, y + 2, SLOT_W - 4, H - 4).fill({ color: ok, alpha: 0.18 });
         dashedRect(g, x + 2, y + 2, SLOT_W - 4, H - 4, DASH, DASH * 0.6);
         g.stroke({ color: ok, alpha: 0.85, width: 1.5 });

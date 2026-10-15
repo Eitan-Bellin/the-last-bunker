@@ -8,7 +8,7 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "check": "tsc --noEmit && node tools/sim/smoke.mjs && node tools/sim/lint.mjs && node tools/sim/glossary-lint.mjs",
-    "check:full": "npm run check && node tools/sim/migrate-test.mjs store/sim/saves-v6 && node tools/sim/placement-test.mjs && node tools/sim/infra-test.mjs && node tools/sim/routes-test.mjs && node tools/sim/rooms-test.mjs && node tools/sim/openings-test.mjs && node tools/sim/daily-test.mjs && node tools/sim/foreman-test.mjs && node tools/sim/tokens-test.mjs && node tools/sim/format-test.mjs && node tools/sim/popup-test.mjs && node tools/sim/advisor-test.mjs && node tools/sim/onboarding-copy-test.mjs && node tools/sim/countup-test.mjs && node tools/sim/i18n-plural-test.mjs"
+    "check:full": "npm run check && node tools/sim/migrate-test.mjs store/sim/saves-v6 && node tools/sim/migrate-test.mjs store/sim/saves-v7 && node tools/sim/project-test.mjs && node tools/sim/city-layout-test.mjs && node tools/sim/placement-test.mjs && node tools/sim/infra-test.mjs && node tools/sim/routes-test.mjs && node tools/sim/rooms-test.mjs && node tools/sim/openings-test.mjs && node tools/sim/daily-test.mjs && node tools/sim/foreman-test.mjs && node tools/sim/tokens-test.mjs && node tools/sim/format-test.mjs && node tools/sim/popup-test.mjs && node tools/sim/advisor-test.mjs && node tools/sim/onboarding-copy-test.mjs && node tools/sim/countup-test.mjs && node tools/sim/i18n-plural-test.mjs"
   },
   "devDependencies": {
     "@types/howler": "^2.2.13",

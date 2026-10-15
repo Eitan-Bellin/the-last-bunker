@@ -3,7 +3,8 @@
 // without doubles, roomDoorX agrees with it, and a wing that ends in one or two empty slots next to a room gets a corridor stub with a door.
 import { migrateState, type BuildingInstance, type GameState } from '../../src/core/GameState';
 import { roomSlots } from '../../src/data/buildingDefs';
-import { extentsFor, slotX } from '../../src/rendering/geom';
+import { extentsFor } from '../../src/rendering/geom';
+import { roomsEastX, roomsWestX, slotX } from '../../src/world/project';
 import { occupancy } from '../../src/rendering/occupancy';
 import { floorOpenings, openingsOfFloor, roomDoorX } from '../../src/rendering/openings';
 
@@ -28,7 +29,7 @@ export function openingChecks(games: { name: string; json: string }[]): { proble
         if (o.kind !== 'room') continue;
         const a = cell(o.slot - 1), b = cell(o.slot);
         if (!a || !b || a.ruin || b.ruin || a.key === b.key) fail(`${g.name}: floor ${f} door at slot ${o.slot} is not between two different rooms`);
-        if (o.x !== slotX(o.slot)) fail(`${g.name}: floor ${f} door at slot ${o.slot} has x ${o.x}, not the column`);
+        if (o.x !== slotX(f, o.slot)) fail(`${g.name}: floor ${f} door at slot ${o.slot} has x ${o.x}, not the column`);
       }
       // Every pair of neighbouring different rooms has its door.
       for (let s = -ext.w + 1; s < ext.e; s++) {
@@ -60,19 +61,19 @@ export function openingChecks(games: { name: string; json: string }[]): { proble
     const tail: [BuildingInstance['type'], number][] = [['quarters', 6], ['workshop', 9]];
     const w2 = fake(tail, 13);
     const stub = opsOf(w2).find(o => o.kind === 'stub');
-    if (!stub || stub.run !== 2 || stub.slot !== 11 || stub.x !== slotX(11)) fail(`wing with 2 empty slots: expected a stub at slot 11 with run 2, got ${JSON.stringify(stub)}`);
+    if (!stub || stub.run !== 2 || stub.slot !== 11 || stub.x !== slotX(0, 11)) fail(`wing with 2 empty slots: expected a stub at slot 11 with run 2, got ${JSON.stringify(stub)}`); // floor-0: the fake bunker has one floor (B1)
     if (opsOf(fake(tail, 14)).some(o => o.kind === 'stub')) fail('a wing with 3 empty slots must not get a stub');
     if (opsOf(fake(tail, 12)).some(o => o.kind === 'stub')) fail('a floor with no wing must not get a stub');
     // Rooms at the shaft: the landing is the west door of the first room, the next room's boundary its east door.
     const near = fake([['quarters', 0], ['workshop', 3]], 12);
     const d = roomDoorX(near, 'r1');
-    if (d.w !== 64 || d.e !== slotX(3)) fail(`roomDoorX of the room at the shaft: expected landing 64 and east door ${slotX(3)}, got ${JSON.stringify(d)}`);
+    if (d.w !== roomsEastX(0) || d.e !== slotX(0, 3)) fail(`roomDoorX of the room at the shaft: expected landing ${roomsEastX(0)} and east door ${slotX(0, 3)}, got ${JSON.stringify(d)}`); // floor-0: the fake bunker has one floor (B1)
     const d2 = roomDoorX(near, 'r2');
-    if (d2.w !== slotX(3) || d2.e !== null) fail(`roomDoorX of the second room: expected west door ${slotX(3)} and no east door, got ${JSON.stringify(d2)}`);
+    if (d2.w !== slotX(0, 3) || d2.e !== null) fail(`roomDoorX of the second room: expected west door ${slotX(0, 3)} and no east door, got ${JSON.stringify(d2)}`); // floor-0: the fake bunker has one floor (B1)
     // A west wing: the first room against the shaft has the west landing door.
     const west = fake([['workshop', -2]], 12, 2);
     const dw = roomDoorX(west, 'r1');
-    if (dw.e !== -6 || dw.w !== null) fail(`roomDoorX of a west wing room: expected the west landing at -6 and no west door, got ${JSON.stringify(dw)}`);
+    if (dw.e !== roomsWestX(0) || dw.w !== null) fail(`roomDoorX of a west wing room: expected the west landing at ${roomsWestX(0)} and no west door, got ${JSON.stringify(dw)}`); // floor-0: the fake bunker has one floor (B1)
     void roomSlots;
     notes.push('synthetic floors: stub rule, landings and roomDoorX checked');
   }

@@ -1,5 +1,7 @@
 import { Container, Graphics, Rectangle } from 'pixi.js';
-import { BASE_EAST, ROOM_H, floorTop, slotX, type Ext } from './geom';
+import { BASE_EAST, ROOM_H, floorTop, type Ext } from './geom';
+import { roomsWestX, slotX } from '../world/project';
+import { CITY } from '../world/flag';
 import { richLine } from './richText';
 import { GFX } from './gfxFeatures';
 import { VIEW } from './perfFx';
@@ -55,7 +57,8 @@ export class WingSigns {
     for (const o of options) {
       const ext = exts[o.floor] ?? { w: 0, e: BASE_EAST };
       const key = `${o.floor}${o.side}`;
-      const x = o.side === 'e' ? slotX(ext.e) + 7 : ext.w > 0 ? slotX(-ext.w) - 7 : westX;
+      // [world:C1] In the city a floor with no west wing ends at its west vestibule (the hub is no place for a sign).
+      const x = o.side === 'e' ? slotX(o.floor, ext.e) + 7 : ext.w > 0 ? slotX(o.floor, -ext.w) - 7 : CITY ? roomsWestX(o.floor) - 7 : westX;
       const y = floorTop(o.floor) + ROOM_H * 0.4;
       const cost = Object.entries(o.cost).slice(0, 2).map(([k, v]) => `[[${ICON[k] ?? k}]] ${v}`).join('  ');
       const label = `${x}|${y}|+${o.steps}|${cost}|${o.block ?? ''}`;
@@ -76,6 +79,15 @@ export class WingSigns {
   private build(s: Sign, o: WingOption): Container {
     const root = new Container();
     root.position.set(s.x, s.y);
+    // [world:C2] In the city an edge the Act holds shut already shows it (the shell's choke: rubble, tape, the red sign, a cold light): no
+    // price plate over it. The tap stays, so the wing card still says why it is shut.
+    if (CITY && o.block === 'act') {
+      root.eventMode = 'static';
+      root.cursor = 'pointer';
+      root.hitArea = new Rectangle(-24, -SIGN_H / 2 - 6, 48, SIGN_H + 12);
+      root.on('pointertap', () => { if (!this.isDragging()) this.onDig?.(s.floor, s.side); });
+      return root;
+    }
     const g = new Graphics();
     // A steel plate under a strip of hazard tape (the tape is on top, slightly crooked, as it was hung by hand).
     steelTag(g, -SIGN_W / 2, -SIGN_H / 2, SIGN_W, SIGN_H, { rivets: 4 });

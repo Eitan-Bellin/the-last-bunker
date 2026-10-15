@@ -18,7 +18,8 @@ import { RUIN_KINDS } from '../../data/ruins';
 import type { PlaceBlock } from '../../systems/BuildingSystem';
 import { bestSpot, nameOf, nearestSpot, placeEffects, spotForTap, validSpots } from '../../systems/placementRank';
 import { RELOCATE_SECONDS, relocateBlock, relocateCost, stateWithout } from '../../systems/relocate';
-import { ROOM_H, SLOT_W, buildingH, floorTop, slotX } from '../../rendering/geom';
+import { ROOM_H, SLOT_W, buildingH, floorTop } from '../../rendering/geom';
+import { buildingX, slotX } from '../../world/project';
 import { hasFreeSpot, missingText, noSpaceRoute, noSpaceText } from '../components/BuildMenu'; // [ux-redesign w2c #2]
 import type { IconName } from '../../ui/icons';
 import type { GameApp } from '../../app';
@@ -59,13 +60,13 @@ export class WorldController {
    * the sheet and the HUD bands itself, utils/hudInsets). Waits two frames so the sheet has its height.
    */
   frameRuin(ruin: Ruin): void {
-    const go = () => this.app.renderer.revealRect(slotX(ruin.x), floorTop(ruin.floor), ruin.w * SLOT_W, ROOM_H, 0);
+    const go = () => this.app.renderer.revealRect(slotX(ruin.floor, ruin.x), floorTop(ruin.floor), ruin.w * SLOT_W, ROOM_H, 0);
     requestAnimationFrame(() => requestAnimationFrame(go));
   }
 
   /** [ux-redesign w2fix] The same framing for a built room whose sheet just opened (its full width and height, tall rooms too). */
   frameRoom(type: BuildingType, pos: Position): void {
-    const go = () => this.app.renderer.revealRect(slotX(pos.x), floorTop(pos.floor), roomSlots(type) * SLOT_W, buildingH(type), 0);
+    const go = () => this.app.renderer.revealRect(buildingX({ type, position: pos }), floorTop(pos.floor), roomSlots(type) * SLOT_W, buildingH(type), 0);
     requestAnimationFrame(() => requestAnimationFrame(go));
   }
 
@@ -288,7 +289,7 @@ export class WorldController {
     const type = this.app.placementMode;
     if (!type) return;
     const w = roomSlots(type) * SLOT_W, h = buildingH(type);
-    const best = nearestSpot(this.spots, type, wx + w / 2, wy + h / 2, (t, p) => ({ x: slotX(p.x) + (roomSlots(t) * SLOT_W) / 2, y: floorTop(p.floor) + buildingH(t) / 2 }));
+    const best = nearestSpot(this.spots, type, wx + w / 2, wy + h / 2, (t, p) => ({ x: slotX(p.floor, p.x) + (roomSlots(t) * SLOT_W) / 2, y: floorTop(p.floor) + buildingH(t) / 2 }));
     if (!best) return;
     const at = this.app.renderer.ghostSpot;
     if (at && at.x === best.x && at.floor === best.floor && this.bar) return;

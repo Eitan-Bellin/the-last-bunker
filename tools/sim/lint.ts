@@ -1,7 +1,7 @@
 // Data checks for CI (run by tools/sim/lint.mjs): research is a sound DAG, every cost names a real resource,
 // every resource has a name in both languages, and every upgrade and dig of Acts II-VII fits in storage (L2).
 import { RESEARCH } from '../../src/data/research';
-import { BUILDING_DEFS, BUILDABLE_TYPES, DISTRICT_KINDS, INFRA_KINDS, getDef, isDistrict, isInfra, roomFloors, roomSlots, type BuildingDef } from '../../src/data/buildingDefs';
+import { BUILDING_DEFS, BUILDABLE_TYPES, DISTRICT_KINDS, DISTRICT_SLOTS, INFRA_KINDS, getDef, isDistrict, isInfra, roomFloors, roomSlots, type BuildingDef } from '../../src/data/buildingDefs';
 import { CHAIN_INPUTS } from '../../src/data/chains';
 import { cargoMult, earlyWarningLead, evacuationMult, expeditionTeamsBonus, hygieneMult, mourningMult, quarantineCapacity, returnSafetyMult, roomChildGrowth, ventilationRelief } from '../../src/data/roomEffects';
 import { PopulationSystem, moraleBreakdown } from '../../src/systems/PopulationSystem';
@@ -10,7 +10,12 @@ import { SeededRandom } from '../../src/core/Random';
 import { allowedFloors, crossesGallery } from '../../src/data/zones';
 import { DISTRICTS, availableDistricts, nextDistrict } from '../../src/data/districts';
 import { DISTRICT_ART_ALIAS, DISTRICT_KEYS } from '../../src/art/registry';
-import { DISTRICT_GAP, DISTRICT_X, FLOOR_H, GALLERY_MAX, ROOM_H, SLOT_W, buildingX, floorTop, slotX } from '../../src/rendering/geom';
+import { DISTRICT_GAP, DISTRICT_X, FLOOR_H, GALLERY_H, GALLERY_MAX, ROOM_H, SLOT_W, floorTop } from '../../src/rendering/geom';
+import { buildingX, slotX } from '../../src/world/project';
+import { FLOORS_PER_STRATUM, POCKET_CLEAR_EAST, POCKET_CLEAR_WEST, STRATA as CITY_STRATA, stratumOf } from '../../src/data/strata';
+import { CITY as CITY_TOKENS, STRATA as ART_STRATA } from '../../src/world/tokens';
+import { createCity } from '../../src/core/state/city';
+import { GALLERY_ABOVE_FLOORS, MAX_FLOORS } from '../../src/data/zones';
 import { GFX } from '../../src/rendering/gfxFeatures';
 import { ALL_RESOURCES, RESOURCES } from '../../src/data/resources';
 import type { BuildingType, GameState, ResourceType } from '../../src/core/GameState';
@@ -138,7 +143,118 @@ export function lintData(i18n: Record<string, Record<string, string>>): string[]
     if (!m.layout || m.layout.v !== 1 || m.layout.surfaceOpen !== false) problems.push('layout: migrateState does not default layout for a v6 save');
   }
   problems.push(...wingChecks());
+  problems.push(...cityChecks());
   return problems;
+}
+
+/**
+ * [world:C0] The City Below: the strata follow the service galleries, the deepest floor is in the core, the art tokens agree on the floor ranges,
+ * every pocket lies beyond what any floor can logically reach (or inside a gallery band), the projection frames are sound, and a new game starts
+ * with the empty city slice.
+ */
+export function cityChecks(): string[] {
+  const problems: string[] = [];
+  const fail = (m: string) => { if (problems.length < 14) problems.push(`city: ${m}`); };
+  if (CITY_STRATA.length !== 7) fail(`${CITY_STRATA.length} strata, expected 7`);
+  CITY_STRATA.forEach((s, i) => {
+    if (s.id !== i) fail('stratum ' + i + ' has id ' + s.id);
+    if (!s.name.he || !s.name.en) fail('stratum ' + i + ' has no he/en name');
+    const art = ART_STRATA[i];
+    if (!art || art.floors[0] !== s.floors[0] || art.floors[1] !== s.floors[1]) fail('stratum ' + i + ': data/strata.ts floors and tokens.ts floors differ');
+    if (i >= 1) {
+      if (s.floors[0] !== (i - 1) * FLOORS_PER_STRATUM || s.floors[1] !== s.floors[0] + FLOORS_PER_STRATUM - 1) fail('stratum ' + i + ' floors are not 4(s-1) .. 4(s-1)+3');
+      for (let f = s.floors[0]; f <= s.floors[1]; f++) if (stratumOf(f) !== i) fail('stratumOf(' + f + ') = ' + stratumOf(f) + ', expected ' + i);
+      // Every boundary b - 1 (the last floor of a stratum above the next one) carries a service gallery.
+      if (i < CITY_STRATA.length - 1 && !GALLERY_ABOVE_FLOORS.includes(s.floors[1])) fail('the seam after floor ' + s.floors[1] + ' has no service gallery');
+    }
+  });
+  if (stratumOf(-1) !== 0) fail('the surface row is not stratum 0');
+  if (stratumOf(MAX_FLOORS - 1) !== 6) fail('the deepest floor ' + (MAX_FLOORS - 1) + ' is in stratum ' + stratumOf(MAX_FLOORS - 1) + ', not the core');
+  // Pockets: unique stable ids in their stratum, clear of the furthest reach (Act wing cap + a district + margin) or inside a gallery band.
+  const reachE = Math.max(...WING_CAP_EAST) + DISTRICT_SLOTS, reachW = Math.max(...WING_CAP_WEST);
+  if (POCKET_CLEAR_EAST < reachE + 2) fail('POCKET_CLEAR_EAST ' + POCKET_CLEAR_EAST + ' is inside the reach ' + reachE + ' (+2 margin)');
+  if (POCKET_CLEAR_WEST < reachW + 2) fail('POCKET_CLEAR_WEST ' + POCKET_CLEAR_WEST + ' is inside the reach ' + reachW + ' (+2 margin)');
+  const ids = new Set<string>();
+  for (const s of CITY_STRATA) for (const p of s.pockets) {
+    if (ids.has(p.id)) fail('pocket ' + p.id + ' is listed twice');
+    ids.add(p.id);
+    if (!p.id.startsWith('p:' + s.id + ':')) fail('pocket ' + p.id + ' is not named p:' + s.id + ':<name>');
+    if (stratumOf(p.anchorFloor) !== s.id) fail('pocket ' + p.id + ' anchors on floor ' + p.anchorFloor + ', outside its stratum');
+    if (!p.name.he || !p.name.en || !(p.w >= 1) || !(p.h > 0)) fail('pocket ' + p.id + ': name or size missing');
+    if (p.side === 'e' && p.dxSlots < POCKET_CLEAR_EAST) fail('pocket ' + p.id + ' starts at slot ' + p.dxSlots + ', inside the east reach');
+    if (p.side === 'w' && p.dxSlots + p.w > -POCKET_CLEAR_WEST) fail('pocket ' + p.id + ' ends at slot ' + (p.dxSlots + p.w) + ', inside the west reach');
+    if (p.side === 'below' && (!GALLERY_ABOVE_FLOORS.includes(p.anchorFloor) || p.dy < 0 || p.dy + p.h > GALLERY_H)) fail('pocket ' + p.id + ' is not inside the gallery band under floor ' + p.anchorFloor);
+  }
+  // Projection frames: one per stratum, stratum 0 classic (geom.ts SHAFT_W 58 / SHAFT_GAP 6 / DISTRICT_GAP), a hub that holds the spine, vestibules >= the classic gap.
+  const F = CITY_TOKENS.frames, C = CITY_TOKENS.classic;
+  if (F.length !== 7) fail('CITY.frames has ' + F.length + ' frames, expected 7');
+  if (C.hubL !== 0 || C.hubR !== 58 || C.vestW !== 6 || C.vestE !== 6 || C.tunnel !== DISTRICT_GAP) fail('CITY.classic is not the classic tower frame');
+  if (F[0] && (F[0].hubL !== C.hubL || F[0].hubR !== C.hubR || F[0].vestW !== C.vestW || F[0].vestE !== C.vestE || F[0].tunnel !== C.tunnel)) fail('stratum 0 (the surface row) must keep the classic frame');
+  F.forEach((f, i) => { if (f.hubL > 0 || f.hubR < 58 || f.vestW < 6 || f.vestE < 6 || f.tunnel < 0) fail('frame ' + i + ' does not hold the spine (x 0..58) or has a gap under the classic one'); });
+  const hub = CITY_TOKENS.hub;
+  if (hub.wallW + hub.stairInset + hub.stairW > Math.min(...F.slice(1).map(f => Math.min(-f.hubL, f.hubR - 58)))) fail('CITY.hub: a stair column does not fit beside the spine in some frame');
+  // A new game starts with the empty slice.
+  if (JSON.stringify(createInitialState().city) !== JSON.stringify(createCity())) fail('createInitialState().city is not createCity()');
+  return problems;
+}
+
+/** [world:C0] The x-conversion ratchet: legacy (classic, floor-less) imports of geom.ts plus ROOMS_X / SHAFT_GAP x-maths outside geom.ts / project.ts. It may only go down. */
+export const LEGACY_X_BASELINE = 0;
+const LEGACY_X_NAMES = ['slotX', 'slotAtX', 'buildingX', 'districtXAt', 'DISTRICT_X', 'ROOMS_X', 'SHAFT_GAP'];
+
+/** Every legacy x use in src (see LEGACY_X_BASELINE), as "file:line: what". */
+export function legacyXUses(files: { rel: string; text: string }[]): string[] {
+  const hits: string[] = [];
+  for (const { rel, text } of files) {
+    if (rel === 'rendering/geom.ts' || rel === 'world/project.ts') continue;
+    const src = text.replace(/\r\n/g, '\n');
+    // Named imports from rendering/geom or rendering/layout (possibly over several lines).
+    for (const m of src.matchAll(/import\s*(?:type\s*)?\{([^}]*)\}\s*from\s*['"]([^'"]*)['"]/g)) {
+      if (!/(^|\/)(rendering\/)?(geom|layout)$/.test(m[2]) || !(/rendering\/(geom|layout)$/.test(m[2]) || /^\.\/(geom|layout)$/.test(m[2]))) continue;
+      const line = src.slice(0, m.index).split('\n').length;
+      for (const raw of m[1].split(',')) {
+        const name = raw.trim().replace(/^type\s+/, '').split(/\s+as\s+/)[0];
+        if (LEGACY_X_NAMES.includes(name)) hits.push(rel + ':' + line + ': imports legacy ' + name);
+      }
+    }
+    src.split('\n').forEach((l, i) => {
+      if (/^\s*(import\b|\/\/|\*|\/\*)/.test(l)) return;
+      const code = l.replace(/\/\/.*$/, '');
+      if (/\b(ROOMS_X|SHAFT_GAP)\b/.test(code)) hits.push(rel + ':' + (i + 1) + ': ROOMS_X / SHAFT_GAP x-maths');
+    });
+  }
+  return hits;
+}
+
+/**
+ * [world:M1 review] Colours in the world renderer come from the tokens (src/world/tokens*.ts), never from a literal: any 0xRRGGBB in
+ * src/world/render/** other than 0x000000 / 0xffffff (pure masks, shadows and identity tints) fails the lint. Comments are ignored.
+ */
+export function renderHexLiterals(files: { rel: string; text: string }[]): string[] {
+  const hits: string[] = [];
+  for (const { rel, text } of files) {
+    if (!rel.startsWith('world/render/') || /(^|\/)tokens[^/]*\.ts$/.test(rel)) continue;
+    text.split(/\r?\n/).forEach((l, i) => {
+      if (/^\s*(\/\/|\*|\/\*)/.test(l)) return;
+      const code = l.replace(/\/\/.*$/, '');
+      for (const m of code.matchAll(/\b0x([0-9a-fA-F]{6})\b/g)) {
+        const v = m[1].toLowerCase();
+        if (v !== '000000' && v !== 'ffffff') hits.push(`src/${rel}:${i + 1}: colour literal ${m[0]} (use a token from src/world/tokens.ts)`);
+      }
+    });
+  }
+  return hits;
+}
+
+/** [world:C0] A literal floor 0 in a projection call (slotX(0, ...)) needs a "// floor-0: <reason>" on the line (the floor-argument rule: never invent a 0). */
+export function floorZeroWarnings(files: { rel: string; text: string }[]): string[] {
+  const hits: string[] = [];
+  for (const { rel, text } of files) {
+    text.split(/\r?\n/).forEach((l, i) => {
+      if ((/\b(slotX|slotAtX|districtXAt|roomRect|slotSpanX)\(\s*0\s*,/.test(l) || /\b(roomsEastX|roomsWestX)\(\s*0\s*\)/.test(l)) && !/\/\/\s*floor-0:/.test(l)) hits.push(rel + ':' + (i + 1));
+    });
+  }
+  return hits;
 }
 
 /**
@@ -487,11 +603,13 @@ export function districtAndGalleryProblems(games: { name: string; json: string |
     if (!Object.keys(d.cost).length || Object.keys(d.cost).some(r => !ALL_RESOURCES.includes(r as ResourceType))) fail(`${d.kind}: cost is empty or names an unknown resource`);
   }
   // buildingX of a district follows its own position.x; x = 12 (every older save) is where it always stood.
-  const at = (type: BuildingType, x: number) => buildingX({ type, position: { x } });
+  // [world:C0] Through the projection (classic in Node), at each district's own floor.
+  const floorOf = (type: string) => DISTRICTS.find(d => d.kind === type)?.floor ?? 1;
+  const at = (type: BuildingType, x: number) => buildingX({ type, position: { x, floor: floorOf(type) } });
   if (at('cave', 12) !== DISTRICT_X || at('metro', 12) !== DISTRICT_X) fail('a district at x = 12 is not at DISTRICT_X');
   if (at('lake', 14) !== DISTRICT_X + 2 * SLOT_W) fail('a district pushed to x = 14 did not move by two slots');
-  if (at('lake', 12) !== slotX(12) + DISTRICT_GAP) fail('district x is not the end of the floor plus the tunnel');
-  if (at('quarters', 5) !== slotX(5)) fail('a normal room moved');
+  if (at('lake', 12) !== slotX(floorOf('lake'), 12) + DISTRICT_GAP) fail('district x is not the end of the floor plus the tunnel');
+  if (buildingX({ type: 'quarters' as BuildingType, position: { x: 5, floor: 0 } }) !== slotX(0, 5)) fail('a normal room moved'); // floor-0: the probe room stands on B1
   // The choice list: the classic three come one at a time, in the old order.
   const g = createInitialState();
   g.storyFlags = [...g.storyFlags, 'districts:unlocked'];

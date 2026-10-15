@@ -108,6 +108,10 @@ async function boot(): Promise<void> {
   await chooseDefaultLanguage();
   await loadLanguages();
   installMaterials(); // plan 2026-10 M7: the worn-steel texture of the HUD plates
+  // [world:C1] DEV only: `?scenario=slice|slice-dig&slot=<name>` writes the city vertical-slice save to that slot and reloads without the param.
+  if (import.meta.env.DEV && new URLSearchParams(location.search).has('scenario')) {
+    if (await (await import('./dev/cityScenario')).runCityScenario()) return;
+  }
   const app = new GameApp();
   // [plan4:UX-14] Service worker with the "new version, tap to refresh" chip (production builds only); the tap saves first.
   initServiceWorker(() => app.engine.forceSave());

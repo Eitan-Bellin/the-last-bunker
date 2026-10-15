@@ -110,6 +110,10 @@ class ArtLibraryImpl {
   private async load(key: string): Promise<void> {
     this.pending.add(key);
     try {
+      // [world:M1] A painting being unloaded (reset after a lost GL context, the memory sweep) must finish unloading first: Assets would
+      // otherwise hand back the texture the unload is about to destroy, or fail the load (every kit piece "failed" after a restore).
+      const gone = this.unloading.get(this.url(key));
+      if (gone) await gone;
       const tex = await Assets.load<Texture>({
         src: this.url(key),
         data: { autoGenerateMipmaps: !isLiteMode(), scaleMode: 'linear' }, // lite mode: a quarter less texture memory
@@ -145,6 +149,8 @@ class ArtLibraryImpl {
     return tex;
   }
   private composedKeys = new Set<string>();
+  /** [world:M1] Unloads in flight, by URL (a load of the same painting waits for its unload). */
+  private unloading = new Map<string, Promise<void>>();
 
   /**
    * [plan4:BL-6] Bakes are one-off but not free (about 8 ms for a 3-slot room): at most ~10 ms of them per picture. A room asked for beyond
@@ -220,7 +226,9 @@ class ArtLibraryImpl {
         continue;
       }
       try {
-        void Assets.unload(this.url(key));
+        const url = this.url(key);
+        const p: Promise<void> = Assets.unload(url).catch(() => undefined).finally(() => { if (this.unloading.get(url) === p) this.unloading.delete(url); });
+        this.unloading.set(url, p);
       } catch {
         tex.destroy(true);
       }

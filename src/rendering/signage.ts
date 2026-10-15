@@ -3,7 +3,10 @@ import type { BuildingInstance, BuildingType, Ruin } from '../core/GameState';
 import { isDistrict, isHall, roomSlots } from '../data/buildingDefs';
 import { zoneForFloor } from '../data/zones';
 import { ArtLibrary, glowTexture } from '../art/ArtLibrary';
-import { ROOMS_X, ROOM_H, SHAFT_W, SLOT_W, floorTop, slotX, type Ext } from './layout';
+import { ROOM_H, SHAFT_W, SLOT_W, floorTop, type Ext } from './layout';
+import { roomsEastX, slotX } from '../world/project';
+import { CITY } from '../world/flag';
+import { zonePlateAt } from '../world/model/cityLayout';
 import { hashString, mix, seeded, shade, vGradient } from './draw';
 import { depthGains, occupancy, type Grid, type WorldLamp } from './structure';
 import { GFX } from './gfxFeatures';
@@ -494,9 +497,9 @@ function columnsOf(grid: Grid, f: number): { x: number; openL: boolean; openR: b
   for (let s = 1; s < row.length; s++) {
     if (s === ew) continue;
     const a = row[s - 1], b = row[s];
-    if ((a || b) && a?.key !== b?.key) out.push({ x: slotX(s - ew), openL: !a, openR: !b });
+    if ((a || b) && a?.key !== b?.key) out.push({ x: slotX(f, s - ew), openL: !a, openR: !b });
   }
-  out.push({ x: slotX(grid.ext[f].e), openL: !row[row.length - 1], openR: false });
+  out.push({ x: slotX(f, grid.ext[f].e), openL: !row[row.length - 1], openR: false });
   return out;
 }
 
@@ -628,28 +631,29 @@ export function buildSignage(inp: SignageInput): Container {
         plate.addChild(halo);
       }
       plate.addChild(shadow, ps);
-      plate.position.set(SHAFT_W / 2, py);
+      if (CITY) { const zp = zonePlateAt(f); plate.position.set(zp.x, zp.y); } // [world:C1] in the city: on the hub wall by the east vestibule (the chandelier hangs in front of the spine)
+      else plate.position.set(SHAFT_W / 2, py);
       if (GFX.airy) plate.scale.set(1.06);
       plate.rotation = !GFX.airy && inp.era <= 0 ? (f % 2 ? 0.035 : -0.025) : 0;
       plates.addChild(plate);
       // The level's name sprayed on the slab face under it, at the far end (skipped where a hall swallows the slab).
       const halls: [number, number][] = inp.buildings.filter(b => isHall(b.type) && b.position.floor === f)
-        .map(b => [slotX(b.position.x), slotX(b.position.x) + roomSlots(b.type) * SLOT_W]);
+        .map(b => [slotX(b.position.floor, b.position.x), slotX(b.position.floor, b.position.x) + roomSlots(b.type) * SLOT_W]);
       // Hebrew reads right to left: the level sits on the right, the name to its left.
       const text = inp.rtl ? `${zone.name} · ${level}` : `${level} · ${zone.name.toUpperCase()}`;
       const paint = mix(zone.color, 0xf0e6d0, 0.45);
       const skey = `stencil|${text}|${paint}|${wear}`;
       const stex = cachedTexture(skey, () => paintStencil(text, paint, wear, hashString(skey), inp.rtl));
       const sw = stex.width / SS;
-      let sx1 = slotX(grid.ext[f].e) - 16, sx0 = sx1 - sw;
+      let sx1 = slotX(f, grid.ext[f].e) - 16, sx0 = sx1 - sw;
       // [plan4:polish] A stairwell or vent stack at the end of the floor stands over the slab: the name moves west of it (and of any column it then meets).
       const cols = (inp.infra ?? [])
         .filter(i => i.kind !== 'bulkhead' && f >= i.floor && f < i.floor + Math.max(1, i.floors ?? 1))
-        .map(i => [slotX(i.x), slotX(i.x) + SLOT_W] as [number, number])
+        .map(i => [slotX(f, i.x), slotX(f, i.x) + SLOT_W] as [number, number])
         .sort((a, b) => b[0] - a[0]);
       let moved = false;
       for (const [c0, c1] of cols) if (sx1 > c0 - 3 && sx0 < c1 + 3) { sx1 = c0 - 6; sx0 = sx1 - sw; moved = true; }
-      if ((!moved || sx0 >= ROOMS_X) && !halls.some(([a, b]) => sx1 > a && sx0 < b)) {
+      if ((!moved || sx0 >= roomsEastX(f)) && !halls.some(([a, b]) => sx1 > a && sx0 < b)) {
         const st = new Sprite(stex);
         st.anchor.set(1, 0.44);
         st.scale.set(1 / SS);
@@ -664,7 +668,7 @@ export function buildSignage(inp: SignageInput): Container {
         const mtext = inp.memorial;
         const mkey = `memorial|${mtext}|${wear}`;
         const mtex = cachedTexture(mkey, () => paintStencil(mtext, 0xe6d6a8, wear, hashString(mkey), inp.rtl));
-        const mx0 = ROOMS_X + 14;
+        const mx0 = roomsEastX(f) + 14;
         if (!halls.some(([a, b]) => mx0 + mtex.width / SS > a && mx0 < b)) {
           const ms = new Sprite(mtex);
           ms.anchor.set(0, 0.44);
@@ -678,7 +682,7 @@ export function buildSignage(inp: SignageInput): Container {
       }
       // Halls of the level above pass through this level's columns.
       const hallsAbove: [number, number][] = inp.buildings.filter(b => isHall(b.type) && b.position.floor === f - 1)
-        .map(b => [slotX(b.position.x), slotX(b.position.x) + roomSlots(b.type) * SLOT_W]);
+        .map(b => [slotX(b.position.floor, b.position.x), slotX(b.position.floor, b.position.x) + roomSlots(b.type) * SLOT_W]);
       above = placeProps(props, f, grid, inp.era, inp.lamps, inp.ambient, hallsAbove, above);
     }
     root.addChild(stencils, props, plates);

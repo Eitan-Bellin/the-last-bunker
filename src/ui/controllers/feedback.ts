@@ -3,7 +3,8 @@ import { SEASONS, nextSeason, seasonAt } from '../../data/seasons';
 import { ACTS } from '../../data/acts';
 import { feel, haptic } from '../../utils/haptics';
 import { FLY_MS, FlyToHud, type Point } from '../fx/flyToHud'; // [ux-redesign W4]
-import { floorTop, slotX, SLOT_W } from '../../rendering/geom';
+import { floorTop, SLOT_W } from '../../rendering/geom';
+import { slotX } from '../../world/project';
 import '../../styles/fx.css';
 import { reducedMotion } from '../../utils/a11y'; // [plan4:GP-2]
 import { statusTint } from '../../utils/a11y';
@@ -109,7 +110,7 @@ export class FeedbackController {
 
   /** The surface gate (trips come home through it). */
   private gatePoint(): Point | null {
-    return this.worldToScreen(slotX(0) + SLOT_W, floorTop(0) + 30);
+    return this.worldToScreen(slotX(0, 0) + SLOT_W, floorTop(0) + 30);
   }
 
   private crisisAt = -1e9;

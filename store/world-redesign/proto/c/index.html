@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <title>Proto C · 3D Diorama</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;600;700&display=swap" rel="stylesheet" />
+  <style>
+    html, body { margin: 0; height: 100%; background: #050507; overflow: hidden; overscroll-behavior: none; }
+    body { font-family: Rubik, 'Segoe UI', Arial, sans-serif; color: #e8dcc2; -webkit-user-select: none; user-select: none; }
+    #gl { position: fixed; inset: 0; display: block; touch-action: none; cursor: grab; }
+    #gl:active { cursor: grabbing; }
+    #labels { position: fixed; inset: 0; pointer-events: none; overflow: hidden; }
+    .tag {
+      position: absolute; left: 0; top: 0; white-space: nowrap; font-size: 12px; font-weight: 700; letter-spacing: .02em;
+      padding: 3px 9px 4px; border-radius: 3px; color: #f2e6c8; background: linear-gradient(#2a2622ee, #171513ee);
+      border: 1px solid #5d5141; box-shadow: 0 2px 10px #000a; transition: opacity .35s; will-change: transform;
+    }
+    .tag::after { content: ''; position: absolute; left: 50%; bottom: -5px; width: 1px; height: 5px; background: #5d5141; }
+    #hud {
+      position: fixed; top: max(12px, env(safe-area-inset-top)); right: 12px; max-width: min(360px, calc(100vw - 24px));
+      background: #0d0c0bd9; border: 1px solid #3b342b; border-radius: 6px; padding: 10px 12px; font-size: 12px; line-height: 1.5;
+      backdrop-filter: blur(4px); box-shadow: 0 6px 24px #000a;
+    }
+    #hud h1 { margin: 0 0 4px; font-size: 14px; color: #f1d58a; font-weight: 700; }
+    #hud p { margin: 0 0 6px; color: #b9ab90; }
+    #hud .btns { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+    #hud button {
+      font: inherit; font-size: 12px; color: #f2e6c8; background: #2a241d; border: 1px solid #5d5141; border-radius: 4px;
+      padding: 5px 10px; min-height: 32px; cursor: pointer;
+    }
+    #hud button:hover { background: #3a3127; }
+    #stats { direction: ltr; text-align: left; font: 11px ui-monospace, Consolas, monospace; color: #8fd0a8; margin-top: 4px; }
+    body.nohud #hud > :not(.btns) { display: none; }
+    .ping { position: fixed; width: 10px; height: 10px; margin: -5px 0 0 -5px; border-radius: 50%; border: 2px solid #f1d58a; pointer-events: none; animation: ping .9s ease-out forwards; }
+    @keyframes ping { to { transform: scale(9); opacity: 0; } }
+    #lost { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: #000c; font-size: 16px; }
+  </style>
+</head>
+<body>
+  <canvas id="gl"></canvas>
+  <div id="labels"></div>
+  <div id="hud">
+    <h1>פרוטוטייפ C · תלת־ממד אמיתי</h1>
+    <p>גרירה: הזזה · גלגלת / צביטה: זום · קליק ימני או Shift + גרירה / סיבוב בשתי אצבעות / Q E: הטיית מצלמה (±25°) · הקשה: חשיפת ערפל</p>
+    <div class="btns">
+      <button id="btnCam">איפוס מצלמה</button>
+      <button id="btnFog">ערפל מחדש</button>
+      <button id="btnAll">חשוף הכול</button>
+      <button id="btnHud">הסתר</button>
+    </div>
+    <div id="stats">…</div>
+  </div>
+  <div id="lost">ההקשר הגרפי אבד · משחזר…</div>
+  <script type="module" src="./main.ts"></script>
+</body>
+</html>

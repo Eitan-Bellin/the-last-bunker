@@ -27,6 +27,7 @@ import { StorySystem } from '../systems/StorySystem';
 import { SupplySystem } from '../systems/SupplySystem';
 import { RushSystem } from '../systems/RushSystem';
 import { DailySystem } from '../systems/DailySystem'; // [plan4:GP-1]
+import { CitySystem } from '../systems/CitySystem'; // [world:C0]
 import { ShopSystem, type ProjectBooster } from '../systems/ShopSystem';
 import { ProjectSystem } from '../systems/ProjectSystem'; // [LateGame B1]
 import { snapshot } from '../data/challenges'; // [LateGame B4]
@@ -178,6 +179,8 @@ export class GameEngine {
   rushSystem: RushSystem;
   /** [plan4:GP-1] Daily orders. */
   dailySystem: DailySystem;
+  /** [world:C0] The city's discovery bookkeeping (seen / found). Economy-neutral: no tick, writes only state.city. */
+  citySystem: CitySystem;
   shopSystem: ShopSystem;
   projectSystem: ProjectSystem; // [LateGame B1]
   /** [Long game] The Decision Inbox's own cards. */
@@ -258,6 +261,7 @@ export class GameEngine {
     this.supplySystem = new SupplySystem(this.stateManager, this.resourceSystem);
     this.rushSystem = new RushSystem(this.stateManager, this.researchSystem);
     this.dailySystem = new DailySystem(this.stateManager, this.resourceSystem, this.rushSystem, { digBlock: st => this.buildingSystem.digBlock(st) }); // [plan4:GP-1]
+    this.citySystem = new CitySystem(this.stateManager); // [world:C0]
     // [Economy A3] The big-projects system (Late-game agent) may feed on overflow; resolved lazily so build order doesn't matter.
     // [Economy A2] Credits shop; its project-boost item shows up once the Projects system offers boostStage().
     this.shopSystem = new ShopSystem(this.stateManager, this.resourceSystem, this.researchSystem, this.supplySystem);
