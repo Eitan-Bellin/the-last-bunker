@@ -82,6 +82,55 @@
         "--strictPort"
       ],
       "port": 5176
+    },
+    {
+      "name": "world-C",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": [
+        "vite",
+        "C:/Users/eitan/Desktop/lbw-C",
+        "--port",
+        "5177",
+        "--strictPort"
+      ],
+      "port": 5177
+    },
+    {
+      "name": "world-Li",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": [
+        "vite",
+        "C:/Users/eitan/Desktop/lbw-Li",
+        "--port",
+        "5178",
+        "--strictPort"
+      ],
+      "port": 5178
+    },
+    {
+      "name": "phone",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": [
+        "vite",
+        "preview",
+        "--host",
+        "--port",
+        "4300",
+        "--strictPort"
+      ],
+      "port": 4300
+    },
+    {
+      "name": "world-T",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": [
+        "vite",
+        "C:/Users/eitan/Desktop/lbw-T",
+        "--port",
+        "5179",
+        "--strictPort"
+      ],
+      "port": 5179
     }
   ]
 }
