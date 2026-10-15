@@ -4,6 +4,9 @@ import { AMBIENCE, AMBIENCE_SECONDS, type AmbienceKey } from './ambience';
 import { ERA_BEDS, type BedKey } from './bedKeys';
 import { isLiteMode } from '../core/crashGuard';
 import { lazyChunk } from '../utils/lazy';
+import { CITY } from '../world/flag'; // [world:C1-Li]
+import { AUDIO } from '../world/tokens'; // [world:C1-Li]
+import { STRATA_N, cityMix, newCityMix } from '../world/life/ambience'; // [world:C1-Li]
 
 /**
  * Plan 4 wave 3 (perf): the effect, music-theme and era-bed recipes (audio/synth.ts, about 11 KB gzipped) are a chunk of their own.
@@ -136,6 +139,10 @@ export class AudioEngine {
   private musicOut: GainNode | null = null;
   private fxOut: GainNode | null = null;
   private volumes = { music: 1, fx: 1 };
+  /** [world:C1-Li] The city's stratum beds (rendered when the camera first visits a stratum) and the hub crowd, on the ambience bus. */
+  private cityBeds = new Map<number, GainNode>();
+  private cityCrowd: GainNode | null = null;
+  private readonly cityTarget = newCityMix();
 
   constructor() {
     let stored: string | null = null;
@@ -577,7 +584,9 @@ export class AudioEngine {
   /** Each era has its own room tone; the city hum belongs to the far view. */
   private bedLevel(key: BedKey): number {
     if (key === 'city') return this.zoom === 'far' ? 1 : 0;
-    return ERA_BEDS[Math.min(ERA_BEDS.length - 1, this.era)] === key ? (this.zoom === 'far' ? 0.4 : 1) : 0;
+    // [world:C1-Li] In the city the stratum beds lead up close and the era's bed stays underneath at AUDIO.eraBedShare.
+    const share = CITY && this.zoom !== 'far' ? AUDIO.eraBedShare : 1;
+    return ERA_BEDS[Math.min(ERA_BEDS.length - 1, this.era)] === key ? (this.zoom === 'far' ? 0.4 : 1) * share : 0;
   }
 
   private startBed(key: BedKey, buffer: AudioBuffer): void {
@@ -655,6 +664,61 @@ export class AudioEngine {
       voice.gain.gain.setTargetAtTime(m ? Math.min(1, m.level) : 0, t, 0.4);
       voice.pan.pan.setTargetAtTime(m ? Math.max(-1, Math.min(1, m.pan)) : 0, t, 0.4);
     }
+    if (CITY) this.updateCity();
+  }
+
+  /**
+   * [world:C1-Li] The city ambience follows the camera (src/world/life/ambience.ts): every stratum's bed at its weight for the view's
+   * depth, crossfading over AUDIO.crossfade; the hub crowd with the people in view. A bed is synthesized the first time it is wanted
+   * (after the first gesture: there is no context before). It plays on the ambience bus, so the effects volume and the sound switch
+   * apply as to every other bed.
+   */
+  private updateCity(): void {
+    const ctx = this.ctx;
+    if (!ctx || !this.synth || !this.ambBus) return;
+    const mix = this.cityTarget;
+    if (!cityMix(this.zoom === 'far', mix)) return;
+    const t = ctx.currentTime, tc = AUDIO.crossfade / 3;
+    for (let s = 0; s < STRATA_N; s++) {
+      const want = mix.beds[s];
+      const g = this.cityBeds.get(s);
+      if (g) g.gain.setTargetAtTime(want, t, tc);
+      else if (want > 0.02) this.enqueueCityBed(s);
+    }
+    if (this.cityCrowd) this.cityCrowd.gain.setTargetAtTime(mix.crowd, t, tc);
+    else if (mix.crowd > 0.02) this.enqueueCityCrowd();
+  }
+
+  private cityLoop(buffer: AudioBuffer): GainNode {
+    const ctx = this.ctx!;
+    const src = ctx.createBufferSource();
+    src.buffer = buffer;
+    src.loop = true;
+    const g = ctx.createGain();
+    g.gain.value = 0;
+    src.connect(g).connect(this.ambBus!);
+    src.start(ctx.currentTime, Math.random() * buffer.duration);
+    return g;
+  }
+
+  private enqueueCityBed(s: number): void {
+    this.enqueue(`city:${s}`, 7, async () => {
+      if (this.cityBeds.has(s) || !this.ctx) return;
+      const { cityBed, CITY_BED_SECONDS } = this.synth!;
+      const buffer = await renderLoop(CITY_BED_SECONDS, 2, cityBed(s), 900 + s, AUDIO.strata[s].reverb, this.light ? 16000 : LOOP_RATE);
+      this.cityBeds.set(s, this.cityLoop(normalize(buffer, 0.24)));
+      this.updateCity();
+    });
+  }
+
+  private enqueueCityCrowd(): void {
+    this.enqueue('city:crowd', 8, async () => {
+      if (this.cityCrowd || !this.ctx) return;
+      const { cityCrowd, CITY_BED_SECONDS } = this.synth!;
+      const buffer = await renderLoop(CITY_BED_SECONDS, 2, cityCrowd, 950, 0.6, this.light ? 16000 : LOOP_RATE);
+      this.cityCrowd = this.cityLoop(normalize(buffer, 0.2));
+      this.updateCity();
+    });
   }
 
   /** Briefly lowers the music under an important sound. */

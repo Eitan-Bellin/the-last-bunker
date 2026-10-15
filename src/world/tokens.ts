@@ -720,6 +720,102 @@ export const SIGNS = {
 } as const;
 
 // =================================================================================================================================
+// LIFE: the city's people off duty (src/world/life/*, walkers.ts). Presentation only: who works where never changes.
+// =================================================================================================================================
+
+/** Kinds of places off-duty people loiter at in the hubs and corridors (src/world/life/idleSpots.ts). */
+export type IdleSpotKind = 'rail' | 'barrel' | 'bench' | 'plaza' | 'corridor';
+
+export const LIFE = {
+  idle: {
+    /** Most people loitering at once, per render tier (each is one walker slot that stays out). */
+    max: { high: 16, medium: 10, low: 5, lite: 0 } as Record<'high' | 'medium' | 'low' | 'lite', number>,
+    /** One loiter cycle (s, varied ±20% per person); a person is out for `outShare` of it at a phase of their own. */
+    cycle: 130,
+    outShare: 0.5,
+    /** Once at the spot, nobody is called back by the schedule before this many seconds (a job, the night or a meal still call at once). */
+    minHold: 20,
+    /** Spots nearer the person's room weigh more: weight / (1 + dx / near + floors apart). */
+    near: 170,
+    /** Below this zoom nobody walks out (the far map shows dots); the ones out stay where they are. */
+    minZoom: 0.42,
+    /** Decisions (who goes out, who comes back) run this often per second; positions update every frame. */
+    passHz: 2,
+    /** At most this many walks out are planned in one pass (route planning is the costly part; the rest wait for the next pass). */
+    startsPerPass: 3,
+    /** After a walk could not be planned (a shut door, a trip too long), the person stays in for this long (s). */
+    retry: 25,
+    /** A spot is only offered to people whose room is at most this many floors away (keeps the walks short). */
+    maxFloors: 3,
+    /**
+     * Workers' short breaks (presentation only: production runs on, the room keeps its crew in the simulation). A worker steps out for
+     * `breakShare` of their own `breakCycle` (±20%), to a spot within `breakFloors`; never the last one in the room, one per room at a time.
+     */
+    breakCycle: 260,
+    breakShare: 0.18,
+    breakFloors: 1,
+    breakMinCrew: 2,
+    /** How much each kind of place draws people (relative). */
+    weights: { rail: 3, barrel: 4, bench: 2, plaza: 3, corridor: 2 } as Record<IdleSpotKind, number>,
+    /** Spacing of standing places along a balcony rail / the bridge, and how far in from the ends. */
+    railStep: 20,
+    railInset: 7,
+    /** Offsets of the places around the fire barrel (x from the barrel; facing toward it). */
+    barrelRing: [-17, -31, 13] as readonly number[],
+    /** Offsets on the bench (x from its left end). */
+    benchSeats: [9, 27] as readonly number[],
+    /** Plaza pair beside the spine (x from the spine's edges). */
+    plazaGap: 8,
+    /** Corridor places: per vestibule, and per floor strip (from the strip's hub end, every `stripStep`, at most `stripMax`). */
+    vestInset: 6,
+    stripFirst: 46,
+    stripStep: 130,
+    stripMax: 3,
+  },
+  /** Carried light (style guide 7): lanterns and headlamps are real moving pools; the share per stratum is PEOPLE.lantern*. */
+  lantern: {
+    /** Most carried lights at once, per tier (the people over the cap carry nothing). */
+    max: { high: 8, medium: 5, low: 2, lite: 0 } as Record<'high' | 'medium' | 'low' | 'lite', number>,
+    /** Where the lantern hangs (from the feet, facing side) and where the headlamp sits (from the top of the head). */
+    hand: { x: 7, y: -19 },
+    head: { x: 3, y: 7 },
+    /** Strata counted as deep for PEOPLE.lanternShareDeep. */
+    deepFrom: 4,
+  },
+  /** Self-light (style guide 7): somebody standing in a pool darker than `below` (lightAt, pools only) gets a faint light of their own. */
+  selfLight: {
+    max: { high: 8, medium: 5, low: 3, lite: 0 } as Record<'high' | 'medium' | 'low' | 'lite', number>,
+    below: 0.3,
+    radius: 34,
+    intensity: 0.34,
+    color: 0xffe2c0,
+    /** Kept at least this long once lit (s), so it never flickers on and off at a pool's edge. */
+    hold: 3,
+  },
+  /** Rim (style guide 7): an additive copy of the body, offset toward the brighter side and tinted by the stratum's key light. */
+  rim: {
+    /** Sample offsets for the brighter-side test (world units from the feet), and every how many frames a person is re-sampled. */
+    sampleDx: 10,
+    sampleY: -26,
+    every: 3,
+  },
+  /** One saturated accent per job outfit (style guide 7): the shirt (or the hat under a coat) pulled to this HSL saturation, the rest muted. */
+  accent: { saturation: 0.65, lightness: [0.34, 0.58] as readonly [number, number], mute: 0.55 },
+  /** The dig crew (architecture 4.2): at the dig face (floor dig) or at the edge's rubble (wing dig). */
+  dig: {
+    /** Most diggers shown working at one face; the others carry rubble back toward the ladder. */
+    atFace: 3,
+    /** Spacing between diggers, and their stand-off from the rubble wall / the edge choke. */
+    step: 19,
+    standOff: 7,
+    /** The ladder down from the plaza into the pit (x from the pit's west end). */
+    ladderX: 16,
+    /** A digger with a headlamp at the face (on top of the work lamp), on tiers that have lights. */
+    headlamp: true,
+  },
+} as const;
+
+// =================================================================================================================================
 // AUDIO: ambience per stratum (the audio agent wires these into AudioEngine / ambience beds)
 // =================================================================================================================================
 

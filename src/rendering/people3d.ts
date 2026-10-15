@@ -223,6 +223,8 @@ export class Body3D {
   private curAnim = '';
   private ghost: Ghost | null = null;
   private fade = 1;
+  /** [world:C1-Li] The rim copy (white layers + hair and hat, tinted and added by the Person), first child of the body; null until asked for. */
+  private rimSet: { container: Container; layers: Sprite[]; head: Container; hair: Sprite; hat: Sprite } | null = null;
   /** The shadow copy (black layers + hair), parented by the Person; null until asked for. */
   private shadowSet: { container: Container; layers: Sprite[]; head: Container; hair: Sprite } | null = null;
 
@@ -312,6 +314,61 @@ export class Body3D {
     this.headHolder.position.set(f.head[0], f.head[1]);
     this.headHolder.rotation = f.head[2] - this.data.headRef;
     if (this.shadowSet) this.syncShadow();
+    if (this.rimSet?.container.visible) this.syncRim();
+  }
+
+  /**
+   * [world:C1-Li] The rim copy: the same body sprites in white (the Person tints the holder and blends it additively), drawn behind the body
+   * so only the offset edge shows. Hidden when `on` is false; same textures, no extra atlas memory.
+   */
+  rim(on: boolean): Container | null {
+    if (!on) {
+      if (this.rimSet) this.rimSet.container.visible = false;
+      return this.rimSet?.container ?? null;
+    }
+    if (!this.rimSet) {
+      const container = new Container();
+      container.blendMode = 'add';
+      const layers: Sprite[] = [];
+      for (let i = 0; i < 4; i++) {
+        const s = new Sprite(Texture.EMPTY);
+        layers.push(s);
+        container.addChild(s);
+      }
+      const head = new Container();
+      const hair = new Sprite(Texture.EMPTY);
+      const hat = new Sprite(Texture.EMPTY);
+      hair.visible = hat.visible = false;
+      head.addChild(hair, hat);
+      container.addChild(head);
+      this.rimSet = { container, layers, head, hair, hat };
+      this.container.addChildAt(container, 0);
+    }
+    if (!this.rimSet.container.visible) {
+      this.rimSet.container.visible = true;
+      this.syncRim();
+    }
+    return this.rimSet.container;
+  }
+
+  private syncRim(): void {
+    const r = this.rimSet;
+    if (!r) return;
+    for (let k = 0; k < 4; k++) {
+      const src = this.layers[k], dst = r.layers[k];
+      dst.visible = src.visible;
+      dst.texture = src.texture;
+      dst.position.copyFrom(src.position);
+    }
+    r.head.position.copyFrom(this.headHolder.position);
+    r.head.rotation = this.headHolder.rotation;
+    const hs = this.slots.hair, ht = this.slots.hat;
+    r.hair.visible = hs.visible;
+    r.hair.texture = hs.texture;
+    r.hair.position.copyFrom(hs.position);
+    r.hat.visible = ht.visible;
+    r.hat.texture = ht.texture;
+    r.hat.position.copyFrom(ht.position);
   }
 
   /** Freezes what is on screen as a ghost and fades it out (mirrored when the figure has just turned around). */
