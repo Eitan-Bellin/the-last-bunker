@@ -45,7 +45,7 @@ export function navChecks(e55json: string | null, fail: (m: string) => void, not
       return out;
     };
     const g = navGraph(st);
-    notes.push(`nav: e55 x24 floors, skewed frames: ${g.N} nodes, ${g.aTo.length / 2} vertical links, ${g.links.length} transfers (stand-ins: the layout has none yet)`);
+    notes.push(`nav: e55 x24 floors, skewed frames: ${g.N} nodes, ${g.aTo.length / 2} vertical links, ${g.links.length} transfers (from the city layout)`);
 
     // 1. Every slot pair across floors 0..23 with the lift on (a high and a low roll): never refused, never the ladder, within the cap.
     let plans = 0, worst = 0, lifts = 0, walked = 0, viaGallery = 0;

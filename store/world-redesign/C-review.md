@@ -89,3 +89,23 @@ Findings from the M1 reviewer, the fix for each, and the commit.
   - `?city=0` boots classic.
   - No console errors apart from the logs from the forced context loss.
   - The remembered `?city` choice was cleared after the test.
+
+## M2 (partial) review, 2026-10-15
+
+**Verdict: APPROVE WITH FIXES.** The review covered per-stratum frames, gallery transfers, the Service Network kit, the nav graph and follow-survivor. The city map is not in it: that agent was stopped, and its work-in-progress is on origin/world/m2-T-citymap-wip.
+
+**Fixed**
+- **Medium:** a follow swallowed scripted camera moves. Now `focusTo` and `tourPath` end the follow first.
+- **Low:** routes-test checked the city loop against the classic cap; it now uses `CITY_MAX_TRIP_S`.
+- **Low:** a nav-test note was stale ("stand-ins").
+- **Integration:** the nav graph reads the level-builder's `GalleryTransfer` runs through `navTransfers()`. Before this fix, check:full failed: 0 transfer links, so blackout trips fell back to the ladder.
+
+**Open (Low, for M3)**
+- Keep the follow at idle fps while the target stands still.
+- On double tap, the first tap still opens a sheet.
+- `MAX_WP` 32 also applies in classic.
+- Make `CityLayout.transfers` a typed field.
+- `gallery.ts` has a function between imports.
+- Catwalk waypoint floor tags.
+- The figure half-width 8 is a magic number.
+- The nav graph rebuilds the layout a second time.

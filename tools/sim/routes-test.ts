@@ -4,7 +4,7 @@ import { LANDING_X, LEG_LADDER, LEG_LIFT, LEG_STAIRS, LEG_WALK, Route, route, se
 import { roomsEastX, slotX } from '../../src/world/project';
 import { GFX } from '../../src/rendering/gfxFeatures';
 import { createInitialState, floorExtent, type GameState } from '../../src/core/GameState';
-import { LADDER_X, MAX_TRIP_S, laneY } from '../../src/rendering/routes';
+import { CITY_MAX_TRIP_S, LADDER_X, laneY } from '../../src/rendering/routes';
 import { __setProjectionForTests } from '../../src/world/project';
 import { HUB_STAIR_AMP, hubStairFor, hubStairX } from '../../src/world/nav/hubStairs';
 import { cityCameraFrame } from '../../src/world/nav/cameraFrame';
@@ -215,13 +215,13 @@ function cityChecks(fail: (m: string) => void, notes: string[]): void {
         if (!o) { fail(`city: ${a}:${sa} -> ${b}:${sb} (lift ${lift}, roll ${rnd}) has no route: the survivor would teleport`); continue; }
         if (ks().includes(LEG_LADDER)) fail(`city: ${a}:${sa} -> ${b}:${sb} uses the shaft ladder`);
         if (r.n > MAX_WP) fail('city: waypoint list overflow');
-        if (r.seconds > MAX_TRIP_S) fail('city: a trip over MAX_TRIP_S was returned');
+        if (r.seconds > CITY_MAX_TRIP_S) fail('city: a trip over CITY_MAX_TRIP_S was returned');
         worst = Math.max(worst, r.seconds);
         if (ks().includes(LEG_STAIRS)) stairs++;
         if (ks().includes(LEG_LIFT)) lifts++;
       }
     }
-    notes.push(`routes (city): ${plans} slice plans between floors 0-2, ${stairs} by the hub stairs, ${lifts} by the lift, none refused, longest ${worst.toFixed(1)} s (cap ${MAX_TRIP_S})`);
+    notes.push(`routes (city): ${plans} slice plans between floors 0-2, ${stairs} by the hub stairs, ${lifts} by the lift, none refused, longest ${worst.toFixed(1)} s (cap ${CITY_MAX_TRIP_S})`);
     // The surface still joins floor 0 by the shaft ladder (LADDER_X), then hub stairs or the lift.
     o = route(st, { floor: -1, x: -40, y: -8 }, stop(2, roomsEastX(2) + 60), true, 0.9, r);
     if (!o || r.x[ks().indexOf(LEG_LADDER)] !== LADDER_X) fail('city: surface -> floor 2 should climb the shaft ladder to floor 0 first');

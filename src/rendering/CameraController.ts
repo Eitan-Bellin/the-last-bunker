@@ -1009,6 +1009,7 @@ export class CameraController {
 
   /** Glide (critically damped spring) to a camera centre and zoom; the target is kept inside the bounds. */
   focusTo(x: number, y: number, z: number): void {
+    this.stopFollow(); // [world:M2] a scripted move (crisis, dig, placement, sheet) wins over a follow; stepFollow never calls focusTo
     z = this.clampZoom(z);
     this.untouched = false;
     this.camBounds(z);
@@ -1028,6 +1029,7 @@ export class CameraController {
    * it was cancelled (by the player, or by another tourPath). Under reduced motion the camera cuts from point to point instead of gliding.
    */
   tourPath(points: { x: number; y: number; z?: number }[], dwellMs = 1500): Promise<boolean> {
+    this.stopFollow(); // [world:M2] a tour ends a follow
     this.cancelTour();
     if (!points.length) return Promise.resolve(true);
     return new Promise<boolean>(resolve => {
