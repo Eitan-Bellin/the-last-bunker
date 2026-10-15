@@ -28,6 +28,10 @@
   -webkit-tap-highlight-color: transparent;
 }
 .edge-arrow[hidden] { display: none; }
+/* [w3fix B1] A chip whose target just went: it fades out where it was and still takes (and swallows) the tap for a moment
+   (GHOST_MS in edgeArrows.ts), so the finger does not land on the room behind it. */
+.edge-arrow.is-gone { opacity: 0; transition: opacity var(--dur-screen) var(--ease-out); cursor: default; }
+.edge-arrow.is-gone .edge-arrow__face { animation: none; }
 
 /* The face: a round chip with the event's icon. Danger = dashed red edge (a shape, not only a colour); ready = solid amber edge. */
 .edge-arrow__face {

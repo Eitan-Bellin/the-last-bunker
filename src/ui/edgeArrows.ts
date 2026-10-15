@@ -2,7 +2,7 @@ import { el, setRich } from './dom';
 import { i18n } from '../i18n/I18nManager';
 import { haptic } from '../utils/haptics';
 import { getHudInsets } from '../utils/hudInsets';
-import { MS, PX } from './kit';
+import { bindPress, MS, PX } from './kit';
 import { LONG_PRESS_SLOP } from './kit/tokens';
 import type { GameState, IncidentKind } from '../core/GameState';
 import type { BunkerRenderer } from '../rendering/BunkerRenderer';
@@ -27,8 +27,14 @@ const READY_TTL_MS = 90_000;
 const TAP_QUIET_MS = 4_000;
 /** More rooms than this appearing in one look is a loaded save, not a finished room: no "ready" arrows for them. */
 const REBASE_AT = 4;
-/** Extra px between an arrow's hit area and the band's edge (room for the wedge that points out of the chip). */
-const EDGE_PAD = 8;
+/** Extra px between an arrow's hit area and the band's edge (room for the wedge that points out of the chip): the --sp-2 token. */
+const EDGE_PAD = PX['sp-2'];
+/**
+ * [ux-redesign w3fix B1] A chip whose target just went (a fire put out) stays this long as an inert ghost that fades out and swallows
+ * the tap: a finger already on its way must not land on the room behind it. Logic timing (when taps are swallowed), not a motion token;
+ * the fade itself is --dur-screen (edge.css).
+ */
+export const GHOST_MS = 400;
 
 export type ArrowTone = 'danger' | 'ready';
 
@@ -52,7 +58,7 @@ export interface EdgeArrowsHost {
 
 const INCIDENT_ICON: Record<IncidentKind, string> = { fire: 'fire', flood: 'wave', blackout: 'plug', roaches: 'bug', breach: 'skull' };
 
-interface Chip { btn: HTMLButtonElement; sig: string; key: string }
+interface Chip { btn: HTMLButtonElement; sig: string; key: string; ghostTimer: number }
 
 export class EdgeArrows {
   private readonly layer = el('div', 'edge-layer');
@@ -112,7 +118,7 @@ export class EdgeArrows {
     }
     picks.sort((a, b) => (a.t.tone === b.t.tone ? a.d - b.d : a.t.tone === 'danger' ? -1 : 1));
     const shown = picks.slice(0, MAX_ARROWS);
-    this.showLayer(shown.length > 0);
+    if (shown.length) this.showLayer(true);
     const places = shown.map(p => this.place(p, view));
     // Two targets in about the same direction would stack their chips: slide the later one along its edge, clear of the earlier ones.
     const gap = PX['hit-min'] + EDGE_PAD;
@@ -127,6 +133,8 @@ export class EdgeArrows {
       const p = shown[i];
       this.setChip(i, p ? { t: p.t, x: places[i].x, y: places[i].y, sx: p.sx, sy: p.sy } : null);
     }
+    // After the chips: a chip that just went stays (as a ghost) on a shown layer until GHOST_MS is over.
+    if (!shown.length) this.showLayer(this.chips.some(c => c.ghostTimer !== 0));
   }
 
   /** Where the line from the band's centre to the target leaves the band (inset by half a hit area plus the wedge), and the angle. */
@@ -230,10 +238,11 @@ export class EdgeArrows {
   private setChip(i: number, p: { t: Target; x: number; y: number; sx: number; sy: number } | null): void {
     let c = this.chips[i];
     if (!p) {
-      if (c && c.sig !== '') { c.btn.hidden = true; c.sig = ''; c.key = ''; }
+      if (c && c.sig !== '') this.ghost(c);
       return;
     }
     if (!c) c = this.chips[i] = this.makeChip();
+    if (c.ghostTimer) this.unghost(c);
     const { x, y } = p;
     // The wedge points from where the chip ended up (after any slide) to the target.
     const ang = Math.round((Math.atan2(p.sy - y, p.sx - x) * 180) / Math.PI / 5) * 5;
@@ -254,6 +263,29 @@ export class EdgeArrows {
     c.sig = sig;
   }
 
+  /** [w3fix B1] The chip's target went: it fades out in place, still under the finger, and swallows a tap for GHOST_MS. */
+  private ghost(c: Chip): void {
+    c.sig = '';
+    c.key = '';
+    c.btn.classList.add('is-gone');
+    c.btn.setAttribute('aria-hidden', 'true');
+    c.btn.tabIndex = -1;
+    window.clearTimeout(c.ghostTimer);
+    c.ghostTimer = window.setTimeout(() => {
+      this.unghost(c);
+      c.btn.hidden = true;
+      this.showLayer(this.chips.some(x => !x.btn.hidden));
+    }, GHOST_MS);
+  }
+
+  private unghost(c: Chip): void {
+    window.clearTimeout(c.ghostTimer);
+    c.ghostTimer = 0;
+    c.btn.classList.remove('is-gone');
+    c.btn.removeAttribute('aria-hidden');
+    c.btn.removeAttribute('tabindex');
+  }
+
   private makeChip(): Chip {
     const btn = el('button', 'edge-arrow');
     btn.type = 'button';
@@ -264,12 +296,10 @@ export class EdgeArrows {
     face.setAttribute('aria-hidden', 'true');
     face.appendChild(el('span', 'edge-arrow__icon'));
     btn.append(pointer, face);
-    const chip: Chip = { btn, sig: '', key: '' };
-    // Action on release, like every other button (click fires on release inside the element).
-    btn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      this.go(chip.key);
-    });
+    const chip: Chip = { btn, sig: '', key: '', ghostTimer: 0 };
+    // Action on release, like every other button (the kit's press: release inside, debounce). A ghost (key '') only swallows the tap.
+    // go() plays its own haptic and click.
+    bindPress(btn, () => this.go(chip.key), { haptics: false });
     this.layer.appendChild(btn);
     return chip;
   }
