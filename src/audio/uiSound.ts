@@ -16,7 +16,9 @@ export function uiSound(name: Sfx, volume?: number, minGapMs = 0): void {
   const now = performance.now();
   if (minGapMs && now - (last.get(name) ?? -1e9) < minGapMs) return;
   last.set(name, now);
-  player?.(name, volume, soundRate(name, now));
+  // [w4fix] No rate here: the engine asks soundRate (its rateOf) only once the sound really plays (not muted, not throttled), so the
+  // collect combo climbs only on sounds that were heard.
+  player?.(name, volume);
 }
 
 // ───────────────────────────── [ux-redesign W4] pitch: variation and the collect combo ─────────────────────────────

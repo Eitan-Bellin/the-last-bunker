@@ -23,6 +23,8 @@ const MAX_PARTICLES = 12;
 const MAX_ACTIVE = 40;
 /** The reduced-motion fade at the tile (--dur-popup-in in, held, out). */
 const FADE_MS = MS['dur-popup-in'] * 3;
+/** [w4fix C2] Share of the way a particle's end point moves toward a tile that moved, per frame. */
+const FOLLOW = 0.35;
 
 export interface Point { x: number; y: number }
 
@@ -65,6 +67,8 @@ export class FlyToHud {
   private layer: HTMLElement | null = null;
   private pool: HTMLElement[] = [];
   private parts: Particle[] = [];
+  /** [w4fix] Particles waiting or in the air (the cap counts these, not the finished ones still in `parts`). */
+  private liveCount = 0;
   private raf = 0;
   /** For the debug tool: bursts asked for, particles flown, particles dropped by the cap. */
   readonly stats = { bursts: 0, flown: 0, dropped: 0 };
@@ -89,12 +93,15 @@ export class FlyToHud {
     const n = this.pool.pop() ?? document.createElement('span');
     n.className = 'fx-fly';
     n.style.opacity = '0';
-    if (!n.parentElement) this.ensureLayer().appendChild(n);
+    // [w4fix] A pooled node may sit in an old layer that was removed from the page: move it into the live one.
+    const layer = this.ensureLayer();
+    if (n.parentElement !== layer) layer.appendChild(n);
     return n;
   }
 
   private give(p: Particle): void {
     p.live = false;
+    this.liveCount--;
     p.node.style.opacity = '0';
     p.node.style.transform = '';
     p.node.className = 'fx-fly is-parked';
@@ -119,10 +126,15 @@ export class FlyToHud {
       return 1;
     }
     const want = particlesFor(amount);
-    const room = Math.max(0, MAX_ACTIVE - this.parts.length);
+    const room = Math.max(0, MAX_ACTIVE - this.liveCount);
     const n = Math.min(want, room);
     this.stats.dropped += want - n;
-    if (n === 0) { this.host.land(r); return 0; }
+    if (n === 0) {
+      // [w4fix C5] Nothing of this store flies (the cap): its tile pulses when its goods would have landed, with the others.
+      this.host.start?.(r, FLY_MS);
+      window.setTimeout(() => { if (!document.hidden) this.host.land(r); }, FLY_MS);
+      return 0;
+    }
     // The arc bows to one side of the straight line (alternating per particle), so the burst fans out and gathers at the tile.
     const dx = to.x - from.x, dy = to.y - from.y;
     const len = Math.hypot(dx, dy) || 1;
@@ -146,6 +158,7 @@ export class FlyToHud {
     const part: Particle = { ...p, node, live: true };
     this.place(part, 0);
     this.parts.push(part);
+    this.liveCount++;
     this.stats.flown++;
     if (!this.raf) this.raf = requestAnimationFrame(this.tick);
   }
@@ -171,15 +184,29 @@ export class FlyToHud {
     this.raf = 0;
     const now = performance.now();
     let alive = 0;
+    // [w4fix C2] Tiles reorder (a store fills up) and the screen turns: in the second half of a flight the end point follows the tile's
+    // rect now, read once per store per frame, and eases toward it so a particle never jumps.
+    const fresh = new Map<ResourceType, Point | null>();
     for (const p of this.parts) {
       if (!p.live) continue;
       const dur = p.still ? FADE_MS : FLY_MS;
       const k = (now - p.t0) / dur;
       if (k < 0) { alive++; continue; }
       if (k >= 1) {
-        if (p.first) this.host.land(p.r);
+        // A tab that was in the background comes back long after the landing: no late pulse or buzz, the goods are simply there.
+        if (p.first && now - p.t0 <= 2 * dur) this.host.land(p.r);
         this.give(p);
         continue;
+      }
+      if (!p.still && k > 0.5) {
+        if (!fresh.has(p.r)) {
+          const rect = this.host.target(p.r);
+          fresh.set(p.r, rect ? { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 } : null);
+        }
+        const to = fresh.get(p.r);
+        if (to) {
+          p.to = Math.abs(to.x - p.to.x) + Math.abs(to.y - p.to.y) < 1 ? to : { x: p.to.x + (to.x - p.to.x) * FOLLOW, y: p.to.y + (to.y - p.to.y) * FOLLOW };
+        }
       }
       this.place(p, k);
       alive++;
@@ -190,11 +217,12 @@ export class FlyToHud {
       this.raf = requestAnimationFrame(this.tick);
     } else {
       this.parts.length = 0;
+      this.liveCount = 0;
     }
   };
 
   /** Particles in the air right now (debug / perf check). */
   get active(): number {
-    return this.parts.reduce((n, p) => n + (p.live ? 1 : 0), 0);
+    return this.liveCount;
   }
 }

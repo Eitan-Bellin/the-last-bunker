@@ -1,6 +1,6 @@
 /**
  * [ux-redesign W4] The number on a HUD tile counts up (or down) when it jumps by more than JUMP_SHARE in one go, over 300..1000 ms by
- * the size of the jump; small changes (the steady trickle of production) keep the gentle roll the HUD always had. While goods fly to a
+ * the size of the jump (a drop shows at once); small changes (the steady trickle of production) keep the gentle roll the HUD always had. While goods fly to a
  * tile the number may wait for them (`hold`). Pure arithmetic: the HUD calls `step` from its own update and writes only when the text
  * changes, so an idle tile costs no DOM writes.
  */
@@ -32,13 +32,17 @@ export class CountUp<K> {
   /** Reduced motion: jumps show at once (no counting). */
   instant = false;
 
-  /** Keep showing the old number for `ms` (goods are on their way to the tile). */
+  /**
+   * Keep showing the old number for `ms` (goods are on their way to the tile). [w4fix C1] A count already running for this key is
+   * dropped (its clock would keep running under the hold and jump at the landing); on release a fresh count starts from the shown value.
+   */
   hold(key: K, ms: number, now = performance.now()): void {
     if (ms <= 0) { this.holds.delete(key); return; }
+    this.tweens.delete(key);
     this.holds.set(key, Math.max(this.holds.get(key) ?? 0, now + ms));
   }
 
-  /** Releases a hold early (the first particle landed). */
+  /** Releases a hold early (the first particle landed): the next step starts counting from the shown value. */
   release(key: K): void {
     this.holds.delete(key);
   }
@@ -64,16 +68,13 @@ export class CountUp<K> {
     }
     const diff = target - shown;
     if (Math.abs(diff) < 0.5) return target;
+    // [w4fix] Spending (and every drop) shows at once: only gains count.
+    if (diff < 0) return target;
     if (!this.instant && Math.abs(diff) > JUMP_SHARE * Math.max(1, Math.abs(shown))) {
       this.tweens.set(key, { from: shown, to: target, t0: now, ms: countMs(shown, target) });
       return shown;
     }
     if (this.instant && Math.abs(diff) > JUMP_SHARE * Math.max(1, Math.abs(shown))) return target;
     return shown + diff * Math.min(1, dt * 9);
-  }
-
-  /** Something is counting or waiting (the HUD may skip work otherwise). */
-  get busy(): boolean {
-    return this.tweens.size > 0 || this.holds.size > 0;
   }
 }

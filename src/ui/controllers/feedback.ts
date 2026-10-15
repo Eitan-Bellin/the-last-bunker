@@ -2,7 +2,8 @@ import { ENDINGS } from '../../data/endings';
 import { SEASONS, nextSeason, seasonAt } from '../../data/seasons';
 import { ACTS } from '../../data/acts';
 import { feel, haptic } from '../../utils/haptics';
-import { FlyToHud, type Point } from '../fx/flyToHud'; // [ux-redesign W4]
+import { FLY_MS, FlyToHud, type Point } from '../fx/flyToHud'; // [ux-redesign W4]
+import { fmtNum } from '../format';
 import { floorTop, slotX, SLOT_W } from '../../rendering/geom';
 import '../../styles/fx.css';
 import { reducedMotion } from '../../utils/a11y'; // [plan4:GP-2]
@@ -99,8 +100,11 @@ export class FeedbackController {
   flyGoods(gains: Partial<Record<ResourceType, number>>, from: Point | null): void {
     if (document.hidden || this.app.engine.awayRunning) return;
     const at = from ?? this.middle();
-    (Object.entries(gains) as [ResourceType, number][]).filter(([, v]) => v > 0)
-      .forEach(([r, v], i) => window.setTimeout(() => this.fly.fly(r, at, v, `+${i18n.formatCompact(v)}`), i * FLY_GAP_MS));
+    const stores = (Object.entries(gains) as [ResourceType, number][]).filter(([, v]) => v > 0);
+    // [w4fix C1] Every number waits for its goods from now on: the gain is already in the state, and a HUD frame before the burst
+    // leaves would otherwise start the count early. The label reads like the tile it lands on (fmtNum, C4).
+    stores.forEach(([r], i) => this.app.hud.holdCount(r, FLY_MS + i * FLY_GAP_MS));
+    stores.forEach(([r, v], i) => window.setTimeout(() => this.fly.fly(r, at, v, `+${fmtNum(v)}`), i * FLY_GAP_MS));
   }
 
   /** The surface gate (trips come home through it). */
