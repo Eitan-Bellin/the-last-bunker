@@ -2,7 +2,8 @@ import { el, setRich } from '../dom';
 import { haptic } from '../../utils/haptics';
 import { uiSound } from '../../audio/uiSound';
 import { i18n } from '../../i18n/I18nManager';
-import { setInert, trapTab } from '../a11yDom';
+import { trapTab } from '../a11yDom';
+import { dropInert, holdInert } from '../inertOwners';
 import { MS } from '../kit/tokens';
 
 /** [ux-redesign W4] Rows of a sheet that come in one by one (fx.css styles the same eight). */
@@ -238,7 +239,7 @@ export class Sheet {
     openSheets.push(this);
     if (!wasOpen) {
       this.staggerRows();
-      if (openCount++ === 0) for (const n of behind()) setInert(n, true);
+      if (openCount++ === 0) for (const n of behind()) holdInert(n, 'sheet');
       // The title takes the focus so a screen reader starts at the top of the panel (a repeated show() leaves it where the player is).
       this.titleEl.focus({ preventScroll: true });
     }
@@ -298,7 +299,7 @@ export class Sheet {
     if (i >= 0) openSheets.splice(i, 1);
     if (--openCount <= 0) {
       openCount = 0;
-      for (const n of behind()) setInert(n, false);
+      for (const n of behind()) dropInert(n, 'sheet');
     }
     const back = this.opener;
     this.opener = null;

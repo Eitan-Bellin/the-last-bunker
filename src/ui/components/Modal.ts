@@ -1,6 +1,7 @@
 import { el } from '../dom';
 import { uiSound } from '../../audio/uiSound';
-import { setInert, trapTab } from '../a11yDom';
+import { trapTab } from '../a11yDom';
+import { dropInert, forceLive, holdInert, shouldInert } from '../inertOwners';
 import { kButton } from '../kit';
 import { dismissIndex, tapBlocked } from '../popupRules';
 
@@ -151,13 +152,15 @@ export class Modal {
       this.opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
       // Everything else on the page (the HUD, the canvas, the sheets) leaves the tab order and the screen reader while the dialog is up.
       // [ux-redesign w2fix B2] A story scene on screen (z 60, over this dialog's z 40) is never made inert: the dialog waits behind it.
-      // [ux-redesign w3fix] Parts the tutorial spotlight made inert (data-ob-inert) are taken over: the spotlight leaves them to the dialog.
+      // [ux-redesign final F1] Each part is held under the dialog's own name (inertOwners): a part the spotlight also holds stays inert
+      // until both let go, and the dialog's own layer (and any other dialog-type layer) is never part of the walk.
       for (const n of [...document.body.children]) {
-        if (n === this.overlay || n.tagName === 'SCRIPT' || n.matches('.toast-stack, .sr-only, #splash, .story-overlay.open') || ((n as HTMLElement).inert && !n.hasAttribute('data-ob-inert')) || n.hasAttribute('aria-hidden')) continue;
-        setInert(n, true);
-        this.inerted.push(n);
+        if (n === this.overlay || !shouldInert(n)) continue;
+        if (holdInert(n, 'modal')) this.inerted.push(n);
       }
     }
+    // [ux-redesign final F1] Whatever made the page inert before (a spotlight, an older build of a walk), this layer takes taps now.
+    forceLive(this.overlay, document.body);
     this.overlay.classList.add('open');
     const story = document.querySelector<HTMLElement>('.story-overlay.open');
     if (story) this.waitBehind(story);
@@ -184,9 +187,8 @@ export class Modal {
       this.focusFirst();
       // the scene itself was left out of the inert walk at show(): take it (and anything new) out now that this dialog is on top
       for (const n of [...document.body.children]) {
-        if (n === this.overlay || this.inerted.includes(n) || n.tagName === 'SCRIPT' || n.matches('.toast-stack, .sr-only, #splash, .story-overlay.open') || ((n as HTMLElement).inert && !n.hasAttribute('data-ob-inert')) || n.hasAttribute('aria-hidden')) continue;
-        setInert(n, true);
-        this.inerted.push(n);
+        if (n === this.overlay || this.inerted.includes(n) || !shouldInert(n)) continue;
+        if (holdInert(n, 'modal')) this.inerted.push(n);
       }
     });
     this.storyWatch.observe(story, { attributes: true, attributeFilter: ['class'] });
@@ -202,7 +204,7 @@ export class Modal {
     this.release();
     this.dismissBtn = null;
     this.overlay.classList.remove('open');
-    for (const n of this.inerted) setInert(n, false);
+    for (const n of this.inerted) dropInert(n, 'modal');
     this.inerted = [];
     const back = this.opener;
     this.opener = null;

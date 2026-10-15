@@ -1,7 +1,7 @@
 import { i18n } from '../../i18n/I18nManager';
 import { el } from '../dom';
 import { kButton, PX } from '../kit';
-import { setInert } from '../a11yDom';
+import { dropInert, holdInert, shouldInert } from '../inertOwners';
 import { reducedMotion } from '../../utils/a11y';
 import { ghostHand } from '../controllers/tips';
 
@@ -30,11 +30,20 @@ const visible = (n: HTMLElement | null): n is HTMLElement => {
   return r.width > 0 && r.height > 0;
 };
 
-/** Marks the nodes the spotlight made inert, so a dialog opening over it (Modal.ts) takes them over instead of skipping them. */
-export const OB_INERT_ATTR = 'data-ob-inert';
+/**
+ * [ux-redesign final F1] Body-level parts the spotlight's walk leaves live besides inertOwners.NEVER_INERT (dialogs, story, lore,
+ * toasts, ceremonies, its own layer): the idle hand. A dialog layer must never be inerted here: one that opened over a step stayed
+ * dead for the rest of the session.
+ */
+const KEEP_LIVE = '.ob-hand';
 
-/** Body-level parts that never go inert under the spotlight: its own layer, toasts, screen-reader text, the splash, the idle hand. */
-const KEEP_LIVE = '.ob-spot, .toast-stack, .sr-only, #splash, .ob-hand, .ob-ring';
+/** The nearest ancestor that scrolls (a sheet's body), or null. */
+const scrollParent = (n: HTMLElement): HTMLElement | null => {
+  for (let p = n.parentElement; p && p !== document.body; p = p.parentElement) {
+    if (p.scrollHeight > p.clientHeight + 1 && /(auto|scroll)/.test(getComputedStyle(p).overflowY)) return p;
+  }
+  return null;
+};
 
 /**
  * [ux-redesign W3a] The tutorial spotlight: a dark layer (--overlay) with a cut-out around one element, a bubble that says what to do,
@@ -64,6 +73,9 @@ export class Spotlight {
   private skipRect: DOMRect | null = null;
   private side = '';
   private lost: boolean | null = null;
+  /** [final F3] The target was scrolled clear of the bottom nav once for this step. */
+  private scrolled = false;
+  private rawSig = '';
   /** Nodes made inert, and for which target ('all' = everything but the spotlight). */
   private inerted: Element[] = [];
   private inertFor: HTMLElement | 'all' | null = null;
@@ -121,12 +133,15 @@ export class Spotlight {
     // New text or buttons: measure the bubble again and write the layout on the next look.
     this.bubbleSize = null;
     this.sig = '';
+    this.scrolled = false;
     this.watchTap();
     cancelAnimationFrame(this.raf);
     this.place();
   }
 
   hide(): void {
+    // [ux-redesign final F8] Called every tick while the screen is busy: an already hidden spotlight writes nothing.
+    if (this.root.hidden && !this.step && !this.inerted.length) return;
     this.offClick?.();
     this.offClick = null;
     this.step = null;
@@ -168,22 +183,16 @@ export class Spotlight {
     const walk = (parent: Element): void => {
       for (const c of [...parent.children]) {
         if (path.has(c)) { if (c !== keep) walk(c); continue; }
-        if (c.tagName === 'SCRIPT' || c.tagName === 'STYLE' || c.matches(KEEP_LIVE) || (c as HTMLElement).inert || c.hasAttribute('aria-hidden')) continue;
-        setInert(c, true);
-        c.setAttribute(OB_INERT_ATTR, '');
-        this.inerted.push(c);
+        if (!shouldInert(c, KEEP_LIVE)) continue;
+        if (holdInert(c, 'spotlight')) this.inerted.push(c);
       }
     };
     walk(document.body);
   }
 
+  /** Lets go of exactly what the walk held (inertOwners): a part a dialog or a sheet also holds stays inert until they let go too. */
   private releaseInert(): void {
-    // A dialog that opened over the spotlight took the page-level parts over (Modal.ts): it gives them back when it closes.
-    const dialogUp = !!document.querySelector('.modal-overlay.open');
-    for (const n of this.inerted) {
-      n.removeAttribute(OB_INERT_ATTR);
-      if (!(dialogUp && n.parentElement === document.body)) setInert(n, false);
-    }
+    for (const n of this.inerted) dropInert(n, 'spotlight');
     this.inerted = [];
     this.inertFor = null;
   }
@@ -209,11 +218,26 @@ export class Spotlight {
     this.inertAround(ok && step.mode === 'tap' ? t : null);
     let x0 = 0, y0 = 0, x1 = 0, y1 = 0;
     if (ok) {
-      const r = t.getBoundingClientRect();
+      let r = t.getBoundingClientRect();
+      // [ux-redesign final F3] A target under the bottom nav (a sheet's button on a short screen): scroll its sheet once so it sits
+      // above the nav; if it still cannot clear it, the cut-out covers only the part that shows.
+      const nav = document.querySelector<HTMLElement>('.hud-bottom');
+      const navTop = nav && !nav.contains(t) && nav.getClientRects().length ? nav.getBoundingClientRect().top : vh;
+      // Only once the element has stopped moving (a sheet still sliding in is below the nav for a moment).
+      const raw = `${Math.round(r.top)}|${Math.round(r.bottom)}`;
+      const still = raw === this.rawSig;
+      this.rawSig = raw;
+      if (r.bottom > navTop && still && !this.scrolled) {
+        this.scrolled = true;
+        const sc = scrollParent(t);
+        if (sc) { sc.scrollTop += Math.ceil(r.bottom - navTop + PAD * 2); r = t.getBoundingClientRect(); }
+      }
+      const bottom = Math.min(vh, navTop);
       x0 = Math.round(Math.max(0, r.left - PAD));
       y0 = Math.round(Math.max(0, r.top - PAD));
       x1 = Math.round(Math.min(vw, r.right + PAD));
-      y1 = Math.round(Math.min(vh, r.bottom + PAD));
+      y1 = Math.round(Math.min(bottom, r.bottom + PAD));
+      if (y1 <= y0) y1 = Math.round(Math.min(vh, r.bottom + PAD)); // nothing shows above the nav: point at the element itself
     }
     const sig = `${ok ? 1 : 0}|${x0}|${y0}|${x1}|${y1}|${vw}|${vh}`;
     if (sig === this.sig && this.bubbleSize) return; // nothing moved: no writes
