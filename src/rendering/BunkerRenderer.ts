@@ -9,8 +9,8 @@ import type { BuildingInstance, BuildingType, GameState, Position, Ruin, Survivo
 import { effectiveLevel, isDistrict, roomFloors, roomSlots } from '../data/buildingDefs';
 import { i18n } from '../i18n/I18nManager';
 import { BASE_EAST, BUILDING_W, FLOOR_H, ROOM_H, SHAFT_W, SLOT_W, TOPSOIL, buildingH, extentsFor, floorExtent, floorIndexAt, floorTop, type Ext } from './layout';
-import { buildingX, districtXAt, eastmostSlotX, slotX, stripX, useClassicProjection, westmostSlotX } from '../world/project';
-import { CITY, disableCityForSession } from '../world/flag'; // [world:C1] the city renderer behind ?city [world:M1] session fallback
+import { buildingX, districtXAt, eastmostSlotX, fallbackToClassic, slotX, stripX, westmostSlotX, worldModeConsistent } from '../world/project';
+import { CITY } from '../world/flag'; // [world:C1] the city renderer behind ?city [world:M1] session fallback
 import type { CityHost } from '../world/render/cityHost'; // [world:C1] loaded on demand (mountCity): classic never downloads the city renderer
 import { setLightSink } from '../world/life/lanterns'; // [world:C1-Li] // [world:C2] the real city layout and shell into the seams
 import { PEOPLE_RENDER } from '../world/tokensRender'; // [world:C1]
@@ -533,6 +533,8 @@ export class BunkerRenderer {
 
     this.surface = buildSurface();
     if (CITY) await this.mountCity(canvas); // [world:C1] the city's layer stack around the same holders (its own chunk)
+    // [world:M1 review] The flag and the projection must agree once the world is chosen (one kill switch: project.ts fallbackToClassic).
+    if (import.meta.env.DEV && !worldModeConsistent()) console.error('[world] CITY flag and PROJECTION disagree after init');
     if (!this.cityHost) this.worldContainer.addChild( // [world:M1] classic, or the city chunk could not be loaded (mountCity fell back)
       this.surfaceHolder, this.projectSites.layer, this.projectSites.smokeLayer, this.projectSites.glowLayer, this.projectSites.crew, this.projectSites.signLayer, this.undergroundHolder, this.bayHolder, this.slotLayer, this.highlightLayer,
       this.roomLayer, this.shaftHolder, this.utilitiesHolder, this.walkers.layer, this.dust.container, this.digHolder, this.wingSigns.container, this.districtSignHolder, this.fxLayer, this.incidents.fx, this.disasterFx.fx,
@@ -584,8 +586,7 @@ export class BunkerRenderer {
       // [world:M1] Offline before the service worker had the city chunks (or a flaky first load): never a dead boot. This session runs the
       // classic tower (flag and projection both flip before anything is projected for drawing); the next visit tries the city again.
       logCrash('city-chunk', err, { fallback: 'classic' });
-      disableCityForSession(String((err as Error)?.message ?? err));
-      useClassicProjection();
+      fallbackToClassic(String((err as Error)?.message ?? err)); // [world:M1 review] flag and projection together
       return;
     }
     const [{ CityHost }, { installCityWorld }] = mods;

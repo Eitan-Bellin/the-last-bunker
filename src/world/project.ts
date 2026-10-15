@@ -19,7 +19,7 @@ import { stratumOf, type StratumId } from '../data/strata';
 import type { BuildingType } from '../core/GameState';
 import { SHAFT_W, SLOT_W, SURFACE_TOP, buildingH, floorTop, ROOM_H, SLAB } from '../rendering/geom';
 import { CITY as CITY_TOKENS, type CityFrameTokens } from './tokens';
-import { CITY } from './flag';
+import { CITY, disableCityForSession } from './flag';
 import type { ExtLike, Rect, StratumFrame } from './types';
 
 export type ProjectionKind = 'classic' | 'city';
@@ -47,12 +47,27 @@ export function __setProjectionForTests(k: ProjectionKind, cityFrameTokens?: rea
 }
 
 /**
- * [world:M1] The session kill switch: the city chunk could not be loaded (offline before the service worker had it), so this session runs
- * the classic tower. Called by BunkerRenderer.init together with flag.ts `disableCityForSession`, before anything is projected for drawing.
+ * [world:M1] Projection half of the session kill switch. Callers outside tests use `fallbackToClassic`, which flips the flag with it
+ * (tools/sim/project-test checks this half alone).
  */
 export function useClassicProjection(): void {
   PROJECTION = 'classic';
   frames = classicFrames;
+}
+
+/**
+ * [world:M1 review] THE session kill switch, the one entry point: the city cannot run (its chunk failed to load offline, ...), so this
+ * session runs the classic tower. Turns flag.ts `CITY` off and resets the projection together, so the two can never disagree. Must run
+ * before anything is projected for drawing. The remembered choice is kept: the next visit tries the city again.
+ */
+export function fallbackToClassic(reason: string): void {
+  disableCityForSession(reason);
+  useClassicProjection();
+}
+
+/** [world:M1 review] The flag and the projection agree (`CITY === (PROJECTION === 'city')`); BunkerRenderer asserts it in DEV after init. */
+export function worldModeConsistent(): boolean {
+  return CITY === (PROJECTION === 'city');
 }
 
 /** The classic frame (the tower of today). */

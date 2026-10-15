@@ -77,7 +77,7 @@ export let cityDisabledReason: string | null = null;
 
 /**
  * Turns the city off for the rest of this session (the remembered choice is kept: the next visit, online, tries again). Must run before
- * anything is drawn with the city projection; BunkerRenderer.init calls it when the city chunk cannot be loaded.
+ * anything is drawn with the city projection. Do not call it directly: project.ts `fallbackToClassic` calls it and resets the projection with it.
  */
 export function disableCityForSession(reason: string): void {
   if (!CITY) return;
