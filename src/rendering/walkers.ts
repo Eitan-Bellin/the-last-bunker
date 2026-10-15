@@ -164,6 +164,8 @@ export class Walkers {
   private readonly retryAt = new WeakMap<Person, number>();
   private readonly tmpRoute = new Route();
   private readonly place = { x: 0, face: 1 };
+  /** redirect()'s one-room view map (reused: no Map per redirect). */
+  private readonly oneView = new Map<string, WalkView>();
   private nextPass = 0;
   private nextSig = 0;
   private now = 0;
@@ -724,7 +726,7 @@ export class Walkers {
         if (!s || !s.life || s.ret) continue;
         if (s.life === LIFE_DIG) {
           if (ds !== s.site || !this.siteOk[ds] || !on) this.sendBack(s, state, views);
-          else if (k !== s.member) this.retarget(s, k, state);
+          else if (k !== s.member) this.retarget(s, k);
         } else {
           // Called back: at once for a reason (a job, the night, the cap, the spot gone); by the schedule only after LIFE.idle.minHold at the spot.
           const held = s.mode === M_LOITER && t - s.t >= LIFE.idle.minHold;
@@ -888,7 +890,7 @@ export class Walkers {
   }
 
   /** A digger's place changed (someone joined or left the crew): a short walk along the pit to the new one. */
-  private retarget(s: Slot, k: number, state: GameState): void {
+  private retarget(s: Slot, k: number): void {
     const site = this.sites[s.site];
     crewPlace(site, k, this.place);
     s.member = k;
@@ -903,7 +905,6 @@ export class Walkers {
     pushLeg(r, LEG_WALK, floorIndexAt(s.py), s.ex, s.ey);
     s.leg = 1;
     s.mode = M_WALK;
-    void state;
   }
 
   /** Back to the room the renderer wants them in (`destId`): a walk when anyone can see it, else placed there at once. */
@@ -969,11 +970,15 @@ export class Walkers {
       // (mid-lift or mid-flight: finish that leg first; the new room is used when they are back on a floor)
       if (s.ret) return true;
     }
+    // Now an ordinary walk between rooms: it counts against MAX_WALKERS like any other, so with the walks full the old placement applies.
+    if (this.active - this.lifeN >= MAX_WALKERS) { this.cancel(s, true); return false; }
     this.dropLife(s);
     this.endLifeSlot(s);
-    // Now an ordinary walk between rooms (it counts against MAX_WALKERS like any other).
-    const views = new Map<string, WalkView>([[toId, toView]]);
+    const views = this.oneView;
+    views.clear();
+    views.set(toId, toView);
     this.sendBack(s, state, views);
+    views.clear();
     return !!s.person;
   }
 }
