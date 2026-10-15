@@ -3,6 +3,10 @@ import { haptic } from '../../utils/haptics';
 import { uiSound } from '../../audio/uiSound';
 import { i18n } from '../../i18n/I18nManager';
 import { setInert, trapTab } from '../a11yDom';
+import { MS } from '../kit/tokens';
+
+/** [ux-redesign W4] Rows of a sheet that come in one by one (fx.css styles the same eight). */
+const STAGGER_ROWS = 8;
 
 /** Open sheets, newest last: Escape closes the top one. */
 const openSheets: Sheet[] = [];
@@ -231,10 +235,24 @@ export class Sheet {
     if (i >= 0) openSheets.splice(i, 1);
     openSheets.push(this);
     if (!wasOpen) {
+      this.staggerRows();
       if (openCount++ === 0) for (const n of behind()) setInert(n, true);
       // The title takes the focus so a screen reader starts at the top of the panel (a repeated show() leaves it where the player is).
       this.titleEl.focus({ preventScroll: true });
     }
+  }
+
+  /**
+   * [ux-redesign W4] The first eight rows come in one after the other (fx.css, --stagger apart, skipped under reduced motion). The class
+   * stays only for the entrance, so rows a panel re-renders later simply appear. Taps are never held up: rows are tappable at once.
+   */
+  private staggerTimer = 0;
+  private staggerRows(): void {
+    window.clearTimeout(this.staggerTimer);
+    this.body.classList.remove('fx-stagger');
+    void this.body.offsetWidth;
+    this.body.classList.add('fx-stagger');
+    this.staggerTimer = window.setTimeout(() => this.body.classList.remove('fx-stagger'), MS['dur-popup-in'] + MS.stagger * STAGGER_ROWS);
   }
 
   /** [ux-w2f #38] Closes without the slide (another sheet is taking over). */

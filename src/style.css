@@ -134,9 +134,15 @@ body.placement-mode #game-canvas { cursor: crosshair; }
   font-size: calc(13px * var(--fs, 1));
   font-weight: 600;
   cursor: pointer;
-  transition: transform 0.1s, filter 0.2s;
+  /* [ux-redesign W4] The kit's press on every legacy button: in --dur-press, back in --dur-release springing (out-back). */
+  transition: transform var(--dur-release) var(--ease-out-back), filter var(--dur-release) var(--ease-out);
 }
-.btn:active:not(:disabled) { transform: scale(0.97); }
+/* .btn.btn: beats bunker-os.css's later `.btn:active` (translateY only); the key still sinks its 1 px there. */
+.btn.btn:active:not(:disabled):not([aria-disabled="true"]):not(.k-btn) {
+  transform: translateY(var(--border-w)) scale(var(--press-scale));
+  filter: brightness(var(--press-darken));
+  transition-duration: var(--dur-press);
+}
 .btn:disabled { opacity: 0.4; cursor: not-allowed; }
 .btn-primary { background: linear-gradient(135deg, #ff8a4d, #e8592a); border-color: transparent; color: #fff; }
 .btn-secondary { background: var(--bg-card-hi); }
