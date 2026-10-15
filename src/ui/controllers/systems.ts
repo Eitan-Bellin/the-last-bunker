@@ -125,7 +125,13 @@ export class SystemsController {
       title: i18n.t(card.title ?? `sys.${card.id}.title`, params),
       body: i18n.t(card.body ?? `sys.${card.id}.body`, params),
       actions: [
-        { label: i18n.t('sys.ok'), className: 'btn-primary', onClick: () => { this.app.modal.hide(); this.app.hud.spotlight(card.spot); } },
+        {
+          label: i18n.t('sys.ok'), className: 'btn-primary', onClick: () => {
+            this.app.modal.hide();
+            this.app.hud.spotlight(card.spot);
+            this.app.onboarding.guideTo(card.spot, card.id); // [ux-redesign W3a] once per player: a guided tap on where it lives
+          },
+        },
         { label: i18n.t('sys.more'), className: 'btn-secondary', onClick: () => { this.app.modal.hide(); this.app.openBook(card.book); } },
       ],
     });

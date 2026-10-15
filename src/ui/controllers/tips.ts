@@ -56,6 +56,17 @@ const TIPS: TipDef[] = [
   { id: 'wing', flag: 'tip:wing', textKey: 'tip.wing', ghost: 'wing', due: s => wingsAvailable(s) && s.currentFloors >= 4 },
 ];
 
+/**
+ * [ux-redesign W3a] The ghost finger the tip cards draw, also used by the onboarding idle hint (src/ui/onboarding): a translucent disc
+ * (two for the pinch), a trail and a ring, animated by checkin.css under full motion only.
+ */
+export function ghostHand(kind: TipDef['ghost'], extraClass = ''): HTMLElement {
+  const ghost = el('div', `tip-ghost g-${kind}${extraClass ? ` ${extraClass}` : ''}`);
+  ghost.setAttribute('aria-hidden', 'true');
+  ghost.append(el('b', 'tip-trail'), el('i', 'tip-f1'), el('i', 'tip-f2'), el('u', 'tip-ring'));
+  return ghost;
+}
+
 /** Time between two tips (ms): they teach one thing at a time. */
 const GAP_MS = 40_000;
 const SHOW_MS = 14_000;
@@ -127,8 +138,14 @@ export class TipsController {
     this.app.engine.requestSave();
   }
 
-  get isShowing(): boolean {
+  /** [ux-redesign W3a] A tip card itself is on screen (not counting the onboarding spotlight). */
+  get cardShowing(): boolean {
     return !!this.card;
+  }
+
+  /** [ux-redesign W3a] Also true while an onboarding spotlight holds the screen: ordinary dialogs wait for it as they wait for a tip. */
+  get isShowing(): boolean {
+    return !!this.card || !!this.app.onboarding?.holdsScreen;
   }
 
   /** Called every frame; looks about twice a second. Shows at most one tip, and only in a calm moment. */
@@ -141,6 +158,7 @@ export class TipsController {
       return;
     }
     if (now - this.lastCheck < CHECK_MS) return;
+    if (app.onboarding?.holdsScreen) return; // [ux-redesign W3a] one teacher at a time
     this.lastCheck = now;
     const s = app.state;
     if (this.card || now - this.lastTipAt < GAP_MS) return;
@@ -156,9 +174,7 @@ export class TipsController {
     this.lastTipAt = performance.now();
     const card = el('div', `gesture-tip tip-${def.ghost}`);
     card.setAttribute('role', 'status');
-    const ghost = el('div', `tip-ghost g-${def.ghost}`);
-    ghost.setAttribute('aria-hidden', 'true');
-    ghost.append(el('b', 'tip-trail'), el('i', 'tip-f1'), el('i', 'tip-f2'), el('u', 'tip-ring'));
+    const ghost = ghostHand(def.ghost);
     const text = el('p', 'tip-text', i18n.t(def.textKey));
     // [ux-redesign w2a] Kit buttons (action on release, 48 px hit area).
     const more = kButton({ variant: 'secondary', className: 'btn-secondary tip-btn', label: i18n.t('tip.more'), onPress: () => { this.hide(true); this.app.openBook('touch'); } });
@@ -175,6 +191,7 @@ export class TipsController {
 
   /** [ux-wp3 C1] Puts the tip away unread (something else took the screen): it shows again in a calm moment. */
   defer(): void {
+    this.app.onboarding?.defer(); // [ux-redesign W3a] an emergency dialog puts the spotlight away too (it comes back when calm)
     if (!this.card) return;
     this.hide(false);
     this.lastTipAt = performance.now() - GAP_MS + RETRY_MS;
