@@ -15,7 +15,7 @@ import { Container, Graphics } from 'pixi.js';
 import type { GameState } from '../../../core/GameState';
 import { SLOT_W } from '../../../rendering/geom';
 import { WORLD_KIT_IDS, rockTileId } from '../../tokensAssets';
-import type { StratumId } from '../../tokens';
+import { PROPS, type StratumId } from '../../tokens';
 import type { RenderTier } from '../../tokensRender';
 import { polyBounds } from '../../model/outline';
 import type { Cavity, CityLayout, Rect } from '../layoutTypes';
@@ -48,7 +48,7 @@ function buildBacks(cavs: readonly Cavity[]): Container {
       c.addChild(grain(b.x0, b.y0, b.x1 - b.x0, b.y1 - b.y0));
     } else if (cav.back === 'rock') {
       // Recessed rock: the same rock, in shadow (it is the far wall of a tunnel or a pit).
-      c.addChild(tile(rockTileId(WORLD_KIT_IDS[Math.max(1, s)]), b.x0, b.y0, b.x1 - b.x0, b.y1 - b.y0, { tint: 0x5a5450 }));
+      c.addChild(tile(rockTileId(WORLD_KIT_IDS[Math.max(1, s)]), b.x0, b.y0, b.x1 - b.x0, b.y1 - b.y0, { tint: PROPS.rock.recessTint }));
     }
   }
   c.addChildAt(g, 0);

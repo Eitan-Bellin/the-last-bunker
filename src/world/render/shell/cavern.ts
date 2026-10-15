@@ -5,7 +5,7 @@
  * signature light beyond; being dug, the choke clears with the construction's progress.
  */
 import { Container, Graphics } from 'pixi.js';
-import { STRATA, type Hex, type StratumId } from '../../tokens';
+import { CITY, PROPS, STRATA, type Hex, type StratumId } from '../../tokens';
 import { DISTRICT_SLOTS } from '../../../data/buildingDefs';
 import { ROOM_H, SLOT_W, floorTop } from '../../../rendering/geom';
 import { laneY, storeyBottom } from '../../model/cityLayout';
@@ -16,12 +16,12 @@ import type { LightDef, ShellPiece } from './types';
 import { OUTLINE, lamp, palette, rng, rod, shade, sprite, vfill } from './kit';
 import { rubbleWall, tunnelFloor } from './props';
 
-const SLAB_PAD = 40;
+const SLAB_PAD = CITY.layout.cavernSlabPad;
 
 /** The light a district shows through its choked mouth before it is dug (its identity, cool = the unknown). */
 const DISTRICT_TEASE: Record<string, { preset: PresetName; color?: Hex }> = {
   cave: { preset: 'crystal' },
-  lake: { preset: 'signal', color: 0x40c8e0 },
+  lake: { preset: 'signal', color: PROPS.cavern.lakeTease },
   metro: { preset: 'sodium' },
   geothermal: { preset: 'magma' },
   oldVault: { preset: 'teaseBeyond' },
@@ -85,9 +85,9 @@ export function buildCaverns(areas: readonly CityArea[], cavs: readonly Cavity[]
       const lx = Math.min(cb.x1 - 18, room.x1 + 22);
       rod(fg, lx, lane, lx, lane - 74, 2.4, shade(P.metal, 0.9));
       rod(fg, lx, lane - 74, lx - 9, lane - 74, 1.8, shade(P.metal, 0.9));
-      fg.poly([lx - 15, lane - 74, lx - 3, lane - 74, lx - 5, lane - 68, lx - 13, lane - 68]).fill(0x2a2622).stroke({ ...OUTLINE, width: 1 });
+      fg.poly([lx - 15, lane - 74, lx - 3, lane - 74, lx - 5, lane - 68, lx - 13, lane - 68]).fill(PROPS.cavern.streetLampHood).stroke({ ...OUTLINE, width: 1 });
       const bulb = new Graphics();
-      bulb.circle(lx - 9, lane - 67, 2.6).fill({ color: 0xffe0a8 });
+      bulb.circle(lx - 9, lane - 67, 2.6).fill({ color: PROPS.cavern.streetLampBulb });
       bulb.blendMode = 'add';
       glow.addChild(bulb);
       lights.push({ x: lx - 9, y: lane - 66, preset: 'streetLamp', kind: 'civic', area: a.id });

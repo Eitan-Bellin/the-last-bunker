@@ -4,7 +4,7 @@
  */
 import { Container, Graphics, Sprite, TilingSprite } from 'pixi.js';
 import { makeWorldTiling } from '../../../art/worldKit';
-import type { Hex, StratumId } from '../../tokens';
+import { PROPS, type Hex, type StratumId } from '../../tokens';
 import { noise1 } from '../../model/outline';
 import type { LightDef } from './types';
 import { OUTLINE, contactShadow, palette, rng, rod, shade, sprite, vfill } from './kit';
@@ -39,16 +39,16 @@ export function tape(into: Container, xa: number, ya: number, xb: number, yb: nu
 /** A pick lying or leaning: steel head on a wooden haft. */
 export function pick(g: Graphics, x: number, y: number, angle: number): void {
   const len = 30, hx = x + Math.cos(angle) * len, hy = y + Math.sin(angle) * len;
-  rod(g, x, y, hx, hy, 2.2, 0x7a5636);
+  rod(g, x, y, hx, hy, 2.2, PROPS.tools.haft);
   const nx = -Math.sin(angle), ny = Math.cos(angle);
-  rod(g, hx - nx * 9, hy - ny * 9 + 2, hx + nx * 9, hy + ny * 9 - 2, 2.4, 0x6a6e72);
+  rod(g, hx - nx * 9, hy - ny * 9 + 2, hx + nx * 9, hy + ny * 9 - 2, 2.4, PROPS.tools.pickHead);
 }
 
 /** A shovel leaning against a wall. */
 export function shovel(g: Graphics, x: number, y: number, lean: number): void {
   const tx = x + lean * 30, ty = y - 30;
-  rod(g, x, y - 8, tx, ty, 2, 0x7a5636);
-  g.poly([x - 4, y, x + 4, y, x + 3 + lean * 2, y - 10, x - 3 + lean * 2, y - 10]).fill(vfill(0x5e6266, y - 10, y)).stroke({ ...OUTLINE, width: 1 });
+  rod(g, x, y - 8, tx, ty, 2, PROPS.tools.haft);
+  g.poly([x - 4, y, x + 4, y, x + 3 + lean * 2, y - 10, x - 3 + lean * 2, y - 10]).fill(vfill(PROPS.tools.shovelBlade, y - 10, y)).stroke({ ...OUTLINE, width: 1 });
 }
 
 /** A lantern set on the ground (its anchor is the hook; on the ground it stands on its base). */
@@ -111,7 +111,7 @@ export function cracks(dark: Graphics, lit: Graphics | null, x: number, y: numbe
       pts.push(px, py);
       l -= step;
     }
-    dark.poly(pts, false).stroke({ width: 2.2, color: 0x0a0806, alpha: 0.85, join: 'round', cap: 'round' });
+    dark.poly(pts, false).stroke({ width: PROPS.crack.width, color: PROPS.crack.color, alpha: PROPS.crack.alpha, join: 'round', cap: 'round' });
     if (lit && glowColor !== undefined) {
       lit.poly(pts, false).stroke({ width: 4, color: glowColor, alpha: 0.12, join: 'round', cap: 'round' });
       lit.poly(pts, false).stroke({ width: 0.9, color: glowColor, alpha: 0.55, join: 'round', cap: 'round' });
@@ -129,6 +129,6 @@ export function sprayX(g: Graphics, x: number, y: number, size: number, color: H
 
 /** A wooden post (tape stand, plate post). */
 export function post(g: Graphics, x: number, yTop: number, yBot: number): void {
-  rod(g, x, yTop, x, yBot, 2.6, 0x6b4c2e);
+  rod(g, x, yTop, x, yBot, 2.6, PROPS.tools.post);
   contactShadow(g, x, yBot, 8);
 }

@@ -168,3 +168,18 @@ export const BACKDROP = {
   /** The haze band (screen-space feel, plane units). */
   hazeH: [120, 220] as readonly [number, number],
 } as const;
+
+/** [world:C2] The rock cut face (src/world/render/shell/rock.ts), streamed in cached chunks. World units. */
+export const ROCK_RENDER = {
+  /** Chunk size (each chunk is one cache texture). */
+  chunk: 512,
+  /** How far strokes may reach past a chunk before its erase frame trims them. */
+  spill: 48,
+  /** Height of the topsoil (the surface kit) under the ground line, and the banding strip's height. */
+  soil: 64,
+  bandH: 100,
+  /** Neighbouring chunks overlap this much, hiding the bilinear seam at a cache texture's edge. */
+  overlap: 3,
+  /** How far the rock extends past the layout bounds on each side. */
+  sideRun: 2400,
+} as const;

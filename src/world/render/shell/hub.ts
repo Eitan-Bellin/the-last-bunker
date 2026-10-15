@@ -5,7 +5,7 @@
  * Colony era) the string lights.
  */
 import { Container, Graphics } from 'pixi.js';
-import { CITY, DETAIL, SIGNS, type StratumId } from '../../tokens';
+import { CITY, DETAIL, PROPS, SIGNS, type StratumId } from '../../tokens';
 import { baseTier, type RenderTier } from '../../tokensRender';
 import { SHAFT_W, floorTop } from '../../../rendering/geom';
 import { floorLineY, storeyBottom } from '../../model/cityLayout';
@@ -16,10 +16,10 @@ import { OUTLINE, contactShadow, grain, lamp, mix, palette, rng, rod, shade, spr
 import type { PresetName } from '../lighting';
 
 const H = CITY.hub;
-/** Uniform scale of the hub-vault tile: one 192 u bay drawn one storey (144 u) tall, so a bay's arch sits behind the lift on every storey. */
-const VAULT_PITCH = 144;
-const DECK_H = 32;
-const RAIL_H = 24;
+const HP = PROPS.hub;
+const VAULT_PITCH = H.vaultPitch;
+const DECK_H = H.deckH;
+const RAIL_H = H.railH;
 
 /** The key light hung in a stratum's hub: the ring chandelier up in the shelter, the stratum's own work light below. */
 const HUB_KEY: Record<number, PresetName> = { 1: 'chandelier', 2: 'fluoroTube', 3: 'sodium', 4: 'floodlight', 5: 'crystal', 6: 'magma' };
@@ -43,7 +43,7 @@ export function buildHub(h: HubGeom, quality: RenderTier, era: number): ShellPie
   // ----------------------------------------------------------------------------------------------------------- the vault wall
   const wall = new Container();
   const vault = tile('hub-vault', x0, y0, x1 - x0, y1 - y0, s === 1 ? {} : { tint: mix(P.built, 0xffffff, 0.35) });
-  const k = VAULT_PITCH / 192;
+  const k = VAULT_PITCH / H.vaultTileW;
   vault.tileScale.set(vault.tileScale.x * k, vault.tileScale.y * k);
   // A bay centred on the spine, every bay's bottom on a storey's floor line.
   vault.tilePosition.set(cx - VAULT_PITCH / 2 - x0, floorLineY(h.floors[0]) - VAULT_PITCH - y0);
@@ -108,7 +108,7 @@ export function buildHub(h: HubGeom, quality: RenderTier, era: number): ShellPie
     walls.rect(wx, y0 + H.vaultRise * 0.6, H.wallW, y1 - y0 - H.vaultRise * 0.6).fill(vfill(P.builtDark, y0, y1));
     for (const f of h.floors) {
       const dTop = floorLineY(f) - 76, dBot = floorLineY(f) + 18;
-      walls.rect(wx, dTop, H.wallW, dBot - dTop).fill({ color: 0x050405, alpha: 0.92 });
+      walls.rect(wx, dTop, H.wallW, dBot - dTop).fill({ color: HP.doorway, alpha: HP.doorwayAlpha });
       walls.rect(wx - 1, dTop - 4, H.wallW + 2, 5).fill(shade(P.builtDark, 1.25)).stroke({ ...OUTLINE, width: 1 });
       for (let y = dTop + 2; y < dBot - 4; y += 10) walls.rect(side < 0 ? wx + H.wallW - 2.5 : wx, y, 2.5, 5).fill(P.hazard);
     }
@@ -138,12 +138,12 @@ export function buildHub(h: HubGeom, quality: RenderTier, era: number): ShellPie
   if (s === 1) {
     const nb = new Graphics();
     const bx = x0 + H.wallW + 12, by = floorLineY(fz) - 50;
-    nb.rect(bx, by, 34, 24).fill(vfill(0x4a3a28, by, by + 24)).stroke(OUTLINE);
+    nb.rect(bx, by, 34, 24).fill(vfill(HP.noticeBoard, by, by + 24)).stroke(OUTLINE);
     const r = rng(77);
     for (let i = 0; i < 5; i++) {
       const px = bx + 3 + r() * 24, py = by + 3 + r() * 14;
-      nb.rect(px, py, 6 + r() * 4, 7 + r() * 3).fill(mix(SIGNS.plate.text, 0xb8a888, r()));
-      nb.circle(px + 3, py + 1, 0.8).fill(0xa03a2a);
+      nb.rect(px, py, 6 + r() * 4, 7 + r() * 3).fill(mix(SIGNS.plate.text, HP.notePaper, r()));
+      nb.circle(px + 3, py + 1, 0.8).fill(HP.notePin);
     }
     back.addChild(nb);
   }
@@ -208,26 +208,26 @@ export function buildHub(h: HubGeom, quality: RenderTier, era: number): ShellPie
     // A bench by the notice board.
     const bx = x0 + H.wallW + 28, by = plazaY;
     contactShadow(props, bx + 18, by, 36);
-    props.rect(bx, by - 11, 36, 3.5).fill(vfill(0x6b4c2e, by - 11, by - 7)).stroke({ ...OUTLINE, width: 1 });
-    rod(props, bx + 3, by - 8, bx + 3, by, 2, 0x3a3430);
-    rod(props, bx + 33, by - 8, bx + 33, by, 2, 0x3a3430);
+    props.rect(bx, by - 11, 36, 3.5).fill(vfill(HP.benchSeat, by - 11, by - 7)).stroke({ ...OUTLINE, width: 1 });
+    rod(props, bx + 3, by - 8, bx + 3, by, 2, HP.benchLeg);
+    rod(props, bx + 33, by - 8, bx + 33, by, 2, HP.benchLeg);
     // Crates and a water drum on the east side.
     const ex = x1 - H.wallW - 64;
     contactShadow(props, ex + 10, by, 22);
-    props.rect(ex, by - 16, 20, 16).fill(vfill(0x7a5a36, by - 16, by)).stroke(OUTLINE);
-    props.moveTo(ex, by - 16).lineTo(ex + 20, by).stroke({ width: 1, color: 0x3a2a1a, alpha: 0.7 });
-    props.rect(ex + 3, by - 26, 13, 10).fill(vfill(0x6a4e30, by - 26, by - 16)).stroke(OUTLINE);
+    props.rect(ex, by - 16, 20, 16).fill(vfill(HP.crate, by - 16, by)).stroke(OUTLINE);
+    props.moveTo(ex, by - 16).lineTo(ex + 20, by).stroke({ width: 1, color: HP.crateStrap, alpha: 0.7 });
+    props.rect(ex + 3, by - 26, 13, 10).fill(vfill(HP.crateSmall, by - 26, by - 16)).stroke(OUTLINE);
     contactShadow(props, ex + 36, by, 18);
-    props.roundRect(ex + 27, by - 24, 17, 24, 3).fill(vfill(0x2f5a5a, by - 24, by)).stroke(OUTLINE);
+    props.roundRect(ex + 27, by - 24, 17, 24, 3).fill(vfill(HP.waterDrum, by - 24, by)).stroke(OUTLINE);
     props.rect(ex + 27, by - 17, 17, 2).fill({ color: 0x000000, alpha: 0.35 });
     // The fire barrel (a warmer, flickering second pool on the square).
     const fx = x1 - H.wallW - 18;
     contactShadow(props, fx, by, 14);
-    props.roundRect(fx - 7, by - 18, 14, 18, 2).fill(vfill(0x5a3a26, by - 18, by)).stroke(OUTLINE);
+    props.roundRect(fx - 7, by - 18, 14, 18, 2).fill(vfill(HP.fireBarrel, by - 18, by)).stroke(OUTLINE);
     props.rect(fx - 7, by - 12, 14, 1.6).fill({ color: 0x000000, alpha: 0.4 });
     const flame = new Graphics();
-    flame.poly([fx - 6, by - 18, fx - 2, by - 29, fx + 1, by - 22, fx + 4, by - 31, fx + 6, by - 18]).fill({ color: 0xffa040, alpha: 0.85 });
-    flame.poly([fx - 3, by - 18, fx, by - 25, fx + 3, by - 18]).fill({ color: 0xffe0a0, alpha: 0.9 });
+    flame.poly([fx - 6, by - 18, fx - 2, by - 29, fx + 1, by - 22, fx + 4, by - 31, fx + 6, by - 18]).fill({ color: HP.flame, alpha: 0.85 });
+    flame.poly([fx - 3, by - 18, fx, by - 25, fx + 3, by - 18]).fill({ color: HP.flameCore, alpha: 0.9 });
     flame.blendMode = 'add';
     glow.addChild(flame);
     lights.push({ x: fx, y: by - 24, preset: 'fireBarrel', kind: 'shell', area: area(fz) });
@@ -256,7 +256,7 @@ export function buildHub(h: HubGeom, quality: RenderTier, era: number): ShellPie
       const ya = floorTop(h.floors[run]) + 16, xa = x0 + H.wallW + 4, xb = x1 - H.wallW - 4;
       const pts: number[] = [];
       for (let i = 0; i <= 20; i++) { const t = i / 20; pts.push(xa + (xb - xa) * t, ya + Math.sin(Math.PI * t) * 26); }
-      wire.poly(pts, false).stroke({ width: 0.9, color: 0x1a1612, alpha: 0.9 });
+      wire.poly(pts, false).stroke({ width: 0.9, color: HP.stringWire, alpha: 0.9 });
       for (let i = 0; i < n; i++) {
         const t = (i + 0.5) / n, bx = xa + (xb - xa) * t, by = ya + Math.sin(Math.PI * t) * 26;
         lights.push(...lamp(front, glow, 'lamp-bulb', bx, by, { kind: 'civic', area: area(h.floors[run]) }));

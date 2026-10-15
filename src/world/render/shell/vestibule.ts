@@ -4,7 +4,7 @@
  * (cool work light; one per stratum is failing), and the walkway deck on the corridor lane.
  */
 import { Container, Graphics } from 'pixi.js';
-import { type StratumId } from '../../tokens';
+import { CITY, PROPS, type StratumId } from '../../tokens';
 import { ROOM_H, SLAB, floorTop } from '../../../rendering/geom';
 import { laneY } from '../../model/cityLayout';
 import type { Cavity } from '../layoutTypes';
@@ -37,16 +37,16 @@ export function buildVestibules(cavs: readonly Cavity[], failing: ReadonlySet<st
     // Pipe bundle under the ceiling: two insulated runs and a red valve wheel (vector parts under 6 u).
     const py = top + 7;
     pipes.rect(b.x0, py - 3, w, 4).fill(vfill(shade(P.metal, 1.05), py - 3, py + 1)).stroke({ ...OUTLINE, width: 1 });
-    pipes.rect(b.x0, py + 3, w, 3).fill(vfill(0x8a7a5e, py + 3, py + 6)).stroke({ ...OUTLINE, width: 1 });
+    pipes.rect(b.x0, py + 3, w, 3).fill(vfill(PROPS.vestibule.pipe, py + 3, py + 6)).stroke({ ...OUTLINE, width: 1 });
     for (let x = b.x0 + 8; x < b.x1; x += 22) pipes.rect(x, py - 4, 2, 11).fill(shade(P.metal, 0.7));
     const vx = side === 'e' ? b.x0 + w * 0.7 : b.x0 + w * 0.3;
-    rod(pipes, vx, py, vx, py + 12, 1.2, 0x5a4a3a);
-    pipes.circle(vx, py + 15, 4.2).stroke({ width: 1.6, color: 0x8a3a2a }).stroke({ width: 0.6, color: OUTLINE.color, alpha: 0.6 });
+    rod(pipes, vx, py, vx, py + 12, 1.2, PROPS.vestibule.valveStem);
+    pipes.circle(vx, py + 15, 4.2).stroke({ width: 1.6, color: PROPS.vestibule.valveWheel }).stroke({ width: 0.6, color: OUTLINE.color, alpha: 0.6 });
     // The tube: cool work light; the failing one flickers out now and then.
     const id = `${f}:${side}`;
     lights.push(...lamp(back, glow, 'lamp-tube', b.x0 + w / 2, top + 13, { kind: 'shell', preset: failing.has(id) ? 'failingTube' : 'fluoroTube', area: `f:${f}` }));
     // The walkway deck carries on from the rooms' corridor to the balcony.
-    front.addChild(tile('deck', b.x0 - 2, laneY(f), w + 4, 32));
+    front.addChild(tile('deck', b.x0 - 2, laneY(f), w + 4, CITY.hub.deckH));
   }
   back.addChildAt(slabs, 0);
   back.addChild(pipes, glow);

@@ -4,7 +4,7 @@
  * FOG.teaseAlpha); once found the hollow is lit by its own light: crystals in the caves and below, a dusty chamber above.
  */
 import { Container, Graphics } from 'pixi.js';
-import { STRATA, type StratumId } from '../../tokens';
+import { PROPS, STRATA, type StratumId } from '../../tokens';
 import { polyBounds, seedOf } from '../../model/outline';
 import type { CityArea, Cavity } from '../layoutTypes';
 import type { LightDef, ShellPiece } from './types';
@@ -27,7 +27,7 @@ export function buildPockets(areas: readonly CityArea[], cavs: readonly Cavity[]
     const cav = cavs.find(c => c.id === `c:${a.id}`);
     const s = a.s as StratumId;
     const P = palette(s);
-    const tease = STRATA[s].tease === 0xff3a2a ? 0x6aa8ff : STRATA[s].tease;
+    const tease = STRATA[s].tease === PROPS.pocketRedTease ? PROPS.coldLeak : STRATA[s].tease;
     const b = polyBounds(a.poly);
     const cx = (b.x0 + b.x1) / 2, cy = (b.y0 + b.y1) / 2;
     const seed = seedOf(a.id);

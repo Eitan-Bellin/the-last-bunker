@@ -1003,6 +1003,12 @@ export const CITY = {
     windowMullion: 3,
     /** [world:C1] The plaza floor slab under the hub's bottom storey (thicker than a balcony deck). */
     plazaSlab: 18,
+    /** [world:C2] The hub-vault tile is drawn one storey tall: one vaultTileW bay scaled to this pitch, so a bay's arch sits behind the lift on every storey. */
+    vaultPitch: 144,
+    vaultTileW: 192,
+    /** [world:C2] Drawn balcony / walkway deck strip height and the railing tile above it (art kit scale, not the walkable depth). */
+    deckH: 32,
+    railH: 24,
   },
   /**
    * [world:C1] The cut of the city into the rock (src/world/model/cityLayout.ts): how ragged each cavity is and how far the dark edges, dig
@@ -1028,9 +1034,84 @@ export const CITY = {
     cavernLumps: 0.16,
     /** Pockets: how lumpy their blob is. */
     pocketLumps: 0.24,
+    /** [world:C2] The rock ledge under a district room reaches this far past the room on each side. */
+    cavernSlabPad: 40,
+    /** [world:C2] Depth of the packed-dirt floor drawn under an edge tunnel's lane. */
+    edgeFloorDepth: 30,
     /** How many strata below the deepest reached one get (hidden) storey areas, so the fog keeps the next stratum dark. */
     strataAhead: 1,
     /** Layout bounds margin: sideways, above ground (the sky) and below the deepest area. */
     boundsPad: { x: 420, top: 700, bottom: 520 },
+  },
+} as const;
+
+/**
+ * [world:C2] Dressing colours of the city shell (src/world/render/shell/*): the made things it draws in vector outside the stratum
+ * palettes (tools, plates, plaza props, pipes, the cold that leaks through a sealed end). Painted colour before the lightmap.
+ */
+export const PROPS = {
+  tools: {
+    /** Wooden hafts (pick, shovel). */
+    haft: 0x7a5636 as Hex,
+    pickHead: 0x6a6e72 as Hex,
+    shovelBlade: 0x5e6266 as Hex,
+    /** Timber posts (tape stands, plate posts). */
+    post: 0x6b4c2e as Hex,
+  },
+  /** Crack lines in rock (a near-black stroke under the lit seam). */
+  crack: { color: 0x0a0806 as Hex, alpha: 0.85, width: 2.2 },
+  /** The cold that shows through a sealed end (a missing block, lit cracks), and in a pocket whose stratum tease is pocketRedTease. */
+  coldLeak: 0x6aa8ff as Hex,
+  /** A pocket in a stratum whose tease is this red (danger) shows the cold leak instead. */
+  pocketRedTease: 0xff3a2a as Hex,
+  edges: {
+    /** The red bar on a "sealed by order" plate. */
+    sealBar: 0xb03a2a as Hex,
+    plateRod: 0x4a4440 as Hex,
+    /** Water drips down a cracked face or a collapse. */
+    drip: 0x9ab0c0 as Hex,
+    /** The chalked arrow of a marked dig site. */
+    chalk: 0xe8e0c8 as Hex,
+    chalkAlpha: 0.6,
+    chalkWidth: 2.4,
+  },
+  hub: {
+    /** The dark of a doorway into a vestibule. */
+    doorway: 0x050405 as Hex,
+    doorwayAlpha: 0.92,
+    noticeBoard: 0x4a3a28 as Hex,
+    notePaper: 0xb8a888 as Hex,
+    notePin: 0xa03a2a as Hex,
+    benchSeat: 0x6b4c2e as Hex,
+    benchLeg: 0x3a3430 as Hex,
+    crate: 0x7a5a36 as Hex,
+    crateStrap: 0x3a2a1a as Hex,
+    crateSmall: 0x6a4e30 as Hex,
+    waterDrum: 0x2f5a5a as Hex,
+    fireBarrel: 0x5a3a26 as Hex,
+    flame: 0xffa040 as Hex,
+    flameCore: 0xffe0a0 as Hex,
+    stringWire: 0x1a1612 as Hex,
+  },
+  cavern: {
+    streetLampHood: 0x2a2622 as Hex,
+    streetLampBulb: 0xffe0a8 as Hex,
+    /** The lake district's own signal colour through its choked mouth. */
+    lakeTease: 0x40c8e0 as Hex,
+  },
+  vestibule: {
+    /** The insulated pipe run, the valve stem and the red valve wheel. */
+    pipe: 0x8a7a5e as Hex,
+    valveStem: 0x5a4a3a as Hex,
+    valveWheel: 0x8a3a2a as Hex,
+  },
+  rock: {
+    /**
+     * The rock face is the darkest made surface after the fore silhouettes: its painted tile is pulled down this much (the lightmap's
+     * section fill and the stratum ambient light it back up), so the lit city reads as islands in dark earth.
+     */
+    tint: 0x9a948e as Hex,
+    /** Recessed rock at the back of a tunnel or pit: the same tile in shadow. */
+    recessTint: 0x5a5450 as Hex,
   },
 } as const;

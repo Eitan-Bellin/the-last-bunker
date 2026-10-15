@@ -12,29 +12,18 @@
  */
 import { Container, Graphics, Rectangle } from 'pixi.js';
 import { WORLD_KIT_IDS, rockBandId, rockTileId } from '../../tokensAssets';
-import { DETAIL, UNIFY, type StratumId } from '../../tokens';
-import { baseTier, type RenderTier } from '../../tokensRender';
+import { DETAIL, PROPS, UNIFY, type StratumId } from '../../tokens';
+import { ROCK_RENDER, baseTier, type RenderTier } from '../../tokensRender';
 import { ChunkManager, type ChunkSource } from '../chunks';
 import type { Cavity, CityLayout, Rect } from '../layoutTypes';
 import { inPoly, polyArea, polyBounds } from '../../model/outline';
 import { hash2, palette, tile } from './kit';
 
-const CHUNK = 512;
-/** How far strokes may reach past a chunk before its erase frame trims them. */
-const SPILL = 48;
-/** Height of the topsoil (the surface kit) under the ground line, and the banding strip's height. */
-const SOIL = 64;
-const BAND_H = 100;
-/** Neighbouring chunks overlap this much (world units), hiding the bilinear seam at a cache texture's edge. */
-const OVERLAP = 3;
-/** The rock face is the darkest made surface after the fore silhouettes: its painted tile is pulled down this much (the lightmap's section
- * fill and the stratum ambient light it back up), so the lit city reads as islands in dark earth. */
-const ROCK_TINT = 0x9a948e;
+const { chunk: CHUNK, spill: SPILL, soil: SOIL, bandH: BAND_H, overlap: OVERLAP, sideRun: ROCK_SIDE_RUN } = ROCK_RENDER;
+const ROCK_TINT = PROPS.rock.tint;
 
 interface CavityInfo { c: Cavity; b: { x0: number; y0: number; x1: number; y1: number }; cw: boolean }
 
-/** [world:C2] World units the rock extends past the layout bounds on each side. */
-const ROCK_SIDE_RUN = 2400;
 
 export class RockLayer implements ChunkSource {
   readonly manager: ChunkManager;

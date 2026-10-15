@@ -9,7 +9,7 @@
  *   digging    a work lamp and a rubble face that clears with the dig's progress
  */
 import { Container, Graphics } from 'pixi.js';
-import { CITY, SIGNS, type StratumId } from '../../tokens';
+import { CITY, PROPS, SIGNS, type StratumId } from '../../tokens';
 import { floorTop } from '../../../rendering/geom';
 import { laneY } from '../../model/cityLayout';
 import { seedOf } from '../../model/outline';
@@ -19,6 +19,7 @@ import { OUTLINE, lamp, palette, rod, shade, sprite } from './kit';
 import { cracks, groundLantern, pick, post, rubbleWall, shovel, sprayX, tape, tunnelFloor } from './props';
 
 const L = CITY.layout;
+const E = PROPS.edges;
 
 export function buildEdges(edges: readonly EdgeSite[], cavs: readonly Cavity[]): ShellPiece {
   const back = new Container();
@@ -45,7 +46,7 @@ export function buildEdges(edges: readonly EdgeSite[], cavs: readonly Cavity[]):
     const ceil = floorTop(e.floor) + L.edgeTop;
     const seed = seedOf(e.id);
     const area = e.id;
-    tunnelFloor(floorG, mouth - dir * 4, far, lane, 30, s, seed);
+    tunnelFloor(floorG, mouth - dir * 4, far, lane, L.edgeFloorDepth, s, seed);
     // Timber sets hold the tunnel: one at the mouth, one by the choke.
     for (const t of [0.12, 0.46]) {
       const ts = sprite('timber-set', mouth + dir * L.edgeLen * t, lane + 1);
@@ -71,13 +72,13 @@ export function buildEdges(edges: readonly EdgeSite[], cavs: readonly Cavity[]):
             if (xb - xa < 2) continue;
             const top = Math.max(ceil + 2, y - bh);
             const missing = course === Math.floor((lane - ceil) / bh) - gapCourse && x > wx0 + 4;
-            if (missing) { lit.rect(xa + 1, top + 1, xb - xa - 2, y - top - 2).fill({ color: 0x6aa8ff, alpha: 0.5 }); continue; }
+            if (missing) { lit.rect(xa + 1, top + 1, xb - xa - 2, y - top - 2).fill({ color: PROPS.coldLeak, alpha: 0.5 }); continue; }
             dress.rect(xa, top, xb - xa - 0.6, y - top - 0.6).fill(shade(P.builtDark, 1.15 + 0.15 * ((x + y) % 3) / 3)).stroke({ ...OUTLINE, width: 0.8 });
           }
         }
         // A stencilled plate on the blocks.
         dress.rect(wx0 + 3, lane - 44, 16, 10).fill(SIGNS.plate.fill).stroke({ width: 1, color: SIGNS.plate.rim });
-        dress.rect(wx0 + 5, lane - 40, 12, 2.5).fill(0xb03a2a);
+        dress.rect(wx0 + 5, lane - 40, 12, 2.5).fill(E.sealBar);
         const pile = sprite('rubble-a', choke - dir * 18, lane + 2, { flip: dir < 0 });
         front.addChild(pile);
       } else {
@@ -86,7 +87,7 @@ export function buildEdges(edges: readonly EdgeSite[], cavs: readonly Cavity[]):
         front.addChild(wall);
         const beam = sprite('timber-beam', choke - dir * 16, lane - (look === 1 ? 30 : 18), { rotation: dir * (look === 1 ? -0.75 : -0.42), flip: dir < 0 });
         front.addChild(beam);
-        cracks(new Graphics(), lit, choke + dir * 14, lane - 22, 2, 16, seed + 3, 0x6aa8ff);
+        cracks(new Graphics(), lit, choke + dir * 14, lane - 22, 2, 16, seed + 3, PROPS.coldLeak);
         lit.alpha = 0.55;
       }
       if (look === 0) {
@@ -99,15 +100,15 @@ export function buildEdges(edges: readonly EdgeSite[], cavs: readonly Cavity[]):
         // The plate: dark enamel with a red bar ("sealed by order"), no text in the world.
         const px = tx + dir * 26, py = lane - 52;
         dress.rect(px - 9, py, 18, 12).fill(SIGNS.plate.fill).stroke({ width: 1, color: SIGNS.plate.rim });
-        dress.rect(px - 7, py + 4.5, 14, 3).fill(0xb03a2a);
-        rod(dress, px, py + 12, px, lane, 1.6, 0x4a4440);
+        dress.rect(px - 7, py + 4.5, 14, 3).fill(E.sealBar);
+        rod(dress, px, py + 12, px, lane, 1.6, E.plateRod);
         // A warm island at the mouth: a lantern by a pick.
         lights.push(...groundLantern(front, glow, mouth + dir * 62, lane, area));
         pick(dress, mouth + dir * 70, lane - 1, dir > 0 ? -0.2 : Math.PI + 0.2);
       } else if (look === 1) {
         // Planks stacked against the collapse, a drip line.
         front.addChild(sprite('timber-planks', mouth + dir * 50, lane + 1, { flip: dir < 0 }));
-        for (let i = 0; i < 3; i++) dress.rect(choke - dir * (20 + i * 7), ceil + 4 + i * 4, 1, 9 + i * 3).fill({ color: 0x9ab0c0, alpha: 0.3 });
+        for (let i = 0; i < 3; i++) dress.rect(choke - dir * (20 + i * 7), ceil + 4 + i * 4, 1, 9 + i * 3).fill({ color: E.drip, alpha: 0.3 });
       }
       // The cold beyond (every sealed end has one: the invitation to the next Act).
       lights.push({ x: far - dir * 14, y: (ceil + lane) / 2, preset: 'teaseBeyond', kind: 'tease', area });
@@ -121,7 +122,7 @@ export function buildEdges(edges: readonly EdgeSite[], cavs: readonly Cavity[]):
       front.addChild(ts);
       lights.push(...lamp(back, glow, 'lamp-cage', mouth + dir * L.edgeLen * 0.12 + dir * 8, ceil + 24, { area }, { flip: dir < 0 }));
       // Drips down the cracked face.
-      for (let i = 0; i < 4; i++) dress.rect(choke - dir * (8 + i * 9), ceil + 6 + i * 5, 1, 10 + i * 4).fill({ color: 0x9ab0c0, alpha: 0.35 });
+      for (let i = 0; i < 4; i++) dress.rect(choke - dir * (8 + i * 9), ceil + 6 + i * 5, 1, 10 + i * 4).fill({ color: E.drip, alpha: 0.35 });
     } else if (e.block === 'district') {
       const wall = new Container();
       rubbleWall(wall, choke, far, lane, (lane - ceil) * 0.6, seed)(1);
@@ -135,8 +136,8 @@ export function buildEdges(edges: readonly EdgeSite[], cavs: readonly Cavity[]):
       if (e.floor % 2 === 0) sprayX(backG, choke + dir * 12, (ceil + lane) / 2, 10, P.hazard);
       else {
         const ax = choke + dir * 4, ay = (ceil + lane) / 2;
-        backG.moveTo(ax - dir * 12, ay).lineTo(ax + dir * 8, ay).stroke({ width: 2.4, color: 0xe8e0c8, alpha: 0.6, cap: 'round' });
-        backG.moveTo(ax + dir * 2, ay - 6).lineTo(ax + dir * 9, ay).lineTo(ax + dir * 2, ay + 6).stroke({ width: 2.4, color: 0xe8e0c8, alpha: 0.6, cap: 'round', join: 'round' });
+        backG.moveTo(ax - dir * 12, ay).lineTo(ax + dir * 8, ay).stroke({ width: E.chalkWidth, color: E.chalk, alpha: E.chalkAlpha, cap: 'round' });
+        backG.moveTo(ax + dir * 2, ay - 6).lineTo(ax + dir * 9, ay).lineTo(ax + dir * 2, ay + 6).stroke({ width: E.chalkWidth, color: E.chalk, alpha: E.chalkAlpha, cap: 'round', join: 'round' });
       }
       pick(dress, choke - dir * 28, lane - 1, dir > 0 ? -1.25 : Math.PI + 1.25);
       shovel(dress, choke - dir * 40, lane, -dir * 0.25);
