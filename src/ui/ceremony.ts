@@ -171,14 +171,22 @@ export class Ceremonies {
     return spec.kind === 'genesis' ? STATIC_GENESIS_MS : spec.kind === 'act' ? 400 : Math.min(d.ms, STATIC_MS);
   }
 
-  /** [ux-redesign w2a #12] Something holds the screen: a sheet, a dialog, a lore page, a story card or a room being placed. */
-  private screenBusy(): boolean {
+  /**
+   * [ux-redesign w2a #12] Something holds the screen: a sheet, a dialog, a lore page, a story card or a room being placed.
+   * [ux-redesign w2fix] A big moment (prio >= WAIT_KEEP_PRIO: the raid, an Act, a project) does not wait for an open sheet, only for a
+   * dialog or a placement, so the raid plays before its result dialog instead of after it.
+   */
+  private screenBusy(item?: Item): boolean {
     const app = this.app;
-    return !!app.placementMode || app.anyPanelOpen() || app.modal.isVisible || app.storyOpen || app.welcomeOpen || app.loreReader.isVisible;
+    const dialog = !!app.placementMode || app.modal.isVisible || app.storyOpen || app.welcomeOpen;
+    if (item && CEREMONIES[item.spec.kind].prio >= WAIT_KEEP_PRIO) return dialog;
+    return dialog || app.anyPanelOpen() || app.loreReader.isVisible;
   }
 
   private next(): void {
-    if (this.queue.length && this.screenBusy()) {
+    // [ux-redesign w2fix] The first moment the screen lets through plays (a big one may go ahead of small ones held by a sheet).
+    const free = this.queue.findIndex(q => !this.screenBusy(q));
+    if (this.queue.length && free < 0) {
       const now = performance.now();
       if (!this.waitingSince) this.waitingSince = now;
       if (now - this.waitingSince > WAIT_STALE_MS) {
@@ -194,7 +202,7 @@ export class Ceremonies {
       if (this.queue.length) return;
     }
     this.waitingSince = 0;
-    const item = this.queue.shift();
+    const item = free > 0 ? this.queue.splice(free, 1)[0] : this.queue.shift();
     if (!item) {
       this.current = null;
       // The gate opens a moment after the last one, not at the very instant (a dialog should not pop up under the finger that just skipped).

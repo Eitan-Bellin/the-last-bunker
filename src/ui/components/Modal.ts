@@ -44,6 +44,8 @@ export class Modal {
   /** [ux-redesign w2a] When the current content appeared, and the button back / Escape presses (null: a decision). */
   private openedAt = 0;
   private dismissBtn: HTMLButtonElement | null = null;
+  /** [ux-redesign w2fix B2] Watches the story scene this dialog waits behind (null: not waiting). */
+  private storyWatch: MutationObserver | null = null;
 
   constructor() {
     this.overlay = el('div', 'modal-overlay');
@@ -55,8 +57,9 @@ export class Modal {
     document.body.appendChild(this.overlay);
     this.overlay.addEventListener('keydown', (e) => trapTab(e, [this.box]));
     // [ux-redesign w2a #20] Escape belongs to the dialog while one is up (a sheet under it stays open); a decision ignores it.
+    // [ux-redesign w2fix] Not while it waits behind a story scene: the scene has the keys then.
     document.addEventListener('keydown', (e) => {
-      if (e.key !== 'Escape' || !this.isVisible) return;
+      if (e.key !== 'Escape' || !this.isVisible || this.storyWatch) return;
       e.preventDefault();
       e.stopPropagation();
       this.back();
@@ -119,14 +122,18 @@ export class Modal {
       });
     };
     const pinnedFrom = opts.actions.length > 3 ? opts.actions.length - 1 : 0;
+    // [ux-redesign w2fix] Every choice in order, straight from makeButton (a body that brings its own buttons cannot shift the index).
+    const buttons: HTMLButtonElement[] = [];
     if (pinnedFrom > 0) {
       const list = el('div', 'modal-actions');
-      for (const a of opts.actions.slice(0, pinnedFrom)) list.appendChild(makeButton(a));
+      for (const a of opts.actions.slice(0, pinnedFrom)) {
+        const b = makeButton(a);
+        buttons.push(b);
+        list.appendChild(b);
+      }
       scroll.appendChild(list);
     }
     const actions = el('div', 'modal-actions');
-    const buttons: HTMLButtonElement[] = [];
-    if (pinnedFrom > 0) buttons.push(...(scroll.querySelectorAll<HTMLButtonElement>('.modal-actions button')));
     for (const a of opts.actions.slice(pinnedFrom)) {
       const b = makeButton(a);
       buttons.push(b);
@@ -143,18 +150,55 @@ export class Modal {
       uiSound('modalOpen', 0.8, 300);
       this.opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
       // Everything else on the page (the HUD, the canvas, the sheets) leaves the tab order and the screen reader while the dialog is up.
+      // [ux-redesign w2fix B2] A story scene on screen (z 60, over this dialog's z 40) is never made inert: the dialog waits behind it.
       for (const n of [...document.body.children]) {
-        if (n === this.overlay || n.tagName === 'SCRIPT' || n.matches('.toast-stack, .sr-only, #splash') || (n as HTMLElement).inert || n.hasAttribute('aria-hidden')) continue;
+        if (n === this.overlay || n.tagName === 'SCRIPT' || n.matches('.toast-stack, .sr-only, #splash, .story-overlay.open') || (n as HTMLElement).inert || n.hasAttribute('aria-hidden')) continue;
         setInert(n, true);
         this.inerted.push(n);
       }
     }
     this.overlay.classList.add('open');
-    // Keyboard and screen-reader users land on the first choice.
+    const story = document.querySelector<HTMLElement>('.story-overlay.open');
+    if (story) this.waitBehind(story);
+    else this.focusFirst();
+  }
+
+  /** Keyboard and screen-reader users land on the first choice. */
+  private focusFirst(): void {
     this.box.querySelector<HTMLButtonElement>('.modal-actions button:not(:disabled):not([aria-disabled="true"])')?.focus({ preventScroll: true });
   }
 
+  /**
+   * [ux-redesign w2fix B2] A dialog opened while a story scene plays stays hidden (no taps, no focus, no Escape) until the scene closes;
+   * then it shows, its tap guard starts again, and its first choice takes the focus.
+   */
+  private waitBehind(story: HTMLElement): void {
+    if (this.storyWatch) return;
+    this.overlay.classList.add('is-held');
+    this.storyWatch = new MutationObserver(() => {
+      if (story.classList.contains('open') && story.isConnected) return;
+      this.release();
+      if (!this.isVisible) return;
+      this.openedAt = performance.now();
+      this.focusFirst();
+      // the scene itself was left out of the inert walk at show(): take it (and anything new) out now that this dialog is on top
+      for (const n of [...document.body.children]) {
+        if (n === this.overlay || this.inerted.includes(n) || n.tagName === 'SCRIPT' || n.matches('.toast-stack, .sr-only, #splash, .story-overlay.open') || (n as HTMLElement).inert || n.hasAttribute('aria-hidden')) continue;
+        setInert(n, true);
+        this.inerted.push(n);
+      }
+    });
+    this.storyWatch.observe(story, { attributes: true, attributeFilter: ['class'] });
+  }
+
+  private release(): void {
+    this.storyWatch?.disconnect();
+    this.storyWatch = null;
+    this.overlay.classList.remove('is-held');
+  }
+
   hide(): void {
+    this.release();
     this.dismissBtn = null;
     this.overlay.classList.remove('open');
     for (const n of this.inerted) setInert(n, false);

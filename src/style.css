@@ -351,6 +351,8 @@ body.placement-mode #game-canvas { cursor: crosshair; }
   transition: opacity var(--dur-popup-out) var(--ease-in);
 }
 .modal-overlay.open { opacity: 1; pointer-events: auto; transition: opacity var(--dur-popup-in) var(--ease-out); }
+/* [ux-redesign w2fix B2] A dialog that opened during a story scene waits, hidden and untappable, until the scene closes (Modal.waitBehind). */
+.modal-overlay.open.is-held { opacity: 0; visibility: hidden; pointer-events: none; }
 
 .modal {
   background: linear-gradient(180deg, #23233f, #16162b);
