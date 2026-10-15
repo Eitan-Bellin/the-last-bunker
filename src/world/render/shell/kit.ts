@@ -30,11 +30,19 @@ export function mix(a: Hex, b: Hex, t: number): Hex {
   return (f(16) << 16) | (f(8) << 8) | f(0);
 }
 
+// [world:C2 tech-artist] Every FillGradient owns a 256x1 texture that a Graphics' destroy does not free: a shell rebuild left about 330 of them
+// behind. The gradients are shared: the same arguments give the same gradient for the life of the page (a layout has a bounded set).
+const gradients = new Map<string, FillGradient>();
+
 /** A vertical gradient fill (UNIFY.fill: top x1.08, bottom x0.9) for a flat procedural surface spanning y0..y1. */
 export function vfill(c: Hex, y0: number, y1: number, top: number = UNIFY.fill.gradientTop, bottom: number = UNIFY.fill.gradientBottom): FillGradient {
-  const g = new FillGradient({ type: 'linear', start: { x: 0, y: y0 }, end: { x: 0, y: y1 }, textureSpace: 'global' });
+  const key = `${c}|${y0}|${y1}|${top}|${bottom}`;
+  let g = gradients.get(key);
+  if (g) return g;
+  g = new FillGradient({ type: 'linear', start: { x: 0, y: y0 }, end: { x: 0, y: y1 }, textureSpace: 'global' });
   g.addColorStop(0, shade(c, top));
   g.addColorStop(1, shade(c, bottom));
+  gradients.set(key, g);
   return g;
 }
 

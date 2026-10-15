@@ -19,14 +19,16 @@ const mountCityShell: ShellMounter = ctx => {
   ctx.back.addChild(parts.back);
   ctx.front.addChild(parts.front);
   const ids = parts.lights.map(l => ctx.addLight(l));
+  batchOrder(parts.back, parts.front);
   const cull = cullList(parts.back, parts.front);
   let destroyed = false;
-  // The rock chunks and shell pieces bake into texture caches (cacheAsTexture): a world-kit painting that arrives after a bake would leave the
-  // stand-in baked in (seen in the game: plain rock around the storeys, banded rock beyond). Remount once the arrivals settle (800 ms).
+  // The rock chunks bake into texture caches (cacheAsTexture): a world-kit painting that arrives after a bake would leave the stand-in baked in
+  // (seen in the game: plain rock around the storeys, banded rock beyond). Once the arrivals settle (800 ms) the rock chunks are dropped and
+  // rebuild near the view; the other pieces swap their stand-ins by themselves (worldKit pendingSprites).
   let timer = 0;
   const off = onWorldKitLoaded(() => {
     window.clearTimeout(timer);
-    timer = window.setTimeout(() => { if (!destroyed) ctx.requestRebuild(); }, 800);
+    timer = window.setTimeout(() => { if (!destroyed) parts.refreshRock(); }, 800);
   });
   return {
     update(_t, _dt, view) {
@@ -77,6 +79,23 @@ function cullTo(list: Cullable[], v: Rect): void {
     const k = list[i];
     const on = k.x1 > x0 && k.x0 < x1 && k.y1 > y0 && k.y0 < y1;
     if (on !== k.on) { k.on = on; k.c.renderable = on; }
+  }
+}
+
+/**
+ * Draw-call order: inside each shell piece the children alternate blend modes (a vestibule tile, its multiply grain, the next tile...), and a
+ * blend change breaks the batch, so each vestibule cost two draw calls. Per piece the children are regrouped, stably: normal first, then
+ * multiply, then the rest (add). Pieces do not overlap each other much, and grain and glow are meant to lie over what they shade.
+ */
+function batchOrder(...roots: Container[]): void {
+  const rank = (c: Container): number => (c.blendMode === 'multiply' ? 1 : c.blendMode === 'normal' || c.blendMode === 'inherit' || !c.blendMode ? 0 : 2);
+  for (const root of roots) for (const piece of root.children) {
+    if (piece.label === 'shell:rock' || piece.children.length < 3) continue;
+    const kids = piece.children.slice();
+    const sorted = kids.map((c, i) => ({ c, i, r: rank(c) })).sort((a, b) => a.r - b.r || a.i - b.i);
+    if (sorted.every((k, i) => k.i === i)) continue;
+    piece.removeChildren();
+    for (const k of sorted) piece.addChild(k.c);
   }
 }
 

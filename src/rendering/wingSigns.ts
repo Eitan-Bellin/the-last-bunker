@@ -79,6 +79,15 @@ export class WingSigns {
   private build(s: Sign, o: WingOption): Container {
     const root = new Container();
     root.position.set(s.x, s.y);
+    // [world:C2] In the city an edge the Act holds shut already shows it (the shell's choke: rubble, tape, the red sign, a cold light): no
+    // price plate over it. The tap stays, so the wing card still says why it is shut.
+    if (CITY && o.block === 'act') {
+      root.eventMode = 'static';
+      root.cursor = 'pointer';
+      root.hitArea = new Rectangle(-24, -SIGN_H / 2 - 6, 48, SIGN_H + 12);
+      root.on('pointertap', () => { if (!this.isDragging()) this.onDig?.(s.floor, s.side); });
+      return root;
+    }
     const g = new Graphics();
     // A steel plate under a strip of hazard tape (the tape is on top, slightly crooked, as it was hung by hand).
     steelTag(g, -SIGN_W / 2, -SIGN_H / 2, SIGN_W, SIGN_H, { rivets: 4 });

@@ -94,7 +94,7 @@ export const TIER_RENDER: Record<RenderTier, {
   planeRes: number;
 }> = {
   high: { lightmap: true, fogHalos: 2, fogHz: 30, planes: 'live', glow: true, planeRes: 1 },
-  medium: { lightmap: true, fogHalos: 1, fogHz: 15, planes: 'cached', glow: true, planeRes: 0.5 },
+  medium: { lightmap: true, fogHalos: 1, fogHz: 15, planes: 'merged', glow: true, planeRes: 0.5 }, // [world:C2] far baked into back's cache (one cache, not two)
   low: { lightmap: true, fogHalos: 1, fogHz: 0, planes: 'merged', glow: true, planeRes: 0.5 },
   lite: { lightmap: false, fogHalos: 0, fogHz: 0, planes: 'off', glow: false, planeRes: 0.5 },
 };
@@ -143,7 +143,11 @@ export const BACKDROP = {
   far: { pillarsPerChunk: 2, clusterChance: 0.6, windowsPerCluster: 12, hazePerChunk: 1, pillarW: [30, 110] as readonly [number, number] },
   back: { ribsPerChunk: 7, clusterChance: 0.55, housesPerCluster: 8, windowChance: 0.55, ribRimAlpha: 0.35 },
   mid: { shacksPerDistrict: 9, galleryRings: 3, crystalsPerCave: 8 },
-  fore: { lipStep: [40, 90] as readonly [number, number], outcropChance: 0.35, rimAlpha: 0.45 },
+  /**
+   * [world:C2] `enabled`: the fore lip runs along the stratum seams at parallax 1.32, so in the game it drifts over the dig face, its sign and
+   * the rooms (style guide: never over a room or a badge). Off until a layout-aware fore keeps clear of the storey strips.
+   */
+  fore: { enabled: false, lipStep: [40, 90] as readonly [number, number], outcropChance: 0.35, rimAlpha: 0.45 },
   /** Lit windows: colour pool (inhabited temperatures) and halo size (plane units). */
   windowHalo: 22,
   windowAlpha: 0.35,

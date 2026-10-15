@@ -96,6 +96,9 @@ export function buildShell(layout: CityLayout, state: Pick<GameState, 'era'>, qu
     setProgress(id: string, p: number) {
       progress[id]?.(p);
     },
+    refreshRock() {
+      rock.manager.clear();
+    },
     destroy() {
       rock.destroy();
       back.destroy({ children: true });

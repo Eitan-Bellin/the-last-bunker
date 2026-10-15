@@ -35,6 +35,8 @@ export interface ShellParts {
   update(view: Rect, now: number): void;
   /** A dig or a district moved on: the rubble of `f:<n>`, `e:<f>:<side>` or `d:<kind>` follows progress p (0..1) without a rebuild. */
   setProgress(id: string, p: number): void;
+  /** [world:C2] Drop the baked rock chunks (they rebuild near the view): real world-kit art replaced a stand-in a chunk cache had baked. */
+  refreshRock(): void;
   /** For the probe: chunks of rock built / shown. */
   readonly stats: { rockChunks: number; rockShown: number };
   destroy(): void;

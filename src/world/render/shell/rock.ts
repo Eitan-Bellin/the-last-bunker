@@ -83,7 +83,7 @@ export class RockLayer implements ChunkSource {
     chunk.label = `rock:${cx},${cy}`;
     const baked = new Container();
 
-    // 3. ambient occlusion inside the holes (drawn first: the rock goes over its outer half).
+    // 3. ambient occlusion along the cuts (drawn over the erased rock, see below).
     const ao = new Graphics();
     const rim = new Graphics();
     const U = UNIFY.cutEdge;
@@ -94,7 +94,7 @@ export class RockLayer implements ChunkSource {
       }
     });
 
-    // 1 + 2. the rock with the holes erased, in a cache of its own (the erase must not reach the AO under it).
+    // 1 + 2. the rock with the holes erased (drawn first in the chunk cache, so the erase only reaches the rock).
     const rock = new Container();
     // Chunks overlap by OVERLAP units: the cache texture's border texels never blend with the erased frame inside the view.
     const hasRock = this.paintRock(rock, x0 - OVERLAP, y0 - OVERLAP, x1 + OVERLAP, y1 + OVERLAP);
@@ -106,8 +106,8 @@ export class RockLayer implements ChunkSource {
     // [world:C2 tech-artist] The cache covers the chunk only: without boundsArea it took the bounds of every whole cavity polygon near the
     // chunk (the hub, the floor strips), 1024x2048 px per cache in the game (2 caches a chunk, 16 MB), 236 MB more GPU memory at e55.
     const area = new Rectangle(x0 - OVERLAP, y0 - OVERLAP, x1 - x0 + OVERLAP * 2, y1 - y0 + OVERLAP * 2);
-    rock.boundsArea = area;
-    rock.cacheAsTexture({ resolution: this.res, antialias: false });
+    // [world:C2 tech-artist] One cache a chunk (was two: the rock with its holes, then that with the AO under it). The AO now goes over the
+    // erased rock: its inner half shades the hole as before, its outer half darkens the cut lip a touch (half the GPU memory of the rock).
 
     // 4. trim everything to the chunk.
     const frame = new Graphics();
@@ -117,7 +117,7 @@ export class RockLayer implements ChunkSource {
     frame.rect(fx0 - SPILL * 2, fy0, SPILL * 2, fy1 - fy0).fill(0xffffff);
     frame.rect(fx1, fy0, SPILL * 2, fy1 - fy0).fill(0xffffff);
     frame.blendMode = 'erase';
-    baked.addChild(ao, rock, frame);
+    baked.addChild(rock, ao, frame);
     baked.boundsArea = area;
     baked.cacheAsTexture({ resolution: this.res, antialias: false });
 

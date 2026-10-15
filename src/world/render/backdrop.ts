@@ -320,6 +320,7 @@ export class Backdrop {
 
   private buildFore(cx: number, cy: number, x0: number, y0: number, x1: number, y1: number): Container | null {
     const L = this.planes.fore.token, p = L.p, K = BACKDROP.fore;
+    if (!K.enabled) return null;
     const seams: { y: number; s: StratumId }[] = [];
     for (let i = 0; i < this.bands.length; i++) {
       const b = this.bands[i];
