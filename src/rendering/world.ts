@@ -10,6 +10,7 @@ import { steelTag } from './signage';
 import { FlowBeads } from './perfFx';
 import { GFX } from './gfxFeatures';
 import { buildStrata } from './strata';
+import { CITY } from '../world/flag';
 
 export const WORLD_LEFT = -260;
 /** Right edge of the painted panorama's own span (the painting is scaled to this width, never to the wider world). */
@@ -165,6 +166,12 @@ export function buildUnderground(
   exts: readonly Ext[] = [], districtSlot: Readonly<Record<number, number>> = {}, rockWest = 0, // plan4:ST-16 slots the rock must reach west for the surface row (no wing, no casing)
 ): Container {
   const root = new Container();
+  // [world:C1] In the city the rock, the cavities, the bays' backs and the district tunnels are the shell's (src/world/render/shell): the classic
+  // underground keeps only an empty rock layer at index 0 (BunkerRenderer.parallaxRock reads it).
+  if (CITY) {
+    root.addChild(new Container());
+    return root;
+  }
   const g = new Graphics();
   const rnd = seeded(4242);
   const bottom = floorTop(floors) + 170;

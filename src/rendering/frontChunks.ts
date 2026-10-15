@@ -14,6 +14,7 @@ import { PIER_AO, PIER_W, clusterSpan, pierKey, piersOfFloor } from './airyArt';
 import { beamTexture, deckTexture, railTexture, seamBack, slotSlice, towerStubTexture, towerTexture } from './circulation'; // [airy2:D1]
 import { BASE_EAST, CORR_BEAM, CORR_DECK, CORR_LANE, CORR_RAIL, FLOOR_H, ROOM_H, SLAB, SLOT_W, TOPSOIL, floorAtY, floorH, floorTop, type Ext } from './layout';
 import { roomsEastX, roomsWestX, slotX, stripX } from '../world/project';
+import { CITY } from '../world/flag';
 import {
   AO_CONTACT, AO_SIDE, COLUMN_SPILL_W, COLUMN_W, KIT_LIFT, LIP, PIPES_H, PIPES_Y, SLAB_DRAW,
   cellAt, depthGains, gridSegments, hallSpans, inSpan, kitTex, lampParts, lightOf, nightLight, shadeAt, slabExt, softTexture,
@@ -153,7 +154,7 @@ export class FrontChunks implements Animated {
     this.ambient = ambient;
     this.st = st;
     // [plan4:ST-11] Floor identity: a kind per floor, so a change of the rooms may restyle a floor (the signature below carries each style's key).
-    this.annex = GFX.airy && hasAnnex(grid);
+    this.annex = !CITY && GFX.airy && hasAnnex(grid); // [world:C1] the city's hub has its own stairs
     this.styles = GFX.floorId ? floorStyles(buildings, floors) : [];
     this.full = gfxLevel() !== 'low';
     this.lampsByFloor = Array.from({ length: floors }, () => []);
@@ -181,6 +182,7 @@ export class FrontChunks implements Animated {
         hi = Math.max(hi, cxOfX(f, slotX(f, e.e) - 0.01));
       }
       for (let cx = lo; cx <= hi; cx++) {
+        if (CITY && cx === 0) continue; // [world:C1] column 0 is the hub and its vestibules: the shell draws them
         const key = cy * 8192 + (cx + 4096);
         const sig = this.signature(cx, cy);
         const old = this.chunks.get(key);
@@ -470,7 +472,8 @@ export class FrontChunks implements Animated {
       const endFade = softTexture('fadeH');
       // The roof slab under the topsoil (first group only), then one under every level of the group.
       const lines: { y: number; spans: [number, number][]; ext: Ext; f: number; piers: Pier[]; lo: number; hi: number }[] = [];
-      if (cy === 0) lines.push({ y: TOPSOIL - SLAB - LIP, spans: [], ext: slabExt(grid.ext, floors, 0), f: 0, piers: [], lo: 0, hi: 0 });
+      // [world:C1] No roof slab under the topsoil in the city (the rock is cut there).
+      if (cy === 0 && !CITY) lines.push({ y: TOPSOIL - SLAB - LIP, spans: [], ext: slabExt(grid.ext, floors, 0), f: 0, piers: [], lo: 0, hi: 0 });
       for (let f = fa; f < fb; f++) lines.push({ y: floorTop(f) + ROOM_H - LIP, spans: hallSpans(buildings, f), ext: slabExt(grid.ext, floors, f + 1), f, piers: airy ? piersOfFloor(grid, f, true) : [], lo: slotX(f, -grid.ext[f].w), hi: slotX(f, grid.ext[f].e) });
       const heavyTex = full ? heavySlabTexture() : null;
       const perfTex = full ? perforatedSlabTexture() : null;

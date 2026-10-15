@@ -1,6 +1,7 @@
 import { Container, Graphics, Rectangle } from 'pixi.js';
 import { BASE_EAST, ROOM_H, floorTop, type Ext } from './geom';
-import { slotX } from '../world/project';
+import { roomsWestX, slotX } from '../world/project';
+import { CITY } from '../world/flag';
 import { richLine } from './richText';
 import { GFX } from './gfxFeatures';
 import { VIEW } from './perfFx';
@@ -56,7 +57,8 @@ export class WingSigns {
     for (const o of options) {
       const ext = exts[o.floor] ?? { w: 0, e: BASE_EAST };
       const key = `${o.floor}${o.side}`;
-      const x = o.side === 'e' ? slotX(o.floor, ext.e) + 7 : ext.w > 0 ? slotX(o.floor, -ext.w) - 7 : westX;
+      // [world:C1] In the city a floor with no west wing ends at its west vestibule (the hub is no place for a sign).
+      const x = o.side === 'e' ? slotX(o.floor, ext.e) + 7 : ext.w > 0 ? slotX(o.floor, -ext.w) - 7 : CITY ? roomsWestX(o.floor) - 7 : westX;
       const y = floorTop(o.floor) + ROOM_H * 0.4;
       const cost = Object.entries(o.cost).slice(0, 2).map(([k, v]) => `[[${ICON[k] ?? k}]] ${v}`).join('  ');
       const label = `${x}|${y}|+${o.steps}|${cost}|${o.block ?? ''}`;

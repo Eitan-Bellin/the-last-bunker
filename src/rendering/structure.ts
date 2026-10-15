@@ -4,6 +4,7 @@ import { isDistrict, isHall, roomSlots } from '../data/buildingDefs';
 import { ArtLibrary, glowTexture } from '../art/ArtLibrary';
 import { BASE_EAST, BUILDING_W, FLOOR_H, ROOMS_W, ROOM_H, SHAFT_W, SLAB, SLOT_W, TOPSOIL, floorAtY, floorFrac, floorTop, galleryCount, galleryExt, galleryTop, type Ext } from './layout';
 import { roomsEastX, roomsWestX, slotX, stripX } from '../world/project';
+import { CITY } from '../world/flag';
 import { ERAS } from '../data/eras';
 import { GFX } from './gfxFeatures';
 import { roomFlicker } from './paintedRoom';
@@ -261,6 +262,7 @@ function slabMidY(k: number): number {
 export function buildCasing(floors: number, st: KitState = 'F', exts: readonly Ext[] = []): Container {
   const root = new Container();
   root.eventMode = 'none';
+  if (CITY) return root; // [world:C1] no tower casing in the city: the rock cut and the hub are the shell's
   const wall = kitTex('wall', st);
   const top = TOPSOIL - SLAB - 4;
   const base = floorTop(floors);

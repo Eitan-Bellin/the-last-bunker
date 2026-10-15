@@ -5,6 +5,8 @@ import { zoneForFloor } from '../data/zones';
 import { ArtLibrary, glowTexture } from '../art/ArtLibrary';
 import { ROOM_H, SHAFT_W, SLOT_W, floorTop, type Ext } from './layout';
 import { roomsEastX, slotX } from '../world/project';
+import { CITY } from '../world/flag';
+import { zonePlateAt } from '../world/model/cityLayout';
 import { hashString, mix, seeded, shade, vGradient } from './draw';
 import { depthGains, occupancy, type Grid, type WorldLamp } from './structure';
 import { GFX } from './gfxFeatures';
@@ -629,7 +631,8 @@ export function buildSignage(inp: SignageInput): Container {
         plate.addChild(halo);
       }
       plate.addChild(shadow, ps);
-      plate.position.set(SHAFT_W / 2, py);
+      if (CITY) { const zp = zonePlateAt(f); plate.position.set(zp.x, zp.y); } // [world:C1] in the city: on the hub wall by the east vestibule (the chandelier hangs in front of the spine)
+      else plate.position.set(SHAFT_W / 2, py);
       if (GFX.airy) plate.scale.set(1.06);
       plate.rotation = !GFX.airy && inp.era <= 0 ? (f % 2 ? 0.035 : -0.025) : 0;
       plates.addChild(plate);
