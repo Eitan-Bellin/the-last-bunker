@@ -237,7 +237,8 @@ export class CityRenderer {
     P.mid.apply(cam, this.tier);
     P.fore.apply(cam, this.tier);
     if (covers) {
-      // The map draws over everything: keep the planes still and do no light/fog work.
+      // The map draws over everything: keep the planes still and do no light/fog work (and draw no plane under it).
+      P.far.container.visible = P.back.container.visible = P.mid.container.visible = P.fore.container.visible = false;
       this.lighting.glowLayer.visible = false;
       this.lighting.teaseLayer.visible = false;
       this.fog.layer.visible = false;
@@ -280,6 +281,30 @@ export class CityRenderer {
     }
     this.stats.updateMs = performance.now() - t0;
   }
+
+  /**
+   * Snapshots (`renderer.extract`): the extract renders into its own root target, where the 'global' screen UV would read the light
+   * texture against the extract frame. Between `beginSnapshot()` and `endSnapshot()` the filter uses the 'area' fallback (filterArea
+   * pinned to the current view), and the light texture is redrawn for the camera as it stands.
+   */
+  beginSnapshot(t: number): void {
+    this.snapPrev = this.uvMode;
+    if (this.uvMode !== 'area') this.setUvMode('area');
+    const v = this.view;
+    this.area.x = v.x0;
+    this.area.y = v.y0;
+    this.area.width = v.x1 - v.x0;
+    this.area.height = v.y1 - v.y0;
+    if (this.filterOn) this.litGroup.filterArea = this.area;
+    this.renderLightmap(t);
+  }
+
+  endSnapshot(): void {
+    if (this.snapPrev && this.snapPrev !== this.uvMode) this.setUvMode(this.snapPrev);
+    this.snapPrev = null;
+  }
+
+  private snapPrev: LightmapUvMode | null = null;
 
   /** Renders the light texture now (the host may call it itself right before `app.render()`). */
   renderLightmap(t: number): void {

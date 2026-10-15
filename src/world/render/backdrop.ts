@@ -412,6 +412,9 @@ export class Backdrop {
     if (!DETAIL[baseTier(this.tier)].backLife) return;
     const B = layout.bounds, tx = cityTextures();
     const bp = this.planes.back.p, fp = this.planes.far.p;
+    // Every lift rail in one Graphics, then every car dot (additive): two batches for all of them, not two per lift.
+    const rails = new Graphics();
+    const dots: Sprite[] = [];
     for (const b of this.bands) {
       if (b.s === 0) continue;
       if (BACKDROP.viaductStrata.includes(b.s)) {
@@ -439,19 +442,20 @@ export class Backdrop {
       for (let i = 0; i < 3; i++) {
         const x = (B.x + B.w * hash01(i, b.s * 7)) * fp;
         const y0 = (b.y0 + (b.y1 - b.y0) * 0.15) * fp, y1 = (b.y0 + (b.y1 - b.y0) * 0.85) * fp;
-        const g = new Graphics();
-        g.rect(x - 1, y0, 2, y1 - y0).fill(onLayer(STRATA[b.s].palette.metal, b.s, this.planes.far.token));
+        rails.rect(x - 1, y0, 2, y1 - y0).fill(onLayer(STRATA[b.s].palette.metal, b.s, this.planes.far.token));
         const dot = new Sprite(tx.soft);
         dot.anchor.set(0.5);
         dot.x = x;
         dot.width = dot.height = 16;
         dot.tint = STRATA[b.s].light.key;
         dot.blendMode = 'add';
-        this.liveFar.addChild(g, dot);
+        dots.push(dot);
         const [a, z] = BACKDROP.liftSpeed;
         this.lifts.push({ dot, y0, y1, sp: a + (z - a) * hash01(i, b.s), ph: hash01(b.s, i) * 6 });
       }
     }
+    if (dots.length) this.liveFar.addChild(rails, ...dots);
+    else rails.destroy();
   }
 
   // ------------------------------------------------------------------ per frame
