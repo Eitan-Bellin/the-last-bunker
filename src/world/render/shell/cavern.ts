@@ -16,6 +16,8 @@ import type { LightDef, ShellPiece } from './types';
 import { OUTLINE, lamp, palette, rng, rod, shade, sprite, vfill } from './kit';
 import { rubbleWall, tunnelFloor } from './props';
 
+const SLAB_PAD = 40;
+
 /** The light a district shows through its choked mouth before it is dug (its identity, cool = the unknown). */
 const DISTRICT_TEASE: Record<string, { preset: PresetName; color?: Hex }> = {
   cave: { preset: 'crystal' },
@@ -35,6 +37,12 @@ export function buildCaverns(areas: readonly CityArea[], cavs: readonly Cavity[]
   const progress: Record<string, (p: number) => void> = {};
   const g = new Graphics();
   const fg = new Graphics();
+  // Every district room: nothing hangs over one (style guide 11), whichever cavern it hangs from (caverns of stacked districts merge).
+  const rooms = areas.filter(a => a.kind === 'district' && a.label).map(a => {
+    const cx = a.label!.x, top = a.label!.y + 20;
+    return { x0: cx - (DISTRICT_SLOTS * SLOT_W) / 2 - 6, x1: cx + (DISTRICT_SLOTS * SLOT_W) / 2 + 6, y0: top - 6, y1: top + ROOM_H + SLAB_PAD };
+  });
+  const overRoom = (x: number, y0: number, y1: number) => rooms.some(r => x > r.x0 && x < r.x1 && y1 > r.y0 && y0 < r.y1);
   for (const a of areas) {
     if (a.kind !== 'district') continue;
     const kind = a.id.slice(2);
@@ -68,7 +76,7 @@ export function buildCaverns(areas: readonly CityArea[], cavs: readonly Cavity[]
         const room0 = x > room.x0 - 6 && x < room.x1 + 6;
         const maxLen = room0 ? Math.max(0, top - roofY - 8) : (lane - roofY) * 0.45;
         const len = Math.min(maxLen, 10 + r() * 34);
-        if (len < 6) continue;
+        if (len < 6 || overRoom(x, roofY - 2, roofY + len)) continue;
         const w = 4 + r() * 6;
         fg.poly([x - w, roofY - 2, x + w, roofY - 2, x + (r() - 0.5) * 3, roofY + len]).fill(vfill(shade(P.rockDark, 0.9), roofY, roofY + len, 1.2, 0.7)).stroke({ ...OUTLINE, width: 1 });
         fg.moveTo(x - w * 0.6, roofY).lineTo(x, roofY + len * 0.8).stroke({ width: 1, color: P.rockRim, alpha: 0.3 });

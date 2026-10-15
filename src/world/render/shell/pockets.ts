@@ -25,21 +25,26 @@ export function buildPockets(areas: readonly CityArea[], cavs: readonly Cavity[]
   for (const a of areas) {
     if (a.kind !== 'pocket') continue;
     const cav = cavs.find(c => c.id === `c:${a.id}`);
-    if (!cav) continue;
     const s = a.s as StratumId;
     const P = palette(s);
     const tease = STRATA[s].tease === 0xff3a2a ? 0x6aa8ff : STRATA[s].tease;
-    const b = polyBounds(cav.poly);
+    const b = polyBounds(a.poly);
     const cx = (b.x0 + b.x1) / 2, cy = (b.y0 + b.y1) / 2;
     const seed = seedOf(a.id);
     const r = rng(seed);
     // Cracks run from the hollow out through the rock, lit from inside.
-    for (let i = 0; i < 4; i++) {
-      const ex = r() < 0.5 ? b.x0 + 6 : b.x1 - 6, ey = b.y0 + (b.y1 - b.y0) * (0.2 + r() * 0.6);
-      cracks(dark, a.state === 'revealed' ? null : lit, ex, ey, 2, 46, seed + i, tease);
+    if (!cav) {
+      // Sealed: a web of cracks round the hidden hollow, the stratum's tease light leaking through them, a faint core where it is thinnest.
+      cracks(dark, lit, cx, cy, 4, Math.min(56, (b.x1 - b.x0) * 0.4), seed, tease);
+      for (let i = 0; i < 3; i++) lit.ellipse(cx, cy, 8 - i * 2.4, 4.5 - i * 1.2).fill({ color: tease, alpha: 0.08 + i * 0.07 });
+    } else {
+      for (let i = 0; i < 4; i++) {
+        const ex = r() < 0.5 ? b.x0 + 6 : b.x1 - 6, ey = b.y0 + (b.y1 - b.y0) * (0.2 + r() * 0.6);
+        cracks(dark, null, ex, ey, 2, 46, seed + i);
+      }
     }
-    // Inside: crystals (caves, core) or a dusty chamber with rubble.
-    if (s >= 5 || a.id.includes('crystal') || a.id.includes('Grotto')) {
+    // Inside (once found and cut open): crystals (caves, core) or a dusty chamber with rubble.
+    if (!cav) { /* still sealed in the rock */ } else if (s >= 5 || a.id.includes('crystal') || a.id.includes('Grotto')) {
       for (let i = 0; i < 7; i++) {
         const x = b.x0 + 14 + r() * (b.x1 - b.x0 - 28), y = b.y1 - 4;
         const h = 14 + r() * 26, w = 4 + r() * 5;

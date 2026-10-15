@@ -222,6 +222,23 @@ export function buildCityLayout(state: GameState): CityLayout {
     if (ext.w > 0) cavities.push({ id: `c:strip:${f}:w`, s, back: 'concrete', poly: q8(raggedPoly(rectPoly(slotX(f, -ext.w), y0, roomsWestX(f), y1), [L.stripRag, 0, 0, L.stripRag], seed + 1, L.stripWave)) });
   }
 
+  // The world's reach sideways: every strip, edge stub, district and pocket that can show. Undug storeys and unknown galleries span all of
+  // it, so the unknown deep reads as one dark earth instead of a dark column under the city.
+  let wx0 = Infinity, wx1 = -Infinity;
+  for (let f = 0; f < Math.max(1, n); f++) {
+    const e = stripEnds(f, extOf(f));
+    wx0 = Math.min(wx0, e.xw - L.edgeLen);
+    wx1 = Math.max(wx1, e.xe + L.edgeLen);
+  }
+  for (const d of districts) wx1 = Math.max(wx1, districtRect(d).x1 + L.cavernPad + L.edgeLen);
+  for (const p of allPockets()) {
+    const b = pocketBox(p);
+    wx0 = Math.min(wx0, b.x0);
+    wx1 = Math.max(wx1, b.x1);
+  }
+  const P = L.boundsPad;
+  const fullX0 = Math.floor(wx0 - P.x), fullX1 = Math.ceil(wx1 + P.x);
+
   // ------------------------------------------------------------------------------------------------------------------- galleries
   if (GFX.galleries) {
     GALLERY_ABOVE_FLOORS.forEach((above, g) => {
@@ -235,7 +252,7 @@ export function buildCityLayout(state: GameState): CityLayout {
       const y0 = galleryTop(g), y1 = y0 + GALLERY_H;
       const s = stratumOf(above);
       const dug = revealed.has(`g:${g}`);
-      areas.push({ id: `g:${g}`, kind: 'gallery', s, state: dug ? 'revealed' : 'hidden', poly: rectPoly(xw, y0, xe, y1) });
+      areas.push({ id: `g:${g}`, kind: 'gallery', s, state: dug ? 'revealed' : 'hidden', poly: dug ? rectPoly(xw, y0, xe, y1) : rectPoly(fullX0, y0, fullX1, y1) });
       if (dug) cavities.push({ id: `c:gal:${g}`, s, back: 'concrete', poly: rectPoly(xw, y0, xe, y1) });
     });
   }
@@ -256,7 +273,7 @@ export function buildCityLayout(state: GameState): CityLayout {
     const topOfHub = f < n && f === stratumFloors(s)[0] && hubs.some(h => h.s === s);
     const poly = topOfHub
       ? [xw, y0, ...vaultLine(F.hubL, F.hubR, y0), xe, y0, xe, y1, xw, y1]
-      : rectPoly(xw, y0, xe, y1);
+      : f >= n ? rectPoly(fullX0, y0, fullX1, y1) : rectPoly(xw, y0, xe, y1);
     areas.push({ id: `f:${f}`, kind: 'storey', s, state: st, ...(progress !== undefined ? { progress } : {}), poly: q8(poly), label: { x: (xw + xe) / 2, y: y0 + ROOM_H / 2, key: `f:${f}` } });
   }
 
@@ -325,7 +342,8 @@ export function buildCityLayout(state: GameState): CityLayout {
     const poly = q8(blobPoly(b.x0, b.y0, b.x1, b.y1, seedOf(p.id), L.pocketLumps, 20, true));
     const st: AreaState = found.has(p.id) ? 'revealed' : reached.includes(s) ? 'glimpsed' : 'hidden';
     areas.push({ id: p.id, kind: 'pocket', s, state: st, poly, label: { x: (b.x0 + b.x1) / 2, y: b.y0 - 12, key: p.id } });
-    cavities.push({ id: `c:${p.id}`, s, back: 'rock', poly: poly.slice() });
+    // A pocket is cut open only once it is found; before that it shows as lit cracks in the rock (shell/pockets.ts).
+    if (st === 'revealed') cavities.push({ id: `c:${p.id}`, s, back: 'rock', poly: poly.slice() });
   }
 
   // ------------------------------------------------------------------------------------------------------------------- bounds, strata
@@ -337,7 +355,6 @@ export function buildCityLayout(state: GameState): CityLayout {
     y1 = Math.max(y1, b.y1);
   }
   if (!isFinite(x0)) { x0 = -200; x1 = 600; }
-  const P = L.boundsPad;
   const bounds = { x: Math.floor(x0 - P.x), y: -P.top, w: Math.ceil(x1 - x0 + 2 * P.x), h: Math.ceil(y1 + P.bottom + P.top) };
   areas.unshift({ id: 'surface', kind: 'surface', s: 0, state: 'revealed', poly: rectPoly(bounds.x, bounds.y, bounds.x + bounds.w, 0) });
   const strata: CityLayout['strata'] = [];

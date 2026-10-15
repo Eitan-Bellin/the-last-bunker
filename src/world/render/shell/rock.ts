@@ -25,6 +25,11 @@ const SPILL = 48;
 /** Height of the topsoil (the surface kit) under the ground line, and the banding strip's height. */
 const SOIL = 64;
 const BAND_H = 100;
+/** Neighbouring chunks overlap this much (world units), hiding the bilinear seam at a cache texture's edge. */
+const OVERLAP = 3;
+/** The rock face is the darkest made surface after the fore silhouettes: its painted tile is pulled down this much (the lightmap's section
+ * fill and the stratum ambient light it back up), so the lit city reads as islands in dark earth. */
+const ROCK_TINT = 0x9a948e;
 
 interface CavityInfo { c: Cavity; b: { x0: number; y0: number; x1: number; y1: number }; cw: boolean }
 
@@ -86,7 +91,8 @@ export class RockLayer implements ChunkSource {
 
     // 1 + 2. the rock with the holes erased, in a cache of its own (the erase must not reach the AO under it).
     const rock = new Container();
-    const hasRock = this.paintRock(rock, x0, y0, x1, y1);
+    // Chunks overlap by OVERLAP units: the cache texture's border texels never blend with the erased frame inside the view.
+    const hasRock = this.paintRock(rock, x0 - OVERLAP, y0 - OVERLAP, x1 + OVERLAP, y1 + OVERLAP);
     if (!hasRock) return null;
     const holes = new Graphics();
     for (const k of near) holes.poly(k.c.poly).fill(0xffffff);
@@ -96,10 +102,11 @@ export class RockLayer implements ChunkSource {
 
     // 4. trim everything to the chunk.
     const frame = new Graphics();
-    frame.rect(x0 - SPILL * 2, y0 - SPILL * 2, x1 - x0 + SPILL * 4, SPILL * 2).fill(0xffffff);
-    frame.rect(x0 - SPILL * 2, y1, x1 - x0 + SPILL * 4, SPILL * 2).fill(0xffffff);
-    frame.rect(x0 - SPILL * 2, y0, SPILL * 2, y1 - y0).fill(0xffffff);
-    frame.rect(x1, y0, SPILL * 2, y1 - y0).fill(0xffffff);
+    const fx0 = x0 - OVERLAP, fy0 = y0 - OVERLAP, fx1 = x1 + OVERLAP, fy1 = y1 + OVERLAP;
+    frame.rect(fx0 - SPILL * 2, fy0 - SPILL * 2, fx1 - fx0 + SPILL * 4, SPILL * 2).fill(0xffffff);
+    frame.rect(fx0 - SPILL * 2, fy1, fx1 - fx0 + SPILL * 4, SPILL * 2).fill(0xffffff);
+    frame.rect(fx0 - SPILL * 2, fy0, SPILL * 2, fy1 - fy0).fill(0xffffff);
+    frame.rect(fx1, fy0, SPILL * 2, fy1 - fy0).fill(0xffffff);
     frame.blendMode = 'erase';
     baked.addChild(ao, rock, frame);
     baked.cacheAsTexture({ resolution: this.res, antialias: false });
@@ -125,11 +132,11 @@ export class RockLayer implements ChunkSource {
     if (top >= y1) return false;
     const w = x1 - x0;
     // Topsoil: ash soil just under the ground line.
-    if (top < SOIL) into.addChild(tile(rockTileId('surface'), x0, top, w, Math.min(y1, SOIL) - top));
+    if (top < SOIL) into.addChild(tile(rockTileId('surface'), x0, top, w, Math.min(y1, SOIL) - top, { tint: ROCK_TINT }));
     for (const b of this.bands) {
       const a = Math.max(top, b.y0, SOIL), z = Math.min(y1, b.y1);
       if (z <= a) continue;
-      into.addChild(tile(rockTileId(WORLD_KIT_IDS[b.s]), x0, a, w, z - a));
+      into.addChild(tile(rockTileId(WORLD_KIT_IDS[b.s]), x0, a, w, z - a, { tint: ROCK_TINT }));
     }
     // Banding: across every seam (the lower stratum's band, centred on it) and, inside a stratum, now and then.
     const seams: { y: number; s: StratumId; a: number }[] = [{ y: SOIL, s: 1, a: 0.9 }];
@@ -141,7 +148,7 @@ export class RockLayer implements ChunkSource {
       const by = sm.y - BAND_H / 2;
       if (by + BAND_H <= top || by >= y1) continue;
       const a = Math.max(by, top), z = Math.min(by + BAND_H, y1);
-      const band = tile(rockBandId(WORLD_KIT_IDS[sm.s]), x0, a, w, z - a, { oy: by - Math.round(hash2(sm.y, 3) * 64), alpha: sm.a });
+      const band = tile(rockBandId(WORLD_KIT_IDS[sm.s]), x0, a, w, z - a, { oy: by - Math.round(hash2(sm.y, 3) * 64), alpha: sm.a, tint: ROCK_TINT });
       band.tilePosition.x = -(x0 + Math.round(hash2(sm.y, 7) * 400));
       into.addChild(band);
     }

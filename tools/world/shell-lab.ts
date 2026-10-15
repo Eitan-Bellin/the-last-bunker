@@ -18,7 +18,7 @@ import { mountShell } from '../../src/world/render/shell/mountShell';
 import { preloadWorldKit } from '../../src/art/worldKit';
 import { SLICE_ASSETS } from '../../src/world/tokensAssets';
 import { tile } from '../../src/world/render/shell/kit';
-import { floorExtent } from '../../src/core/GameState';
+import { floorExtent, migrateState, type GameState } from '../../src/core/GameState';
 import { ROOM_H, SHAFT_W, SLAB, floorTop } from '../../src/rendering/geom';
 import { isDistrict, roomSlots } from '../../src/data/buildingDefs';
 
@@ -47,7 +47,11 @@ async function boot(): Promise<void> {
 
   // ---------------- state and layout
   const scenario = (q.get('scenario') as CityScenarioId) || 'slice';
-  const state = buildSliceState(scenario);
+  // \`&save=e30-seed1\` loads a sample save (store/sim/saves-v7) instead of the slice: deeper strata, wings, districts, galleries.
+  const saveName = q.get('save');
+  const state = saveName
+    ? migrateState(await fetch(`/store/sim/saves-v7/${saveName}.json`).then(r => r.json()) as GameState)
+    : buildSliceState(scenario);
   const era = q.has('era') ? +q.get('era')! : state.era;
   const layout = buildCityLayout(state);
 
@@ -72,11 +76,11 @@ async function boot(): Promise<void> {
     await fetch('/art/meta.json').then(r => r.json()).catch(() => ({}));
   const roomInputs: RoomLightInput[] = [];
   for (const b of state.buildings) {
-    if (b.position.floor < 0 || isDistrict(b.type)) continue;
+    if (b.position.floor < 0) continue;
     const rr = buildingRect(b);
-    const art = `${b.type}-1`;
+    const art = isDistrict(b.type) ? b.type : `${b.type}-${b.level >= 3 ? 2 : 1}`;
     let tex: Texture | null = null;
-    try { tex = await Assets.load(`/art/rooms/${art}.webp`); } catch { tex = null; }
+    try { tex = await Assets.load(isDistrict(b.type) ? `/art/districts/${art}.webp` : `/art/rooms/${art}.webp`); } catch { tex = null; }
     if (tex) {
       const s = new Sprite(tex);
       s.position.set(rr.x, rr.y);

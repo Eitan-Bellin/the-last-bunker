@@ -9,6 +9,7 @@
  * Called from src/main.ts inside an `import.meta.env.DEV` block, before the GameApp exists.
  */
 import { GameEngine } from '../core/GameEngine';
+import { SaveManager } from '../core/SaveManager';
 import { seedCity } from '../core/state/city';
 import type { BuildingType, GameState } from '../core/GameState';
 
@@ -104,7 +105,6 @@ export async function runCityScenario(search: string = location.search): Promise
     return false;
   }
   const state = buildSliceState(id);
-  const { SaveManager } = await import('../core/SaveManager');
   await new SaveManager().saveJson(JSON.stringify(state));
   q.delete('scenario');
   const rest = q.toString().replace(/=(&|$)/g, '$1');

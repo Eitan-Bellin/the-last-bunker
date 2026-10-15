@@ -37,6 +37,8 @@ export interface ShellMount {
   update(view?: Rect, now?: number): void;
   syncProgress(state: GameState): void;
   rebuild(layout: CityLayout, state: GameState): void;
+  /** The quality tier changed (rock bake resolution, scatter density): rebuild at the new tier. */
+  setQuality(q: RenderTier, layout: CityLayout, state: GameState): void;
   bringFrontToTop(): void;
   destroy(): void;
 }
@@ -92,6 +94,11 @@ export function mountShell(city: CityRenderer, layout: CityLayout, state: GameSt
       detach();
       parts = buildShell(next, state, opts.quality, { era: opts.era });
       attach();
+    },
+    setQuality(q: RenderTier, next: CityLayout, state: GameState) {
+      if (q === opts.quality) return;
+      opts.quality = q;
+      this.rebuild(next, state);
     },
     bringFrontToTop() {
       if (ownFront) city.playLayer.addChild(front);

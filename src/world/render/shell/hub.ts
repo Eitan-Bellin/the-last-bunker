@@ -5,9 +5,9 @@
  * Colony era) the string lights.
  */
 import { Container, Graphics } from 'pixi.js';
-import { CITY, DETAIL, SIGNS, type Hex, type StratumId } from '../../tokens';
+import { CITY, DETAIL, SIGNS, type StratumId } from '../../tokens';
 import { baseTier, type RenderTier } from '../../tokensRender';
-import { ROOM_H, SHAFT_W, floorTop } from '../../../rendering/geom';
+import { SHAFT_W, floorTop } from '../../../rendering/geom';
 import { floorLineY, storeyBottom } from '../../model/cityLayout';
 import { archPoints } from '../../model/outline';
 import type { HubGeom } from '../layoutTypes';
@@ -49,9 +49,6 @@ export function buildHub(h: HubGeom, quality: RenderTier, era: number): ShellPie
   vault.tilePosition.set(cx - VAULT_PITCH / 2 - x0, floorLineY(h.floors[0]) - VAULT_PITCH - y0);
   wall.addChild(vault);
   // Depth: the wall darkens toward the top of the vault and toward the side walls (light falls from the chandelier and the balconies).
-  const dim = new Graphics();
-  dim.rect(x0, y0, x1 - x0, y1 - y0).fill(vfill(0x000000, y0, y1, 1, 1));
-  dim.alpha = 0;
   const shadeG = new Graphics();
   for (let i = 0; i < 6; i++) {
     const t = i / 6;
@@ -66,7 +63,7 @@ export function buildHub(h: HubGeom, quality: RenderTier, era: number): ShellPie
   // The observation window: an arched opening behind the spine over the upper storeys, looking onto the mid / back planes.
   const winHalf = H.windowHalfW;
   const winTop = top - H.vaultRise + 18;
-  const winBot = h.floors.length > 1 ? floorLineY(fz - 1) - 6 : floorLineY(fz) - 34;
+  const winBot = floorLineY(h.floors[0]) - 8;
   if (winHalf > 0 && winBot - winTop > 60) {
     const wx0 = cx - winHalf, wx1 = cx + winHalf;
     const spring = winTop + winHalf * 0.8;
@@ -86,12 +83,12 @@ export function buildHub(h: HubGeom, quality: RenderTier, era: number): ShellPie
       for (let i = 0; i < arch.length - 2; i += 2) if (x >= arch[i] && x <= arch[i + 2]) return arch[i + 1] + ((arch[i + 3] - arch[i + 1]) * (x - arch[i])) / (arch[i + 2] - arch[i]);
       return spring;
     };
-    const mull = Math.max(3, Math.round((wx1 - wx0) / 30));
+    const mull = 3;
     for (let i = 1; i < mull; i++) {
       const x = wx0 + ((wx1 - wx0) * i) / mull;
       rod(fr, x, archY(x) + 2, x, winBot, H.windowMullion, steel);
     }
-    for (let y = winBot - 40; y > winTop + 20; y -= 46) {
+    for (let y = spring; y > winTop + 20; y -= 200) {
       const half = Math.sqrt(Math.max(0, 1 - Math.pow(Math.max(0, spring - y) / (winHalf * 0.8), 2))) * winHalf;
       if (half < 12) continue;
       rod(fr, cx - half + 2, y, cx + half - 2, y, 2.2, steel);
@@ -186,7 +183,7 @@ export function buildHub(h: HubGeom, quality: RenderTier, era: number): ShellPie
   // The plaza floor of the bottom storey: one deck across the atrium (no railing) on a concrete slab.
   const plazaY = h.balconies.find(b => b.floor === fz)?.y ?? floorLineY(fz) + 13;
   const slab = new Graphics();
-  slab.rect(x0 + H.wallW, plazaY + DECK_H - 4, x1 - x0 - 2 * H.wallW, storeyBottom(fz) - plazaY - DECK_H + 4 + H.plazaSlab * 0).fill(vfill(P.builtDark, plazaY, storeyBottom(fz)));
+  slab.rect(x0 + H.wallW, plazaY + DECK_H - 4, x1 - x0 - 2 * H.wallW, storeyBottom(fz) - plazaY - DECK_H + 4).fill(vfill(P.builtDark, plazaY, storeyBottom(fz)));
   slab.rect(x0 + H.wallW, storeyBottom(fz) - 3, x1 - x0 - 2 * H.wallW, 3).fill(shade(P.builtDark, 0.6));
   decks.addChild(slab, tile('deck', x0 + H.wallW, plazaY, x1 - x0 - 2 * H.wallW, DECK_H));
   if (h.bridge) {
@@ -268,8 +265,6 @@ export function buildHub(h: HubGeom, quality: RenderTier, era: number): ShellPie
     front.addChildAt(wire, 0);
   }
   front.addChild(glow);
-  void ROOM_H;
   return { back, front, lights };
 }
 
-export type { Hex };

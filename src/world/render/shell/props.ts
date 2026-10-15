@@ -113,8 +113,8 @@ export function cracks(dark: Graphics, lit: Graphics | null, x: number, y: numbe
     }
     dark.poly(pts, false).stroke({ width: 2.2, color: 0x0a0806, alpha: 0.85, join: 'round', cap: 'round' });
     if (lit && glowColor !== undefined) {
-      lit.poly(pts, false).stroke({ width: 3.5, color: glowColor, alpha: 0.18, join: 'round', cap: 'round' });
-      lit.poly(pts, false).stroke({ width: 1, color: glowColor, alpha: 0.75, join: 'round', cap: 'round' });
+      lit.poly(pts, false).stroke({ width: 4, color: glowColor, alpha: 0.12, join: 'round', cap: 'round' });
+      lit.poly(pts, false).stroke({ width: 0.9, color: glowColor, alpha: 0.55, join: 'round', cap: 'round' });
     }
   }
 }
