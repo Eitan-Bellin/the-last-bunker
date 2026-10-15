@@ -8,6 +8,16 @@ import { nightLight } from './structure';
 import { isLiteMode } from '../core/crashGuard';
 import { isTouchDevice } from '../utils/device';
 import { viewport } from '../utils/viewport'; // [perf] window size without forcing layout
+import { CITY } from '../world/flag'; // [world:C1]
+
+/**
+ * [world:C1] City night grade (behind `?city`). Underground the lightmap already carries the night (civic lamps at 60%, the sky ambient
+ * of strata 0-1 to moonlight, style guide section 9), so the composite's underground night mood runs at this share of its classic strength
+ * (the grade never touches the sky). Classic mode never reads it.
+ */
+export const CITY_NIGHT_GRADE = {
+  underground: 0.45,
+} as const;
 
 const BLOOM_SCALE = 0.25;
 const QUALITY_KEY = 'lastbunker_gfx';
@@ -292,7 +302,7 @@ export class PostFX {
       grain: profileOf(q).grain ? 0.055 : 0,
       seed: Math.floor(now / 42) % 997,
       vignette: this.vignette,
-      night: this.night,
+      night: CITY ? this.night * CITY_NIGHT_GRADE.underground : this.night,
       tone: this.toneFor(v.era),
       // Screen y where the underground starts (night only darkens below the topsoil).
       groundY: t.ty + t.d * (TOPSOIL - 30),
