@@ -37,8 +37,16 @@ export class IdleSpots {
     return KINDS[this.kind[i]];
   }
 
+  /** Per edge tunnel: its floor and x range (filled by build: places near one are not offered). */
+  private edgeF: number[] = [];
+  private edgeX0: number[] = [];
+  private edgeX1: number[] = [];
+
   private add(x: number, y: number, floor: number, s: number, kind: IdleSpotKind, face: number, sit = false): void {
     if (this.n >= MAX_SPOTS) return;
+    for (let k = 0; k < this.edgeF.length; k++) {
+      if (this.edgeF[k] === floor && x > this.edgeX0[k] - LIFE.idle.edgeClear && x < this.edgeX1[k] + LIFE.idle.edgeClear) return;
+    }
     const i = this.n++;
     this.x[i] = x;
     this.y[i] = y;
@@ -56,6 +64,14 @@ export class IdleSpots {
     this.n = 0;
     this.taken.fill(-1);
     const I = LIFE.idle, H = CITY_TOKENS.hub;
+    this.edgeF.length = this.edgeX0.length = this.edgeX1.length = 0;
+    for (const c of layout.cavities) {
+      if (!c.id.startsWith('c:edge:')) continue;
+      const b = polyBounds(c.poly);
+      this.edgeF.push(+c.id.split(':')[2]);
+      this.edgeX0.push(b.x0);
+      this.edgeX1.push(b.x1);
+    }
     for (const h of layout.hubs) {
       const fz = h.floors[h.floors.length - 1];
       const x0 = h.rect.x, x1 = h.rect.x + h.rect.w;

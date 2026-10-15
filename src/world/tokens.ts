@@ -781,7 +781,7 @@ export const LIFE = {
     breakFloors: 1,
     breakMinCrew: 2,
     /** How much each kind of place draws people (relative). */
-    weights: { rail: 3, barrel: 4, bench: 2, plaza: 3, corridor: 2 } as Record<IdleSpotKind, number>,
+    weights: { rail: 3, barrel: 4, bench: 2, plaza: 3, corridor: 1 } as Record<IdleSpotKind, number>, // [world:C2] corridor 2 -> 1: the hub is where people gather
     /** Spacing of standing places along a balcony rail / the bridge, and how far in from the ends. */
     railStep: 20,
     railInset: 7,
@@ -793,6 +793,11 @@ export const LIFE = {
     plazaGap: 8,
     /** Corridor places: per vestibule, and per floor strip (from the strip's hub end, every `stripStep`, at most `stripMax`). */
     vestInset: 6,
+    /**
+     * [world:C2] No place within this many units of an edge tunnel (a blocked or dug wing end, `c:edge:*`): nobody idles at the mouth of
+     * a sealed tunnel (with no wing on a side, the vestibule's outer end is that mouth).
+     */
+    edgeClear: 24,
     stripFirst: 46,
     stripStep: 130,
     stripMax: 3,

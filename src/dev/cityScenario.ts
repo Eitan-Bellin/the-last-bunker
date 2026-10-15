@@ -2,7 +2,7 @@
  * [world:C1] DEV ONLY. The vertical slice of "The City Below" as a real save (architecture section 6.1), built with the engine's own APIs:
  *
  *   ?city&slot=city-slice&scenario=slice       Act I, 3 floors, the stratum-1 hub, the living rooms restored, 8 survivors, the dark edge e:2:e
- *   ?city&slot=city-slice&scenario=slice-dig   the same, plus the floor-3 dig at 40 % with a crew of 2
+ *   ?city&slot=city-slice&scenario=slice-dig   the same, plus the floor-3 dig at 10 % with a crew of 2
  *
  * The scenario builds the state on a throw-away engine, writes it to the `?slot=` save (never the player's main slot: it refuses to run without
  * one), then reloads the page without `scenario` so the game boots from that save like any other (a real save -> load round trip).
@@ -79,10 +79,11 @@ export function buildSliceState(id: CityScenarioId): GameState {
   }
 
   if (id === 'slice-dig') {
-    // The floor-3 dig at 40 % with two of the room crews on it (BuildingSystem.dig + DigSystem.assign: the engine's own path).
+    // The floor-3 dig at 10 % with two of the room crews on it (BuildingSystem.dig + DigSystem.assign: the engine's own path). The crew walks about
+    // 20 s from B1 down to the face; started at 40 % the dig was done a few seconds after they got there.
     e.buildingSystem.dig(sm);
     const total = S().longGame.dig.total;
-    sm.applyDelta({ path: 'longGame.dig.progress', value: Math.round(total * 0.4) });
+    sm.applyDelta({ path: 'longGame.dig.progress', value: Math.round(total * 0.1) });
     const crew = S().survivors.filter(s => !s.child).slice(-2);
     for (const s of crew) e.digSystem.assign(s.id, 0);
   }
