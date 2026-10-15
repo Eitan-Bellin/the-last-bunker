@@ -3,7 +3,16 @@
 import { LANDING_X, LEG_LADDER, LEG_LIFT, LEG_STAIRS, LEG_WALK, Route, route, setDoorBlocked, lineY, entryX, type Stop } from '../../src/rendering/routes';
 import { roomsEastX, slotX } from '../../src/world/project';
 import { GFX } from '../../src/rendering/gfxFeatures';
-import { createInitialState, type GameState } from '../../src/core/GameState';
+import { createInitialState, floorExtent, type GameState } from '../../src/core/GameState';
+import { LADDER_X, MAX_TRIP_S, laneY } from '../../src/rendering/routes';
+import { __setProjectionForTests } from '../../src/world/project';
+import { HUB_STAIR_AMP, hubStairFor, hubStairX } from '../../src/world/nav/hubStairs';
+import { cityCameraFrame } from '../../src/world/nav/cameraFrame';
+import { buildCityLayout } from '../../src/world/model/cityLayout';
+import { buildSliceState } from '../../src/dev/cityScenario';
+import { hasAnnex } from '../../src/rendering/voids';
+import { occupancy } from '../../src/rendering/occupancy';
+import { extentsFor } from '../../src/rendering/geom';
 
 export function routeChecks(): { problems: string[]; notes: string[] } {
   const problems: string[] = [];
@@ -96,5 +105,134 @@ export function routeChecks(): { problems: string[]; notes: string[] } {
   if (!o || !Array.from(r.kind.slice(0, r.n)).includes(LEG_LIFT) || r.n > 16) fail(`airy lift trip: ${o ? kinds() : 'null'}`);
   GFX.airy = airyWas;
   notes.push('routes: 20+ plans checked (same floor, wings, lift, stairs, ladder, doors, surface, length cap)');
+  notes.push(`routes: classic digest ${classicDigest()}`);
+  cityChecks(fail, notes);
   return { problems, notes };
+}
+
+/**
+ * A fingerprint of a fixed grid of classic plans (both GFX passes, lift on / off, rolls low / high, with and without a stairwell): printed
+ * so a change to routes.ts can be compared against the previous commit (it must not move while the city work lands).
+ */
+function classicDigest(): string {
+  __setProjectionForTests('classic');
+  const airyWas = GFX.airy;
+  const st: GameState = createInitialState();
+  st.currentFloors = 12;
+  st.layout.infra.push({ id: 'sd', kind: 'stairwell', floor: 1, x: 3, floors: 4 });
+  const r = new Route();
+  let h = 2166136261 >>> 0;
+  const mix = (v: number): void => { h = Math.imul(h ^ (Math.round(v * 100) | 0), 16777619) >>> 0; };
+  for (const airy of [false, true]) {
+    GFX.airy = airy;
+    for (let a = -1; a < 6; a++) for (let b = 0; b < 6; b++) for (const lift of [true, false]) for (const rnd of [0.1, 0.9]) {
+      const from: Stop = a < 0 ? { floor: -1, x: -40, y: -8 } : { floor: a, x: roomsEastX(a) + 30 + a * 17, y: lineY(a) };
+      const to: Stop = { floor: b, x: roomsEastX(b) + 260 - b * 11, y: lineY(b) };
+      const o = route(st, from, to, lift, rnd, r);
+      mix(o ? r.n : -1);
+      if (!o) continue;
+      mix(r.seconds);
+      for (let i = 0; i < r.n; i++) { mix(r.x[i]); mix(r.y[i]); mix(r.kind[i]); mix(r.floor[i]); mix(r.amp[i]); mix(r.flights[i]); }
+    }
+  }
+  GFX.airy = airyWas;
+  return h.toString(16);
+}
+
+/**
+ * [world:C1 camera-nav] The city projection (architecture D10, 1.3): in the vertical slice (stratum 1, floors 0-2) a survivor moving
+ * between floors takes the hub stairs or the lift (the lift landing on the balcony lane), never the ladder with power on and never a
+ * refused plan (a teleport); the stair columns are the level-builder's; the annex is off; trips stay under MAX_TRIP_S; the camera frame
+ * from the layout is sane.
+ */
+function cityChecks(fail: (m: string) => void, notes: string[]): void {
+  const airyWas = GFX.airy;
+  GFX.airy = true;
+  __setProjectionForTests('city');
+  setDoorBlocked(null);
+  try {
+    const st = buildSliceState('slice');
+    const L = buildCityLayout(st);
+    const hub = L.hubs.find(h => h.s === 1);
+    // The stair columns are where the level-builder put them (and where the shell draws them).
+    if (!hub || hub.stairs.length !== 2) fail(`city: the slice hub should have 2 stair columns, got ${hub?.stairs.length ?? 'no hub'}`);
+    else for (const c of hub.stairs) if (Math.abs(c.x - hubStairX(1, c.side)) > 0.01) fail(`city: hub stair ${c.side} at ${c.x}, nav says ${hubStairX(1, c.side)}`);
+    // Within a stratum only, dug floors only.
+    if (!Number.isNaN(hubStairFor(st.currentFloors, 0, 3, 100))) fail('city: floor 3 is not dug in the slice: no hub stair to it');
+    if (Number.isNaN(hubStairFor(st.currentFloors, 0, 2, 100))) fail('city: floors 0..2 should have a hub stair');
+    if (!Number.isNaN(hubStairFor(12, 2, 5, 100))) fail('city: a hub stair must not cross the gallery between strata');
+    if (hubStairFor(st.currentFloors, 0, 1, -200) !== hubStairX(1, 'w') || hubStairFor(st.currentFloors, 0, 1, 400) !== hubStairX(1, 'e')) fail('city: the nearest hub stair column should win');
+    // No stair annex in the city.
+    if (hasAnnex(occupancy(st.buildings, st.ruins ?? [], st.currentFloors, extentsFor(st, st.currentFloors)))) fail('city: the stair annex must be off');
+
+    const r = new Route();
+    const stop = (floor: number, x: number): Stop => ({ floor, x, y: lineY(floor) });
+    const ks = (): number[] => Array.from(r.kind.slice(0, r.n));
+    const eastX = hubStairX(1, 'e');
+    // Blackout 0 -> 2 from the first room (nearer the hub than the first void tower): the east hub stairs, entered and left on the right landing, 8 flights, lane to lane.
+    let o = route(st, stop(0, roomsEastX(0) + 10), stop(2, roomsEastX(2) + 60), false, 0.5, r);
+    if (!o) fail('city: blackout 0->2 has no route (the survivor would teleport)');
+    else {
+      const k = ks().indexOf(LEG_STAIRS);
+      if (k < 1 || ks().includes(LEG_LADDER)) fail(`city: blackout 0->2 should take the hub stairs, got ${ks().join('')}`);
+      else {
+        if (Math.abs(r.x[k - 1] - (eastX - HUB_STAIR_AMP)) > 0.01 || Math.abs(r.x[k] - (eastX - HUB_STAIR_AMP)) > 0.01) fail(`city: hub stairs should start and end on the right landing (${eastX - HUB_STAIR_AMP}), got ${r.x[k - 1]} / ${r.x[k]}`);
+        if (r.amp[k] !== HUB_STAIR_AMP || r.flights[k] !== 8) fail(`city: hub stairs amp ${r.amp[k]} flights ${r.flights[k]}, expected ${HUB_STAIR_AMP} / 8`);
+        if (Math.abs(r.y[k - 1] - laneY(0)) > 0.01 || Math.abs(r.y[k] - laneY(2)) > 0.01) fail('city: hub stairs should run lane to lane');
+        // The zig-zag stays inside the column (walkers.ts: x = start + amp + amp * zig, zig in -1..1).
+        const lo = r.x[k - 1] + 2 * Math.min(0, r.amp[k]), hi = r.x[k - 1] + 2 * Math.max(0, r.amp[k]);
+        if (lo < eastX - 22 || hi > eastX + 22) fail(`city: the hub zig-zag leaves its 44-wide column (${lo}..${hi})`);
+      }
+    }
+    // With the lift: a high roll rides from the landing on the balcony lane to the other balcony.
+    o = route(st, stop(2, roomsEastX(2) + 60), stop(0, roomsEastX(0) + 300), true, 0.9, r);
+    if (!o || !ks().includes(LEG_LIFT)) fail(`city: a high roll with power should ride the lift, got ${o ? ks().join('') : 'null'}`);
+    else {
+      const k = ks().indexOf(LEG_LIFT);
+      if (r.x[k] !== LANDING_X || Math.abs(r.y[k - 1] - laneY(2)) > 0.01 || Math.abs(r.y[k] - laneY(0)) > 0.01) fail('city: the lift should board and leave on the balcony lane');
+    }
+    // A low roll with power takes the hub stairs.
+    o = route(st, stop(1, roomsEastX(1) + 60), stop(2, roomsEastX(2) + 90), true, 0.1, r);
+    if (!o || !ks().includes(LEG_STAIRS)) fail(`city: a low roll should take the hub stairs, got ${o ? ks().join('') : 'null'}`);
+
+    // Never a teleport between the slice floors: every slot pair on floors 0..2, lift on (low and high roll) and off.
+    let plans = 0, worst = 0, stairs = 0, lifts = 0;
+    for (let a = 0; a < 3; a++) for (let b = 0; b < 3; b++) {
+      if (a === b) continue;
+      const ea = floorExtent(st, a).e, eb = floorExtent(st, b).e;
+      for (let sa = 0; sa < ea; sa += 1) for (let sb = 0; sb < eb; sb += 3) for (const [lift, rnd] of [[true, 0.1], [true, 0.9], [false, 0.5]] as const) {
+        plans++;
+        o = route(st, stop(a, roomsEastX(a) + sa * 46 + 23), stop(b, roomsEastX(b) + sb * 46 + 23), lift, rnd, r);
+        if (!o) { fail(`city: ${a}:${sa} -> ${b}:${sb} (lift ${lift}, roll ${rnd}) has no route: the survivor would teleport`); continue; }
+        if (ks().includes(LEG_LADDER)) fail(`city: ${a}:${sa} -> ${b}:${sb} uses the shaft ladder`);
+        if (r.n > 16) fail('city: waypoint list overflow');
+        if (r.seconds > MAX_TRIP_S) fail('city: a trip over MAX_TRIP_S was returned');
+        worst = Math.max(worst, r.seconds);
+        if (ks().includes(LEG_STAIRS)) stairs++;
+        if (ks().includes(LEG_LIFT)) lifts++;
+      }
+    }
+    notes.push(`routes (city): ${plans} slice plans between floors 0-2, ${stairs} by the hub stairs, ${lifts} by the lift, none refused, longest ${worst.toFixed(1)} s (cap ${MAX_TRIP_S})`);
+    // The surface still joins floor 0 by the shaft ladder (LADDER_X), then hub stairs or the lift.
+    o = route(st, { floor: -1, x: -40, y: -8 }, stop(2, roomsEastX(2) + 60), true, 0.9, r);
+    if (!o || r.x[ks().indexOf(LEG_LADDER)] !== LADDER_X) fail('city: surface -> floor 2 should climb the shaft ladder to floor 0 first');
+    // A closed bulkhead still blocks the walk (acceptance 6.4: closing a bulkhead blocks the walk).
+    setDoorBlocked((fl, x0, x1) => fl === 2 && x0 === 3 && x1 === 4);
+    if (route(st, stop(0, roomsEastX(0) + 30), stop(2, slotX(2, 6) + 10), true, 0.9, r) !== null) fail('city: a closed door between the landing and the room must block the walk');
+    setDoorBlocked(null);
+
+    // The camera frame from the layout: content inside bounds, the hub inside content, the bounds tighter than the dressing bounds.
+    const cf = cityCameraFrame(L);
+    const inside = (a: { x: number; y: number; w: number; h: number }, b: { x: number; y: number; w: number; h: number }): boolean =>
+      a.x >= b.x - 0.01 && a.y >= b.y - 0.01 && a.x + a.w <= b.x + b.w + 0.01 && a.y + a.h <= b.y + b.h + 0.01;
+    if (!cf.hub || !inside(cf.hub, cf.content)) fail('city camera: the hub should sit inside the framed content');
+    if (!inside(cf.content, cf.bounds)) fail('city camera: the content should sit inside the bounds');
+    if (cf.bounds.w >= L.bounds.w || cf.bounds.h >= L.bounds.h) fail('city camera: the camera bounds should be tighter than the layout dressing bounds');
+    if (cf.hub && Math.abs(cf.hub.x + cf.hub.w / 2 - 29) > 0.01) fail(`city camera: the hub (with vestibules) should be centred on the spine, got ${cf.hub.x + cf.hub.w / 2}`);
+    notes.push(`routes (city): camera frame bounds ${JSON.stringify(cf.bounds)} content ${JSON.stringify(cf.content)} hub ${JSON.stringify(cf.hub)}`);
+  } finally {
+    __setProjectionForTests('classic');
+    GFX.airy = airyWas;
+    setDoorBlocked(null);
+  }
 }

@@ -2,7 +2,8 @@ import type { GameState } from '../core/GameState';
 import { getDef } from '../data/buildingDefs';
 import { doorwayX } from './openings';
 import { CORR_LANE, FLIGHTS_PER_FLOOR, TOWER_AMP, ROOM_H, SHAFT_W, SLOT_W, floorTop, extentsFor } from './geom';
-import { roomsEastX, roomsWestX, slotAtX, slotX } from '../world/project';
+import { PROJECTION, roomsEastX, roomsWestX, slotAtX, slotX } from '../world/project';
+import { HUB_FLIGHTS_PER_FLOOR, HUB_STAIR_AMP, hubStairFor } from '../world/nav/hubStairs';
 import { GFX } from './gfxFeatures';
 import { occupancy } from './occupancy';
 import { ANNEX_X, hasAnnex, voidBoundaries } from './voids';
@@ -61,6 +62,8 @@ export const STAIR_SPEED = 22;
 export const LADDER_SPEED = 15;
 /** Longest trip we draw; anything slower is not worth watching and the survivor just appears. */
 export const MAX_TRIP_S = 60;
+/** [world:C1] City: share of one- and two-storey hops (with the lift running) that take the hub stairs instead; the atrium is built to be walked. */
+export const CITY_HUB_STAIR_SHARE = 0.5;
 /** Rough wait for the lift to come, load and arrive, in seconds (the car's trip itself takes ~2 s whatever the distance). */
 const LIFT_EST_S = 10;
 
@@ -224,6 +227,7 @@ function walkTo(r: Route, x: number, yEnd?: number): boolean {
  */
 function hop(r: Route, state: GameState, toFloor: number, liftOk: boolean, rnd: number, groundY: number): boolean {
   const i = r.n - 1;
+  const city = PROJECTION === 'city';
   const from = r.floor[i];
   const lo = Math.min(from, toFloor), hi = Math.max(from, toFloor);
   const n = hi - lo;
@@ -236,16 +240,21 @@ function hop(r: Route, state: GameState, toFloor: number, liftOk: boolean, rnd: 
   }
   const stairX = n <= 6 ? stairColumnX(state, lo, hi) : NaN;
   // [airy2:D3] The tower in front of a cluster void is a stair of its own: four flights a floor, wide enough to watch.
-  const towerX = n <= 6 ? towerColumnX(state, lo, hi, r.x[i]) : NaN;
+  let towerX = n <= 6 ? towerColumnX(state, lo, hi, r.x[i]) : NaN;
+  // [world:C1] City: the hub's stair columns (one each side of the spine, within a stratum) are towers too; the nearest one wins.
+  const hubX = city ? hubStairFor(state.currentFloors, lo, hi, r.x[i]) : NaN;
+  const useHub = !Number.isNaN(hubX) && (Number.isNaN(towerX) || Math.abs(hubX - r.x[i]) <= Math.abs(towerX - r.x[i]));
+  if (useHub) towerX = hubX;
   const useTower = !Number.isNaN(towerX) && (Number.isNaN(stairX) || Math.abs(towerX - r.x[i]) < Math.abs(stairX - r.x[i]));
-  const useStairs = (useTower || !Number.isNaN(stairX)) && (!liftOk || (n <= 2 && rnd < (useTower ? 0.4 : 0.3)));
+  const useStairs = (useTower || !Number.isNaN(stairX)) && (!liftOk || (n <= 2 && rnd < (useHub ? CITY_HUB_STAIR_SHARE : useTower ? 0.4 : 0.3)));
   if (useStairs && useTower) {
-    const amp = TOWER_AMP;
+    // [world:C1] A hub flight column starts on its right landing and zig-zags left first (see hubStairs.ts); a void tower on its left.
+    const amp = useHub ? HUB_STAIR_AMP : TOWER_AMP;
     if (!walkTo(r, towerX - amp, laneY(from))) return false;
     const y0 = r.y[r.n - 1];
     push(r, LEG_STAIRS, toFloor, towerX - amp, laneY(toFloor));
     const k = r.n - 1;
-    const fl = FLIGHTS_PER_FLOOR * n;
+    const fl = (useHub ? HUB_FLIGHTS_PER_FLOOR : FLIGHTS_PER_FLOOR) * n;
     r.amp[k] = amp;
     r.flights[k] = fl;
     r.seconds += (fl * Math.hypot(amp * 2, Math.abs(r.y[k] - y0) / fl)) / STAIR_SPEED;
@@ -262,8 +271,9 @@ function hop(r: Route, state: GameState, toFloor: number, liftOk: boolean, rnd: 
     return true;
   }
   if (liftOk) {
-    if (!walkTo(r, LANDING_X)) return false;
-    push(r, LEG_LIFT, toFloor, LANDING_X, ty);
+    // [world:C1] City: the lift's landing gates open on the hub balconies, which sit on the corridor lane (vestibule -> balcony -> landing).
+    if (!walkTo(r, LANDING_X, city ? laneY(from) : undefined)) return false;
+    push(r, LEG_LIFT, toFloor, LANDING_X, city ? laneY(toFloor) : ty);
     r.seconds += LIFT_EST_S;
     return true;
   }
@@ -306,5 +316,13 @@ export function route(state: GameState, from: Stop, to: Stop, liftOk: boolean, r
   }
   // The end point's own y (its line may sit a little off the standard one, e.g. a dock above the floor).
   out.y[out.n - 1] = to.y;
-  return out.seconds <= MAX_TRIP_S ? out : null;
+  if (out.seconds <= MAX_TRIP_S) return out;
+  // [world:C1] City: a stair hop that makes the trip too long to draw falls back to the lift (the roll that never takes the stairs).
+  if (PROJECTION === 'city' && liftOk && rnd < 1 && hasLeg(out, LEG_STAIRS)) return route(state, from, to, liftOk, 1, out);
+  return null;
+}
+
+function hasLeg(r: Route, kind: number): boolean {
+  for (let i = 1; i < r.n; i++) if (r.kind[i] === kind) return true;
+  return false;
 }
