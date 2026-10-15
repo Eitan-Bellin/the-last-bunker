@@ -384,3 +384,103 @@ In classic mode every city path sits behind `this.cityHost`, which is null. The 
 - **camera-nav:** an official `parallaxInfo()`.
 - **level-builder:** plug in both seams. Shell lamps go through `ctx.addLight`.
 - **Everyone:** the context-restore crash in the batcher, which also happens in classic mode.
+
+## Phase 2b: the real layout and shell in the game (tech-artist, world-redesign, 2026-10-15)
+
+### Wiring
+
+`src/world/render/cityWiring.ts` → `installCityWorld()` is called by `BunkerRenderer.mountCity()`. It runs only in city mode (dev and prod) and registers two things:
+- the provider: `setCityLayoutProvider({ sig: cityLayoutSig, build: buildCityLayout })`;
+- the shell mounter: an adapter around `buildShell`.
+
+The stub stays as the fallback (`setCityLayoutProvider(null)`).
+
+What the adapter does:
+- **Holders.** The shell goes into `CityHost.shellBack` (its own holder, right after `undergroundHolder`) and `shellFront` (right after the shaft).
+  - `rebuildStructure` never clears either holder. This is the C1-L §3 trap.
+- **Lights.** They go in through `ctx.addLight`, with their area ids, and are removed again on `destroy`.
+- **Every frame.** `shell.update(view)` gets the world rect on screen, from worldContainer.
+- **Twice a second.** `cityProgress(state)` → `city.setAreaState` + `shell.setProgress`.
+- **Remount.** It happens on:
+  - a new layout sig, era or kit state;
+  - a tier change (`CityHost.ensureShell`);
+  - and, 800 ms after the world-kit art arrivals settle, `onWorldKitLoaded` → `ctx.requestRebuild()`.
+- **Culling.** Each shell piece's children are culled against the view: Pixi draws what is visible even when it is off screen, and every vestibule tile is a TilingSprite.
+
+Seam additions:
+- `ShellMountContext.setAreaState` / `requestRebuild`;
+- `MountedShell.update(t, dt, view)` and `syncProgress(state)`.
+
+### Integration bugs found and fixed
+
+1. **Room and ruin taps opened the build menu.**
+   - Cause: C1 had moved the slot pad (an invisible tap area over every slot) above the lit group.
+   - Fix: it is back under the rooms, as in classic. Only the placement highlight stays above the lightmap.
+2. **The rock had a hard seam to the parallax planes** when zoomed out. Fix in `shell/rock.ts`: the rock runs `ROCK_SIDE_RUN` (2400 u) past the layout bounds to the sides and below.
+3. **Stand-in rock was baked into the chunk caches** (plain rock around the storeys, banded rock beyond). Fix: the adapter remounts once the world-kit art has arrived.
+4. **Rock chunk caches were 1024x2048 px each.** `cacheAsTexture` took the bounds of every whole cavity polygon near the chunk.
+   - Fix: `boundsArea` is set to the chunk. Each cache is now 0.3 MB instead of 8 MB.
+   - This saved about 200 MB of GPU memory at e55.
+   - Chunks are now parked after 4 s instead of 12 s.
+5. **The east edges were out of the camera's reach.** Fix: `BunkerRenderer.applyCityExtents()` widens `extentL` / `extentR` to the edge sites and district caverns (+90 u).
+6. **The sky and ground ended short in the west** (a black band). Fix: in city mode, `surfaceLeft` follows the layout bounds.
+7. **The fore plane's lit lip drew stray wire lines** in front of the undiscovered fog. Fix (backdrop.ts): the fore lip is drawn only at seams above a stratum that has a non-hidden storey.
+
+### Checked in the game (headless Chrome with GPU, 1600x900)
+
+**Slice, `slice-dig`, fresh game and e55:**
+- no console errors;
+- hub with balconies, stairs and the chandelier;
+- tiled vestibules, the living district, edge chokes with tape, rubble and signs;
+- dig face at 40–60 % with crew and fog;
+- spine-only lift;
+- no classic casing in the hub.
+
+**Taps** (CDP mouse; each check was the first tap of its session, because a sheet the test opened blocked the taps after it):
+- room → `onBuildingClick`;
+- ruin → `onRuinClick`;
+- dig sign → `onDigClick`;
+- `slotAtWorld` at floor 2, slot 7 → `{ floor: 2, x: 7 }`.
+
+All slice edges are blocked by the Act, so a wing-dig tap was not exercised.
+
+### Classic parity
+
+`tools/compare/run.mjs` (saves-v6 e30 and c, 390x844@2x), baseline dae3858 vs this change: 2.02 % mean, 4.44 % max. The noise floor is about 2.3 %.
+
+### Performance
+
+Production build, iGPU, A2 method; classic and city measured in the same session.
+
+| Medium | Draw calls, classic → city | GPU tex MB, classic → city | Raw frame med ms, classic → city |
+|---|---|---|---|
+| fresh desktop | 203 → 234 | 141 → 197 | 3.9 → 8.1 |
+| e55 desktop | 530 → **473** | 241 → 339 | 16.5 → 19.4 |
+| fresh phone | 191 → 198 | 351 → 408 | 5.6 → 7.1 |
+| e55 phone | 502 → **423** | 440 → 465 | 19.6 → 16.5 |
+
+| High | Draw calls, classic → city | GPU tex MB, classic → city | Raw frame med ms, classic → city |
+|---|---|---|---|
+| fresh desktop | 207 → 257 | 144 → 170 | 55.8 → 104 (noisy run; an earlier run gave 67.5) |
+| e55 desktop | 544 → 506 | 229 → 306 | 63.8 → 76–124 (noisy) |
+| fresh phone | 194 → 209 | 351 → 323 | 6.0 → 8.0 |
+| e55 phone | 513 → 442 | 312 → 422 | 15.7 → 17.0 |
+
+**Medium target**
+- **Draw calls:** met for e55, desktop and phone. Fresh games are +7 to +31.
+- **GPU memory:** not met.
+  - City is +25 MB on the e55 phone and +56 to 98 MB elsewhere.
+  - The new world-kit paintings (rock tiles, hub, vestibule and edge kit) and the rock chunk caches are most of it.
+  - The texture count also includes a leak: one 256x1 FillGradient texture is left behind per shell build (about 330 per remount). They are tiny in MB, but they add up.
+
+**Next steps**
+- Share or dispose the shell's gradients.
+- Remount only the rock (not the whole shell) on world-kit arrivals.
+- Merge far into back on Medium.
+- One cache per rock chunk instead of two.
+
+### Shots
+
+`shots/C-overview.png`, `C-hub.png`, `C-corridor.png`, `C-district.png`, `C-edge.png` (slice) and `C-dig.png` (slice-dig). All at High, 1600x900.
+
+The camera still clamps vertically. The east edge choke is framed from the rooms' side.
