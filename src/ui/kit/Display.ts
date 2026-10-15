@@ -2,7 +2,7 @@ import { el, setRich, RESOURCE_ICONS } from '../dom';
 import { i18n } from '../../i18n/I18nManager';
 import { enhanceTabs } from '../a11yDom';
 import { fmtDuration, fmtNum, fmtRate } from '../format';
-import { BADGE_MAX, DANGER_RATIO, LOW_RATIO, NEVER_ATTACHED_TICKS, SECOND_MS, resourceColor } from './tokens';
+import { BADGE_MAX, DANGER_RATIO, LOW_RATIO, NEVER_ATTACHED_TICKS, SECOND_MS, TIMER_ENDING_S, resourceColor } from './tokens';
 import { bindPress, kButton } from './Button';
 
 /**
@@ -223,10 +223,12 @@ export function kTimer(o: TimerOptions): HTMLSpanElement {
     if (left <= 0) {
       node.textContent = o.doneText ?? i18n.t('kit.timer.done');
       node.classList.add('is-done');
+      node.classList.remove('is-ending');
       o.onDone?.();
       return false;
     }
     node.textContent = fmtDuration(left);
+    node.classList.toggle('is-ending', left <= TIMER_ENDING_S);
     return true;
   };
   if (!tick()) return node; // already over: onDone has run once, no interval

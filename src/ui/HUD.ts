@@ -14,6 +14,7 @@ import { subscribeA11y, getA11y, reducedMotion } from '../utils/a11y';
 import { setHudInsets } from '../utils/hudInsets';
 import { initViewportUi } from './viewportUi';
 import { kResourceChip, kProgress, setProgress, kBadge, setBadge, kRow, kTooltip, bindPress } from './kit';
+import { TIMER_ENDING_S } from './kit/tokens';
 import { fmtDuration, fmtNum, plural } from './format';
 import '../styles/hud.css';
 import { CountUp } from './fx/countUp'; // [ux-redesign W4]
@@ -1016,6 +1017,7 @@ export class HUD {
     this.setState(els.chip, 'mode', mode);
     this.setState(els.chip, 'state', danger ? 'is-danger' : low ? 'is-low' : 'is-normal');
     this.setState(els.root, 'empty', empty ? 'empty' : '');
+    this.setState(els.chip, 'ending', countdown && tte <= TIMER_ENDING_S ? 'is-ending' : '');
     const barPct = Math.round(pct);
     if (this.cache(els.bar).get('pct') !== String(barPct)) {
       this.cache(els.bar).set('pct', String(barPct));

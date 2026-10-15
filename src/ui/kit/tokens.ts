@@ -34,6 +34,8 @@ export const BADGE_MAX = 99;
 export const LONG_PRESS_SLOP = 10;
 /** A timer that is still not on the page after this many ticks was never shown: it stops. */
 export const NEVER_ATTACHED_TICKS = 5;
+/** [ux-redesign w5] A countdown pulses in its last this-many seconds (logic, not motion: reduced motion only stops the pulse). */
+export const TIMER_ENDING_S = 10;
 /** One second, for timers. */
 export const SECOND_MS = 1000;
 

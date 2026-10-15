@@ -111,6 +111,8 @@
 #hud .hx-res .k-chip.is-full .hx-res__line2 { color: var(--warning); font-weight: var(--weight-bold); letter-spacing: 0.04em; }
 #hud .hx-res .k-chip.is-countdown .hx-res__line2 { color: var(--warning); font-family: var(--font-mono); font-weight: var(--weight-bold); }
 #hud .hx-res .k-chip.is-danger.is-countdown .hx-res__line2 { color: var(--danger-text); }
+/* [w5] The last 10 s before a store runs dry: the countdown ticks (kit.css stops it under reduced motion). */
+#hud .hx-res .k-chip.is-ending .hx-res__line2 { animation: k-tick var(--dur-pulse) var(--ease-in-out) infinite; }
 
 /* Fill: a thin bar along the bottom edge of the tile (the kit progress, slimmed). */
 #hud .hx-res__bar {
