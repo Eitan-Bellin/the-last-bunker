@@ -47,9 +47,10 @@ export function installPlaythrough(getPlayTime: () => number): void {
       const res = await fetch(`/store/playthrough/saves/${stage}-seed1.json`);
       if (!res.ok) throw new Error(`no stage save ${stage}: run node tools/playthrough.mjs`);
       for (let i = 0; i < 80 && !w.__engine; i++) await new Promise(r => setTimeout(r, 250));
-      const engine = w.__engine as { importState(s: string): unknown; saveManager: { exportSave(o: unknown): string } };
-      engine.importState(engine.saveManager.exportSave(await res.json()));
-      setTimeout(() => location.reload(), 600);
+      const engine = w.__engine as { importState(s: string): Promise<boolean>; forceSave(): Promise<void>; saveManager: { exportSave(o: unknown): string } };
+      if (!(await engine.importState(engine.saveManager.exportSave(await res.json())))) throw new Error(`stage ${stage} was refused`);
+      await engine.forceSave();
+      setTimeout(() => location.reload(), 300);
       return `loading ${stage}`;
     },
     reset() { log.length = 0; t0 = performance.now(); g0 = getPlayTime(); return 'reset'; },
@@ -67,6 +68,7 @@ export function installPlaythrough(getPlayTime: () => number): void {
       };
       const press = (b: HTMLElement) => b.click(); // kit buttons accept script clicks (detail 0)
       let tick = 0;
+      let lastPressed: HTMLElement | null = null;
       w.__ptAuto = setInterval(() => {
         tick++;
         const intro = document.querySelector<HTMLElement>('.intro');
@@ -94,7 +96,7 @@ export function installPlaythrough(getPlayTime: () => number): void {
         const sheet = [...document.querySelectorAll('.sheet-overlay.open')].find(vis);
         if (sheet) {
           const main = [...sheet.querySelectorAll<HTMLElement>('.k-btn--primary, .btn-primary')].find(b => vis(b) && !b.classList.contains('is-disabled'));
-          if (main && tick % 2 === 0) press(main);
+          if (main && main !== lastPressed) { lastPressed = main; press(main); } // each main button once, then close the sheet
           else document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
           return;
         }
