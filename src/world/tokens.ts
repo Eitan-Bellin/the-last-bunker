@@ -8,7 +8,7 @@
  * Conventions
  * - Colours are 0xRRGGBB (sRGB, the same space Pixi tints use). Alphas and levels are 0..1.
  * - Distances are WORLD UNITS (1 unit = 1 CSS px at zoom 1). Reference sizes from `rendering/geom.ts`: SLOT_W 46, ROOM_H 100,
- *   FLOOR_H 144 (airy), an adult survivor is 56 tall.
+ *   FLOOR_H 144 (airy), an adult survivor is 48 tall.
  * - Times are seconds, rates are 1/s, frequencies are Hz.
  * - Strata are keyed by LOGICAL FLOOR INDEX (0 = B1, -1 = surface row), never by world y, so a change of geometry cannot move a
  *   stratum. `yHint` is only the current airy geometry, for tools and docs.
@@ -584,7 +584,7 @@ export const CAMERA = {
   /** Parallax never moves a foreground object more than this many screen px from its play-plane position at home zoom. */
   foreMaxShift: 120,
   shake: { px: 16, decay: 6 },
-  /** Phone: people must be at least this many CSS px tall at the home zoom (adult 56 u x zoom). */
+  /** Phone: people must be at least this many CSS px tall at the home zoom (adult 48 u x zoom). */
   minPersonPx: 30,
 } as const;
 
@@ -678,7 +678,7 @@ export const UNIFY = {
 // =================================================================================================================================
 
 export const PEOPLE = {
-  adultHeight: 56,
+  adultHeight: 48,
   childScale: 0.74,
   /** Minimum light on a survivor (multiply floor), so nobody drowns in a dark corridor. */
   minLight: 0.28,
