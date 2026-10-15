@@ -23,7 +23,7 @@ import { LIGHT } from '../tokens';
 import { CityRenderer, parallaxFromWorld, type ParallaxInfo, type RenderTier } from './CityRenderer';
 import { cityLayoutProvider, shellMounter, type MountedShell } from './citySeams';
 import type { FloorRect, RoomLightInput } from './lighting';
-import type { CityLayout } from './layoutTypes';
+import type { CityLayout, Rect } from './layoutTypes';
 
 /** The host's layers, by where they go in the city's stack. */
 export interface CityHostLayers {
@@ -54,6 +54,13 @@ export class CityHost {
   readonly city: CityRenderer;
   /** The shell's front holder (balconies, stairs, rails, edge rubble), inside the lit group after the shaft. */
   readonly shellFront = new Container();
+  /** The shell's back holder (rock, cavity backs), inside the lit group right after the host's rock holder (which rebuildStructure clears). */
+  readonly shellBack = new Container();
+  /** The shell must be (re)mounted: new layout, era, kit state, mounter or tier. */
+  private needShell = false;
+  private shellTier: RenderTier | null = null;
+  private progressAt = -1;
+  private readonly view: Rect = { x: 0, y: 0, w: 1, h: 1 };
   private layout: CityLayout | null = null;
   private layoutSig = '';
   private shell: MountedShell | null = null;
@@ -73,6 +80,8 @@ export class CityHost {
     this.city = new CityRenderer({ renderer, tier, canvas });
     this.shellFront.label = 'shellFront';
     this.shellFront.eventMode = 'none';
+    this.shellBack.label = 'shellBack';
+    this.shellBack.eventMode = 'none';
     this.wrapExtract(renderer);
   }
 
@@ -83,6 +92,7 @@ export class CityHost {
     world.removeChildren();
     for (const h of L.play) {
       c.playLayer.addChild(h);
+      if (h === L.play[0]) c.playLayer.addChild(this.shellBack);
       if (h === L.shaft) c.playLayer.addChild(this.shellFront);
     }
     world.addChild(c.planes.far.container, c.planes.back.container, ...L.surface, c.litGroup, ...L.overLit, c.glowLayer, ...L.overGlow,
@@ -95,8 +105,8 @@ export class CityHost {
   }
 
   /**
-   * The layout follows the provider's signature. Returns true when the shell must be (re)built by the host: a new layout, a new era or a
-   * new kit state (`extraSig`); the host then calls `mountShell` (or falls back to the classic underground when no mounter is set).
+   * The layout follows the provider's signature. Returns true (and flags the shell for `ensureShell`) when the shell must be rebuilt:
+   * a new layout, a new era or kit state (`extraSig`), or a new mounter.
    */
   syncLayout(state: GameState, extraSig: string): boolean {
     const p = cityLayoutProvider();
@@ -110,27 +120,49 @@ export class CityHost {
     const ss = `${this.layout.sig}|${extraSig}|${!!shellMounter()}`;
     if (ss === this.shellSig) return false;
     this.shellSig = ss;
+    this.needShell = true;
     return true;
   }
 
-  /** Mounts the level-builder's shell into `back` (the host's rock holder) and the shell front. False when no mounter is set. */
-  mountShell(state: GameState, back: Container, era: number): boolean {
+  /** Mounts the shell when something it depends on changed (layout, era, kit, tier). Cheap when nothing did. */
+  ensureShell(state: GameState, era: number): void {
+    if (this.shellTier !== this.city.quality) this.needShell = true;
+    if (!this.needShell || !this.layout) return;
+    this.needShell = false;
+    this.mountShell(state, era);
+  }
+
+  /** Mounts the level-builder's shell into the shell holders. False when no mounter is set (the holders stay empty). */
+  mountShell(state: GameState, era: number): boolean {
     this.shell?.destroy();
     this.shell = null;
+    this.shellBack.removeChildren().forEach(ch => ch.destroy({ children: true }));
     this.shellFront.removeChildren().forEach(ch => ch.destroy({ children: true }));
+    this.shellTier = this.city.quality;
+    this.progressAt = -1;
     const m = shellMounter();
     if (!m || !this.layout) return false;
     this.shell = m({
-      state, layout: this.layout, back, front: this.shellFront, era, tier: this.city.quality,
+      state, layout: this.layout, back: this.shellBack, front: this.shellFront, era, tier: this.city.quality,
       addLight: l => this.city.addLight(l), removeLight: id => this.city.removeLight(id),
+      setAreaState: (id, st, p) => this.city.setAreaState(id, st, p),
+      requestRebuild: () => { this.needShell = true; },
     });
     return true;
+  }
+
+  /** Dig and district progress into the fog and the rubble, twice a second (and right after a mount). */
+  syncProgress(state: GameState, t: number): void {
+    if (!this.shell?.syncProgress || (this.progressAt >= 0 && t - this.progressAt < 0.5)) return;
+    this.progressAt = t;
+    this.shell.syncProgress(state);
   }
 
   /** Forget everything that was built from the scene (after a context restore or a scene reset): rebuilt on the next frame. */
   invalidate(): void {
     this.roomSig = '';
     this.shellSig = '';
+    this.needShell = true;
   }
 
   // ------------------------------------------------------------------ rooms
@@ -218,7 +250,14 @@ export class CityHost {
       this.nightNow = n;
       c.setEra(e, n);
     }
-    this.shell?.update?.(t, dt);
+    if (this.shell?.update) {
+      const z = wc.scale.x || 1, v = this.view;
+      v.x = -wc.x / z;
+      v.y = -wc.y / z;
+      v.w = sw / z;
+      v.h = sh / z;
+      this.shell.update(t, dt, v);
+    }
     c.update(this.parallaxInfo(wc, sw, sh), t, dt, { mapCovers });
   }
 

@@ -15,7 +15,7 @@
  */
 import type { Container } from 'pixi.js';
 import type { GameState } from '../../core/GameState';
-import type { CityLayout } from './layoutTypes';
+import type { AreaState, CityLayout, Rect } from './layoutTypes';
 import type { RenderTier } from '../tokensRender';
 import type { LightInput } from './lighting';
 import { stubLayoutProvider } from './stubLayout';
@@ -40,7 +40,10 @@ export function cityLayoutProvider(): CityLayoutProvider {
 export interface ShellMountContext {
   state: GameState;
   layout: CityLayout;
-  /** Behind the rooms (rock, cavity backs, hub vault and walls). Emptied (children destroyed) before every mount. */
+  /**
+   * Behind the rooms (rock, cavity backs, hub vault and walls): the host's own shell holder right after `undergroundHolder`, which
+   * `rebuildStructure` never clears. Emptied (children destroyed) before every mount.
+   */
   back: Container;
   /** In front of the rooms and the shaft, behind the people (balconies, rails, stairs, bridge, edge rubble, dig face). Emptied before every mount. */
   front: Container;
@@ -49,11 +52,18 @@ export interface ShellMountContext {
   /** Adds a light to the city lightmap (shell lamps: vestibule tubes, hub chandelier, edge teases). Returns its id. */
   addLight(l: LightInput): number;
   removeLight(id: number): void;
+  /** Fog state of one area (progress 0..1 while digging), for progress the layout signature leaves out. */
+  setAreaState(id: string, state: AreaState, progress: number): void;
+  /** Ask for a fresh mount on the next frame (e.g. real art replaced a stand-in that a texture cache had baked). */
+  requestRebuild(): void;
 }
 
 /** What a mounted shell gives back: per-frame animation (optional) and its own teardown (lights it added included). */
 export interface MountedShell {
-  update?(t: number, dt: number): void;
+  /** Per frame, before the city's update: `view` = the world rect on screen (rock chunk streaming). */
+  update?(t: number, dt: number, view: Rect): void;
+  /** About twice a second: digs and district construction move on without a new layout (fog states and rubble). */
+  syncProgress?(state: GameState): void;
   destroy(): void;
 }
 

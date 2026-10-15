@@ -12,6 +12,7 @@ import { BASE_EAST, BUILDING_W, FLOOR_H, ROOM_H, SHAFT_W, SLOT_W, TOPSOIL, build
 import { buildingX, districtXAt, eastmostSlotX, slotX, stripX, westmostSlotX } from '../world/project';
 import { CITY } from '../world/flag'; // [world:C1] the city renderer behind ?city
 import { CityHost } from '../world/render/cityHost'; // [world:C1]
+import { installCityWorld } from '../world/render/cityWiring'; // [world:C2] the real city layout and shell into the seams
 import { PEOPLE_RENDER } from '../world/tokensRender'; // [world:C1]
 import { hashString, seeded } from './draw';
 import { PEOPLE_STYLE, Person, ROOM_ACTIVITY, type Activity, type Lane } from './people';
@@ -62,6 +63,9 @@ import { FrontChunks } from './frontChunks'; // [plan4:ST-7]
 import { KIT_KEYS, buildBays,buildCasing, depthGains, structureAmbient, gfx2Enabled, kitReady, kitState, occupancy, type WorldLamp } from './structure';
 
 
+
+/** [world:C2] World units the camera may pan past a city edge site or district cavern. */
+const CITY_EDGE_PAD = 90;
 
 interface Burst {
   s: Sprite;
@@ -534,14 +538,16 @@ export class BunkerRenderer {
    * replaced by a neutral one (life-systems owns walkers.ts; this override goes when their city lighting lands).
    */
   private mountCity(canvas: HTMLCanvasElement): void {
+    installCityWorld(); // [world:C2] cityLayout + shell (the stub layout stays the seams' fallback)
     const host = new CityHost(this.app.renderer, isLiteMode() ? 'lite' : startQuality(), canvas);
     this.cityHost = host;
     const P = this.projectSites;
     host.mount(this.worldContainer, {
       surface: [this.surfaceHolder, P.layer, P.smokeLayer, P.glowLayer, P.crew, P.signLayer],
-      play: [this.undergroundHolder, this.bayHolder, this.roomLayer, this.shaftHolder, this.utilitiesHolder, this.walkers.layer],
+      // [world:C2] The slot pad (an invisible tap area over every slot) stays UNDER the rooms, as in classic, or it eats the room and ruin taps.
+      play: [this.undergroundHolder, this.bayHolder, this.slotLayer, this.roomLayer, this.shaftHolder, this.utilitiesHolder, this.walkers.layer],
       shaft: this.shaftHolder,
-      overLit: [this.slotLayer, this.highlightLayer],
+      overLit: [this.highlightLayer],
       overGlow: [this.dust.container, this.fxLayer, this.incidents.fx, this.disasterFx.fx, this.digHolder, this.districtSignHolder, this.wingSigns.container],
       top: [this.labelLayer, this.incidents.badges, this.ghost.layer],
     });
@@ -651,22 +657,21 @@ export class BunkerRenderer {
     this.extentL = Math.min(this.extentL, this.rowOpen ? ROW_X0 - 14 : -280); // plan4:ST-16 the camera may pan to the row's west end, or (closed) to the ruin of the old gate house
     this.extentWingR = eastmostSlotX(exts.reduce((m, x) => Math.max(m, x.e), 12));
     this.extentR = Math.max(BUILDING_W, this.extentWingR, this.projectSites.right);
+    this.applyCityExtents(); // [world:C2]
     // [plan4:ST-4] A west wing past the classic edge: the sky, ground and dark edge of the surface move out with the rock (rebuilt once per two-slot step).
     const rowWas = this.rowOpen;
     this.rowOpen = !!state.layout?.surfaceOpen; // plan4:ST-16
-    const wl = worldLeft(Math.max(this.rowOpen ? 11 : 0, exts.reduce((m, x) => Math.max(m, x.w), 0))); // plan4:ST-16 the row's slots -11..-4 need the world to reach west
+    let wl = worldLeft(Math.max(this.rowOpen ? 11 : 0, exts.reduce((m, x) => Math.max(m, x.w), 0))); // plan4:ST-16 the row's slots -11..-4 need the world to reach west
+    if (this.cityHost?.current) wl = Math.min(wl, Math.floor(this.cityHost.current.bounds.x)); // [world:C2] the city reaches further west: so do the sky and the ground
     if (wl !== this.surfaceLeft || rowWas !== this.rowOpen) { this.surfaceLeft = wl; this.surfaceSig = ''; this.refreshSurface(); }
     this.undergroundHolder.removeChildren().forEach(c => c.destroy({ children: true }));
     const districtList = state.buildings.filter(b => isDistrict(b.type));
     const districts = districtList.map(b => b.position.floor);
     const districtSlot: Record<number, number> = {};
     for (const b of districtList) districtSlot[b.position.floor] = b.position.x; // [plan4:ST-8]
-    // [world:C1] City mode: the level-builder's shell (citySeams.setShellMounter) replaces the classic rock and casing; until it is plugged in,
-    // the classic underground stays as the stand-in.
-    if (!this.cityHost?.current || !this.cityHost.mountShell(state, this.undergroundHolder, this.surfaceEra)) {
+    // [world:C2] In city mode buildUnderground / buildCasing draw nothing (world.ts, structure.ts); the shell lives in CityHost's own holders.
     const casing = this.gfx2 && kitReady() ? buildCasing(this.floors, kitState(this.surfaceEra), exts) : null;
     this.undergroundHolder.addChild(buildUnderground(this.floors, i18n.currentLocale, this.gloom, ArtLibrary.get('backdrops/rock'), districts, casing, exts, districtSlot, this.rowOpen ? 11 : 0)); // plan4:ST-16
-    }
     this.undergroundSig = this.structureSig(state);
     this.structureGloom = this.gloom;
     this.shaftHolder.removeChildren().forEach(c => c.destroy({ children: true }));
@@ -1457,20 +1462,39 @@ export class BunkerRenderer {
     this.postfx?.update(now);
   }
 
-  /** [world:C1] The layout follows the provider; a new one (or a new era / kit) rebuilds the structure, so the shell is mounted again. */
+  /** [world:C1] The layout follows the provider; a new one (or a new era / kit) flags the shell, mounted in updateCity (CityHost.ensureShell). */
   private syncCityLayout(state: GameState): void {
     const host = this.cityHost!;
     const key = (Math.imul(LAYOUT.ext, 31) ^ Math.imul(LAYOUT.rooms, 17) ^ Math.imul(this.surfaceEra + 2, 7919) ^ state.currentFloors) >>> 0;
     if (key === this.cityKey && host.current) return;
     this.cityKey = key;
-    if (host.syncLayout(state, `${this.surfaceEra}|${this.gfx2 && kitReady()}`)) this.undergroundSig = '';
+    if (host.syncLayout(state, `${this.surfaceEra}|${this.gfx2 && kitReady()}`)) this.applyCityExtents();
+  }
+
+  /**
+   * [world:C2] City mode: the camera may pan out to the edge sites (the dark ends past each floor's last room, with their tape, rubble and cold
+   * light) and the district caverns, which lie beyond the classic reach of the floors.
+   */
+  private applyCityExtents(): void {
+    const L = this.cityHost?.current;
+    if (!L) return;
+    let l = this.extentL, r = this.extentR;
+    for (const e of L.edges) { if (e.side === 'e') r = Math.max(r, e.x + CITY_EDGE_PAD); else l = Math.min(l, e.x - CITY_EDGE_PAD); }
+    for (const c of L.cavities) if (c.id.startsWith('c:dist:')) for (let i = 0; i < c.poly.length; i += 2) r = Math.max(r, c.poly[i] + CITY_EDGE_PAD);
+    this.extentL = l;
+    this.extentWingR = Math.max(this.extentWingR, r);
+    this.extentR = Math.max(this.extentR, r);
   }
 
   /** [world:C1] Rooms into the lightmap (4x a second at most), then the city's frame. Lite mode: no lightmap, a flat tint. */
   private updateCity(state: GameState, dt: number): void {
     const host = this.cityHost!;
     this.probeState = state;
-    if (host.current) host.syncRooms(state, this.roomProbe, this.time, LAYOUT.rooms);
+    if (host.current) {
+      host.ensureShell(state, this.surfaceEra); // [world:C2] new layout / era / kit / tier: the shell is rebuilt
+      host.syncProgress(state, this.time); // [world:C2] digs and districts move the fog and the rubble (2x a second)
+      host.syncRooms(state, this.roomProbe, this.time, LAYOUT.rooms);
+    }
     const tier = isLiteMode() ? 'lite' : this.postfx?.quality ?? 'high';
     host.frame(this.worldContainer, this.app.screen.width, this.app.screen.height, this.time, dt, tier, this.mapCovers, this.surfaceEra, this.nightNow);
   }
