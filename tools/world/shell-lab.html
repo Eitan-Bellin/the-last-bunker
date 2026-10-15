@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>City shell lab</title>
+  <style>
+    html, body { margin: 0; height: 100%; background: #07080a; overflow: hidden; }
+    #stage { position: fixed; inset: 0; }
+    #panel { position: fixed; left: 8px; top: 8px; padding: 8px 10px; background: rgba(10, 12, 16, 0.82); color: #cfc6b4;
+      font: 12px/1.5 ui-monospace, Consolas, monospace; border: 1px solid #2a2a30; border-radius: 6px; max-width: 360px; }
+    #panel button { font: inherit; margin: 2px 2px 0 0; background: #1d1f26; color: #e8dcc0; border: 1px solid #3a3a44; border-radius: 4px; padding: 2px 6px; cursor: pointer; }
+    #panel button.on { background: #4a3a1e; border-color: #a07a3a; }
+    #panel.hidden > :not(#toggle) { display: none; }
+  </style>
+</head>
+<body>
+  <div id="stage"></div>
+  <div id="panel">
+    <div id="stats">booting…</div>
+    <div id="btns"></div>
+    <div style="opacity:.7">drag pan · wheel zoom · tap reveals fog · 1-4 tier · L light · F fog · H panel</div>
+  </div>
+  <script type="module" src="./shell-lab.ts"></script>
+</body>
+</html>

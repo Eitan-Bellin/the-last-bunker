@@ -5,6 +5,7 @@ import { ArtLibrary } from '../art/ArtLibrary';
 import { voidBoundaries } from './voids';
 import { BASE_EAST, ROOM_H, SHAFT_W, SLAB, SLOT_W, floorTop } from './layout';
 import { roomsEastX, roomsWestX, slotX } from '../world/project';
+import { CITY } from '../world/flag';
 import { hashString, seeded } from './draw';
 import { GFX } from './gfxFeatures';
 import { depthGains, type Grid, type WorldLamp } from './structure';
@@ -276,7 +277,7 @@ export function buildDecals(
           // [airy2:D1] The airy slab is the corridor band (deck, beam, soffit): decals sit on the soffit under the beam, 5 tall.
           const hMax = GFX.airy ? 5 : SLAB + 2;
           if (h > hMax + (GFX.airy ? 0 : 1)) { w *= hMax / h; h = hMax; }
-          const lo = ew > 0 ? xFirst - 6 : roomsWestX(f), hi = xLast + 6;
+          const lo = ew > 0 ? xFirst - 6 : CITY ? roomsEastX(f) : roomsWestX(f), hi = xLast + 6; // [world:C1] the hub's slab band is the shell's
           const x = lo + w / 2 + r() * (hi - lo - w);
           if (inSlabGap(x - w / 2, x + w / 2) || x - w / 2 < SHAFT_W + 2 && x + w / 2 > -2 && r() < 0.6) return null;
           return { x, y: bottom + (GFX.airy ? 41 : 6.5) + (r() - 0.5) * (GFX.airy ? 0.6 : 2), w, h };
