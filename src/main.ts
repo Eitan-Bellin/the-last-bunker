@@ -115,6 +115,8 @@ async function boot(): Promise<void> {
   const app = new GameApp();
   // [plan4:UX-14] Service worker with the "new version, tap to refresh" chip (production builds only); the tap saves first.
   initServiceWorker(() => app.engine.forceSave());
+  // [phase1 cheat] DEV only: `__pt` playthrough kit (stage saves, fast forward, interruption log).
+  if (import.meta.env.DEV) (await import('./dev/playthrough')).installPlaythrough(() => app.state?.stats.totalPlayTime ?? 0);
   await app.start();
   prefetchOtherLanguage();
   prefetchLazyChunks();

@@ -1,0 +1,9766 @@
+{
+ "meta": {
+  "mode": "casual",
+  "days": 3,
+  "think": 10,
+  "returnMode": "restart",
+  "seeds": [
+   1,
+   2,
+   3
+  ],
+  "startedAt": "2026-10-15T12:48:01.639Z",
+  "finishedAt": "2026-10-15T12:48:43.657Z",
+  "seconds": 42,
+  "note": null,
+  "fingerprint": {
+   "src": "src",
+   "hash": "85bc65cb79e9",
+   "files": 97,
+   "newestChange": "2026-10-15T12:46:14.073Z",
+   "lastChanged": [
+    "core/GameEngine.ts @ 2026-10-15T12:46:14.073Z",
+    "systems/CitySystem.ts @ 2026-10-15T12:10:25.701Z",
+    "data/strata.ts @ 2026-10-15T12:10:25.658Z",
+    "core/state/city.ts @ 2026-10-15T12:10:25.656Z",
+    "core/GameState.ts @ 2026-10-15T12:10:25.653Z",
+    "core/SaveManager.ts @ 2026-10-15T12:10:25.653Z",
+    "systems/morale.ts @ 2026-10-15T12:02:56.657Z",
+    "systems/economy.ts @ 2026-10-15T12:02:56.656Z"
+   ]
+  },
+  "node": "v22.13.1",
+  "stepList": [
+   "resource",
+   "building",
+   "population",
+   "event(online only)",
+   "research",
+   "exploration",
+   "restoration",
+   "incident(online only)",
+   "family",
+   "project",
+   "dig",
+   "act(slow)(online only)",
+   "threat",
+   "contracts(slow)",
+   "outposts",
+   "foreman",
+   "homes",
+   "maintenance",
+   "inbox(slow)",
+   "achievements(slow)(online only)",
+   "objective(slow)(online only)",
+   "era(slow)(online only)",
+   "story(slow)(online only)",
+   "daily(slow)"
+  ],
+  "failures": []
+ },
+ "runs": [
+  {
+   "seed": 1,
+   "mode": "casual",
+   "wallSeconds": 259200,
+   "playSeconds": 9600,
+   "runMs": 40186,
+   "milestones": {
+    "research insulatedWiring": {
+     "play": 59,
+     "wall": 59
+    },
+    "research nutrition": {
+     "play": 119,
+     "wall": 119
+    },
+    "built quarters": {
+     "play": 160,
+     "wall": 160
+    },
+    "built canteen": {
+     "play": 200,
+     "wall": 200
+    },
+    "population 5": {
+     "play": 240,
+     "wall": 240
+    },
+    "built storage": {
+     "play": 250,
+     "wall": 250
+    },
+    "story static": {
+     "play": 260,
+     "wall": 260
+    },
+    "built waterPump": {
+     "play": 310,
+     "wall": 310
+    },
+    "research hazmatSuits": {
+     "play": 349,
+     "wall": 349
+    },
+    "first expedition out": {
+     "play": 360,
+     "wall": 360
+    },
+    "era 1 restoration": {
+     "play": 475,
+     "wall": 475
+    },
+    "built generator": {
+     "play": 480,
+     "wall": 480
+    },
+    "built laboratory": {
+     "play": 670,
+     "wall": 670
+    },
+    "all ruins cleared": {
+     "play": 763,
+     "wall": 763
+    },
+    "research communityMeals": {
+     "play": 768,
+     "wall": 768
+    },
+    "built workshop": {
+     "play": 770,
+     "wall": 770
+    },
+    "first expedition back": {
+     "play": 841,
+     "wall": 841
+    },
+    "floor B4": {
+     "play": 969,
+     "wall": 969
+    },
+    "built farm": {
+     "play": 970,
+     "wall": 970
+    },
+    "research armoryResearch": {
+     "play": 983,
+     "wall": 983
+    },
+    "research batteryBanks": {
+     "play": 1246,
+     "wall": 1246
+    },
+    "research firstAid": {
+     "play": 1379,
+     "wall": 1379
+    },
+    "research automation": {
+     "play": 1539,
+     "wall": 1539
+    },
+    "research radioBasics": {
+     "play": 1699,
+     "wall": 1699
+    },
+    "story toll": {
+     "play": 1810,
+     "wall": 1810
+    },
+    "research waterFiltration": {
+     "play": 1859,
+     "wall": 1859
+    },
+    "research hydroponicsResearch": {
+     "play": 2073,
+     "wall": 2073
+    },
+    "research geigerCounters": {
+     "play": 2286,
+     "wall": 2286
+    },
+    "research trainingProgram": {
+     "play": 2400,
+     "wall": 2400
+    },
+    "first upgrade": {
+     "play": 2400,
+     "wall": 12600
+    },
+    "research leadership": {
+     "play": 2400,
+     "wall": 12600
+    },
+    "population 10": {
+     "play": 2600,
+     "wall": 12800
+    },
+    "era 2 colony": {
+     "play": 2600,
+     "wall": 12800
+    },
+    "story deep": {
+     "play": 2610,
+     "wall": 12810
+    },
+    "district cave": {
+     "play": 2610,
+     "wall": 12810
+    },
+    "research fortifiedDoor": {
+     "play": 2666,
+     "wall": 12866
+    },
+    "floor B5": {
+     "play": 2999,
+     "wall": 13199
+    },
+    "research preservation": {
+     "play": 3000,
+     "wall": 13200
+    },
+    "research scavengingTactics": {
+     "play": 3000,
+     "wall": 13200
+    },
+    "first project stage": {
+     "play": 3000,
+     "wall": 13200
+    },
+    "district lake": {
+     "play": 3000,
+     "wall": 46800
+    },
+    "research advancedEngineering": {
+     "play": 3000,
+     "wall": 46800
+    },
+    "story maya": {
+     "play": 3060,
+     "wall": 46860
+    },
+    "built radioTower": {
+     "play": 3080,
+     "wall": 46880
+    },
+    "story terminus": {
+     "play": 3310,
+     "wall": 47110
+    },
+    "research education": {
+     "play": 3600,
+     "wall": 47400
+    },
+    "research refine_food": {
+     "play": 3600,
+     "wall": 47400
+    },
+    "research vehicles": {
+     "play": 4200,
+     "wall": 65400
+    },
+    "research atriumDesign": {
+     "play": 4200,
+     "wall": 65400
+    },
+    "district metro": {
+     "play": 4200,
+     "wall": 86400
+    },
+    "research reactorTheory": {
+     "play": 4799,
+     "wall": 86999
+    },
+    "research refine_water": {
+     "play": 5100,
+     "wall": 87300
+    },
+    "research refine_power": {
+     "play": 5100,
+     "wall": 87300
+    },
+    "story clan": {
+     "play": 5410,
+     "wall": 99310
+    },
+    "research fusionHall": {
+     "play": 5700,
+     "wall": 99600
+    },
+    "research temporalTheory": {
+     "play": 5700,
+     "wall": 99600
+    },
+    "research refine_materials": {
+     "play": 6042,
+     "wall": 133542
+    },
+    "research refine_medicine": {
+     "play": 6300,
+     "wall": 133800
+    },
+    "research refine_knowledge": {
+     "play": 6300,
+     "wall": 133800
+    },
+    "project vaultSeal done": {
+     "play": 6900,
+     "wall": 151800
+    },
+    "act 2": {
+     "play": 6900,
+     "wall": 172800
+    },
+    "first weekly challenge": {
+     "play": 6930,
+     "wall": 172830
+    },
+    "first child": {
+     "play": 7079,
+     "wall": 172979
+    },
+    "story genesis": {
+     "play": 7230,
+     "wall": 173130
+    },
+    "research communityHall": {
+     "play": 7465,
+     "wall": 173365
+    },
+    "population 20": {
+     "play": 7520,
+     "wall": 173420
+    },
+    "research mycology": {
+     "play": 7547,
+     "wall": 173447
+    },
+    "research bulkheads": {
+     "play": 7685,
+     "wall": 173585
+    },
+    "research emergencyExits": {
+     "play": 7800,
+     "wall": 173700
+    },
+    "research atmosphericWater": {
+     "play": 7800,
+     "wall": 173700
+    },
+    "floor B6": {
+     "play": 7800,
+     "wall": 173700
+    },
+    "built medbay": {
+     "play": 7800,
+     "wall": 185400
+    },
+    "built hydroponics": {
+     "play": 7800,
+     "wall": 185400
+    },
+    "built waterPurifier": {
+     "play": 7800,
+     "wall": 185400
+    },
+    "research energyStorage": {
+     "play": 7969,
+     "wall": 185569
+    },
+    "research perimeter": {
+     "play": 8138,
+     "wall": 185738
+    },
+    "built gatePost": {
+     "play": 8140,
+     "wall": 185740
+    },
+    "research libraryScience": {
+     "play": 8400,
+     "wall": 186000
+    },
+    "research tripwires": {
+     "play": 8400,
+     "wall": 186000
+    },
+    "population 30": {
+     "play": 8560,
+     "wall": 219760
+    },
+    "story winter": {
+     "play": 8570,
+     "wall": 219770
+    },
+    "research deepDrilling": {
+     "play": 9000,
+     "wall": 220200
+    },
+    "research longRangeRadio": {
+     "play": 9000,
+     "wall": 220200
+    },
+    "research coldChain": {
+     "play": 9600,
+     "wall": 238200
+    },
+    "research watchtower": {
+     "play": 9600,
+     "wall": 238200
+    }
+   },
+   "rebirths": 0,
+   "genesis": null,
+   "rebirthPayoutEnd": 317,
+   "samples": [
+    {
+     "label": "5m",
+     "wallH": 0.08,
+     "playH": 0.08,
+     "era": 0,
+     "pop": 5,
+     "maxPop": 8,
+     "kids": 0,
+     "floors": 3,
+     "buildings": 9,
+     "levels": 9,
+     "research": 2,
+     "explored": 0,
+     "morale": 65,
+     "minHp": 100,
+     "step": 7,
+     "iso": 24,
+     "res": {
+      "food": [
+       278,
+       8452,
+       0.34
+      ],
+      "water": [
+       264,
+       6260,
+       0.24
+      ],
+      "power": [
+       0,
+       50,
+       -1.79
+      ],
+      "materials": [
+       29,
+       300,
+       0
+      ],
+      "knowledge": [
+       5,
+       100,
+       0
+      ],
+      "scrap": [
+       54,
+       200,
+       0
+      ],
+      "medicine": [
+       6,
+       30,
+       0.01
+      ],
+      "components": [
+       0,
+       200,
+       0
+      ],
+      "alloys": [
+       0,
+       80,
+       0
+      ]
+     }
+    },
+    {
+     "label": "15m",
+     "wallH": 0.25,
+     "playH": 0.25,
+     "era": 1,
+     "pop": 8,
+     "maxPop": 8,
+     "kids": 0,
+     "floors": 3,
+     "buildings": 15,
+     "levels": 15,
+     "research": 4,
+     "explored": 2,
+     "morale": 53,
+     "minHp": 83,
+     "step": 17,
+     "iso": 46,
+     "res": {
+      "food": [
+       41,
+       3326,
+       -0.15
+      ],
+      "water": [
+       800,
+       7098,
+       0.41
+      ],
+      "power": [
+       0,
+       100,
+       -8.06
+      ],
+      "materials": [
+       51,
+       600,
+       0.26
+      ],
+      "knowledge": [
+       21,
+       350,
+       0.03
+      ],
+      "scrap": [
+       194,
+       300,
+       -0.08
+      ],
+      "medicine": [
+       21,
+       50,
+       0.01
+      ],
+      "components": [
+       0,
+       350,
+       0
+      ],
+      "alloys": [
+       0,
+       140,
+       0
+      ]
+     }
+    },
+    {
+     "label": "30m",
+     "wallH": 0.5,
+     "playH": 0.5,
+     "era": 1,
+     "pop": 8,
+     "maxPop": 8,
+     "kids": 0,
+     "floors": 4,
+     "buildings": 19,
+     "levels": 19,
+     "research": 9,
+     "explored": 4,
+     "morale": 57,
+     "minHp": 100,
+     "step": 17,
+     "iso": 76,
+     "res": {
+      "food": [
+       349,
+       8486,
+       0.42
+      ],
+      "water": [
+       1260,
+       10856,
+       0.83
+      ],
+      "power": [
+       0,
+       250,
+       -1
+      ],
+      "materials": [
+       33,
+       900,
+       0.31
+      ],
+      "knowledge": [
+       25,
+       500,
+       0.03
+      ],
+      "scrap": [
+       150,
+       400,
+       0
+      ],
+      "medicine": [
+       33,
+       70,
+       0.02
+      ],
+      "components": [
+       0,
+       500,
+       0
+      ],
+      "alloys": [
+       0,
+       200,
+       0
+      ]
+     }
+    },
+    {
+     "label": "d0 s1 end",
+     "wallH": 0.67,
+     "playH": 0.67,
+     "era": 1,
+     "pop": 8,
+     "maxPop": 8,
+     "kids": 0,
+     "floors": 4,
+     "buildings": 19,
+     "levels": 19,
+     "research": 12,
+     "explored": 6,
+     "morale": 83,
+     "minHp": 100,
+     "step": 17,
+     "iso": 87,
+     "res": {
+      "food": [
+       691,
+       20983,
+       1.49
+      ],
+      "water": [
+       2222,
+       22139,
+       1.76
+      ],
+      "power": [
+       0,
+       250,
+       -0.58
+      ],
+      "materials": [
+       246,
+       900,
+       0.38
+      ],
+      "knowledge": [
+       23,
+       500,
+       0.04
+      ],
+      "scrap": [
+       143,
+       400,
+       0
+      ],
+      "medicine": [
+       49,
+       70,
+       0.02
+      ],
+      "components": [
+       0,
+       500,
+       0
+      ],
+      "alloys": [
+       0,
+       200,
+       0
+      ]
+     }
+    },
+    {
+     "label": "d0 return",
+     "wallH": 3.5,
+     "playH": 0.67,
+     "era": 1,
+     "pop": 8,
+     "maxPop": 8,
+     "kids": 0,
+     "floors": 4,
+     "buildings": 19,
+     "levels": 19,
+     "research": 13,
+     "explored": 8,
+     "morale": 95,
+     "minHp": 100,
+     "step": 17,
+     "iso": 89,
+     "res": {
+      "food": [
+       9288,
+       27746,
+       2.24
+      ],
+      "water": [
+       16041,
+       29380,
+       2.56
+      ],
+      "power": [
+       250,
+       250,
+       6.09
+      ],
+      "materials": [
+       900,
+       900,
+       0.41
+      ],
+      "knowledge": [
+       390,
+       500,
+       0.04
+      ],
+      "scrap": [
+       200,
+       400,
+       0
+      ],
+      "medicine": [
+       70,
+       70,
+       0.02
+      ],
+      "components": [
+       0,
+       500,
+       0
+      ],
+      "alloys": [
+       0,
+       200,
+       0
+      ]
+     }
+    },
+    {
+     "label": "d0 s2 end",
+     "wallH": 3.67,
+     "playH": 0.83,
+     "era": 2,
+     "pop": 11,
+     "maxPop": 11,
+     "kids": 0,
+     "floors": 5,
+     "buildings": 21,
+     "levels": 23,
+     "research": 15,
+     "explored": 8,
+     "morale": 85,
+     "minHp": 100,
+     "step": 17,
+     "iso": 111,
+     "res": {
+      "food": [
+       8112,
+       5333,
+       -0.17
+      ],
+      "water": [
+       16336,
+       15421,
+       1.09
+      ],
+      "power": [
+       0,
+       250,
+       -3.49
+      ],
+      "materials": [
+       18,
+       1350,
+       0.54
+      ],
+      "knowledge": [
+       246,
+       750,
+       0.06
+      ],
+      "scrap": [
+       50,
+       600,
+       0
+      ],
+      "medicine": [
+       78,
+       105,
+       0.02
+      ],
+      "components": [
+       0,
+       750,
+       0
+      ],
+      "alloys": [
+       0,
+       300,
+       0
+      ]
+     }
+    },
+    {
+     "label": "d0 return",
+     "wallH": 13,
+     "playH": 0.83,
+     "era": 2,
+     "pop": 11,
+     "maxPop": 11,
+     "kids": 0,
+     "floors": 5,
+     "buildings": 21,
+     "levels": 23,
+     "research": 17,
+     "explored": 10,
+     "morale": 96,
+     "minHp": 100,
+     "step": 17,
+     "iso": 115,
+     "res": {
+      "food": [
+       25235,
+       25235,
+       1.72
+      ],
+      "water": [
+       34509,
+       34509,
+       2.89
+      ],
+      "power": [
+       250,
+       250,
+       17.16
+      ],
+      "materials": [
+       1350,
+       1350,
+       0.63
+      ],
+      "knowledge": [
+       750,
+       750,
+       0.07
+      ],
+      "scrap": [
+       91,
+       600,
+       0
+      ],
+      "medicine": [
+       105,
+       105,
+       0.02
+      ],
+      "components": [
+       0,
+       750,
+       0
+      ],
+      "alloys": [
+       0,
+       300,
+       0
+      ]
+     }
+    },
+    {
+     "label": "d0 s3 end",
+     "wallH": 13.17,
+     "playH": 1,
+     "era": 2,
+     "pop": 12,
+     "maxPop": 12,
+     "kids": 0,
+     "floors": 5,
+     "buildings": 26,
+     "levels": 29,
+     "research": 18,
+     "explored": 10,
+     "morale": 95,
+     "minHp": 100,
+     "step": 17,
+     "iso": 128,
+     "res": {
+      "food": [
+       23784,
+       15075,
+       0.93
+      ],
+      "water": [
+       35098,
+       35798,
+       3.28
+      ],
+      "power": [
+       250,
+       250,
+       8.75
+      ],
+      "materials": [
+       166,
+       1650,
+       0.76
+      ],
+      "knowledge": [
+       712,
+       1055,
+       0.12
+      ],
+      "scrap": [
+       31,
+       600,
+       0
+      ],
+      "medicine": [
+       105,
+       105,
+       0.02
+      ],
+      "components": [
+       0,
+       750,
+       0
+      ],
+      "alloys": [
+       0,
+       300,
+       0
+      ]
+     }
+    },
+    {
+     "label": "d0 return",
+     "wallH": 18,
+     "playH": 1,
+     "era": 2,
+     "pop": 12,
+     "maxPop": 12,
+     "kids": 0,
+     "floors": 5,
+     "buildings": 26,
+     "levels": 29,
+     "research": 20,
+     "explored": 12,
+     "morale": 100,
+     "minHp": 100,
+     "step": 17,
+     "iso": 130,
+     "res": {
+      "food": [
+       49203,
+       49203,
+       4.41
+      ],
+      "water": [
+       53623,
+       53623,
+       4.94
+      ],
+      "power": [
+       250,
+       250,
+       11.7
+      ],
+      "materials": [
+       1650,
+       1650,
+       0.78
+      ],
+      "knowledge": [
+       1415,
+       1415,
+       0.16
+      ],
+      "scrap": [
+       61,
+       600,
+       0
+      ],
+      "medicine": [
+       105,
+       105,
+       0.02
+      ],
+      "components": [
+       0,
+       750,
+       0
+      ],
+      "alloys": [
+       0,
+       300,
+       0
+      ]
+     }
+    },
+    {
+     "label": "d0 s4 end",
+     "wallH": 18.17,
+     "playH": 1.17,
+     "era": 2,
+     "pop": 12,
+     "maxPop": 12,
+     "kids": 0,
+     "floors": 5,
+     "buildings": 26,
+     "levels": 58,
+     "research": 20,
+     "explored": 12,
+     "morale": 90,
+     "minHp": 100,
+     "step": 17,
+     "iso": 130,
+     "res": {
+      "food": [
+       68680,
+       13597,
+       0.54
+      ],
+      "water": [
+       74997,
+       66443,
+       6.66
+      ],
+      "power": [
+       350,
+       350,
+       11.71
+      ],
+      "materials": [
+       1641,
+       2550,
+       0.98
+      ],
+      "knowledge": [
+       1797,
+       1950,
+       0.2
+      ],
+      "scrap": [
+       1,
+       900,
+       0
+      ],
+      "medicine": [
+       123,
+       165,
+       0.03
+      ],
+      "components": [
+       0,
+       1200,
+       0
+      ],
+      "alloys": [
+       0,
+       480,
+       0
+      ]
+     }
+    },
+    {
+     "label": "d1 return",
+     "wallH": 24,
+     "playH": 1.17,
+     "era": 2,
+     "pop": 12,
+     "maxPop": 12,
+     "kids": 0,
+     "floors": 5,
+     "buildings": 26,
+     "levels": 58,
+     "research": 22,
+     "explored": 14,
+     "morale": 92,
+     "minHp": 100,
+     "step": 17,
+     "iso": 134,
+     "res": {
+      "food": [
+       74796,
+       74796,
+       7.02
+      ],
+      "water": [
+       74997,
+       66989,
+       6.39
+      ],
+      "power": [
+       350,
+       350,
+       10.71
+      ],
+      "materials": [
+       2550,
+       2550,
+       0.98
+      ],
+      "knowledge": [
+       1950,
+       1950,
+       0.21
+      ],
+      "scrap": [
+       39,
+       900,
+       0
+      ],
+      "medicine": [
+       165,
+       165,
+       0.04
+      ],
+      "components": [
+       0,
+       1200,
+       0
+      ],
+      "alloys": [
+       0,
+       480,
+       0
+      ]
+     }
+    },
+    {
+     "label": "d1 s5 end",
+     "wallH": 24.25,
+     "playH": 1.42,
+     "era": 2,
+     "pop": 12,
+     "maxPop": 12,
+     "kids": 0,
+     "floors": 5,
+     "buildings": 27,
+     "levels": 75,
+     "research": 23,
+     "explored": 18,
+     "morale": 95,
+     "minHp": 100,
+     "step": 17,
+     "iso": 136,
+     "res": {
+      "food": [
+       132583,
+       89360,
+       8.64
+      ],
+      "water": [
+       128589,
+       75614,
+       7.35
+      ],
+      "power": [
+       288,
+       450,
+       14.41
+      ],
+      "materials": [
+       3686,
+       3450,
+       1.33
+      ],
+      "knowledge": [
+       3202,
+       2700,
+       0.26
+      ],
+      "scrap": [
+       121,
+       1200,
+       0.15
+      ],
+      "medicine": [
+       190,
+       225,
+       0.04
+      ],
+      "components": [
+       0,
+       1650,
+       0
+      ],
+      "alloys": [
+       0,
+       660,
+       0
+      ]
+     }
+    },
+    {
+     "label": "d1 return",
+     "wallH": 27.5,
+     "playH": 1.42,
+     "era": 2,
+     "pop": 12,
+     "maxPop": 12,
+     "kids": 0,
+     "floors": 5,
+     "buildings": 27,
+     "levels": 75,
+     "research": 25,
+     "explored": 20,
+     "morale": 96,
+     "minHp": 100,
+     "step": 17,
+     "iso": 136,
+     "res": {
+      "food": [
+       132583,
+       90363,
+       8.75
+      ],
+      "water": [
+       128589,
+       79481,
+       7.78
+      ],
+      "power": [
+       450,
+       450,
+       16.38
+      ],
+      "materials": [
+       3686,
+       3450,
+       1.8
+      ],
+      "knowledge": [
+       3279,
+       3279,
+       0.36
+      ],
+      "scrap": [
+       668,
+       1200,
+       0.01
+      ],
+      "medicine": [
+       225,
+       225,
+       0.04
+      ],
+      "components": [
+       0,
+       1650,
+       0
+      ],
+      "alloys": [
+       0,
+       660,
+       0
+      ]
+     }
+    },
+    {
+     "label": "d1 s6 end",
+     "wallH": 27.67,
+     "playH": 1.58,
+     "era": 2,
+     "pop": 12,
+     "maxPop": 12,
+     "kids": 0,
+     "floors": 5,
+     "buildings": 27,
+     "levels": 75,
+     "research": 25,
+     "explored": 22,
+     "morale": 99,
+     "minHp": 92,
+     "step": 17,
+     "iso": 141,
+     "res": {
+      "food": [
+       132543,
+       91809,
+       8.92
+      ],
+      "water": [
+       128589,
+       48634,
+       4.35
+      ],
+      "power": [
+       450,
+       450,
+       16.38
+      ],
+      "materials": [
+       345,
+       3450,
+       1.35
+      ],
+      "knowledge": [
+       2433,
+       2700,
+       0.26
+      ],
+      "scrap": [
+       566,
+       1200,
+       0.15
+      ],
+      "medicine": [
+       225,
+       225,
+       0.05
+      ],
+      "components": [
+       0,
+       1650,
+       0
+      ],
+      "alloys": [
+       0,
+       660,
+       0
+      ]
+     }
+    },
+    {
+     "label": "d1 return",
+     "wallH": 37,
+     "playH": 1.58,
+     "era": 2,
+     "pop": 12,
+     "maxPop": 12,
+     "kids": 0,
+     "floors": 5,
+     "buildings": 27,
+     "levels": 75,
+     "research": 27,
+     "explored": 24,
+     "morale": 99,
+     "minHp": 100,
+     "step": 17,
+     "iso": 145,
+     "res": {
+      "food": [
+       132543,
+       92980,
+       9.04
+      ],
+      "water": [
+       128589,
+       50316,
+       4.54
+      ],
+      "power": [
+       450,
+       450,
+       19.49
+      ],
+      "materials": [
+       3450,
+       3450,
+       1.83
+      ],
+      "knowledge": [
+       3340,
+       3340,
+       0.37
+      ],
+      "scrap": [
+       1002,
+       1200,
+       0.01
+      ],
+      "medicine": [
+       225,
+       225,
+       0.05
+      ],
+      "components": [
+       0,
+       1650,
+       0
+      ],
+      "alloys": [
+       0,
+       660,
+       0
+      ]
+     }
+    },
+    {
+     "label": "d1 s7 end",
+     "wallH": 37.17,
+     "playH": 1.75,
+     "era": 2,
+     "pop": 12,
+     "maxPop": 12,
+     "kids": 0,
+     "floors": 5,
+     "buildings": 27,
+     "levels": 75,
+     "research": 28,
+     "explored": 26,
+     "morale": 98,
+     "minHp": 100,
+     "step": 17,
+     "iso": 145,
+     "res": {
+      "food": [
+       130149,
+       92735,
+       9.02
+      ],
+      "water": [
+       128581,
+       50183,
+       4.52
+      ],
+      "power": [
+       450,
+       450,
+       19.49
+      ],
+      "materials": [
+       3450,
+       3450,
+       1.91
+      ],
+      "knowledge": [
+       3313,
+       3331,
+       0.37
+      ],
+      "scrap": [
+       1043,
+       1200,
+       0.01
+      ],
+      "medicine": [
+       223,
+       225,
+       0.05
+      ],
+      "components": [
+       0,
+       1650,
+       0
+      ],
+      "alloys": [
+       0,
+       660,
+       0
+      ]
+     }
+    },
+    {
+     "label": "d1 return",
+     "wallH": 42,
+     "playH": 1.75,
+     "era": 2,
+     "pop": 12,
+     "maxPop": 12,
+     "kids": 0,
+     "floors": 5,
+     "buildings": 27,
+     "levels": 75,
+     "research": 30,
+     "explored": 28,
+     "morale": 99,
+     "minHp": 100,
+     "step": 17,
+     "iso": 145,
+     "res": {
+      "food": [
+       130149,
+       95103,
+       9.28
+      ],
+      "water": [
+       128581,
+       50463,
+       4.55
+      ],
+      "power": [
+       450,
+       450,
+       19.49
+      ],
+      "materials": [
+       3450,
+       3450,
+       1.92
+      ],
+      "knowledge": [
+       3479,
+       3479,
+       0.39
+      ],
+      "scrap": [
+       1200,
+       1200,
+       0.01
+      ],
+      "medicine": [
+       225,
+       225,
+       0.05
+      ],
+      "components": [
+       0,
+       1650,
+       0
+      ],
+      "alloys": [
+       0,
+       660,
+       0
+      ]
+     }
+    },
+    {
+     "label": "d1 s8 end",
+     "wallH": 42.17,
+     "playH": 1.92,
+     "era": 2,
+     "pop": 12,
+     "maxPop": 12,
+     "kids": 0,
+     "floors": 5,
+     "buildings": 27,
+     "levels": 75,
+     "research": 31,
+     "explored": 30,
+     "morale": 97,
+     "minHp": 78,
+     "step": 17,
+     "iso": 145,
+     "res": {
+      "food": [
+       127802,
+       97807,
+       9.58
+      ],
+      "water": [
+       128581,
+       49901,
+       4.49
+      ],
+      "power": [
+       450,
+       450,
+       19.49
+      ],
+      "materials": [
+       3450,
+       3450,
+       1.9
+      ],
+      "knowledge": [
+       3371,
+       3440,
+       0.38
+      ],
+      "scrap": [
+       1200,
+       1200,
+       0.01
+      ],
+      "medicine": [
+       225,
+       225,
+       0.05
+      ],
+      "components": [
+       0,
+       1650,
+       0
+      ],
+      "alloys": [
+       0,
+       660,
+       0
+      ]
+     }
+    },
+    {
+     "label": "d2 return",
+     "wallH": 48,
+     "playH": 1.92,
+     "era": 2,
+     "pop": 12,
+     "maxPop": 12,
+     "kids": 0,
+     "floors": 5,
+     "buildings": 27,
+     "levels": 75,
+     "research": 33,
+     "explored": 32,
+     "morale": 89,
+     "minHp": 100,
+     "step": 17,
+     "iso": 145,
+     "res": {
+      "food": [
+       127802,
+       93708,
+       9.13
+      ],
+      "water": [
+       128581,
+       50087,
+       4.51
+      ],
+      "power": [
+       450,
+       450,
+       23.09
+      ],
+      "materials": [
+       3450,
+       3450,
+       1.82
+      ],
+      "knowledge": [
+       3408,
+       3296,
+       0.37
+      ],
+      "scrap": [
+       1200,
+       1200,
+       0
+      ],
+      "medicine": [
+       225,
+       225,
+       0.04
+      ],
+      "components": [
+       0,
+       1650,
+       0
+      ],
+      "alloys": [
+       0,
+       660,
+       0
+      ]
+     }
+    },
+    {
+     "label": "d2 s9 end",
+     "wallH": 48.25,
+     "playH": 2.17,
+     "era": 2,
+     "pop": 21,
+     "maxPop": 30,
+     "kids": 1,
+     "floors": 5,
+     "buildings": 27,
+     "levels": 75,
+     "research": 38,
+     "explored": 36,
+     "morale": 87,
+     "minHp": 100,
+     "step": 17,
+     "iso": 270,
+     "res": {
+      "food": [
+       202401,
+       2250,
+       9.36
+      ],
+      "water": [
+       150253,
+       2175,
+       9.41
+      ],
+      "power": [
+       450,
+       450,
+       16.92
+      ],
+      "materials": [
+       101453,
+       1123450,
+       3.44
+      ],
+      "knowledge": [
+       5743,
+       2700,
+       0.36
+      ],
+      "scrap": [
+       1180,
+       1200,
+       0
+      ],
+      "medicine": [
+       225,
+       225,
+       0.24
+      ],
+      "components": [
+       0,
+       1650,
+       0
+      ],
+      "alloys": [
+       0,
+       660,
+       0
+      ]
+     }
+    },
+    {
+     "label": "d2 return",
+     "wallH": 51.5,
+     "playH": 2.17,
+     "era": 2,
+     "pop": 21,
+     "maxPop": 30,
+     "kids": 1,
+     "floors": 6,
+     "buildings": 27,
+     "levels": 75,
+     "research": 40,
+     "explored": 38,
+     "morale": 99,
+     "minHp": 100,
+     "step": 17,
+     "iso": 284,
+     "res": {
+      "food": [
+       202401,
+       2250,
+       11.62
+      ],
+      "water": [
+       150253,
+       2175,
+       12.11
+      ],
+      "power": [
+       450,
+       450,
+       49.8
+      ],
+      "materials": [
+       112345,
+       1123450,
+       5.71
+      ],
+      "knowledge": [
+       5743,
+       2700,
+       0.47
+      ],
+      "scrap": [
+       1200,
+       1200,
+       0.01
+      ],
+      "medicine": [
+       225,
+       225,
+       0.41
+      ],
+      "components": [
+       0,
+       1650,
+       0
+      ],
+      "alloys": [
+       0,
+       660,
+       0
+      ]
+     }
+    },
+    {
+     "label": "d2 s10 end",
+     "wallH": 51.67,
+     "playH": 2.33,
+     "era": 2,
+     "pop": 26,
+     "maxPop": 30,
+     "kids": 2,
+     "floors": 6,
+     "buildings": 33,
+     "levels": 81,
+     "research": 42,
+     "explored": 40,
+     "morale": 93,
+     "minHp": 100,
+     "step": 17,
+     "iso": 293,
+     "res": {
+      "food": [
+       202353,
+       2250,
+       12.35
+      ],
+      "water": [
+       150239,
+       2175,
+       11.28
+      ],
+      "power": [
+       450,
+       450,
+       32.8
+      ],
+      "materials": [
+       104031,
+       1123450,
+       8.25
+      ],
+      "knowledge": [
+       5083,
+       2700,
+       1.33
+      ],
+      "scrap": [
+       1020,
+       1200,
+       0.01
+      ],
+      "medicine": [
+       225,
+       225,
+       0.43
+      ],
+      "components": [
+       0,
+       1650,
+       0
+      ],
+      "alloys": [
+       0,
+       660,
+       0
+      ]
+     }
+    },
+    {
+     "label": "d2 return",
+     "wallH": 61,
+     "playH": 2.33,
+     "era": 2,
+     "pop": 26,
+     "maxPop": 30,
+     "kids": 2,
+     "floors": 6,
+     "buildings": 33,
+     "levels": 81,
+     "research": 44,
+     "explored": 42,
+     "morale": 99,
+     "minHp": 100,
+     "step": 17,
+     "iso": 297,
+     "res": {
+      "food": [
+       202353,
+       2250,
+       13.26
+      ],
+      "water": [
+       150239,
+       2175,
+       12.24
+      ],
+      "power": [
+       450,
+       450,
+       38.56
+      ],
+      "materials": [
+       112346,
+       1123450,
+       12.77
+      ],
+      "knowledge": [
+       5083,
+       2700,
+       1.93
+      ],
+      "scrap": [
+       1200,
+       1200,
+       0.01
+      ],
+      "medicine": [
+       225,
+       225,
+       0.48
+      ],
+      "components": [
+       0,
+       1650,
+       0
+      ],
+      "alloys": [
+       0,
+       660,
+       0
+      ]
+     }
+    },
+    {
+     "label": "d2 s11 end",
+     "wallH": 61.17,
+     "playH": 2.5,
+     "era": 2,
+     "pop": 38,
+     "maxPop": 30,
+     "kids": 2,
+     "floors": 6,
+     "buildings": 33,
+     "levels": 81,
+     "research": 44,
+     "explored": 44,
+     "morale": 86,
+     "minHp": 100,
+     "step": 17,
+     "iso": 309,
+     "res": {
+      "food": [
+       201870,
+       2250,
+       13.54
+      ],
+      "water": [
+       150239,
+       2175,
+       11.05
+      ],
+      "power": [
+       450,
+       450,
+       38.56
+      ],
+      "materials": [
+       112345,
+       1123450,
+       13.43
+      ],
+      "knowledge": [
+       3823,
+       2700,
+       2.64
+      ],
+      "scrap": [
+       1043,
+       1200,
+       0.14
+      ],
+      "medicine": [
+       225,
+       225,
+       0.44
+      ],
+      "components": [
+       0,
+       1650,
+       0
+      ],
+      "alloys": [
+       0,
+       660,
+       0
+      ]
+     }
+    },
+    {
+     "label": "d2 return",
+     "wallH": 66,
+     "playH": 2.5,
+     "era": 2,
+     "pop": 38,
+     "maxPop": 30,
+     "kids": 2,
+     "floors": 6,
+     "buildings": 33,
+     "levels": 81,
+     "research": 46,
+     "explored": 46,
+     "morale": 99,
+     "minHp": 100,
+     "step": 17,
+     "iso": 313,
+     "res": {
+      "food": [
+       201870,
+       2250,
+       18.56
+      ],
+      "water": [
+       150239,
+       2175,
+       13.49
+      ],
+      "power": [
+       450,
+       450,
+       44.33
+      ],
+      "materials": [
+       112346,
+       1123450,
+       17.67
+      ],
+      "knowledge": [
+       3823,
+       2700,
+       3.6
+      ],
+      "scrap": [
+       1200,
+       1200,
+       0.41
+      ],
+      "medicine": [
+       225,
+       225,
+       0.51
+      ],
+      "components": [
+       0,
+       1650,
+       0
+      ],
+      "alloys": [
+       0,
+       660,
+       0
+      ]
+     }
+    },
+    {
+     "label": "d2 s12 end",
+     "wallH": 66.17,
+     "playH": 2.67,
+     "era": 2,
+     "pop": 38,
+     "maxPop": 30,
+     "kids": 1,
+     "floors": 6,
+     "buildings": 33,
+     "levels": 81,
+     "research": 46,
+     "explored": 48,
+     "morale": 73,
+     "minHp": 100,
+     "step": 17,
+     "iso": 313,
+     "res": {
+      "food": [
+       201600,
+       2250,
+       7.29
+      ],
+      "water": [
+       150239,
+       2175,
+       10.96
+      ],
+      "power": [
+       450,
+       450,
+       14.13
+      ],
+      "materials": [
+       112345,
+       1123450,
+       14.62
+      ],
+      "knowledge": [
+       2700,
+       2700,
+       3.07
+      ],
+      "scrap": [
+       1197,
+       1200,
+       -0.14
+      ],
+      "medicine": [
+       225,
+       225,
+       0.43
+      ],
+      "components": [
+       0,
+       1650,
+       0
+      ],
+      "alloys": [
+       0,
+       660,
+       0
+      ]
+     }
+    },
+    {
+     "label": "end",
+     "wallH": 72,
+     "playH": 2.67,
+     "era": 2,
+     "pop": 38,
+     "maxPop": 30,
+     "kids": 1,
+     "floors": 6,
+     "buildings": 33,
+     "levels": 81,
+     "research": 48,
+     "explored": 50,
+     "morale": 69,
+     "minHp": 100,
+     "step": 17,
+     "iso": 317,
+     "res": {
+      "food": [
+       201600,
+       3750,
+       7.14
+      ],
+      "water": [
+       150239,
+       3675,
+       10.72
+      ],
+      "power": [
+       450,
+       450,
+       14.13
+      ],
+      "materials": [
+       112345,
+       1123450,
+       10.27
+      ],
+      "knowledge": [
+       2700,
+       2700,
+       2.09
+      ],
+      "scrap": [
+       594,
+       1200,
+       0
+      ],
+      "medicine": [
+       225,
+       225,
+       0.42
+      ],
+      "components": [
+       0,
+       1650,
+       0
+      ],
+      "alloys": [
+       0,
+       660,
+       0
+      ]
+     }
+    }
+   ],
+   "capShare": {
+    "food": 0.756,
+    "water": 0.708,
+    "power": 0.677,
+    "materials": 0.195,
+    "knowledge": 0.448,
+    "scrap": 0.122,
+    "medicine": 0.53
+   },
+   "famineSeconds": 0,
+   "thirstSeconds": 0,
+   "deaths": {
+    "total": 0,
+    "famine": 0,
+    "other": 0,
+    "causes": {}
+   },
+   "injuries": {
+    "expedition": 15,
+    "raid": 0,
+    "sickness": 0
+   },
+   "danger": {
+    "raids": {},
+    "disasterStarted": 0,
+    "disasterHandled": 0,
+    "disasterStruck": {},
+    "tributes": 0,
+    "maintained": 24,
+    "away": {
+     "raids": 0,
+     "raidsLost": 0,
+     "disasters": 0,
+     "hurt": 0,
+     "died": 0
+    },
+    "deathDays": [],
+    "minPop": 38,
+    "minPopDay": 0,
+    "raidLog": [],
+    "byKind": {}
+   },
+   "incidents": 16,
+   "missions": 50,
+   "missionFails": 0,
+   "kids": 2,
+   "arrivals": {
+    "accepted": 24,
+    "refused": 0,
+    "doorAdmitted": 6
+   },
+   "events": {
+    "wanderer": 10,
+    "pipeLeak": 4,
+    "group": 4,
+    "trader": 8,
+    "sickness": 4,
+    "radioSignal": 1,
+    "argument": 2,
+    "powerSurge": 2,
+    "radioSignal2": 1,
+    "radioSignal3": 1,
+    "stash": 4
+   },
+   "chapters": [
+    {
+     "id": "static",
+     "wall": 260,
+     "play": 260
+    },
+    {
+     "id": "toll",
+     "wall": 1810,
+     "play": 1810
+    },
+    {
+     "id": "deep",
+     "wall": 12810,
+     "play": 2610
+    },
+    {
+     "id": "maya",
+     "wall": 46860,
+     "play": 3060
+    },
+    {
+     "id": "terminus",
+     "wall": 47110,
+     "play": 3310
+    },
+    {
+     "id": "clan",
+     "wall": 99310,
+     "play": 5410
+    },
+    {
+     "id": "genesis",
+     "wall": 173130,
+     "play": 7230
+    },
+    {
+     "id": "winter",
+     "wall": 219770,
+     "play": 8570
+    }
+   ],
+   "chaptersTotal": 20,
+   "idle": {
+    "share": 0.596,
+    "gapsOver5m": 5,
+    "longest": [
+     [
+      6300,
+      470
+     ],
+     [
+      4200,
+      360
+     ],
+     [
+      5700,
+      350
+     ],
+     [
+      2080,
+      320
+     ],
+     [
+      4800,
+      300
+     ]
+    ]
+   },
+   "offline": [
+    {
+     "wallH": 3.5,
+     "awayMin": 170,
+     "gained": {
+      "food": 8597,
+      "water": 13818,
+      "power": 250,
+      "materials": 654,
+      "medicine": 21,
+      "knowledge": 367,
+      "scrap": 57
+     },
+     "wasted": {},
+     "wastedEstimated": false,
+     "arrivals": 0,
+     "doorAdmitted": 0,
+     "missions": 2,
+     "research": 1,
+     "starvingOnReturn": false,
+     "extra": {
+      "converted": {
+       "medicine": 163,
+       "materials": 2770
+      },
+      "credits": 116,
+      "absorbed": {},
+      "arrivals": 0,
+      "missions": 2,
+      "research": 1,
+      "danger": {
+       "raids": 0,
+       "raidsLost": 0,
+       "disasters": [],
+       "hurt": 0,
+       "died": []
+      },
+      "log": 2,
+      "nightDanger": {
+       "hurt": [],
+       "lost": {}
+      },
+      "realSeconds": 10200
+     }
+    },
+    {
+     "wallH": 13,
+     "awayMin": 560,
+     "gained": {
+      "food": 17123,
+      "water": 18173,
+      "power": 250,
+      "materials": 1332,
+      "medicine": 27,
+      "knowledge": 504,
+      "scrap": 41
+     },
+     "wasted": {},
+     "wastedEstimated": false,
+     "arrivals": 0,
+     "doorAdmitted": 0,
+     "missions": 2,
+     "research": 2,
+     "starvingOnReturn": false,
+     "extra": {
+      "converted": {
+       "water": 57591,
+       "food": 27011,
+       "medicine": 629,
+       "materials": 4194,
+       "knowledge": 1474
+      },
+      "credits": 1171,
+      "absorbed": {
+       "materials": 11539
+      },
+      "arrivals": 0,
+      "missions": 2,
+      "research": 2,
+      "danger": {
+       "raids": 0,
+       "raidsLost": 0,
+       "disasters": [],
+       "hurt": 0,
+       "died": []
+      },
+      "log": 3,
+      "nightDanger": {
+       "hurt": [],
+       "lost": {}
+      },
+      "realSeconds": 33600
+     }
+    },
+    {
+     "wallH": 18,
+     "awayMin": 290,
+     "gained": {
+      "food": 25419,
+      "water": 18525,
+      "materials": 1484,
+      "knowledge": 703,
+      "scrap": 30
+     },
+     "wasted": {},
+     "wastedEstimated": false,
+     "arrivals": 0,
+     "doorAdmitted": 0,
+     "missions": 2,
+     "research": 2,
+     "starvingOnReturn": false,
+     "extra": {
+      "converted": {
+       "food": 30337,
+       "medicine": 339,
+       "materials": 3645,
+       "water": 48524,
+       "knowledge": 1479
+      },
+      "credits": 1040,
+      "absorbed": {
+       "materials": 5821
+      },
+      "arrivals": 0,
+      "missions": 2,
+      "research": 2,
+      "danger": {
+       "raids": 0,
+       "raidsLost": 0,
+       "disasters": [],
+       "hurt": 0,
+       "died": []
+      },
+      "log": 0,
+      "nightDanger": {
+       "hurt": [],
+       "lost": {}
+      },
+      "realSeconds": 17400
+     }
+    },
+    {
+     "wallH": 24,
+     "awayMin": 350,
+     "gained": {
+      "food": 6116,
+      "materials": 909,
+      "medicine": 42,
+      "knowledge": 153,
+      "scrap": 38
+     },
+     "wasted": {},
+     "wastedEstimated": false,
+     "arrivals": 0,
+     "doorAdmitted": 0,
+     "missions": 2,
+     "research": 2,
+     "starvingOnReturn": false,
+     "extra": {
+      "converted": {
+       "food": 110825,
+       "water": 107380,
+       "medicine": 711,
+       "knowledge": 3302,
+       "materials": 15669
+      },
+      "credits": 2959,
+      "absorbed": {},
+      "arrivals": 0,
+      "missions": 2,
+      "research": 2,
+      "danger": {
+       "raids": 0,
+       "raidsLost": 0,
+       "disasters": [],
+       "hurt": 0,
+       "died": []
+      },
+      "log": 2,
+      "nightDanger": {
+       "hurt": [],
+       "lost": {}
+      },
+      "realSeconds": 21000
+     }
+    },
+    {
+     "wallH": 27.5,
+     "awayMin": 195,
+     "gained": {
+      "power": 162,
+      "medicine": 35,
+      "knowledge": 77,
+      "scrap": 547
+     },
+     "wasted": {},
+     "wastedEstimated": false,
+     "arrivals": 0,
+     "doorAdmitted": 0,
+     "missions": 2,
+     "research": 2,
+     "starvingOnReturn": false,
+     "extra": {
+      "converted": {
+       "food": 65214,
+       "water": 73036,
+       "materials": 15864,
+       "knowledge": 3105,
+       "medicine": 383
+      },
+      "credits": 2090,
+      "absorbed": {},
+      "arrivals": 0,
+      "missions": 2,
+      "research": 2,
+      "danger": {
+       "raids": 0,
+       "raidsLost": 0,
+       "disasters": [],
+       "hurt": 0,
+       "died": []
+      },
+      "log": 1,
+      "nightDanger": {
+       "hurt": [],
+       "lost": {}
+      },
+      "realSeconds": 11700
+     }
+    },
+    {
+     "wallH": 37,
+     "awayMin": 560,
+     "gained": {
+      "materials": 3105,
+      "knowledge": 907,
+      "scrap": 435
+     },
+     "wasted": {},
+     "wastedEstimated": false,
+     "arrivals": 0,
+     "doorAdmitted": 0,
+     "missions": 2,
+     "research": 2,
+     "starvingOnReturn": false,
+     "extra": {
+      "converted": {
+       "food": 224470,
+       "water": 118297,
+       "medicine": 1227,
+       "materials": 32542,
+       "knowledge": 9032
+      },
+      "credits": 5101,
+      "absorbed": {
+       "materials": 13466
+      },
+      "arrivals": 0,
+      "missions": 2,
+      "research": 2,
+      "danger": {
+       "raids": 0,
+       "raidsLost": 0,
+       "disasters": [],
+       "hurt": 0,
+       "died": []
+      },
+      "log": 0,
+      "nightDanger": {
+       "hurt": [],
+       "lost": {}
+      },
+      "realSeconds": 33600
+     }
+    },
+    {
+     "wallH": 42,
+     "awayMin": 290,
+     "gained": {
+      "medicine": 2,
+      "knowledge": 166,
+      "scrap": 157
+     },
+     "wasted": {},
+     "wastedEstimated": false,
+     "arrivals": 0,
+     "doorAdmitted": 0,
+     "missions": 2,
+     "research": 2,
+     "starvingOnReturn": false,
+     "extra": {
+      "converted": {
+       "food": 112135,
+       "water": 63798,
+       "materials": 26591,
+       "medicine": 657,
+       "knowledge": 5191,
+       "scrap": 141
+      },
+      "credits": 2952,
+      "absorbed": {},
+      "arrivals": 0,
+      "missions": 2,
+      "research": 2,
+      "danger": {
+       "raids": 0,
+       "raidsLost": 0,
+       "disasters": [],
+       "hurt": 0,
+       "died": []
+      },
+      "log": 0,
+      "nightDanger": {
+       "hurt": [],
+       "lost": {}
+      },
+      "realSeconds": 17400
+     }
+    },
+    {
+     "wallH": 48,
+     "awayMin": 350,
+     "gained": {
+      "knowledge": 36
+     },
+     "wasted": {},
+     "wastedEstimated": false,
+     "arrivals": 0,
+     "doorAdmitted": 0,
+     "missions": 2,
+     "research": 2,
+     "starvingOnReturn": false,
+     "extra": {
+      "converted": {
+       "food": 138300,
+       "water": 77789,
+       "materials": 30946,
+       "medicine": 767,
+       "scrap": 103,
+       "knowledge": 6204
+      },
+      "credits": 3556,
+      "absorbed": {},
+      "arrivals": 0,
+      "missions": 2,
+      "research": 2,
+      "danger": {
+       "raids": 0,
+       "raidsLost": 0,
+       "disasters": [],
+       "hurt": 0,
+       "died": []
+      },
+      "log": 2,
+      "nightDanger": {
+       "hurt": [],
+       "lost": {}
+      },
+      "realSeconds": 21000
+     }
+    },
+    {
+     "wallH": 51.5,
+     "awayMin": 195,
+     "gained": {
+      "materials": 10892,
+      "scrap": 20
+     },
+     "wasted": {},
+     "wastedEstimated": false,
+     "arrivals": 3,
+     "doorAdmitted": 3,
+     "missions": 2,
+     "research": 2,
+     "starvingOnReturn": false,
+     "extra": {
+      "converted": {
+       "food": 79241,
+       "water": 99230,
+       "medicine": 3291,
+       "knowledge": 4221,
+       "scrap": 91
+      },
+      "credits": 2657,
+      "absorbed": {},
+      "arrivals": 3,
+      "missions": 2,
+      "research": 2,
+      "danger": {
+       "raids": 0,
+       "raidsLost": 0,
+       "disasters": [],
+       "hurt": 0,
+       "died": []
+      },
+      "log": 5,
+      "nightDanger": {
+       "hurt": [],
+       "lost": {}
+      },
+      "realSeconds": 11700
+     }
+    },
+    {
+     "wallH": 61,
+     "awayMin": 560,
+     "gained": {
+      "materials": 8315,
+      "scrap": 180
+     },
+     "wasted": {},
+     "wastedEstimated": false,
+     "arrivals": 3,
+     "doorAdmitted": 3,
+     "missions": 2,
+     "research": 2,
+     "starvingOnReturn": false,
+     "extra": {
+      "converted": {
+       "food": 327400,
+       "water": 315659,
+       "medicine": 12827,
+       "knowledge": 49043,
+       "scrap": 327
+      },
+      "credits": 11458,
+      "absorbed": {},
+      "arrivals": 3,
+      "missions": 2,
+      "research": 2,
+      "danger": {
+       "raids": 0,
+       "raidsLost": 0,
+       "disasters": [],
+       "hurt": 0,
+       "died": []
+      },
+      "log": 2,
+      "nightDanger": {
+       "hurt": [],
+       "lost": {}
+      },
+      "realSeconds": 33600
+     }
+    },
+    {
+     "wallH": 66,
+     "awayMin": 290,
+     "gained": {
+      "scrap": 157
+     },
+     "wasted": {},
+     "wastedEstimated": false,
+     "arrivals": 0,
+     "doorAdmitted": 0,
+     "missions": 2,
+     "research": 2,
+     "starvingOnReturn": false,
+     "extra": {
+      "converted": {
+       "food": 204818,
+       "water": 179225,
+       "medicine": 6851,
+       "knowledge": 44688,
+       "scrap": 3940
+      },
+      "credits": 7563,
+      "absorbed": {},
+      "arrivals": 0,
+      "missions": 2,
+      "research": 2,
+      "danger": {
+       "raids": 0,
+       "raidsLost": 0,
+       "disasters": [],
+       "hurt": 0,
+       "died": []
+      },
+      "log": 5,
+      "nightDanger": {
+       "hurt": [],
+       "lost": {}
+      },
+      "realSeconds": 17400
+     }
+    },
+    {
+     "wallH": 72,
+     "awayMin": 350,
+     "gained": {
+      "scrap": -603
+     },
+     "wasted": {},
+     "wastedEstimated": false,
+     "arrivals": 0,
+     "doorAdmitted": 0,
+     "missions": 2,
+     "research": 2,
+     "starvingOnReturn": false,
+     "extra": {
+      "converted": {
+       "food": 110111,
+       "water": 179928,
+       "medicine": 7061,
+       "knowledge": 39662
+      },
+      "credits": 6296,
+      "absorbed": {},
+      "arrivals": 0,
+      "missions": 2,
+      "research": 2,
+      "danger": {
+       "raids": 0,
+       "raidsLost": 0,
+       "disasters": [],
+       "hurt": 0,
+       "died": []
+      },
+      "log": 0,
+      "nightDanger": {
+       "hurt": [],
+       "lost": {}
+      },
+      "realSeconds": 21000
+     }
+    }
+   ],
+   "lastProgress": {
+    "play": 9600,
+    "wall": 259200
+   },
+   "stallWallH": 0,
+   "stallPlayH": 0,
+   "objectivesDone": 14,
+   "supplyDrops": 3,
+   "daily": {
+    "days": 3,
+    "orders": 4,
+    "chests": 0,
+    "credits": 132,
+    "rush": 0,
+    "frags": 2,
+    "blueprints": 0,
+    "streakEnd": 3
+   },
+   "lateGame": {
+    "stages": 3,
+    "caravansOk": 0,
+    "caravansLost": 0,
+    "weekly": 1,
+    "trained": 0,
+    "rank5": 0,
+    "projectsDone": 1
+   },
+   "final": {
+    "era": 2,
+    "floors": 6,
+    "buildings": 33,
+    "levels": 81,
+    "pop": 38,
+    "maxPop": 30,
+    "research": 48,
+    "researchNodes": 110,
+    "explored": 50,
+    "mapHexes": 270,
+    "tutorialStep": 17,
+    "objective": "guide:project:purifier",
+    "achievements": 15,
+    "ruinsLeft": 0,
+    "lore": 16,
+    "rooms": "quarters×3 generator×4 waterPump×3 farm×4 canteen×2 medbay×2 storage×2 workshop×2 laboratory×2 cave×1 lake×1 radioTower×2 metro×1 hydroponics×2 waterPurifier×1 gatePost×1",
+    "res": {
+     "food": "201600/3750",
+     "water": "150239/3675",
+     "power": "450/450",
+     "materials": "112345/1123450",
+     "knowledge": "2700/2700",
+     "scrap": "594/1200",
+     "medicine": "225/225"
+    }
+   },
+   "bot": {
+    "actions": {
+     "supplyDrop": 3,
+     "ruin": 14,
+     "research": 48,
+     "build": 23,
+     "expedition": 50,
+     "staffRuin": 2,
+     "dig": 3,
+     "digStaff": 3,
+     "dailyOrder": 4,
+     "shop": 34,
+     "upgrade": 48,
+     "district": 3,
+     "projectStaff": 3,
+     "projectDeposit": 285,
+     "maintain": 24,
+     "door": 2
+    },
+    "pulledForRuins": 2,
+    "journalReads": 16,
+    "queuedResearch": 30,
+    "longTrips": 18
+   },
+   "warnings": [],
+   "stepList": [
+    "resource",
+    "building",
+    "population",
+    "event(online only)",
+    "research",
+    "exploration",
+    "restoration",
+    "incident(online only)",
+    "family",
+    "project",
+    "dig",
+    "act(slow)(online only)",
+    "threat",
+    "contracts(slow)",
+    "outposts",
+    "foreman",
+    "homes",
+    "maintenance",
+    "inbox(slow)",
+    "achievements(slow)(online only)",
+    "objective(slow)(online only)",
+    "era(slow)(online only)",
+    "story(slow)(online only)",
+    "daily(slow)"
+   ]
+  },
+  {
+   "seed": 2,
+   "mode": "casual",
+   "wallSeconds": 259200,
+   "playSeconds": 9600,
+   "runMs": 41560,
+   "milestones": {
+    "research insulatedWiring": {
+     "play": 59,
+     "wall": 59
+    },
+    "research nutrition": {
+     "play": 119,
+     "wall": 119
+    },
+    "built quarters": {
+     "play": 140,
+     "wall": 140
+    },
+    "built canteen": {
+     "play": 180,
+     "wall": 180
+    },
+    "population 5": {
+     "play": 220,
+     "wall": 220
+    },
+    "built storage": {
+     "play": 230,
+     "wall": 230
+    },
+    "story static": {
+     "play": 260,
+     "wall": 260
+    },
+    "research hazmatSuits": {
+     "play": 349,
+     "wall": 349
+    },
+    "first expedition out": {
+     "play": 350,
+     "wall": 350
+    },
+    "era 1 restoration": {
+     "play": 422,
+     "wall": 422
+    },
+    "built generator": {
+     "play": 430,
+     "wall": 430
+    },
+    "built laboratory": {
+     "play": 590,
+     "wall": 590
+    },
+    "all ruins cleared": {
+     "play": 671,
+     "wall": 671
+    },
+    "built workshop": {
+     "play": 680,
+     "wall": 680
+    },
+    "research communityMeals": {
+     "play": 688,
+     "wall": 688
+    },
+    "first expedition back": {
+     "play": 830,
+     "wall": 830
+    },
+    "floor B4": {
+     "play": 959,
+     "wall": 959
+    },
+    "built waterPump": {
+     "play": 970,
+     "wall": 970
+    },
+    "research armoryResearch": {
+     "play": 973,
+     "wall": 973
+    },
+    "built farm": {
+     "play": 1140,
+     "wall": 1140
+    },
+    "research firstAid": {
+     "play": 1373,
+     "wall": 1373
+    },
+    "research batteryBanks": {
+     "play": 1675,
+     "wall": 1675
+    },
+    "story toll": {
+     "play": 1860,
+     "wall": 1860
+    },
+    "research automation": {
+     "play": 2203,
+     "wall": 2203
+    },
+    "floor B5": {
+     "play": 2400,
+     "wall": 2400
+    },
+    "first upgrade": {
+     "play": 2400,
+     "wall": 12600
+    },
+    "built medbay": {
+     "play": 2400,
+     "wall": 12600
+    },
+    "story deep": {
+     "play": 2450,
+     "wall": 12650
+    },
+    "district cave": {
+     "play": 2450,
+     "wall": 12650
+    },
+    "population 10": {
+     "play": 2480,
+     "wall": 12680
+    },
+    "era 2 colony": {
+     "play": 2480,
+     "wall": 12680
+    },
+    "research waterFiltration": {
+     "play": 2543,
+     "wall": 12743
+    },
+    "research radioBasics": {
+     "play": 2687,
+     "wall": 12887
+    },
+    "story maya": {
+     "play": 2710,
+     "wall": 12910
+    },
+    "research hydroponicsResearch": {
+     "play": 2879,
+     "wall": 13079
+    },
+    "research geigerCounters": {
+     "play": 3000,
+     "wall": 13200
+    },
+    "research trainingProgram": {
+     "play": 3000,
+     "wall": 13200
+    },
+    "first project stage": {
+     "play": 3000,
+     "wall": 13200
+    },
+    "district lake": {
+     "play": 3000,
+     "wall": 46800
+    },
+    "research leadership": {
+     "play": 3000,
+     "wall": 46800
+    },
+    "research fortifiedDoor": {
+     "play": 3239,
+     "wall": 47039
+    },
+    "research preservation": {
+     "play": 3600,
+     "wall": 47400
+    },
+    "research scavengingTactics": {
+     "play": 3600,
+     "wall": 47400
+    },
+    "district metro": {
+     "play": 3600,
+     "wall": 64800
+    },
+    "research advancedEngineering": {
+     "play": 3600,
+     "wall": 64800
+    },
+    "research education": {
+     "play": 4200,
+     "wall": 65400
+    },
+    "research atriumDesign": {
+     "play": 4200,
+     "wall": 65400
+    },
+    "research vehicles": {
+     "play": 5100,
+     "wall": 87300
+    },
+    "research reactorTheory": {
+     "play": 5100,
+     "wall": 87300
+    },
+    "story clan": {
+     "play": 5410,
+     "wall": 99310
+    },
+    "research fusionHall": {
+     "play": 5700,
+     "wall": 99600
+    },
+    "research temporalTheory": {
+     "play": 5700,
+     "wall": 99600
+    },
+    "project vaultSeal done": {
+     "play": 5700,
+     "wall": 99600
+    },
+    "act 2": {
+     "play": 5700,
+     "wall": 133200
+    },
+    "first weekly challenge": {
+     "play": 5730,
+     "wall": 133230
+    },
+    "first child": {
+     "play": 5849,
+     "wall": 133349
+    },
+    "research refine_food": {
+     "play": 6042,
+     "wall": 133542
+    },
+    "research refine_water": {
+     "play": 6300,
+     "wall": 133800
+    },
+    "research communityHall": {
+     "play": 6300,
+     "wall": 133800
+    },
+    "floor B6": {
+     "play": 6300,
+     "wall": 133800
+    },
+    "built radioTower": {
+     "play": 6300,
+     "wall": 151200
+    },
+    "built hydroponics": {
+     "play": 6300,
+     "wall": 151200
+    },
+    "built waterPurifier": {
+     "play": 6300,
+     "wall": 151200
+    },
+    "research mycology": {
+     "play": 6300,
+     "wall": 151200
+    },
+    "research bulkheads": {
+     "play": 6412,
+     "wall": 151312
+    },
+    "story terminus": {
+     "play": 6440,
+     "wall": 151340
+    },
+    "research emergencyExits": {
+     "play": 6554,
+     "wall": 151454
+    },
+    "population 20": {
+     "play": 6640,
+     "wall": 151540
+    },
+    "research atmosphericWater": {
+     "play": 6695,
+     "wall": 151595
+    },
+    "research energyStorage": {
+     "play": 6864,
+     "wall": 151764
+    },
+    "research perimeter": {
+     "play": 6900,
+     "wall": 151800
+    },
+    "research libraryScience": {
+     "play": 6900,
+     "wall": 151800
+    },
+    "floor B7": {
+     "play": 6900,
+     "wall": 151800
+    },
+    "built armory": {
+     "play": 6900,
+     "wall": 172800
+    },
+    "built trainingRoom": {
+     "play": 6900,
+     "wall": 172800
+    },
+    "built commons": {
+     "play": 6900,
+     "wall": 172800
+    },
+    "built gatePost": {
+     "play": 6900,
+     "wall": 172800
+    },
+    "first rank-5 worker": {
+     "play": 7030,
+     "wall": 172930
+    },
+    "first mastery specialization": {
+     "play": 7030,
+     "wall": 172930
+    },
+    "story genesis": {
+     "play": 7210,
+     "wall": 173110
+    },
+    "research tripwires": {
+     "play": 7697,
+     "wall": 173597
+    },
+    "research deepDrilling": {
+     "play": 7800,
+     "wall": 173700
+    },
+    "research coldChain": {
+     "play": 7800,
+     "wall": 173700
+    },
+    "population 30": {
+     "play": 7800,
+     "wall": 185400
+    },
+    "story winter": {
+     "play": 7850,
+     "wall": 185450
+    },
+    "research watchtower": {
+     "play": 8400,
+     "wall": 186000
+    },
+    "research longRangeRadio": {
+     "play": 8400,
+     "wall": 186000
+    },
+    "research winterStores": {
+     "play": 9000,
+     "wall": 220200
+    },
+    "doctrine hydroDoctrine": {
+     "play": 9000,
+     "wall": 220200
+    },
+    "research hydroDoctrine": {
+     "play": 9000,
+     "wall": 220200
+    },
+    "doctrine solarArray": {
+     "play": 9600,
+     "wall": 238200
+    },
+    "research solarArray": {
+     "play": 9600,
+     "wall": 238200
+    },
+    "research childcare": {
+     "play": 9600,
+     "wall": 238200
+    }
+   },
+   "rebirths": 0,
+   "genesis": null,
+   "rebirthPayoutEnd": 335,
+   "samples": [
+    {
+     "label": "5m",
+     "wallH": 0.08,
+     "playH": 0.08,
+     "era": 0,
+     "pop": 5,
+     "maxPop": 8,
+     "kids": 0,
+     "floors": 3,
+     "buildings": 10,
+     "levels": 10,
+     "research": 2,
+     "explored": 0,
+     "morale": 67,
+     "minHp": 100,
+     "step": 7,
+     "iso": 24,
+     "res": {
+      "food": [
+       295,
+       10721,
+       0.59
+      ],
+      "water": [
+       298,
+       8122,
+       0.44
+      ],
+      "power": [
+       40,
+       100,
+       -0.51
+      ],
+      "materials": [
+       51,
+       600,
+       0
+      ],
+      "knowledge": [
+       5,
+       250,
+       0
+      ],
+      "scrap": [
+       67,
+       300,
+       0
+      ],
+      "medicine": [
+       7,
+       50,
+       0.01
+      ],
+      "components": [
+       0,
+       350,
+       0
+      ],
+      "alloys": [
+       0,
+       140,
+       0
+      ]
+     }
+    },
+    {
+     "label": "15m",
+     "wallH": 0.25,
+     "playH": 0.25,
+     "era": 1,
+     "pop": 8,
+     "maxPop": 8,
+     "kids": 0,
+     "floors": 3,
+     "buildings": 14,
+     "levels": 14,
+     "research": 4,
+     "explored": 1,
+     "morale": 49,
+     "minHp": 100,
+     "step": 17,
+     "iso": 46,
+     "res": {
+      "food": [
+       19,
+       1308,
+       -0.37
+      ],
+      "water": [
+       515,
+       5700,
+       0.25
+      ],
+      "power": [
+       0,
+       150,
+       -2.55
+      ],
+      "materials": [
+       120,
+       900,
+       0.2
+      ],
+      "knowledge": [
+       22,
+       500,
+       0.03
+      ],
+      "scrap": [
+       188,
+       400,
+       0
+      ],
+      "medicine": [
+       34,
+       70,
+       0.07
+      ],
+      "components": [
+       0,
+       500,
+       0
+      ],
+      "alloys": [
+       0,
+       200,
+       0
+      ]
+     }
+    },
+    {
+     "label": "30m",
+     "wallH": 0.5,
+     "playH": 0.5,
+     "era": 1,
+     "pop": 8,
+     "maxPop": 8,
+     "kids": 0,
+     "floors": 4,
+     "buildings": 19,
+     "levels": 19,
+     "research": 7,
+     "explored": 4,
+     "morale": 53,
+     "minHp": 100,
+     "step": 17,
+     "iso": 72,
+     "res": {
+      "food": [
+       81,
+       9779,
+       0.57
+      ],
+      "water": [
+       746,
+       6001,
+       0.29
+      ],
+      "power": [
+       0,
+       250,
+       -12.86
+      ],
+      "materials": [
+       136,
+       900,
+       0.15
+      ],
+      "knowledge": [
+       9,
+       600,
+       0.02
+      ],
+      "scrap": [
+       200,
+       400,
+       0
+      ],
+      "medicine": [
+       70,
+       70,
+       0.07
+      ],
+      "components": [
+       0,
+       500,
+       0
+      ],
+      "alloys": [
+       0,
+       200,
+       0
+      ]
+     }
+    },
+    {
+     "label": "d0 s1 end",
+     "wallH": 0.67,
+     "playH": 0.67,
+     "era": 1,
+     "pop": 8,
+     "maxPop": 8,
+     "kids": 0,
+     "floors": 4,
+     "buildings": 19,
+     "levels": 19,
+     "research": 8,
+     "explored": 6,
+     "morale": 75,
+     "minHp": 100,
+     "step": 17,
+     "iso": 74,
+     "res": {
+      "food": [
+       563,
+       12265,
+       0.52
+      ],
+      "water": [
+       977,
+       10639,
+       0.48
+      ],
+      "power": [
+       250,
+       250,
+       7.18
+      ],
+      "materials": [
+       52,
+       900,
+       0.37
+      ],
+      "knowledge": [
+       29,
+       709,
+       0.08
+      ],
+      "scrap": [
+       148,
+       400,
+       0
+      ],
+      "medicine": [
+       66,
+       70,
+       0.15
+      ],
+      "components": [
+       0,
+       500,
+       0
+      ],
+      "alloys": [
+       0,
+       200,
+       0
+      ]
+     }
+    },
+    {
+     "label": "d0 return",
+     "wallH": 3.5,
+     "playH": 0.67,
+     "era": 1,
+     "pop": 8,
+     "maxPop": 8,
+     "kids": 0,
+     "floors": 5,
+     "buildings": 19,
+     "levels": 19,
+     "research": 8,
+     "explored": 8,
+     "morale": 81,
+     "minHp": 100,
+     "step": 17,
+     "iso": 84,
+     "res": {
+      "food": [
+       3737,
+       14098,
+       0.73
+      ],
+      "water": [
+       7692,
+       13899,
+       0.84
+      ],
+      "power": [
+       250,
+       250,
+       16.14
+      ],
+      "materials": [
+       900,
+       900,
+       0.38
+      ],
+      "knowledge": [
+       692,
+       732,
+       0.08
+      ],
+      "scrap": [
+       199,
+       400,
+       0
+      ],
+      "medicine": [
+       70,
+       70,
+       0.2
+      ],
+      "components": [
+       0,
+       500,
+       0
+      ],
+      "alloys": [
+       0,
+       200,
+       0
+      ]
+     }
+    },
+    {
+     "label": "d0 s2 end",
+     "wallH": 3.67,
+     "playH": 0.83,
+     "era": 2,
+     "pop": 12,
+     "maxPop": 12,
+     "kids": 0,
+     "floors": 5,
+     "buildings": 24,
+     "levels": 25,
+     "research": 11,
+     "explored": 8,
+     "morale": 79,
+     "minHp": 100,
+     "step": 17,
+     "iso": 109,
+     "res": {
+      "food": [
+       3430,
+       11622,
+       0.45
+      ],
+      "water": [
+       7844,
+       10255,
+       0.38
+      ],
+      "power": [
+       0,
+       250,
+       -0.99
+      ],
+      "materials": [
+       136,
+       1350,
+       0.56
+      ],
+      "knowledge": [
+       693,
+       943,
+       0.1
+      ],
+      "scrap": [
+       84,
+       600,
+       0
+      ],
+      "medicine": [
+       105,
+       105,
+       0.15
+      ],
+      "components": [
+       0,
+       750,
+       0
+      ],
+      "alloys": [
+       0,
+       300,
+       0
+      ]
+     }
+    },
+    {
+     "label": "d0 return",
+     "wallH": 13,
+     "playH": 0.83,
+     "era": 2,
+     "pop": 12,
+     "maxPop": 12,
+     "kids": 0,
+     "floors": 5,
+     "buildings": 24,
+     "levels": 25,
+     "research": 13,
+     "explored": 10,
+     "morale": 100,
+     "minHp": 100,
+     "step": 17,
+     "iso": 113,
+     "res": {
+      "food": [
+       36575,
+       36575,
+       2.9
+      ],
+      "water": [
+       17264,
+       17264,
+       0.84
+      ],
+      "power": [
+       250,
+       250,
+       15.12
+      ],
+      "materials": [
+       1350,
+       1350,
+       0.67
+      ],
+      "knowledge": [
+       1130,
+       1130,
+       0.13
+      ],
+      "scrap": [
+       111,
+       600,
+       0
+      ],
+      "medicine": [
+       105,
+       105,
+       0.26
+      ],
+      "components": [
+       0,
+       750,
+       0
+      ],
+      "alloys": [
+       0,
+       300,
+       0
+      ]
+     }
+    },
+    {
+     "label": "d0 s3 end",
+     "wallH": 13.17,
+     "playH": 1,
+     "era": 2,
+     "pop": 12,
+     "maxPop": 12,
+     "kids": 0,
+     "floors": 5,
+     "buildings": 25,
+     "levels": 27,
+     "research": 15,
+     "explored": 10,
+     "morale": 96,
+     "minHp": 100,
+     "step": 17,
+     "iso": 117,
+     "res": {
+      "food": [
+       51181,
+       9922,
+       0.26
+      ],
+      "water": [
+       24169,
+       23679,
+       1.87
+      ],
+      "power": [
+       250,
+       250,
+       7.16
+      ],
+      "materials": [
+       136,
+       1350,
+       0.63
+      ],
+      "knowledge": [
+       1382,
+       1063,
+       0.12
+      ],
+      "scrap": [
+       51,
+       600,
+       0
+      ],
+      "medicine": [
+       105,
+       105,
+       0.24
+      ],
+      "components": [
+       0,
+       750,
+       0
+      ],
+      "alloys": [
+       0,
+       300,
+       0
+      ]
+     }
+    },
+    {
+     "label": "d0 return",
+     "wallH": 18,
+     "playH": 1,
+     "era": 2,
+     "pop": 12,
+     "maxPop": 12,
+     "kids": 0,
+     "floors": 5,
+     "buildings": 25,
+     "levels": 27,
+     "research": 17,
+     "explored": 12,
+     "morale": 100,
+     "minHp": 100,
+     "step": 17,
+     "iso": 121,
+     "res": {
+      "food": [
+       51181,
+       39294,
+       3.21
+      ],
+      "water": [
+       18338,
+       24450,
+       1.72
+      ],
+      "power": [
+       250,
+       250,
+       21.72
+      ],
+      "materials": [
+       1215,
+       1350,
+       0.66
+      ],
+      "knowledge": [
+       1382,
+       1097,
+       0.12
+      ],
+      "scrap": [
+       71,
+       600,
+       0
+      ],
+      "medicine": [
+       105,
+       105,
+       0.25
+      ],
+      "components": [
+       0,
+       750,
+       0
+      ],
+      "alloys": [
+       0,
+       300,
+       0
+      ]
+     }
+    },
+    {
+     "label": "d0 s4 end",
+     "wallH": 18.17,
+     "playH": 1.17,
+     "era": 2,
+     "pop": 12,
+     "maxPop": 12,
+     "kids": 0,
+     "floors": 5,
+     "buildings": 26,
+     "levels": 44,
+     "research": 18,
+     "explored": 12,
+     "morale": 93,
+     "minHp": 100,
+     "step": 17,
+     "iso": 123,
+     "res": {
+      "food": [
+       81197,
+       11649,
+       0.38
+      ],
+      "water": [
+       38460,
+       28792,
+       2.42
+      ],
+      "power": [
+       0,
+       350,
+       -5.94
+      ],
+      "materials": [
+       255,
+       2550,
+       0.89
+      ],
+      "knowledge": [
+       1651,
+       1500,
+       0.12
+      ],
+      "scrap": [
+       41,
+       900,
+       0
+      ],
+      "medicine": [
+       165,
+       165,
+       0.32
+      ],
+      "components": [
+       0,
+       1200,
+       0
+      ],
+      "alloys": [
+       0,
+       480,
+       0
+      ]
+     }
+    },
+    {
+     "label": "d1 return",
+     "wallH": 24,
+     "playH": 1.17,
+     "era": 2,
+     "pop": 12,
+     "maxPop": 12,
+     "kids": 0,
+     "floors": 5,
+     "buildings": 26,
+     "levels": 44,
+     "research": 20,
+     "explored": 14,
+     "morale": 100,
+     "minHp": 100,
+     "step": 17,
+     "iso": 127,
+     "res": {
+      "food": [
+       81197,
+       58948,
+       5.32
+      ],
+      "water": [
+       38460,
+       33914,
+       2.67
+      ],
+      "power": [
+       350,
+       350,
+       11.42
+      ],
+      "materials": [
+       2550,
+       2550,
+       1.56
+      ],
+      "knowledge": [
+       2363,
+       2363,
+       0.26
+      ],
+      "scrap": [
+       900,
+       900,
+       0.04
+      ],
+      "medicine": [
+       165,
+       165,
+       0.38
+      ],
+      "components": [
+       0,
+       1200,
+       0
+      ],
+      "alloys": [
+       0,
+       480,
+       0
+      ]
+     }
+    },
+    {
+     "label": "d1 s5 end",
+     "wallH": 24.25,
+     "playH": 1.42,
+     "era": 2,
+     "pop": 12,
+     "maxPop": 12,
+     "kids": 0,
+     "floors": 5,
+     "buildings": 26,
+     "levels": 59,
+     "research": 20,
+     "explored": 16,
+     "morale": 97,
+     "minHp": 100,
+     "step": 17,
+     "iso": 127,
+     "res": {
+      "food": [
+       80431,
+       30736,
+       2.29
+      ],
+      "water": [
+       39033,
+       39033,
+       3.38
+      ],
+      "power": [
+       350,
+       350,
+       2.68
+      ],
+      "materials": [
+       1729,
+       2550,
+       1.52
+      ],
+      "knowledge": [
+       2160,
+       2679,
+       0.3
+      ],
+      "scrap": [
+       819,
+       900,
+       0.03
+      ],
+      "medicine": [
+       165,
+       165,
+       0.38
+      ],
+      "components": [
+       0,
+       1200,
+       0
+      ],
+      "alloys": [
+       0,
+       480,
+       0
+      ]
+     }
+    },
+    {
+     "label": "d1 return",
+     "wallH": 27.5,
+     "playH": 1.42,
+     "era": 2,
+     "pop": 12,
+     "maxPop": 12,
+     "kids": 0,
+     "floors": 5,
+     "buildings": 26,
+     "levels": 59,
+     "research": 22,
+     "explored": 18,
+     "morale": 100,
+     "minHp": 100,
+     "step": 17,
+     "iso": 131,
+     "res": {
+      "food": [
+       80431,
+       66401,
+       6.09
+      ],
+      "water": [
+       39710,
+       39710,
+       3.28
+      ],
+      "power": [
+       450,
+       450,
+       0.68
+      ],
+      "materials": [
+       3450,
+       3450,
+       1.54
+      ],
+      "knowledge": [
+       2725,
+       2725,
+       0.3
+      ],
+      "scrap": [
+       1072,
+       1200,
+       0.03
+      ],
+      "medicine": [
+       225,
+       225,
+       0.48
+      ],
+      "components": [
+       0,
+       1650,
+       0
+      ],
+      "alloys": [
+       0,
+       660,
+       0
+      ]
+     }
+    },
+    {
+     "label": "d1 s6 end",
+     "wallH": 27.67,
+     "playH": 1.58,
+     "era": 2,
+     "pop": 12,
+     "maxPop": 12,
+     "kids": 0,
+     "floors": 5,
+     "buildings": 26,
+     "levels": 71,
+     "research": 22,
+     "explored": 20,
+     "morale": 99,
+     "minHp": 100,
+     "step": 17,
+     "iso": 136,
+     "res": {
+      "food": [
+       79063,
+       74047,
+       6.94
+      ],
+      "water": [
+       40022,
+       41048,
+       3.43
+      ],
+      "power": [
+       450,
+       450,
+       16.23
+      ],
+      "materials": [
+       2401,
+       3450,
+       1.88
+      ],
+      "knowledge": [
+       2182,
+       2772,
+       0.31
+      ],
+      "scrap": [
+       946,
+       1200,
+       0.02
+      ],
+      "medicine": [
+       225,
+       225,
+       0.49
+      ],
+      "components": [
+       0,
+       1650,
+       0
+      ],
+      "alloys": [
+       0,
+       660,
+       0
+      ]
+     }
+    },
+    {
+     "label": "d1 return",
+     "wallH": 37,
+     "playH": 1.58,
+     "era": 2,
+     "pop": 12,
+     "maxPop": 12,
+     "kids": 0,
+     "floors": 5,
+     "buildings": 26,
+     "levels": 71,
+     "research": 24,
+     "explored": 22,
+     "morale": 96,
+     "minHp": 100,
+     "step": 17,
+     "iso": 140,
+     "res": {
+      "food": [
+       79063,
+       72065,
+       6.72
+      ],
+      "water": [
+       41334,
+       39950,
+       3.31
+      ],
+      "power": [
+       450,
+       450,
+       13.28
+      ],
+      "materials": [
+       3450,
+       3450,
+       1.83
+      ],
+      "knowledge": [
+       3441,
+       3326,
+       0.37
+      ],
+      "scrap": [
+       1200,
+       1200,
+       0.01
+      ],
+      "medicine": [
+       225,
+       225,
+       0.47
+      ],
+      "components": [
+       0,
+       1650,
+       0
+      ],
+      "alloys": [
+       0,
+       660,
+       0
+      ]
+     }
+    },
+    {
+     "label": "d1 s7 end",
+     "wallH": 37.17,
+     "playH": 1.75,
+     "era": 2,
+     "pop": 16,
+     "maxPop": 30,
+     "kids": 1,
+     "floors": 5,
+     "buildings": 26,
+     "levels": 72,
+     "research": 25,
+     "explored": 24,
+     "morale": 96,
+     "minHp": 100,
+     "step": 17,
+     "iso": 249,
+     "res": {
+      "food": [
+       78658,
+       2250,
+       6.76
+      ],
+      "water": [
+       41334,
+       2175,
+       3
+      ],
+      "power": [
+       389,
+       450,
+       2.08
+      ],
+      "materials": [
+       112346,
+       1123450,
+       3.78
+      ],
+      "knowledge": [
+       3336,
+       2700,
+       0.37
+      ],
+      "scrap": [
+       953,
+       1200,
+       0.01
+      ],
+      "medicine": [
+       225,
+       225,
+       0.48
+      ],
+      "components": [
+       0,
+       1650,
+       0
+      ],
+      "alloys": [
+       0,
+       660,
+       0
+      ]
+     }
+    },
+    {
+     "label": "d1 return",
+     "wallH": 42,
+     "playH": 1.75,
+     "era": 2,
+     "pop": 16,
+     "maxPop": 30,
+     "kids": 1,
+     "floors": 6,
+     "buildings": 26,
+     "levels": 72,
+     "research": 27,
+     "explored": 26,
+     "morale": 98,
+     "minHp": 100,
+     "step": 17,
+     "iso": 261,
+     "res": {
+      "food": [
+       78658,
+       2250,
+       7.95
+      ],
+      "water": [
+       41334,
+       2175,
+       5.22
+      ],
+      "power": [
+       450,
+       450,
+       24.68
+      ],
+      "materials": [
+       112346,
+       1123450,
+       5.57
+      ],
+      "knowledge": [
+       3336,
+       2700,
+       0.44
+      ],
+      "scrap": [
+       1200,
+       1200,
+       0.01
+      ],
+      "medicine": [
+       225,
+       225,
+       0.51
+      ],
+      "components": [
+       0,
+       1650,
+       0
+      ],
+      "alloys": [
+       0,
+       660,
+       0
+      ]
+     }
+    },
+    {
+     "label": "d1 s8 end",
+     "wallH": 42.17,
+     "playH": 1.92,
+     "era": 2,
+     "pop": 21,
+     "maxPop": 30,
+     "kids": 2,
+     "floors": 6,
+     "buildings": 31,
+     "levels": 77,
+     "research": 32,
+     "explored": 28,
+     "morale": 96,
+     "minHp": 100,
+     "step": 17,
+     "iso": 286,
+     "res": {
+      "food": [
+       78343,
+       2250,
+       7.46
+      ],
+      "water": [
+       41259,
+       2175,
+       4.84
+      ],
+      "power": [
+       450,
+       450,
+       7.68
+      ],
+      "materials": [
+       112345,
+       1123450,
+       5.44
+      ],
+      "knowledge": [
+       6238,
+       2700,
+       0.78
+      ],
+      "scrap": [
+       1195,
+       1200,
+       0.01
+      ],
+      "medicine": [
+       225,
+       225,
+       0.5
+      ],
+      "components": [
+       0,
+       1650,
+       0
+      ],
+      "alloys": [
+       0,
+       660,
+       0
+      ]
+     }
+    },
+    {
+     "label": "d2 return",
+     "wallH": 48,
+     "playH": 1.92,
+     "era": 2,
+     "pop": 21,
+     "maxPop": 30,
+     "kids": 2,
+     "floors": 7,
+     "buildings": 31,
+     "levels": 77,
+     "research": 34,
+     "explored": 30,
+     "morale": 98,
+     "minHp": 100,
+     "step": 17,
+     "iso": 300,
+     "res": {
+      "food": [
+       78343,
+       2250,
+       10.93
+      ],
+      "water": [
+       41259,
+       2175,
+       5.03
+      ],
+      "power": [
+       450,
+       450,
+       11.53
+      ],
+      "materials": [
+       112345,
+       1123450,
+       9.21
+      ],
+      "knowledge": [
+       8100,
+       2700,
+       1.22
+      ],
+      "scrap": [
+       1211,
+       1200,
+       0.28
+      ],
+      "medicine": [
+       225,
+       225,
+       0.51
+      ],
+      "components": [
+       0,
+       1650,
+       0
+      ],
+      "alloys": [
+       0,
+       660,
+       0
+      ]
+     }
+    },
+    {
+     "label": "d2 s9 end",
+     "wallH": 48.25,
+     "playH": 2.17,
+     "era": 2,
+     "pop": 29,
+     "maxPop": 30,
+     "kids": 3,
+     "floors": 7,
+     "buildings": 38,
+     "levels": 84,
+     "research": 35,
+     "explored": 33,
+     "morale": 92,
+     "minHp": 100,
+     "step": 17,
+     "iso": 310,
+     "res": {
+      "food": [
+       67912,
+       2250,
+       8.67
+      ],
+      "water": [
+       41259,
+       2175,
+       7.69
+      ],
+      "power": [
+       450,
+       450,
+       14.63
+      ],
+      "materials": [
+       101667,
+       1123450,
+       11.73
+      ],
+      "knowledge": [
+       564,
+       2700,
+       1.76
+      ],
+      "scrap": [
+       995,
+       1200,
+       0.26
+      ],
+      "medicine": [
+       225,
+       225,
+       0.56
+      ],
+      "components": [
+       0,
+       1650,
+       0
+      ],
+      "alloys": [
+       0,
+       660,
+       0
+      ]
+     }
+    },
+    {
+     "label": "d2 return",
+     "wallH": 51.5,
+     "playH": 2.17,
+     "era": 2,
+     "pop": 29,
+     "maxPop": 30,
+     "kids": 3,
+     "floors": 7,
+     "buildings": 38,
+     "levels": 84,
+     "research": 37,
+     "explored": 35,
+     "morale": 99,
+     "minHp": 100,
+     "step": 17,
+     "iso": 314,
+     "res": {
+      "food": [
+       67912,
+       3750,
+       14.31
+      ],
+      "water": [
+       41259,
+       3675,
+       9.2
+      ],
+      "power": [
+       450,
+       450,
+       14.63
+      ],
+      "materials": [
+       112346,
+       1123450,
+       15.25
+      ],
+      "knowledge": [
+       2700,
+       2700,
+       2.5
+      ],
+      "scrap": [
+       1200,
+       1200,
+       0.31
+      ],
+      "medicine": [
+       225,
+       225,
+       0.61
+      ],
+      "components": [
+       0,
+       1650,
+       0
+      ],
+      "alloys": [
+       0,
+       660,
+       0
+      ]
+     }
+    },
+    {
+     "label": "d2 s10 end",
+     "wallH": 51.67,
+     "playH": 2.33,
+     "era": 2,
+     "pop": 38,
+     "maxPop": 30,
+     "kids": 2,
+     "floors": 7,
+     "buildings": 38,
+     "levels": 84,
+     "research": 37,
+     "explored": 37,
+     "morale": 77,
+     "minHp": 100,
+     "step": 17,
+     "iso": 323,
+     "res": {
+      "food": [
+       65812,
+       3750,
+       11.03
+      ],
+      "water": [
+       41259,
+       3675,
+       6.76
+      ],
+      "power": [
+       450,
+       450,
+       14.63
+      ],
+      "materials": [
+       106095,
+       1123450,
+       14.12
+      ],
+      "knowledge": [
+       1328,
+       2700,
+       2.7
+      ],
+      "scrap": [
+       1200,
+       1200,
+       0.53
+      ],
+      "medicine": [
+       225,
+       225,
+       0.73
+      ],
+      "components": [
+       0,
+       1650,
+       0
+      ],
+      "alloys": [
+       0,
+       660,
+       0
+      ]
+     }
+    },
+    {
+     "label": "d2 return",
+     "wallH": 61,
+     "playH": 2.33,
+     "era": 2,
+     "pop": 38,
+     "maxPop": 38,
+     "kids": 2,
+     "floors": 7,
+     "buildings": 38,
+     "levels": 84,
+     "research": 39,
+     "explored": 39,
+     "morale": 99,
+     "minHp": 100,
+     "step": 17,
+     "iso": 327,
+     "res": {
+      "food": [
+       65812,
+       3750,
+       14.64
+      ],
+      "water": [
+       41259,
+       3675,
+       9.83
+      ],
+      "power": [
+       450,
+       450,
+       14.63
+      ],
+      "materials": [
+       112346,
+       1123450,
+       18.17
+      ],
+      "knowledge": [
+       2700,
+       2700,
+       3.68
+      ],
+      "scrap": [
+       1200,
+       1200,
+       0.98
+      ],
+      "medicine": [
+       225,
+       225,
+       0.97
+      ],
+      "components": [
+       0,
+       1650,
+       0
+      ],
+      "alloys": [
+       0,
+       660,
+       0
+      ]
+     }
+    },
+    {
+     "label": "d2 s11 end",
+     "wallH": 61.17,
+     "playH": 2.5,
+     "era": 2,
+     "pop": 38,
+     "maxPop": 38,
+     "kids": 2,
+     "floors": 7,
+     "buildings": 38,
+     "levels": 84,
+     "research": 39,
+     "explored": 41,
+     "morale": 98,
+     "minHp": 100,
+     "step": 17,
+     "iso": 327,
+     "res": {
+      "food": [
+       62797,
+       3750,
+       14.25
+      ],
+      "water": [
+       41245,
+       3675,
+       9.32
+      ],
+      "power": [
+       450,
+       450,
+       14.63
+      ],
+      "materials": [
+       102593,
+       1123450,
+       18.1
+      ],
+      "knowledge": [
+       1250,
+       2700,
+       3.54
+      ],
+      "scrap": [
+       1200,
+       1200,
+       0.94
+      ],
+      "medicine": [
+       225,
+       225,
+       0.96
+      ],
+      "components": [
+       0,
+       1650,
+       0
+      ],
+      "alloys": [
+       0,
+       660,
+       0
+      ]
+     }
+    },
+    {
+     "label": "d2 return",
+     "wallH": 66,
+     "playH": 2.5,
+     "era": 2,
+     "pop": 38,
+     "maxPop": 38,
+     "kids": 2,
+     "floors": 7,
+     "buildings": 38,
+     "levels": 84,
+     "research": 41,
+     "explored": 43,
+     "morale": 99,
+     "minHp": 100,
+     "step": 17,
+     "iso": 331,
+     "res": {
+      "food": [
+       62797,
+       3750,
+       15.32
+      ],
+      "water": [
+       41245,
+       3675,
+       9.68
+      ],
+      "power": [
+       450,
+       450,
+       16.02
+      ],
+      "materials": [
+       112345,
+       1123450,
+       18.64
+      ],
+      "knowledge": [
+       2700,
+       2700,
+       3.64
+      ],
+      "scrap": [
+       1200,
+       1200,
+       1.02
+      ],
+      "medicine": [
+       225,
+       225,
+       0.96
+      ],
+      "components": [
+       0,
+       1650,
+       0
+      ],
+      "alloys": [
+       0,
+       660,
+       0
+      ]
+     }
+    },
+    {
+     "label": "d2 s12 end",
+     "wallH": 66.17,
+     "playH": 2.67,
+     "era": 2,
+     "pop": 38,
+     "maxPop": 38,
+     "kids": 1,
+     "floors": 7,
+     "buildings": 38,
+     "levels": 84,
+     "research": 41,
+     "explored": 45,
+     "morale": 96,
+     "minHp": 100,
+     "step": 17,
+     "iso": 331,
+     "res": {
+      "food": [
+       48787,
+       3750,
+       17.7
+      ],
+      "water": [
+       41170,
+       3675,
+       10.14
+      ],
+      "power": [
+       450,
+       450,
+       16.02
+      ],
+      "materials": [
+       112345,
+       1123450,
+       19.85
+      ],
+      "knowledge": [
+       1333,
+       2700,
+       4.31
+      ],
+      "scrap": [
+       1200,
+       1200,
+       1.04
+      ],
+      "medicine": [
+       225,
+       225,
+       0.94
+      ],
+      "components": [
+       0,
+       1650,
+       0
+      ],
+      "alloys": [
+       0,
+       660,
+       0
+      ]
+     }
+    },
+    {
+     "label": "end",
+     "wallH": 72,
+     "playH": 2.67,
+     "era": 2,
+     "pop": 38,
+     "maxPop": 38,
+     "kids": 1,
+     "floors": 7,
+     "buildings": 38,
+     "levels": 84,
+     "research": 43,
+     "explored": 47,
+     "morale": 92,
+     "minHp": 100,
+     "step": 17,
+     "iso": 335,
+     "res": {
+      "food": [
+       48787,
+       3750,
+       19.71
+      ],
+      "water": [
+       41170,
+       3675,
+       9.92
+      ],
+      "power": [
+       450,
+       450,
+       54.94
+      ],
+      "materials": [
+       112345,
+       1123450,
+       19.56
+      ],
+      "knowledge": [
+       2700,
+       2700,
+       4.24
+      ],
+      "scrap": [
+       1200,
+       1200,
+       1.06
+      ],
+      "medicine": [
+       225,
+       225,
+       0.93
+      ],
+      "components": [
+       0,
+       1650,
+       0
+      ],
+      "alloys": [
+       0,
+       660,
+       0
+      ]
+     }
+    }
+   ],
+   "capShare": {
+    "food": 0.693,
+    "water": 0.691,
+    "power": 0.591,
+    "materials": 0,
+    "knowledge": 0.338,
+    "scrap": 0.126,
+    "medicine": 0.722
+   },
+   "famineSeconds": 578,
+   "thirstSeconds": 0,
+   "deaths": {
+    "total": 0,
+    "famine": 0,
+    "other": 0,
+    "causes": {}
+   },
+   "injuries": {
+    "expedition": 21,
+    "raid": 0,
+    "sickness": 0
+   },
+   "danger": {
+    "raids": {},
+    "disasterStarted": 0,
+    "disasterHandled": 0,
+    "disasterStruck": {},
+    "tributes": 0,
+    "maintained": 19,
+    "away": {
+     "raids": 2,
+     "raidsLost": 0,
+     "disasters": 1,
+     "hurt": 0,
+     "died": 0
+    },
+    "deathDays": [],
+    "minPop": 38,
+    "minPopDay": 0,
+    "raidLog": [],
+    "byKind": {}
+   },
+   "incidents": 13,
+   "missions": 47,
+   "missionFails": 3,
+   "kids": 3,
+   "arrivals": {
+    "accepted": 23,
+    "refused": 0,
+    "doorAdmitted": 7
+   },
+   "events": {
+    "wanderer": 14,
+    "stash": 5,
+    "trader": 7,
+    "powerSurge": 3,
+    "argument": 3,
+    "pipeLeak": 3,
+    "radioSignal": 1,
+    "sickness": 4,
+    "radioSignal2": 1,
+    "group": 1,
+    "radioSignal3": 1
+   },
+   "chapters": [
+    {
+     "id": "static",
+     "wall": 260,
+     "play": 260
+    },
+    {
+     "id": "toll",
+     "wall": 1860,
+     "play": 1860
+    },
+    {
+     "id": "deep",
+     "wall": 12650,
+     "play": 2450
+    },
+    {
+     "id": "maya",
+     "wall": 12910,
+     "play": 2710
+    },
+    {
+     "id": "clan",
+     "wall": 99310,
+     "play": 5410
+    },
+    {
+     "id": "terminus",
+     "wall": 151340,
+     "play": 6440
+    },
+    {
+     "id": "genesis",
+     "wall": 173110,
+     "play": 7210
+    },
+    {
+     "id": "winter",
+     "wall": 185450,
+     "play": 7850
+    }
+   ],
+   "chaptersTotal": 20,
+   "idle": {
+    "share": 0.592,
+    "gapsOver5m": 1,
+    "longest": [
+     [
+      8400,
+      360
+     ],
+     [
+      5160,
+      280
+     ],
+     [
+      1810,
+      250
+     ],
+     [
+      1580,
+      230
+     ],
+     [
+      4490,
+      220
+     ]
+    ]
+   },
+   "offline": [
+    {
+     "wallH": 3.5,
+     "awayMin": 170,
+     "gained": {
+      "food": 3174,
+      "water": 6715,
+      "materials": 848,
+      "medicine": 4,
+      "knowledge": 663,
+      "scrap": 51
+     },
+     "wasted": {},
+     "wastedEstimated": false,
+     "arrivals": 0,
+     "doorAdmitted": 0,
+     "missions": 2,
+     "research": 0,
+     "starvingOnReturn": false,
+     "extra": {
+      "converted": {
+       "medicine": 1424,
+       "materials": 2247
+      },
+      "credits": 352,
+      "absorbed": {},
+      "arrivals": 0,
+      "missions": 2,
+      "research": 0,
+      "danger": {
+       "raids": 0,
+       "raidsLost": 0,
+       "disasters": [],
+       "hurt": 0,
+       "died": []
+      },
+      "log": 3,
+      "nightDanger": {
+       "hurt": [],
+       "lost": {}
+      },
+      "realSeconds": 10200
+     }
+    },
+    {
+     "wallH": 13,
+     "awayMin": 560,
+     "gained": {
+      "food": 33145,
+      "water": 9420,
+      "power": 250,
+      "materials": 1214,
+      "knowledge": 437,
+      "scrap": 27
+     },
+     "wasted": {},
+     "wastedEstimated": false,
+     "arrivals": 0,
+     "doorAdmitted": 0,
+     "missions": 2,
+     "research": 2,
+     "starvingOnReturn": false,
+     "extra": {
+      "converted": {
+       "medicine": 6597,
+       "materials": 4761,
+       "knowledge": 2931,
+       "food": 40395,
+       "water": 10792
+      },
+      "credits": 2121,
+      "absorbed": {
+       "materials": 12184
+      },
+      "arrivals": 0,
+      "missions": 2,
+      "research": 2,
+      "danger": {
+       "raids": 0,
+       "raidsLost": 0,
+       "disasters": [],
+       "hurt": 0,
+       "died": []
+      },
+      "log": 3,
+      "nightDanger": {
+       "hurt": [],
+       "lost": {}
+      },
+      "realSeconds": 33600
+     }
+    },
+    {
+     "wallH": 18,
+     "awayMin": 290,
+     "gained": {
+      "water": -5831,
+      "materials": 1079,
+      "scrap": 20
+     },
+     "wasted": {},
+     "wastedEstimated": false,
+     "arrivals": 0,
+     "doorAdmitted": 0,
+     "missions": 2,
+     "research": 2,
+     "starvingOnReturn": false,
+     "extra": {
+      "converted": {
+       "food": 43743,
+       "water": 22529,
+       "medicine": 3478,
+       "knowledge": 1697,
+       "materials": 4762
+      },
+      "credits": 1586,
+      "absorbed": {
+       "materials": 3181
+      },
+      "arrivals": 0,
+      "missions": 2,
+      "research": 2,
+      "danger": {
+       "raids": 0,
+       "raidsLost": 0,
+       "disasters": [
+        "deepFlood"
+       ],
+       "hurt": 0,
+       "died": []
+      },
+      "log": 0,
+      "nightDanger": {
+       "hurt": [],
+       "lost": {
+        "water": -6112,
+        "materials": -135
+       }
+      },
+      "realSeconds": 17400
+     }
+    },
+    {
+     "wallH": 24,
+     "awayMin": 350,
+     "gained": {
+      "power": 350,
+      "materials": 2295,
+      "knowledge": 712,
+      "scrap": 859
+     },
+     "wasted": {},
+     "wastedEstimated": false,
+     "arrivals": 0,
+     "doorAdmitted": 0,
+     "missions": 2,
+     "research": 2,
+     "starvingOnReturn": false,
+     "extra": {
+      "converted": {
+       "food": 88606,
+       "water": 44798,
+       "medicine": 6352,
+       "knowledge": 3493,
+       "materials": 7485
+      },
+      "credits": 3004,
+      "absorbed": {
+       "materials": 15494,
+       "scrap": 86
+      },
+      "arrivals": 0,
+      "missions": 2,
+      "research": 2,
+      "danger": {
+       "raids": 0,
+       "raidsLost": 0,
+       "disasters": [],
+       "hurt": 0,
+       "died": []
+      },
+      "log": 0,
+      "nightDanger": {
+       "hurt": [],
+       "lost": {}
+      },
+      "realSeconds": 21000
+     }
+    },
+    {
+     "wallH": 27.5,
+     "awayMin": 195,
+     "gained": {
+      "water": 677,
+      "power": 100,
+      "materials": 1721,
+      "medicine": 60,
+      "knowledge": 565,
+      "scrap": 254
+     },
+     "wasted": {},
+     "wastedEstimated": false,
+     "arrivals": 0,
+     "doorAdmitted": 0,
+     "missions": 2,
+     "research": 2,
+     "starvingOnReturn": false,
+     "extra": {
+      "converted": {
+       "food": 47129,
+       "water": 26867,
+       "medicine": 4023,
+       "knowledge": 2018,
+       "materials": 11462
+      },
+      "credits": 1989,
+      "absorbed": {},
+      "arrivals": 0,
+      "missions": 2,
+      "research": 2,
+      "danger": {
+       "raids": 0,
+       "raidsLost": 0,
+       "disasters": [],
+       "hurt": 0,
+       "died": []
+      },
+      "log": 3,
+      "nightDanger": {
+       "hurt": [],
+       "lost": {}
+      },
+      "realSeconds": 11700
+     }
+    },
+    {
+     "wallH": 37,
+     "awayMin": 560,
+     "gained": {
+      "water": 1312,
+      "materials": 1049,
+      "knowledge": 1259,
+      "scrap": 254
+     },
+     "wasted": {},
+     "wastedEstimated": false,
+     "arrivals": 0,
+     "doorAdmitted": 0,
+     "missions": 2,
+     "research": 2,
+     "starvingOnReturn": false,
+     "extra": {
+      "converted": {
+       "food": 172948,
+       "medicine": 12928,
+       "water": 90060,
+       "materials": 48772,
+       "knowledge": 8814,
+       "scrap": 367
+      },
+      "credits": 7131,
+      "absorbed": {},
+      "arrivals": 0,
+      "missions": 2,
+      "research": 2,
+      "danger": {
+       "raids": 2,
+       "raidsLost": 0,
+       "disasters": [],
+       "hurt": 0,
+       "died": []
+      },
+      "log": 7,
+      "nightDanger": {
+       "hurt": [],
+       "lost": {}
+      },
+      "realSeconds": 33600
+     }
+    },
+    {
+     "wallH": 42,
+     "awayMin": 290,
+     "gained": {
+      "power": 61,
+      "scrap": 247
+     },
+     "wasted": {},
+     "wastedEstimated": false,
+     "arrivals": 3,
+     "doorAdmitted": 3,
+     "missions": 2,
+     "research": 2,
+     "starvingOnReturn": false,
+     "extra": {
+      "converted": {
+       "food": 92445,
+       "water": 68385,
+       "medicine": 6778,
+       "knowledge": 5724,
+       "scrap": 109
+      },
+      "credits": 3253,
+      "absorbed": {},
+      "arrivals": 3,
+      "missions": 2,
+      "research": 2,
+      "danger": {
+       "raids": 0,
+       "raidsLost": 0,
+       "disasters": [],
+       "hurt": 0,
+       "died": []
+      },
+      "log": 1,
+      "nightDanger": {
+       "hurt": [],
+       "lost": {}
+      },
+      "realSeconds": 17400
+     }
+    },
+    {
+     "wallH": 48,
+     "awayMin": 350,
+     "gained": {
+      "knowledge": 1862,
+      "scrap": 16
+     },
+     "wasted": {},
+     "wastedEstimated": false,
+     "arrivals": 3,
+     "doorAdmitted": 3,
+     "missions": 2,
+     "research": 2,
+     "starvingOnReturn": false,
+     "extra": {
+      "converted": {
+       "food": 157806,
+       "water": 81795,
+       "medicine": 8304,
+       "knowledge": 17275,
+       "scrap": 3410
+      },
+      "credits": 5023,
+      "absorbed": {},
+      "arrivals": 3,
+      "missions": 2,
+      "research": 2,
+      "danger": {
+       "raids": 0,
+       "raidsLost": 0,
+       "disasters": [],
+       "hurt": 0,
+       "died": []
+      },
+      "log": 4,
+      "nightDanger": {
+       "hurt": [],
+       "lost": {}
+      },
+      "realSeconds": 21000
+     }
+    },
+    {
+     "wallH": 51.5,
+     "awayMin": 195,
+     "gained": {
+      "materials": 10678,
+      "knowledge": 2136,
+      "scrap": 205
+     },
+     "wasted": {},
+     "wastedEstimated": false,
+     "arrivals": 1,
+     "doorAdmitted": 1,
+     "missions": 2,
+     "research": 2,
+     "starvingOnReturn": false,
+     "extra": {
+      "converted": {
+       "food": 117755,
+       "water": 82271,
+       "medicine": 5646,
+       "knowledge": 19428,
+       "scrap": 2103
+      },
+      "credits": 4164,
+      "absorbed": {},
+      "arrivals": 1,
+      "missions": 2,
+      "research": 2,
+      "danger": {
+       "raids": 0,
+       "raidsLost": 0,
+       "disasters": [],
+       "hurt": 0,
+       "died": []
+      },
+      "log": 5,
+      "nightDanger": {
+       "hurt": [],
+       "lost": {}
+      },
+      "realSeconds": 11700
+     }
+    },
+    {
+     "wallH": 61,
+     "awayMin": 560,
+     "gained": {
+      "materials": 6251,
+      "knowledge": 1372,
+      "blueprints": 1
+     },
+     "wasted": {},
+     "wastedEstimated": false,
+     "arrivals": 0,
+     "doorAdmitted": 0,
+     "missions": 2,
+     "research": 2,
+     "starvingOnReturn": false,
+     "extra": {
+      "converted": {
+       "food": 356381,
+       "water": 255652,
+       "medicine": 25317,
+       "scrap": 23476,
+       "knowledge": 94348
+      },
+      "credits": 16605,
+      "absorbed": {},
+      "arrivals": 0,
+      "missions": 2,
+      "research": 2,
+      "danger": {
+       "raids": 0,
+       "raidsLost": 0,
+       "disasters": [],
+       "hurt": 0,
+       "died": []
+      },
+      "log": 6,
+      "nightDanger": {
+       "hurt": [],
+       "lost": {}
+      },
+      "realSeconds": 33600
+     }
+    },
+    {
+     "wallH": 66,
+     "awayMin": 290,
+     "gained": {
+      "materials": 9752,
+      "knowledge": 1450
+     },
+     "wasted": {},
+     "wastedEstimated": false,
+     "arrivals": 0,
+     "doorAdmitted": 0,
+     "missions": 2,
+     "research": 2,
+     "starvingOnReturn": false,
+     "extra": {
+      "converted": {
+       "food": 188729,
+       "water": 133099,
+       "medicine": 13355,
+       "scrap": 12798,
+       "knowledge": 48454
+      },
+      "credits": 8696,
+      "absorbed": {},
+      "arrivals": 0,
+      "missions": 2,
+      "research": 2,
+      "danger": {
+       "raids": 0,
+       "raidsLost": 0,
+       "disasters": [],
+       "hurt": 0,
+       "died": []
+      },
+      "log": 1,
+      "nightDanger": {
+       "hurt": [],
+       "lost": {}
+      },
+      "realSeconds": 17400
+     }
+    },
+    {
+     "wallH": 72,
+     "awayMin": 350,
+     "gained": {
+      "knowledge": 1367
+     },
+     "wasted": {},
+     "wastedEstimated": false,
+     "arrivals": 0,
+     "doorAdmitted": 0,
+     "missions": 2,
+     "research": 2,
+     "starvingOnReturn": false,
+     "extra": {
+      "converted": {
+       "food": 296542,
+       "water": 167557,
+       "medicine": 15552,
+       "scrap": 16267,
+       "knowledge": 69435
+      },
+      "credits": 11711,
+      "absorbed": {},
+      "arrivals": 0,
+      "missions": 2,
+      "research": 2,
+      "danger": {
+       "raids": 0,
+       "raidsLost": 0,
+       "disasters": [],
+       "hurt": 0,
+       "died": []
+      },
+      "log": 1,
+      "nightDanger": {
+       "hurt": [],
+       "lost": {}
+      },
+      "realSeconds": 21000
+     }
+    }
+   ],
+   "lastProgress": {
+    "play": 9600,
+    "wall": 259200
+   },
+   "stallWallH": 0,
+   "stallPlayH": 0,
+   "objectivesDone": 14,
+   "supplyDrops": 4,
+   "daily": {
+    "days": 3,
+    "orders": 4,
+    "chests": 0,
+    "credits": 132,
+    "rush": 0,
+    "frags": 2,
+    "blueprints": 0,
+    "streakEnd": 3
+   },
+   "lateGame": {
+    "stages": 4,
+    "caravansOk": 0,
+    "caravansLost": 0,
+    "weekly": 1,
+    "trained": 126,
+    "rank5": 23,
+    "projectsDone": 1
+   },
+   "final": {
+    "era": 2,
+    "floors": 7,
+    "buildings": 38,
+    "levels": 84,
+    "pop": 38,
+    "maxPop": 38,
+    "research": 43,
+    "researchNodes": 110,
+    "explored": 47,
+    "mapHexes": 270,
+    "tutorialStep": 17,
+    "objective": "guide:project:purifier",
+    "achievements": 15,
+    "ruinsLeft": 0,
+    "lore": 16,
+    "rooms": "quarters×5 generator×3 waterPump×2 farm×3 canteen×2 medbay×2 storage×2 workshop×2 laboratory×2 cave×1 lake×1 metro×1 radioTower×2 hydroponics×2 waterPurifier×2 armory×2 trainingRoom×2 commons×1 gatePost×1",
+    "res": {
+     "food": "48787/3750",
+     "water": "41170/3675",
+     "power": "450/450",
+     "materials": "112345/1123450",
+     "knowledge": "2700/2700",
+     "scrap": "1200/1200",
+     "medicine": "225/225"
+    }
+   },
+   "bot": {
+    "actions": {
+     "supplyDrop": 4,
+     "ruin": 14,
+     "research": 43,
+     "build": 28,
+     "expedition": 47,
+     "staffRuin": 2,
+     "dig": 4,
+     "digStaff": 4,
+     "dailyOrder": 4,
+     "shop": 42,
+     "upgrade": 46,
+     "district": 3,
+     "projectStaff": 3,
+     "projectDeposit": 299,
+     "door": 3,
+     "maintain": 19,
+     "train": 126,
+     "spec": 23
+    },
+    "pulledForRuins": 2,
+    "journalReads": 16,
+    "queuedResearch": 24,
+    "longTrips": 16
+   },
+   "warnings": [],
+   "stepList": [
+    "resource",
+    "building",
+    "population",
+    "event(online only)",
+    "research",
+    "exploration",
+    "restoration",
+    "incident(online only)",
+    "family",
+    "project",
+    "dig",
+    "act(slow)(online only)",
+    "threat",
+    "contracts(slow)",
+    "outposts",
+    "foreman",
+    "homes",
+    "maintenance",
+    "inbox(slow)",
+    "achievements(slow)(online only)",
+    "objective(slow)(online only)",
+    "era(slow)(online only)",
+    "story(slow)(online only)",
+    "daily(slow)"
+   ]
+  },
+  {
+   "seed": 3,
+   "mode": "casual",
+   "wallSeconds": 259200,
+   "playSeconds": 9600,
+   "runMs": 41325,
+   "milestones": {
+    "research insulatedWiring": {
+     "play": 59,
+     "wall": 59
+    },
+    "research nutrition": {
+     "play": 119,
+     "wall": 119
+    },
+    "built quarters": {
+     "play": 180,
+     "wall": 180
+    },
+    "built canteen": {
+     "play": 230,
+     "wall": 230
+    },
+    "story static": {
+     "play": 260,
+     "wall": 260
+    },
+    "population 5": {
+     "play": 260,
+     "wall": 260
+    },
+    "built farm": {
+     "play": 290,
+     "wall": 290
+    },
+    "research hazmatSuits": {
+     "play": 349,
+     "wall": 349
+    },
+    "built storage": {
+     "play": 360,
+     "wall": 360
+    },
+    "first expedition out": {
+     "play": 380,
+     "wall": 380
+    },
+    "era 1 restoration": {
+     "play": 604,
+     "wall": 604
+    },
+    "built generator": {
+     "play": 610,
+     "wall": 610
+    },
+    "first expedition back": {
+     "play": 868,
+     "wall": 868
+    },
+    "built laboratory": {
+     "play": 880,
+     "wall": 880
+    },
+    "floor B4": {
+     "play": 949,
+     "wall": 949
+    },
+    "built waterPump": {
+     "play": 960,
+     "wall": 960
+    },
+    "research communityMeals": {
+     "play": 978,
+     "wall": 978
+    },
+    "all ruins cleared": {
+     "play": 1044,
+     "wall": 1044
+    },
+    "built workshop": {
+     "play": 1050,
+     "wall": 1050
+    },
+    "research armoryResearch": {
+     "play": 1112,
+     "wall": 1112
+    },
+    "research batteryBanks": {
+     "play": 1326,
+     "wall": 1326
+    },
+    "research firstAid": {
+     "play": 1459,
+     "wall": 1459
+    },
+    "story toll": {
+     "play": 1810,
+     "wall": 1810
+    },
+    "research automation": {
+     "play": 2259,
+     "wall": 2259
+    },
+    "floor B5": {
+     "play": 2400,
+     "wall": 2400
+    },
+    "first upgrade": {
+     "play": 2400,
+     "wall": 12600
+    },
+    "story deep": {
+     "play": 2450,
+     "wall": 12650
+    },
+    "district cave": {
+     "play": 2450,
+     "wall": 12650
+    },
+    "population 10": {
+     "play": 2480,
+     "wall": 12680
+    },
+    "era 2 colony": {
+     "play": 2480,
+     "wall": 12680
+    },
+    "research waterFiltration": {
+     "play": 2552,
+     "wall": 12752
+    },
+    "research radioBasics": {
+     "play": 2696,
+     "wall": 12896
+    },
+    "story maya": {
+     "play": 2710,
+     "wall": 12910
+    },
+    "research hydroponicsResearch": {
+     "play": 2888,
+     "wall": 13088
+    },
+    "research geigerCounters": {
+     "play": 3000,
+     "wall": 13200
+    },
+    "research trainingProgram": {
+     "play": 3000,
+     "wall": 13200
+    },
+    "first project stage": {
+     "play": 3000,
+     "wall": 13200
+    },
+    "district lake": {
+     "play": 3000,
+     "wall": 46800
+    },
+    "research leadership": {
+     "play": 3000,
+     "wall": 46800
+    },
+    "research fortifiedDoor": {
+     "play": 3239,
+     "wall": 47039
+    },
+    "research preservation": {
+     "play": 3600,
+     "wall": 47400
+    },
+    "research scavengingTactics": {
+     "play": 3600,
+     "wall": 47400
+    },
+    "district metro": {
+     "play": 3600,
+     "wall": 64800
+    },
+    "research advancedEngineering": {
+     "play": 3600,
+     "wall": 64800
+    },
+    "research education": {
+     "play": 4200,
+     "wall": 65400
+    },
+    "research vehicles": {
+     "play": 4200,
+     "wall": 65400
+    },
+    "research reactorTheory": {
+     "play": 5100,
+     "wall": 87300
+    },
+    "research atriumDesign": {
+     "play": 5100,
+     "wall": 87300
+    },
+    "story clan": {
+     "play": 5410,
+     "wall": 99310
+    },
+    "research fusionHall": {
+     "play": 5700,
+     "wall": 99600
+    },
+    "research temporalTheory": {
+     "play": 5700,
+     "wall": 99600
+    },
+    "project vaultSeal done": {
+     "play": 5700,
+     "wall": 99600
+    },
+    "act 2": {
+     "play": 5700,
+     "wall": 133200
+    },
+    "first weekly challenge": {
+     "play": 5730,
+     "wall": 133230
+    },
+    "first child": {
+     "play": 5789,
+     "wall": 133289
+    },
+    "research refine_food": {
+     "play": 6042,
+     "wall": 133542
+    },
+    "research refine_water": {
+     "play": 6300,
+     "wall": 133800
+    },
+    "research communityHall": {
+     "play": 6300,
+     "wall": 133800
+    },
+    "floor B6": {
+     "play": 6300,
+     "wall": 133800
+    },
+    "built radioTower": {
+     "play": 6300,
+     "wall": 151200
+    },
+    "population 20": {
+     "play": 6300,
+     "wall": 151200
+    },
+    "built medbay": {
+     "play": 6300,
+     "wall": 151200
+    },
+    "built hydroponics": {
+     "play": 6300,
+     "wall": 151200
+    },
+    "research mycology": {
+     "play": 6300,
+     "wall": 151200
+    },
+    "story terminus": {
+     "play": 6420,
+     "wall": 151320
+    },
+    "research bulkheads": {
+     "play": 6430,
+     "wall": 151330
+    },
+    "research emergencyExits": {
+     "play": 6571,
+     "wall": 151471
+    },
+    "research atmosphericWater": {
+     "play": 6712,
+     "wall": 151612
+    },
+    "research energyStorage": {
+     "play": 6882,
+     "wall": 151782
+    },
+    "research perimeter": {
+     "play": 6900,
+     "wall": 151800
+    },
+    "research libraryScience": {
+     "play": 6900,
+     "wall": 151800
+    },
+    "built gatePost": {
+     "play": 6900,
+     "wall": 172800
+    },
+    "population 30": {
+     "play": 7080,
+     "wall": 172980
+    },
+    "story winter": {
+     "play": 7090,
+     "wall": 172990
+    },
+    "story genesis": {
+     "play": 7340,
+     "wall": 173240
+    },
+    "research tripwires": {
+     "play": 7618,
+     "wall": 173518
+    },
+    "research deepDrilling": {
+     "play": 7800,
+     "wall": 173700
+    },
+    "research coldChain": {
+     "play": 7800,
+     "wall": 173700
+    },
+    "research watchtower": {
+     "play": 8400,
+     "wall": 186000
+    },
+    "research longRangeRadio": {
+     "play": 8400,
+     "wall": 186000
+    },
+    "research winterStores": {
+     "play": 9000,
+     "wall": 220200
+    },
+    "floor B7": {
+     "play": 9000,
+     "wall": 220200
+    },
+    "doctrine mycelium": {
+     "play": 9000,
+     "wall": 220200
+    },
+    "research mycelium": {
+     "play": 9000,
+     "wall": 220200
+    },
+    "built waterPurifier": {
+     "play": 9000,
+     "wall": 237600
+    },
+    "doctrine fission": {
+     "play": 9273,
+     "wall": 237873
+    },
+    "research fission": {
+     "play": 9273,
+     "wall": 237873
+    },
+    "research childcare": {
+     "play": 9369,
+     "wall": 237969
+    },
+    "research sanitation": {
+     "play": 9465,
+     "wall": 238065
+    },
+    "research observation": {
+     "play": 9561,
+     "wall": 238161
+    },
+    "research photovoltaics": {
+     "play": 9600,
+     "wall": 238200
+    },
+    "research refine_power": {
+     "play": 9600,
+     "wall": 238200
+    }
+   },
+   "rebirths": 0,
+   "genesis": null,
+   "rebirthPayoutEnd": 341,
+   "samples": [
+    {
+     "label": "5m",
+     "wallH": 0.08,
+     "playH": 0.08,
+     "era": 0,
+     "pop": 5,
+     "maxPop": 8,
+     "kids": 0,
+     "floors": 3,
+     "buildings": 9,
+     "levels": 9,
+     "research": 2,
+     "explored": 0,
+     "morale": 63,
+     "minHp": 100,
+     "step": 7,
+     "iso": 24,
+     "res": {
+      "food": [
+       222,
+       4956,
+       -0.05
+      ],
+      "water": [
+       249,
+       6586,
+       0.27
+      ],
+      "power": [
+       43,
+       50,
+       0.11
+      ],
+      "materials": [
+       42,
+       300,
+       0
+      ],
+      "knowledge": [
+       5,
+       100,
+       0
+      ],
+      "scrap": [
+       47,
+       200,
+       0
+      ],
+      "medicine": [
+       8,
+       30,
+       0.07
+      ],
+      "components": [
+       0,
+       200,
+       0
+      ],
+      "alloys": [
+       0,
+       80,
+       0
+      ]
+     }
+    },
+    {
+     "label": "15m",
+     "wallH": 0.25,
+     "playH": 0.25,
+     "era": 1,
+     "pop": 8,
+     "maxPop": 8,
+     "kids": 0,
+     "floors": 3,
+     "buildings": 13,
+     "levels": 13,
+     "research": 3,
+     "explored": 2,
+     "morale": 39,
+     "minHp": 100,
+     "step": 17,
+     "iso": 44,
+     "res": {
+      "food": [
+       46,
+       2026,
+       -0.29
+      ],
+      "water": [
+       383,
+       3837,
+       0.05
+      ],
+      "power": [
+       0,
+       100,
+       -4.65
+      ],
+      "materials": [
+       95,
+       600,
+       0.11
+      ],
+      "knowledge": [
+       15,
+       250,
+       0
+      ],
+      "scrap": [
+       179,
+       300,
+       -0.03
+      ],
+      "medicine": [
+       22,
+       50,
+       0.01
+      ],
+      "components": [
+       0,
+       350,
+       0
+      ],
+      "alloys": [
+       0,
+       140,
+       0
+      ]
+     }
+    },
+    {
+     "label": "30m",
+     "wallH": 0.5,
+     "playH": 0.5,
+     "era": 1,
+     "pop": 8,
+     "maxPop": 8,
+     "kids": 0,
+     "floors": 4,
+     "buildings": 19,
+     "levels": 19,
+     "research": 7,
+     "explored": 4,
+     "morale": 50,
+     "minHp": 100,
+     "step": 17,
+     "iso": 72,
+     "res": {
+      "food": [
+       169,
+       7564,
+       0.32
+      ],
+      "water": [
+       626,
+       7477,
+       0.45
+      ],
+      "power": [
+       0,
+       250,
+       -9.1
+      ],
+      "materials": [
+       94,
+       900,
+       0.17
+      ],
+      "knowledge": [
+       19,
+       500,
+       0.02
+      ],
+      "scrap": [
+       200,
+       400,
+       0
+      ],
+      "medicine": [
+       21,
+       70,
+       0.01
+      ],
+      "components": [
+       0,
+       500,
+       0
+      ],
+      "alloys": [
+       0,
+       200,
+       0
+      ]
+     }
+    },
+    {
+     "label": "d0 s1 end",
+     "wallH": 0.67,
+     "playH": 0.67,
+     "era": 1,
+     "pop": 8,
+     "maxPop": 8,
+     "kids": 0,
+     "floors": 4,
+     "buildings": 19,
+     "levels": 19,
+     "research": 8,
+     "explored": 6,
+     "morale": 61,
+     "minHp": 100,
+     "step": 17,
+     "iso": 74,
+     "res": {
+      "food": [
+       681,
+       12005,
+       0.49
+      ],
+      "water": [
+       974,
+       11514,
+       0.58
+      ],
+      "power": [
+       0,
+       250,
+       -2
+      ],
+      "materials": [
+       156,
+       900,
+       0.8
+      ],
+      "knowledge": [
+       15,
+       500,
+       0.03
+      ],
+      "scrap": [
+       145,
+       400,
+       0
+      ],
+      "medicine": [
+       29,
+       70,
+       0.02
+      ],
+      "components": [
+       0,
+       500,
+       0
+      ],
+      "alloys": [
+       0,
+       200,
+       0
+      ]
+     }
+    },
+    {
+     "label": "d0 return",
+     "wallH": 3.5,
+     "playH": 0.67,
+     "era": 1,
+     "pop": 8,
+     "maxPop": 8,
+     "kids": 0,
+     "floors": 5,
+     "buildings": 19,
+     "levels": 19,
+     "research": 8,
+     "explored": 8,
+     "morale": 75,
+     "minHp": 100,
+     "step": 17,
+     "iso": 84,
+     "res": {
+      "food": [
+       5805,
+       18550,
+       1.22
+      ],
+      "water": [
+       7527,
+       16183,
+       1.1
+      ],
+      "power": [
+       250,
+       250,
+       3.42
+      ],
+      "materials": [
+       900,
+       900,
+       1.09
+      ],
+      "knowledge": [
+       280,
+       500,
+       0.04
+      ],
+      "scrap": [
+       199,
+       400,
+       0
+      ],
+      "medicine": [
+       70,
+       70,
+       0.02
+      ],
+      "components": [
+       0,
+       500,
+       0
+      ],
+      "alloys": [
+       0,
+       200,
+       0
+      ]
+     }
+    },
+    {
+     "label": "d0 s2 end",
+     "wallH": 3.67,
+     "playH": 0.83,
+     "era": 2,
+     "pop": 12,
+     "maxPop": 12,
+     "kids": 0,
+     "floors": 5,
+     "buildings": 24,
+     "levels": 25,
+     "research": 11,
+     "explored": 8,
+     "morale": 68,
+     "minHp": 100,
+     "step": 17,
+     "iso": 109,
+     "res": {
+      "food": [
+       5344,
+       9937,
+       0.18
+      ],
+      "water": [
+       8001,
+       12081,
+       0.64
+      ],
+      "power": [
+       0,
+       250,
+       -10.26
+      ],
+      "materials": [
+       135,
+       1350,
+       0.96
+      ],
+      "knowledge": [
+       262,
+       900,
+       0.08
+      ],
+      "scrap": [
+       64,
+       600,
+       0
+      ],
+      "medicine": [
+       75,
+       105,
+       0.02
+      ],
+      "components": [
+       0,
+       750,
+       0
+      ],
+      "alloys": [
+       0,
+       300,
+       0
+      ]
+     }
+    },
+    {
+     "label": "d0 return",
+     "wallH": 13,
+     "playH": 0.83,
+     "era": 2,
+     "pop": 12,
+     "maxPop": 12,
+     "kids": 0,
+     "floors": 5,
+     "buildings": 24,
+     "levels": 25,
+     "research": 13,
+     "explored": 10,
+     "morale": 100,
+     "minHp": 75,
+     "step": 17,
+     "iso": 113,
+     "res": {
+      "food": [
+       44285,
+       44285,
+       3.68
+      ],
+      "water": [
+       20893,
+       20893,
+       1.3
+      ],
+      "power": [
+       250,
+       250,
+       11.09
+      ],
+      "materials": [
+       1350,
+       1350,
+       1.63
+      ],
+      "knowledge": [
+       1107,
+       1107,
+       0.12
+      ],
+      "scrap": [
+       85,
+       600,
+       0
+      ],
+      "medicine": [
+       105,
+       105,
+       0.02
+      ],
+      "components": [
+       0,
+       750,
+       0
+      ],
+      "alloys": [
+       0,
+       300,
+       0
+      ]
+     }
+    },
+    {
+     "label": "d0 s3 end",
+     "wallH": 13.17,
+     "playH": 1,
+     "era": 2,
+     "pop": 12,
+     "maxPop": 12,
+     "kids": 0,
+     "floors": 5,
+     "buildings": 25,
+     "levels": 37,
+     "research": 15,
+     "explored": 10,
+     "morale": 92,
+     "minHp": 100,
+     "step": 17,
+     "iso": 117,
+     "res": {
+      "food": [
+       61802,
+       9897,
+       0.11
+      ],
+      "water": [
+       29801,
+       34020,
+       3.06
+      ],
+      "power": [
+       300,
+       300,
+       22.07
+      ],
+      "materials": [
+       1227,
+       1800,
+       1.53
+      ],
+      "knowledge": [
+       1350,
+       1125,
+       0.12
+      ],
+      "scrap": [
+       45,
+       750,
+       0
+      ],
+      "medicine": [
+       113,
+       135,
+       0.03
+      ],
+      "components": [
+       0,
+       975,
+       0
+      ],
+      "alloys": [
+       0,
+       390,
+       0
+      ]
+     }
+    },
+    {
+     "label": "d0 return",
+     "wallH": 18,
+     "playH": 1,
+     "era": 2,
+     "pop": 12,
+     "maxPop": 12,
+     "kids": 0,
+     "floors": 5,
+     "buildings": 25,
+     "levels": 37,
+     "research": 17,
+     "explored": 12,
+     "morale": 96,
+     "minHp": 100,
+     "step": 17,
+     "iso": 121,
+     "res": {
+      "food": [
+       68341,
+       68341,
+       6.28
+      ],
+      "water": [
+       35788,
+       35788,
+       2.94
+      ],
+      "power": [
+       300,
+       300,
+       22.57
+      ],
+      "materials": [
+       1800,
+       1800,
+       2.21
+      ],
+      "knowledge": [
+       1350,
+       1125,
+       0.12
+      ],
+      "scrap": [
+       79,
+       750,
+       0
+      ],
+      "medicine": [
+       135,
+       135,
+       0.04
+      ],
+      "components": [
+       0,
+       975,
+       0
+      ],
+      "alloys": [
+       0,
+       390,
+       0
+      ]
+     }
+    },
+    {
+     "label": "d0 s4 end",
+     "wallH": 18.17,
+     "playH": 1.17,
+     "era": 2,
+     "pop": 12,
+     "maxPop": 12,
+     "kids": 0,
+     "floors": 5,
+     "buildings": 26,
+     "levels": 59,
+     "research": 18,
+     "explored": 12,
+     "morale": 92,
+     "minHp": 100,
+     "step": 17,
+     "iso": 123,
+     "res": {
+      "food": [
+       122869,
+       11713,
+       0.26
+      ],
+      "water": [
+       64343,
+       18171,
+       1.29
+      ],
+      "power": [
+       400,
+       400,
+       16.62
+      ],
+      "materials": [
+       300,
+       3000,
+       2.72
+      ],
+      "knowledge": [
+       1682,
+       1875,
+       0.16
+      ],
+      "scrap": [
+       75,
+       1050,
+       0
+      ],
+      "medicine": [
+       155,
+       195,
+       0.04
+      ],
+      "components": [
+       0,
+       1425,
+       0
+      ],
+      "alloys": [
+       0,
+       570,
+       0
+      ]
+     }
+    },
+    {
+     "label": "d1 return",
+     "wallH": 24,
+     "playH": 1.17,
+     "era": 2,
+     "pop": 12,
+     "maxPop": 12,
+     "kids": 0,
+     "floors": 5,
+     "buildings": 26,
+     "levels": 59,
+     "research": 20,
+     "explored": 14,
+     "morale": 96,
+     "minHp": 100,
+     "step": 17,
+     "iso": 127,
+     "res": {
+      "food": [
+       122869,
+       87692,
+       8.38
+      ],
+      "water": [
+       64343,
+       18555,
+       1.01
+      ],
+      "power": [
+       400,
+       400,
+       14.62
+      ],
+      "materials": [
+       3000,
+       3000,
+       4.17
+      ],
+      "knowledge": [
+       2670,
+       2670,
+       0.3
+      ],
+      "scrap": [
+       891,
+       1050,
+       0.03
+      ],
+      "medicine": [
+       195,
+       195,
+       0.05
+      ],
+      "components": [
+       0,
+       1425,
+       0
+      ],
+      "alloys": [
+       0,
+       570,
+       0
+      ]
+     }
+    },
+    {
+     "label": "d1 s5 end",
+     "wallH": 24.25,
+     "playH": 1.42,
+     "era": 2,
+     "pop": 12,
+     "maxPop": 12,
+     "kids": 0,
+     "floors": 5,
+     "buildings": 26,
+     "levels": 72,
+     "research": 20,
+     "explored": 18,
+     "morale": 97,
+     "minHp": 100,
+     "step": 17,
+     "iso": 127,
+     "res": {
+      "food": [
+       122636,
+       54032,
+       4.8
+      ],
+      "water": [
+       64327,
+       20781,
+       1.42
+      ],
+      "power": [
+       450,
+       450,
+       21.24
+      ],
+      "materials": [
+       3450,
+       3450,
+       5.19
+      ],
+      "knowledge": [
+       2637,
+       3301,
+       0.37
+      ],
+      "scrap": [
+       845,
+       1200,
+       0.01
+      ],
+      "medicine": [
+       216,
+       225,
+       0.05
+      ],
+      "components": [
+       0,
+       1650,
+       0
+      ],
+      "alloys": [
+       0,
+       660,
+       0
+      ]
+     }
+    },
+    {
+     "label": "d1 return",
+     "wallH": 27.5,
+     "playH": 1.42,
+     "era": 2,
+     "pop": 12,
+     "maxPop": 12,
+     "kids": 0,
+     "floors": 5,
+     "buildings": 26,
+     "levels": 72,
+     "research": 22,
+     "explored": 20,
+     "morale": 100,
+     "minHp": 100,
+     "step": 17,
+     "iso": 131,
+     "res": {
+      "food": [
+       122636,
+       89739,
+       8.6
+      ],
+      "water": [
+       64327,
+       21209,
+       1.3
+      ],
+      "power": [
+       450,
+       450,
+       21.24
+      ],
+      "materials": [
+       3450,
+       3450,
+       5.3
+      ],
+      "knowledge": [
+       3369,
+       3369,
+       0.37
+      ],
+      "scrap": [
+       1000,
+       1200,
+       0.01
+      ],
+      "medicine": [
+       225,
+       225,
+       0.05
+      ],
+      "components": [
+       0,
+       1650,
+       0
+      ],
+      "alloys": [
+       0,
+       660,
+       0
+      ]
+     }
+    },
+    {
+     "label": "d1 s6 end",
+     "wallH": 27.67,
+     "playH": 1.58,
+     "era": 2,
+     "pop": 12,
+     "maxPop": 12,
+     "kids": 0,
+     "floors": 5,
+     "buildings": 26,
+     "levels": 72,
+     "research": 22,
+     "explored": 22,
+     "morale": 98,
+     "minHp": 100,
+     "step": 17,
+     "iso": 136,
+     "res": {
+      "food": [
+       122342,
+       54347,
+       4.83
+      ],
+      "water": [
+       64327,
+       20902,
+       1.43
+      ],
+      "power": [
+       450,
+       450,
+       21.24
+      ],
+      "materials": [
+       3450,
+       3450,
+       5.22
+      ],
+      "knowledge": [
+       2893,
+       3321,
+       0.37
+      ],
+      "scrap": [
+       871,
+       1200,
+       0.01
+      ],
+      "medicine": [
+       221,
+       225,
+       0.05
+      ],
+      "components": [
+       0,
+       1650,
+       0
+      ],
+      "alloys": [
+       0,
+       660,
+       0
+      ]
+     }
+    },
+    {
+     "label": "d1 return",
+     "wallH": 37,
+     "playH": 1.58,
+     "era": 2,
+     "pop": 12,
+     "maxPop": 12,
+     "kids": 0,
+     "floors": 5,
+     "buildings": 26,
+     "levels": 72,
+     "research": 24,
+     "explored": 24,
+     "morale": 94,
+     "minHp": 100,
+     "step": 17,
+     "iso": 140,
+     "res": {
+      "food": [
+       122342,
+       88434,
+       8.46
+      ],
+      "water": [
+       64327,
+       20452,
+       1.22
+      ],
+      "power": [
+       450,
+       450,
+       25.28
+      ],
+      "materials": [
+       3450,
+       3450,
+       5.29
+      ],
+      "knowledge": [
+       3361,
+       3249,
+       0.36
+      ],
+      "scrap": [
+       1200,
+       1200,
+       0.01
+      ],
+      "medicine": [
+       225,
+       225,
+       0.04
+      ],
+      "components": [
+       0,
+       1650,
+       0
+      ],
+      "alloys": [
+       0,
+       660,
+       0
+      ]
+     }
+    },
+    {
+     "label": "d1 s7 end",
+     "wallH": 37.17,
+     "playH": 1.75,
+     "era": 2,
+     "pop": 17,
+     "maxPop": 30,
+     "kids": 1,
+     "floors": 5,
+     "buildings": 26,
+     "levels": 72,
+     "research": 25,
+     "explored": 26,
+     "morale": 96,
+     "minHp": 100,
+     "step": 17,
+     "iso": 250,
+     "res": {
+      "food": [
+       122117,
+       2250,
+       9.14
+      ],
+      "water": [
+       64316,
+       2175,
+       3.9
+      ],
+      "power": [
+       450,
+       450,
+       25.28
+      ],
+      "materials": [
+       4353,
+       1123450,
+       1.81
+      ],
+      "knowledge": [
+       3256,
+       2700,
+       0.37
+      ],
+      "scrap": [
+       971,
+       1200,
+       0.01
+      ],
+      "medicine": [
+       225,
+       225,
+       0.05
+      ],
+      "components": [
+       0,
+       1650,
+       0
+      ],
+      "alloys": [
+       0,
+       660,
+       0
+      ]
+     }
+    },
+    {
+     "label": "d1 return",
+     "wallH": 42,
+     "playH": 1.75,
+     "era": 2,
+     "pop": 17,
+     "maxPop": 30,
+     "kids": 1,
+     "floors": 6,
+     "buildings": 26,
+     "levels": 72,
+     "research": 27,
+     "explored": 28,
+     "morale": 99,
+     "minHp": 100,
+     "step": 17,
+     "iso": 262,
+     "res": {
+      "food": [
+       122117,
+       2250,
+       10.3
+      ],
+      "water": [
+       64316,
+       2175,
+       6.51
+      ],
+      "power": [
+       450,
+       450,
+       25.28
+      ],
+      "materials": [
+       43441,
+       1123450,
+       3.07
+      ],
+      "knowledge": [
+       3256,
+       2700,
+       0.49
+      ],
+      "scrap": [
+       1200,
+       1200,
+       0.48
+      ],
+      "medicine": [
+       225,
+       225,
+       0.05
+      ],
+      "components": [
+       0,
+       1650,
+       0
+      ],
+      "alloys": [
+       0,
+       660,
+       0
+      ]
+     }
+    },
+    {
+     "label": "d1 s8 end",
+     "wallH": 42.17,
+     "playH": 1.92,
+     "era": 2,
+     "pop": 24,
+     "maxPop": 30,
+     "kids": 1,
+     "floors": 6,
+     "buildings": 31,
+     "levels": 77,
+     "research": 32,
+     "explored": 30,
+     "morale": 97,
+     "minHp": 100,
+     "step": 17,
+     "iso": 284,
+     "res": {
+      "food": [
+       121892,
+       2250,
+       10.48
+      ],
+      "water": [
+       64316,
+       2175,
+       8.27
+      ],
+      "power": [
+       450,
+       450,
+       9.28
+      ],
+      "materials": [
+       112346,
+       1123450,
+       6.06
+      ],
+      "knowledge": [
+       6474,
+       2700,
+       1.09
+      ],
+      "scrap": [
+       1212,
+       1200,
+       0.46
+      ],
+      "medicine": [
+       225,
+       225,
+       0.25
+      ],
+      "components": [
+       0,
+       1650,
+       0
+      ],
+      "alloys": [
+       0,
+       660,
+       0
+      ]
+     }
+    },
+    {
+     "label": "d2 return",
+     "wallH": 48,
+     "playH": 1.92,
+     "era": 2,
+     "pop": 25,
+     "maxPop": 30,
+     "kids": 2,
+     "floors": 6,
+     "buildings": 31,
+     "levels": 77,
+     "research": 34,
+     "explored": 32,
+     "morale": 98,
+     "minHp": 100,
+     "step": 17,
+     "iso": 289,
+     "res": {
+      "food": [
+       121892,
+       2250,
+       10.64
+      ],
+      "water": [
+       64316,
+       2175,
+       12.18
+      ],
+      "power": [
+       450,
+       450,
+       9.28
+      ],
+      "materials": [
+       112345,
+       1123450,
+       8.97
+      ],
+      "knowledge": [
+       6474,
+       2700,
+       1.69
+      ],
+      "scrap": [
+       1212,
+       1200,
+       0.47
+      ],
+      "medicine": [
+       225,
+       225,
+       0.45
+      ],
+      "components": [
+       0,
+       1650,
+       0
+      ],
+      "alloys": [
+       0,
+       660,
+       0
+      ]
+     }
+    },
+    {
+     "label": "d2 s9 end",
+     "wallH": 48.25,
+     "playH": 2.17,
+     "era": 2,
+     "pop": 38,
+     "maxPop": 30,
+     "kids": 2,
+     "floors": 6,
+     "buildings": 32,
+     "levels": 78,
+     "research": 35,
+     "explored": 35,
+     "morale": 73,
+     "minHp": 100,
+     "step": 17,
+     "iso": 304,
+     "res": {
+      "food": [
+       121412,
+       2250,
+       4.45
+      ],
+      "water": [
+       64227,
+       2175,
+       11.18
+      ],
+      "power": [
+       450,
+       450,
+       8.28
+      ],
+      "materials": [
+       102194,
+       1123450,
+       11.21
+      ],
+      "knowledge": [
+       4554,
+       2700,
+       2.35
+      ],
+      "scrap": [
+       1200,
+       1200,
+       0.58
+      ],
+      "medicine": [
+       225,
+       225,
+       0.51
+      ],
+      "components": [
+       0,
+       1650,
+       0
+      ],
+      "alloys": [
+       0,
+       660,
+       0
+      ]
+     }
+    },
+    {
+     "label": "d2 return",
+     "wallH": 51.5,
+     "playH": 2.17,
+     "era": 2,
+     "pop": 38,
+     "maxPop": 38,
+     "kids": 2,
+     "floors": 6,
+     "buildings": 32,
+     "levels": 78,
+     "research": 37,
+     "explored": 37,
+     "morale": 100,
+     "minHp": 100,
+     "step": 17,
+     "iso": 308,
+     "res": {
+      "food": [
+       121412,
+       3750,
+       10.38
+      ],
+      "water": [
+       64227,
+       3675,
+       15.56
+      ],
+      "power": [
+       450,
+       450,
+       8.28
+      ],
+      "materials": [
+       112345,
+       1123450,
+       16.1
+      ],
+      "knowledge": [
+       4554,
+       2700,
+       3.35
+      ],
+      "scrap": [
+       1200,
+       1200,
+       0.95
+      ],
+      "medicine": [
+       225,
+       225,
+       0.66
+      ],
+      "components": [
+       0,
+       1650,
+       0
+      ],
+      "alloys": [
+       0,
+       660,
+       0
+      ]
+     }
+    },
+    {
+     "label": "d2 s10 end",
+     "wallH": 51.67,
+     "playH": 2.33,
+     "era": 2,
+     "pop": 38,
+     "maxPop": 38,
+     "kids": 1,
+     "floors": 6,
+     "buildings": 32,
+     "levels": 78,
+     "research": 37,
+     "explored": 39,
+     "morale": 91,
+     "minHp": 100,
+     "step": 17,
+     "iso": 313,
+     "res": {
+      "food": [
+       121400,
+       3750,
+       10.01
+      ],
+      "water": [
+       64227,
+       3675,
+       14.05
+      ],
+      "power": [
+       450,
+       450,
+       8.28
+      ],
+      "materials": [
+       106477,
+       1123450,
+       14.85
+      ],
+      "knowledge": [
+       2794,
+       2700,
+       3.09
+      ],
+      "scrap": [
+       1200,
+       1200,
+       0.86
+      ],
+      "medicine": [
+       225,
+       225,
+       0.6
+      ],
+      "components": [
+       0,
+       1650,
+       0
+      ],
+      "alloys": [
+       0,
+       660,
+       0
+      ]
+     }
+    },
+    {
+     "label": "d2 return",
+     "wallH": 61,
+     "playH": 2.33,
+     "era": 2,
+     "pop": 38,
+     "maxPop": 38,
+     "kids": 1,
+     "floors": 6,
+     "buildings": 32,
+     "levels": 78,
+     "research": 39,
+     "explored": 41,
+     "morale": 87,
+     "minHp": 100,
+     "step": 17,
+     "iso": 317,
+     "res": {
+      "food": [
+       121400,
+       3750,
+       11.38
+      ],
+      "water": [
+       64227,
+       3675,
+       14.55
+      ],
+      "power": [
+       450,
+       450,
+       8.28
+      ],
+      "materials": [
+       112346,
+       1123450,
+       15.54
+      ],
+      "knowledge": [
+       2794,
+       2700,
+       3.18
+      ],
+      "scrap": [
+       1200,
+       1200,
+       0.93
+      ],
+      "medicine": [
+       225,
+       225,
+       0.62
+      ],
+      "components": [
+       0,
+       1650,
+       0
+      ],
+      "alloys": [
+       0,
+       660,
+       0
+      ]
+     }
+    },
+    {
+     "label": "d2 s11 end",
+     "wallH": 61.17,
+     "playH": 2.5,
+     "era": 2,
+     "pop": 38,
+     "maxPop": 38,
+     "kids": 1,
+     "floors": 6,
+     "buildings": 32,
+     "levels": 78,
+     "research": 39,
+     "explored": 43,
+     "morale": 88,
+     "minHp": 100,
+     "step": 17,
+     "iso": 317,
+     "res": {
+      "food": [
+       119450,
+       3750,
+       11.15
+      ],
+      "water": [
+       62227,
+       3675,
+       13.92
+      ],
+      "power": [
+       248,
+       450,
+       8.28
+      ],
+      "materials": [
+       112346,
+       1123450,
+       14.94
+      ],
+      "knowledge": [
+       2025,
+       2700,
+       3.14
+      ],
+      "scrap": [
+       1200,
+       1200,
+       0.68
+      ],
+      "medicine": [
+       225,
+       225,
+       0.63
+      ],
+      "components": [
+       0,
+       1650,
+       0
+      ],
+      "alloys": [
+       0,
+       660,
+       0
+      ]
+     }
+    },
+    {
+     "label": "d2 return",
+     "wallH": 66,
+     "playH": 2.5,
+     "era": 2,
+     "pop": 38,
+     "maxPop": 38,
+     "kids": 1,
+     "floors": 7,
+     "buildings": 32,
+     "levels": 78,
+     "research": 41,
+     "explored": 45,
+     "morale": 87,
+     "minHp": 100,
+     "step": 17,
+     "iso": 331,
+     "res": {
+      "food": [
+       119450,
+       3750,
+       16.67
+      ],
+      "water": [
+       62227,
+       3675,
+       13.98
+      ],
+      "power": [
+       450,
+       450,
+       8.28
+      ],
+      "materials": [
+       112346,
+       1123450,
+       15.57
+      ],
+      "knowledge": [
+       2700,
+       2700,
+       3.24
+      ],
+      "scrap": [
+       1200,
+       1200,
+       0.69
+      ],
+      "medicine": [
+       225,
+       225,
+       0.63
+      ],
+      "components": [
+       0,
+       1650,
+       0
+      ],
+      "alloys": [
+       0,
+       660,
+       0
+      ]
+     }
+    },
+    {
+     "label": "d2 s12 end",
+     "wallH": 66.17,
+     "playH": 2.67,
+     "era": 2,
+     "pop": 38,
+     "maxPop": 38,
+     "kids": 0,
+     "floors": 7,
+     "buildings": 36,
+     "levels": 82,
+     "research": 45,
+     "explored": 47,
+     "morale": 77,
+     "minHp": 100,
+     "step": 17,
+     "iso": 339,
+     "res": {
+      "food": [
+       119450,
+       3750,
+       15.88
+      ],
+      "water": [
+       62227,
+       3675,
+       13.75
+      ],
+      "power": [
+       19,
+       450,
+       18.7
+      ],
+      "materials": [
+       112346,
+       1123450,
+       14.7
+      ],
+      "knowledge": [
+       7925,
+       2700,
+       3.06
+      ],
+      "scrap": [
+       1200,
+       1200,
+       0.65
+      ],
+      "medicine": [
+       225,
+       225,
+       0.6
+      ],
+      "components": [
+       0,
+       1650,
+       0
+      ],
+      "alloys": [
+       0,
+       660,
+       0
+      ]
+     }
+    },
+    {
+     "label": "end",
+     "wallH": 72,
+     "playH": 2.67,
+     "era": 2,
+     "pop": 38,
+     "maxPop": 38,
+     "kids": 0,
+     "floors": 7,
+     "buildings": 36,
+     "levels": 82,
+     "research": 47,
+     "explored": 49,
+     "morale": 95,
+     "minHp": 100,
+     "step": 17,
+     "iso": 341,
+     "res": {
+      "food": [
+       119450,
+       3750,
+       18.66
+      ],
+      "water": [
+       62227,
+       3675,
+       16.07
+      ],
+      "power": [
+       450,
+       450,
+       26.6
+      ],
+      "materials": [
+       112345,
+       1123450,
+       16.3
+      ],
+      "knowledge": [
+       7925,
+       2700,
+       3.43
+      ],
+      "scrap": [
+       1200,
+       1200,
+       0.73
+      ],
+      "medicine": [
+       225,
+       225,
+       0.66
+      ],
+      "components": [
+       0,
+       1650,
+       0
+      ],
+      "alloys": [
+       0,
+       660,
+       0
+      ]
+     }
+    }
+   ],
+   "capShare": {
+    "food": 0.722,
+    "water": 0.672,
+    "power": 0.678,
+    "materials": 0.1,
+    "knowledge": 0.432,
+    "scrap": 0.251,
+    "medicine": 0.472
+   },
+   "famineSeconds": 0,
+   "thirstSeconds": 0,
+   "deaths": {
+    "total": 0,
+    "famine": 0,
+    "other": 0,
+    "causes": {}
+   },
+   "injuries": {
+    "expedition": 18,
+    "raid": 0,
+    "sickness": 0
+   },
+   "danger": {
+    "raids": {},
+    "disasterStarted": 0,
+    "disasterHandled": 0,
+    "disasterStruck": {},
+    "tributes": 0,
+    "maintained": 23,
+    "away": {
+     "raids": 1,
+     "raidsLost": 1,
+     "disasters": 0,
+     "hurt": 1,
+     "died": 0
+    },
+    "deathDays": [],
+    "minPop": 38,
+    "minPopDay": 0,
+    "raidLog": [],
+    "byKind": {}
+   },
+   "incidents": 15,
+   "missions": 49,
+   "missionFails": 2,
+   "kids": 2,
+   "arrivals": {
+    "accepted": 24,
+    "refused": 0,
+    "doorAdmitted": 6
+   },
+   "events": {
+    "wanderer": 10,
+    "powerSurge": 3,
+    "argument": 6,
+    "stash": 5,
+    "sickness": 7,
+    "radioSignal": 1,
+    "pipeLeak": 2,
+    "group": 4,
+    "trader": 2,
+    "radioSignal2": 1
+   },
+   "chapters": [
+    {
+     "id": "static",
+     "wall": 260,
+     "play": 260
+    },
+    {
+     "id": "toll",
+     "wall": 1810,
+     "play": 1810
+    },
+    {
+     "id": "deep",
+     "wall": 12650,
+     "play": 2450
+    },
+    {
+     "id": "maya",
+     "wall": 12910,
+     "play": 2710
+    },
+    {
+     "id": "clan",
+     "wall": 99310,
+     "play": 5410
+    },
+    {
+     "id": "terminus",
+     "wall": 151320,
+     "play": 6420
+    },
+    {
+     "id": "winter",
+     "wall": 172990,
+     "play": 7090
+    },
+    {
+     "id": "genesis",
+     "wall": 173240,
+     "play": 7340
+    }
+   ],
+   "chaptersTotal": 20,
+   "idle": {
+    "share": 0.61,
+    "gapsOver5m": 5,
+    "longest": [
+     [
+      7800,
+      600
+     ],
+     [
+      1360,
+      450
+     ],
+     [
+      5100,
+      360
+     ],
+     [
+      4760,
+      340
+     ],
+     [
+      5710,
+      340
+     ]
+    ]
+   },
+   "offline": [
+    {
+     "wallH": 3.5,
+     "awayMin": 170,
+     "gained": {
+      "food": 5124,
+      "water": 6553,
+      "power": 250,
+      "materials": 744,
+      "medicine": 41,
+      "knowledge": 265,
+      "scrap": 54
+     },
+     "wasted": {},
+     "wastedEstimated": false,
+     "arrivals": 0,
+     "doorAdmitted": 0,
+     "missions": 2,
+     "research": 0,
+     "starvingOnReturn": false,
+     "extra": {
+      "converted": {
+       "medicine": 98,
+       "materials": 4772
+      },
+      "credits": 163,
+      "absorbed": {},
+      "arrivals": 0,
+      "missions": 2,
+      "research": 0,
+      "danger": {
+       "raids": 0,
+       "raidsLost": 0,
+       "disasters": [],
+       "hurt": 0,
+       "died": []
+      },
+      "log": 4,
+      "nightDanger": {
+       "hurt": [],
+       "lost": {}
+      },
+      "realSeconds": 10200
+     }
+    },
+    {
+     "wallH": 13,
+     "awayMin": 560,
+     "gained": {
+      "food": 38941,
+      "water": 12892,
+      "power": 250,
+      "materials": 1215,
+      "medicine": 30,
+      "knowledge": 845,
+      "scrap": 21
+     },
+     "wasted": {},
+     "wastedEstimated": false,
+     "arrivals": 0,
+     "doorAdmitted": 0,
+     "missions": 2,
+     "research": 2,
+     "starvingOnReturn": false,
+     "extra": {
+      "converted": {
+       "materials": 25925,
+       "medicine": 633,
+       "knowledge": 2448,
+       "water": 21524,
+       "food": 52116
+      },
+      "credits": 1763,
+      "absorbed": {
+       "materials": 16124
+      },
+      "arrivals": 0,
+      "missions": 2,
+      "research": 2,
+      "danger": {
+       "raids": 1,
+       "raidsLost": 1,
+       "disasters": [],
+       "hurt": 1,
+       "died": []
+      },
+      "log": 3,
+      "nightDanger": {
+       "hurt": [
+        "June"
+       ],
+       "lost": {
+        "scrap": -11
+       }
+      },
+      "realSeconds": 33600
+     }
+    },
+    {
+     "wallH": 18,
+     "awayMin": 290,
+     "gained": {
+      "food": 6539,
+      "water": 5987,
+      "materials": 573,
+      "medicine": 22,
+      "scrap": 34
+     },
+     "wasted": {},
+     "wastedEstimated": false,
+     "arrivals": 0,
+     "doorAdmitted": 0,
+     "missions": 2,
+     "research": 2,
+     "starvingOnReturn": false,
+     "extra": {
+      "converted": {
+       "food": 78499,
+       "knowledge": 1639,
+       "materials": 29539,
+       "medicine": 473,
+       "water": 34541
+      },
+      "credits": 2193,
+      "absorbed": {},
+      "arrivals": 0,
+      "missions": 2,
+      "research": 2,
+      "danger": {
+       "raids": 0,
+       "raidsLost": 0,
+       "disasters": [],
+       "hurt": 0,
+       "died": []
+      },
+      "log": 1,
+      "nightDanger": {
+       "hurt": [],
+       "lost": {}
+      },
+      "realSeconds": 17400
+     }
+    },
+    {
+     "wallH": 24,
+     "awayMin": 350,
+     "gained": {
+      "materials": 2700,
+      "medicine": 40,
+      "knowledge": 988,
+      "scrap": 816
+     },
+     "wasted": {},
+     "wastedEstimated": false,
+     "arrivals": 0,
+     "doorAdmitted": 0,
+     "missions": 2,
+     "research": 2,
+     "starvingOnReturn": false,
+     "extra": {
+      "converted": {
+       "food": 139662,
+       "water": 16985,
+       "materials": 48966,
+       "medicine": 717,
+       "knowledge": 3743
+      },
+      "credits": 3366,
+      "absorbed": {
+       "materials": 14817
+      },
+      "arrivals": 0,
+      "missions": 2,
+      "research": 2,
+      "danger": {
+       "raids": 0,
+       "raidsLost": 0,
+       "disasters": [],
+       "hurt": 0,
+       "died": []
+      },
+      "log": 0,
+      "nightDanger": {
+       "hurt": [],
+       "lost": {}
+      },
+      "realSeconds": 21000
+     }
+    },
+    {
+     "wallH": 27.5,
+     "awayMin": 195,
+     "gained": {
+      "medicine": 9,
+      "knowledge": 732,
+      "scrap": 155
+     },
+     "wasted": {},
+     "wastedEstimated": false,
+     "arrivals": 0,
+     "doorAdmitted": 0,
+     "missions": 2,
+     "research": 2,
+     "starvingOnReturn": false,
+     "extra": {
+      "converted": {
+       "food": 71255,
+       "water": 12526,
+       "materials": 49429,
+       "medicine": 421,
+       "knowledge": 2761
+      },
+      "credits": 2543,
+      "absorbed": {},
+      "arrivals": 0,
+      "missions": 2,
+      "research": 2,
+      "danger": {
+       "raids": 0,
+       "raidsLost": 0,
+       "disasters": [],
+       "hurt": 0,
+       "died": []
+      },
+      "log": 0,
+      "nightDanger": {
+       "hurt": [],
+       "lost": {}
+      },
+      "realSeconds": 11700
+     }
+    },
+    {
+     "wallH": 37,
+     "awayMin": 560,
+     "gained": {
+      "medicine": 4,
+      "knowledge": 468,
+      "scrap": 329
+     },
+     "wasted": {},
+     "wastedEstimated": false,
+     "arrivals": 0,
+     "doorAdmitted": 0,
+     "missions": 2,
+     "research": 2,
+     "starvingOnReturn": false,
+     "extra": {
+      "converted": {
+       "food": 222454,
+       "water": 34974,
+       "materials": 142394,
+       "medicine": 1228,
+       "knowledge": 9530,
+       "scrap": 216
+      },
+      "credits": 7575,
+      "absorbed": {},
+      "arrivals": 0,
+      "missions": 2,
+      "research": 2,
+      "danger": {
+       "raids": 0,
+       "raidsLost": 0,
+       "disasters": [],
+       "hurt": 0,
+       "died": []
+      },
+      "log": 2,
+      "nightDanger": {
+       "hurt": [],
+       "lost": {}
+      },
+      "realSeconds": 33600
+     }
+    },
+    {
+     "wallH": 42,
+     "awayMin": 290,
+     "gained": {
+      "materials": 39088,
+      "scrap": 229
+     },
+     "wasted": {},
+     "wastedEstimated": false,
+     "arrivals": 3,
+     "doorAdmitted": 3,
+     "missions": 2,
+     "research": 2,
+     "starvingOnReturn": false,
+     "extra": {
+      "converted": {
+       "food": 118956,
+       "water": 80817,
+       "medicine": 650,
+       "knowledge": 6449,
+       "scrap": 5216
+      },
+      "credits": 2607,
+      "absorbed": {},
+      "arrivals": 3,
+      "missions": 2,
+      "research": 2,
+      "danger": {
+       "raids": 0,
+       "raidsLost": 0,
+       "disasters": [],
+       "hurt": 0,
+       "died": []
+      },
+      "log": 3,
+      "nightDanger": {
+       "hurt": [],
+       "lost": {}
+      },
+      "realSeconds": 17400
+     }
+    },
+    {
+     "wallH": 48,
+     "awayMin": 350,
+     "gained": {},
+     "wasted": {},
+     "wastedEstimated": false,
+     "arrivals": 3,
+     "doorAdmitted": 3,
+     "missions": 2,
+     "research": 2,
+     "starvingOnReturn": false,
+     "extra": {
+      "converted": {
+       "food": 161135,
+       "water": 178333,
+       "medicine": 6242,
+       "knowledge": 24544,
+       "scrap": 7821
+      },
+      "credits": 6105,
+      "absorbed": {},
+      "arrivals": 3,
+      "missions": 2,
+      "research": 2,
+      "danger": {
+       "raids": 0,
+       "raidsLost": 0,
+       "disasters": [],
+       "hurt": 0,
+       "died": []
+      },
+      "log": 2,
+      "nightDanger": {
+       "hurt": [],
+       "lost": {}
+      },
+      "realSeconds": 21000
+     }
+    },
+    {
+     "wallH": 51.5,
+     "awayMin": 195,
+     "gained": {
+      "materials": 10151
+     },
+     "wasted": {},
+     "wastedEstimated": false,
+     "arrivals": 0,
+     "doorAdmitted": 0,
+     "missions": 2,
+     "research": 2,
+     "starvingOnReturn": false,
+     "extra": {
+      "converted": {
+       "food": 82656,
+       "water": 138409,
+       "medicine": 6036,
+       "knowledge": 29426,
+       "scrap": 8149
+      },
+      "credits": 5134,
+      "absorbed": {},
+      "arrivals": 0,
+      "missions": 2,
+      "research": 2,
+      "danger": {
+       "raids": 0,
+       "raidsLost": 0,
+       "disasters": [],
+       "hurt": 0,
+       "died": []
+      },
+      "log": 7,
+      "nightDanger": {
+       "hurt": [],
+       "lost": {}
+      },
+      "realSeconds": 11700
+     }
+    },
+    {
+     "wallH": 61,
+     "awayMin": 560,
+     "gained": {
+      "materials": 5869,
+      "blueprints": 1
+     },
+     "wasted": {},
+     "wastedEstimated": false,
+     "arrivals": 0,
+     "doorAdmitted": 0,
+     "missions": 2,
+     "research": 2,
+     "starvingOnReturn": false,
+     "extra": {
+      "converted": {
+       "food": 271384,
+       "water": 385706,
+       "medicine": 16400,
+       "knowledge": 84179,
+       "scrap": 24563
+      },
+      "credits": 14797,
+      "absorbed": {},
+      "arrivals": 0,
+      "missions": 2,
+      "research": 2,
+      "danger": {
+       "raids": 0,
+       "raidsLost": 0,
+       "disasters": [],
+       "hurt": 0,
+       "died": []
+      },
+      "log": 1,
+      "nightDanger": {
+       "hurt": [],
+       "lost": {}
+      },
+      "realSeconds": 33600
+     }
+    },
+    {
+     "wallH": 66,
+     "awayMin": 290,
+     "gained": {
+      "power": 202,
+      "knowledge": 675
+     },
+     "wasted": {},
+     "wastedEstimated": false,
+     "arrivals": 0,
+     "doorAdmitted": 0,
+     "missions": 2,
+     "research": 2,
+     "starvingOnReturn": false,
+     "extra": {
+      "converted": {
+       "food": 191475,
+       "water": 194713,
+       "medicine": 8733,
+       "scrap": 9533,
+       "knowledge": 43475
+      },
+      "credits": 8068,
+      "absorbed": {},
+      "arrivals": 0,
+      "missions": 2,
+      "research": 2,
+      "danger": {
+       "raids": 0,
+       "raidsLost": 0,
+       "disasters": [],
+       "hurt": 0,
+       "died": []
+      },
+      "log": 2,
+      "nightDanger": {
+       "hurt": [],
+       "lost": {}
+      },
+      "realSeconds": 17400
+     }
+    },
+    {
+     "wallH": 72,
+     "awayMin": 350,
+     "gained": {
+      "power": 431
+     },
+     "wasted": {},
+     "wastedEstimated": false,
+     "arrivals": 0,
+     "doorAdmitted": 0,
+     "missions": 2,
+     "research": 2,
+     "starvingOnReturn": false,
+     "extra": {
+      "converted": {
+       "food": 277735,
+       "water": 265882,
+       "medicine": 11011,
+       "knowledge": 56418,
+       "scrap": 12153
+      },
+      "credits": 10824,
+      "absorbed": {},
+      "arrivals": 0,
+      "missions": 2,
+      "research": 2,
+      "danger": {
+       "raids": 0,
+       "raidsLost": 0,
+       "disasters": [],
+       "hurt": 0,
+       "died": []
+      },
+      "log": 1,
+      "nightDanger": {
+       "hurt": [],
+       "lost": {}
+      },
+      "realSeconds": 21000
+     }
+    }
+   ],
+   "lastProgress": {
+    "play": 9600,
+    "wall": 259200
+   },
+   "stallWallH": 0,
+   "stallPlayH": 0,
+   "objectivesDone": 14,
+   "supplyDrops": 4,
+   "daily": {
+    "days": 3,
+    "orders": 4,
+    "chests": 0,
+    "credits": 132,
+    "rush": 0,
+    "frags": 2,
+    "blueprints": 0,
+    "streakEnd": 3
+   },
+   "lateGame": {
+    "stages": 3,
+    "caravansOk": 0,
+    "caravansLost": 0,
+    "weekly": 1,
+    "trained": 0,
+    "rank5": 0,
+    "projectsDone": 1
+   },
+   "final": {
+    "era": 2,
+    "floors": 7,
+    "buildings": 36,
+    "levels": 82,
+    "pop": 38,
+    "maxPop": 38,
+    "research": 47,
+    "researchNodes": 110,
+    "explored": 49,
+    "mapHexes": 270,
+    "tutorialStep": 17,
+    "objective": "guide:project:purifier",
+    "achievements": 15,
+    "ruinsLeft": 0,
+    "lore": 16,
+    "rooms": "quarters×8 generator×3 waterPump×4 farm×2 canteen×2 medbay×2 storage×2 workshop×2 laboratory×2 cave×1 lake×1 metro×1 radioTower×2 hydroponics×2 gatePost×1 waterPurifier×1",
+    "res": {
+     "food": "119450/3750",
+     "water": "62227/3675",
+     "power": "450/450",
+     "materials": "112345/1123450",
+     "knowledge": "7925/2700",
+     "scrap": "1200/1200",
+     "medicine": "225/225"
+    }
+   },
+   "bot": {
+    "actions": {
+     "supplyDrop": 4,
+     "ruin": 14,
+     "research": 47,
+     "build": 26,
+     "expedition": 49,
+     "staffRuin": 2,
+     "dig": 4,
+     "digStaff": 4,
+     "dailyOrder": 4,
+     "shop": 42,
+     "upgrade": 46,
+     "district": 3,
+     "projectStaff": 3,
+     "projectDeposit": 247,
+     "maintain": 23,
+     "door": 2
+    },
+    "pulledForRuins": 2,
+    "journalReads": 16,
+    "queuedResearch": 30,
+    "longTrips": 15
+   },
+   "warnings": [],
+   "stepList": [
+    "resource",
+    "building",
+    "population",
+    "event(online only)",
+    "research",
+    "exploration",
+    "restoration",
+    "incident(online only)",
+    "family",
+    "project",
+    "dig",
+    "act(slow)(online only)",
+    "threat",
+    "contracts(slow)",
+    "outposts",
+    "foreman",
+    "homes",
+    "maintenance",
+    "inbox(slow)",
+    "achievements(slow)(online only)",
+    "objective(slow)(online only)",
+    "era(slow)(online only)",
+    "story(slow)(online only)",
+    "daily(slow)"
+   ]
+  }
+ ],
+ "aggregate": {
+  "runs": 3,
+  "milestones": {
+   "research insulatedWiring": {
+    "reached": 3,
+    "of": 3,
+    "wallMed": 59,
+    "wallMin": 59,
+    "wallMax": 59,
+    "playMed": 59
+   },
+   "research nutrition": {
+    "reached": 3,
+    "of": 3,
+    "wallMed": 119,
+    "wallMin": 119,
+    "wallMax": 119,
+    "playMed": 119
+   },
+   "built quarters": {
+    "reached": 3,
+    "of": 3,
+    "wallMed": 160,
+    "wallMin": 140,
+    "wallMax": 180,
+    "playMed": 160
+   },
+   "built canteen": {
+    "reached": 3,
+    "of": 3,
+    "wallMed": 200,
+    "wallMin": 180,
+    "wallMax": 230,
+    "playMed": 200
+   },
+   "population 5": {
+    "reached": 3,
+    "of": 3,
+    "wallMed": 240,
+    "wallMin": 220,
+    "wallMax": 260,
+    "playMed": 240
+   },
+   "built storage": {
+    "reached": 3,
+    "of": 3,
+    "wallMed": 250,
+    "wallMin": 230,
+    "wallMax": 360,
+    "playMed": 250
+   },
+   "story static": {
+    "reached": 3,
+    "of": 3,
+    "wallMed": 260,
+    "wallMin": 260,
+    "wallMax": 260,
+    "playMed": 260
+   },
+   "built waterPump": {
+    "reached": 3,
+    "of": 3,
+    "wallMed": 960,
+    "wallMin": 310,
+    "wallMax": 970,
+    "playMed": 960
+   },
+   "research hazmatSuits": {
+    "reached": 3,
+    "of": 3,
+    "wallMed": 349,
+    "wallMin": 349,
+    "wallMax": 349,
+    "playMed": 349
+   },
+   "first expedition out": {
+    "reached": 3,
+    "of": 3,
+    "wallMed": 360,
+    "wallMin": 350,
+    "wallMax": 380,
+    "playMed": 360
+   },
+   "era 1 restoration": {
+    "reached": 3,
+    "of": 3,
+    "wallMed": 475,
+    "wallMin": 422,
+    "wallMax": 604,
+    "playMed": 475
+   },
+   "built generator": {
+    "reached": 3,
+    "of": 3,
+    "wallMed": 480,
+    "wallMin": 430,
+    "wallMax": 610,
+    "playMed": 480
+   },
+   "built laboratory": {
+    "reached": 3,
+    "of": 3,
+    "wallMed": 670,
+    "wallMin": 590,
+    "wallMax": 880,
+    "playMed": 670
+   },
+   "all ruins cleared": {
+    "reached": 3,
+    "of": 3,
+    "wallMed": 763,
+    "wallMin": 671,
+    "wallMax": 1044,
+    "playMed": 763
+   },
+   "research communityMeals": {
+    "reached": 3,
+    "of": 3,
+    "wallMed": 768,
+    "wallMin": 688,
+    "wallMax": 978,
+    "playMed": 768
+   },
+   "built workshop": {
+    "reached": 3,
+    "of": 3,
+    "wallMed": 770,
+    "wallMin": 680,
+    "wallMax": 1050,
+    "playMed": 770
+   },
+   "first expedition back": {
+    "reached": 3,
+    "of": 3,
+    "wallMed": 841,
+    "wallMin": 830,
+    "wallMax": 868,
+    "playMed": 841
+   },
+   "floor B4": {
+    "reached": 3,
+    "of": 3,
+    "wallMed": 959,
+    "wallMin": 949,
+    "wallMax": 969,
+    "playMed": 959
+   },
+   "built farm": {
+    "reached": 3,
+    "of": 3,
+    "wallMed": 970,
+    "wallMin": 290,
+    "wallMax": 1140,
+    "playMed": 970
+   },
+   "research armoryResearch": {
+    "reached": 3,
+    "of": 3,
+    "wallMed": 983,
+    "wallMin": 973,
+    "wallMax": 1112,
+    "playMed": 983
+   },
+   "research batteryBanks": {
+    "reached": 3,
+    "of": 3,
+    "wallMed": 1326,
+    "wallMin": 1246,
+    "wallMax": 1675,
+    "playMed": 1326
+   },
+   "research firstAid": {
+    "reached": 3,
+    "of": 3,
+    "wallMed": 1379,
+    "wallMin": 1373,
+    "wallMax": 1459,
+    "playMed": 1379
+   },
+   "research automation": {
+    "reached": 3,
+    "of": 3,
+    "wallMed": 2203,
+    "wallMin": 1539,
+    "wallMax": 2259,
+    "playMed": 2203
+   },
+   "research radioBasics": {
+    "reached": 3,
+    "of": 3,
+    "wallMed": 12887,
+    "wallMin": 1699,
+    "wallMax": 12896,
+    "playMed": 2687
+   },
+   "story toll": {
+    "reached": 3,
+    "of": 3,
+    "wallMed": 1810,
+    "wallMin": 1810,
+    "wallMax": 1860,
+    "playMed": 1810
+   },
+   "research waterFiltration": {
+    "reached": 3,
+    "of": 3,
+    "wallMed": 12743,
+    "wallMin": 1859,
+    "wallMax": 12752,
+    "playMed": 2543
+   },
+   "research hydroponicsResearch": {
+    "reached": 3,
+    "of": 3,
+    "wallMed": 13079,
+    "wallMin": 2073,
+    "wallMax": 13088,
+    "playMed": 2879
+   },
+   "research geigerCounters": {
+    "reached": 3,
+    "of": 3,
+    "wallMed": 13200,
+    "wallMin": 2286,
+    "wallMax": 13200,
+    "playMed": 3000
+   },
+   "research trainingProgram": {
+    "reached": 3,
+    "of": 3,
+    "wallMed": 13200,
+    "wallMin": 2400,
+    "wallMax": 13200,
+    "playMed": 3000
+   },
+   "first upgrade": {
+    "reached": 3,
+    "of": 3,
+    "wallMed": 12600,
+    "wallMin": 12600,
+    "wallMax": 12600,
+    "playMed": 2400
+   },
+   "research leadership": {
+    "reached": 3,
+    "of": 3,
+    "wallMed": 46800,
+    "wallMin": 12600,
+    "wallMax": 46800,
+    "playMed": 3000
+   },
+   "population 10": {
+    "reached": 3,
+    "of": 3,
+    "wallMed": 12680,
+    "wallMin": 12680,
+    "wallMax": 12800,
+    "playMed": 2480
+   },
+   "era 2 colony": {
+    "reached": 3,
+    "of": 3,
+    "wallMed": 12680,
+    "wallMin": 12680,
+    "wallMax": 12800,
+    "playMed": 2480
+   },
+   "story deep": {
+    "reached": 3,
+    "of": 3,
+    "wallMed": 12650,
+    "wallMin": 12650,
+    "wallMax": 12810,
+    "playMed": 2450
+   },
+   "district cave": {
+    "reached": 3,
+    "of": 3,
+    "wallMed": 12650,
+    "wallMin": 12650,
+    "wallMax": 12810,
+    "playMed": 2450
+   },
+   "research fortifiedDoor": {
+    "reached": 3,
+    "of": 3,
+    "wallMed": 47039,
+    "wallMin": 12866,
+    "wallMax": 47039,
+    "playMed": 3239
+   },
+   "floor B5": {
+    "reached": 3,
+    "of": 3,
+    "wallMed": 2400,
+    "wallMin": 2400,
+    "wallMax": 13199,
+    "playMed": 2400
+   },
+   "research preservation": {
+    "reached": 3,
+    "of": 3,
+    "wallMed": 47400,
+    "wallMin": 13200,
+    "wallMax": 47400,
+    "playMed": 3600
+   },
+   "research scavengingTactics": {
+    "reached": 3,
+    "of": 3,
+    "wallMed": 47400,
+    "wallMin": 13200,
+    "wallMax": 47400,
+    "playMed": 3600
+   },
+   "first project stage": {
+    "reached": 3,
+    "of": 3,
+    "wallMed": 13200,
+    "wallMin": 13200,
+    "wallMax": 13200,
+    "playMed": 3000
+   },
+   "district lake": {
+    "reached": 3,
+    "of": 3,
+    "wallMed": 46800,
+    "wallMin": 46800,
+    "wallMax": 46800,
+    "playMed": 3000
+   },
+   "research advancedEngineering": {
+    "reached": 3,
+    "of": 3,
+    "wallMed": 64800,
+    "wallMin": 46800,
+    "wallMax": 64800,
+    "playMed": 3600
+   },
+   "story maya": {
+    "reached": 3,
+    "of": 3,
+    "wallMed": 12910,
+    "wallMin": 12910,
+    "wallMax": 46860,
+    "playMed": 2710
+   },
+   "built radioTower": {
+    "reached": 3,
+    "of": 3,
+    "wallMed": 151200,
+    "wallMin": 46880,
+    "wallMax": 151200,
+    "playMed": 6300
+   },
+   "story terminus": {
+    "reached": 3,
+    "of": 3,
+    "wallMed": 151320,
+    "wallMin": 47110,
+    "wallMax": 151340,
+    "playMed": 6420
+   },
+   "research education": {
+    "reached": 3,
+    "of": 3,
+    "wallMed": 65400,
+    "wallMin": 47400,
+    "wallMax": 65400,
+    "playMed": 4200
+   },
+   "research refine_food": {
+    "reached": 3,
+    "of": 3,
+    "wallMed": 133542,
+    "wallMin": 47400,
+    "wallMax": 133542,
+    "playMed": 6042
+   },
+   "research vehicles": {
+    "reached": 3,
+    "of": 3,
+    "wallMed": 65400,
+    "wallMin": 65400,
+    "wallMax": 87300,
+    "playMed": 4200
+   },
+   "research atriumDesign": {
+    "reached": 3,
+    "of": 3,
+    "wallMed": 65400,
+    "wallMin": 65400,
+    "wallMax": 87300,
+    "playMed": 4200
+   },
+   "district metro": {
+    "reached": 3,
+    "of": 3,
+    "wallMed": 64800,
+    "wallMin": 64800,
+    "wallMax": 86400,
+    "playMed": 3600
+   },
+   "research reactorTheory": {
+    "reached": 3,
+    "of": 3,
+    "wallMed": 87300,
+    "wallMin": 86999,
+    "wallMax": 87300,
+    "playMed": 5100
+   },
+   "research refine_water": {
+    "reached": 3,
+    "of": 3,
+    "wallMed": 133800,
+    "wallMin": 87300,
+    "wallMax": 133800,
+    "playMed": 6300
+   },
+   "research refine_power": {
+    "reached": 2,
+    "of": 3,
+    "wallMed": 162750,
+    "wallMin": 87300,
+    "wallMax": 238200,
+    "playMed": 7350
+   },
+   "story clan": {
+    "reached": 3,
+    "of": 3,
+    "wallMed": 99310,
+    "wallMin": 99310,
+    "wallMax": 99310,
+    "playMed": 5410
+   },
+   "research fusionHall": {
+    "reached": 3,
+    "of": 3,
+    "wallMed": 99600,
+    "wallMin": 99600,
+    "wallMax": 99600,
+    "playMed": 5700
+   },
+   "research temporalTheory": {
+    "reached": 3,
+    "of": 3,
+    "wallMed": 99600,
+    "wallMin": 99600,
+    "wallMax": 99600,
+    "playMed": 5700
+   },
+   "research refine_materials": {
+    "reached": 1,
+    "of": 3,
+    "wallMed": 133542,
+    "wallMin": 133542,
+    "wallMax": 133542,
+    "playMed": 6042
+   },
+   "research refine_medicine": {
+    "reached": 1,
+    "of": 3,
+    "wallMed": 133800,
+    "wallMin": 133800,
+    "wallMax": 133800,
+    "playMed": 6300
+   },
+   "research refine_knowledge": {
+    "reached": 1,
+    "of": 3,
+    "wallMed": 133800,
+    "wallMin": 133800,
+    "wallMax": 133800,
+    "playMed": 6300
+   },
+   "project vaultSeal done": {
+    "reached": 3,
+    "of": 3,
+    "wallMed": 99600,
+    "wallMin": 99600,
+    "wallMax": 151800,
+    "playMed": 5700
+   },
+   "act 2": {
+    "reached": 3,
+    "of": 3,
+    "wallMed": 133200,
+    "wallMin": 133200,
+    "wallMax": 172800,
+    "playMed": 5700
+   },
+   "first weekly challenge": {
+    "reached": 3,
+    "of": 3,
+    "wallMed": 133230,
+    "wallMin": 133230,
+    "wallMax": 172830,
+    "playMed": 5730
+   },
+   "first child": {
+    "reached": 3,
+    "of": 3,
+    "wallMed": 133349,
+    "wallMin": 133289,
+    "wallMax": 172979,
+    "playMed": 5849
+   },
+   "story genesis": {
+    "reached": 3,
+    "of": 3,
+    "wallMed": 173130,
+    "wallMin": 173110,
+    "wallMax": 173240,
+    "playMed": 7230
+   },
+   "research communityHall": {
+    "reached": 3,
+    "of": 3,
+    "wallMed": 133800,
+    "wallMin": 133800,
+    "wallMax": 173365,
+    "playMed": 6300
+   },
+   "population 20": {
+    "reached": 3,
+    "of": 3,
+    "wallMed": 151540,
+    "wallMin": 151200,
+    "wallMax": 173420,
+    "playMed": 6640
+   },
+   "research mycology": {
+    "reached": 3,
+    "of": 3,
+    "wallMed": 151200,
+    "wallMin": 151200,
+    "wallMax": 173447,
+    "playMed": 6300
+   },
+   "research bulkheads": {
+    "reached": 3,
+    "of": 3,
+    "wallMed": 151330,
+    "wallMin": 151312,
+    "wallMax": 173585,
+    "playMed": 6430
+   },
+   "research emergencyExits": {
+    "reached": 3,
+    "of": 3,
+    "wallMed": 151471,
+    "wallMin": 151454,
+    "wallMax": 173700,
+    "playMed": 6571
+   },
+   "research atmosphericWater": {
+    "reached": 3,
+    "of": 3,
+    "wallMed": 151612,
+    "wallMin": 151595,
+    "wallMax": 173700,
+    "playMed": 6712
+   },
+   "floor B6": {
+    "reached": 3,
+    "of": 3,
+    "wallMed": 133800,
+    "wallMin": 133800,
+    "wallMax": 173700,
+    "playMed": 6300
+   },
+   "built medbay": {
+    "reached": 3,
+    "of": 3,
+    "wallMed": 151200,
+    "wallMin": 12600,
+    "wallMax": 185400,
+    "playMed": 6300
+   },
+   "built hydroponics": {
+    "reached": 3,
+    "of": 3,
+    "wallMed": 151200,
+    "wallMin": 151200,
+    "wallMax": 185400,
+    "playMed": 6300
+   },
+   "built waterPurifier": {
+    "reached": 3,
+    "of": 3,
+    "wallMed": 185400,
+    "wallMin": 151200,
+    "wallMax": 237600,
+    "playMed": 7800
+   },
+   "research energyStorage": {
+    "reached": 3,
+    "of": 3,
+    "wallMed": 151782,
+    "wallMin": 151764,
+    "wallMax": 185569,
+    "playMed": 6882
+   },
+   "research perimeter": {
+    "reached": 3,
+    "of": 3,
+    "wallMed": 151800,
+    "wallMin": 151800,
+    "wallMax": 185738,
+    "playMed": 6900
+   },
+   "built gatePost": {
+    "reached": 3,
+    "of": 3,
+    "wallMed": 172800,
+    "wallMin": 172800,
+    "wallMax": 185740,
+    "playMed": 6900
+   },
+   "research libraryScience": {
+    "reached": 3,
+    "of": 3,
+    "wallMed": 151800,
+    "wallMin": 151800,
+    "wallMax": 186000,
+    "playMed": 6900
+   },
+   "research tripwires": {
+    "reached": 3,
+    "of": 3,
+    "wallMed": 173597,
+    "wallMin": 173518,
+    "wallMax": 186000,
+    "playMed": 7697
+   },
+   "population 30": {
+    "reached": 3,
+    "of": 3,
+    "wallMed": 185400,
+    "wallMin": 172980,
+    "wallMax": 219760,
+    "playMed": 7800
+   },
+   "story winter": {
+    "reached": 3,
+    "of": 3,
+    "wallMed": 185450,
+    "wallMin": 172990,
+    "wallMax": 219770,
+    "playMed": 7850
+   },
+   "research deepDrilling": {
+    "reached": 3,
+    "of": 3,
+    "wallMed": 173700,
+    "wallMin": 173700,
+    "wallMax": 220200,
+    "playMed": 7800
+   },
+   "research longRangeRadio": {
+    "reached": 3,
+    "of": 3,
+    "wallMed": 186000,
+    "wallMin": 186000,
+    "wallMax": 220200,
+    "playMed": 8400
+   },
+   "research coldChain": {
+    "reached": 3,
+    "of": 3,
+    "wallMed": 173700,
+    "wallMin": 173700,
+    "wallMax": 238200,
+    "playMed": 7800
+   },
+   "research watchtower": {
+    "reached": 3,
+    "of": 3,
+    "wallMed": 186000,
+    "wallMin": 186000,
+    "wallMax": 238200,
+    "playMed": 8400
+   },
+   "floor B7": {
+    "reached": 2,
+    "of": 3,
+    "wallMed": 186000,
+    "wallMin": 151800,
+    "wallMax": 220200,
+    "playMed": 7950
+   },
+   "built armory": {
+    "reached": 1,
+    "of": 3,
+    "wallMed": 172800,
+    "wallMin": 172800,
+    "wallMax": 172800,
+    "playMed": 6900
+   },
+   "built trainingRoom": {
+    "reached": 1,
+    "of": 3,
+    "wallMed": 172800,
+    "wallMin": 172800,
+    "wallMax": 172800,
+    "playMed": 6900
+   },
+   "built commons": {
+    "reached": 1,
+    "of": 3,
+    "wallMed": 172800,
+    "wallMin": 172800,
+    "wallMax": 172800,
+    "playMed": 6900
+   },
+   "first rank-5 worker": {
+    "reached": 1,
+    "of": 3,
+    "wallMed": 172930,
+    "wallMin": 172930,
+    "wallMax": 172930,
+    "playMed": 7030
+   },
+   "first mastery specialization": {
+    "reached": 1,
+    "of": 3,
+    "wallMed": 172930,
+    "wallMin": 172930,
+    "wallMax": 172930,
+    "playMed": 7030
+   },
+   "research winterStores": {
+    "reached": 2,
+    "of": 3,
+    "wallMed": 220200,
+    "wallMin": 220200,
+    "wallMax": 220200,
+    "playMed": 9000
+   },
+   "doctrine hydroDoctrine": {
+    "reached": 1,
+    "of": 3,
+    "wallMed": 220200,
+    "wallMin": 220200,
+    "wallMax": 220200,
+    "playMed": 9000
+   },
+   "research hydroDoctrine": {
+    "reached": 1,
+    "of": 3,
+    "wallMed": 220200,
+    "wallMin": 220200,
+    "wallMax": 220200,
+    "playMed": 9000
+   },
+   "doctrine solarArray": {
+    "reached": 1,
+    "of": 3,
+    "wallMed": 238200,
+    "wallMin": 238200,
+    "wallMax": 238200,
+    "playMed": 9600
+   },
+   "research solarArray": {
+    "reached": 1,
+    "of": 3,
+    "wallMed": 238200,
+    "wallMin": 238200,
+    "wallMax": 238200,
+    "playMed": 9600
+   },
+   "research childcare": {
+    "reached": 2,
+    "of": 3,
+    "wallMed": 238084.5,
+    "wallMin": 237969,
+    "wallMax": 238200,
+    "playMed": 9484.5
+   },
+   "doctrine mycelium": {
+    "reached": 1,
+    "of": 3,
+    "wallMed": 220200,
+    "wallMin": 220200,
+    "wallMax": 220200,
+    "playMed": 9000
+   },
+   "research mycelium": {
+    "reached": 1,
+    "of": 3,
+    "wallMed": 220200,
+    "wallMin": 220200,
+    "wallMax": 220200,
+    "playMed": 9000
+   },
+   "doctrine fission": {
+    "reached": 1,
+    "of": 3,
+    "wallMed": 237873,
+    "wallMin": 237873,
+    "wallMax": 237873,
+    "playMed": 9273
+   },
+   "research fission": {
+    "reached": 1,
+    "of": 3,
+    "wallMed": 237873,
+    "wallMin": 237873,
+    "wallMax": 237873,
+    "playMed": 9273
+   },
+   "research sanitation": {
+    "reached": 1,
+    "of": 3,
+    "wallMed": 238065,
+    "wallMin": 238065,
+    "wallMax": 238065,
+    "playMed": 9465
+   },
+   "research observation": {
+    "reached": 1,
+    "of": 3,
+    "wallMed": 238161,
+    "wallMin": 238161,
+    "wallMax": 238161,
+    "playMed": 9561
+   },
+   "research photovoltaics": {
+    "reached": 1,
+    "of": 3,
+    "wallMed": 238200,
+    "wallMin": 238200,
+    "wallMax": 238200,
+    "playMed": 9600
+   }
+  },
+  "final": {
+   "era": {
+    "med": 2,
+    "min": 2,
+    "max": 2
+   },
+   "floors": {
+    "med": 7,
+    "min": 6,
+    "max": 7
+   },
+   "pop": {
+    "med": 38,
+    "min": 38,
+    "max": 38
+   },
+   "research": {
+    "med": 47,
+    "min": 43,
+    "max": 48
+   },
+   "levels": {
+    "med": 82,
+    "min": 81,
+    "max": 84
+   },
+   "explored": {
+    "med": 49,
+    "min": 47,
+    "max": 50
+   },
+   "tutorialStep": {
+    "med": 17,
+    "min": 17,
+    "max": 17
+   }
+  },
+  "genesisReached": 0,
+  "genesisPayout": {
+   "med": null,
+   "min": null,
+   "max": null
+  },
+  "rebirthPayoutEnd": {
+   "med": 335,
+   "min": 317,
+   "max": 341
+  },
+  "deaths": {
+   "med": 0,
+   "min": 0,
+   "max": 0
+  },
+  "injuries": {
+   "med": 18,
+   "min": 15,
+   "max": 21
+  },
+  "famineSeconds": {
+   "med": 0,
+   "min": 0,
+   "max": 578
+  },
+  "thirstSeconds": {
+   "med": 0,
+   "min": 0,
+   "max": 0
+  },
+  "idleShare": {
+   "med": 0.596,
+   "min": 0.592,
+   "max": 0.61
+  },
+  "gapsOver5m": {
+   "med": 5,
+   "min": 1,
+   "max": 5
+  },
+  "stallWallH": {
+   "med": 0,
+   "min": 0,
+   "max": 0
+  },
+  "stallPlayH": {
+   "med": 0,
+   "min": 0,
+   "max": 0
+  },
+  "chapters": {
+   "med": 8,
+   "min": 8,
+   "max": 8
+  },
+  "chaptersTotal": 20,
+  "capShare": {
+   "food": 0.722,
+   "water": 0.691,
+   "power": 0.677,
+   "materials": 0.1,
+   "knowledge": 0.432,
+   "scrap": 0.126,
+   "medicine": 0.53
+  },
+  "lateGame": {
+   "stages": {
+    "med": 3,
+    "min": 3,
+    "max": 4
+   },
+   "projects": {
+    "med": 1,
+    "min": 1,
+    "max": 1
+   },
+   "ok": {
+    "med": 0,
+    "min": 0,
+    "max": 0
+   },
+   "lost": {
+    "med": 0,
+    "min": 0,
+    "max": 0
+   },
+   "weekly": {
+    "med": 1,
+    "min": 1,
+    "max": 1
+   },
+   "trained": {
+    "med": 0,
+    "min": 0,
+    "max": 126
+   },
+   "rank5": {
+    "med": 0,
+    "min": 0,
+    "max": 23
+   }
+  },
+  "offline": {
+   "returns": 36,
+   "emptyReturns": 0,
+   "gainedMed": {
+    "food": 0,
+    "water": 0,
+    "power": 0,
+    "materials": 979,
+    "knowledge": 402,
+    "scrap": 39.5,
+    "medicine": 0
+   },
+   "wastedMed": {
+    "food": 0,
+    "water": 0,
+    "power": 0,
+    "materials": 0,
+    "knowledge": 0,
+    "scrap": 0,
+    "medicine": 0
+   },
+   "wastedShareOfPotential": 0,
+   "arrivals": 19,
+   "missions": 72,
+   "research": 67,
+   "starvingOnReturn": 0,
+   "wastedEstimated": false
+  },
+  "arrivalsAccepted": {
+   "med": 24,
+   "min": 23,
+   "max": 24
+  },
+  "arrivalsRefused": {
+   "med": 0,
+   "min": 0,
+   "max": 0
+  },
+  "warnings": []
+ }
+}

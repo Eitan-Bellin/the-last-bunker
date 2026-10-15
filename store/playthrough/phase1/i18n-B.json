@@ -1,0 +1,12 @@
+{
+  "en": {
+    "phase1.proj.pledgeOn": "Auto-deliver: on",
+    "phase1.proj.pledgeOff": "Auto-deliver: off",
+    "phase1.proj.pledgeHint": "Auto-deliver feeds this stage from your stores all the time, even while you are away, but always leaves half of each store for building. \"Deliver resources\" still sends a batch at once."
+  },
+  "he": {
+    "phase1.proj.pledgeOn": "מסירה אוטומטית: פועלת",
+    "phase1.proj.pledgeOff": "מסירה אוטומטית: כבויה",
+    "phase1.proj.pledgeHint": "מסירה אוטומטית מזינה את השלב הזה מהמחסנים כל הזמן, גם כשאתם רחוקים, אבל תמיד משאירה חצי מכל מחסן לבנייה. \"הביאו משאבים\" עדיין שולח מנה בבת אחת."
+  }
+}
