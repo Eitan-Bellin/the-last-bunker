@@ -235,6 +235,9 @@ export class CityHost {
    * The camera for the parallax planes, derived from worldContainer (zoom, offset; the world point at the screen centre). The camera
    * agent's official `CameraController.parallaxInfo()` replaces this at merge; the values are the same (shake and punch included).
    */
+  /** [world:C2] The camera's own parallax camera (CameraController.parallaxInfo: anchored at the camera centre, no drift under reduced motion). */
+  parallaxSource: (() => ParallaxInfo) | null = null;
+
   parallaxInfo(wc: Container, sw: number, sh: number): ParallaxInfo {
     return parallaxFromWorld(this.pi, wc, sw, sh);
   }
@@ -258,7 +261,7 @@ export class CityHost {
       v.h = sh / z;
       this.shell.update(t, dt, v);
     }
-    c.update(this.parallaxInfo(wc, sw, sh), t, dt, { mapCovers });
+    c.update(this.parallaxSource ? this.parallaxSource() : this.parallaxInfo(wc, sw, sh), t, dt, { mapCovers });
   }
 
   /** Light (0..~2) at a world point from the pools drawn this frame (people's self-light, life-systems' hook). */

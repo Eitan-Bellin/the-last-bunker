@@ -12,7 +12,8 @@ import { BASE_EAST, BUILDING_W, FLOOR_H, ROOM_H, SHAFT_W, SLOT_W, TOPSOIL, build
 import { buildingX, districtXAt, eastmostSlotX, slotX, stripX, westmostSlotX } from '../world/project';
 import { CITY } from '../world/flag'; // [world:C1] the city renderer behind ?city
 import { CityHost } from '../world/render/cityHost'; // [world:C1]
-import { installCityWorld } from '../world/render/cityWiring'; // [world:C2] the real city layout and shell into the seams
+import { installCityWorld } from '../world/render/cityWiring';
+import { setLightSink } from '../world/life/lanterns'; // [world:C1-Li] // [world:C2] the real city layout and shell into the seams
 import { PEOPLE_RENDER } from '../world/tokensRender'; // [world:C1]
 import { hashString, seeded } from './draw';
 import { PEOPLE_STYLE, Person, ROOM_ACTIVITY, type Activity, type Lane } from './people';
@@ -551,7 +552,9 @@ export class BunkerRenderer {
       overGlow: [this.dust.container, this.fxLayer, this.incidents.fx, this.disasterFx.fx, this.digHolder, this.districtSignHolder, this.wingSigns.container],
       top: [this.labelLayer, this.incidents.badges, this.ghost.layer],
     });
-    (this.walkers as unknown as { ambientAt(y: number): number }).ambientAt = () => PEOPLE_RENDER.cityAmbient;
+    // [world:C1-Li] Lanterns and headlamps are real moving lights; walkers.ts picks the city ambient itself.
+    setLightSink({ add: l => host.city.addLight(l), remove: id => host.city.removeLight(id), move: (id, x, y) => host.city.moveLight(id, x, y), lightAt: (x, y) => host.lightAt(x, y) });
+    host.parallaxSource = () => this.cam.parallaxInfo(); // [world:C1 camera-nav] the official parallax camera
     if (import.meta.env.DEV) (window as unknown as Record<string, unknown>).__city = host;
   }
 
@@ -933,6 +936,7 @@ export class BunkerRenderer {
     this.walkers.power = state.powerRatio ?? 1; // plan4:polish
     this.walkers.refreshHot(state); // plan4:polish rooms on fire or collapsing: their crew walks out
     this.walkers.update(dt, this.time, this.cam.zoom); // plan4:ST-18 (before the placement below, so a finished walk is placed this picture)
+    if (this.cityHost) this.walkers.life(state, this.people, this.views, this.cam.zoom, this.nightNow, isLiteMode() ? 'lite' : this.postfx?.quality ?? 'high'); // [world:C1-Li] loiterers, the dig crew
     const quarters = state.buildings.filter(b => b.type === 'quarters' && !(b.isConstructing && b.level === 1));
     const seen = new Set<string>();
     const sleeping = new Map<string, number>();
@@ -1469,6 +1473,7 @@ export class BunkerRenderer {
     if (key === this.cityKey && host.current) return;
     this.cityKey = key;
     if (host.syncLayout(state, `${this.surfaceEra}|${this.gfx2 && kitReady()}`)) this.applyCityExtents();
+    if (host.current) this.cam.setCityLayout(host.current); // [world:C1 camera-nav] city bounds, home view, overview (returns early when unchanged)
   }
 
   /**
