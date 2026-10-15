@@ -144,6 +144,16 @@ export function projectChecks(games: { name: string; json: string }[]): { proble
   }
   // The city frames come from tokens and are not the classic ones (or this test would prove nothing).
   if (CITY.frames[1].hubR === CITY.classic.hubR) problems.push('city: the underground frame equals the classic one');
+  // [world:M2] Distinct frames (D5 lifted): no two neighbouring strata share a frame, and every hub side holds the wall, a stair column and
+  // its landing beside the spine (CITY.hub: wallW + stairInset + stairW, and the landing TOWER_AMP past the column centre on the balcony).
+  const H = CITY.hub, side = H.wallW + H.stairInset + H.stairW;
+  for (let s = 1; s <= 6; s++) {
+    const F = CITY.frames[s];
+    if (s > 1) { const P = CITY.frames[s - 1]; if (P.hubL === F.hubL && P.hubR === F.hubR && P.vestW === F.vestW && P.vestE === F.vestE) problems.push(`city: strata ${s - 1} and ${s} share a frame`); }
+    if (-F.hubL < side + 2 || F.hubR - legacy.SHAFT_W < side + 2) problems.push(`city: stratum ${s}'s hub is too narrow for its stair columns`);
+    if (F.hubL + H.wallW + H.stairInset + H.stairW / 2 + legacy.TOWER_AMP > 0) problems.push(`city: stratum ${s}'s west landing is not on the balcony`);
+    if (F.vestW < 6 || F.vestE < 6 || F.tunnel < 6) problems.push(`city: stratum ${s}'s vestibules or tunnel are too short`);
+  }
   // [world:M1] The flag: the query wins (and `?city=0` beats a remembered '1'), then the remembered '1' / '0', then DEFAULT_CITY.
   const flagCases: [string, string | null, boolean][] = [
     ['?city', null, true], ['?city=1', '0', true], ['?city=0', '1', false], ['?slot=a&city', null, true], ['', '1', true], ['', '0', false],

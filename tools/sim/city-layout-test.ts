@@ -6,7 +6,10 @@ import { isDistrict } from '../../src/data/buildingDefs';
 import { SHAFT_W } from '../../src/rendering/geom';
 import { allPockets, stratumOf, strataReached } from '../../src/data/strata';
 import { WING_CAP_EAST, WING_CAP_WEST } from '../../src/data/wings';
-import { FLIGHT_RISE } from '../../src/rendering/geom';
+import { FLIGHT_RISE, GALLERY_H, TOWER_AMP, galleryTop } from '../../src/rendering/geom';
+import { GALLERY_ABOVE_FLOORS } from '../../src/data/zones';
+import { GFX } from '../../src/rendering/gfxFeatures';
+import { galleryTransfers } from '../../src/world/model/transfers';
 import { CITY } from '../../src/world/tokens';
 import { __setProjectionForTests, buildingRect, roomRect, slotX, frameOfStratum } from '../../src/world/project';
 import { buildCityLayout, cityLayoutSig, cityProgress, entranceGeom, laneY, pocketBox } from '../../src/world/model/cityLayout';
@@ -146,9 +149,9 @@ function checkLayout(name: string, state: GameState, fail: (m: string) => void):
     for (const r of rects) if (hit(hb, r.b)) fail(`${name}: ${r.id} stands in hub ${h.s}`);
   }
   for (const c of L.cavities) {
-    const m = /^c:(dist|tun|edge|hatch)(?::(\w+))?(?::(\d+))?/.exec(c.id);
+    const m = /^c:(dist|tun|edge|hatch|xfer)(?::(\w+))?(?::(\d+))?/.exec(c.id);
     if (!m) continue;
-    const own = m[1] === 'edge' ? +c.id.split(':')[2] : m[1] === 'hatch' ? -99 : state.buildings.find(b => b.type === m[2])?.position.floor ?? -99;
+    const own = m[1] === 'edge' ? +c.id.split(':')[2] : m[1] === 'hatch' || m[1] === 'xfer' ? -99 : state.buildings.find(b => b.type === m[2])?.position.floor ?? -99;
     const cb = polyBounds(c.poly);
     for (const r of rects) {
       if (r.floor === own) continue;
@@ -181,6 +184,47 @@ function checkLayout(name: string, state: GameState, fail: (m: string) => void):
     const pb = pocketBox(p);
     for (const c of L.cavities) if (!c.id.startsWith('c:p:') && !c.id.startsWith('c:gal:') && hit(pb, polyBounds(c.poly), 2)) fail(`${name}: pocket ${p.id} meets ${c.id}`);
   }
+  // [world:M2] Gallery transfers: one per seam whose lower stratum is dug, a west and an east run, each from the upper hub's stair column
+  // landing on its last lane, down an even number of flights to the catwalk in the band, along it, and down to the lower hub's first lane.
+  const want = GALLERY_ABOVE_FLOORS.filter(a => a + 1 < nf).length;
+  if (L.transfers.length !== want) fail(`${name}: ${L.transfers.length} transfers, want ${want}`);
+  if (JSON.stringify(L.transfers) !== JSON.stringify(galleryTransfers(nf))) fail(`${name}: layout.transfers differs from galleryTransfers`);
+  for (const t of L.transfers) {
+    const hu = L.hubs.find(h => h.s === t.upper), hl = L.hubs.find(h => h.s === t.lower);
+    if (!hu || !hl || t.lower !== t.upper + 1) { fail(`${name}: transfer g${t.g} joins strata ${t.upper}/${t.lower} without both hubs`); continue; }
+    if (GFX.galleries && (t.y0 !== galleryTop(t.g) || t.y1 !== t.y0 + GALLERY_H || t.deckY <= t.y0 || t.deckY >= t.y1)) fail(`${name}: transfer g${t.g} deck is not in its gallery band`);
+    if (t.runs.map(r => r.side).join() !== 'w,e') fail(`${name}: transfer g${t.g} runs are not west, east`);
+    for (const r of t.runs) {
+      n++;
+      const P = r.path, k = P.length;
+      const su = hu.stairs.find(x => x.side === r.side), sl = hl.stairs.find(x => x.side === r.side);
+      if (!su || Math.abs(su.x - r.upper.column) > 1e-6 || r.upper.y !== su.bottom) fail(`${name}: ${r.id} does not start at the foot of the upper hub's ${r.side} stair column`);
+      if (sl && (Math.abs(sl.x - r.lower.column) > 1e-6 || r.lower.y !== sl.top)) fail(`${name}: ${r.id} does not end at the head of the lower hub's ${r.side} stair column`);
+      const bal = hl.balconies.find(b => b.floor === r.lower.floor && b.side === r.side);
+      if (!bal || r.lower.x < Math.min(bal.x0, bal.x1) || r.lower.x > Math.max(bal.x0, bal.x1) || r.lower.y !== bal.y) fail(`${name}: ${r.id} exit is not on the ${r.side} balcony of floor ${r.lower.floor}`);
+      if (r.upper.x !== r.upper.column + TOWER_AMP || r.lower.x !== r.lower.column + TOWER_AMP) fail(`${name}: ${r.id} ends are not the right landings`);
+      if (P[0] !== r.upper.x || P[1] !== r.upper.y || Math.abs(P[k - 2] - r.lower.x) > 1e-6 || Math.abs(P[k - 1] - r.lower.y) > 1e-6) fail(`${name}: ${r.id} path does not run entry to exit`);
+      if (r.upperFlights % 2 || r.lowerFlights % 2 || r.upperFlights < 2 || r.lowerFlights < 2) fail(`${name}: ${r.id} flight counts ${r.upperFlights}/${r.lowerFlights} are not even`);
+      const jog = Math.abs(r.run.x1 - r.run.x0) > 1e-6 ? 1 : 0;
+      if (k / 2 !== 1 + r.upperFlights + jog + r.lowerFlights) fail(`${name}: ${r.id} has ${k / 2} corners`);
+      let len = 0;
+      for (let i = 2; i < k; i += 2) {
+        const dx = P[i] - P[i - 2], dy = P[i + 1] - P[i - 1];
+        len += Math.hypot(dx, dy);
+        if (dy < -1e-6) fail(`${name}: ${r.id} climbs on the way down`);
+        // Flights span the column (2 x TOWER_AMP); the level run is flat.
+        if (Math.abs(dy) > 1e-6 && Math.abs(Math.abs(dx) - 2 * TOWER_AMP) > 1e-6) fail(`${name}: ${r.id} flight ${i / 2} runs ${dx}`);
+        // The whole walk is inside the cut (sampled every 4 u, a little above the feet).
+        const steps = Math.ceil(Math.hypot(dx, dy) / 4);
+        for (let q = 0; q <= steps; q++) {
+          const x = P[i - 2] + (dx * q) / steps, y = P[i - 1] + (dy * q) / steps - 2;
+          if (!inAnyCavity(L, x, y)) { fail(`${name}: ${r.id} leaves the cut at ${x.toFixed(0)},${y.toFixed(0)}`); break; }
+        }
+      }
+      if (Math.abs(len - r.length) > 1e-3) fail(`${name}: ${r.id} length ${r.length} vs ${len}`);
+    }
+  }
+
   // Progress never changes the geometry signature.
   const prog = cityProgress(state);
   for (const p of prog) if (!L.areas.some(a => a.id === p.id)) fail(`${name}: progress for unknown area ${p.id}`);
@@ -223,6 +267,10 @@ export function cityLayoutChecks(games: { name: string; json: string }[]): { pro
       deep.currentFloors = 24;
       n += checkLayout('e55@24', deep, fail);
       if (buildCityLayout(deep).hubs.length !== 6) fail(`e55@24: ${buildCityLayout(deep).hubs.length} hubs, want 6`);
+      // [world:M2] Distinct frames: every seam's transfer jogs on at least one side (the strata do not stack as one straight column).
+      const tr = buildCityLayout(deep).transfers;
+      if (tr.length !== 5) fail(`e55@24: ${tr.length} transfers, want 5`);
+      for (const t of tr) if (t.runs.every(r => r.run.x0 === r.run.x1)) fail(`e55@24: transfer g${t.g} does not jog: strata ${t.upper}/${t.lower} share a frame`);
       const wide = migrateState(JSON.parse(big.json) as GameState);
       wide.currentFloors = 24;
       const ext: Record<string, { w: number; e: number }> = {};

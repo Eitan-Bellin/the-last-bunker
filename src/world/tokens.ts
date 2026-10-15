@@ -989,14 +989,29 @@ export interface CityFrameTokens {
 /** The classic tower: no hub beyond the shaft, a 6-unit gap each side (geom.ts SHAFT_GAP), an 18-unit district tunnel. */
 const CLASSIC_FRAME: CityFrameTokens = { hubL: 0, hubR: 58, vestW: 6, vestE: 6, tunnel: 18 };
 /**
- * Every underground stratum through C and M1 (architecture D5: one shared frame; distinct frames arrive with the nav graph in M2).
- * The atrium is 186 wide: the 58 shaft plus 64 each side, room for a stair column (CITY.hub.stairW) and a balcony landing.
+ * [world:M2] Each underground stratum has its own frame (architecture D5 lifted; M2-L-notes.md 0.1). A hub side is never narrower than 64
+ * (hubL <= -64, hubR >= 122): the wall, the stair column (CITY.hub.stairW) and its landing on the balcony must fit beside the spine.
+ * Inside a stratum everything stays vertical (D4); at each service gallery x jumps, and the gallery transfers walk the jog.
  */
-const UNDER_FRAME: CityFrameTokens = { hubL: -64, hubR: 122, vestW: 36, vestE: 36, tunnel: 18 };
+const UNDER_FRAMES: readonly CityFrameTokens[] = [
+  CLASSIC_FRAME,
+  /** 1 Bell Square: the civic plaza, wide and symmetric. */
+  { hubL: -84, hubR: 142, vestW: 36, vestE: 36, tunnel: 18 },
+  /** 2 Service Network: the narrow pump hall, long service corridors out to the rooms, a longer district tunnel. */
+  { hubL: -64, hubR: 122, vestW: 66, vestE: 66, tunnel: 30 },
+  /** 3 Old Metro: the wide station hall, short tiled passages. */
+  { hubL: -158, hubR: 216, vestW: 30, vestE: 30, tunnel: 22 },
+  /** 4 Mines: a lopsided hewn chamber, east-heavy; a long west drift, a short east one. */
+  { hubL: -72, hubR: 196, vestW: 52, vestE: 20, tunnel: 40 },
+  /** 5 Deep Caves: a natural cavern leaning west; a long east crawl. */
+  { hubL: -136, hubR: 150, vestW: 24, vestE: 58, tunnel: 34 },
+  /** 6 Core: the compact forge between heavy shielding. */
+  { hubL: -96, hubR: 154, vestW: 44, vestE: 44, tunnel: 26 },
+];
 
 export const CITY = {
   /** Indexed by stratum id. Stratum 0 (the surface row) always keeps the classic frame. */
-  frames: [CLASSIC_FRAME, UNDER_FRAME, UNDER_FRAME, UNDER_FRAME, UNDER_FRAME, UNDER_FRAME, UNDER_FRAME] as readonly CityFrameTokens[],
+  frames: UNDER_FRAMES,
   classic: CLASSIC_FRAME,
   hub: {
     /** Thickness of the atrium's side walls, drawn inside hubL / hubR. */
@@ -1073,8 +1088,8 @@ export const CITY = {
    */
   entrance: {
     /** The hatch shaft through the soil and the vault crown (x span, top just above the ground line). */
-    hatchX0: 68,
-    hatchX1: 106,
+    hatchX0: 88,
+    hatchX1: 126,
     hatchTop: -3,
     /** How far below the vault line the hatch shaft cuts (so its mouth reads as a hole in the vault). */
     hatchDip: 10,
@@ -1102,7 +1117,13 @@ export const CITY = {
     { vault: 'forge', deck: 'gantry', vaultRag: 10, frame: 'steel' },
   ] as readonly { vault: 'none' | 'hub' | 'service' | 'station' | 'mine' | 'cavern' | 'forge'; deck: 'balcony' | 'gantry' | 'timber' | 'stilts'; vaultRag: number; frame: 'concrete' | 'tile' | 'timber' | 'none' | 'steel' }[],
   /** [world:M1] The transfer at each service gallery (the strata seams): the landing across the hub, its signal lamps per metre. */
-  transfer: { lampEvery: 70, deckH: 8, plateW: 34, plateH: 12 },
+  transfer: {
+    lampEvery: 70, deckH: 8, plateW: 34, plateH: 12,
+    /** [world:M2] The catwalk line in the gallery band (y below galleryTop; gallery.ts CATWALK_Y): where a transfer run walks level. */
+    deckDy: 27,
+    /** [world:M2] The stair well cut around a transfer's flights (padding past the flight ends, world units). */
+    wellPad: 8,
+  },
   /**
    * [world:M1] The foreground plane (layer `fore`, p 1.32): silhouettes stand only in the rock between strata and past the edges, and fade
    * out whenever their projected box would cross a storey, a sign or the dig face. `keepClear` pads those boxes (world units). `fadeTau` is
