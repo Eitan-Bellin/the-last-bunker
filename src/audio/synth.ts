@@ -6,3 +6,4 @@
 export { SFX } from './sfx';
 export { EXPEDITION_SECONDS, LOOP_SECONDS, LOOP_TAIL, colonyTheme, darkTheme, expeditionPulse, remnantTheme, shelterTheme, undercityTheme } from './music';
 export { BEDS, BED_SECONDS } from './beds';
+export { CITY_BED_SECONDS, cityBed, cityCrowd } from './cityBeds'; // [world:C1-Li]

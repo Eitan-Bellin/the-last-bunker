@@ -8,6 +8,8 @@ import { Body3D, PEOPLE3D, UNITS_PER_M, bodyData, hasSetPoses, ppm, requestSetPo
 import { GFX } from './gfxFeatures';
 import { SlopArea } from './HitSlop'; // [plan4:ST-12]
 import { LOOK_ACTIVITY, LOOK_OUTFIT } from './roomSpecs'; // plan4:BL-7
+import { CITY } from '../world/flag'; // [world:C1-Li]
+import { LIFE } from '../world/tokens'; // [world:C1-Li]
 
 const SPEED = 24;
 const FLOOR_FRONT = ROOM_H - 3;
@@ -128,6 +130,36 @@ function mute(c: number): number {
   const k = 0.72;
   const m = (v: number, warm: number) => Math.max(0, Math.min(255, Math.round((v * k + l * (1 - k)) * 0.95 + warm)));
   return (m(r, 6) << 16) | (m(g, 2) << 8) | m(b, -4);
+}
+
+/**
+ * [world:C1-Li] City survivors (style guide 7, "one saturated accent per job"): the job's accent colour is pulled to LIFE.accent's HSL
+ * saturation and a readable lightness; `muteMore` greys the rest of the outfit further. Painted style only, like `mute`.
+ */
+function accent(c: number): number {
+  if (!PEOPLE_STYLE.painted) return c;
+  const r = ((c >> 16) & 255) / 255, g = ((c >> 8) & 255) / 255, b = (c & 255) / 255;
+  const mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn;
+  let l = (mx + mn) / 2;
+  let s = d === 0 ? 0 : d / (1 - Math.abs(2 * l - 1));
+  let h = 0;
+  if (d > 0) h = mx === r ? ((g - b) / d + 6) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  const A = LIFE.accent;
+  if (s > 0.08) s = Math.max(s, A.saturation); // a grey or white garment stays neutral
+  l = Math.max(A.lightness[0], Math.min(A.lightness[1], l));
+  const C = (1 - Math.abs(2 * l - 1)) * s, X = C * (1 - Math.abs((h % 2) - 1)), m = l - C / 2;
+  const [rr, gg, bb] = h < 1 ? [C, X, 0] : h < 2 ? [X, C, 0] : h < 3 ? [0, C, X] : h < 4 ? [0, X, C] : h < 5 ? [X, 0, C] : [C, 0, X];
+  const to = (v: number) => Math.max(0, Math.min(255, Math.round((v + m) * 255)));
+  return (to(rr) << 16) | (to(gg) << 8) | to(bb);
+}
+
+function muteMore(c: number): number {
+  if (!PEOPLE_STYLE.painted) return c;
+  const r = (c >> 16) & 0xff, g = (c >> 8) & 0xff, b = c & 0xff;
+  const l = 0.3 * r + 0.59 * g + 0.11 * b;
+  const k = LIFE.accent.mute;
+  const m = (v: number) => Math.max(0, Math.min(255, Math.round((v * k + l * (1 - k)) * 0.95)));
+  return (m(r) << 16) | (m(g) << 8) | m(b);
 }
 
 function limb(len: number, w: number, color: number): Graphics {
@@ -671,10 +703,13 @@ export class Person implements CrowdMember {
   private dress3(): void {
     const o = this.outfit;
     if (!this.b3 || !o) return;
+    // [world:C1-Li] In the city a job's outfit carries one saturated accent (the shirt, or the hat under a coat); the rest is muted further.
+    const acc = CITY && !!this.job;
     this.b3.dress({
-      skin: mute(shade(this.look.skin, this.skinV)), top: mute(o.coat ?? o.top), bottom: mute(o.bottom), hair: mute(this.look.hair),
+      skin: mute(shade(this.look.skin, this.skinV)), top: acc && !o.coat ? accent(o.top) : CITY ? muteMore(o.coat ?? o.top) : mute(o.coat ?? o.top),
+      bottom: CITY ? muteMore(o.bottom) : mute(o.bottom), hair: mute(this.look.hair),
       beard: this.look.beard !== undefined ? mute(this.look.beard) : null, hairStyle: this.look.hairStyle,
-      glasses: !!this.look.glasses, goggles: !!o.goggles, hat: o.hat, hatTint: mute(shade(o.top, 0.8)), hurt: this.hurt,
+      glasses: !!this.look.glasses, goggles: !!o.goggles, hat: o.hat, hatTint: acc && o.coat ? accent(o.top) : mute(shade(o.top, 0.8)), hurt: this.hurt,
     });
   }
 
@@ -687,7 +722,8 @@ export class Person implements CrowdMember {
       return;
     }
     let anim: Anim3;
-    if (this.rest && this.restPhase > 0.55) anim = this.restAnim(t);
+    if (this.inTransit && this.transitPose && act === 'idle') anim = this.transitPose; // [world:C1-Li] loitering: talking, looking out
+    else if (this.rest && this.restPhase > 0.55) anim = this.restAnim(t);
     else if (this.breather) anim = 'look';
     else if (act === 'idle') anim = this.wounded ? 'hunch' : this.mood === 'sad' ? 'sad' : this.talkingTo(t) ? 'talk' : 'idle';
     else if (act === 'tend' && (this.job === 'laboratory' || this.job === 'reactorHall')) anim = 'inspect';
@@ -801,7 +837,7 @@ export class Person implements CrowdMember {
    * One step of a walk: `wx, wy` the new position (world units, feet), `dist` the ground covered since the last step, `facing` -1/1 (0 keeps it),
    * `moving` false while waiting (for the lift). Uses the same bodies, strides and turning as in a room.
    */
-  stepTransit(dt: number, t: number, wx: number, wy: number, dist: number, facing: number, moving: boolean): void {
+  stepTransit(dt: number, t: number, wx: number, wy: number, dist: number, facing: number, moving: boolean, act: Activity = 'idle'): void {
     this.try3d();
     this.b3?.step(dt);
     if (this.b3) this.faceStep();
@@ -816,11 +852,11 @@ export class Person implements CrowdMember {
       this.setMode('walk', 0.18);
       this.walkPose(this.tgt, false);
     } else {
-      this.setMode('idle');
-      this.workPose(this.tgt, 'idle', t);
+      this.setMode(act); // [world:C1-Li] a digger at the face works ('dig'), a loiterer stands ('idle')
+      this.workPose(this.tgt, act, t);
     }
     this.turnStep(dt);
-    if (this.b3) this.show3(t, moving, 'idle', false);
+    if (this.b3) this.show3(t, moving, act, act === 'carry');
     else this.show(dt);
     this.container.position.set(wx, wy);
     this.container.zIndex = Math.round(wy * 10);
@@ -831,6 +867,7 @@ export class Person implements CrowdMember {
   /** The walk is over: the person is put back in a room by the renderer's usual placement and appears at `localX` (a doorway) on depth `depth`. */
   endTransit(localX: number | null, depth: number): void {
     this.inTransit = false;
+    this.leaveLife(); // [world:C1-Li]
     this.entryLocal = localX;
     this.entryDepth = depth;
     this.replan = true;
@@ -839,7 +876,15 @@ export class Person implements CrowdMember {
   /** Gives up a walk without placing the person (they are being dragged, or are gone). */
   abortTransit(): void {
     this.inTransit = false;
+    this.leaveLife(); // [world:C1-Li]
     this.entryLocal = null;
+  }
+
+  /** [world:C1-Li] Back in a room: no loiter pose, nothing carried, no rim (the room's light takes over). */
+  private leaveLife(): void {
+    this.transitPose = null;
+    this.setCarry(0);
+    this.b3?.rim(false);
   }
 
   /** Hidden while inside the lift cabin (the shaft draws a rider figure instead). */
@@ -853,6 +898,76 @@ export class Person implements CrowdMember {
     out.shirt = mute(o ? o.coat ?? o.top : this.casual);
     out.skin = mute(shade(this.look.skin, this.skinV));
     out.pants = mute(o ? o.bottom : this.pants);
+  }
+
+  // --- [world:C1-Li] City life: what walkers.ts / src/world/life ask of a person (carried light, rim, a pose while loitering) ---
+
+  /** While walkers.ts holds this person standing somewhere (loitering): the pose to show instead of 'idle' (null = idle). */
+  private transitPose: Anim3 | null = null;
+  private carryG: Graphics | null = null;
+  private carryKind = 0;
+
+  /** -1 facing west, 1 facing east. */
+  get facingDir(): number {
+    return this.facing;
+  }
+
+  /** Standing height to the top of the head (world units, at depth scale 1). */
+  get standHeight(): number {
+    return this.height();
+  }
+
+  /** A loiter pose: 'talk' (needs the set poses: requested, idle until they are in), 'look', or null for plain idle. */
+  setTransitPose(pose: 'talk' | 'look' | null): void {
+    if (pose === 'talk' && (!this.b3 || !hasSetPoses(this.kind))) {
+      if (this.b3) requestSetPoses(this.kind);
+      pose = null;
+    }
+    this.transitPose = pose;
+  }
+
+  /** What the person carries: 0 nothing, 1 a lantern in the hand, 2 a headlamp (the light itself is src/world/life/lanterns.ts). */
+  setCarry(kind: number): void {
+    if (kind === this.carryKind) return;
+    this.carryKind = kind;
+    if (!kind) {
+      if (this.carryG) this.carryG.visible = false;
+      return;
+    }
+    const g = (this.carryG ??= new Graphics());
+    g.clear();
+    const k = 1 / this.baseScale;
+    if (kind === 1) {
+      const x = LIFE.lantern.hand.x * k, y = LIFE.lantern.hand.y * k;
+      g.moveTo(x, y - 6).lineTo(x, y - 3).stroke({ width: 0.8, color: 0x2a2420 });
+      g.roundRect(x - 2.4, y - 3.2, 4.8, 6.4, 1.1).fill(0x3a3028);
+      g.roundRect(x - 1.6, y - 2.4, 3.2, 4.6, 0.8).fill(0xffe2a0);
+      g.rect(x - 2.8, y + 2.6, 5.6, 1.1).fill(0x2a2420);
+    } else {
+      const x = LIFE.lantern.head.x * k, y = (-this.height() + LIFE.lantern.head.y) * k;
+      g.rect(x - 4.2, y - 0.7, 3.2, 1.4).fill(0x2a2420);
+      g.circle(x, y, 1.7).fill(0xfff4d8);
+    }
+    this.figure.addChild(g); // (re-added on top: the 3D body may have come in after the last call)
+    g.visible = true;
+  }
+
+  /**
+   * The rim light (style guide 7): an additive copy of the 3D body behind it, tinted `color`, offset (`dx`, `dy` world units) toward the
+   * brighter side, so a thin lit edge separates the figure from a dark wall. `alpha` 0 turns it off. Without the 3D body it does nothing.
+   */
+  setRim(color: number, alpha: number, dx: number, dy: number): void {
+    const b3 = this.b3;
+    if (!b3) return;
+    if (alpha <= 0) {
+      b3.rim(false);
+      return;
+    }
+    const r = b3.rim(true)!;
+    if (r.tint !== color) r.tint = color;
+    r.alpha = alpha;
+    const sx = this.figure.scale.x * b3.container.scale.x, sy = this.figure.scale.y * b3.container.scale.y;
+    r.position.set(sx ? dx / sx : 0, sy ? dy / sy : 0);
   }
 
   /** gfx-p0 people: the room's crowd (work spots, spacing, lamp); call every frame, cheap when unchanged. */
