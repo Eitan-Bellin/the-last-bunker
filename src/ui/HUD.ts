@@ -13,7 +13,7 @@ import { crewCount, getDef } from '../data/buildingDefs';
 import { subscribeA11y, getA11y, reducedMotion } from '../utils/a11y';
 import { setHudInsets } from '../utils/hudInsets';
 import { initViewportUi } from './viewportUi';
-import { kResourceChip, kProgress, setProgress, kBadge, setBadge, kRow, kTooltip } from './kit';
+import { kResourceChip, kProgress, setProgress, kBadge, setBadge, kRow, kTooltip, bindPress } from './kit';
 import { fmtDuration, fmtNum } from './format';
 import '../styles/hud.css';
 
@@ -62,6 +62,27 @@ export function jobRoom(state: GameState): { idle: number; free: number } {
   }
   return { idle, free };
 }
+/** [ux-redesign W3a] What the advisor strip says: one line, its reward or countdown, and its progress (null: no bar). */
+export interface StripView {
+  key: string;
+  kind: 'crisis' | 'collect' | 'goal' | 'upgrade';
+  icon: string;
+  text: string;
+  progress: [number, number] | null;
+  reward: string;
+  /** A countdown ("[[clock]] 2:10", icons allowed) when the line stands for a crisis. */
+  urgent?: string;
+}
+
+/** [ux-redesign W3a] One goal in the strip's unfolded list. */
+export interface GoalView {
+  icon: string;
+  text: string;
+  progress: [number, number];
+  reward: string;
+  onPress: () => void;
+}
+
 /** Buttons a "new system" card can make glow (see src/ui/controllers/systems.ts). */
 export type SpotKey = NavKey | 'inbox' | 'season' | 'era';
 
@@ -532,25 +553,151 @@ export class HUD {
     this.setStyle(this.nightOverlay, 'opacity', night.toFixed(3));
   }
 
-  private objectiveEl!: HTMLButtonElement;
+  /**
+   * [ux-redesign W3a] The objective strip is the one "What now?" advisor: one line (icon, short verb text, reward or countdown, a progress
+   * bar) that routes on tap, and a "goals" key that unfolds up to three active goals. What it says comes from `advisor`
+   * (src/ui/onboarding/advisor.ts); without it the strip shows the objective the app passes, as before.
+   */
+  private objectiveEl!: HTMLElement;
+  private objectiveMain!: HTMLButtonElement;
+  private objectiveIcon!: HTMLElement;
   private objectiveText!: HTMLElement;
   private objectiveMeta!: HTMLElement;
+  private objectiveBar!: HTMLElement;
+  private objectiveMore!: HTMLButtonElement;
+  private objectiveMoreN!: HTMLElement;
+  private objectiveList: HTMLElement | null = null;
+  private objectiveListAt = 0;
+  private offListOutside: (() => void) | null = null;
   onObjectiveTap: (() => void) | null = null;
+  /** [ux-redesign W3a] What the strip says now (null: the objective passed to setObjective). */
+  advisor: (() => StripView | null) | null = null;
+  /** [ux-redesign W3a] The goals the strip unfolds (up to three). Fewer than two: no "goals" key. */
+  goals: (() => GoalView[]) | null = null;
+
+  /** [ux-redesign W3a] The strip's tappable line (the spotlight and the idle hint point at it). */
+  get objectiveTarget(): HTMLElement {
+    return this.objectiveMain;
+  }
 
   setObjective(icon: string, text: string, progress: [number, number], reward: string): void {
-    this.setText(this.objectiveText, `${icon} ${text}`);
-    const [cur, target] = progress;
-    this.setText(this.objectiveMeta, `${target > 1 ? `${cur}/${target}` : ''}${reward ? `${target > 1 ? ' · ' : ''}[[gift]] ${reward}` : ''}`);
-    this.setStyle(this.objectiveEl, '--obj-progress', `${Math.round((cur / Math.max(1, target)) * 100)}%`);
+    const v = this.advisor?.() ?? { key: 'objective', kind: 'goal', icon, text, progress, reward };
+    this.objectiveEl.dataset.kind = v.urgent ? 'crisis' : v.kind;
+    this.setText(this.objectiveIcon, v.icon);
+    this.setText(this.objectiveText, v.text);
+    const [cur, target] = v.progress ?? [0, 0];
+    const parts: string[] = [];
+    if (v.urgent) parts.push(v.urgent);
+    else if (target > 1) parts.push(`${fmtNum(Math.min(cur, target))}/${fmtNum(target)}`);
+    if (v.reward) parts.push(`[[gift]] ${v.reward}`);
+    this.setText(this.objectiveMeta, parts.join(' · '));
+    this.objectiveMeta.hidden = parts.length === 0;
+    const showBar = !!v.progress && target > 0 && !v.urgent;
+    this.objectiveBar.hidden = !showBar;
+    if (showBar && this.objectiveBar.dataset.sig !== `${cur}/${target}`) {
+      this.objectiveBar.dataset.sig = `${cur}/${target}`;
+      setProgress(this.objectiveBar, cur, target);
+    }
+    const label = `${v.text}${parts.length ? `. ${parts.join(', ').replace(/\[\[\w+\]\]\s?/g, '')}` : ''}`;
+    if (this.objectiveMain.getAttribute('aria-label') !== label) this.objectiveMain.setAttribute('aria-label', label);
+    // The goals key, and the open list kept current (about once a second: the goals read the whole Act).
+    const now = performance.now();
+    if (this.objectiveList) {
+      if (now - this.objectiveListAt > 1000) this.fillGoals();
+    } else if (now - this.objectiveListAt > 1000) {
+      this.objectiveListAt = now;
+      const n = this.goals?.().length ?? 0;
+      this.objectiveMore.hidden = n < 2;
+      this.setText(this.objectiveMoreN, n >= 2 ? String(n) : '');
+    }
+  }
+
+  private toggleGoals(): void {
+    if (this.objectiveList) { this.closeGoals(); return; }
+    const list = el('div', 'adv-list');
+    list.id = 'adv-goals';
+    list.setAttribute('role', 'list');
+    list.setAttribute('aria-label', i18n.t('ux3a.goals'));
+    this.objectiveList = list;
+    this.objectiveEl.appendChild(list);
+    this.fillGoals();
+    this.objectiveMore.setAttribute('aria-expanded', 'true');
+    this.objectiveEl.classList.add('is-open');
+    const outside = (e: PointerEvent): void => {
+      if (e.target instanceof Node && this.objectiveEl.contains(e.target)) return;
+      this.closeGoals();
+    };
+    document.addEventListener('pointerdown', outside, { capture: true });
+    this.offListOutside = () => document.removeEventListener('pointerdown', outside, { capture: true });
+  }
+
+  closeGoals(): void {
+    this.offListOutside?.();
+    this.offListOutside = null;
+    this.objectiveList?.remove();
+    this.objectiveList = null;
+    this.objectiveMore.setAttribute('aria-expanded', 'false');
+    this.objectiveEl.classList.remove('is-open');
+  }
+
+  private fillGoals(): void {
+    const list = this.objectiveList;
+    if (!list) return;
+    this.objectiveListAt = performance.now();
+    const goals = this.goals?.() ?? [];
+    const sig = goals.map(g => `${g.text}|${g.progress.join('/')}|${g.reward}`).join(';');
+    if (list.dataset.sig === sig) return;
+    list.dataset.sig = sig;
+    list.replaceChildren(el('div', 'adv-list__title', i18n.t('ux3a.goals')));
+    for (const g of goals) {
+      const row = el('button', 'adv-goal');
+      row.type = 'button';
+      row.setAttribute('role', 'listitem');
+      const [cur, target] = g.progress;
+      const meta = [target > 1 ? `${fmtNum(Math.min(cur, target))}/${fmtNum(target)}` : '', g.reward ? `[[gift]] ${g.reward}` : ''].filter(Boolean).join(' · ');
+      const top = el('span', 'adv-goal__top');
+      top.append(el('span', 'adv-goal__icon', g.icon), el('span', 'adv-goal__text', g.text));
+      if (meta) {
+        const m = el('span', 'adv-goal__meta', meta);
+        m.dir = 'auto';
+        top.appendChild(m);
+      }
+      row.append(top, kProgress(cur, Math.max(1, target), g.text));
+      bindPress(row, () => { this.closeGoals(); g.onPress(); });
+      list.appendChild(row);
+    }
   }
 
   private createBanners(): void {
-    this.objectiveEl = el('button', 'objective');
+    // [ux-redesign W3a] The advisor strip: the line (one button, routes on release) and the "goals" key that unfolds the list above it.
+    this.objectiveEl = el('div', 'objective adv');
+    this.objectiveMain = el('button', 'adv-main');
+    this.objectiveMain.type = 'button';
+    this.objectiveIcon = el('span', 'objective-tag', '[[target]]');
+    this.objectiveIcon.setAttribute('aria-hidden', 'true');
     this.objectiveText = el('span', 'objective-text');
     this.objectiveMeta = el('span', 'objective-meta');
     this.objectiveMeta.dir = 'auto';
-    this.objectiveEl.append(el('span', 'objective-tag', '[[target]]'), this.objectiveText, this.objectiveMeta);
-    this.objectiveEl.addEventListener('click', () => this.onObjectiveTap?.());
+    this.objectiveBar = kProgress(0, 1);
+    this.objectiveBar.classList.add('adv-bar');
+    this.objectiveBar.setAttribute('aria-hidden', 'true');
+    const body = el('span', 'adv-body');
+    const line = el('span', 'adv-line');
+    line.append(this.objectiveText, this.objectiveMeta);
+    body.append(line, this.objectiveBar);
+    this.objectiveMain.append(this.objectiveIcon, body);
+    bindPress(this.objectiveMain, () => { this.closeGoals(); this.onObjectiveTap?.(); }, { haptics: false });
+    this.objectiveMore = el('button', 'adv-more');
+    this.objectiveMore.type = 'button';
+    this.objectiveMore.hidden = true;
+    this.objectiveMore.setAttribute('aria-expanded', 'false');
+    this.objectiveMore.setAttribute('aria-controls', 'adv-goals');
+    this.objectiveMore.setAttribute('aria-label', i18n.t('ux3a.goalsMore'));
+    this.objectiveMore.title = i18n.t('ux3a.goalsMore');
+    this.objectiveMoreN = el('span', 'adv-more__n');
+    this.objectiveMore.append(el('span', 'adv-more__icon', '[[flag]]'), this.objectiveMoreN);
+    bindPress(this.objectiveMore, () => this.toggleGoals());
+    this.objectiveEl.append(this.objectiveMain, this.objectiveMore);
     this.container.appendChild(this.objectiveEl);
 
     this.powerBanner = el('button', 'hud-banner power');
@@ -939,6 +1086,7 @@ export class HUD {
 
   destroy(): void {
     this.closePop();
+    this.closeGoals(); // [ux-redesign W3a]
     this.resizeObs?.disconnect();
     this.offResize?.();
     if (this.measureRaf) cancelAnimationFrame(this.measureRaf);

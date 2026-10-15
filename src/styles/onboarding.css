@@ -1,0 +1,170 @@
+/*
+ * [ux-redesign W3a] Onboarding: the tutorial spotlight (a dark layer with a cut-out, a bubble, "Skip tutorial"), the idle hint (the tip
+ * cards' ghost finger, or a still ring under reduced motion), locked nav tabs and their "Opens with ..." popover, and the unlock pulse.
+ * Imported by src/ui/onboarding/index.ts. Tokens only (styles/tokens.css).
+ */
+
+/* ---------- spotlight ---------- */
+
+.ob-spot {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-tutorial);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity var(--dur-popup-in) var(--ease-out);
+}
+.ob-spot[hidden] { display: none; }
+.ob-spot.in { opacity: 1; }
+.ob-spot__hole,
+.ob-spot__block,
+.ob-spot .ob-bubble {
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+.ob-spot__hole {
+  border-radius: var(--r-card);
+  box-shadow: 0 0 0 var(--ring-w) var(--primary), 0 0 0 200vmax var(--overlay);
+}
+/* A soft ring that breathes around the cut-out (still under reduced motion: --breathe-scale is 1 there). */
+.ob-spot__hole::after {
+  content: '';
+  position: absolute;
+  inset: calc(-1 * var(--ring-w));
+  border-radius: inherit;
+  box-shadow: 0 0 0 var(--ring-w) var(--primary-glow);
+  animation: obBreathe var(--dur-breathe) var(--ease-in-out) infinite;
+}
+.ob-spot__block { pointer-events: auto; background: transparent; touch-action: none; }
+.ob-spot__block[hidden] { display: none; }
+/* The element is not on screen yet (a sheet still sliding): the whole screen dims and waits. */
+.ob-spot.is-lost { background: var(--overlay); }
+.ob-spot.is-lost .ob-spot__hole { visibility: hidden; }
+.ob-spot.is-lost .ob-bubble { visibility: hidden; }
+
+.ob-spot .ob-bubble {
+  pointer-events: auto;
+  max-width: min(calc(var(--sp-8) * 5), calc(100vw - 2 * var(--sp-4)));
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  padding: var(--sp-3) var(--sp-4);
+  border-radius: var(--r-card);
+  background: var(--surface-2);
+  border: var(--border-w) solid var(--primary);
+  box-shadow: var(--elev-2);
+  color: var(--text-primary);
+}
+.ob-bubble__text {
+  margin: 0;
+  font-family: var(--font-title);
+  font-size: calc(var(--type-body-l) * var(--fs, 1));
+  line-height: var(--lh-tight);
+  text-align: start;
+}
+.ob-bubble__actions { display: flex; justify-content: flex-end; }
+.ob-bubble__actions:empty { display: none; }
+
+.ob-skip {
+  position: absolute;
+  inset-block-start: calc(env(safe-area-inset-top) + var(--sp-2));
+  inset-inline-end: max(var(--sp-2), env(safe-area-inset-right));
+  pointer-events: auto;
+}
+.ob-skip .ob-skip__btn {
+  min-height: var(--hit-min);
+  padding-inline: var(--sp-3);
+  font-size: calc(var(--type-caption) * var(--fs, 1));
+  color: var(--text-primary);
+  background: var(--surface-1);
+  border-radius: var(--r-full);
+}
+
+/* ---------- idle hint ---------- */
+
+.ob-hand.tip-ghost {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: calc(var(--z-tutorial) + 1);
+  pointer-events: none;
+  background: none;
+  border: 0;
+  overflow: visible;
+  opacity: 0;
+  transition: opacity var(--dur-popup-in) var(--ease-out);
+}
+.ob-hand.in { opacity: 1; }
+.ob-hand__glyph {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: var(--icon-l);
+  height: var(--icon-l);
+  color: var(--text-primary);
+  filter: drop-shadow(0 0 var(--sp-1) var(--primary));
+  transform-origin: 30% 10%;
+}
+.ob-hand__glyph .ic { width: var(--icon-l); height: var(--icon-l); }
+:root[data-motion='full'] .ob-hand__glyph { animation: obTap var(--dur-breathe) var(--ease-in-out) infinite; }
+.ob-ring {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: calc(var(--z-tutorial) + 1);
+  pointer-events: none;
+  border-radius: var(--r-card);
+  box-shadow: 0 0 0 var(--ring-w) var(--primary);
+}
+
+/* ---------- locked nav tabs ---------- */
+
+#hud-nav .hx-tab .ob-lock {
+  position: absolute;
+  inset-block-end: calc(-1 * var(--sp-1));
+  inset-inline-end: calc(-1 * var(--sp-2));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--icon-s);
+  height: var(--icon-s);
+  border-radius: var(--r-full);
+  background: var(--surface-2);
+  color: var(--text-secondary);
+}
+#hud-nav .hx-tab .ob-lock[hidden] { display: none; }
+#hud-nav .hx-tab .ob-lock .ic { width: var(--sp-3); height: var(--sp-3); }
+#hud-nav .hx-tab.ob-locked .hx-tab__label { color: var(--text-disabled); }
+#hud-nav .hx-tab.ob-locked .hx-tab__icon > .ic { opacity: var(--ghost-opacity); }
+
+.ob-pop {
+  position: fixed;
+  z-index: var(--z-tooltip);
+  max-width: min(calc(var(--sp-8) * 5), calc(100vw - 2 * var(--sp-4)));
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  padding: var(--sp-3);
+  border-radius: var(--r-card);
+  background: var(--surface-2);
+  border: var(--border-w) solid var(--border);
+  box-shadow: var(--elev-2);
+  color: var(--text-primary);
+  opacity: 0;
+  transform: translateY(var(--sp-2));
+  transition: opacity var(--dur-popup-in) var(--ease-out), transform var(--dur-popup-in) var(--ease-out);
+}
+.ob-pop.in { opacity: 1; transform: none; }
+.ob-pop__text { margin: 0; font-size: calc(var(--type-body) * var(--fs, 1)); line-height: var(--lh-body); text-align: start; }
+.ob-pop .ob-pop__btn { align-self: flex-end; }
+
+/* A tab that just opened: a short pulse (reduced motion: --breathe-scale is 1, so only the glow fades in and out). */
+#hud-nav .hx-tab.ob-unlock .hx-tab__icon { animation: obUnlock var(--dur-pulse) var(--ease-out) 2; }
+
+@keyframes obBreathe { 0%, 100% { transform: scale(1); opacity: 0.4; } 50% { transform: scale(var(--breathe-scale)); opacity: 1; } }
+@keyframes obTap { 0%, 100% { transform: translate(0, 0) scale(1); } 40% { transform: translate(0, 0) scale(var(--press-scale)); } }
+@keyframes obUnlock {
+  0%, 100% { transform: scale(1); filter: none; }
+  50% { transform: scale(var(--breathe-scale)); filter: drop-shadow(0 0 var(--sp-2) var(--primary)); }
+}

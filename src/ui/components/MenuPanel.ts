@@ -95,6 +95,8 @@ export interface MenuActions {
   /** [plan4:UX-11] Forget which gesture tips were seen / play the opening story again (no change to the game). */
   showTipsAgain?: () => void;
   replayIntro?: () => void;
+  /** [ux-redesign W3a] "Tutorial again": the first-session spotlight (or a short walk round the screen) for this player again. */
+  replayTutorial?: () => void;
   /** [plan4:GP-5/GP-6] Make the share picture / start the tour mode (the app closes the menu first). */
   shareBunker?: () => void;
   startTour?: () => void;
@@ -221,9 +223,12 @@ export class MenuPanel {
     const card = el('div', 'bp-card settings-learn');
     const tips = button(`[[hand]] ${i18n.t('settings.tipsAgain')}`, 'btn-secondary learn-btn', () => { uiSound('click'); this.actions.showTipsAgain?.(); });
     const intro = button(`[[flashlight]] ${i18n.t('settings.introAgain')}`, 'btn-secondary learn-btn', () => { uiSound('click'); this.actions.replayIntro?.(); });
+    // [ux-redesign W3a] The tutorial row.
+    const tutorial = button(`[[target]] ${i18n.t('ux3a.tutorialAgain')}`, 'btn-secondary learn-btn', () => { uiSound('click'); this.actions.replayTutorial?.(); });
     if (!this.actions.showTipsAgain) tips.hidden = true;
     if (!this.actions.replayIntro) intro.hidden = true;
-    card.append(tips, intro);
+    if (!this.actions.replayTutorial) tutorial.hidden = true;
+    card.append(tutorial, tips, intro);
     return card;
   }
 

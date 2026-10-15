@@ -96,6 +96,7 @@ import { SystemsController } from './ui/controllers/systems';
 import { WhatsNewController } from './ui/controllers/whatsnew'; // [plan4:ST-9]
 import { WelcomeController } from './ui/controllers/welcome';
 import { TipsController } from './ui/controllers/tips'; // [plan4:UX-11]
+import { OnboardingController } from './ui/onboarding'; // [ux-redesign W3a]
 import { PRODUCTION_POPUP_MS, WorldController } from './ui/controllers/world';
 import { DailyController } from './ui/controllers/daily'; // [plan4:GP-1]
 import { Ceremonies } from './ui/ceremony'; // [plan4:GP-2]
@@ -136,6 +137,8 @@ export class GameApp {
   readonly systems = new SystemsController(this);
   /** [plan4:ST-9] The one-time "the bunker can grow sideways" card for saves from v6. */
   readonly whatsNew = new WhatsNewController(this);
+  // [ux-redesign W3a] Onboarding: the "What now?" advisor strip, idle hint, first-session spotlight, locked tabs. Wires itself to the HUD.
+  readonly onboarding = new OnboardingController(this);
   engine: GameEngine;
   renderer: BunkerRenderer;
   hud: HUD;
@@ -278,6 +281,7 @@ export class GameApp {
       openChronicle: () => this.chroniclePanel.show(this.state),
       showTipsAgain: () => { this.tips.reset(); this.toasts.show(`[[hand]] ${i18n.t('settings.tipsReset')}`, 'good'); }, // [plan4:UX-11]
       replayIntro: () => { this.closeSheets(); this.story.replayIntro(); },
+      replayTutorial: () => this.onboarding.replay(), // [ux-redesign W3a]
       shareBunker: () => this.shareBunker(), // [plan4:GP-5]
       startTour: () => this.startTour(), // [plan4:GP-6]
       redeemCoupon: (code: string) => { // the coupon sheet: pick how much to skip or add
