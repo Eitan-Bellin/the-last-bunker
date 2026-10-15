@@ -43,13 +43,22 @@ export function installPlaythrough(getPlayTime: () => number): void {
   w.__pt = {
     stages: () => STAGES,
     speed: (n: number) => { w.__speed = Math.max(1, Math.min(50, n)); return w.__speed; },
-    async load(stage: string) {
+    /** Loads a stage save; `awayHours` > 0 makes the next start a return after that long away (welcome-back, offline catch-up). */
+    async load(stage: string, awayHours = 0) {
       const res = await fetch(`/store/playthrough/saves/${stage}-seed1.json`);
       if (!res.ok) throw new Error(`no stage save ${stage}: run node tools/playthrough.mjs`);
       for (let i = 0; i < 80 && !w.__engine; i++) await new Promise(r => setTimeout(r, 250));
-      const engine = w.__engine as { importState(s: string): Promise<boolean>; forceSave(): Promise<void>; saveManager: { exportSave(o: unknown): string } };
+      const engine = w.__engine as { importState(s: string): Promise<boolean>; forceSave(): Promise<void>; stop(): void; saveBlocked: boolean;
+        saveManager: { exportSave(o: unknown): string; saveJson(json: string): Promise<void> }; stateManager: { getSnapshot(): { timestamp: number } } };
       if (!(await engine.importState(engine.saveManager.exportSave(await res.json())))) throw new Error(`stage ${stage} was refused`);
       await engine.forceSave();
+      if (awayHours > 0) { // write the save once more with an older clock, and stop this page from saving over it
+        engine.stop();
+        engine.saveBlocked = true;
+        const snap = engine.stateManager.getSnapshot();
+        snap.timestamp = Date.now() - awayHours * 3600 * 1000;
+        await engine.saveManager.saveJson(JSON.stringify(snap));
+      }
       setTimeout(() => location.reload(), 300);
       return `loading ${stage}`;
     },

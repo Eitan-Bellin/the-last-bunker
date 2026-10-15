@@ -15,6 +15,7 @@ const base = arg('url', 'http://localhost:5175');
 const minutes = Number(arg('minutes', 30));
 const speed = Number(arg('speed', 5));
 const stage = arg('stage', '');
+const away = Number(arg('away', 0)); // hours away before the stage save is opened (a returning player)
 const lang = arg('lang', 'he');
 const out = arg('out', '');
 const slot = `measure-${Date.now()}`;
@@ -58,7 +59,7 @@ try {
   await evaluate(`localStorage.setItem('lastbunker_lang', ${JSON.stringify(lang)})`);
   await go();
   if (stage) {
-    await evaluate(`__pt.load(${JSON.stringify(stage)})`);
+    await evaluate(`__pt.load(${JSON.stringify(stage)}, ${away})`);
     await sleep(1500);
     for (let i = 0; i < 80; i++) { await sleep(500); if (await evaluate('typeof window.__pt === "object" && !!window.__app?.state').catch(() => false)) break; }
   }
@@ -66,7 +67,7 @@ try {
     await evaluate('__pt.autoplay(true)');
     for (let i = 0; i < 120; i++) { await sleep(250); if (await evaluate('!__engine.paused && __app.state.stats.totalPlayTime > 0').catch(() => false)) break; }
   }
-  await evaluate(`__pt.reset(); __pt.speed(${speed}); __pt.autoplay(${!idle})`);
+  await evaluate(`${stage ? '' : '__pt.reset(); '}__pt.speed(${speed}); __pt.autoplay(${!idle})`);
   const wallMs = (minutes * 60 * 1000) / speed;
   const t0 = Date.now();
   while (Date.now() - t0 < wallMs) {
@@ -79,7 +80,7 @@ try {
   const report = await evaluate('__pt.report()');
   report.state = await evaluate(STATE).catch(e => String(e));
   report.samples = samples;
-  report.config = { base, minutes, speed, stage, lang };
+  report.config = { base, minutes, speed, stage, away, lang };
   console.log(JSON.stringify(report, null, 1));
   if (out) writeFileSync(out, JSON.stringify(report, null, 1));
 } finally {
