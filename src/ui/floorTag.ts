@@ -20,3 +20,19 @@ export function floorTagIso(floor: number): string {
   // number keeps "קומה 3" on one line ("Surface" and "B3" have no space to replace).
   return String.fromCharCode(0x2068) + floorTag(floor).replace(/ /g, String.fromCharCode(0xa0)) + String.fromCharCode(0x2069);
 }
+
+/**
+ * [ux-redesign final F7] A tidy list of floors for a sentence: "B2, B4–B9" in English, "קומה 2, קומות 4–9" in Hebrew (the UI-side
+ * twin of placementRank.floorRangesLabel, which keeps the Latin form for the world signs). 0-based in, as the ruler shows them out.
+ */
+export function floorRangesTag(floors: number[]): string {
+  const f = [...new Set(floors)].sort((a, b) => a - b);
+  const parts: string[] = [];
+  for (let i = 0; i < f.length;) {
+    let j = i;
+    while (j + 1 < f.length && f[j + 1] === f[j] + 1) j++;
+    parts.push(j === i ? floorTag(f[i]) : i18n.t('floor.range', { a: f[i] + 1, b: f[j] + 1 }));
+    i = j + 1;
+  }
+  return parts.join(', ');
+}

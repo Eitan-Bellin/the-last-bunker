@@ -113,6 +113,11 @@
 #hud .hx-res .k-chip.is-danger.is-countdown .hx-res__line2 { color: var(--danger-text); }
 /* [w5] The last 10 s before a store runs dry: the countdown ticks (kit.css stops it under reduced motion). */
 #hud .hx-res .k-chip.is-ending .hx-res__line2 { animation: k-tick var(--dur-pulse) var(--ease-in-out) infinite; }
+/* [ux-redesign final] Reduced motion: the last-seconds line stays still (the countdown itself says it). Moved here from kit.css. */
+:root[data-motion="reduced"] #hud .k-chip.is-ending .hx-res__line2 { animation: none; }
+@media (prefers-reduced-motion: reduce) {
+  :root:not([data-motion="full"]) #hud .k-chip.is-ending .hx-res__line2 { animation: none; }
+}
 
 /* Fill: a thin bar along the bottom edge of the tile (the kit progress, slimmed). */
 #hud .hx-res__bar {
@@ -320,6 +325,16 @@
 }
 #hud .hx-top.fs-big .hx-res .k-chip:not(.is-low):not(.is-danger):not(.is-countdown) { grid-template-areas: 'icon' 'amount'; }
 #hud .hx-top.fs-big .hx-res .k-chip__amount { max-width: 100%; direction: ltr; }
+/* [ux-redesign final F5] Large text on a narrow phone: the people chip drops its caption (the chip's aria-label says it) and its number
+   steps down to the caption size, ending in an ellipsis rather than losing its leading digits. */
+#hud .hx-top.fs-big .hx-people .hx-stat__caption { display: none; }
+#hud .hx-top.fs-big .hx-people .hx-stat__value {
+  font-size: calc(var(--type-caption) * var(--fs, 1));
+  direction: ltr;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
 #hud .hx-top.fs-big .hx-res__line2,
 [dir='rtl'] #hud .hx-top.fs-big .hx-res__line2 { justify-content: center; }
 

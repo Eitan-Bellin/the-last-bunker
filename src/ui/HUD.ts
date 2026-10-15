@@ -926,7 +926,10 @@ export class HUD {
     const nowMs = performance.now();
     const dtRoll = Math.min(0.1, (nowMs - this.lastUpdate) / 1000);
     this.lastUpdate = nowMs;
-    const ariaDue = nowMs - this.lastAria >= 250;
+    // [ux-redesign final F8] The tiles' spoken labels (amount, rate, time left) follow the numbers every 5 s, or 4 times a second while the
+    // focus is in the HUD (a screen reader is on it): they were rewritten 7 times a second while nobody listened.
+    const focusIn = !!document.activeElement && this.container.contains(document.activeElement);
+    const ariaDue = nowMs - this.lastAria >= (focusIn ? 250 : 5000);
     if (ariaDue) this.lastAria = nowMs;
 
     this.counts.instant = reducedMotion(); // [ux-redesign W4]

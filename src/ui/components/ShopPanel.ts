@@ -116,7 +116,7 @@ export class ShopPanel {
         variant: 'purchase',
         className: 'btn-primary shop-buy',
         label: `[[credits]] ${fmtCost(o.price)}`,
-        ariaLabel: i18n.t('ux2d.shop.buyAria', { name: i18n.t(`shop.item.${o.item.id}`), n: o.price }),
+        ariaLabel: i18n.t('ux2d.shop.buyAria', { name: i18n.t(`shop.item.${o.item.id}`), n: fmtCost(o.price) }),
         disabledReason: why,
         onPress: () => this.onBuy?.(o.item.id),
       });

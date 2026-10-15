@@ -16,6 +16,7 @@ import { RESOURCE_ICONS } from '../dom';
 import { flowArrow } from '../rtl'; // [plan4:UX-22]
 import { jobRoom } from '../HUD'; // [ux-wp4] B4
 import { kButton } from '../kit'; // [ux2e]
+import { reducedMotion } from '../../utils/a11y';
 
 /** [ux2e #29] Filters (one chip row) only above this many people; below it every survivor fits on a phone anyway. */
 const FILTER_FROM = 12;
@@ -119,7 +120,7 @@ export class PeoplePanel {
     this.signature = '';
     this.refresh(this.engine.stateManager.state);
     this.sheet.show();
-    if (focusId) requestAnimationFrame(() => this.sheet.body.querySelector(`[data-sid="${focusId}"]`)?.scrollIntoView({ block: 'center', behavior: 'smooth' }));
+    if (focusId) requestAnimationFrame(() => this.sheet.body.querySelector(`[data-sid="${focusId}"]`)?.scrollIntoView({ block: 'center', behavior: reducedMotion() ? 'auto' : 'smooth' }));
   }
 
   hide(): void {
@@ -580,6 +581,11 @@ export class PeoplePanel {
         onPress: () => {
           this.choosingFor = this.choosingFor === s.id ? null : s.id;
           this.refresh(this.engine.stateManager.state);
+          // [ux-redesign final F2] The room list opens under the card, often below the fold: bring it into view.
+          if (this.choosingFor === s.id) {
+            requestAnimationFrame(() => this.sheet.body.querySelector(`[data-sid="${s.id}"] .job-chooser`)
+              ?.scrollIntoView({ block: 'nearest', behavior: reducedMotion() ? 'auto' : 'smooth' }));
+          }
         },
       }));
     }

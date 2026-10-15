@@ -69,7 +69,7 @@ const pad2 = (n: number): string => (n < 10 ? `0${n}` : String(n));
 
 /**
  * A time left or taken, in the two largest units: "2d 4h", "4h 12m", "12:05" (minutes:seconds under an hour), "45s".
- * Hebrew: "2י 4ש", "4ש 12ד", "12:05", "45ש". A zero second unit is dropped ("2d", "4h"). Rounds up: 0.2 s left is "1s".
+ * Hebrew: "2י׳ 4ש׳", "4ש׳ 12ד׳", "12:05", "45שנ׳" (one unit style everywhere: שנ׳ seconds, ד׳ minutes, ש׳ hours, י׳ days). A zero second unit is dropped ("2d", "4h"). Rounds up: 0.2 s left is "1s".
  */
 export function fmtDuration(seconds: number): string {
   const total = Math.max(0, Math.ceil(Number.isFinite(seconds) ? seconds : 0));
@@ -97,7 +97,7 @@ function pluralRules(): Intl.PluralRules {
 }
 
 /**
- * The right form of a counted phrase, by the language's plural rules (Intl.PluralRules): Hebrew has a dual ("שני שורדים"), English not.
+ * The right form of a counted phrase, by the language's plural rules (Intl.PluralRules): Hebrew has a dual ("שני ניצולים"), English not.
  * The string table holds `<key>.one`, `<key>.two` and `<key>.other` (every plural key has all three in both languages; English `.two`
  * repeats `.other`). A category the table lacks (an engine that still says "many") falls back to `.other`.
  * `{n}` in the text becomes the number (with a thousands separator); other `params` are substituted as with `i18n.t`.

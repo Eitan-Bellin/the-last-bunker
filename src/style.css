@@ -209,6 +209,8 @@ body.placement-mode #game-canvas { cursor: crosshair; }
      HUD.ts and already includes the home-bar safe area). With the keyboard up (--kb-inset, viewportUi.ts) the sheet is lifted by the
      overlay's padding and the nav no longer needs room. */
   padding-bottom: calc(max(0px, var(--nav-h, 72px) - var(--kb-inset, 0px)) + 12px);
+  /* [ux-redesign final F2/F3] Something scrolled into view (the Assign room list, a tutorial target) stops above the nav, not under it. */
+  scroll-padding-block-end: calc(max(0px, var(--nav-h, 72px) - var(--kb-inset, 0px)) + var(--sp-3));
   overflow-y: auto;
   overscroll-behavior: contain;
   touch-action: pan-y;

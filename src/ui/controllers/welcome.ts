@@ -139,7 +139,7 @@ export class WelcomeController {
       const dg = report.danger;
       if (dg && (dg.raids > 0 || dg.disasters.length > 0)) {
         const parts: string[] = [];
-        if (dg.raids > 0) parts.push(i18n.t('welcome.danger.raids', { n: dg.raids, lost: dg.raidsLost }));
+        if (dg.raids > 0) parts.push(plural('welcome.danger.raids', dg.raids, { lost: fmtNum(dg.raidsLost) }));
         if (dg.disasters.length > 0) parts.push(plural('welcome.danger.disasters', dg.disasters.length));
         if (dg.hurt > 0) parts.push(plural('welcome.danger.hurt', dg.hurt));
         body.appendChild(el('p', 'modal-sub negative-text', `[[warning]] ${i18n.t('welcome.danger.title')} ${parts.join(' · ')}`));
@@ -197,7 +197,10 @@ export class WelcomeController {
     // Raids and disasters, with who was hurt and what was taken.
     const dg = report.danger;
     if (dg && dg.raids > 0) {
-      const text = dg.raidsLost > 0 ? i18n.t(dg.raids === 1 ? 'night.raidLostOne' : 'night.raidsLost', { n: dg.raids, lost: dg.raidsLost }) : plural('night.raids', dg.raids);
+      // [ux-redesign final] One raid that broke in is its own sentence; several say both counts, each in its own plural form.
+      const times = (n: number): string => plural('night.raidsLostPart', n);
+      let text = plural('night.raids', dg.raids);
+      if (dg.raidsLost > 0) text = dg.raids > 1 ? i18n.t('night.raidsLost', { times: times(dg.raids), lostPart: times(dg.raidsLost) }) : i18n.t('night.raidLostOne');
       out.push({ text: `[[skull]] ${text}`, bad: dg.raidsLost > 0, rank: 2 });
     }
     if (dg && dg.disasters.length > 0) {
@@ -373,7 +376,7 @@ export class WelcomeController {
     // [ux-wp5 C14] The night log tells raids and disasters with names; this summary line stays for reports without it.
     if (dg && !report.nightDanger && (dg.raids > 0 || dg.disasters.length > 0)) {
       const parts: string[] = [];
-      if (dg.raids > 0) parts.push(i18n.t('welcome.danger.raids', { n: dg.raids, lost: dg.raidsLost }));
+      if (dg.raids > 0) parts.push(plural('welcome.danger.raids', dg.raids, { lost: fmtNum(dg.raidsLost) }));
       if (dg.disasters.length > 0) parts.push(plural('welcome.danger.disasters', dg.disasters.length));
       if (dg.hurt > 0) parts.push(plural('welcome.danger.hurt', dg.hurt));
       if (dg.died.length > 0) parts.push(i18n.t('welcome.danger.died', { names: dg.died.map(n => this.app.localName(n)).join(', ') }));

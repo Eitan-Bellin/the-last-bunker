@@ -263,6 +263,6 @@ export class DailyController {
 
 /** [ux-wp2 R5] " + [[components]] 200" for goods paid besides credits (empty when there are none). */
 function goodsText(gains: Partial<Record<string, number>> | undefined): string {
-  const parts = Object.entries(gains ?? {}).filter(([, v]) => (v ?? 0) > 0).map(([r, v]) => `${RESOURCE_ICONS[r as keyof typeof RESOURCE_ICONS] ?? ''} ${i18n.formatCompact(Math.round(v ?? 0))}`);
+  const parts = Object.entries(gains ?? {}).filter(([, v]) => (v ?? 0) > 0).map(([r, v]) => `${RESOURCE_ICONS[r as keyof typeof RESOURCE_ICONS] ?? ''} ${fmtNum(Math.round(v ?? 0))}`);
   return parts.length ? ` + ${parts.join(' ')}` : '';
 }

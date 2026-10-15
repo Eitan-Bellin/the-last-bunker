@@ -235,8 +235,8 @@ list.appendChild(people.length ? rows : kEmpty('people', i18n.t('people.none'), 
 | `fmtNum(n)` | `9,999` · `15.2K` · `152K` · `1.52M` · `3.40B` · `1.20T` · `−5`. Exact with separators to 9,999, then 3 significant digits, always cut down (never shows more than there is) |
 | `fmtCost(n)` | the old `costAmount` (prices round UP, 2 significant digits): `470K`, `2.4M`. Differs from `fmtNum` on purpose: a price must never look smaller than what is asked (rounded up, short), an amount owned must never look bigger than what is there (cut down, 3 digits). Do not swap one for the other |
 | `fmtRate(perSec)` | the old `rateText`: `+1.2 /s`, trickles per hour |
-| `fmtDuration(sec)` | en `2d 4h` · `4h 12m` · `12:05` · `45s`; he `2י 4ש` · `4ש 12ד` · `12:05` · `45שנ׳` (seconds `שנ׳` so they never read as hours `ש`). Zero second unit dropped (`1h`), rounds up |
-| `plural(key, n, params?)` | `Intl.PluralRules` category → `<key>.one` / `.two` / `.other` (falls back to `.other`); `{n}` gets the separated number. he: `שורד אחד` / `שני שורדים` / `5 שורדים` |
+| `fmtDuration(sec)` | en `2d 4h` · `4h 12m` · `12:05` · `45s`; he `2י׳ 4ש׳` · `4ש׳ 12ד׳` · `12:05` · `45שנ׳` (one style in the kit and in `time.*`: `שנ׳` seconds, `ד׳` minutes, `ש׳` hours, `י׳` days; seconds never read as hours). Zero second unit dropped (`1h`), rounds up |
+| `plural(key, n, params?)` | `Intl.PluralRules` category → `<key>.one` / `.two` / `.other` (falls back to `.other`); `{n}` gets the separated number. he: `ניצול אחד` / `שני ניצולים` / `5 ניצולים` |
 
 New strings live under `kit.*` in both `he.json` and `en.json` (flat keys like the rest of the tables): duration units, `kit.unavailable`,
 `kit.loading`, `kit.timer.done`, `kit.badge.label`, `kit.close`, and two plural examples (`kit.survivors.*`, `kit.minutes.*`).
