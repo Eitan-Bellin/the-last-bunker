@@ -1,18 +1,21 @@
-import type { BuildingType, GameState, ResourceType } from '../../core/GameState';
+import type { BuildingType, GameState, ResourceType, Ruin } from '../../core/GameState';
 import type { ResourceSystem } from '../../systems/ResourceSystem';
 import type { BuildingSystem } from '../../systems/BuildingSystem';
 import { i18n } from '../../i18n/I18nManager';
-import { BUILDABLE_TYPES, actMult, getDef, roomSlots, type BuildingDef } from '../../data/buildingDefs';
+import { BUILDABLE_TYPES, actMult, getDef, roomFloors, roomSlots, type BuildingDef } from '../../data/buildingDefs';
 import { BUILD_CATEGORIES, buildCategoryOf, type BuildCategory } from '../../data/buildCategories';
 import { allowedFloors, zoneForFloor } from '../../data/zones';
 import { actOf } from '../../data/acts';
 import { isBuildingUnlocked, unlockingResearch } from '../../systems/ResearchSystem';
-import { recommendedRooms } from '../../systems/BuildAdvice';
 import { Sheet } from './Sheet';
 import { ArtLibrary } from '../../art/ArtLibrary';
 import { buildingArtKey } from '../../art/registry';
 import { BUILDING_ICONS, RESOURCE_ICONS, el, rateText } from '../dom';
 import { describeMissing, missingList } from '../missing';
+import { floorRangesTag, floorTag, floorTagIso } from '../floorTag';
+import { BATTERY_ROOMS, BED_ROOMS, KID_ROOMS, MORALE_ROOMS, NEED_ROOMS } from '../../systems/BuildAdvice'; // [ux-redesign w2fix] one source for the lists
+import { fmtCost, fmtDuration, plural } from '../format';
+import { kButton } from '../kit';
 import { haptic } from '../../utils/haptics';
 import { uiSound } from '../../audio/uiSound';
 
@@ -20,6 +23,91 @@ import { uiSound } from '../../audio/uiSound';
 export function missingText(state: GameState, cost: Record<string, number>): string {
   return missingList(state, cost).length ? describeMissing(state, cost) : '';
 }
+
+/** LRI..PDI: "B2", "B3–B5" or "4m" keep their order inside a Hebrew line. */
+const iso = (t: string): string => `\u2066${t}\u2069`;
+
+/**
+ * [ux-redesign w2c #2] Where to go when a room has no free spot anywhere it may stand, best first:
+ *  - wreck: a wrecked room of this very type (restoring it gives the room back without needing a spot),
+ *  - clear: plain rubble whose clearing frees a spot the room fits,
+ *  - dig / digging: a new floor would take it (or one is being dug already),
+ *  - none: nothing to do now (the words say where the room may stand).
+ * A pure reading of the state (findFreeSpot / digBlock on copies): nothing here changes the game.
+ */
+export type NoSpaceRoute =
+  | { kind: 'wreck'; ruin: Ruin }
+  | { kind: 'clear'; ruin: Ruin }
+  | { kind: 'dig' }
+  | { kind: 'digging' }
+  | { kind: 'none' };
+
+/** Is there a free spot for `type` on any floor it may stand on (judged against `state`)? */
+export function hasFreeSpot(bs: BuildingSystem, state: GameState, type: BuildingType): boolean {
+  return allowedFloors(type, state.currentFloors).some(f => !!bs.findFreeSpot(type, f, state));
+}
+
+export function noSpaceRoute(bs: BuildingSystem, state: GameState, type: BuildingType): NoSpaceRoute {
+  const ruins = state.ruins ?? [];
+  const wreck = ruins.find(r => r.restoresTo === type && !r.started) ?? ruins.find(r => r.restoresTo === type);
+  if (wreck) return { kind: 'wreck', ruin: wreck };
+  const floors = allowedFloors(type, state.currentFloors);
+  // A wreck turns into another room and keeps its spot, so only plain rubble frees one. Work already under way first.
+  const clearable = ruins.filter(r => !r.restoresTo && floors.includes(r.floor)).sort((a, b) => Number(b.started) - Number(a.started) || a.floor - b.floor);
+  for (const r of clearable) {
+    const probe: GameState = { ...state, ruins: ruins.filter(x => x.id !== r.id) };
+    if (floors.some(f => !!bs.findFreeSpot(type, f, probe))) return { kind: 'clear', ruin: r };
+  }
+  // Would the next floor take it? (A tall room needs one of its levels on the new floor.)
+  const n = state.currentFloors;
+  const levels = roomFloors(type);
+  if (allowedFloors(type, n + 1).some(f => f <= n && f + levels - 1 >= n)) {
+    const block = bs.digBlock(state);
+    if (block === null) return { kind: 'dig' };
+    if (block === 'digging') return { kind: 'digging' };
+  }
+  return { kind: 'none' };
+}
+
+/** The words of a no-space route ("No space: restore the wrecked Farm on B2 →"). */
+export function noSpaceText(state: GameState, type: BuildingType, route: NoSpaceRoute): string {
+  const def = getDef(type);
+  const name = def?.name[i18n.currentLocale] ?? def?.name.en ?? type;
+  switch (route.kind) {
+    case 'wreck': return i18n.t(route.ruin.started ? 'ux2c.noSpace.wreckBusy' : 'ux2c.noSpace.wreck', { name, floor: iso(floorTag(route.ruin.floor)) });
+    case 'clear': return i18n.t('ux2c.noSpace.clear', { floor: iso(floorTag(route.ruin.floor)) });
+    case 'dig': return i18n.t('ux2c.noSpace.dig');
+    case 'digging': return i18n.t('ux2c.noSpace.digging');
+    default: return i18n.t('ux2c.noSpace.none', { floors: iso(floorRangesTag(allowedFloors(type, state.currentFloors))) });
+  }
+}
+
+/**
+ * [ux-redesign w2c] Price chips that say what is missing: a check or a cross (a11y.css draws it, colour-vision aware), the price, and on a price the bunker
+ * cannot pay yet how much is short ("20 · 8 short"). Shared by the build cards, the placement bar and the wrecked-room sheet.
+ */
+export function costChips(state: GameState, cost: Record<string, number>, className = ''): HTMLElement {
+  const row = el('div', `cost-row ux2c-cost${className ? ` ${className}` : ''}`);
+  for (const [r, amount] of Object.entries(cost)) {
+    const have = state.resources[r as ResourceType]?.amount ?? 0;
+    const ok = have >= amount;
+    const chip = el('span', `cost-chip ${ok ? 'affordable' : 'expensive'}`, `${RESOURCE_ICONS[r] ?? ''} ${fmtCost(amount)}`);
+    if (!ok) chip.appendChild(el('span', 'ux2c-short', i18n.t('ux2c.short', { n: fmtCost(amount - have) })));
+    chip.setAttribute('aria-label', i18n.t('build.haveNeed', { res: i18n.t(`resources.${r}`), have: Math.floor(have), need: amount }));
+    row.appendChild(chip);
+  }
+  return row;
+}
+
+/** One "Recommended now" entry: a room and why (i18n key + params). `wreck` = no free spot, but restoring that wreck gives the room. */
+interface Rec {
+  type: BuildingType;
+  why: string;
+  params?: Record<string, string>;
+  wreck?: Ruin;
+}
+
+const net = (state: GameState, r: ResourceType): number => (state.resources[r]?.productionRate ?? 0) - (state.resources[r]?.consumptionRate ?? 0);
 
 /** What one card needs to know about a room right now. */
 interface Entry {
@@ -31,12 +119,18 @@ interface Entry {
   /** Built so far / the type's copy limit (Infinity when it has none). */
   count: number;
   max: number;
+  /** [w2c #2] A free spot exists on a floor the room may stand on. */
+  placeable: boolean;
+  /** [w2c #2] Unlocked, under its limit, but no free spot: where to go instead. */
+  route: NoSpaceRoute | null;
 }
 
 /**
  * [plan4:BL-39] The build menu: category chips, a search field (16px so iOS does not zoom), an "available now" filter, a
  * "recommended now" row and cards (icon, name, what it makes, price with a check or a cross, width dots, and for a locked room the
  * research that opens it). Every tap target is at least 44px; nothing is told by colour alone.
+ * [ux-redesign w2c] A room with no free spot never pretends it can be built: its card says where the space is (restore the wreck, clear the
+ * rubble, dig a floor) and a tap goes there (through onSelectBuilding: WorldController.startPlacement routes a room without a spot).
  */
 export class BuildMenu {
   private sheet = new Sheet('build-sheet', 'build');
@@ -62,6 +156,9 @@ export class BuildMenu {
   private lockedOpen = false;
   private query = '';
   private onlyAvailable = false;
+  /** [w2c] Free-spot answers per room type, kept while the bunker's layout is the same (the refresh runs twice a second). */
+  private spotKey = '';
+  private spotCache = new Map<BuildingType, boolean>();
 
   constructor(resources: ResourceSystem, buildings: BuildingSystem) {
     this.resources = resources;
@@ -111,6 +208,26 @@ export class BuildMenu {
     return this.sheet.isVisible;
   }
 
+  /** Whether `type` has a free spot now (cached until a room, ruin, floor or wing changes). */
+  private freeSpot(state: GameState, type: BuildingType): boolean {
+    const key = [
+      state.currentFloors, JSON.stringify(state.layout ?? null),
+      state.buildings.map(b => `${b.type}@${b.position.floor}:${b.position.x}`).join(','),
+      (state.ruins ?? []).map(r => r.id).join(','),
+      (state.storyFlags ?? []).length,
+    ].join('|');
+    if (key !== this.spotKey) {
+      this.spotKey = key;
+      this.spotCache.clear();
+    }
+    let v = this.spotCache.get(type);
+    if (v === undefined) {
+      v = hasFreeSpot(this.buildings, state, type);
+      this.spotCache.set(type, v);
+    }
+    return v;
+  }
+
   private entries(state: GameState): Entry[] {
     const out: Entry[] = [];
     for (const type of BUILDABLE_TYPES) {
@@ -118,21 +235,17 @@ export class BuildMenu {
       if (!def) continue;
       const cost = this.buildings.getBuildCost(type, state);
       const unlocked = isBuildingUnlocked(state, type);
+      const count = state.buildings.filter(b => b.type === type).length;
+      const max = def.maxCopies ?? Infinity;
+      const open = unlocked && count < max;
+      const placeable = open && this.freeSpot(state, type);
       out.push({
-        type, def, cost, unlocked,
+        type, def, cost, unlocked, count, max, placeable,
         affordable: unlocked && this.resources.canAfford(state, cost),
-        count: state.buildings.filter(b => b.type === type).length,
-        max: def.maxCopies ?? Infinity,
+        route: open && !placeable ? noSpaceRoute(this.buildings, state, type) : null,
       });
     }
     return out;
-  }
-
-  /** Whether the room could be placed somewhere right now (unlocked, under its limit, a free spot). */
-  private placeable(state: GameState, e: Entry): boolean {
-    if (!e.unlocked || e.count >= e.max) return false;
-    for (const f of allowedFloors(e.type, state.currentFloors)) if (this.buildings.findFreeSpot(e.type, f, state)) return true;
-    return false;
   }
 
   private matches(e: Entry, locale: string): boolean {
@@ -151,16 +264,14 @@ export class BuildMenu {
 
     // A search looks through every category (a typed word means the player knows what they want).
     const shown = all.filter(e => (this.category === 'all' || this.category === 'now' || !!this.query || buildCategoryOf(e.type) === this.category)
-      && this.matches(e, locale) && (!this.onlyAvailable || (e.affordable && this.placeable(state, e))));
-    const recs = this.query || this.onlyAvailable ? [] : recommendedRooms(state, t => {
-      const e = all.find(x => x.type === t);
-      return !!e && this.placeable(state, e);
-    });
+      && this.matches(e, locale) && (!this.onlyAvailable || (e.affordable && e.placeable)));
+    const recs = this.query || this.onlyAvailable ? [] : this.recommendations(state, all);
 
+    const routeSig = (e: Entry) => (e.route ? `${e.route.kind}${'ruin' in e.route ? `:${e.route.ruin.id}:${e.route.ruin.started}` : ''}` : '');
     const sig = [
       locale, this.category, this.query, this.onlyAvailable, actOf(state).id, this.lockedOpen,
-      shown.map(e => `${e.type}:${e.unlocked}:${e.affordable}:${e.count}:${JSON.stringify(e.cost)}`).join('|'),
-      recs.map(r => `${r.type}:${r.why}`).join(','),
+      shown.map(e => `${e.type}:${e.unlocked}:${e.affordable}:${e.count}:${e.placeable}:${routeSig(e)}:${JSON.stringify(e.cost)}`).join('|'),
+      recs.map(r => `${r.type}:${r.why}:${r.params?.time ?? ''}:${r.wreck?.id ?? ''}`).join(','),
       present.map(c => c.id).join(','),
     ].join('#');
     if (sig === this.signature) return;
@@ -178,6 +289,47 @@ export class BuildMenu {
     this.renderList(state, shown, locale);
   }
 
+  /**
+   * [w2c #3] "Recommended now", by real need: first the stores that run out (food, water, power, soonest to empty first, from the current
+   * rates), then beds, then a low battery, then spirits and children. Only rooms with a free spot, or whose wreck can be restored.
+   */
+  private recommendations(state: GameState, all: Entry[], max = 3): Rec[] {
+    const out: Rec[] = [];
+    const add = (why: string, types: BuildingType[], params?: Record<string, string>) => {
+      for (const type of types) {
+        if (out.length >= max) return;
+        if (out.some(t => t.type === type)) continue;
+        const e = all.find(x => x.type === type);
+        if (!e) continue;
+        if (e.placeable) out.push({ type, why, params });
+        else if (e.route?.kind === 'wreck' && !e.route.ruin.started) out.push({ type, why, params, wreck: e.route.ruin });
+      }
+    };
+    const needs = (['food', 'water', 'power'] as const).map(r => {
+      const res = state.resources[r];
+      const n = net(state, r);
+      const dark = r === 'power' && (state.powerRatio ?? 1) < 0.99;
+      const empty = dark ? 0 : n < 0 && res ? res.amount / -n : Infinity;
+      return { r, n, empty, short: dark || n < (r === 'power' ? 0.5 : 0.2) };
+    }).filter(x => x.short).sort((a, b) => a.empty - b.empty || a.n - b.n);
+    for (const x of needs) {
+      if (x.empty === 0) add('build.rec.power', NEED_ROOMS.power);
+      else if (isFinite(x.empty)) add(`ux2c.rec.${x.r}`, NEED_ROOMS[x.r], { time: iso(fmtDuration(x.empty)) });
+      else add(`build.rec.${x.r}`, NEED_ROOMS[x.r]);
+    }
+    if (state.survivors.length >= state.maxPopulation - 1) add('build.rec.beds', BED_ROOMS);
+    const p = state.resources.power;
+    if (p && p.cap > 0 && p.amount < p.cap * 0.25 && net(state, 'power') >= 0.5) add('build.rec.battery', BATTERY_ROOMS);
+    if (state.survivors.length >= 4) {
+      const mood = state.survivors.reduce((s, x) => s + x.happiness, 0) / state.survivors.length;
+      if (mood < 55) add('build.rec.morale', MORALE_ROOMS);
+    }
+    // [plan4:BL-26/30] Children need a place of their own: a nursery first, then a school.
+    if (state.survivors.some(x => x.child) && !state.buildings.some(b => b.type === 'nursery')) add('build.rec.kids', KID_ROOMS.first);
+    else if (state.survivors.filter(x => x.child).length >= 3 && !state.buildings.some(b => b.type === 'school')) add('build.rec.kids', KID_ROOMS.then);
+    return out;
+  }
+
   private renderChips(present: { id: BuildCategory; icon: string }[], all: Entry[]): void {
     const chip = (id: BuildCategory | 'all' | 'now', icon: string, label: string, n: number) => {
       const b = el('button', `bm-chip${this.category === id ? ' active' : ''}`);
@@ -191,28 +343,35 @@ export class BuildMenu {
       return b;
     };
     this.chips.replaceChildren(
-      chip('now', '[[check]]', i18n.t('wp4.canBuild'), all.filter(e => e.unlocked).length),
+      // [ux-redesign w2fix B8] The count is the rooms with a free spot right now (a "No space" card is open but cannot be built yet).
+      chip('now', '[[check]]', i18n.t('wp4.canBuild'), all.filter(e => e.placeable).length),
       chip('all', '[[build]]', i18n.t('build.cat.all'), all.length),
       ...present.map(c => chip(c.id, c.icon, i18n.t(`build.cat.${c.id}`), all.filter(e => buildCategoryOf(e.type) === c.id).length)),
     );
   }
 
-  private renderRecommended(state: GameState, recs: { type: BuildingType; why: string }[], all: Entry[]): void {
+  private renderRecommended(state: GameState, recs: Rec[], all: Entry[]): void {
     this.rec.style.display = recs.length ? '' : 'none';
     if (!recs.length) return;
     const locale = i18n.currentLocale;
     const row = el('div', 'bm-rec-row');
     for (const r of recs) {
       const e = all.find(x => x.type === r.type)!;
-      const b = el('button', `bm-rec-chip${e.affordable ? '' : ' disabled'}`);
-      b.type = 'button';
-      b.append(
-        el('span', 'bm-rec-ic', BUILDING_ICONS[r.type] ?? ''),
-        el('span', 'bm-rec-text', ''),
-      );
-      const text = b.querySelector('.bm-rec-text') as HTMLElement;
-      text.append(el('span', 'bm-rec-name', e.def.name[locale] ?? e.def.name.en), el('span', 'bm-rec-why', i18n.t(r.why)));
-      b.addEventListener('click', () => this.pick(this.lastState ?? state, e, b));
+      const name = e.def.name[locale] ?? e.def.name.en;
+      // A wreck to restore names itself ("Wrecked Farm"); its price is the ruin's, shown on the ruin's sheet.
+      const title = r.wreck ? i18n.t('ruin.wreckOf', { name }) : name;
+      const text = el('span', 'bm-rec-text');
+      text.append(el('span', 'bm-rec-name', title), el('span', 'bm-rec-why', i18n.t(r.why, r.params)));
+      const body = el('span', 'bm-rec-body');
+      body.append(el('span', 'bm-rec-ic', r.wreck ? '[[workshop]]' : BUILDING_ICONS[r.type] ?? ''), text);
+      const b = kButton({
+        variant: 'secondary',
+        className: 'bm-rec-chip',
+        detail: body,
+        ariaLabel: `${title}: ${i18n.t(r.why, r.params)}`,
+        disabledReason: r.wreck ? null : missingText(state, e.cost) || null,
+        onPress: () => this.pick(this.lastState ?? state, all.find(x => x.type === r.type) ?? e),
+      });
       row.appendChild(b);
     }
     this.rec.replaceChildren(el('div', 'bm-rec-title', `[[star]] ${i18n.t('build.recommended')}`), row);
@@ -220,28 +379,36 @@ export class BuildMenu {
 
   private pick(state: GameState, e: Entry, card?: HTMLElement): void {
     if (!e.unlocked) return;
-    // [ux-wp4] B2: a card that cannot be picked says why (what is missing and when it will be there), with a buzz, instead of doing nothing.
-    const why = e.count >= e.max ? i18n.t('build.copiesFull', { n: e.count, max: e.max }) : missingText(state, e.cost);
-    if (why) {
-      haptic('error');
-      uiSound('error', 0.6);
-      if (card) {
-        let line = card.querySelector<HTMLElement>('.bm-why');
-        if (!line) {
-          line = el('div', 'bm-why');
-          line.setAttribute('role', 'status');
-          (card.querySelector('.bm-info') ?? card).appendChild(line);
-        }
-        line.textContent = '';
-        line.append(el('span', '', `[[warning]] ${why}`));
-        card.classList.remove('shake');
-        void card.offsetWidth;
-        card.classList.add('shake');
-      }
+    // [w2c #2] No free spot: go where the space is (WorldController routes a room without a spot), or say why there is none.
+    if (e.route) {
+      if (e.route.kind === 'none') { this.refuse(card, noSpaceText(state, e.type, e.route)); return; }
+      this.hide();
+      this.onSelectBuilding?.(e.type);
       return;
     }
+    // [ux-wp4] B2: a card that cannot be picked says why (what is missing and when it will be there), with a buzz, instead of doing nothing.
+    const why = e.count >= e.max ? i18n.t('build.copiesFull', { n: e.count, max: e.max }) : missingText(state, e.cost);
+    if (why) { this.refuse(card, why); return; }
     this.hide();
     this.onSelectBuilding?.(e.type);
+  }
+
+  /** A buzz and the reason under the card's info. */
+  private refuse(card: HTMLElement | undefined, why: string): void {
+    haptic('error');
+    uiSound('error', 0.6);
+    if (!card) return;
+    let line = card.querySelector<HTMLElement>('.bm-why');
+    if (!line) {
+      line = el('div', 'bm-why');
+      line.setAttribute('role', 'status');
+      (card.querySelector('.bm-info') ?? card).appendChild(line);
+    }
+    line.textContent = '';
+    line.append(el('span', '', `[[warning]] ${why}`));
+    card.classList.remove('shake');
+    void card.offsetWidth;
+    card.classList.add('shake');
   }
 
   private renderList(state: GameState, shown: Entry[], locale: string): void {
@@ -251,7 +418,8 @@ export class BuildMenu {
       return;
     }
     // Rooms you can build come first; [ux-wp4] B2/P7 the locked ones fold under one "Locked (N)" row (open while searching).
-    const open = shown.filter(e => e.unlocked);
+    // [w2c] Among the open ones, the rooms with a free spot before those that need space first (same order otherwise).
+    const open = shown.filter(e => e.unlocked).sort((a, b) => Number(!!b.placeable) - Number(!!a.placeable));
     const locked = shown.filter(e => !e.unlocked);
     for (const e of open) this.list.appendChild(this.card(state, e, locale));
     if (!open.length && !locked.length) return;
@@ -293,29 +461,18 @@ export class BuildMenu {
     return out.slice(0, 4);
   }
 
-  /** Price chips: a check or a cross says whether you have enough (colour is only a second cue). */
-  private costChips(state: GameState, cost: Record<string, number>): HTMLElement {
-    const row = el('div', 'cost-row bm-cost');
-    for (const [r, amount] of Object.entries(cost)) {
-      const have = state.resources[r as ResourceType]?.amount ?? 0;
-      const ok = have >= amount;
-      const chip = el('span', `cost-chip ${ok ? 'affordable' : 'expensive'}`, `${ok ? '[[check]]' : '[[close]]'} ${RESOURCE_ICONS[r] ?? ''} ${i18n.formatCompact(amount)}`);
-      chip.setAttribute('aria-label', i18n.t('build.haveNeed', { res: i18n.t(`resources.${r}`), have: Math.floor(have), need: amount }));
-      row.appendChild(chip);
-    }
-    return row;
-  }
-
   private card(state: GameState, e: Entry, locale: string): HTMLElement {
     const { def, type } = e;
     const full = e.count >= e.max;
-    const card = el('div', `bm-card${e.unlocked ? '' : ' locked'}${e.unlocked && (!e.affordable || full) ? ' disabled' : ''}`);
+    const noSpace = !!e.route;
+    const card = el('div', `bm-card${e.unlocked ? '' : ' locked'}${e.unlocked && (!e.affordable || full || noSpace) ? ' disabled' : ''}${noSpace ? ' no-space' : ''}`);
     // [plan4:AC-8] A room you can build is a button named by the room; a locked one holds its own "what opens it" button, so it is a group
     // (a button inside a button is invalid), and a card that cannot be picked now says so (the grey look was the only sign).
-    const pickable = e.unlocked && !full && e.affordable;
-    card.setAttribute('role', e.unlocked ? 'button' : 'group');
-    if (e.unlocked) card.tabIndex = 0;
-    if (e.unlocked && !pickable) card.setAttribute('aria-disabled', 'true');
+    // [w2c #2] A card with no free spot holds its own "where the space is" button: a group as well.
+    const pickable = e.unlocked && !full && e.affordable && !noSpace;
+    card.setAttribute('role', e.unlocked && !noSpace ? 'button' : 'group');
+    if (e.unlocked && !noSpace) card.tabIndex = 0;
+    if (e.unlocked && !noSpace && !pickable) card.setAttribute('aria-disabled', 'true');
 
     const thumb = el('div', 'build-icon build-thumb bm-thumb');
     const art = buildingArtKey(type, 0);
@@ -337,7 +494,7 @@ export class BuildMenu {
     const slots = roomSlots(type);
     const dots = el('span', 'bm-dots');
     dots.setAttribute('role', 'img');
-    dots.setAttribute('aria-label', i18n.t('build.width', { n: slots }));
+    dots.setAttribute('aria-label', plural('build.width', slots));
     for (let i = 0; i < slots; i++) dots.appendChild(el('span', 'bm-dot'));
     head.appendChild(dots);
     info.appendChild(head);
@@ -362,27 +519,29 @@ export class BuildMenu {
       const floors = allowedFloors(type);
       if (floors.length === 1) {
         const zone = zoneForFloor(floors[0]);
-        meta.appendChild(el('span', 'zone-chip', place === 'entrance' ? `${zone.icon} ${i18n.t('build.entranceOnly')}` : `${zone.icon} B${zone.floor + 1} ${zone.name[locale] ?? zone.name.en}`));
+        meta.appendChild(el('span', 'zone-chip', place === 'entrance' ? `${zone.icon} ${i18n.t('build.entranceOnly')}` : `${zone.icon} ${floorTagIso(zone.floor)} ${zone.name[locale] ?? zone.name.en}`));
       }
     }
     meta.appendChild(el('span', '', `[[clock]] ${i18n.formatDuration(def.constructionTime)}`));
-    if (def.powerConsumption > 0) meta.appendChild(el('span', '', `[[power]] −${def.powerConsumption}`));
+    if (def.powerConsumption > 0) meta.appendChild(el('span', '', `[[power]] \u2212${def.powerConsumption}`));
     if (def.maxWorkers > 0) meta.appendChild(el('span', '', `[[worker]] ${def.maxWorkers}`));
     if (def.maxCopies !== undefined) meta.appendChild(el('span', '', `[[district]] ${i18n.t('build.copies', { n: e.count, max: def.maxCopies })}`));
     info.appendChild(meta);
 
     if (e.unlocked) {
-      info.appendChild(this.costChips(state, e.cost));
+      info.appendChild(costChips(state, e.cost, 'bm-cost'));
       if (def.priceByAct) {
         const m = actMult(actOf(state).id);
         if (m > 1) info.appendChild(el('div', 'bp-hint bm-act', `[[flag]] ${i18n.t('build.actPrice', { n: m })}`));
       }
       if (full) info.appendChild(el('div', 'bp-hint bm-limit', `[[lock]] ${i18n.t('build.copiesFull', { n: e.count, max: e.max })}`));
+      else if (e.route) info.appendChild(this.noSpaceLine(state, e));
     } else {
       info.appendChild(this.lockLine(type, def, locale));
     }
 
     card.append(thumb, info);
+    if (!e.unlocked || noSpace) return card;
     const activate = () => this.pick(this.lastState ?? state, e, card);
     card.addEventListener('click', activate);
     card.addEventListener('keydown', (ev) => {
@@ -394,6 +553,21 @@ export class BuildMenu {
     return card;
   }
 
+  /** [w2c #2] The card's one action when the room has no free spot: where the space is, or (nowhere) a plain line saying so. */
+  private noSpaceLine(state: GameState, e: Entry): HTMLElement {
+    const route = e.route!;
+    const text = noSpaceText(state, e.type, route);
+    if (route.kind === 'none') return el('div', 'bp-hint bm-nospace', `[[lock]] ${text}`);
+    return kButton({
+      variant: 'primary',
+      className: 'btn-primary bm-route',
+      icon: route.kind === 'wreck' ? 'workshop' : route.kind === 'clear' ? 'broom' : 'pick',
+      label: text,
+      sound: 'click',
+      onPress: () => this.pick(this.lastState ?? state, e),
+    });
+  }
+
   /** The line on a locked card: what opens it, and a tap that goes to the research panel. */
   private lockLine(type: BuildingType, def: BuildingDef, locale: string): HTMLElement {
     const req = unlockingResearch(type);
@@ -403,14 +577,16 @@ export class BuildMenu {
     }
     const name = req.name[locale] ?? req.name.en;
     const text = req.act && req.act > 1 ? i18n.t('build.unlocksWithAct', { name, n: req.act }) : i18n.t('build.unlocksWith', { name });
-    const btn = el('button', 'bm-unlock', `[[lock]] ${text} [[research]]`);
-    btn.type = 'button';
-    btn.setAttribute('aria-label', `${i18n.t('build.openResearch')}: ${def.name[locale] ?? def.name.en}`);
-    btn.addEventListener('click', (ev) => {
-      ev.stopPropagation();
-      this.hide();
-      this.onOpenResearch?.();
+    return kButton({
+      variant: 'tertiary',
+      className: 'btn-ghost bm-unlock',
+      icon: 'lock',
+      label: `${text} [[research]]`,
+      ariaLabel: `${i18n.t('build.openResearch')}: ${def.name[locale] ?? def.name.en}`,
+      onPress: () => {
+        this.hide();
+        this.onOpenResearch?.();
+      },
     });
-    return btn;
   }
 }

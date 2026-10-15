@@ -1,14 +1,22 @@
 import type { GameState, ResourceType, Ruin } from '../../core/GameState';
-import { floorTag } from '../floorTag'; // plan4:ST-16
+import { floorTag, floorTagIso } from '../floorTag'; // plan4:ST-16
 import type { GameEngine } from '../../core/GameEngine';
 import { i18n } from '../../i18n/I18nManager';
+import { plural } from '../format';
 import { getDef, isPowerPlant } from '../../data/buildingDefs';
 import { roomPowerDraw } from '../../systems/ResourceSystem'; // [ux-wp4] P4
 import { MAX_RUIN_WORKERS, RUIN_KINDS } from '../../data/ruins';
 import { Sheet } from './Sheet';
-import { BUILDING_ICONS, RESOURCE_ICONS, STAT_ICONS, bar, button, costRow, el, setBar, setRich } from '../dom';
+import { BUILDING_ICONS, RESOURCE_ICONS, STAT_ICONS, bar, el, setBar, setRich } from '../dom';
+import { kButton } from '../kit';
+import { costChips, missingText } from './BuildMenu'; // [ux-redesign w2c]
 
-/** Bottom sheet for a ruined area: what it is, what clearing costs and yields, and who is working on it. */
+/**
+ * Bottom sheet for a ruined area: what it is, what clearing costs and yields, and who is working on it.
+ * [ux-redesign w2c] #16 the Cost card says the restored room's power use against the bunker's spare power (red when it would go negative);
+ * #17 showing it fires `lb:sheet-target` so the world controller frames the ruin above the sheet; buttons are kit buttons, the price chips say
+ * what is short.
+ */
 export class RuinPanel {
   private sheet = new Sheet('building-sheet');
   private ruinId: string | null = null;
@@ -31,6 +39,7 @@ export class RuinPanel {
     this.signature = '';
     this.refresh(this.engine.stateManager.state);
     this.sheet.show();
+    window.dispatchEvent(new CustomEvent('lb:sheet-target', { detail: { ruinId } }));
   }
 
   hide(): void {
@@ -54,7 +63,8 @@ export class RuinPanel {
     }
     const rs = this.engine.restorationSystem;
     const sig = [
-      r.started, rs.blockReason(state, r), rs.canStart(state, r), i18n.currentLocale, this.powerShort(state, r)?.join(':') ?? '',
+      r.started, rs.blockReason(state, r), rs.canStart(state, r), i18n.currentLocale, this.powerUse(state, r)?.join(':') ?? '',
+      missingText(state, rs.cost(r) as Record<string, number>),
       state.survivors.map(s => `${s.id}:${s.assignedBuildingId}:${s.isOnMission}`).join(','),
     ].join('|');
     if (sig !== this.signature) {
@@ -84,7 +94,7 @@ export class RuinPanel {
     const locale = i18n.currentLocale;
     const rs = this.engine.restorationSystem;
     const kind = RUIN_KINDS[r.kind];
-    this.sheet.setTitle(`${this.title(r)} · ${floorTag(r.floor)}`);
+    this.sheet.setTitle(`${this.title(r)} · ${floorTagIso(r.floor)}`);
     const root = el('div', 'bp');
 
     const desc = el('div', 'bp-card ruin-desc');
@@ -102,10 +112,6 @@ export class RuinPanel {
     for (const res of Object.keys(kind.loot) as ResourceType[]) chips.appendChild(el('span', 'cost-chip affordable', `${RESOURCE_ICONS[res] ?? ''} ${i18n.t(`resources.${res}`)}`));
     finds.appendChild(chips);
     root.appendChild(finds);
-
-    // [ux-wp4] P4: restoring a room that draws power the bunker does not have makes the blackout worse: say so before the tap.
-    const short = this.powerShort(state, r);
-    if (short) root.appendChild(el('div', 'bp-warning', `[[power]] ${i18n.t(short[1] <= 0 ? 'wp4.ruinNoPower' : 'wp4.ruinPower', { draw: short[0], spare: short[1] })}`));
 
     const block = rs.blockReason(state, r);
     if (block === 'needsPump') {
@@ -125,36 +131,49 @@ export class RuinPanel {
       const card = el('div', 'bp-card');
       card.appendChild(el('div', 'bp-section-title', i18n.t('ruin.cost')));
       const cost = rs.cost(r) as Record<string, number>;
-      if (Object.keys(cost).length) card.appendChild(costRow(state, cost));
+      if (Object.keys(cost).length) card.appendChild(costChips(state, cost));
       else card.appendChild(el('div', 'bp-hint', i18n.t('ruin.free')));
+      // [w2c #16] (was [ux-wp4] P4) What the restored room will draw against the spare power: red, with a warning, when it would go negative.
+      const use = this.powerUse(state, r);
+      if (use) {
+        const [draw, spare] = use;
+        const short = spare - draw < 0;
+        const sign = (v: number) => `${v < 0 ? '\u2212' : '+'}${Math.abs(v)}`; // el() isolates signed numbers (dom.ts setRich), so "+4.6" keeps its order in Hebrew
+        const line = el('div', `bp-hint ux2c-power${short ? ' is-short' : ''}`, `${short ? '[[warning]]' : '[[power]]'} ${i18n.t('ux2c.ruin.power', { draw, spare: sign(spare) })}`);
+        card.appendChild(line);
+        if (short) card.appendChild(el('div', 'bp-hint ux2c-power is-short', i18n.t('ux2c.ruin.powerShort')));
+      }
       const idle = rs.pickIdle(state, MAX_RUIN_WORKERS).length;
       const est = r.total / Math.max(1, idle);
-      card.appendChild(el('div', 'bp-hint', `[[clock]] ${i18n.t('ruin.estimate', { time: i18n.formatDuration(est) })} · [[worker]] ${i18n.t('ruin.crewSize', { n: MAX_RUIN_WORKERS })}`));
+      card.appendChild(el('div', 'bp-hint', `[[clock]] ${i18n.t('ruin.estimate', { time: i18n.formatDuration(est) })} · [[worker]] ${plural('ruin.crewSize', MAX_RUIN_WORKERS)}`));
       if (idle === 0) card.appendChild(el('div', 'bp-hint negative-text', `[[warning]] ${i18n.t('ruin.noIdle')}`));
       root.appendChild(card);
-      root.appendChild(button(
-        `${r.kind === 'wreck' ? '[[workshop]]' : '[[broom]]'} ${i18n.t(r.kind === 'wreck' ? 'ruin.startRestore' : 'ruin.startClear')}`,
-        'btn-primary btn-wide',
-        () => this.onStart?.(r.id),
-        !rs.canStart(state, r),
-      ));
+      // The one main action; disabled with the reason (the pump, or what the price lacks).
+      const why = rs.canStart(state, r) ? null : block === 'needsPump' ? i18n.t('ruin.needsPump') : missingText(state, cost) || '';
+      root.appendChild(kButton({
+        variant: 'primary',
+        className: 'btn-primary btn-wide',
+        icon: r.kind === 'wreck' ? 'workshop' : 'broom',
+        label: i18n.t(r.kind === 'wreck' ? 'ruin.startRestore' : 'ruin.startClear'),
+        disabledReason: why,
+        onPress: () => this.onStart?.(r.id),
+      }));
     }
     this.sheet.body.replaceChildren(root);
   }
 
   /**
-   * [ux-wp4] P4: [draw, spare] when the room this ruin turns into draws more power than the bunker has spare (production minus demand,
-   * rounded to tenths); null when it makes power itself, draws none, or there is enough.
+   * [w2c #16] [draw, spare]: the power the room this ruin turns into will draw (at the level it comes back at) and the bunker's spare power now
+   * (production minus demand, tenths; negative in a shortage). null when it makes power itself or draws none.
    */
-  private powerShort(state: GameState, r: Ruin): [number, number] | null {
+  private powerUse(state: GameState, r: Ruin): [number, number] | null {
     if (!r.restoresTo || isPowerPlant(r.restoresTo)) return null;
     const def = getDef(r.restoresTo);
-    const draw = def ? roomPowerDraw(def.powerConsumption, 1) : 0;
+    const draw = def ? roomPowerDraw(def.powerConsumption, r.restoresLevel ?? 1) : 0;
     if (draw <= 0) return null;
     const p = state.resources.power;
-    const spare = Math.round((p.productionRate - p.consumptionRate) * 10) / 10;
-    if (spare >= draw && (state.powerRatio ?? 1) >= 0.99) return null;
-    return [Math.round(draw * 10) / 10, Math.max(0, spare)];
+    const spare = Math.round(((p?.productionRate ?? 0) - (p?.consumptionRate ?? 0)) * 10) / 10;
+    return [Math.round(draw * 10) / 10, spare];
   }
 
   private renderCrew(state: GameState, r: Ruin): HTMLElement {
@@ -167,10 +186,15 @@ export class RuinPanel {
       const row = el('div', 'worker-row');
       row.appendChild(el('span', 'worker-name', this.engine.populationSystem.getLocalizedName(s, locale)));
       row.appendChild(el('span', 'worker-stat', `${STAT_ICONS.strength} ${s.stats.strength}`));
-      row.appendChild(button(i18n.t('building.unassign'), 'btn-small btn-ghost', () => {
-        rs.unassign(s.id);
-        this.engine.requestSave();
-        this.refresh(this.engine.stateManager.state);
+      row.appendChild(kButton({
+        variant: 'tertiary',
+        className: 'btn-small btn-ghost',
+        label: i18n.t('building.unassign'),
+        onPress: () => {
+          rs.unassign(s.id);
+          this.engine.requestSave();
+          this.refresh(this.engine.stateManager.state);
+        },
       }));
       card.appendChild(row);
     }
@@ -182,10 +206,16 @@ export class RuinPanel {
       for (const s of candidates) {
         const job = s.assignedBuildingId ? state.buildings.find(b => b.id === s.assignedBuildingId) : undefined;
         const label = `${this.engine.populationSystem.getLocalizedName(s, locale)} · ${STAT_ICONS.strength} ${s.stats.strength}${job ? ` · ${BUILDING_ICONS[job.type] ?? ''}` : ''}`;
-        card.appendChild(button(`[[plus]] ${label}`, 'btn-job', () => {
-          rs.assign(r.id, s.id);
-          this.engine.requestSave();
-          this.refresh(this.engine.stateManager.state);
+        card.appendChild(kButton({
+          variant: 'secondary',
+          className: 'btn-job',
+          icon: 'plus',
+          label,
+          onPress: () => {
+            rs.assign(r.id, s.id);
+            this.engine.requestSave();
+            this.refresh(this.engine.stateManager.state);
+          },
         }));
       }
     }

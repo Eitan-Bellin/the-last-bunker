@@ -1,7 +1,8 @@
 import { i18n } from '../../i18n/I18nManager';
+import { fmtNum } from '../format';
 import { BIOMES, POIS, type BiomeId } from '../../data/surface';
-import { el } from '../../ui/dom';
-import type { MissionReport, SurvivorState } from '../../core/GameState';
+import { RESOURCE_ICONS, el } from '../../ui/dom';
+import type { MissionReport, ResourceType, SurvivorState } from '../../core/GameState';
 import { genderOf, portraitFor, portraitUrl } from '../../data/portraits';
 import { biomeImage, journalTimeline } from '../../ui/expeditionText';
 import { expeditionEvent } from '../../data/expeditionEvents';
@@ -85,6 +86,17 @@ export class EventController {
     if (eventId === 'wanderer' && choiceKey === 'accept' && !result.gains && !(result.injured ?? []).length) {
       this.app.modal.hide();
       this.app.toasts.show(`[[door]] ${i18n.t(`event.${eventId}.result.${result.key}`, params)}`, 'good');
+      return;
+    }
+    // [ux-redesign w2a #19] A find (the hidden stash) needs no second "Continue" dialog either: a toast says what was taken and the
+    // goods fly up into their counters.
+    if (eventId === 'stash' && !(result.injured ?? []).length) {
+      this.app.modal.hide();
+      const gains = result.gains ?? {};
+      // [w4fix C4] Amounts read like the HUD ("400K", not "400000").
+      const got = (Object.entries(gains) as [ResourceType, number][]).filter(([, v]) => v > 0).map(([r, v]) => `${RESOURCE_ICONS[r] ?? ''}${fmtNum(v)}`).join(' ');
+      this.app.toasts.show(`${EVENT_ICONS.stash} ${i18n.t(`event.${eventId}.result.${result.key}`, params)}${got ? ` ${got}` : ''}`, 'good');
+      this.app.feedback.flyGoods(gains, null); // [w4fix C1] from the middle; the numbers wait for the goods, then count
       return;
     }
     const body = el('div', 'modal-result');

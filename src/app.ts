@@ -1,5 +1,5 @@
 import { VIEW } from './rendering/perfFx'; // [perf]
-import { floorTag } from './ui/floorTag'; // plan4:ST-16
+import { floorTag, floorTagIso } from './ui/floorTag'; // plan4:ST-16
 import { GameEngine, type OfflineReport } from './core/GameEngine';
 import { ProjectsPanel } from './ui/components/ProjectsPanel'; // [LateGame B1]
 import { PROJECTS, projectDone, stagesDone } from './data/projects'; // [LateGame B1]
@@ -20,13 +20,13 @@ import { Toasts } from './ui/components/Toast';
 import { NumberPopupManager } from './ui/components/NumberPopup';
 import { DepthRuler } from './ui/components/DepthRuler'; // [plan4:ST-12]
 import { AudioEngine } from './audio/AudioEngine';
-import { setUiSound } from './audio/uiSound';
+import { setUiSound, soundRate } from './audio/uiSound';
 import { timeOfDay } from './ui/HUD';
 import { i18n } from './i18n/I18nManager';
 import { bus } from './core/EventBus';
 import { getDef } from './data/buildingDefs';
 import { RESEARCH } from './data/research';
-import { RESOURCE_ICONS, el } from './ui/dom';
+import { el } from './ui/dom';
 import { isBuildingUnlocked } from './systems/ResearchSystem';
 import type { BuildingType, GameState, Position, ResourceType, SurvivorState } from './core/GameState';
 import { preloadIcons } from './rendering/richText';
@@ -61,6 +61,7 @@ import { Notifier, type NotifyItem } from './ui/notifications';
 import type { TourMode } from './ui/tour'; // [plan4:GP-6] type only: the tour's code loads on first use
 import { arrivalGap, type RaidResult } from './systems/EventSystem';
 import { DialogQueue, type DialogSource } from './ui/dialogQueue'; // [plan4:UX-10]
+import { backAction, gateBlock, LOST_POINTER_MS, lowStoreStep, SHEET_SETTLE_MS, wantsWelcome, type BackAction, type BackInput, type PopupTier } from './ui/popupRules'; // [ux-redesign w2a]
 import { getChapter } from './data/story';
 import { districtDef } from './data/districts';
 import { haptic } from './utils/haptics'; // [plan4:UX-20]
@@ -78,6 +79,11 @@ import './styles/placement.css'; // [plan4:ST-19] the confirm bar and the chips 
 import './styles/pwa.css'; // [plan4:UX-13] update chip, home-screen card, copy box
 import './styles/ux-wp4.css'; // [ux-wp4] convenience and HUD (upgrade bar, people rows, build menu folds)
 import './styles/a11y.css'; // [plan4:AC-2] the accessibility layer, last of all: reduced motion, colour modes, focus rings
+// [ux-redesign W3b] main-screen helpers: off-screen event arrows, back to the bunker, the Android back button, long press on a store tile
+import './styles/edge.css';
+import { EdgeArrows, installResourceLongPress } from './ui/edgeArrows';
+import { BackToBunker } from './ui/backToBunker';
+import { installNativeBack } from './ui/nativeBack';
 import { FeedbackController } from './ui/controllers/feedback';
 import { InboxController } from './ui/controllers/inbox';
 import { SaveController } from './ui/controllers/saves';
@@ -90,6 +96,7 @@ import { SystemsController } from './ui/controllers/systems';
 import { WhatsNewController } from './ui/controllers/whatsnew'; // [plan4:ST-9]
 import { WelcomeController } from './ui/controllers/welcome';
 import { TipsController } from './ui/controllers/tips'; // [plan4:UX-11]
+import { OnboardingController } from './ui/onboarding'; // [ux-redesign W3a]
 import { PRODUCTION_POPUP_MS, WorldController } from './ui/controllers/world';
 import { DailyController } from './ui/controllers/daily'; // [plan4:GP-1]
 import { Ceremonies } from './ui/ceremony'; // [plan4:GP-2]
@@ -130,6 +137,8 @@ export class GameApp {
   readonly systems = new SystemsController(this);
   /** [plan4:ST-9] The one-time "the bunker can grow sideways" card for saves from v6. */
   readonly whatsNew = new WhatsNewController(this);
+  // [ux-redesign W3a] Onboarding: the "What now?" advisor strip, idle hint, first-session spotlight, locked tabs. Wires itself to the HUD.
+  readonly onboarding = new OnboardingController(this);
   engine: GameEngine;
   renderer: BunkerRenderer;
   hud: HUD;
@@ -180,10 +189,16 @@ export class GameApp {
   /** [plan4:UX-10] Pointers that are down right now (id -> last event time) and the time of the last touch gesture. */
   private pointersDown = new Map<number, number>();
   private lastGestureAt = -Infinity;
+  /** [ux-redesign w2a #5] A sheet started to open or close: it is still moving until this time. */
+  private sheetMovingUntil = 0;
+  /** [ux-redesign w2a] Why the last dialog check was held back ('' = open), for debugging (?debug: __app.lastGateBlock). */
+  lastGateBlock = '';
   /** [plan4:UX-10] A ceremony (GP-2) holds every dialog back until this time (performance.now() ms). */
   ceremonyUntil = 0;
   private shortages = new Set<ResourceType>();
   private lowWarned = new Set<ResourceType>();
+  /** [ux-redesign w2a #11] When each store last warned (performance.now() ms). */
+  private lowWarnedAt = new Map<ResourceType, number>();
   private hurtWarned = new Set<string>();
   private powerOk = true;
   private ruinBuckets = new Map<string, number>();
@@ -266,6 +281,7 @@ export class GameApp {
       openChronicle: () => this.chroniclePanel.show(this.state),
       showTipsAgain: () => { this.tips.reset(); this.toasts.show(`[[hand]] ${i18n.t('settings.tipsReset')}`, 'good'); }, // [plan4:UX-11]
       replayIntro: () => { this.closeSheets(); this.story.replayIntro(); },
+      replayTutorial: () => this.onboarding.replay(), // [ux-redesign W3a]
       shareBunker: () => this.shareBunker(), // [plan4:GP-5]
       startTour: () => this.startTour(), // [plan4:GP-6]
       redeemCoupon: (code: string) => { // the coupon sheet: pick how much to skip or add
@@ -279,7 +295,7 @@ export class GameApp {
     this.resourceSheet = new ResourceSheet(this.engine);
     this.modal = new Modal();
     this.toasts = new Toasts();
-    this.dialogs = new DialogQueue(this.dialogSources(), this.modal, c => this.dialogGate(c), () => this.engine.stateManager.state?.stats.totalPlayTime ?? 0);
+    this.dialogs = new DialogQueue(this.dialogSources(), this.modal, (c, w, t) => this.dialogGate(c, w, t), () => this.engine.stateManager.state?.stats.totalPlayTime ?? 0);
   }
 
   async start(): Promise<void> {
@@ -302,6 +318,7 @@ export class GameApp {
     const HANDS = new Set(['click', 'open', 'tab', 'switch', 'modalOpen', 'confirm', 'cancel', 'whoosh', 'type', 'error']);
     this.audio.mute = name => this.engine.awayRunning && !HANDS.has(name);
     this.toasts.hold = () => this.engine.awayRunning;
+    this.toasts.pause = () => !!this.placementMode; // [ux-redesign w2a #12/#39] the placement hint is never under a toast
     setSplashProgress(0.1);
     await Promise.all([this.renderer.init(canvas), preloadIcons(SCENE_ICONS).catch(() => undefined)]);
     setSplashProgress(0.4); // [plan4:UX-18]
@@ -343,9 +360,30 @@ export class GameApp {
     // Back from a break, or people still waiting at the door from last time: the welcome screen comes first. [plan4:UX-10] It waits in the
     // dialog queue (top priority) so a gesture or placement under way is not interrupted; it is set before the loop starts, or the first
     // frame would open the door-only welcome without the report.
-    if (this.state.storyFlags.includes('intro:done') && (this.engine.offlineReport || (this.state.doorWaiting?.length ?? 0) > 0)) this.pendingWelcome = { report: this.engine.offlineReport };
+    if (this.state.storyFlags.includes('intro:done')) this.queueWelcome(this.engine.offlineReport);
     this.engine.start();
     this.installBackNavigation();
+    // [ux-redesign W3b] main-screen helpers (DOM only; the camera is driven through the renderer's public focus API)
+    {
+      const covered = () => this.anyPanelOpen() || this.structurePanel.isVisible || this.modal.isVisible || !!this.placementMode || !!this.tour?.active
+        || this.welcomeOpen || this.introPlaying || this.storyOpen || this.storyDialog.isVisible;
+      this.onboarding.covered = covered; // [ux-redesign w3fix] the hint and the spotlight never show over the structure sheet either
+      const click = () => this.audio.play('click');
+      new EdgeArrows({ renderer: this.renderer, getState: () => this.state, blocked: covered, click }).start();
+      new BackToBunker({ renderer: this.renderer, getState: () => this.state, blocked: covered, click }).start();
+      installResourceLongPress(r => this.hud.onResourceTap?.(r as ResourceType));
+      installNativeBack({
+        input: () => this.backInput(),
+        act: act => this.doBack(act),
+        confirmLeave: (title, body, stay, leave, onLeave) => this.modal.show({
+          title, body, dismiss: 0,
+          actions: [
+            { label: stay, className: 'btn-primary', onClick: () => this.modal.hide() },
+            { label: leave, className: 'btn-secondary', onClick: () => { this.modal.hide(); onLeave(); } },
+          ],
+        }),
+      });
+    }
     // Ask the browser to keep the save safe (it may clear site data when the phone runs low on space): after the first tap, and once more later.
     window.addEventListener('pointerdown', () => void ensurePersistentStorage(), { once: true });
     setTimeout(() => void ensurePersistentStorage(), 10 * 60_000);
@@ -544,24 +582,31 @@ export class GameApp {
 
   /**
    * [plan4:UX-10] May an auto-opening dialog land right now? Not while a building is being placed, a finger is down (a camera drag,
-   * a pinch, a carried survivor), a gesture ended less than 1.2 s ago, a ceremony is playing, or (for anything that is not an
+   * a pinch, a carried survivor), a gesture ended less than 1.5 s ago, a sheet is sliding, a ceremony is playing, or (for anything that is not an
    * emergency) a sheet is open under the player's hands. A sheet left open and untouched for 20 s no longer holds the dialogs back.
    */
-  dialogGate(critical = false): boolean {
+  dialogGate(critical = false, waitedMs = 0, tier?: PopupTier): boolean {
     const now = performance.now();
-    if (this.placementMode) return false;
-    if (this.tour?.active) return false; // [plan4:GP-6] the tour is for watching: dialogs wait for the tap that ends it
-    for (const [id, t] of this.pointersDown) if (now - t > 12000) this.pointersDown.delete(id); // a lost pointerup must not block forever
-    if (this.pointersDown.size > 0) return false;
-    if (now - this.lastGestureAt < 1200) return false;
-    if (this.ceremonyActive(now)) return false;
-    if (!critical && this.anyPanelOpen() && now - this.lastGestureAt < 20000) return false;
+    for (const [id, t] of this.pointersDown) if (now - t > LOST_POINTER_MS) this.pointersDown.delete(id); // a lost pointerup must not block forever
+    // [ux-redesign w2a #5] The rules live in popupRules.gateBlock: 1.5 s after any touch, and never while a sheet is still moving.
+    // [ux-redesign w3fix] A tutorial spotlight is its own input: it holds ordinary dialogs only up to SPOTLIGHT_PATIENCE_MS.
+    const why = gateBlock({
+      now, critical, placing: !!this.placementMode, touring: !!this.tour?.active, pointersDown: this.pointersDown.size,
+      lastGestureAt: this.lastGestureAt, ceremony: this.ceremonyActive(now), panelOpen: this.anyPanelOpen(),
+      sheetMovingUntil: this.sheetMovingUntil, tipShowing: this.tips.isShowing, spotlightShowing: this.onboarding.holdsScreen, waitedMs,
+      // [ux-redesign final F6] Offers wait for a calm moment: not during a crisis, not while an absence is still being worked through
+      // (the engine's catch-up, read only) or its welcome-back is still to come.
+      offer: tier === 'offer',
+      crisis: tier === 'offer' && (this.onboarding.advisor.crisis() || !!this.danger.dangerBanner()),
+      returning: tier === 'offer' && (!!this.pendingWelcome || this.welcomeOpen || this.engine['catchingUp']),
+    });
+    this.lastGateBlock = why;
+    if (why) return false;
     // [ux-wp3 C1] A tip card and a dialog never share the screen: an ordinary dialog waits for the tip (it goes by itself within
     // seconds); an emergency puts the tip away (it is not marked seen, so it comes back in a calm moment).
-    if (this.tips.isShowing) {
-      if (!critical) return false;
-      this.tips.defer();
-    }
+    if (this.tips.isShowing) this.tips.defer();
+    // [ux-redesign w3fix] A dialog that may land puts the spotlight away first (it comes back when the screen is calm).
+    if (this.onboarding.holdsScreen) this.onboarding.defer();
     return true;
   }
 
@@ -581,9 +626,28 @@ export class GameApp {
     window.addEventListener('blur', () => this.pointersDown.clear());
     document.addEventListener('wheel', stamp, { capture: true, passive: true });
     document.addEventListener('keydown', stamp, { capture: true, passive: true });
+    // [ux-redesign w2a #5] A sheet sliding in or out: no dialog lands on the moving panel.
+    document.addEventListener('transitionrun', e => {
+      const t = e.target;
+      if (t instanceof Element && t.matches('.sheet, .sheet-overlay')) this.sheetMovingUntil = performance.now() + SHEET_SETTLE_MS;
+    }, { capture: true, passive: true });
   }
 
-  /** [plan4:UX-10] Every dialog that opens by itself, in the order of the old fixed chain (higher priority = first). */
+  /** [ux-redesign w2a #7] "Welcome back" only after more than 10 minutes away; people at the door are asked about regardless. */
+  private queueWelcome(report: OfflineReport | null): void {
+    const away = report ? report.realSeconds ?? report.seconds : null;
+    // [ux-redesign w2fix] A raid, a disaster or a hurt survivor while away is worth the report even after a short absence.
+    const dg = report?.danger, nd = report?.nightDanger;
+    const hadDanger = !!dg && (dg.raids > 0 || dg.disasters.length > 0 || dg.hurt > 0 || dg.died.length > 0)
+      || !!nd && (nd.hurt.length > 0 || Object.values(nd.lost).some(v => (v ?? 0) !== 0));
+    if (!wantsWelcome(away, this.state.doorWaiting?.length ?? 0, hadDanger)) return;
+    this.pendingWelcome = { report: wantsWelcome(away, 0, hadDanger) ? report : null };
+  }
+
+  /**
+   * [plan4:UX-10] Every dialog that opens by itself, in the order of the old fixed chain (higher priority = first). [ux-redesign w2a] Each
+   * has a tier (popupRules.TIER_BASE): crisis (memorial, raid result, danger) > offline (welcome back) > story > unlock > offer.
+   */
   private dialogSources(): DialogSource[] {
     const st = () => this.state;
     const memorialN = () => st().danger?.memorialQueue?.length ?? 0;
@@ -600,78 +664,79 @@ export class GameApp {
     });
     return [
       {
-        id: 'welcome', priority: 100, snoozeMs: 60_000, critical: true, icon: '[[door]]',
+        id: 'welcome', priority: 100, tier: 'offline', snoozeMs: 60_000, critical: true, icon: '[[door]]',
         ready: () => !!this.pendingWelcome || (st().doorWaiting?.length ?? 0) > 0,
         open: () => { const p = this.pendingWelcome; this.pendingWelcome = null; this.welcome.showWelcome(p ? p.report : null); },
         label: () => i18n.t('welcome.title'),
       },
       {
-        id: 'memorial', priority: 90, snoozeMs: 60_000, critical: true, icon: '[[heart]]',
+        id: 'memorial', priority: 90, tier: 'crisis', snoozeMs: 60_000, critical: true, icon: '[[heart]]',
         ready: () => memorialN() > 0,
         open: () => this.danger.showMemorial(), // [Danger C5]
         label: () => i18n.t('dq.memorial'),
       },
       {
-        id: 'raidResult', priority: 80, snoozeMs: 60_000, critical: true, icon: '[[warning]]',
+        id: 'raidResult', priority: 80, tier: 'crisis', snoozeMs: 60_000, critical: true, icon: '[[warning]]',
         ready: () => !!this.raidResult,
         open: () => { const r = this.raidResult!; this.raidResult = null; this.danger.showRaidResult(r); }, // [Danger C1]
         label: () => i18n.t('dq.raidResult'),
       },
       {
-        id: 'danger', priority: 70, snoozeMs: 30_000, critical: true, icon: '[[warning]]',
+        id: 'danger', priority: 70, tier: 'crisis', snoozeMs: 30_000, critical: true, icon: '[[warning]]',
         ready: () => this.dangerPrompt,
         open: () => { this.dangerPrompt = false; if (this.danger.dangerBanner()) this.danger.showDanger(); }, // [Danger C1/C2]
         label: () => i18n.t('dq.danger'),
       },
       {
-        id: 'event', priority: 60, snoozeMs: 120_000, icon: '[[inbox]]',
+        id: 'event', priority: 60, tier: 'story', snoozeMs: 120_000, icon: '[[inbox]]',
         ready: () => this.inbox.autoOpenEvent(st()),
         open: () => this.events.showEvent(),
         label: () => { const ev = st().activeEvent; return ev ? i18n.t(`event.${ev.id}.title`, this.events.eventParams(ev.data)) : ''; },
       },
       {
-        id: 'missionChoice', priority: 50, snoozeMs: 180_000, icon: '[[radioTower]]',
+        id: 'missionChoice', priority: 50, tier: 'story', snoozeMs: 180_000, icon: '[[radioTower]]',
         ready: () => !!asking() && !this.inbox.defers(st()),
         open: () => { const m = asking(); if (m) this.events.showMissionChoice(m); },
         label: () => i18n.t('inbox.missionAsks'),
       },
       {
-        id: 'missionReport', priority: 40, snoozeMs: 180_000, icon: '[[map]]',
+        id: 'missionReport', priority: 40, tier: 'story', snoozeMs: 180_000, icon: '[[map]]',
         ready: () => st().missionReports.length > 0 && !this.inbox.defers(st()),
         open: () => this.events.showMissionReport(st().missionReports[0]),
         label: () => i18n.t(st().missionReports[0]?.success ? 'inbox.reportOk' : 'inbox.reportBad'),
       },
       {
-        id: 'chapter', priority: 30, snoozeMs: 240_000, icon: '[[books]]',
+        id: 'chapter', priority: 30, tier: 'story', snoozeMs: 240_000, icon: '[[books]]',
         ready: () => !!this.pendingChapter,
         open: () => this.story.playChapter(this.pendingChapter!),
         label: () => { const c = this.pendingChapter ? getChapter(this.pendingChapter) : undefined; return c ? c.title[i18n.currentLocale] : i18n.t('dq.chapter'); },
       },
       {
-        id: 'system', priority: 20, snoozeMs: 300_000, icon: '[[sparkle]]',
+        id: 'system', priority: 20, tier: 'unlock', snoozeMs: 300_000, icon: '[[sparkle]]',
         ready: () => this.systems.hasDue(st()),
         open: () => this.systems.update(st()),
         label: () => this.systems.dueTitle(st()),
       },
       {
-        id: 'lore', priority: 15, snoozeMs: 300_000, icon: '[[note]]',
+        id: 'lore', priority: 15, tier: 'unlock', snoozeMs: 300_000, icon: '[[note]]',
         ready: () => this.lore.hasQueued,
         open: () => this.lore.flushLoreQueue(),
         label: () => i18n.t('journal.found'),
       },
       {
-        id: 'whatsNew', priority: 5, snoozeMs: 600_000, icon: '[[build]]', // [plan4:ST-9] last in line: every other dialog goes first
+        id: 'whatsNew', priority: 5, tier: 'unlock', snoozeMs: 600_000, icon: '[[build]]', // [plan4:ST-9] last in line: every other dialog goes first
         ready: () => this.whatsNew.hasDue(st()),
         open: () => this.whatsNew.open(st()),
         label: () => this.whatsNew.label(),
       },
       {
-        id: 'district', priority: 10, snoozeMs: 300_000, icon: '[[pick]]',
+        id: 'district', priority: 10, tier: 'unlock', snoozeMs: 300_000, icon: '[[pick]]',
         ready: () => this.districtFoundQueue.length > 0,
         open: () => this.dig.showDistrictFound(this.districtFoundQueue.shift()!),
         label: () => { const d = districtDef(this.districtFoundQueue[0] ?? ''); return d ? i18n.t('district.found', { name: d.name[i18n.currentLocale] }) : ''; },
       },
-      ...pwa,
+      // [ux-redesign w2a] Install / power saver / backup reminders are offers: last in line, at most one a session.
+      ...pwa.map(src => ({ ...src, tier: 'offer' as const })),
     ];
   }
 
@@ -718,9 +783,8 @@ export class GameApp {
     this.danger.updateIncidentBanner();
     // [plan4:UX-11] The gesture tips (pinch, double tap, hold a survivor, wings), once each; the old drag toast is the "hold" tip now.
     this.tips.update(performance.now());
-    const obj = this.engine.objectiveSystem.current(state);
-    const reward = (Object.entries(obj.reward) as [ResourceType, number][]).map(([r, v]) => `${RESOURCE_ICONS[r] ?? ''}${v}`).join(' ');
-    this.hud.setObjective(obj.icon, obj.text[i18n.currentLocale] ?? obj.text.en, obj.progress(state), reward);
+    // [ux-redesign W3a] The strip says what the onboarding advisor picks (and routes there on tap: OnboardingController wires it).
+    this.hud.setObjective();
   }
 
   /** [Q2] The chip: the Act and how far through it, with the era as the quieter second half. */
@@ -737,7 +801,8 @@ export class GameApp {
     // [ux-wp1 C1] The chip names the Act only ("I·34% Survive"); the era stays the bunker's look (banner, Command panel).
     const actName = act.name[i18n.currentLocale];
     const short = actName.split('·').pop()?.trim() || actName;
-    this.hud.setEra(era.key, short, `${roman}·${pct}%`, `${actName} · ${pct}%`);
+    // [ux-redesign w2fix] Numeral and percent as data: the HUD isolates them (no "I·20%" string mixed into right-to-left text).
+    this.hud.setEra(era.key, short, { roman, pct }, `${actName} · ${pct}%`);
   }
 
   private updateAudio(): void {
@@ -753,11 +818,6 @@ export class GameApp {
     this.audio.setEra(state.era ?? 0);
     this.audio.setExpedition(state.activeMissions.length > 0);
     this.audio.setAmbience(this.renderer.getAmbienceMix(state));
-  }
-
-  private onObjectiveTap(): void {
-    this.audio.play('click');
-    this.runAction(this.engine.objectiveSystem.current(this.state).action);
   }
 
   /** [plan4:ST-9] Opens the Command panel and draws the eye to its wing line. */
@@ -878,14 +938,17 @@ export class GameApp {
     // Early warning while there is still time to react.
     for (const r of ['food', 'water', 'power'] as ResourceType[]) {
       const res = state.resources[r];
-      const falling = res.productionRate < res.consumptionRate;
-      if (falling && res.amount > 0 && res.amount < res.cap * 0.1 && !this.lowWarned.has(r)) {
+      // [ux-redesign w2a #11] Only when the store empties within 3 minutes at the current rate; a rising store never warns.
+      const now = performance.now();
+      const step = lowStoreStep(res.amount, res.productionRate - res.consumptionRate, this.lowWarned.has(r), now - (this.lowWarnedAt.get(r) ?? -Infinity));
+      if (step === 'warn') {
         this.lowWarned.add(r);
+        this.lowWarnedAt.set(r, now);
         this.audio.play('warn');
         // [plan4:AC-9] The sound has a visual twin: a toast and a blink of the resource plate.
         this.toasts.show(`[[warning]] ${i18n.t('shortage.low', { name: i18n.t(`resources.${r}`) })}`, 'bad');
         this.hud.alertResource(r);
-      } else if (res.amount > res.cap * 0.25) this.lowWarned.delete(r);
+      } else if (step === 'clear') this.lowWarned.delete(r);
     }
     for (const s of state.survivors) {
       if (s.health < 30 && !this.hurtWarned.has(s.id)) {
@@ -968,6 +1031,7 @@ export class GameApp {
       this.closeSheets();
       if (!wasOpen) this.journal.show(this.state);
     };
+    this.hud.onShop = () => { this.audio.play('paper'); this.closeSheets(); this.journal.showShop(this.state); }; // [ux-redesign W2b] shop has its own HUD entry
     this.eraPanel.onOpenProjects = () => { this.closeSheets(); this.projectsPanel.show(); }; // [LateGame B1]
     this.eraPanel.foreman = this.engine.foremanSystem; // [Long game]
     this.eraPanel.engine = this.engine;
@@ -1016,7 +1080,6 @@ export class GameApp {
       this.audio.play('click');
       this.openRuin(ruinId);
     };
-    this.hud.onObjectiveTap = () => this.onObjectiveTap();
     this.renderer.onDigClick = () => this.dig.confirmDig();
     this.renderer.onWingDig = (floor, side) => { this.audio.play('click'); this.dig.confirmWingDig(floor, side); }; // [plan4:ST-3]
     this.renderer.onElevator = () => {
@@ -1057,6 +1120,7 @@ export class GameApp {
       this.researchPanel.show();
     };
 
+    this.researchPanel.onGo = (action) => { this.audio.play('click'); this.runAction(action); }; // blocked research routes to the room that makes the missing input
     this.researchPanel.onOpenGenesis = () => {
       this.closeSheets();
       this.menuPanel.show('genesis');
@@ -1111,6 +1175,13 @@ export class GameApp {
 
     this.world.installHud({ openPeople: () => this.peoplePanel.show(), structure: this.structurePanel }); // [ux-wp4] W2, R3, B3, M5 hooks
     this.feedback.install();
+    // [ux-redesign W4] Motion and sound: UI sounds vary their pitch (±5 %) and collect sounds climb in a combo; goods fly to their
+    // HUD tile through the pooled fx layer (the bubbles' and the stash's own fly-to-HUD now use it too).
+    setUiSound((name, volume, rate) => this.audio.play(name, { volume, rate }));
+    this.audio.rateOf = name => soundRate(name);
+    const flashAttr = (): void => { document.documentElement.dataset.flash = getA11y().flash; }; // fx.css: no CRT flash in "no flashes"
+    flashAttr();
+    subscribeA11y(flashAttr);
     this.inbox.install();
     this.daily.install(); // [plan4:GP-1]
     this.watchGestures(); // [plan4:UX-10]
@@ -1125,7 +1196,7 @@ export class GameApp {
 
     bus.on('offline:processed', (report: unknown) => {
       if (this.engine.offlineReport === report) return;
-      this.pendingWelcome = { report: report as OfflineReport }; // [plan4:UX-10] through the gate, like every auto dialog
+      this.queueWelcome(report as OfflineReport); // [plan4:UX-10] through the gate, like every auto dialog
     });
 
     // Any touch, drag, wheel or key counts: the picture draws at full speed while the player is handling the bunker.
@@ -1148,6 +1219,28 @@ export class GameApp {
 
   // ---- the phone's back button ----
 
+  /** [ux-redesign w3fix] What is open, for the back button and Escape (popupRules.backAction). */
+  private backInput(): BackInput {
+    return {
+      touring: !!this.tour?.active, modalOpen: this.modal.isVisible, modalDismiss: this.modal.isVisible && this.modal.canDismiss ? 0 : null,
+      placing: !!this.placementMode, readerOpen: this.loreReader.isVisible, surfaceOpen: this.surfacePanel.isVisible,
+      sheetOpen: this.anyPanelOpen() || this.structurePanel.isVisible,
+      popoverOpen: this.hud.floatingOpen || this.onboarding.popOpen, spotlight: this.onboarding.holdsScreen,
+    };
+  }
+
+  /** [ux-redesign w3fix] One back step (web back, Escape and the Android back button share it). */
+  private doBack(act: Exclude<BackAction, 'leave' | 'modalStay' | 'spotlight'>): void {
+    if (act === 'tour') this.tour?.stop(); // [plan4:GP-6] back ends the tour first
+    else if (act === 'modalDismiss') this.modal.back();
+    else if (act === 'popover') { this.hud.closeFloating(); this.onboarding.closePop(); }
+    else if (act === 'placement') this.world.cancelPlacement();
+    else if (act === 'reader') this.loreReader.hide();
+    else if (act === 'surface') this.surfacePanel.hide();
+    // [ux-wp4] the book opened over a room panel goes back to that panel, not to the bunker
+    else if (act === 'sheet' && !Sheet.closeTop()) this.closeSheets();
+  }
+
   anyPanelOpen(): boolean {
     return this.buildMenu.isVisible || this.buildingPanel.isVisible || this.peoplePanel.isVisible || this.researchPanel.isVisible
       || this.surfacePanel.isVisible || this.menuPanel.isVisible || this.ruinPanel.isVisible || this.journal.isVisible
@@ -1161,22 +1254,22 @@ export class GameApp {
   private installBackNavigation(): void {
     let lastBack = 0;
     history.pushState({ lastbunker: 1 }, '');
+    // [ux-redesign w3fix] Escape knows the floating lists and the spotlight too (the dialog, the sheets and placement keep their own
+    // Escape handlers): a list closes alone; on a spotlight Escape does nothing (it must not close the sheet under it).
+    window.addEventListener('keydown', e => {
+      if (e.key !== 'Escape') return;
+      const act = backAction(this.backInput());
+      if (act !== 'popover' && act !== 'spotlight') return;
+      e.preventDefault();
+      e.stopPropagation();
+      if (act === 'popover') this.doBack(act);
+    }, { capture: true });
     window.addEventListener('popstate', () => {
-      if (this.tour?.active) { this.tour.stop(); history.pushState({ lastbunker: 1 }, ''); return; } // [plan4:GP-6] back ends the tour first
-      if (this.modal.isVisible) {
-        history.pushState({ lastbunker: 1 }, '');
-        return;
-      }
-      if (this.placementMode) {
-        this.world.cancelPlacement();
-        history.pushState({ lastbunker: 1 }, '');
-        return;
-      }
-      // [ux-wp4] Back closes only the top panel (the book opened over a room panel goes back to that panel, not to the bunker).
-      if (this.loreReader.isVisible || this.surfacePanel.isVisible || this.anyPanelOpen() || this.structurePanel.isVisible) {
-        if (this.loreReader.isVisible) this.loreReader.hide();
-        else if (this.surfacePanel.isVisible) this.surfacePanel.hide();
-        else if (!Sheet.closeTop()) this.closeSheets();
+      // [ux-redesign w2a #20] Back closes the top layer only (popupRules.backAction): an info dialog closes, a decision stays.
+      // [ux-redesign w3fix] A floating list closes first; on a spotlight back does nothing (never "press again to leave").
+      const act = backAction(this.backInput());
+      if (act !== 'leave') {
+        if (act !== 'modalStay' && act !== 'spotlight') this.doBack(act);
         history.pushState({ lastbunker: 1 }, '');
         return;
       }
@@ -1249,7 +1342,7 @@ export class GameApp {
   roomName(buildingId: string): string {
     const b = this.state.buildings.find(x => x.id === buildingId);
     if (!b) return '';
-    return `${getDef(b.type)?.name[i18n.currentLocale] ?? b.type} · ${floorTag(b.position.floor)}`; // plan4:ST-16
+    return `${getDef(b.type)?.name[i18n.currentLocale] ?? b.type} · ${floorTagIso(b.position.floor)}`; // plan4:ST-16 [ux-redesign w2fix] isolated
   }
 
   private specialize(buildingId: string, specId: string): void {

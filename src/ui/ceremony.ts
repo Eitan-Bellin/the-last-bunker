@@ -1,7 +1,8 @@
-import { reducedMotion } from '../utils/a11y';
+import { flashOk, reducedMotion } from '../utils/a11y';
 import { haptic, type HapticKind } from '../utils/haptics';
 import { el } from './dom';
 import { i18n } from '../i18n/I18nManager';
+import { plural } from './format';
 import { buildingH, floorTop, SLOT_W } from '../rendering/geom';
 import { buildingX, slotX } from '../world/project';
 import { floorExtent, type BuildingInstance } from '../core/GameState';
@@ -64,10 +65,11 @@ interface Def {
 
 export const CEREMONIES: Record<CeremonyKind, Def> = {
   build: { ms: 1600, prio: 35, sound: 'complete', haptic: [{ kind: 'success', at: 0 }] },
-  roomLevel: { ms: 1200, prio: 30, sound: 'levelup', haptic: [{ kind: 'success', at: 0 }] },
+  // [ux-redesign W4] An upgrade is a medium knock (FEEL.upgrade); level ups and victories are the success tick.
+  roomLevel: { ms: 1200, prio: 30, sound: 'levelup', haptic: [{ kind: 'impact', at: 0 }] },
   research: { ms: 1400, prio: 40, sound: 'research', haptic: [{ kind: 'success', at: 0 }] },
   // [ux-wp3 D1/F5] Its own small sound (two knocks and a bell), no longer the shop's 'coin'.
-  person: { ms: 900, prio: 10, sound: 'rankUp', haptic: [{ kind: 'tap', at: 0 }] },
+  person: { ms: 900, prio: 10, sound: 'rankUp', haptic: [{ kind: 'success', at: 0 }] },
   act: { ms: 4500, prio: 90, sound: 'era', haptic: [{ kind: 'success', at: 0 }, { kind: 'success', at: 260 }], beatAt: 1500 },
   dig: { ms: 2000, prio: 50, sound: 'dig', haptic: [{ kind: 'success', at: 0 }] },
   // 'lore' (soft bells over a low pad) stands in for the mourning tone.
@@ -78,7 +80,8 @@ export const CEREMONIES: Record<CeremonyKind, Def> = {
   // [ux-wp3 F15] A badge card at the top with the count ("Achievement · 12/28").
   achievement: { ms: 1600, prio: 45, sound: 'achievement', haptic: [{ kind: 'success', at: 0 }] },
   // [ux-wp3 F2] The raiders reach the gate: siren, the camera at the entrance, the impact (a shake, sparks, a soft warm flash).
-  raid: { ms: 2600, prio: 85, sound: 'siren', haptic: [{ kind: 'warning', at: 0 }, { kind: 'error', at: 900 }] },
+  // [ux-redesign W4] The siren and the impact are heavy (FEEL.raid / FEEL.explosion).
+  raid: { ms: 2600, prio: 85, sound: 'siren', haptic: [{ kind: 'heavy', at: 0 }, { kind: 'heavy', at: 900 }] },
   genesis: { ms: 6000, prio: 100, block: true, sound: 'era', haptic: [{ kind: 'success', at: 0 }, { kind: 'success', at: 900 }, { kind: 'success', at: 1800 }] },
 };
 
@@ -87,6 +90,14 @@ const MAX_WAITING = 3;
 /** A still card stays this long under reduced motion (Genesis waits longer: it is a summary to read). */
 const STATIC_MS = 1600;
 const STATIC_GENESIS_MS = 4000;
+/** [ux-redesign w2a #12] A moment waits while a sheet, a dialog or a placement holds the screen; looked at this often. */
+const WAIT_POLL_MS = 400;
+/** Small moments (below this priority) that waited longer than WAIT_STALE_MS are dropped: the toast already told them. */
+const WAIT_KEEP_PRIO = 50;
+const WAIT_STALE_MS = 8000;
+/** [ux-redesign W4] Moments at least this important duck the music for their length (at most DUCK_MAX_MS). */
+const DUCK_PRIO = 30;
+const DUCK_MAX_MS = 3000;
 
 interface Item {
   spec: CeremonySpec;
@@ -97,6 +108,8 @@ export class Ceremonies {
   private app: GameApp;
   private queue: Item[] = [];
   private current: { item: Item; root: HTMLElement; end: (skipped: boolean) => void } | null = null;
+  private waitTimer = 0;
+  private waitingSince = 0;
 
   constructor(app: GameApp) {
     this.app = app;
@@ -136,7 +149,7 @@ export class Ceremonies {
         gone.resolve();
       }
       this.hold();
-      if (!this.current) this.next();
+      if (!this.current && !this.waitTimer) this.next();
     });
   }
 
@@ -165,8 +178,38 @@ export class Ceremonies {
     return spec.kind === 'genesis' ? STATIC_GENESIS_MS : spec.kind === 'act' ? 400 : Math.min(d.ms, STATIC_MS);
   }
 
+  /**
+   * [ux-redesign w2a #12] Something holds the screen: a sheet, a dialog, a lore page, a story card or a room being placed.
+   * [ux-redesign w2fix] A big moment (prio >= WAIT_KEEP_PRIO: the raid, an Act, a project) does not wait for an open sheet, only for a
+   * dialog or a placement, so the raid plays before its result dialog instead of after it.
+   */
+  private screenBusy(item?: Item): boolean {
+    const app = this.app;
+    const dialog = !!app.placementMode || app.modal.isVisible || app.storyOpen || app.welcomeOpen;
+    if (item && CEREMONIES[item.spec.kind].prio >= WAIT_KEEP_PRIO) return dialog;
+    return dialog || app.anyPanelOpen() || app.loreReader.isVisible;
+  }
+
   private next(): void {
-    const item = this.queue.shift();
+    // [ux-redesign w2fix] The first moment the screen lets through plays (a big one may go ahead of small ones held by a sheet).
+    const free = this.queue.findIndex(q => !this.screenBusy(q));
+    if (this.queue.length && free < 0) {
+      const now = performance.now();
+      if (!this.waitingSince) this.waitingSince = now;
+      if (now - this.waitingSince > WAIT_STALE_MS) {
+        this.queue = this.queue.filter(q => {
+          if (CEREMONIES[q.spec.kind].prio >= WAIT_KEEP_PRIO) return true;
+          q.spec.beat?.();
+          q.resolve();
+          return false;
+        });
+      }
+      this.current = null;
+      if (this.queue.length && !this.waitTimer) this.waitTimer = window.setTimeout(() => { this.waitTimer = 0; if (!this.current) this.next(); }, WAIT_POLL_MS);
+      if (this.queue.length) return;
+    }
+    this.waitingSince = 0;
+    const item = free > 0 ? this.queue.splice(free, 1)[0] : this.queue.shift();
     if (!item) {
       this.current = null;
       // The gate opens a moment after the last one, not at the very instant (a dialog should not pop up under the finger that just skipped).
@@ -193,6 +236,8 @@ export class Ceremonies {
     document.body.appendChild(root);
 
     // Sound and the buzz at the start (a power plant brings its own sound; a merged moment plays once).
+    // [ux-redesign W4] The music steps back under the moment, first, so a sound that ducks for longer (the siren, an era) wins (small moments are too short to need it).
+    if (def.prio >= DUCK_PRIO) this.app.audio.duck(Math.min(ms, DUCK_MAX_MS) / 1000);
     this.app.audio.play(spec.sound ?? def.sound);
     if (spec.kind === 'build' && !spec.sound) later(() => this.app.audio.play('hiss', { volume: 0.6 }), 260);
     for (const h of def.haptic) { if (h.at === 0) haptic(h.kind); else later(() => haptic(h.kind), h.at); }
@@ -237,7 +282,7 @@ export class Ceremonies {
     const c = el('div', 'cer-card');
     // Folded moments say so: "5 workers leveled up", "We remember the 3 we lost".
     const many = (spec.n ?? 1) > 1;
-    const title = many && spec.kind === 'person' ? i18n.t('cer.person.many', { n: spec.n ?? 1 }) : many && spec.kind === 'death' ? i18n.t('cer.deathMany', { n: spec.n ?? 1 }) : spec.title;
+    const title = many && spec.kind === 'person' ? plural('cer.persons', spec.n ?? 1) : many && spec.kind === 'death' ? plural('cer.deaths', spec.n ?? 1) : spec.title;
     const sub = many && spec.kind === 'person' ? undefined : spec.sub;
     if (spec.kind === 'achievement') c.style.top = '9%'; // [ux-wp3 F15] a badge near the top, out of the bunker's middle
     if (spec.icon) c.appendChild(el('div', 'cer-icon', spec.icon));
@@ -396,13 +441,14 @@ export class Ceremonies {
         later(() => {
           r.shake(5, 0.6);
           r.burstAt(gate.x, gate.y, 90, 10);
+          if (!flashOk('cer-raid')) return; // [ux-redesign W4] the flash budget and the "no flashes" setting
           const flash = el('div', 'cer-flash');
           flash.style.cssText = 'position:absolute;inset:0;background:rgba(255,196,120,1);opacity:0;pointer-events:none';
           root.appendChild(flash);
           flash.animate([{ opacity: 0 }, { opacity: 0.28, offset: 0.25 }, { opacity: 0 }], { duration: 650, easing: 'ease-out' });
         }, 900);
         later(() => r.burstAt(gate.x + 24, gate.y - 6, 70, 8), 1250);
-        if (spec.win !== undefined) later(() => this.app.audio.play(spec.win ? 'cheer' : 'crumble'), 1700);
+        if (spec.win !== undefined) later(() => { this.app.audio.play(spec.win ? 'cheer' : 'crumble'); if (spec.win) haptic('success'); }, 1700);
         break;
       }
     }

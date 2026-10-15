@@ -1,0 +1,579 @@
+/*
+ * [ux-redesign W2b] The HUD: one calm status bar and the nav console.
+ *   - top: at most four resource tiles (icon, amount, trend + rate / FULL / countdown), then ONE info row: the Act as a labelled
+ *     progress bar, survivors, morale, (wide screens: credits, clock) and the alerts button that gathers everything that waits.
+ *   - bottom (thumb zone): the five nav keys, edge to edge.
+ * Imported by src/ui/HUD.ts, i.e. BEFORE style.css / bunker-os.css / touch.css: every rule is anchored on #hud or #hud-nav so the older
+ * class rules cannot reach it. Tokens only (styles/tokens.css). Hit areas reach --hit-min (or --tap with "Large touch targets").
+ */
+
+#hud .hx-top, #hud-nav { --hx-hit: max(var(--hit-min), var(--tap, var(--hit-min))); --hx-h: var(--hx-hit); }
+/* [ux-redesign w2fix B7] The bar's bottom padding: the "+N more" pill hangs from exactly there, so it never covers the info row. */
+#hud .hx-top { --hx-pad-b: var(--sp-3); }
+
+/* ---------- the bar ---------- */
+
+#hud .hx-top {
+  position: relative;
+  pointer-events: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-2) var(--hx-pad-b);
+  padding-top: max(var(--sp-2), env(safe-area-inset-top));
+  padding-inline: max(var(--sp-2), env(safe-area-inset-left)) max(var(--sp-2), env(safe-area-inset-right));
+  background: linear-gradient(to bottom, var(--surface-0) 0%, color-mix(in srgb, var(--surface-0) 88%, transparent) 75%, transparent 100%);
+}
+
+/* ---------- resource tiles ---------- */
+
+#hud .hx-res-row {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--sp-2);
+  width: 100%;
+  max-width: calc(var(--sp-8) * 9);
+  margin-inline: auto;
+}
+#hud .hx-res {
+  display: block;
+  min-width: 0;
+  min-height: var(--hx-hit);
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  border-radius: var(--r-panel);
+  transition: transform var(--dur-release) var(--ease-out-back);
+}
+#hud .hx-res:active { transform: scale(var(--press-scale)); transition-duration: var(--dur-press); }
+#hud .hx-res:focus-visible { outline: var(--ring-w) solid var(--primary); outline-offset: var(--border-w); }
+
+#hud .hx-res .k-chip {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-areas: 'icon amount' 'line2 line2';
+  align-items: center;
+  column-gap: var(--sp-1);
+  row-gap: 0;
+  width: 100%;
+  height: 100%;
+  min-height: var(--hx-hit);
+  padding: var(--sp-1) var(--sp-1) var(--sp-2);
+  padding-inline-start: calc(var(--sp-1) + var(--sp-1) / 2);
+  overflow: hidden;
+  background: var(--surface-1);
+  font-size: calc(var(--type-body) * var(--fs, 1));
+  line-height: var(--lh-tight);
+}
+#hud .hx-res .k-chip__icon { grid-area: icon; }
+#hud .hx-res .k-chip__icon .ic { width: var(--icon-s); height: var(--icon-s); }
+#hud .hx-res .k-chip__amount {
+  grid-area: amount;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-primary);
+  font-variant-numeric: var(--num-tabular);
+  unicode-bidi: isolate;
+}
+#hud .hx-res__line2 {
+  grid-area: line2;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  font-size: calc(var(--type-caption) * var(--fs, 1));
+  color: var(--text-secondary);
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+[dir='rtl'] #hud .hx-res__line2 { justify-content: flex-end; }
+/*
+ * [ux-redesign w2fix #7] Phones: a calm tile is its icon and amount only (the rate line is one number too many on a 375 px bar); the
+ * second line comes back when the tile has something to say: low, danger or a countdown. Wide screens keep the rate.
+ */
+@media (max-width: 599px) {
+  #hud .hx-res .k-chip:not(.is-low):not(.is-danger):not(.is-countdown) { grid-template-areas: 'icon amount'; align-content: center; }
+  #hud .hx-res .k-chip:not(.is-low):not(.is-danger):not(.is-countdown) .hx-res__line2 { display: none; }
+}
+#hud .hx-res .k-chip__rate { font-size: inherit; color: inherit; font-variant-numeric: var(--num-tabular); }
+#hud .hx-res .k-chip__rate .ic { width: var(--icon-s); height: var(--icon-s); }
+#hud .hx-trend { font-size: calc(var(--type-caption) * var(--fs, 1) * 0.75); line-height: 1; }
+#hud .hx-res .k-chip.is-up .hx-res__line2 { color: var(--success); }
+#hud .hx-res .k-chip.is-down .hx-res__line2 { color: var(--danger-text); }
+#hud .hx-res .k-chip.is-full .hx-res__line2 { color: var(--warning); font-weight: var(--weight-bold); letter-spacing: 0.04em; }
+#hud .hx-res .k-chip.is-countdown .hx-res__line2 { color: var(--warning); font-family: var(--font-mono); font-weight: var(--weight-bold); }
+#hud .hx-res .k-chip.is-danger.is-countdown .hx-res__line2 { color: var(--danger-text); }
+/* [w5] The last 10 s before a store runs dry: the countdown ticks (kit.css stops it under reduced motion). */
+#hud .hx-res .k-chip.is-ending .hx-res__line2 { animation: k-tick var(--dur-pulse) var(--ease-in-out) infinite; }
+/* [ux-redesign final] Reduced motion: the last-seconds line stays still (the countdown itself says it). Moved here from kit.css. */
+:root[data-motion="reduced"] #hud .k-chip.is-ending .hx-res__line2 { animation: none; }
+@media (prefers-reduced-motion: reduce) {
+  :root:not([data-motion="full"]) #hud .k-chip.is-ending .hx-res__line2 { animation: none; }
+}
+
+/* Fill: a thin bar along the bottom edge of the tile (the kit progress, slimmed). */
+#hud .hx-res__bar {
+  position: absolute;
+  inset-inline: 0;
+  bottom: 0;
+  height: calc(var(--sp-1) - var(--border-w));
+  border-radius: 0;
+  background: var(--surface-2);
+}
+#hud .hx-res__bar .k-progress__fill { background: var(--k-chip-color); }
+#hud .hx-res .k-chip.is-full .hx-res__bar .k-progress__fill { background: var(--warning); }
+#hud .hx-res .k-chip.is-danger .hx-res__bar .k-progress__fill { background: var(--danger); }
+
+/* Danger: dashed red edge, a warning sign (shape, not colour alone) and an amber-to-red pulse. Low: amber edge. */
+#hud .hx-warn { display: none; line-height: 0; color: var(--danger-text); }
+#hud .hx-warn .ic { width: var(--icon-s); height: var(--icon-s); }
+#hud .hx-res .k-chip.is-danger .hx-warn { display: inline-flex; }
+#hud .hx-res .k-chip.is-low { border-color: var(--warning); }
+#hud .hx-res .k-chip.is-danger {
+  border-color: var(--danger);
+  border-style: dashed;
+  animation: hx-danger var(--dur-pulse) var(--ease-in-out) infinite alternate;
+}
+@keyframes hx-danger {
+  from { box-shadow: 0 0 0 var(--border-w) var(--warning); }
+  to { box-shadow: 0 0 0 var(--ring-w) var(--danger); }
+}
+#hud .hx-res.empty .k-chip { background: color-mix(in srgb, var(--danger) 18%, var(--surface-1)); }
+
+/* "+3 more": hangs off the bar's lower edge (adds no row); visually small, a full hit area. */
+#hud .hx-more {
+  position: absolute;
+  top: 100%;
+  inset-inline-start: 50%;
+  translate: -50% calc(-1 * var(--hx-pad-b));
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--sp-5);
+  padding: 0 var(--sp-3);
+  border: var(--border-w) solid var(--border);
+  border-radius: var(--r-full);
+  background: var(--surface-2);
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: calc(var(--type-caption) * var(--fs, 1));
+  font-weight: var(--weight-medium);
+  white-space: nowrap;
+  cursor: pointer;
+}
+[dir='rtl'] #hud .hx-more { translate: 50% calc(-1 * var(--hx-pad-b)); }
+/* The hit area grows downward only (over the world), never up into the population / morale chips. */
+#hud .hx-more::after { content: ''; position: absolute; inset: 0 0 calc(var(--sp-5) - var(--hx-hit)); }
+#hud .hx-more[aria-expanded='true'] { color: var(--primary); border-color: var(--primary); }
+
+/* ---------- the info row ---------- */
+
+#hud .hx-info {
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+  gap: var(--sp-2);
+  width: 100%;
+  max-width: calc(var(--sp-8) * 9);
+  margin-inline: auto;
+}
+#hud .hx-chip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  min-height: var(--hx-h);
+  padding: var(--sp-1) var(--sp-2);
+  border: var(--border-w) solid var(--border);
+  border-radius: var(--r-panel);
+  background: var(--surface-1);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: calc(var(--type-body) * var(--fs, 1));
+  line-height: var(--lh-tight);
+  text-align: start;
+  cursor: pointer;
+}
+#hud .hx-chip:active { transform: scale(var(--press-scale)); }
+#hud .hx-chip:focus-visible { outline: var(--ring-w) solid var(--primary); outline-offset: var(--border-w); }
+#hud .hx-stat__icon { display: inline-flex; line-height: 0; }
+#hud .hx-stat__icon .ic { width: var(--icon-m); height: var(--icon-m); }
+#hud .hx-stat { flex: 0 0 auto; padding-inline: var(--sp-1) var(--sp-2); }
+#hud .hx-stat .hx-stat__icon .ic { width: var(--icon-s); height: var(--icon-s); }
+#hud .hx-stat__text { display: flex; flex-direction: column; min-width: 0; overflow: hidden; }
+#hud .hx-stat { min-width: 0; }
+#hud .hx-people { flex-shrink: 1; }
+#hud .hx-stat__value { font-weight: var(--weight-bold); font-variant-numeric: var(--num-tabular); unicode-bidi: isolate; white-space: nowrap; }
+#hud .hx-stat__caption {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: calc(var(--type-caption) * var(--fs, 1));
+  color: var(--text-secondary);
+  white-space: nowrap;
+  font-variant-numeric: var(--num-tabular);
+}
+#hud .hx-stat__caption .ic { width: var(--sp-3); height: var(--sp-3); }
+#hud .hx-chip.is-full .hx-stat__caption { color: var(--danger-text); }
+#hud .hx-chip.is-lock .hx-stat__caption { color: var(--text-secondary); }
+#hud .hx-morale.is-up .hx-stat__value { color: var(--success); }
+#hud .hx-morale.is-down .hx-stat__value { color: var(--danger-text); }
+#hud .hx-people .hx-stat__icon { color: var(--text-secondary); }
+
+/*
+ * The Act, on two short lines ([ux-redesign w2fix B1]): "Act III  38%" over the Act's word ("Settle"), with the progress as a slim bar
+ * along the chip's bottom edge. It takes the room that is left, and never less than the longest Act word needs.
+ */
+#hud .hx-act {
+  flex: 1 1 0;
+  min-width: calc(var(--sp-8) + var(--sp-6));
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: center;
+  gap: 0;
+  overflow: hidden;
+  padding-block-end: calc(var(--sp-1) + var(--border-w));
+}
+#hud .hx-act__head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--sp-1); min-width: 0; font-size: calc(var(--type-caption) * var(--fs, 1)); color: var(--text-secondary); white-space: nowrap; }
+#hud .hx-act__num { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+#hud .hx-act__roman { unicode-bidi: isolate; font-weight: var(--weight-bold); }
+#hud .hx-act__name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: calc(var(--type-caption) * var(--fs, 1)); font-weight: var(--weight-bold); color: var(--text-primary); }
+#hud .hx-act__pct { font-weight: var(--weight-bold); color: var(--primary); font-variant-numeric: var(--num-tabular); unicode-bidi: isolate; }
+#hud .hx-act__bar { position: absolute; inset-inline: 0; bottom: 0; height: calc(var(--sp-1) - var(--border-w)); border-radius: 0 0 var(--r-panel) var(--r-panel); }
+
+/* Wide screens only: the shop's credits and the clock. */
+#hud .hx-credits, #hud .hx-clock { display: none; }
+#hud .hx-credits .hx-stat__icon { color: var(--res-credits); }
+#hud .hx-clock { align-items: center; gap: var(--sp-1); color: var(--text-secondary); font-size: calc(var(--type-caption) * var(--fs, 1)); }
+@media (min-width: 600px) {
+  #hud .hx-credits { display: inline-flex; }
+  #hud .hx-clock { display: inline-flex; }
+  #hud .hx-info, #hud .hx-res-row { max-width: calc(var(--sp-8) * 11); }
+  #hud .hx-act { min-width: calc(var(--sp-8) * 3); }
+}
+
+/* Alerts: an icon (a word too on wide screens) and a count; the count is red only when there is something to do now. */
+#hud .hx-alerts { flex: 0 0 auto; min-width: var(--hx-hit); justify-content: center; }
+#hud .hx-alerts__label { display: none; }
+@media (min-width: 600px) { #hud .hx-alerts__label { display: inline; } }
+#hud .hx-alerts .k-badge { position: absolute; top: calc(-1 * var(--sp-1)); inset-inline-end: calc(-1 * var(--sp-1)); }
+#hud .hx-alerts .k-badge.is-news { background: var(--surface-2); color: var(--text-primary); border: var(--border-w) solid var(--border); }
+#hud .hx-alerts.has-action { border-color: var(--primary); }
+#hud .hx-alerts[aria-expanded='true'] { border-color: var(--primary); color: var(--primary); }
+
+/* Every chip reaches the full hit area, also when the visual is slimmer (short screens). */
+#hud .hx-chip::after { content: ''; position: absolute; inset: calc((var(--hx-h) - var(--hx-hit)) / 2 - var(--border-w)) calc(-1 * var(--border-w)); }
+
+/* ---------- the small list (alerts, more resources) ---------- */
+
+/* On <body>, over the toasts (a toast must not cover the list) and under the dialogs. */
+#hud-pop {
+  --hx-hit: max(var(--hit-min), var(--tap, var(--hit-min)));
+  position: fixed;
+  inset-inline-end: max(var(--sp-2), env(safe-area-inset-right));
+  z-index: calc(var(--z-toasts) + 1);
+  pointer-events: auto;
+  width: min(calc(var(--sp-8) * 5), calc(100vw - 2 * var(--sp-2)));
+  max-height: 60vh;
+  overflow-y: auto;
+  margin-top: var(--sp-1);
+  padding-block: var(--sp-1);
+  border: var(--border-w) solid var(--border);
+  border-radius: var(--r-card);
+  background: var(--surface-1);
+  box-shadow: var(--elev-2);
+  animation: hx-pop-in var(--dur-popup-in) var(--ease-out);
+}
+@keyframes hx-pop-in { from { opacity: 0; transform: scale(var(--popup-from-scale)); } }
+#hud-pop .hx-pop__row { min-height: var(--hx-hit); }
+#hud-pop .hx-pop__row:last-child { border-bottom: 0; }
+#hud-pop .hx-pop__row .k-row__icon .ic { width: var(--icon-m); height: var(--icon-m); }
+#hud-pop .hx-pop__row.is-action .k-row__label { font-weight: var(--weight-bold); }
+#hud-pop .hx-pop__dot { line-height: 0; color: var(--primary); }
+#hud-pop .hx-pop__dot .ic { width: var(--icon-s); height: var(--icon-s); }
+
+/* ---------- #35: short screens (16:9 phones) — a slimmer bar ---------- */
+
+@media (max-height: 700px) {
+  /* Tiles and chips are 40 px plates; their hit areas still reach 48 px (they meet in the 4 px gap between the two rows). */
+  #hud .hx-top { --hx-h: calc(var(--sp-6) + var(--sp-2)); --hx-pad-b: var(--sp-2); gap: var(--sp-1); }
+  #hud .hx-res .k-chip { min-height: var(--hx-h); padding-block: var(--border-w) var(--sp-1); }
+  #hud .hx-res { min-height: var(--hx-h); position: relative; }
+  #hud .hx-res::after { content: ''; position: absolute; inset: calc((var(--hx-h) - var(--hx-hit)) / 2) 0; }
+  #hud .hx-chip { padding-block: 0; }
+  #hud .hx-stat__caption { display: none; }
+  #hud .hx-act__head { font-size: calc(var(--type-caption) * var(--fs, 1)); }
+}
+
+/*
+ * Large text: the numbers keep their size and are never cut. [w5] The tiles used to go 2 x 2 (three HUD rows); now each tile stacks its
+ * icon above the number, so the four still share one row and the HUD stays two rows at text size 1.25 to 1.6.
+ */
+#hud .hx-top.fs-big .hx-res .k-chip {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas: 'icon' 'amount' 'line2';
+  justify-items: center;
+  text-align: center;
+  padding-inline: var(--border-w);
+}
+#hud .hx-top.fs-big .hx-res .k-chip:not(.is-low):not(.is-danger):not(.is-countdown) { grid-template-areas: 'icon' 'amount'; }
+#hud .hx-top.fs-big .hx-res .k-chip__amount { max-width: 100%; direction: ltr; }
+/* [ux-redesign final F5] Large text on a narrow phone: the people chip drops its caption (the chip's aria-label says it) and its number
+   steps down to the caption size, ending in an ellipsis rather than losing its leading digits. */
+#hud .hx-top.fs-big .hx-people .hx-stat__caption { display: none; }
+#hud .hx-top.fs-big .hx-people .hx-stat__value {
+  font-size: calc(var(--type-caption) * var(--fs, 1));
+  direction: ltr;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+#hud .hx-top.fs-big .hx-res__line2,
+[dir='rtl'] #hud .hx-top.fs-big .hx-res__line2 { justify-content: center; }
+
+/* ---------- nav console ---------- */
+
+#hud-nav {
+  display: flex;
+  justify-content: stretch;
+  align-items: stretch;
+  gap: 0;
+  padding-block: 0 env(safe-area-inset-bottom);
+  padding-inline: env(safe-area-inset-left) env(safe-area-inset-right);
+  background: var(--surface-0);
+  border-top: var(--border-w) solid var(--border);
+  box-shadow: var(--elev-2);
+}
+#hud-nav .hx-tab {
+  position: relative;
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: calc(var(--hx-hit) + var(--sp-2));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-1);
+  margin: 0;
+  padding: var(--sp-1) 0;
+  border: 0;
+  background: none;
+  color: var(--text-secondary);
+  font: inherit;
+  cursor: pointer;
+  isolation: isolate;
+}
+/* The visible plate sits inside the key, so the gap between plates is not a dead strip. */
+#hud-nav .hx-tab::before {
+  content: '';
+  position: absolute;
+  inset: var(--sp-1) calc(var(--sp-1) / 2);
+  z-index: -1;
+  border-radius: var(--r-l);
+  background: transparent;
+  transition: background var(--dur-release) var(--ease-out);
+}
+#hud-nav .hx-tab:active::before { background: var(--surface-2); }
+#hud-nav .hx-tab:active .hx-tab__icon { transform: scale(var(--press-scale)); }
+#hud-nav .hx-tab:focus-visible { outline: none; }
+#hud-nav .hx-tab:focus-visible::before { box-shadow: inset 0 0 0 var(--ring-w) var(--primary); }
+#hud-nav .hx-tab__icon { position: relative; display: inline-flex; line-height: 0; transition: transform var(--dur-release) var(--ease-out-back); }
+#hud-nav .hx-tab__icon .ic { width: var(--icon-l); height: var(--icon-l); filter: grayscale(0.6); opacity: 0.85; }
+#hud-nav .hx-tab__label {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-title);
+  font-size: calc(var(--type-caption) * var(--fs, 1));
+  line-height: var(--lh-tight);
+}
+/* The open panel's key: icon 12 % larger, in full colour, an amber label and a bar over it (shape as well as colour). */
+#hud-nav .hx-tab[aria-current='page'] { color: var(--primary); }
+#hud-nav .hx-tab[aria-current='page']::before { background: var(--primary-glow); }
+#hud-nav .hx-tab[aria-current='page']::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  inset-inline: 25%;
+  height: var(--ring-w);
+  border-radius: var(--r-full);
+  background: var(--primary);
+}
+#hud-nav .hx-tab[aria-current='page'] .hx-tab__icon { transform: scale(1.12); }
+#hud-nav .hx-tab[aria-current='page'] .hx-tab__icon .ic { filter: none; opacity: 1; }
+#hud-nav .hx-tab[aria-current='page'] .hx-tab__label { font-weight: var(--weight-bold); }
+#hud-nav .hx-tab__badge { position: absolute; top: calc(-1 * var(--sp-1)); inset-inline-end: calc(-1 * var(--sp-3)); }
+#hud-nav .hx-tab--menu { flex: 0.8 1 0; }
+
+@media (max-height: 700px) {
+  #hud-nav .hx-tab { min-height: var(--hx-hit); padding: 0; flex-direction: row; gap: var(--sp-1); }
+  #hud-nav .hx-tab__icon .ic { width: var(--icon-m); height: var(--icon-m); }
+}
+@media (max-height: 700px) and (max-width: 420px) {
+  #hud-nav .hx-tab { flex-direction: column; gap: 0; }
+}
+
+/* ---------- landscape phone: the bar and the console become side columns (touch.css sets the columns) ---------- */
+
+@media (pointer: coarse) and (orientation: landscape) and (max-height: 499px) {
+  #hud .hx-top { position: fixed; background: linear-gradient(to right, var(--surface-0) 80%, transparent); }
+  #hud .hx-res-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  #hud .hx-info { flex-wrap: wrap; }
+  #hud .hx-more { position: static; translate: none; align-self: center; }
+  #hud-nav { flex-direction: column; justify-content: center; border-top: 0; border-inline-start: var(--border-w) solid var(--border); }
+  #hud-nav .hx-tab { flex: 0 1 auto; width: 100%; }
+}
+
+/* ---------- accessibility layers ---------- */
+
+:root[data-motion='reduced'] #hud .hx-res .k-chip.is-danger { animation: none; box-shadow: 0 0 0 var(--ring-w) var(--danger); }
+:root[data-motion='reduced'] #hud-pop { animation: none; }
+:root[data-motion='reduced'] #hud-nav .hx-tab[aria-current='page'] .hx-tab__icon { transform: none; }
+@media (prefers-reduced-motion: reduce) {
+  :root:not([data-motion]) #hud .hx-res .k-chip.is-danger { animation: none; box-shadow: 0 0 0 var(--ring-w) var(--danger); }
+}
+:root[data-contrast='high'] #hud .hx-top { background: var(--surface-0); }
+:root[data-contrast='high'] #hud .hx-res .k-chip,
+:root[data-contrast='high'] #hud .hx-chip,
+:root[data-contrast='high'] #hud-nav .hx-tab::before { border: calc(var(--border-w) * 2) solid var(--text-secondary); }
+:root[data-contrast='high'] #hud .hx-res .k-chip__amount { color: var(--text-primary); }
+/* [w5] The 2 px high-contrast edge must not wipe the state edges: low stays amber, danger stays a dashed red edge (a shape, not only a colour). */
+:root[data-contrast='high'] #hud .hx-res .k-chip.is-low { border-color: var(--warning); }
+:root[data-contrast='high'] #hud .hx-res .k-chip.is-danger { border-color: var(--danger); border-style: dashed; }
+:root[data-contrast='high'] #hud .objective.adv .adv-main,
+:root[data-contrast='high'] #hud .objective.adv .adv-more { background: var(--surface-0); border: calc(var(--border-w) * 2) solid var(--text-secondary); }
+:root[data-contrast='high'] #hud .objective.adv .objective-meta { color: var(--text-primary); }
+:root[data-large='on'] #hud .hx-info { gap: var(--sp-2); }
+
+/* ---------- [ux-redesign W3a] the objective strip = the "What now?" advisor ----------
+ * One line (icon, short verb text, reward or countdown, a thin progress bar) that routes on tap, and a "goals" key that unfolds up to
+ * three goals above the strip. Anchored on #hud so the older .objective rules (style.css, bunker-os.css, touch.css) only place it. */
+
+#hud .objective.adv {
+  display: flex;
+  align-items: stretch;
+  gap: var(--sp-2);
+  padding: 0;
+  max-width: min(calc(100% - 2 * var(--sp-4)), var(--strip-max));
+  cursor: default;
+  transform: none;
+}
+#hud .objective.adv:active { transform: none; }
+#hud .objective.adv .adv-main,
+#hud .objective.adv .adv-more {
+  appearance: none;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  min-height: max(var(--hit-min), var(--tap, var(--hit-min)));
+  transition: transform var(--dur-release) var(--ease-out-back), filter var(--dur-release) var(--ease-out);
+}
+#hud .objective.adv .adv-main.is-pressed,
+#hud .objective.adv .adv-more.is-pressed { transform: scale(var(--press-scale)); filter: brightness(var(--press-darken)); transition-duration: var(--dur-press); }
+#hud .objective.adv .adv-main {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-3);
+  text-align: start;
+}
+#hud .objective.adv .objective-tag { flex: none; font-size: calc(var(--type-body-l) * var(--fs, 1)); }
+#hud .objective.adv .adv-body { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: var(--sp-1); }
+#hud .objective.adv .adv-line { display: flex; align-items: baseline; gap: var(--sp-2); min-width: 0; }
+#hud .objective.adv .objective-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-weight: var(--weight-bold);
+  font-size: calc(var(--type-body) * var(--fs, 1));
+  line-height: var(--lh-tight);
+  color: var(--text-primary);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+#hud .objective.adv .objective-meta {
+  flex: none;
+  font-size: calc(var(--type-caption) * var(--fs, 1));
+  font-variant-numeric: var(--num-tabular);
+  color: var(--primary);
+  white-space: nowrap;
+  unicode-bidi: isolate;
+}
+#hud .objective.adv .adv-bar { height: var(--sp-1); }
+#hud .objective.adv .adv-more {
+  flex: none;
+  min-width: max(var(--hit-min), var(--tap, var(--hit-min)));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-1);
+  padding-inline: var(--sp-2);
+  border-inline-start: var(--border-w) solid var(--border);
+  color: var(--text-secondary);
+  font-size: calc(var(--type-caption) * var(--fs, 1));
+  font-variant-numeric: var(--num-tabular);
+}
+#hud .objective.adv .adv-more[hidden] { display: none; }
+#hud .objective.adv .adv-more[aria-expanded='true'] { color: var(--primary); }
+
+/* The line's kind: a crisis gets a red edge and its countdown in red text (the clock icon says it too, never colour alone). */
+#hud .objective.adv[data-kind='crisis'] { box-shadow: inset 0 0 0 var(--border-w) var(--danger), var(--elev-1); }
+#hud .objective.adv[data-kind='crisis'] .objective-meta { color: var(--danger-text); }
+#hud .objective.adv[data-kind='collect'] { box-shadow: inset 0 0 0 var(--border-w) var(--success), var(--elev-1); }
+#hud .objective.adv[data-kind='collect'] .objective-meta { color: var(--success); }
+
+/* The unfolded goals (above the strip). */
+#hud .objective.adv .adv-list {
+  position: absolute;
+  inset-inline: 0;
+  bottom: calc(100% + var(--sp-2));
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  padding: var(--sp-2);
+  border-radius: var(--r-card);
+  background: var(--surface-1);
+  border: var(--border-w) solid var(--border);
+  box-shadow: var(--elev-2);
+  animation: advListIn var(--dur-popup-in) var(--ease-out);
+}
+#hud .objective.adv .adv-list__title {
+  font-family: var(--font-title);
+  font-size: calc(var(--type-caption) * var(--fs, 1));
+  color: var(--text-secondary);
+  padding-inline: var(--sp-1);
+}
+#hud .objective.adv .adv-goal {
+  appearance: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  min-height: max(var(--hit-min), var(--tap, var(--hit-min)));
+  padding: var(--sp-2);
+  border: 0;
+  border-radius: var(--r-panel);
+  background: var(--surface-2);
+  color: var(--text-primary);
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+  transition: transform var(--dur-release) var(--ease-out-back);
+}
+#hud .objective.adv .adv-goal.is-pressed { transform: scale(var(--press-scale)); transition-duration: var(--dur-press); }
+#hud .objective.adv .adv-goal__top { display: flex; align-items: center; gap: var(--sp-2); min-width: 0; }
+#hud .objective.adv .adv-goal__text { flex: 1 1 auto; min-width: 0; font-size: calc(var(--type-body) * var(--fs, 1)); line-height: var(--lh-tight); }
+#hud .objective.adv .adv-goal__meta { flex: none; font-size: calc(var(--type-caption) * var(--fs, 1)); color: var(--primary); white-space: nowrap; unicode-bidi: isolate; }
+@keyframes advListIn { from { opacity: 0; transform: translateY(var(--sp-2)); } to { opacity: 1; transform: none; } }

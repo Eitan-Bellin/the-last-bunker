@@ -10,7 +10,9 @@ export type Sfx =
   | 'depart' | 'elevator' | 'hiss' | 'type' | 'warn' | 'pulse' | 'thunder' | 'cheer' | 'steam' | 'engineStart'
   | 'powerUp' | 'drill' | 'crumble' | 'drip' | 'confirm' | 'cancel'
   // [ux-wp3] Added at the end (the seeds of the older sounds are their place in this list): a person's level-up, a countdown tick.
-  | 'rankUp' | 'tick';
+  | 'rankUp' | 'tick'
+  // [ux-redesign W4] Added at the end too: the soft two-tone siren when a crisis starts (once, never looping).
+  | 'crisis';
 
 /** Air-raid siren: a detuned saw/sine pair gliding up, holding, and sinking, with a slow wobble. */
 const siren: Builder = (ctx, out, wet) => {
@@ -818,6 +820,29 @@ export const SFX: Record<Sfx, SfxDef> = {
     build: (ctx, out) => {
       noiseHit(ctx, out, 0, 0.018, 0.35, 'bandpass', 2400, 4, 'white', 231);
       metalHit(ctx, out, 0, 1800, 0.04, 0.05);
+    },
+  },
+  // [ux-redesign W4] A crisis begins: two soft rises and falls of a muffled siren (sines, low-passed), 1.6 s, no hard edges.
+  crisis: {
+    seconds: 1.9, reverb: 0.5,
+    build: (ctx, out, wet) => {
+      for (const det of [-5, 5]) {
+        const o = osc(ctx, 'sine', 430, det);
+        for (let i = 0; i < 2; i++) {
+          const t = i * 0.75;
+          o.frequency.setValueAtTime(430, t);
+          o.frequency.linearRampToValueAtTime(640, t + 0.35);
+          o.frequency.linearRampToValueAtTime(430, t + 0.72);
+        }
+        const lp = filter(ctx, 'lowpass', 1300, 0.6);
+        const g = gain(ctx, 0);
+        envelope(g.gain, 0, 0.1, 0.12, 1.2, 0.35);
+        o.connect(lp).connect(g);
+        g.connect(out);
+        g.connect(wet);
+        o.start(0);
+        o.stop(1.75);
+      }
     },
   },
 };

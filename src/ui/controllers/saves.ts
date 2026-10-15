@@ -6,7 +6,8 @@ import { hideSplash } from '../../ui/splash';
 import type { GameApp } from '../../app';
 import { shareFile } from '../../utils/platform'; // [plan4:UX-16]
 import { markExported } from '../../ui/pwa';
-import { lastSaveWasInterrupted } from '../../core/saveFlag';
+import { takeSaveNote } from '../../core/saveFlag';
+import { saveLooksStale } from '../popupRules';
 
 /** Saving and the save menu: new game, Genesis, import/export, backups, and save problems at start. */
 export class SaveController {
@@ -287,7 +288,12 @@ export class SaveController {
     bus.on('save:recovered', () => this.app.toasts.show(`[[save]] ${i18n.t('save.recoveredOk')}`, 'good'));
     bus.on('save:superseded', () => this.showSuperseded());
     // [plan4:UX-16] The last session asked for a save that never reached storage (the phone froze or closed the page): say so, once.
-    if (lastSaveWasInterrupted()) window.setTimeout(() => this.app.toasts.show(`[[warning]] ${i18n.t('save.lostMoments')}`, 'bad'), 3500);
+    // [ux-redesign w2a #6] Only when the stored game is really older than the last save asked for (its time stamp tells: the offline
+    // catch-up moves that stamp, so then it is taken from the length of the absence).
+    const r = this.app.engine.offlineReport;
+    const savedAt = r?.realSeconds ? Date.now() - r.realSeconds * 1000 : this.app.state.timestamp ?? null;
+    const note = takeSaveNote();
+    if (saveLooksStale(note.pending, note.saved, savedAt)) window.setTimeout(() => this.app.toasts.show(`[[warning]] ${i18n.t('save.lostMoments')}`, 'bad'), 3500);
   }
 
   /** The game was opened in another window after this one: this one stops saving, so it cannot overwrite the newer progress. */

@@ -252,7 +252,9 @@ export class PostFX {
   }
 
   private screenSize(): [number, number] {
-    return [Math.max(16, Math.ceil(window.innerWidth)), Math.max(16, Math.ceil(window.innerHeight))];
+    // [ux-w2f #26] layout viewport (innerWidth does not shrink back after a resize)
+    const de = document.documentElement;
+    return [Math.max(16, Math.ceil(de.clientWidth || window.innerWidth)), Math.max(16, Math.ceil(de.clientHeight || window.innerHeight))];
   }
 
   /** Called once per frame after the scene has been updated. */

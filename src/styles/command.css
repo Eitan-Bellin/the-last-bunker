@@ -1,3 +1,4 @@
+@import './panels.css'; /* [ux-redesign W2e] room panel, people, settings, command */
 /* ---------- Command panel (balance plan, phase 1): what to do now, every requirement, a forecast, the ending's lean ---------- */
 
 .command { display: flex; flex-direction: column; gap: 10px; }
@@ -35,9 +36,6 @@
 
 .era-head.compact { padding: 8px 10px; }
 .era-head.compact .era-tagline { display: none; }
-
-/* The chip's Act tag stays on narrow screens (the era's name is the part that folds away). */
-.era-chip .act-tag { font-variant-numeric: tabular-nums; letter-spacing: 0.02em; }
 
 /* Inbox cards: what a contract asks and pays, and which ones are safe to take. */
 .inbox-title { display: flex; flex-direction: column; gap: 2px; }

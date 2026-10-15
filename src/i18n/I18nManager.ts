@@ -120,6 +120,7 @@ export class I18nManager {
     // [ux] Two days and more read as days and hours; a whole hour drops the "0 min".
     if (total >= 48 * 3600) {
       const d = Math.floor(total / 86400), h = Math.floor((total % 86400) / 3600);
+      if (d === 2) return h ? this.t('time.d2', { h }) : this.t('time.d2Only'); // [ux-redesign w5] Hebrew dual: "יומיים", not "2 ימים"
       return h ? this.t('time.d', { d, h }) : this.t('time.dOnly', { d });
     }
     if (total >= 24 * 3600) {

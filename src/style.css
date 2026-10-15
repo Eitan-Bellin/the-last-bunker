@@ -1,22 +1,9 @@
-/* Fonts (Karantina, Rubik, Secular One) load from index.html. */
+/* Fonts (Karantina, Rubik, Secular One) are self-hosted: public/fonts/fonts.css, linked from index.html. */
+@import './styles/tokens.css';
+@import './styles/kit.css';
 
-:root {
-  /* One palette: gunmetal steel, CRT phosphor green, lamp amber; red only for alerts. */
-  --bg-dark: #0b0c0e;
-  --bg-panel: rgba(14, 16, 18, 0.96);
-  --bg-card: rgba(18, 40, 26, 0.72);
-  --bg-card-hi: rgba(30, 62, 40, 0.85);
-  --accent: #ffb547;
-  --accent-glow: rgba(255, 181, 71, 0.28);
-  --text-primary: #e8e2d2;
-  --text-secondary: #a89e88;
-  --text-dim: #5f5a50;
-  --positive: #4dff8f;
-  --negative: #ff5555;
-  --warning: #ffb547;
-  --border: rgba(110, 255, 160, 0.22);
-  --radius: 8px;
-}
+/* [ux-redesign W1] The palette, spacing, type, layers and motion live in one place now: styles/tokens.css. */
+
 
 * {
   margin: 0;
@@ -29,7 +16,7 @@ html, body {
   width: 100%;
   height: 100%;
   overflow: hidden;
-  font-family: 'Rubik', sans-serif;
+  font-family: var(--font-body);
   background: var(--bg-dark);
   color: var(--text-primary);
   user-select: none;
@@ -56,9 +43,10 @@ button {
 #game-canvas {
   position: absolute;
   inset: 0;
-  width: 100%;
-  height: 100%;
-  z-index: 0;
+  /* [ux-redesign w2fix] Pixi writes the backing size as inline px on resize; the box must still follow the viewport (#26), so these win. */
+  width: 100% !important;
+  height: 100% !important;
+  z-index: var(--z-world);
 }
 
 /* gfx-p0 light: vignette and film grain are drawn in-engine (postfx.ts composite, per era); the old DOM overlay and its scanlines are gone. */
@@ -70,7 +58,7 @@ button {
   position: fixed;
   inset: 0;
   pointer-events: none;
-  z-index: 10;
+  z-index: var(--z-hud);
 }
 
 .hud-top {
@@ -80,89 +68,13 @@ button {
   padding-top: max(8px, env(safe-area-inset-top));
 }
 
-.resource-row {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 5px;
-  max-width: 480px;
-  margin: 0 auto;
-}
-
-.resource-item {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  padding: 5px 8px 7px;
-  border-radius: var(--radius);
-  position: relative;
-  overflow: hidden;
-  cursor: pointer;
-  min-width: 0;
-}
-
-.resource-item:active { transform: scale(0.96); }
-.resource-item.empty { border-color: var(--negative); animation: pulse-red 1s infinite alternate; }
+/* [ux-redesign W2b] The resource tiles, the info row and the nav keys are styled in styles/hud.css (imported by HUD.ts). */
 
 @keyframes pulse-red {
   from { box-shadow: 0 0 0 rgba(255, 85, 85, 0); }
   to { box-shadow: 0 0 10px rgba(255, 85, 85, 0.6); }
 }
 
-.resource-icon { font-size: calc(14px * var(--fs, 1)); }
-.resource-value { font-weight: 700; font-size: calc(13px * var(--fs, 1)); }
-.resource-rate {
-  font-size: calc(11px * var(--fs, 1));
-  /* [plan4:AC-3] was --text-dim: 2.8:1 on the steel plate. */
-  color: var(--text-secondary);
-  margin-inline-start: auto;
-  unicode-bidi: isolate;
-  font-variant-numeric: tabular-nums;
-}
-.resource-rate.positive { color: var(--positive); }
-.resource-rate.negative { color: var(--negative); }
-
-.resource-fill-track {
-  position: absolute;
-  bottom: 0;
-  inset-inline: 0;
-  height: 3px;
-  background: rgba(255, 255, 255, 0.06);
-}
-
-.resource-fill-bar {
-  height: 100%;
-  background: var(--accent);
-  transition: width 0.3s ease;
-}
-.resource-fill-bar.full { background: var(--warning); }
-.resource-fill-bar.low { background: var(--negative); }
-
-.info-row {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: 16px;
-  margin-top: 7px;
-}
-
-.info-item { display: flex; align-items: center; gap: 4px; font-size: calc(12px * var(--fs, 1)); }
-.info-icon { font-size: calc(14px * var(--fs, 1)); }
-.info-label { color: var(--text-secondary); }
-.info-value { font-weight: 700; }
-.info-value.positive { color: var(--positive); }
-.info-value.negative { color: var(--negative); }
-
-.lang-btn {
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 2px 8px;
-  font-size: calc(11px * var(--fs, 1));
-  font-weight: 600;
-  cursor: pointer;
-}
 
 .hud-banner {
   pointer-events: auto;
@@ -204,40 +116,9 @@ button {
   /* [perf] no backdrop-filter: a blur over the live canvas is a GPU pass every picture (96% opaque anyway) */
   /* [plan4:UX-8] 22: above the bottom sheets (20), so the nav stays visible and tappable with a sheet open; below the surface map (25),
      toasts (30) and dialogs (40). HUD.ts puts the console on <body> so this z-index competes with the sheets at all. */
-  z-index: 22;
+  z-index: var(--z-nav);
 }
 
-.nav-btn {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2px;
-  background: none;
-  border: none;
-  color: var(--text-secondary);
-  cursor: pointer;
-  padding: 6px 14px;
-  border-radius: var(--radius);
-  transition: background 0.2s, transform 0.1s;
-}
-.nav-btn:active { background: var(--accent-glow); color: var(--accent); transform: scale(0.95); }
-.nav-btn.locked { opacity: 1; }
-.nav-icon { font-size: calc(22px * var(--fs, 1)); position: relative; }
-.nav-label { font-size: calc(11px * var(--fs, 1)); }
-.nav-badge {
-  position: absolute;
-  top: -4px;
-  inset-inline-end: -10px;
-  background: var(--negative);
-  color: #fff;
-  font-size: calc(10px * var(--fs, 1));
-  font-weight: 700;
-  min-width: 16px;
-  height: 16px;
-  line-height: 16px;
-  border-radius: 8px;
-  padding: 0 4px;
-}
 
 body.placement-mode #game-canvas { cursor: crosshair; }
 
@@ -253,9 +134,15 @@ body.placement-mode #game-canvas { cursor: crosshair; }
   font-size: calc(13px * var(--fs, 1));
   font-weight: 600;
   cursor: pointer;
-  transition: transform 0.1s, filter 0.2s;
+  /* [ux-redesign W4] The kit's press on every legacy button: in --dur-press, back in --dur-release springing (out-back). */
+  transition: transform var(--dur-release) var(--ease-out-back), filter var(--dur-release) var(--ease-out);
 }
-.btn:active:not(:disabled) { transform: scale(0.97); }
+/* .btn.btn: beats bunker-os.css's later `.btn:active` (translateY only); the key still sinks its 1 px there. */
+.btn.btn:active:not(:disabled):not([aria-disabled="true"]):not(.k-btn) {
+  transform: translateY(var(--border-w)) scale(var(--press-scale));
+  filter: brightness(var(--press-darken));
+  transition-duration: var(--dur-press);
+}
 .btn:disabled { opacity: 0.4; cursor: not-allowed; }
 .btn-primary { background: linear-gradient(135deg, #ff8a4d, #e8592a); border-color: transparent; color: #fff; }
 .btn-secondary { background: var(--bg-card-hi); }
@@ -300,19 +187,19 @@ body.placement-mode #game-canvas { cursor: crosshair; }
 .sheet-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0);
+  background: transparent;
   display: flex;
   align-items: flex-end;
   justify-content: center;
-  z-index: 20;
+  z-index: var(--z-panels);
   pointer-events: none;
-  transition: background 0.25s;
+  transition: background var(--dur-popup-out) var(--ease-in);
 }
-.sheet-overlay.open { background: rgba(0, 0, 0, 0.5); pointer-events: auto; }
+.sheet-overlay.open { background: var(--overlay-soft); pointer-events: auto; transition: background var(--dur-popup-in) var(--ease-out); }
 
 .sheet {
   background: var(--bg-panel);
-  border-radius: 18px 18px 0 0;
+  border-radius: var(--r-card) var(--r-card) 0 0;
   /* [plan4:UX-6] side padding clears the notch / rounded corners in landscape */
   padding: 8px max(16px, env(safe-area-inset-right)) 16px max(16px, env(safe-area-inset-left));
   width: 100%;
@@ -322,15 +209,26 @@ body.placement-mode #game-canvas { cursor: crosshair; }
      HUD.ts and already includes the home-bar safe area). With the keyboard up (--kb-inset, viewportUi.ts) the sheet is lifted by the
      overlay's padding and the nav no longer needs room. */
   padding-bottom: calc(max(0px, var(--nav-h, 72px) - var(--kb-inset, 0px)) + 12px);
+  /* [ux-redesign final F2/F3] Something scrolled into view (the Assign room list, a tutorial target) stops above the nav, not under it. */
+  scroll-padding-block-end: calc(max(0px, var(--nav-h, 72px) - var(--kb-inset, 0px)) + var(--sp-3));
   overflow-y: auto;
   overscroll-behavior: contain;
   touch-action: pan-y;
   border: 1px solid var(--border);
   border-bottom: none;
   transform: translateY(100%);
-  transition: transform 0.28s cubic-bezier(0.2, 0.9, 0.3, 1);
 }
 .sheet-overlay.open .sheet { transform: translateY(0); }
+/*
+ * [ux-w2f #38] Sheet motion: in --dur-popup-in (250 ms) easing out, out --dur-popup-out (180 ms) easing in; a parked sheet hides once it
+ * is down. [ux-redesign w2fix] Moved here from the <style id="sheet-motion"> Sheet.ts used to inject; the old 300 ms (--dur-screen)
+ * rules here and in bunker-os.css are gone, and the CRT flash there now runs for --dur-popup-in. A sheet replaced by another one closes
+ * with `.sheet-instant`, so two panels never slide over each other; a dragged sheet follows the finger with no transition.
+ */
+.sheet-overlay .sheet { transition: transform var(--dur-popup-out) var(--ease-in), visibility 0s linear var(--dur-popup-out); }
+.sheet-overlay.open .sheet { transition: transform var(--dur-popup-in) var(--ease-out); }
+.sheet-overlay .sheet.dragging, .sheet-overlay.open .sheet.dragging { transition: none; animation: none; }
+.sheet-overlay.sheet-instant, .sheet-overlay.sheet-instant .sheet { transition: none; animation: none; }
 /* [plan4:UX-7] dvh follows the browser bars (100vh on iOS Safari is the tallest state, so a 72vh sheet could reach under the toolbar). */
 @supports (height: 100dvh) {
   .sheet { max-height: min(78dvh, calc(100dvh - var(--kb-inset, 0px) - 16px)); }
@@ -342,7 +240,7 @@ body.placement-mode #game-canvas { cursor: crosshair; }
   width: 40px;
   height: 4px;
   background: var(--text-dim);
-  border-radius: 2px;
+  border-radius: var(--r-full);
   margin: 2px auto 10px;
 }
 
@@ -459,30 +357,32 @@ body.placement-mode #game-canvas { cursor: crosshair; }
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.65);
+  background: var(--overlay);
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 40;
+  z-index: var(--z-popups);
   /* [plan4:UX-3] Keep clear of the notch, the home bar and rounded corners. */
   padding: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
   opacity: 0;
   pointer-events: none;
-  transition: opacity 0.2s;
+  transition: opacity var(--dur-popup-out) var(--ease-in);
 }
-.modal-overlay.open { opacity: 1; pointer-events: auto; }
+.modal-overlay.open { opacity: 1; pointer-events: auto; transition: opacity var(--dur-popup-in) var(--ease-out); }
+/* [ux-redesign w2fix B2] A dialog that opened during a story scene waits, hidden and untappable, until the scene closes (Modal.waitBehind). */
+.modal-overlay.open.is-held { opacity: 0; visibility: hidden; pointer-events: none; }
 
 .modal {
   background: linear-gradient(180deg, #23233f, #16162b);
   border: 1px solid var(--border);
-  border-radius: 16px;
+  border-radius: var(--r-card);
   padding: 20px 18px 16px;
   width: 100%;
   max-width: 380px;
   text-align: center;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
-  transform: scale(0.92);
-  transition: transform 0.22s cubic-bezier(0.2, 1.4, 0.4, 1);
+  box-shadow: var(--elev-3);
+  transform: scale(var(--popup-from-scale));
+  transition: transform var(--dur-popup-in) var(--ease-out-back);
   /* [plan4:UX-3] A dialog never grows past the screen (small phone, landscape, big text): the text scrolls, the buttons stay in reach.
      html/body are overflow:hidden, so a dialog taller than the screen used to push its buttons out of reach (Genesis choices could lock). */
   display: flex;
@@ -498,10 +398,10 @@ body.placement-mode #game-canvas { cursor: crosshair; }
 .modal-body { min-height: 0; }
 .modal-overlay.open .modal { transform: scale(1); }
 .modal-icon { font-size: calc(44px * var(--fs, 1)); margin-bottom: 6px; }
-.modal-title { font-size: calc(19px * var(--fs, 1)); font-weight: 700; color: var(--accent); margin-bottom: 8px; }
-.modal-body { font-size: calc(14px * var(--fs, 1)); line-height: 1.5; color: var(--text-primary); margin-bottom: 14px; }
-.modal-sub { font-size: calc(12px * var(--fs, 1)); color: var(--text-secondary); margin-bottom: 8px; }
-.modal-actions { display: flex; flex-direction: column; gap: 8px; }
+.modal-title { font-size: calc(19px * var(--fs, 1)); font-weight: var(--weight-bold); color: var(--accent); margin-bottom: var(--sp-2); }
+.modal-body { font-size: calc(var(--type-body) * var(--fs, 1)); line-height: 1.5; color: var(--text-primary); margin-bottom: 14px; }
+.modal-sub { font-size: calc(var(--type-caption) * var(--fs, 1)); color: var(--text-secondary); margin-bottom: var(--sp-2); }
+.modal-actions { display: flex; flex-direction: column; gap: var(--sp-2); }
 /* The last (main) button stays pinned under the scrolling part; a very tall pinned group may scroll on its own, never push the text away. */
 .modal > .modal-actions { flex: 0 0 auto; max-height: 45vh; overflow-y: auto; overscroll-behavior: contain; touch-action: pan-y; padding: 8px 4px max(2px, env(safe-area-inset-bottom)); margin-inline: -4px; }
 .modal-scroll > .modal-actions { margin-bottom: 8px; }
@@ -524,30 +424,30 @@ body.placement-mode #game-canvas { cursor: crosshair; }
   flex-direction: column;
   align-items: center;
   gap: 6px;
-  z-index: 30;
+  z-index: var(--z-toasts);
   pointer-events: none;
 }
 .toast {
   max-width: 90%;
   background: rgba(20, 20, 40, 0.95);
   border: 1px solid var(--border);
-  border-radius: 20px;
-  padding: 8px 16px;
+  border-radius: var(--r-full);
+  padding: var(--sp-2) var(--sp-4);
   font-size: calc(13px * var(--fs, 1));
-  font-weight: 500;
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+  font-weight: var(--weight-medium);
+  box-shadow: var(--elev-2);
   opacity: 0;
   transform: translateY(-8px);
-  transition: opacity 0.25s, transform 0.25s;
+  transition: opacity var(--dur-toast) var(--ease-out), transform var(--dur-toast) var(--ease-out);
 }
-.toast.good { border-color: rgba(77, 255, 143, 0.6); }
-.toast.bad, .toast.critical { border-color: rgba(255, 85, 85, 0.7); }
+.toast.good { border-color: var(--success); }
+.toast.bad, .toast.critical { border-color: var(--danger); }
 .toast.critical { border-width: 2px; }
 /* [plan4:UX-9] The player can swipe a toast away (Toast.ts moves it with --dx); the counter shows merged repeats ("x3"). */
 .toast { pointer-events: auto; touch-action: none; transform: translate(var(--dx, 0px), -8px); }
 .toast.in { opacity: 1; transform: translate(var(--dx, 0px), 0); }
 .toast.dragging { transition: none; }
-.toast-count { margin-inline-start: 8px; font-weight: 700; font-variant-numeric: tabular-nums; opacity: 0.85; unicode-bidi: isolate; }
+.toast-count { margin-inline-start: var(--sp-2); font-weight: var(--weight-bold); font-variant-numeric: var(--num-tabular); opacity: 0.85; unicode-bidi: isolate; }
 
 ::-webkit-scrollbar { width: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
@@ -675,18 +575,11 @@ body.placement-mode #game-canvas { cursor: crosshair; }
   padding: 6px 12px;
   border-radius: 12px;
   border: 1px solid rgba(255, 212, 71, 0.45);
-  background:
-    linear-gradient(90deg, rgba(255, 212, 71, 0.18) var(--obj-progress, 0%), transparent var(--obj-progress, 0%)),
-    rgba(16, 16, 34, 0.92);
+  background: rgba(16, 16, 34, 0.92); /* [ux-redesign w3fix] the old --obj-progress fill is gone: the advisor strip has its own bar */
   font-size: calc(12px * var(--fs, 1));
   cursor: pointer;
   text-align: start;
   /* [perf] no backdrop-filter (see the nav bar) */
-}
-[dir="rtl"] .objective {
-  background:
-    linear-gradient(270deg, rgba(255, 212, 71, 0.18) var(--obj-progress, 0%), transparent var(--obj-progress, 0%)),
-    rgba(16, 16, 34, 0.88);
 }
 .objective:active { transform: scale(0.98); }
 .objective-tag { font-size: calc(14px * var(--fs, 1)); }
@@ -715,16 +608,11 @@ body.placement-mode #game-canvas { cursor: crosshair; }
 .ic-strength { color: #ff8a5a; } .ic-intelligence { color: #ffe27a; } .ic-agility { color: #7ae0ff; }
 .ic-charisma { color: #ff9ad5; } .ic-endurance { color: #9ad08a; } .ic-gift { color: #ff9ad5; } .ic-target { color: #ff7a5a; }
 .ic-clock, .ic-hourglass { color: #d8cfbf; } .ic-pick { color: #d9a441; } .ic-trophy, .ic-crown, .ic-medal { color: #ffc547; }
-.resource-icon .ic, .info-icon .ic { width: 16px; height: 16px; }
-.nav-icon .ic { width: 26px; height: 26px; }
 .modal-icon .ic { width: 52px; height: 52px; }
 .ach-icon .ic { width: 30px; height: 30px; }
 .build-icon .ic { width: 28px; height: 28px; }
 .hex-icon { fill: rgba(255, 255, 255, 0.88); font-size: calc(13px * var(--fs, 1)); pointer-events: none; }
 
-/* Daily supply drop (NICE3): a gold crate in the info row that bobs until opened. */
-.supply-btn { color: #ffd27a; border-color: rgba(255, 210, 122, 0.6); animation: supply-bob 1.6s ease-in-out infinite; }
-@keyframes supply-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-2px); box-shadow: 0 0 8px rgba(255, 210, 122, 0.55); } }
 .welcome-door { margin-top: 10px; padding: 8px; border-radius: 10px; background: rgba(255, 210, 122, 0.08); border: 1px solid rgba(255, 210, 122, 0.3); }
 
 /* Coupon: the code box in Settings and the amount boxes in the coupon sheet. */

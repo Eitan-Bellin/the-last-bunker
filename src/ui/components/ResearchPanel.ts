@@ -1,13 +1,26 @@
-import type { GameState } from '../../core/GameState';
+import type { GameState, ResourceType } from '../../core/GameState';
 import type { GameEngine } from '../../core/GameEngine';
+import type { BuildingType } from '../../core/GameState';
+import type { ObjectiveAction } from '../../systems/ObjectiveSystem';
 import { i18n } from '../../i18n/I18nManager';
+import { fmtCost, fmtDuration, plural } from '../format';
 import { BRANCHES, REFINEMENTS, RESEARCH, type ResearchBranch, type ResearchDef } from '../../data/research';
-import { refinementLevel } from '../../systems/ResearchSystem';
+import { BUILDABLE_TYPES, getDef } from '../../data/buildingDefs';
+import { isBuildingUnlocked, refinementLevel } from '../../systems/ResearchSystem';
 import { Sheet } from './Sheet';
-import { enhanceTabs } from '../a11yDom';
-import { bar, button, costRow, el, setBar, setRich } from '../dom';
+import { RESOURCE_ICONS, bar, costRow, el, setBar, setRich } from '../dom';
+import { flowArrow } from '../rtl';
+import { describeMissing, missingList } from '../missing';
+import { kButton, kRow, kTabs, kEmpty, setKButtonHighlighted } from '../kit';
 import { uiSound } from '../../audio/uiSound';
 import { genesisRequirements } from './MenuPanel';
+import '../../styles/research.css';
+
+/** [ux-redesign W2d] A node another panel asked to show (Surface: "Research Hazmat Suits"): consumed by the next show(). */
+let pendingFocus: string | null = null;
+
+/** Where a node sits in the list: on the main list, folded behind more research this Act, in a later Act, or done. */
+type Place = 'now' | 'later' | 'act' | 'done';
 
 export class ResearchPanel {
   private sheet = new Sheet('research-sheet', 'research');
@@ -16,17 +29,42 @@ export class ResearchPanel {
   private signature = '';
   private activeBar: HTMLElement | null = null;
   private activeTime: HTMLElement | null = null;
+  /** Folds the player opened (kept across redraws). */
+  private openFolds = new Set<string>();
+  private focusId: string | null = null;
 
   onOpenGenesis: (() => void) | null = null;
+  /**
+   * [ux-redesign W2d #13] Takes the player where a missing thing is made (e.g. `{ kind: 'build', type: 'laboratory' }`). Wired by the
+   * app to `runAction`, like EraPanel.onGo. While unset, a blocked button still says why but does not route.
+   */
+  onGo: ((action: ObjectiveAction) => void) | null = null;
+
+  /** [ux-redesign W2d #15] The next show() opens on this node's branch and points at it. */
+  static focusNext(id: string): void {
+    pendingFocus = id;
+  }
 
   constructor(engine: GameEngine) {
     this.engine = engine;
   }
 
   show(): void {
+    if (pendingFocus) {
+      const def = RESEARCH.find(r => r.id === pendingFocus);
+      if (def) { this.branch = def.branch; this.focusId = def.id; }
+      pendingFocus = null;
+    }
     this.signature = '';
     this.refresh(this.engine.stateManager.state);
     this.sheet.show();
+    if (this.focusId) {
+      const card = this.sheet.body.querySelector<HTMLElement>(`[data-research="${this.focusId}"]`);
+      card?.scrollIntoView({ block: 'center' });
+      const go = card?.querySelector<HTMLButtonElement>('.k-btn');
+      if (go) setKButtonHighlighted(go, true);
+      this.focusId = null;
+    }
   }
 
   hide(): void {
@@ -44,6 +82,8 @@ export class ResearchPanel {
       this.branch, i18n.currentLocale, state.rush ?? 0, rs.activeId(state), rs.queue(state).join(','), JSON.stringify(state.refinements ?? {}),
       ids.map(id => `${id}:${rs.status(state, id)}:${rs.canStart(state, id)}`).join(','),
       state.buildings.filter(b => b.type === 'laboratory').length,
+      // The blocked buttons name what is missing and how long it takes: redraw when that changes (about every 10 seconds at most).
+      Math.floor(state.stats.totalPlayTime / 10),
       this.branch === 'genesis' ? this.engine.metaSystem.rebirthRequirements(state).map(r => r.current).join(',') : '',
     ].join('|');
     if (sig !== this.signature) {
@@ -54,21 +94,29 @@ export class ResearchPanel {
     if (id && this.activeBar && this.activeTime) {
       const node = state.research[id];
       setBar(this.activeBar, (node.progress / node.total) * 100);
-      setRich(this.activeTime, `[[clock]] ${i18n.formatDuration((node.total - node.progress) / rs.speed(state))}`);
+      setRich(this.activeTime, `[[clock]] ${fmtDuration((node.total - node.progress) / rs.speed(state))}`);
     }
+  }
+
+  private redraw(): void {
+    this.signature = '';
+    this.refresh(this.engine.stateManager.state);
   }
 
   private start(id: string): void {
     if (this.engine.researchSystem.start(this.engine.stateManager, id)) {
       uiSound('confirm');
       this.engine.requestSave();
-      this.refresh(this.engine.stateManager.state);
+      this.redraw();
     }
+  }
+
+  private name(def: { name: Record<string, string> }): string {
+    return def.name[i18n.currentLocale] ?? def.name.en;
   }
 
   private render(state: GameState): void {
     const rs = this.engine.researchSystem;
-    const locale = i18n.currentLocale;
     this.sheet.setTitle(`[[research]] ${i18n.t('research.title')}`);
     const root = el('div', 'bp');
 
@@ -79,66 +127,167 @@ export class ResearchPanel {
     if (activeId) {
       const def = rs.defOf(state, activeId)!;
       const row = el('div', 'bp-row');
-      row.append(el('span', 'research-active-name', `${def.icon} ${def.name[locale] ?? def.name.en}`));
+      row.append(el('span', 'research-active-name', `${def.icon} ${this.name(def)}`));
       this.activeTime = el('span', 'bp-hint');
       row.appendChild(this.activeTime);
       this.activeBar = bar(0, 'xp');
       head.append(row, this.activeBar);
       // Rush: spend a gift charge to skip 15 minutes of this research.
-      head.appendChild(button(`[[hourglass]] ${i18n.t('rush.button', { n: this.engine.rushSystem.count(state) })}`, 'btn-secondary btn-small', () => {
-        if (this.engine.rushSystem.rushResearch()) {
-          uiSound('confirm');
-          this.engine.requestSave();
-          this.signature = '';
-          this.refresh(this.engine.stateManager.state);
-        }
-      }, !this.engine.rushSystem.canRushResearch(state)));
+      head.appendChild(kButton({
+        variant: 'secondary',
+        className: 'btn-secondary btn-small',
+        label: `[[hourglass]] ${i18n.t('rush.button', { n: this.engine.rushSystem.count(state) })}`,
+        disabledReason: this.engine.rushSystem.canRushResearch(state) ? null : i18n.t('ux2d.rush.none'),
+        onPress: () => {
+          if (this.engine.rushSystem.rushResearch()) {
+            uiSound('confirm');
+            this.engine.requestSave();
+            this.redraw();
+          }
+        },
+      }));
       head.appendChild(this.renderQueue(state));
     } else {
       head.appendChild(el('div', 'bp-hint', i18n.t('research.idle')));
     }
-    const speed = rs.speed(state);
     const hasLab = state.buildings.some(b => b.type === 'laboratory');
-    head.appendChild(el('div', 'bp-hint', hasLab
-      ? i18n.t('research.speed', { x: speed.toFixed(2) })
-      : `[[intelligence]] ${i18n.t('research.needLab')}`));
+    if (hasLab) head.appendChild(el('div', 'bp-hint', i18n.t('research.speed', { x: rs.speed(state).toFixed(2) })));
+    else if (this.onGo && isBuildingUnlocked(state, 'laboratory')) {
+      // [ux-redesign W2d #13] "Build a Laboratory" is a way there, not only a sentence.
+      head.appendChild(kButton({
+        variant: 'tertiary',
+        className: 'btn-ghost research-route',
+        label: `[[intelligence]] ${i18n.t('research.needLab')} ${flowArrow()}`,
+        onPress: () => this.onGo?.({ kind: 'build', type: 'laboratory' }),
+      }));
+    } else head.appendChild(el('div', 'bp-hint', `[[intelligence]] ${i18n.t('research.needLab')}`));
     root.appendChild(head);
 
-    // [ux-wp6: clarity C3] The tree opens with the game: this Act and the next are shown, the rest is a count. The Genesis tab
-    // waits for the late game (or a second run), so a new player does not meet the ending in the first minutes.
-    const hidden = this.hiddenNodes(state);
-    const branches = BRANCHES.filter(b => b.id !== 'genesis' || this.showGenesis(state));
-    if (!branches.some(b => b.id === this.branch)) this.branch = 'infrastructure';
-    const tabs = el('div', 'tab-row');
-    for (const b of branches) {
-      const t = button(`${b.icon} ${b.name[locale] ?? b.name.en}`, `tab ${b.id === this.branch ? 'active' : ''}`, () => {
-        this.branch = b.id;
-        this.refresh(this.engine.stateManager.state);
-      });
-      tabs.appendChild(t);
-    }
-    enhanceTabs(tabs, i18n.t('research.title'));
-    root.appendChild(tabs);
-
+    // [ux-redesign W2d #14] Only branches with something to do now get a tab, so the row fits a phone; the row scrolls with a fade
+    // at its end when it still does not. Genesis waits for the late game (ux-wp6), refinement until its first node can start.
+    const places = this.places(state);
+    const branches = BRANCHES.filter(b => {
+      if (b.id === 'genesis') return this.showGenesis(state);
+      if (b.id === 'refinement') return REFINEMENTS.some(r => rs.status(state, r.id) !== 'locked' || refinementLevel(state, r.id) > 0);
+      return RESEARCH.some(r => r.branch === b.id && (places.get(r.id) === 'now' || places.get(r.id) === 'done'));
+    });
+    if (!branches.some(b => b.id === this.branch)) this.branch = branches[0]?.id ?? 'infrastructure';
     const list = el('div', 'research-list');
+    list.id = 'research-list';
+    const tabs = kTabs(
+      branches.map(b => ({ id: b.id, label: `${b.icon} ${this.name(b)}` })),
+      this.branch,
+      (id) => { this.branch = id as ResearchBranch; uiSound('switch'); this.redraw(); },
+      i18n.t('research.title'),
+      list,
+    );
+    tabs.classList.add('research-tabs');
+    const tabWrap = el('div', 'research-tabwrap');
+    tabWrap.appendChild(tabs);
+    root.appendChild(tabWrap);
+    const syncFade = () => {
+      const max = tabs.scrollWidth - tabs.clientWidth;
+      const at = Math.abs(tabs.scrollLeft);
+      tabWrap.classList.toggle('fade-end', max > 1 && at < max - 1);
+      tabWrap.classList.toggle('fade-start', max > 1 && at > 1);
+    };
+    tabs.addEventListener('scroll', syncFade, { passive: true });
+    requestAnimationFrame(() => {
+      tabs.querySelector<HTMLElement>('.active')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+      syncFade();
+    });
+
     if (this.branch === 'refinement') {
       list.appendChild(el('div', 'bp-hint', `[[up]] ${i18n.t('research.refineHint')}`));
-      for (const ref of REFINEMENTS) list.appendChild(this.renderCard(state, rs.defOf(state, ref.id)!, refinementLevel(state, ref.id)));
-    } else {
-      const inBranch = RESEARCH.filter(r => r.branch === this.branch);
-      for (const def of inBranch.filter(r => !hidden.has(r.id)).sort((a, b) => a.tier - b.tier)) {
-        list.appendChild(this.renderCard(state, def, null));
+      for (const ref of REFINEMENTS) {
+        if (rs.status(state, ref.id) === 'locked' && refinementLevel(state, ref.id) === 0) continue;
+        list.appendChild(this.renderCard(state, rs.defOf(state, ref.id)!, refinementLevel(state, ref.id)));
       }
-      const later = inBranch.filter(r => hidden.has(r.id)).length;
-      if (later > 0) list.appendChild(el('div', 'bp-hint research-later', `[[lock]] ${i18n.t('wp6.research.later', { n: later })}`));
+    } else {
+      const inBranch = RESEARCH.filter(r => r.branch === this.branch).sort((a, b) => a.tier - b.tier);
+      const of = (p: Place) => inBranch.filter(r => places.get(r.id) === p);
+      const now = of('now');
+      for (const def of now) list.appendChild(this.renderCard(state, def, null));
+      if (now.length === 0) list.appendChild(kEmpty('check', i18n.t('ux2d.research.allDone')));
+      const later = of('later');
+      if (later.length) {
+        list.appendChild(this.fold('later', `[[lock]] ${plural('ux2d.research.laterNow', later.length)}`, later.map(d => this.foldRow(state, d))));
+      }
+      // Next Act's nodes by name only (no Doctrine or Genesis talk before they open); the ones after that as a count.
+      const act = state.longGame?.meta.act ?? 1;
+      const byAct = new Map<number, ResearchDef[]>();
+      for (const d of of('act')) {
+        const n = d.act ?? act + 1;
+        byAct.set(n, [...(byAct.get(n) ?? []), d]);
+      }
+      for (const [n, defs] of [...byAct].sort((a, b) => a[0] - b[0])) {
+        list.appendChild(this.fold(`act${n}`, `[[lock]] ${i18n.t('ux2d.research.opensAct', { n, count: defs.length })}`, defs.map(d => this.foldRow(state, d))));
+      }
+      const hidden = inBranch.filter(r => !places.has(r.id)).length;
+      if (hidden > 0) list.appendChild(el('div', 'bp-hint research-later', `[[lock]] ${plural('wp6.research.later', hidden)}`));
+      const done = of('done');
+      if (done.length) {
+        list.appendChild(this.fold('done', `[[check]] ${i18n.t('ux2d.research.done', { n: done.length })}`, done.map(d => kRow({ label: `${d.icon} ${this.name(d)}`, value: i18n.t('research.done') }))));
+      }
     }
     root.appendChild(list);
 
     if (this.branch === 'genesis' && this.genesisNear(state)) {
       root.appendChild(genesisRequirements(state, this.engine.metaSystem));
-      root.appendChild(button(`[[isotope7]] ${i18n.t('genesis.open')}`, 'btn-secondary', () => this.onOpenGenesis?.()));
+      root.appendChild(kButton({ variant: 'secondary', label: `[[isotope7]] ${i18n.t('genesis.open')}`, onPress: () => this.onOpenGenesis?.() }));
     }
     this.sheet.body.replaceChildren(root);
+  }
+
+  /** A folded group: a summary line (48 px) that opens a short list of names. */
+  private fold(key: string, summary: string, rows: HTMLElement[]): HTMLElement {
+    const d = el('details', 'research-fold');
+    d.open = this.openFolds.has(key);
+    const s = el('summary', 'research-fold__summary', summary);
+    d.append(s, ...rows);
+    d.addEventListener('toggle', () => {
+      if (d.open) this.openFolds.add(key);
+      else this.openFolds.delete(key);
+    });
+    return d;
+  }
+
+  /** One folded node: its name and, briefly, what it waits for. */
+  private foldRow(state: GameState, def: ResearchDef): HTMLElement {
+    const rs = this.engine.researchSystem;
+    const act = state.longGame?.meta.act ?? 1;
+    let value = '';
+    if ((def.act ?? 1) > act) value = i18n.t('research.actLock', { n: def.act ?? 0 });
+    else {
+      const missing = def.requires.filter(r => !state.research[r]?.completed);
+      if (missing.length) value = i18n.t('research.requires', { list: missing.map(r => { const d = rs.defOf(state, r); return d ? this.name(d) : r; }).join(', ') });
+    }
+    return kRow({ label: `${def.icon} ${this.name(def)}`, value });
+  }
+
+  /**
+   * [ux-redesign W2d #14] Where each node goes. On the main list: what can start now, what is running or queued, and the next step
+   * (its prerequisites are done or on their way). Folded: nodes that need more research first ("later"), and the next Act's ("act").
+   * Absent: two or more Acts ahead (ux-wp6, a count only). A second run sees everything that is open.
+   */
+  private places(state: GameState): Map<string, Place> {
+    const rs = this.engine.researchSystem;
+    const out = new Map<string, Place>();
+    const hidden = this.hiddenNodes(state);
+    const act = state.longGame?.meta.act ?? 1;
+    const pending = new Set([rs.activeId(state), ...rs.queue(state)]);
+    const ready = (id: string) => !!state.research[id]?.completed || pending.has(id);
+    for (const r of RESEARCH) {
+      if (hidden.has(r.id)) continue;
+      const st = rs.status(state, r.id);
+      if (st === 'done') out.set(r.id, 'done');
+      else if (st === 'active' || st === 'queued' || st === 'available') out.set(r.id, 'now');
+      else if (state.longGame && (r.act ?? 1) > act) out.set(r.id, 'act');
+      else if (rs.blockReason(state, r.id) === 'fork') out.set(r.id, 'now'); // a closed doctrine says so on its card
+      // The next step: everything it needs is done, on its way, or can start now (its card says "Requires: ...").
+      else out.set(r.id, r.requires.every(q => ready(q) || rs.status(state, q) === 'available') ? 'now' : 'later');
+    }
+    return out;
   }
 
   /** [ux-wp6] A second run (or later): the whole tree was seen once, nothing is held back. */
@@ -187,7 +336,6 @@ export class ResearchPanel {
   /** The waiting line behind the active research, with a refund button per entry. */
   private renderQueue(state: GameState): HTMLElement {
     const rs = this.engine.researchSystem;
-    const locale = i18n.currentLocale;
     const queue = rs.queue(state);
     const box = el('div', 'research-queue');
     box.appendChild(el('div', 'bp-hint', `[[clock]] ${i18n.t('research.queue', { n: queue.length, max: rs.queueSlots(state) })}`));
@@ -196,18 +344,22 @@ export class ResearchPanel {
       if (!def) return;
       const row = el('div', 'research-queue-row');
       row.append(
-        el('span', 'research-queue-name', `${i + 1}. ${def.icon} ${def.name[locale] ?? def.name.en}`),
+        el('span', 'research-queue-name', `${i + 1}. ${def.icon} ${this.name(def)}`),
         el('span', 'bp-hint', `[[clock]] ${i18n.formatDuration(rs.etaSeconds(state, id))}`),
       );
-      const cancel = button('[[close]]', 'btn-small btn-ghost', () => {
-        if (rs.cancelQueued(this.engine.stateManager, id)) {
-          uiSound('switch');
-          this.engine.requestSave();
-          this.refresh(this.engine.stateManager.state);
-        }
+      const cancel = kButton({
+        variant: 'close',
+        icon: 'close',
+        ariaLabel: i18n.t('research.cancelQueued'),
+        onPress: () => {
+          if (rs.cancelQueued(this.engine.stateManager, id)) {
+            uiSound('switch');
+            this.engine.requestSave();
+            this.redraw();
+          }
+        },
       });
       cancel.title = i18n.t('research.cancelQueued');
-      cancel.setAttribute('aria-label', i18n.t('research.cancelQueued'));
       row.appendChild(cancel);
       box.appendChild(row);
     });
@@ -215,19 +367,58 @@ export class ResearchPanel {
     return box;
   }
 
+  /**
+   * [ux-redesign W2d #13] Where a missing resource comes from: the first unlocked room type that makes it, when the bunker has none
+   * yet (with one, the wait is the answer: "~4 min").
+   */
+  private producerFor(state: GameState, res: ResourceType): BuildingType | null {
+    const makes = (t: BuildingType) => (getDef(t)?.production?.[res]?.base ?? 0) > 0;
+    if (state.buildings.some(b => makes(b.type))) return null;
+    return BUILDABLE_TYPES.find(t => makes(t) && isBuildingUnlocked(state, t)) ?? null;
+  }
+
+  /** The start button: starts, or says exactly what is missing and (when a room would make it) takes the player there. */
+  private startButton(state: GameState, def: ResearchDef): HTMLElement {
+    const rs = this.engine.researchSystem;
+    const busy = !!rs.activeId(state);
+    const full = busy && rs.queue(state).length >= rs.queueSlots(state);
+    const label = busy ? i18n.t('research.addToQueue') : i18n.t('research.start');
+    const variant = busy ? 'secondary' : 'primary';
+    if (full) return kButton({ variant, label: i18n.t('research.queueFull'), disabledReason: i18n.t('ux2d.research.queueFullWhy'), onPress: () => {} });
+    const cost = def.cost as Record<string, number>;
+    const short = missingList(state, cost);
+    if (short.length) {
+      const first = short[0];
+      const room = this.producerFor(state, first.resource);
+      if (room) {
+        const text = i18n.t('ux2d.research.needRoom', {
+          n: fmtCost(first.need), icon: RESOURCE_ICONS[first.resource] ?? '', name: i18n.t(`resources.${first.resource}`),
+          room: getDef(room)?.name[i18n.currentLocale] ?? room,
+        });
+        if (this.onGo) {
+          return kButton({ variant: 'secondary', className: 'btn-secondary research-route', label: `${text} ${flowArrow()}`, onPress: () => this.onGo?.({ kind: 'build', type: room }) });
+        }
+        return kButton({ variant, label, disabledReason: text, detail: el('span', 'research-why', text), onPress: () => {} });
+      }
+      const why = describeMissing(state, cost);
+      return kButton({ variant, label, disabledReason: why, detail: el('span', 'research-why', why), onPress: () => {} });
+    }
+    return kButton({ variant, label, disabledReason: rs.canStart(state, def.id) ? null : '', onPress: () => this.start(def.id) });
+  }
+
   /** One node; `level` is set for repeatable refinements (levels already done). */
   private renderCard(state: GameState, def: ResearchDef, level: number | null): HTMLElement {
     const rs = this.engine.researchSystem;
-    const locale = i18n.currentLocale;
     const status = rs.status(state, def.id);
     const card = el('div', `research-card ${status}`);
+    card.dataset.research = def.id;
     const top = el('div', 'bp-row');
     top.append(
-      el('span', 'research-name', `${def.icon} ${def.name[locale] ?? def.name.en}`),
+      el('span', 'research-name', `${def.icon} ${this.name(def)}`),
       el('span', 'tier-chip', level === null ? i18n.t('wp6.research.tier', { n: def.tier }) : i18n.t('research.level', { n: level })), // [ux-wp6] no Latin "T3" in Hebrew
     );
-    card.append(top, el('div', 'build-item-desc', def.desc[locale] ?? def.desc.en));
-    // [P3] Doctrine forks and Eureka.
+    card.append(top, el('div', 'build-item-desc', def.desc[i18n.currentLocale] ?? def.desc.en));
+    // [P3] Doctrine forks and Eureka. Only nodes that are open reach a card, so the Doctrine line (which names Genesis) waits for them.
     if (def.fork) card.appendChild(el('div', 'bp-hint doctrine-tag', `[[flag]] ${i18n.t('research.doctrine')}`));
     if (def.eureka && status !== 'done') {
       const got = rs.eureka(state, def);
@@ -252,15 +443,12 @@ export class ResearchPanel {
         card.appendChild(el('div', 'bp-hint', `[[lock]] ${i18n.t('research.actLock', { n: def.act ?? 0 })}`));
       } else if (block === 'fork') {
         const other = rs.forkTaken(state, def.id);
-        card.appendChild(el('div', 'bp-hint', `[[lock]] ${i18n.t('research.forkClosed', { name: other?.name[locale] ?? '' })}`));
+        card.appendChild(el('div', 'bp-hint', `[[lock]] ${i18n.t('research.forkClosed', { name: other ? this.name(other) : '' })}`));
       } else if (missing.length > 0) {
-        const names = missing.map(r => rs.defOf(state, r)?.name[locale] ?? r).join(', ');
+        const names = missing.map(r => { const d = rs.defOf(state, r); return d ? this.name(d) : r; }).join(', ');
         card.appendChild(el('div', 'bp-hint', `[[lock]] ${i18n.t('research.requires', { list: names })}`));
       } else {
-        const busy = !!rs.activeId(state);
-        const full = busy && rs.queue(state).length >= rs.queueSlots(state);
-        const label = full ? i18n.t('research.queueFull') : busy ? i18n.t('research.addToQueue') : i18n.t('research.start');
-        card.appendChild(button(label, busy ? 'btn-secondary' : 'btn-primary', () => this.start(def.id), !rs.canStart(state, def.id)));
+        card.appendChild(this.startButton(state, def));
       }
     }
     return card;

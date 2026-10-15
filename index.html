@@ -25,9 +25,10 @@
   <link rel="apple-touch-startup-image" href="./splash/s-1206x2622.png" media="(device-width: 402px) and (device-height: 874px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" />
   <link rel="apple-touch-startup-image" href="./splash/s-1320x2868.png" media="(device-width: 440px) and (device-height: 956px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" />
   <title>The Last Bunker | הבונקר האחרון</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Karantina:wght@400;700&family=Rubik:wght@400;500;600;700;800&family=Secular+One&display=swap" rel="stylesheet" />
+  <!-- [ux-redesign W1] Fonts are self-hosted (public/fonts): the game looks the same offline and in the store build. -->
+  <link rel="preload" href="./fonts/rubik-400-800-hebrew.woff2" as="font" type="font/woff2" crossorigin />
+  <link rel="preload" href="./fonts/rubik-400-800-latin.woff2" as="font" type="font/woff2" crossorigin />
+  <link rel="stylesheet" href="./fonts/fonts.css" />
 </head>
 <body>
   <canvas id="game-canvas"></canvas>

@@ -3,10 +3,12 @@ import { bus } from '../../core/EventBus'; // [plan4:GP-1]
 import { statusTint } from '../../utils/a11y';
 import { HUD, actLock } from '../../ui/HUD';
 import { i18n } from '../../i18n/I18nManager';
+import { floorRangesTag } from '../floorTag';
+import { fmtNum, plural } from '../format';
 import { getDef } from '../../data/buildingDefs';
 import { allowedFloors } from '../../data/zones';
 import { BUILDING_ICONS, RESOURCE_ICONS, costRow, el } from '../../ui/dom';
-import type { BuildingType, GameState, Position, ResourceType } from '../../core/GameState';
+import type { BuildingType, GameState, Position, ResourceType, Ruin } from '../../core/GameState';
 import { roomFloors, roomSlots } from '../../data/buildingDefs';
 import { PlacementBar, type Chip } from '../components/PlacementBar'; // [plan4:ST-19]
 import { DropChip } from '../components/DropChip'; // [plan4:UX-20]
@@ -14,10 +16,11 @@ import type { StructurePanel } from '../components/StructurePanel'; // [ux-wp4] 
 import { getHudInsets } from '../../utils/hudInsets';
 import { RUIN_KINDS } from '../../data/ruins';
 import type { PlaceBlock } from '../../systems/BuildingSystem';
-import { bestSpot, floorRangesLabel, nameOf, nearestSpot, placeEffects, spotForTap, validSpots } from '../../systems/placementRank';
+import { bestSpot, nameOf, nearestSpot, placeEffects, spotForTap, validSpots } from '../../systems/placementRank';
 import { RELOCATE_SECONDS, relocateBlock, relocateCost, stateWithout } from '../../systems/relocate';
-import { SLOT_W, buildingH, floorTop } from '../../rendering/geom';
-import { slotX } from '../../world/project';
+import { ROOM_H, SLOT_W, buildingH, floorTop } from '../../rendering/geom';
+import { buildingX, slotX } from '../../world/project';
+import { hasFreeSpot, missingText, noSpaceRoute, noSpaceText } from '../components/BuildMenu'; // [ux-redesign w2c #2]
 import type { IconName } from '../../ui/icons';
 import type { GameApp } from '../../app';
 import { popupMode } from '../components/NumberPopup'; // [plan4:UX-21]
@@ -41,6 +44,30 @@ export class WorldController {
 
   constructor(app: GameApp) {
     this.app = app;
+    // [ux-redesign w2c #17] A sheet opened for a ruin (RuinPanel.show) frames it in the strip of world left above the sheet.
+    // [ux-redesign w2fix] The same for a room's own sheet (BuildingPanel.show).
+    window.addEventListener('lb:sheet-target', (ev) => {
+      const d = (ev as CustomEvent<{ ruinId?: string; buildingId?: string }>).detail;
+      const ruin = d?.ruinId ? this.app.state.ruins.find(r => r.id === d.ruinId) : undefined;
+      if (ruin) this.frameRuin(ruin);
+      const b = d?.buildingId ? this.app.state.buildings.find(x => x.id === d.buildingId) : undefined;
+      if (b) this.frameRoom(b.type, b.position);
+    });
+  }
+
+  /**
+   * [ux-redesign w2c #17] Glides the camera just enough that a ruin sits between the status row and the open sheet (CameraController measures
+   * the sheet and the HUD bands itself, utils/hudInsets). Waits two frames so the sheet has its height.
+   */
+  frameRuin(ruin: Ruin): void {
+    const go = () => this.app.renderer.revealRect(slotX(ruin.floor, ruin.x), floorTop(ruin.floor), ruin.w * SLOT_W, ROOM_H, 0);
+    requestAnimationFrame(() => requestAnimationFrame(go));
+  }
+
+  /** [ux-redesign w2fix] The same framing for a built room whose sheet just opened (its full width and height, tall rooms too). */
+  frameRoom(type: BuildingType, pos: Position): void {
+    const go = () => this.app.renderer.revealRect(buildingX({ type, position: pos }), floorTop(pos.floor), roomSlots(type) * SLOT_W, buildingH(type), 0);
+    requestAnimationFrame(() => requestAnimationFrame(go));
   }
 
   // ───────────────────────────── [plan4:ST-19] placing a room: ghost, confirm bar, best spot, moving a room ─────────────────────────────
@@ -79,13 +106,6 @@ export class WorldController {
       bar.onCancel = () => { this.app.audio.play('click'); this.cancelPlacement(); };
       bar.onRecommend = () => this.recommend();
       bar.onConfirm = () => this.confirmPlacement();
-      bar.onIdleBuild = () => {
-        haptic('error');
-        const at = r.ghostSpot;
-        const type = this.app.placementMode;
-        const block = at && type ? this.blockAt(type, at) : null;
-        bar.flash(block && type ? this.reasonText(block, type) : i18n.t('placement.noGhost'), 'warn');
-      };
       r.onGhostLift = () => {
         const type = this.app.placementMode;
         if (!type) return;
@@ -113,9 +133,12 @@ export class WorldController {
 
   startPlacement(type: BuildingType, relocateId: string | null = null): void {
     this.cancelPlacement();
-    this.relocateId = relocateId;
     const state = this.app.state;
     const bs = this.app.engine.buildingSystem;
+    // [ux-redesign w2c #2] A new room with no free spot anywhere never opens the console (a green "Build" over "No free spot" was a dead end):
+    // the player goes where the space is instead (restore the wreck, clear the rubble, dig a floor).
+    if (!relocateId && !hasFreeSpot(bs, state, type)) { this.routeNoSpace(type); return; }
+    this.relocateId = relocateId;
     const probe = this.placeState();
     const floors = allowedFloors(type, state.currentFloors);
     const target = floors.find(f => bs.findFreeSpot(type, f, probe)) ?? floors[0];
@@ -133,14 +156,58 @@ export class WorldController {
     bar.followGhost(() => this.app.renderer.ghostScreenRect());
     this.app.renderer.setCarryInset(bar.coverPx());
     this.spots = validSpots(type, probe, bs);
+    bar.setRecommendable(this.spots.length ? null : i18n.t('placement.noSpot'));
     window.clearInterval(this.costTimer);
     this.costTimer = window.setInterval(() => {
       const t = this.app.placementMode;
       if (!t) return;
-      const rr = this.relocateId ? this.app.state.buildings.find(b => b.id === this.relocateId) : null;
-      bar.setCost(this.app.state, rr ? relocateCost(bs, this.app.state, rr) : bs.getBuildCost(t, this.app.state));
+      bar.setCost(this.app.state, this.priceNow(t));
+      this.syncReady(); // the price may have become payable (or not) since
     }, 1000);
     if (WorldController.AUTO_GHOST && !rel) this.recommend();
+  }
+
+  /** The price of what is being placed now: a new room, or the move. */
+  private priceNow(type: BuildingType): Record<string, number> {
+    const bs = this.app.engine.buildingSystem;
+    const rel = this.relocateId ? this.app.state.buildings.find(b => b.id === this.relocateId) : null;
+    return rel ? relocateCost(bs, this.app.state, rel) : bs.getBuildCost(type, this.app.state);
+  }
+
+  /** [ux-redesign w2c #2] Why Build cannot go now (no ghost, a refused spot, what the price lacks), or null when it can. */
+  private buildBlock(): string | null {
+    const type = this.app.placementMode;
+    const at = this.app.renderer.ghostSpot;
+    if (!type || !at) return i18n.t('placement.noGhost');
+    const block = this.blockAt(type, at);
+    if (block) return this.reasonText(block, type);
+    return missingText(this.app.state, this.priceNow(type)) || null;
+  }
+
+  private syncReady(): void {
+    this.bar?.setReady(this.buildBlock());
+  }
+
+  /**
+   * [ux-redesign w2c #2] A room with no free spot: open what makes space (the wreck of this room, rubble in the way, the dig), framed on screen;
+   * when nothing can, say where the room may stand.
+   */
+  private routeNoSpace(type: BuildingType): void {
+    const app = this.app;
+    const state = app.state;
+    const route = noSpaceRoute(app.engine.buildingSystem, state, type);
+    haptic('warning');
+    if (route.kind === 'wreck' || route.kind === 'clear') {
+      app.openRuin(route.ruin.id); // RuinPanel.show frames it (see the constructor)
+      return;
+    }
+    if (route.kind === 'dig' || route.kind === 'digging') {
+      app.closeSheets();
+      app.dig.confirmDig();
+      return;
+    }
+    app.audio.play('error');
+    app.toasts.show(`[[warning]] ${noSpaceText(state, type, route)}`, 'bad');
   }
 
   cancelPlacement(): void {
@@ -160,7 +227,7 @@ export class WorldController {
   private reasonText(block: PlaceBlock | 'same', type: BuildingType): string {
     const state = this.app.state;
     const def = getDef(type);
-    if (block === 'zone') return i18n.t('placement.r.zone', { floors: `\u2066${floorRangesLabel(allowedFloors(type, state.currentFloors))}\u2069` }); // LRI..PDI keeps "B3–B14" in one piece inside a Hebrew line
+    if (block === 'zone') return i18n.t('placement.r.zone', { floors: `\u2068${floorRangesTag(allowedFloors(type, state.currentFloors))}\u2069` }); // [final F7] FSI..PDI keeps "B3–B14" / "קומות 3–14" in one piece
     if (block === 'adjacency') {
       const need = def?.place?.adjacentTo;
       return i18n.t('placement.r.adjacency', { room: need ? nameOf(need, i18n.currentLocale) : '' });
@@ -178,7 +245,7 @@ export class WorldController {
     const chips: Chip[] = [];
     if (fx.compound > 0) chips.push({ kind: 'good', text: i18n.t('placement.chip.compound', { pct: fx.compound * 10 }) });
     if (fx.synergy > 0) chips.push({ kind: 'good', text: i18n.t('placement.chip.synergy', { pct: Math.round(fx.synergy * 100) }) });
-    chips.push({ kind: 'info', text: fx.liftDist === 0 ? i18n.t('placement.chip.liftNear') : i18n.t('placement.chip.lift', { n: fx.liftDist }) });
+    chips.push({ kind: 'info', text: fx.liftDist === 0 ? i18n.t('placement.chip.liftNear') : plural('placement.chip.lift', fx.liftDist) });
     if (fx.fire) {
       chips.push({
         kind: 'warn',
@@ -195,7 +262,7 @@ export class WorldController {
     r.showGhost(type, pos, block === null);
     const { chips, say } = this.chipsFor(type, pos, block);
     this.bar?.setChips(chips, say);
-    this.bar?.setReady(block === null);
+    this.syncReady();
   }
 
   /** A tap on a slot (or on a room / ruin that is in the way) while choosing a spot. */
@@ -239,6 +306,7 @@ export class WorldController {
       haptic('warning');
       this.app.audio.play('error');
       this.bar?.flash(i18n.t('placement.noSpot'), 'warn');
+      this.bar?.setRecommendable(i18n.t('placement.noSpot'));
       return;
     }
     this.setGhost(type, best, this.blockAt(type, best));
@@ -251,7 +319,7 @@ export class WorldController {
   confirmPlacement(): void {
     const type = this.app.placementMode;
     const at = this.app.renderer.ghostSpot;
-    if (!type || !at) { this.bar?.onIdleBuild?.(); return; }
+    if (!type || !at) { haptic('error'); this.bar?.flash(i18n.t('placement.noGhost'), 'warn'); return; }
     const block = this.blockAt(type, at);
     if (block) { this.setGhost(type, at, block); this.refuse(); return; }
     if (this.relocateId) {
@@ -442,36 +510,21 @@ export class WorldController {
     const main = rs[0];
     this.app.audio.play(main === 'water' ? 'drip' : main === 'materials' || main === 'scrap' ? 'coin' : 'collect');
     if (main === 'water' || n > 1) this.app.audio.play('collect', { volume: 0.6 });
-    haptic(n > 1 ? 'success' : 'tap');
-    rs.forEach((r, i) => window.setTimeout(() => this.flyToHud(r, from!.x, from!.y, `+${i18n.formatCompact(totals.get(r)!)}`), i * 90));
+    // [w4fix] One buzz per collect: the landing's (feedback.ts), not a second one at the tap.
+    this.app.feedback.flyGoods(gain, from);
     if (n > 1) {
       const b = state.buildings.find(x => x.id === buildingId);
       if (b) {
         const c = this.app.renderer.roomCenter(b);
-        this.app.popups.spawn(c.x, c.y - 20, `[[star]] ×${n} ${rs.map(r => `${RESOURCE_ICONS[r] ?? ''}+${i18n.formatCompact(totals.get(r)!)}`).join(' ')}`, 0xffe2a0);
+        this.app.popups.spawn(c.x, c.y - 20, `[[star]] ×${n} ${rs.map(r => `${RESOURCE_ICONS[r] ?? ''}+${fmtNum(totals.get(r)!)}`).join(' ')}`, 0xffe2a0);
       }
     }
     this.app.engine.notifyInteraction();
   }
 
-  /** A collected resource icon arcs up into its HUD counter, which then pulses. */
+  /** A collected resource icon arcs up into its HUD counter (the pooled fx layer; [w4fix] the old .fly-icon element is gone). */
   flyToHud(r: ResourceType, x: number, y: number, label: string): void {
-    const target = this.app.hud.resourceRect(r);
-    const fly = el('div', 'fly-icon', `${RESOURCE_ICONS[r] ?? ''} ${label}`);
-    fly.style.left = `${x}px`;
-    fly.style.top = `${y}px`;
-    document.body.appendChild(fly);
-    requestAnimationFrame(() => {
-      fly.classList.add('go');
-      if (target) {
-        fly.style.left = `${target.left + target.width / 2}px`;
-        fly.style.top = `${target.top + target.height / 2}px`;
-      }
-    });
-    setTimeout(() => {
-      fly.remove();
-      this.app.hud.pulseResource(r);
-    }, 650);
+    this.app.feedback.fly.fly(r, { x, y }, 10, label); // no amount here: 10 goods' worth (7 particles)
   }
 
   // ───────────────────────────── [ux-wp4] HUD and panel shortcuts ─────────────────────────────
@@ -540,7 +593,7 @@ export class WorldController {
       for (const [k, v] of rows) {
         const row = el('div', 'bp-row');
         const val = Math.round(v);
-        row.append(el('span', '', i18n.t(`morale.${k}`)), el('span', `bp-value ${v >= 0 ? 'positive' : 'negative'}`, `${val > 0 ? '+' : val < 0 ? '−' : ''}${Math.abs(val)}`));
+        row.append(el('span', '', i18n.t(`morale.${k}`)), el('span', `bp-value ${v >= 0 ? 'positive' : 'negative'}`, `${val > 0 ? '+' : val < 0 ? '\u2212' : ''}${Math.abs(val)}`));
         body.appendChild(row);
       }
       if (!rows.length) body.appendChild(el('p', 'bp-hint', i18n.t('wp4.moraleCalm')));

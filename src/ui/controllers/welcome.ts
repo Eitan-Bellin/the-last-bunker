@@ -1,5 +1,6 @@
 import type { NightEntry, OfflineReport } from '../../core/GameEngine';
 import { i18n } from '../../i18n/I18nManager';
+import { fmtNum, plural } from '../format';
 import { getResearch } from '../../data/research';
 import { RESOURCE_ICONS, el, setRich } from '../../ui/dom';
 import type { GameState, ResourceType } from '../../core/GameState';
@@ -13,12 +14,16 @@ import { ACTS } from '../../data/acts';
 import { SEASONS } from '../../data/seasons';
 import { POIS } from '../../data/surface';
 import { DISASTERS } from '../../data/incidents';
+import { WELCOME_MIN_AWAY_S } from '../popupRules';
 
 /** [ux-wp5 C14] The night log shows at most this many lines. */
 const NIGHT_LINES = 6;
 
-/** [plan4:GP-3] An absence longer than this (seconds) gets the short check-in instead of the long report. */
-const CHECKIN_MIN_SECONDS = 600;
+/**
+ * [plan4:GP-3] An absence longer than this (seconds) gets the short check-in instead of the long report. [ux-redesign w2a #7] A shorter
+ * one gets no welcome at all (app.queueWelcome, popupRules.WELCOME_MIN_AWAY_S); only people at the door are still asked about.
+ */
+const CHECKIN_MIN_SECONDS = WELCOME_MIN_AWAY_S;
 
 /** The welcome-back report and the daily supply drop. */
 export class WelcomeController {
@@ -54,7 +59,7 @@ export class WelcomeController {
       const actions = [{ label: i18n.t('welcome.ok'), onClick: close }] as { label: string; className?: string; onClick: () => void }[];
       // [Economy A1] a shortcut to spend the credits the overflow earned.
       if ((report?.credits ?? 0) > 0) actions.unshift({ label: i18n.t('welcome.toShop'), className: 'btn-secondary', onClick: () => { close(); this.app.journal.showShop(this.app.state); } });
-      this.app.modal.show({ icon: '[[vault]]', title: i18n.t('welcome.title'), body, actions, onDismiss });
+      this.app.modal.show({ icon: '[[vault]]', title: i18n.t('welcome.title'), body, actions, onDismiss, dismiss: actions.length - 1 }); // [ux-redesign w2a] back = OK
       return;
     }
     // The doorstep: faces and names of who waited through the night.
@@ -64,7 +69,7 @@ export class WelcomeController {
       const n = this.app.engine.answerDoor(accept);
       close();
       this.app.audio.play(accept && n > 0 ? 'cheer' : 'click');
-      this.app.toasts.show(accept && n > 0 ? `[[people]] ${i18n.t('welcome.doorIn', { n })}` : `[[door]] ${i18n.t('welcome.doorAway')}`, accept && n > 0 ? 'good' : 'info');
+      this.app.toasts.show(accept && n > 0 ? `[[people]] ${plural('welcome.doorIn', n)}` : `[[door]] ${i18n.t('welcome.doorAway')}`, accept && n > 0 ? 'good' : 'info');
     };
     this.app.modal.show({
       icon: '[[door]]',
@@ -90,9 +95,9 @@ export class WelcomeController {
       row.appendChild(img);
     }
     const names = waiting.map(p => this.app.localName(p.name)).join(', ');
-    door.append(row, el('p', 'modal-body', `[[door]] ${i18n.t(waiting.length === 1 ? 'welcome.doorOne' : 'welcome.door', { n: waiting.length, names })}`));
+    door.append(row, el('p', 'modal-body', `[[door]] ${waiting.length === 1 ? i18n.t('welcome.doorOne', { names }) : plural('welcome.door', waiting.length, { names })}`));
     const beds = state.maxPopulation - state.survivors.length;
-    if (beds < waiting.length) door.appendChild(el('p', 'bp-hint negative-text', i18n.t(beds <= 0 ? 'welcome.doorNoBeds' : 'welcome.doorBeds', { n: Math.max(0, beds) })));
+    if (beds < waiting.length) door.appendChild(el('p', 'bp-hint negative-text', beds <= 0 ? i18n.t('welcome.doorNoBeds') : plural('welcome.doorBeds', beds)));
     return door;
   }
 
@@ -134,9 +139,9 @@ export class WelcomeController {
       const dg = report.danger;
       if (dg && (dg.raids > 0 || dg.disasters.length > 0)) {
         const parts: string[] = [];
-        if (dg.raids > 0) parts.push(i18n.t('welcome.danger.raids', { n: dg.raids, lost: dg.raidsLost }));
-        if (dg.disasters.length > 0) parts.push(i18n.t('welcome.danger.disasters', { n: dg.disasters.length }));
-        if (dg.hurt > 0) parts.push(i18n.t('welcome.danger.hurt', { n: dg.hurt }));
+        if (dg.raids > 0) parts.push(plural('welcome.danger.raids', dg.raids, { lost: fmtNum(dg.raidsLost) }));
+        if (dg.disasters.length > 0) parts.push(plural('welcome.danger.disasters', dg.disasters.length));
+        if (dg.hurt > 0) parts.push(plural('welcome.danger.hurt', dg.hurt));
         body.appendChild(el('p', 'modal-sub negative-text', `[[warning]] ${i18n.t('welcome.danger.title')} ${parts.join(' · ')}`));
         if (dg.died.length > 0) body.appendChild(el('p', 'modal-sub negative-text', `[[skull]] ${i18n.t('welcome.danger.died', { names: dg.died.map(n => this.app.localName(n)).join(', ') })}`));
         else body.appendChild(el('p', 'bp-hint', i18n.t('welcome.danger.hint')));
@@ -153,7 +158,7 @@ export class WelcomeController {
   private awayText(report: OfflineReport): string {
     const real = report.realSeconds ?? report.seconds;
     if (real <= report.seconds + 120) return i18n.t('welcome.away', { time: i18n.formatDuration(report.seconds) });
-    const long = (s: number) => (s >= 36 * 3600 ? i18n.t('night.days', { n: Math.round(s / 86400) }) : i18n.formatDuration(s));
+    const long = (s: number) => (s >= 36 * 3600 ? plural('night.days', Math.round(s / 86400)) : i18n.formatDuration(s));
     return i18n.t('night.capped', { real: long(real), counted: i18n.formatDuration(report.seconds) });
   }
 
@@ -192,8 +197,11 @@ export class WelcomeController {
     // Raids and disasters, with who was hurt and what was taken.
     const dg = report.danger;
     if (dg && dg.raids > 0) {
-      const key = dg.raidsLost > 0 ? (dg.raids === 1 ? 'night.raidLostOne' : 'night.raidsLost') : (dg.raids === 1 ? 'night.raidOne' : 'night.raids');
-      out.push({ text: `[[skull]] ${i18n.t(key, { n: dg.raids, lost: dg.raidsLost })}`, bad: dg.raidsLost > 0, rank: 2 });
+      // [ux-redesign final] One raid that broke in is its own sentence; several say both counts, each in its own plural form.
+      const times = (n: number): string => plural('night.raidsLostPart', n);
+      let text = plural('night.raids', dg.raids);
+      if (dg.raidsLost > 0) text = dg.raids > 1 ? i18n.t('night.raidsLost', { times: times(dg.raids), lostPart: times(dg.raidsLost) }) : i18n.t('night.raidLostOne');
+      out.push({ text: `[[skull]] ${text}`, bad: dg.raidsLost > 0, rank: 2 });
     }
     if (dg && dg.disasters.length > 0) {
       const names = [...new Set(dg.disasters)].map(k => DISASTERS[k]?.name[locale] ?? k).join(', ');
@@ -204,7 +212,7 @@ export class WelcomeController {
       const parts: string[] = [];
       if (nd.hurt.length) parts.push(i18n.t('night.hurt', { names: list(nd.hurt) }));
       const lost = (Object.entries(nd.lost) as [ResourceType, number][]).filter(([, v]) => v < 0)
-        .map(([r, v]) => `${RESOURCE_ICONS[r] ?? ''}−${i18n.formatCompact(Math.abs(v))}`).join(' ');
+        .map(([r, v]) => `${RESOURCE_ICONS[r] ?? ''}−${fmtNum(Math.abs(v))}`).join(' ');
       if (lost) parts.push(i18n.t('night.lost', { list: lost }));
       out.push({ text: `[[bandage]] ${parts.join(' · ')}`, bad: true, rank: 3 });
     }
@@ -222,10 +230,10 @@ export class WelcomeController {
     const digs = of('dig');
     if (digs.length) {
       const deepest = Math.max(...digs.map(e => e.n ?? 0));
-      out.push({ text: `[[pick]] ${i18n.t(digs.length === 1 ? 'night.dig' : 'night.digs', { n: deepest, count: digs.length })}`, rank: 5 });
+      out.push({ text: `[[pick]] ${plural('night.digs', digs.length, { floor: deepest })}`, rank: 5 });
     }
     const ruins = of('ruin');
-    if (ruins.length) out.push({ text: `[[broom]] ${i18n.t(ruins.length === 1 ? 'night.ruinOne' : 'night.ruins', { n: ruins.length })}`, rank: 6 });
+    if (ruins.length) out.push({ text: `[[broom]] ${plural('night.ruins', ruins.length)}`, rank: 6 });
     for (const e of of('recruit').slice(0, 2)) {
       const n = e.names?.[0];
       if (n) out.push({ text: `[[person]] ${i18n.t('night.recruit', { name: nm(n), ...app.gByName(n) })}`, rank: 6 });
@@ -368,9 +376,9 @@ export class WelcomeController {
     // [ux-wp5 C14] The night log tells raids and disasters with names; this summary line stays for reports without it.
     if (dg && !report.nightDanger && (dg.raids > 0 || dg.disasters.length > 0)) {
       const parts: string[] = [];
-      if (dg.raids > 0) parts.push(i18n.t('welcome.danger.raids', { n: dg.raids, lost: dg.raidsLost }));
-      if (dg.disasters.length > 0) parts.push(i18n.t('welcome.danger.disasters', { n: dg.disasters.length }));
-      if (dg.hurt > 0) parts.push(i18n.t('welcome.danger.hurt', { n: dg.hurt }));
+      if (dg.raids > 0) parts.push(plural('welcome.danger.raids', dg.raids, { lost: fmtNum(dg.raidsLost) }));
+      if (dg.disasters.length > 0) parts.push(plural('welcome.danger.disasters', dg.disasters.length));
+      if (dg.hurt > 0) parts.push(plural('welcome.danger.hurt', dg.hurt));
       if (dg.died.length > 0) parts.push(i18n.t('welcome.danger.died', { names: dg.died.map(n => this.app.localName(n)).join(', ') }));
       out.push(el('p', 'checkin-line negative-text', `[[warning]] ${parts.join(' · ')}`));
     }
@@ -405,13 +413,24 @@ export class WelcomeController {
       c.append(main, b);
       return c;
     };
+    // [ux-redesign w2a #7] The people at the door come first: answered right here, no separate door dialog follows (unless the card is left alone).
+    const waiting = state.doorWaiting ?? [];
+    if (waiting.length > 0) {
+      const beds = state.maxPopulation - state.survivors.length;
+      const names = waiting.map(p => app.localName(p.name)).join(', ');
+      cards.push(card('[[door]]', waiting.length === 1 ? i18n.t('checkin.doorOne', { names }) : plural('checkin.door', waiting.length, { names }), i18n.t('welcome.doorAccept'), done => {
+        const n = app.engine.answerDoor(true);
+        app.audio.play(n > 0 ? 'cheer' : 'click');
+        done(`[[people]] ${plural('welcome.doorIn', n)}`);
+      }, beds <= 0, beds < waiting.length ? (beds <= 0 ? i18n.t('welcome.doorNoBeds') : plural('welcome.doorBeds', beds)) : undefined));
+    }
     if (app.engine.supplySystem.isReady(state)) {
       cards.push(card('[[gift]]', i18n.t('checkin.crate'), i18n.t('checkin.collect'), done => {
         const claim = app.engine.supplySystem.claim();
         if (!claim) return;
         app.engine.requestSave();
         app.audio.play('achievement');
-        const got = Object.entries(claim.gains).map(([r, v]) => `${RESOURCE_ICONS[r as ResourceType] ?? ''}${i18n.formatCompact(Math.round(v ?? 0))}`).join(' ');
+        const got = Object.entries(claim.gains).map(([r, v]) => `${RESOURCE_ICONS[r as ResourceType] ?? ''}${fmtNum(Math.round(v ?? 0))}`).join(' ');
         done(`[[gift]] ${i18n.t('checkin.crateDone')} ${got}`.trim());
       }));
     }
@@ -430,22 +449,12 @@ export class WelcomeController {
     const cs = app.engine.contractSystem;
     const safe = (state.longGame?.inbox.items ?? []).filter(i => i.kind === 'contract' && cs.isSafe(state, i)).length;
     if (safe > 0) {
-      cards.push(card('[[cart]]', i18n.t(safe === 1 ? 'checkin.contractsOne' : 'checkin.contracts', { n: safe }), i18n.t('checkin.acceptAll'), done => {
+      cards.push(card('[[cart]]', plural('checkin.contracts', safe), i18n.t('checkin.acceptAll'), done => {
         const n = cs.acceptSafe();
         if (n > 0) app.engine.requestSave();
         app.audio.play('click');
         done(`[[cart]] ${i18n.t('checkin.contractsDone')}`);
       }));
-    }
-    const waiting = state.doorWaiting ?? [];
-    if (waiting.length > 0) {
-      const beds = state.maxPopulation - state.survivors.length;
-      const names = waiting.map(p => app.localName(p.name)).join(', ');
-      cards.push(card('[[door]]', i18n.t(waiting.length === 1 ? 'checkin.doorOne' : 'checkin.door', { n: waiting.length, names }), i18n.t('welcome.doorAccept'), done => {
-        const n = app.engine.answerDoor(true);
-        app.audio.play(n > 0 ? 'cheer' : 'click');
-        done(`[[people]] ${i18n.t('welcome.doorIn', { n })}`);
-      }, beds <= 0, beds < waiting.length ? i18n.t(beds <= 0 ? 'welcome.doorNoBeds' : 'welcome.doorBeds', { n: Math.max(0, beds) }) : undefined));
     }
     return cards.slice(0, 3);
   }
@@ -468,7 +477,7 @@ export class WelcomeController {
     const body = el('div', 'modal-result');
     body.appendChild(el('p', 'modal-body', i18n.t('supply.desc')));
     body.appendChild(this.gainsList(claim.gains));
-    body.appendChild(el('p', 'modal-sub', `[[hourglass]] ${i18n.t('rush.gift', { n: claim.rush })}`));
+    body.appendChild(el('p', 'modal-sub', `[[hourglass]] ${plural('rush.gift', claim.rush)}`));
     if (Object.keys(claim.gains).length === 0) body.appendChild(el('p', 'bp-hint', i18n.t('supply.full')));
     body.appendChild(el('p', 'modal-sub', `[[fire]] ${i18n.t('supply.streak', { n: claim.streak })}`));
     body.appendChild(el('p', 'bp-hint', i18n.t('supply.tomorrow')));

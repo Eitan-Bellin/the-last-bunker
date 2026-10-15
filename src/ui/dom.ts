@@ -3,6 +3,7 @@ import { haptic } from '../utils/haptics';
 import { i18n } from '../i18n/I18nManager';
 import { iconSvg, isIcon, tok, type IconName } from './icons';
 import { uiSound } from '../audio/uiSound';
+import { fmtCost, fmtRate } from './format';
 
 /** Icon tokens for resources; embed them in any UI string. */
 export const RESOURCE_ICONS: Record<string, string> = {
@@ -100,28 +101,46 @@ export function bidiNumbers(text: string): string {
   return text.replace(SIGNED, (m, offset: number) => (/[\p{L}\p{N}]/u.test(text[offset - 1] ?? '') ? m : `⁦${m}⁩`));
 }
 
+/** [ux-redesign final F8] The shape (text / icon sequence) setRich last built in a node, so a new number only rewrites its text node. */
+const richShape = new WeakMap<Node, string>();
+
 /** Fills a node with text in which [[icon]] tokens become inline SVG icons. */
 export function setRich(node: HTMLElement, text: string): void {
   if (!text.includes('[[')) {
+    richShape.delete(node);
     node.textContent = bidiNumbers(text);
     return;
   }
-  node.textContent = '';
+  // The parts: text runs and icon names, in order.
+  const parts: { icon?: string; text?: string }[] = [];
   let last = 0;
   for (const m of text.matchAll(TOKEN)) {
-    if (m.index! > last) node.appendChild(document.createTextNode(bidiNumbers(text.slice(last, m.index))));
-    const name = m[1];
-    if (isIcon(name)) {
-      const span = document.createElement('span');
-      span.className = `ic ic-${name}`;
-      span.innerHTML = iconSvg(name as IconName);
-      node.appendChild(span);
-    } else {
-      node.appendChild(document.createTextNode(m[0]));
-    }
+    if (m.index! > last) parts.push({ text: bidiNumbers(text.slice(last, m.index)) });
+    parts.push(isIcon(m[1]) ? { icon: m[1] } : { text: m[0] });
     last = m.index! + m[0].length;
   }
-  if (last < text.length) node.appendChild(document.createTextNode(bidiNumbers(text.slice(last))));
+  if (last < text.length) parts.push({ text: bidiNumbers(text.slice(last)) });
+  const shape = parts.map(p => (p.icon ? `i:${p.icon}` : 't')).join('|');
+  // Same icons in the same places (a countdown, a counter): only the text nodes that changed are written, one mutation instead of three.
+  if (richShape.get(node) === shape && node.childNodes.length === parts.length) {
+    parts.forEach((p, i) => {
+      const n = node.childNodes[i];
+      if (p.text !== undefined && n.nodeType === Node.TEXT_NODE && (n as Text).data !== p.text) (n as Text).data = p.text;
+    });
+    return;
+  }
+  node.textContent = '';
+  for (const p of parts) {
+    if (p.icon) {
+      const span = document.createElement('span');
+      span.className = `ic ic-${p.icon}`;
+      span.innerHTML = iconSvg(p.icon as IconName);
+      node.appendChild(span);
+    } else {
+      node.appendChild(document.createTextNode(p.text!));
+    }
+  }
+  richShape.set(node, shape);
 }
 
 /** Strips icon tokens (for places that can only show plain text). */
@@ -140,23 +159,18 @@ export function el<K extends keyof HTMLElementTagNameMap>(
 
 /**
  * [plan4:BL-25,34..38] A production rate for the panels: per second as usual, but a trickle (the pre-war vault's blueprints, a forum's influence:
- * under 0.01 a second) is shown per hour, since "+0.00 /s" says nothing.
+ * under 0.01 a second) is shown per hour, since "+0.00 /s" says nothing. [ux-redesign W1] Lives in format.ts now (`fmtRate`).
  */
 export function rateText(perSecond: number): string {
-  if (perSecond > 0 && perSecond < 0.005) return `${i18n.formatRate(perSecond * 3600)} ${i18n.t('resources.perHour')}`;
-  return `${i18n.formatRate(perSecond)} ${i18n.t('resources.perSecond')}`;
+  return fmtRate(perSecond);
 }
 
 /**
  * [ux-wp4] P17: a price for a cost chip. Up to 9,999 it is the exact number; above that it is short like the HUD ("470K", "2.4M"),
- * always rounded up so a short price is never less than what is asked.
+ * always rounded up so a short price is never less than what is asked. [ux-redesign W1] Lives in format.ts now (`fmtCost`).
  */
 export function costAmount(n: number): string {
-  if (n < 10_000) return String(Math.ceil(n));
-  if (n < 999_500) return `${Math.ceil(n / 1000)}K`;
-  if (n < 9_995_000) return `${(Math.ceil(n / 100_000) / 10).toFixed(1)}M`;
-  if (n < 999_500_000) return `${Math.ceil(n / 1_000_000)}M`;
-  return `${(Math.ceil(n / 100_000_000) / 10).toFixed(1)}B`;
+  return fmtCost(n);
 }
 
 /** [ux-wp4] A number with a sign, kept left-to-right inside Hebrew text ("+30%", "−3", "×1.25"), for places that set textContent. */

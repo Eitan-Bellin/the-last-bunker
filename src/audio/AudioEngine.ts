@@ -67,6 +67,7 @@ const SFX_PEAK: Partial<Record<Sfx, number>> = {
   thunder: 0.7, cheer: 0.45, steam: 0.35, engineStart: 0.6, powerUp: 0.5, drill: 0.5, crumble: 0.4, drip: 0.3,
   confirm: 0.45, cancel: 0.3,
   rankUp: 0.38, tick: 0.28, // [ux-wp3]
+  crisis: 0.4, // [ux-redesign W4]
 };
 
 interface AmbienceVoice {
@@ -248,6 +249,9 @@ export class AudioEngine {
       if (this.enabled && !document.hidden && ctx.state !== 'running') this.setBlocked(true);
     }, 700);
   }
+
+  /** [ux-w2f #43] Public hook for a known gesture (the intro's "Tap to enter"): same path as the global unlock listeners. */
+  unlock(): void { this.gesture(); }
 
   /** Not from a gesture, so iOS may refuse: if the context is still not running a moment later, ask for a tap. */
   private tryResume(): void {
@@ -738,10 +742,15 @@ export class AudioEngine {
     });
   }
 
-  /** Briefly lowers the music under an important sound. */
+  /** [w4fix] When the current duck lifts (audio-clock seconds): a shorter duck never cuts a longer one short. */
+  private duckEnd = 0;
+
+  /** Briefly lowers the music under an important sound (a duck already running longer is kept; a longer one extends it). */
   duck(seconds = 2): void {
     if (!this.ctx || !this.musicBus) return;
     const t = this.ctx.currentTime;
+    if (t + seconds <= this.duckEnd) return;
+    this.duckEnd = t + seconds;
     const g = this.musicBus.gain;
     g.cancelScheduledValues(t);
     g.setValueAtTime(g.value, t);
@@ -752,7 +761,10 @@ export class AudioEngine {
   /** [ux-wp3 D2/F4] Says which sounds to skip right now (the app silences the game's sounds while it catches up on time away). */
   mute: ((name: Sfx) => boolean) | null = null;
 
-  play(name: Sfx, opts: { pan?: number; volume?: number } = {}): void {
+  /** [ux-redesign W4] Optional pitch for a play that does not bring its own (uiSound.soundRate: ±5 % on UI sounds, the collect combo). */
+  rateOf: ((name: Sfx) => number | undefined) | null = null;
+
+  play(name: Sfx, opts: { pan?: number; volume?: number; rate?: number } = {}): void {
     if (this.mute?.(name)) return;
     this.onCue?.(name);
     if (!this.enabled || !this.ctx || this.ctx.state !== 'running') return;
@@ -766,7 +778,7 @@ export class AudioEngine {
     this.lastPlayed.set(name, now);
     const src = this.ctx.createBufferSource();
     src.buffer = buffer;
-    src.playbackRate.value = 0.97 + Math.random() * 0.06;
+    src.playbackRate.value = opts.rate ?? this.rateOf?.(name) ?? 0.97 + Math.random() * 0.06;
     const g = this.ctx.createGain();
     g.gain.value = opts.volume ?? 1;
     const p = this.ctx.createStereoPanner();

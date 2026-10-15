@@ -129,6 +129,10 @@ interface Burst {
 }
 
 
+/** [ux-w2f #26] Canvas size from the layout viewport: innerWidth/Height can stay large after the window gets smaller. */
+const viewportW = (): number => document.documentElement.clientWidth || window.innerWidth;
+const viewportH = (): number => document.documentElement.clientHeight || window.innerHeight;
+
 export class BunkerRenderer {
   app = new Application();
   readonly worldContainer = new Container();
@@ -523,8 +527,8 @@ export class BunkerRenderer {
   async init(canvas: HTMLCanvasElement): Promise<void> {
     await this.app.init({
       canvas,
-      width: window.innerWidth,
-      height: window.innerHeight,
+      width: viewportW(), // [ux-w2f #26] layout viewport, not innerWidth (which does not shrink back after a zoom/resize)
+      height: viewportH(),
       backgroundColor: 0x0d0f1a,
       // Lite mode (after the game was killed twice in an hour): fewer pixels, no multisampling. The picture is drawn by
       // render() itself rather than Pixi's ticker: a ticker that throws once never comes back.
@@ -582,7 +586,7 @@ export class BunkerRenderer {
     // gfx-p0 light: the composite takes over the era grade and reads the era/night for vignette and night lighting.
     this.postfx = new PostFX(this.app, this.worldContainer, this.grade, () => ({ era: this.surfaceEra, night: this.nightNow, target: this.frameTarget }));
     window.addEventListener('resize', () => {
-      this.app.renderer.resize(window.innerWidth, window.innerHeight);
+      this.app.renderer.resize(viewportW(), viewportH()); // [ux-w2f #26]
       this.cam.onResize(); // [plan4:ST-12] keeps zoom and centre for small changes (Safari's address bar)
     });
   }

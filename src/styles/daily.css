@@ -1,12 +1,6 @@
 /* [plan4:GP-1] Daily orders: the HUD chip, the sheet and its cards. Fonts go through --fs (Text size XL), buttons keep var(--tap) height, and
    nothing is wider than the sheet. Tier colours are decoration; every tier also carries its name as text (never colour alone). */
 
-/* ---------- HUD chip ---------- */
-.daily-btn { position: relative; display: inline-flex; align-items: center; gap: 4px; }
-.daily-btn .daily-text { font-variant-numeric: tabular-nums; font-size: calc(12px * var(--fs, 1)); }
-.daily-btn .nav-badge { top: -6px; inset-inline-end: -6px; }
-.daily-btn.has-cards { color: #ffd27a; border-color: rgba(255, 210, 122, 0.6); }
-
 /* ---------- sheet ---------- */
 .daily-sheet .sheet-body { display: flex; flex-direction: column; gap: 10px; }
 .daily-head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 2px 12px; font-size: calc(12px * var(--fs, 1)); color: var(--text-secondary); }

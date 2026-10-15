@@ -241,7 +241,7 @@ export interface A11ySettings {
 export function defaultA11y(): A11ySettings {
   return {
     motion: 'auto', flash: 'normal', textScale: 1.1, contrast: 'normal', colorMode: 'none', haptics: 'light', oneHand: 'off',
-    largeTargets: false, popups: 'all', captions: false, announce: false, powerSaver: false, playInSilent: false, timing: 'normal', zoomButtons: false,
+    largeTargets: false, popups: 'important', captions: false, announce: false, powerSaver: false, playInSilent: false, timing: 'normal', zoomButtons: false,
   };
 }
 

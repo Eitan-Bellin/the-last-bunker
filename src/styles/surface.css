@@ -1,0 +1,78 @@
+/* [ux-redesign W2d] Surface: a compact locked card (#15), a map drawn finger-sized with a region list beside it (#9). Tokens only. */
+
+/* #15 Locked: a card at the bottom over the dimmed bunker, not a full-screen wall. */
+.surface-overlay.is-locked {
+  background: var(--overlay-soft);
+  justify-content: flex-end;
+  gap: 0;
+}
+.surface-overlay.is-locked .surface-header,
+.surface-overlay.is-locked .surface-map {
+  background: var(--surface-1);
+  border: var(--border-w) solid var(--border);
+  max-inline-size: calc(var(--measure-short) + var(--sp-8));
+  inline-size: 100%;
+  margin-inline: auto;
+}
+.surface-overlay.is-locked .surface-header {
+  border-block-end: 0;
+  border-start-start-radius: var(--r-card);
+  border-start-end-radius: var(--r-card);
+  padding: var(--sp-3) var(--sp-4) 0;
+  justify-content: flex-start;
+  gap: var(--sp-2);
+}
+/* [ux-redesign w2fix B3] relative, not static: the kit hit area (.k-hit) needs the button as its box to reach the full hit-min. */
+.surface-overlay.is-locked .surface-close { position: relative; margin-inline-start: auto; }
+.surface-overlay.is-locked .surface-map {
+  flex: 0 0 auto;
+  border-block-start: 0;
+  border-end-start-radius: var(--r-card);
+  border-end-end-radius: var(--r-card);
+  padding: var(--sp-2) var(--sp-4) var(--sp-4);
+  justify-content: stretch;
+}
+.surface-overlay.is-locked .surface-missions,
+.surface-overlay.is-locked .surface-card { display: none; }
+.surface-locked {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  text-align: start;
+  max-width: none;
+  inline-size: 100%;
+}
+.surface-locked__need {
+  font-family: var(--font-title);
+  font-size: calc(var(--type-body-l) * var(--fs, 1));
+  color: var(--text-primary);
+}
+.surface-locked__teaser {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: calc(var(--type-body) * var(--fs, 1));
+  line-height: var(--lh-body);
+}
+
+/* #9 The map is drawn so one region is at least 44 px; the box scrolls around it (both ways). */
+.surface-map .map-wrap.is-zoomed {
+  flex: 0 0 auto;
+  max-width: none;
+  min-width: 0;
+  max-height: none;
+}
+.surface-map { align-items: safe flex-start; justify-content: safe flex-start; overscroll-behavior: contain; }
+.surface-map .hex polygon { fill: transparent; stroke: none; pointer-events: all; }
+.surface-map .hex.fog polygon { pointer-events: none; }
+.surface-map .hex.is-selected polygon { stroke: var(--primary); stroke-width: var(--ring-w); }
+
+/* #9 Region list: each row a 48 px button. */
+.surface-regions { display: flex; flex-direction: column; gap: var(--sp-1); }
+.surface-region .k-row__value { font-size: calc(var(--type-caption) * var(--fs, 1)); }
+.surface-region__go {
+  color: var(--primary);
+  font-size: calc(var(--type-caption) * var(--fs, 1));
+  white-space: nowrap;
+}
+.surface-back { align-self: flex-start; }
+.team-chips .team-chip { min-height: var(--hit-min); }

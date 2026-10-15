@@ -2,6 +2,7 @@ import { getDef } from '../../data/buildingDefs';
 import type { BuildingType, RaidStance } from '../../core/GameState';
 import { haptic } from '../../utils/haptics';
 import { i18n } from '../../i18n/I18nManager';
+import { plural } from '../format';
 import { costRow, el } from '../../ui/dom';
 import { portraitFor, portraitUrl } from '../../data/portraits';
 import { INCIDENTS, DISASTERS, disasterCost, quickFixCost } from '../../data/incidents';
@@ -67,7 +68,7 @@ export class DangerController {
     const body = el('div', 'modal-result');
     const later = { label: i18n.t('danger.disaster.later'), className: 'btn-secondary', onClick: () => this.app.modal.hide() };
     const more = d.disasters.length + (d.raid ? 1 : 0) - 1;
-    const note = more > 0 ? el('p', 'bp-hint', i18n.t('danger.more', { n: more })) : null;
+    const note = more > 0 ? el('p', 'bp-hint', plural('danger.more', more)) : null;
     if (dz && dz.deadline - now <= raidLeft) {
       const def = DISASTERS[dz.kind];
       const cost = disasterCost(state, dz.kind);
@@ -75,7 +76,7 @@ export class DangerController {
       body.append(
         el('p', 'modal-body', def.desc[locale]),
         el('p', 'modal-sub negative-text', `[[clock]] ${i18n.t('danger.disaster.eta', { time: i18n.formatDuration(dz.deadline - now) })}`),
-        el('p', 'bp-hint', `[[worker]] ${i18n.t('danger.disaster.crew', { n: def.crew })}`),
+        el('p', 'bp-hint', `[[worker]] ${plural('danger.disaster.crew', def.crew)}`),
       );
       if (block === 'cost') body.appendChild(el('p', 'bp-hint negative-text', i18n.t('danger.disaster.noCost')));
       if (block === 'crew') body.appendChild(el('p', 'bp-hint negative-text', i18n.t('danger.disaster.noCrew')));

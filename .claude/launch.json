@@ -36,19 +36,6 @@
       "port": 4199
     },
     {
-      "name": "longgame",
-      "runtimeExecutable": "npx",
-      "runtimeArgs": [
-        "vite",
-        "preview",
-        "C:/Users/eitan/Desktop/last-bunker-longgame",
-        "--port",
-        "4299",
-        "--strictPort"
-      ],
-      "port": 4299
-    },
-    {
       "name": "dev2",
       "runtimeExecutable": "npx",
       "runtimeArgs": [
@@ -60,16 +47,29 @@
       "port": 5174
     },
     {
-      "name": "ux",
+      "name": "world",
       "runtimeExecutable": "npx",
       "runtimeArgs": [
         "vite",
-        "C:/Users/eitan/Desktop/last-bunker-ux",
+        ".claude/worktrees/world",
         "--port",
-        "5175",
+        "5176",
         "--strictPort"
       ],
-      "port": 5175
+      "port": 5176
+    },
+    {
+      "name": "phone",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": [
+        "vite",
+        "preview",
+        "--host",
+        "--port",
+        "4300",
+        "--strictPort"
+      ],
+      "port": 4300
     }
   ]
 }

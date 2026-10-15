@@ -1,13 +1,16 @@
-import { el, costRow } from '../dom';
+import { el } from '../dom';
 import { i18n } from '../../i18n/I18nManager';
-import { haptic } from '../../utils/haptics';
 import { getHudInsets } from '../../utils/hudInsets';
 import { announce } from '../a11yDom';
+import { kButton, setKButtonDisabled, setKButtonLabel } from '../kit';
+import { costChips } from './BuildMenu';
 import type { GameState } from '../../core/GameState';
 
 // [plan4:ST-19] The placement console: effect / reason chips that follow the ghost room, and the confirm bar above the bottom nav
 // ("Best spot", "Cancel" and "Build (cost)": 48px tall, 56px wide at least; the thumb side follows the one-hand setting, styles/placement.css).
 // Nothing here touches the game: the controller (ui/controllers/world.ts) feeds it and handles the three buttons.
+// [ux-redesign w2c #2] The three are kit buttons. Build is disabled with its reason (no spot chosen, the spot is refused, what the price lacks):
+// pressing it anyway shakes it and shows the reason; "Best spot" is disabled when the room has no valid spot at all.
 
 export type ChipKind = 'good' | 'warn' | 'bad' | 'info';
 export interface Chip { kind: ChipKind; text: string }
@@ -19,44 +22,50 @@ export class PlacementBar {
   onConfirm: (() => void) | null = null;
   onCancel: (() => void) | null = null;
   onRecommend: (() => void) | null = null;
-  /** The Build button was pressed while it cannot build (no ghost yet, or an invalid spot): the controller says why. */
-  onIdleBuild: (() => void) | null = null;
 
   private readonly bar = el('div', 'placement-bar');
   private readonly chips = el('div', 'placement-chips');
   private readonly hint = el('div', 'placement-hint');
   private readonly build: HTMLButtonElement;
+  private readonly rec: HTMLButtonElement;
   private readonly buildCost = el('span', 'pl-cost-slot');
-  private readonly buildLabel = el('span', 'pl-build-label');
   private follow: (() => ScreenRect | null) | null = null;
   private raf = 0;
   private hintTimer = 0;
   private lastChips = '';
   private chipW = 0;
   private lastPos = '';
-  private ready = false;
+  private lastCost = '';
 
   constructor(parent: HTMLElement = document.body) {
     this.bar.setAttribute('role', 'group');
     this.bar.setAttribute('aria-label', i18n.t('placement.title'));
-    const cancel = el('button', 'pl-btn pl-cancel', '[[close]]');
-    cancel.type = 'button';
-    cancel.setAttribute('aria-label', i18n.t('placement.cancelAria'));
-    cancel.title = i18n.t('placement.cancel');
-    cancel.addEventListener('click', () => { haptic('tap'); this.onCancel?.(); });
-    const rec = el('button', 'pl-btn pl-rec') as HTMLButtonElement;
-    rec.type = 'button';
-    rec.setAttribute('aria-label', i18n.t('placement.recommendAria'));
-    rec.append(el('span', 'pl-ico', '[[target]]'), el('span', 'pl-lbl', i18n.t('placement.recommend')));
-    rec.addEventListener('click', () => { haptic('tap'); this.onRecommend?.(); });
-    this.build = el('button', 'pl-btn pl-build idle') as HTMLButtonElement;
-    this.build.type = 'button';
-    this.build.append(el('span', 'pl-ico', '[[check]]'), this.buildLabel, this.buildCost);
-    this.build.addEventListener('click', () => {
-      if (!this.ready) { this.onIdleBuild?.(); return; }
-      this.onConfirm?.();
+    const cancel = kButton({
+      variant: 'secondary',
+      className: 'pl-btn pl-cancel',
+      icon: 'close',
+      ariaLabel: i18n.t('placement.cancelAria'),
+      onPress: () => this.onCancel?.(),
     });
-    this.bar.append(cancel, rec, this.build);
+    cancel.title = i18n.t('placement.cancel');
+    this.rec = kButton({
+      variant: 'secondary',
+      className: 'pl-btn pl-rec',
+      icon: 'target',
+      label: i18n.t('placement.recommend'),
+      ariaLabel: i18n.t('placement.recommendAria'),
+      onPress: () => this.onRecommend?.(),
+    });
+    this.build = kButton({
+      variant: 'primary',
+      className: 'pl-btn pl-build',
+      icon: 'check',
+      label: i18n.t('placement.build'),
+      detail: this.buildCost,
+      disabledReason: i18n.t('placement.noGhost'),
+      onPress: () => this.onConfirm?.(),
+    });
+    this.bar.append(cancel, this.rec, this.build);
     this.chips.setAttribute('aria-hidden', 'true'); // the same words are announced politely when they change
     this.hint.setAttribute('role', 'status');
     for (const n of [this.chips, this.hint, this.bar]) { n.style.display = 'none'; parent.appendChild(n); }
@@ -66,24 +75,34 @@ export class PlacementBar {
 
   /** Opens the bar for a room: its name for the Build button's label and its price (chips go red for what is missing). `move` = relocating a room. */
   show(name: string, state: GameState, cost: Record<string, number>, move = false): void {
-    this.buildLabel.textContent = i18n.t(move ? 'relocate.confirm' : 'placement.build');
+    setKButtonLabel(this.build, i18n.t(move ? 'relocate.confirm' : 'placement.build'));
     this.build.setAttribute('aria-label', i18n.t(move ? 'relocate.confirmAria' : 'placement.buildAria', { name }));
+    this.lastCost = '';
     this.setCost(state, cost);
-    this.setReady(false);
+    this.setReady(i18n.t('placement.noGhost'));
+    this.setRecommendable(null);
     this.bar.style.display = '';
     document.body.classList.add('placement-bar-on');
     this.syncHeight();
   }
 
+  /** The price on Build: chips with a check or a cross, and how much is short (redrawn only when the picture changes). */
   setCost(state: GameState, cost: Record<string, number>): void {
-    this.buildCost.replaceChildren(costRow(state, cost));
+    const short = (r: string, v: number) => Math.max(0, Math.ceil(v - (state.resources[r as keyof GameState['resources']]?.amount ?? 0)));
+    const sig = Object.entries(cost).map(([r, v]) => `${r}:${v}:${short(r, v)}`).join('|');
+    if (sig === this.lastCost) return;
+    this.lastCost = sig;
+    this.buildCost.replaceChildren(costChips(state, cost, 'pl-cost'));
   }
 
-  /** Is there a ghost on a valid spot (the Build button looks and acts ready)? */
-  setReady(ready: boolean): void {
-    this.ready = ready;
-    this.build.classList.toggle('idle', !ready);
-    this.build.setAttribute('aria-disabled', ready ? 'false' : 'true');
+  /** null = a ghost on a valid spot the bunker can pay for (Build is ready); otherwise the reason Build is disabled. */
+  setReady(reason: string | null): void {
+    setKButtonDisabled(this.build, reason);
+  }
+
+  /** null = "Best spot" works; otherwise why it cannot (the room has no valid spot at all). */
+  setRecommendable(reason: string | null): void {
+    setKButtonDisabled(this.rec, reason);
   }
 
   /** The chips over the ghost (effects when valid, the reason when not). An empty list hides them. */

@@ -1,7 +1,8 @@
 import type { BuildingInstance, BuildingType, GameState, SurvivorState } from '../../core/GameState';
-import { floorTag } from '../floorTag'; // plan4:ST-16
+import { floorTag, floorTagIso } from '../floorTag'; // plan4:ST-16
 import type { GameEngine } from '../../core/GameEngine';
 import { i18n } from '../../i18n/I18nManager';
+import { plural } from '../format';
 import { crewCount, getDef, traitBonus } from '../../data/buildingDefs';
 import { childCapacityOf } from '../../data/roomEffects'; // [plan4:BL-4]
 import { MORALE_KINDS, STAT_KEYS, xpForNextLevel } from '../../systems/PopulationSystem';
@@ -14,11 +15,16 @@ import { MAX_RANK, SPECS, rankOf, rankProgress, trainingCost } from '../../data/
 import { RESOURCE_ICONS } from '../dom';
 import { flowArrow } from '../rtl'; // [plan4:UX-22]
 import { jobRoom } from '../HUD'; // [ux-wp4] B4
+import { kButton } from '../kit'; // [ux2e]
+import { reducedMotion } from '../../utils/a11y';
+
+/** [ux2e #29] Filters (one chip row) only above this many people; below it every survivor fits on a phone anyway. */
+const FILTER_FROM = 12;
 
 interface Bars {
   health: HTMLElement;
   happiness: HTMLElement;
-  xp: HTMLElement;
+  xp: HTMLElement | null;
   /** [ux-wp4] M5: the rank bar moves with the person's mastery xp without a re-render. */
   rank: HTMLElement | null;
 }
@@ -114,7 +120,7 @@ export class PeoplePanel {
     this.signature = '';
     this.refresh(this.engine.stateManager.state);
     this.sheet.show();
-    if (focusId) requestAnimationFrame(() => this.sheet.body.querySelector(`[data-sid="${focusId}"]`)?.scrollIntoView({ block: 'center', behavior: 'smooth' }));
+    if (focusId) requestAnimationFrame(() => this.sheet.body.querySelector(`[data-sid="${focusId}"]`)?.scrollIntoView({ block: 'center', behavior: reducedMotion() ? 'auto' : 'smooth' }));
   }
 
   hide(): void {
@@ -125,8 +131,13 @@ export class PeoplePanel {
     return this.sheet.isVisible;
   }
 
+  /** [ux2e #29] Compact cards by default (a tap opens the full card); the switch to full cards sits in the filter row of a big bunker. */
   private currentView(state: GameState): PeopleView {
-    return this.view ?? (state.survivors.length > 12 ? 'rows' : 'cards');
+    return this.filtersOn(state) ? this.view ?? 'rows' : 'rows';
+  }
+
+  private filtersOn(state: GameState): boolean {
+    return state.survivors.length > FILTER_FROM;
   }
 
   refresh(state: GameState): void {
@@ -153,7 +164,7 @@ export class PeoplePanel {
       if (b) {
         setBar(b.health, s.health);
         setBar(b.happiness, s.happiness);
-        setBar(b.xp, (s.xp / xpForNextLevel(s.level)) * 100);
+        if (b.xp) setBar(b.xp, (s.xp / xpForNextLevel(s.level)) * 100);
         if (b.rank) {
           const [cur, span] = rankProgress(s);
           setBar(b.rank, rankOf(s) >= MAX_RANK ? 100 : (cur / span) * 100);
@@ -171,6 +182,7 @@ export class PeoplePanel {
   private filtered(state: GameState): SurvivorState[] {
     const locale = i18n.currentLocale;
     const rank = (s: SurvivorState) => (s.child ? 2 : s.assignedBuildingId ? 1 : 0);
+    if (!this.filtersOn(state)) return [...state.survivors].sort((a, b) => rank(a) - rank(b)); // [ux2e #29] no filters on screen: none apply
     const roomOf = (s: SurvivorState) => (s.assignedBuildingId ? state.buildings.find(b => b.id === s.assignedBuildingId) : undefined);
     return state.survivors.filter(s => {
       if (this.filter === 'idle' && (s.assignedBuildingId || s.child || s.isOnMission)) return false;
@@ -187,7 +199,7 @@ export class PeoplePanel {
   }
 
   private render(state: GameState): void {
-    this.sheet.setTitle(`[[people]] ${i18n.t('people.title')} · ${state.survivors.length}/${state.maxPopulation}`);
+    this.sheet.setTitle(`[[people]] ${i18n.t('people.title')} · ${state.survivors.length}/${state.maxPopulation}`);
     this.bars.clear();
     this.levels.clear();
     const tabs = el('div', 'tab-row');
@@ -205,7 +217,8 @@ export class PeoplePanel {
     }
     const view = this.currentView(state);
     const head = this.renderJobsBar(state);
-    this.renderTools(state, view);
+    if (this.filtersOn(state)) this.renderTools(state, view);
+    else this.tools.replaceChildren();
     const list = el('div', `people-list${view === 'rows' ? ' rows' : ''}`);
     if (state.survivors.length === 0) list.appendChild(el('div', 'bp-hint center', i18n.t('people.empty')));
     const shown = this.filtered(state);
@@ -226,15 +239,20 @@ export class PeoplePanel {
     const { idle, free } = jobRoom(state);
     const n = Math.min(idle, free);
     if (n > 0) {
-      box.appendChild(button(`[[worker]] ${i18n.t('wp4.assignIdle', { n })}`, 'btn-primary pp-assign', () => {
-        const placed = this.assignIdle();
-        uiSound(placed ? 'assign' : 'error');
-        this.assignedNote = placed ? i18n.t('wp4.assignedN', { n: placed }) : i18n.t('wp4.assignedNone');
-        this.engine.requestSave();
-        this.redraw();
+      // [ux2e #29] The existing best-fit assignment (assignIdle below), named for what it is and marked as the advised move.
+      box.appendChild(kButton({
+        variant: 'primary', className: 'btn-primary pp-assign', icon: 'worker', label: i18n.t('ux2e.people.autoAssign'),
+        detail: el('span', 'ux2e-sub', i18n.t('ux2e.people.autoAssignSub', { n })),
+        onPress: () => {
+          const placed = this.assignIdle();
+          uiSound(placed ? 'assign' : 'error');
+          this.assignedNote = placed ? plural('wp4.assignedN', placed) : i18n.t('wp4.assignedNone');
+          this.engine.requestSave();
+          this.redraw();
+        },
       }));
     } else if (idle > 0) {
-      box.appendChild(el('div', 'pp-nojob', `[[worker]] ${i18n.t('wp4.noJobs', { n: idle })}`));
+      box.appendChild(el('div', 'pp-nojob', `[[worker]] ${plural('wp4.noJobs', idle)}`));
     }
     if (this.assignedNote) box.appendChild(el('div', 'bp-hint pp-note', `[[check]] ${this.assignedNote}`));
     return box;
@@ -305,12 +323,6 @@ export class PeoplePanel {
     if (!floors.includes(this.floorFilter)) this.floorFilter = -1;
     this.roomSel.value = this.roomFilter;
     this.floorSel.value = String(this.floorFilter);
-    const row1 = el('div', 'pp-row');
-    row1.append(
-      chip(this.filter === 'all', `${i18n.t('build.cat.all')} ${state.survivors.length}`, () => { this.filter = 'all'; this.redraw(); }),
-      chip(this.filter === 'idle', `${i18n.t('wp4.idle')} ${idleN}`, () => { this.filter = 'idle'; this.redraw(); }),
-      this.roomSel, this.floorSel,
-    );
     const viewBtn = el('button', 'bm-toggle pp-view');
     viewBtn.type = 'button';
     viewBtn.append(el('span', '', view === 'rows' ? `[[menu]] ${i18n.t('wp4.viewCards')}` : `[[menu]] ${i18n.t('wp4.viewRows')}`));
@@ -320,9 +332,17 @@ export class PeoplePanel {
       uiSound('switch');
       this.redraw();
     });
-    const row2 = el('div', 'pp-row');
-    row2.append(this.search, viewBtn);
-    this.tools.replaceChildren(row1, row2);
+    // [ux2e #29] One chip row (it scrolls sideways): All, Idle, room, floor, search, view. It used to be two to four rows.
+    const row = el('div', 'pp-row ux2e-filter-row');
+    row.setAttribute('role', 'toolbar');
+    row.setAttribute('aria-label', i18n.t('ux2e.people.filters'));
+    row.setAttribute('data-no-pulldown', '');
+    row.append(
+      chip(this.filter === 'all', `${i18n.t('build.cat.all')} ${state.survivors.length}`, () => { this.filter = 'all'; this.redraw(); }),
+      chip(this.filter === 'idle', `${i18n.t('wp4.idle')} ${idleN}`, () => { this.filter = 'idle'; this.redraw(); }),
+      this.roomSel, this.floorSel, this.search, viewBtn,
+    );
+    this.tools.replaceChildren(row);
   }
 
   /** [ux-wp4] M5: one compact line per person (face, name and level, job, best stat); a tap opens the full card in place. */
@@ -341,12 +361,27 @@ export class PeoplePanel {
     this.levels.set(s.id, { node: lv, level: s.level });
     name.appendChild(lv);
     const jobText = s.isOnMission ? `[[backpack]] ${i18n.t('wp4.onMission')}` : this.jobLabel(state, s);
-    const best = STAT_KEYS.reduce((a, k) => (s.stats[k] > s.stats[a] ? k : a), STAT_KEYS[0]);
-    const stat = el('span', 'pr-stat', `${STAT_ICONS[best]} ${s.stats[best]}`);
-    stat.title = i18n.t(`stats.${best}`);
     const main = el('span', 'pr-main');
     main.append(name, el('span', `pr-job${job || s.child || s.isOnMission || s.assignedBuildingId ? '' : ' warn'}`, jobText));
-    row.append(face, main, stat);
+    // [ux2e #29] A small card: the five skills as icon + number (the room's key skill marked), then health and morale bars.
+    const jobStat = job ? getDef(job.type)?.optimalStat : undefined;
+    const skills = el('span', 'ux2e-skills');
+    for (const k of STAT_KEYS) {
+      const chip = el('span', `ux2e-skill${k === jobStat ? ' active' : ''}`, `${STAT_ICONS[k]} ${s.stats[k]}`);
+      chip.title = i18n.t(`stats.${k}`);
+      chip.setAttribute('aria-label', `${i18n.t(`stats.${k}`)} ${s.stats[k]}`);
+      skills.appendChild(chip);
+    }
+    main.appendChild(skills);
+    const bars = el('span', 'ux2e-minibars');
+    const health = bar(s.health, 'health');
+    const morale = bar(s.happiness, 'happiness');
+    health.setAttribute('aria-label', `${i18n.t('people.health')} ${Math.round(s.health)}%`);
+    morale.setAttribute('aria-label', `${i18n.t('people.happiness')} ${Math.round(s.happiness)}%`);
+    bars.append(el('span', 'ux2e-bar-ic', '[[heart]]'), health, el('span', 'ux2e-bar-ic', '[[happy]]'), morale);
+    main.appendChild(bars);
+    this.bars.set(s.id, { health, happiness: morale, xp: null, rank: null });
+    row.append(face, main);
     row.setAttribute('aria-expanded', 'false');
     row.addEventListener('click', () => {
       uiSound('click');
@@ -453,12 +488,14 @@ export class PeoplePanel {
     head.appendChild(traits);
     if (collapsible) {
       // [ux-wp4] M5: an open card in the rows view folds back to its row.
-      const fold = button('▴', 'btn-small btn-ghost pp-fold', () => {
-        if (this.expandedId === s.id) this.expandedId = null;
-        if (this.choosingFor === s.id) this.choosingFor = null;
-        this.refresh(this.engine.stateManager.state);
+      const fold = kButton({
+        variant: 'icon', className: 'btn-ghost pp-fold', label: '▴', ariaLabel: i18n.t('wp4.fold'),
+        onPress: () => {
+          if (this.expandedId === s.id) this.expandedId = null;
+          if (this.choosingFor === s.id) this.choosingFor = null;
+          this.refresh(this.engine.stateManager.state);
+        },
       });
-      fold.setAttribute('aria-label', i18n.t('wp4.fold'));
       head.appendChild(fold);
     }
     card.appendChild(head);
@@ -476,18 +513,14 @@ export class PeoplePanel {
     }
     card.appendChild(statsRow);
 
-    const bars: Bars = {
-      health: bar(s.health, 'health'),
-      happiness: bar(s.happiness, 'happiness'),
-      xp: bar((s.xp / xpForNextLevel(s.level)) * 100, 'xp'),
-      rank: null,
-    };
+    const xp = bar((s.xp / xpForNextLevel(s.level)) * 100, 'xp');
+    const bars: Bars = { health: bar(s.health, 'health'), happiness: bar(s.happiness, 'happiness'), xp, rank: null };
     this.bars.set(s.id, bars);
     const barGrid = el('div', 'bar-grid');
     barGrid.append(
       el('span', 'bar-label', `[[heart]] ${i18n.t('people.health')}`), bars.health,
       el('span', 'bar-label', `[[happy]] ${i18n.t('people.happiness')}`), bars.happiness,
-      el('span', 'bar-label', `[[star]] ${i18n.t('people.xp')}`), bars.xp,
+      el('span', 'bar-label', `[[star]] ${i18n.t('people.xp')}`), xp,
     );
     card.appendChild(barGrid);
 
@@ -535,14 +568,25 @@ export class PeoplePanel {
     // [plan4:BL-4] A child in a nursery or school shows its room; otherwise "too young", as before.
     jobRow.appendChild(el('span', job || ruin || s.child || s.assignedBuildingId?.startsWith('p_') ? '' : 'warn', this.jobLabel(state, s)));
     const actions = el('div', 'person-actions');
-    actions.appendChild(button('?', 'btn-small btn-ghost', () => {
-      this.expandedId = this.expandedId === s.id ? null : s.id;
-      this.refresh(this.engine.stateManager.state);
+    actions.appendChild(kButton({
+      variant: 'secondary', className: 'btn-ghost ux2e-48', label: '?', ariaLabel: i18n.t('people.moraleWhy'),
+      onPress: () => {
+        this.expandedId = this.expandedId === s.id ? null : s.id;
+        this.refresh(this.engine.stateManager.state);
+      },
     }));
     if (!s.child || state.buildings.some(b => !b.isConstructing && childCapacityOf(b) > 0)) { // [plan4:BL-4] children can be placed once a room takes them
-      actions.appendChild(button(i18n.t('people.assign'), 'btn-small', () => {
-        this.choosingFor = this.choosingFor === s.id ? null : s.id;
-        this.refresh(this.engine.stateManager.state);
+      actions.appendChild(kButton({
+        variant: 'secondary', className: 'btn-secondary ux2e-48', label: i18n.t('people.assign'),
+        onPress: () => {
+          this.choosingFor = this.choosingFor === s.id ? null : s.id;
+          this.refresh(this.engine.stateManager.state);
+          // [ux-redesign final F2] The room list opens under the card, often below the fold: bring it into view.
+          if (this.choosingFor === s.id) {
+            requestAnimationFrame(() => this.sheet.body.querySelector(`[data-sid="${s.id}"] .job-chooser`)
+              ?.scrollIntoView({ block: 'nearest', behavior: reducedMotion() ? 'auto' : 'smooth' }));
+          }
+        },
       }));
     }
     jobRow.appendChild(actions);
@@ -649,7 +693,7 @@ export class PeoplePanel {
       const full = used >= cap && !b.assignedSurvivorIds.includes(s.id);
       const statVal = def.optimalStat ? `${STAT_ICONS[def.optimalStat]} ${s.stats[def.optimalStat]}` : '';
       const star = traitBonus(s.traits, b.type) > 0 ? ' [[star]]' : '';
-      const label = `${floorTag(b.position.floor)} · ${BUILDING_ICONS[b.type] ?? ''} ${def.name[locale] ?? def.name.en} (${used}/${cap}) ${statVal}${star}`;
+      const label = `${floorTagIso(b.position.floor)} · ${BUILDING_ICONS[b.type] ?? ''} ${def.name[locale] ?? def.name.en} (${used}/${cap}) ${statVal}${star}`;
       rows.push({ b, full, score: fitScore(s, b.type), label });
     }
     const cur = (r: { b: BuildingInstance }) => (r.b.id === s.assignedBuildingId ? 1 : 0);

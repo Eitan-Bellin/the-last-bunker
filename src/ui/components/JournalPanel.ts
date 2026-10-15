@@ -1,10 +1,12 @@
 import type { GameState } from '../../core/GameState';
 import { i18n } from '../../i18n/I18nManager';
+import { plural } from '../format';
 import { LORE, getLore, type LoreEntry, type LoreKind } from '../../data/lore';
 import { getDef } from '../../data/buildingDefs';
 import { Sheet } from './Sheet';
-import { enhanceTabs } from '../a11yDom';
-import { button, el } from '../dom';
+import { el } from '../dom';
+import { flowArrow } from '../rtl';
+import { kEmpty, kTabs } from '../kit';
 import { CHAPTERS, CHARACTERS, INTERLUDES, type CharacterId } from '../../data/story';
 // [Economy A2] credits shop tab
 import { ShopPanel } from './ShopPanel';
@@ -22,16 +24,25 @@ export class JournalPanel {
 
   onRead: ((id: string) => void) | null = null;
   onReplay: ((chapterId: string) => void) | null = null;
-  private tab: 'finds' | 'story' | 'shop' = 'finds';
+  private tab: 'finds' | 'story' = 'finds';
+  /** [ux-redesign W2d #23] The shop is its own sheet; the Journal keeps a "Shop" tab that opens it. */
   private shopPanel = new ShopPanel();
-  /** Set by the app: lets the shop tab read offers and buy. */
-  shop: ShopSystem | null = null;
   onBuy: ((id: ShopItemId) => void) | null = null;
 
-  /** Opens the journal straight on the shop tab (welcome-back "to the shop" button). */
+  constructor() {
+    this.shopPanel.onBuy = id => this.onBuy?.(id);
+  }
+
+  /** Set by the app: the shop reads offers and buys through it. */
+  get shop(): ShopSystem | null { return this.shopPanel.shop; }
+  set shop(s: ShopSystem | null) { this.shopPanel.shop = s; }
+
+  /**
+   * [ux-redesign W2d #23] Opens the shop sheet on its own (welcome-back "to the shop", and the HUD's shop entry). Over the Journal when
+   * that is open (closing the shop goes back to it).
+   */
   showShop(state: GameState): void {
-    this.tab = 'shop';
-    this.show(state);
+    this.shopPanel.show(state);
   }
 
   show(state: GameState): void {
@@ -41,44 +52,49 @@ export class JournalPanel {
   }
 
   hide(): void {
+    this.shopPanel.hide();
     this.sheet.hide();
   }
 
+  /** The Journal or its shop is open (the app refreshes and toggles both through this panel). */
   get isVisible(): boolean {
-    return this.sheet.isVisible;
+    return this.sheet.isVisible || this.shopPanel.isVisible;
   }
 
   refresh(state: GameState): void {
-    const sig = `${state.lore.join(',')}|${(state.loreUnread ?? []).join(',')}|${i18n.currentLocale}|${this.tab}|${state.storyFlags.length}|${this.tab === 'shop' ? this.shopPanel.signature(state) : ''}`;
+    if (this.shopPanel.isVisible) this.shopPanel.refresh(state);
+    const sig = `${state.lore.join(',')}|${(state.loreUnread ?? []).join(',')}|${i18n.currentLocale}|${this.tab}|${state.storyFlags.length}`;
     if (sig === this.signature) return;
     this.signature = sig;
     const locale = i18n.currentLocale;
-    this.sheet.setTitle(`[[journal]] ${i18n.t('journal.title')} · ${state.lore.length}/${LORE.length}`);
+    this.sheet.setTitle(`[[journal]] ${i18n.t('journal.title')} · ${state.lore.length}/${LORE.length}`);
     const root = el('div', 'journal');
-    const tabs = el('div', 'tab-row');
     const told = CHAPTERS.filter(c => state.storyFlags.includes(`story:${c.id}`)).length;
-    for (const [key, label] of [['finds', `[[note]] ${i18n.t('journal.finds')}`], ['story', `[[flag]] ${i18n.t('story.tab')} ${told}/${CHAPTERS.length}`], ['shop', `[[credits]] ${i18n.t('shop.tab')}`]] as const) {
-      tabs.appendChild(button(label, `tab-btn ${this.tab === key ? 'active' : ''}`, () => {
-        this.tab = key;
+    const tabs = kTabs([
+      { id: 'finds', label: `[[note]] ${i18n.t('journal.finds')}` },
+      { id: 'story', label: `[[flag]] ${i18n.t('story.tab')} ${told}/${CHAPTERS.length}` },
+      { id: 'shop', label: `[[credits]] ${i18n.t('shop.tab')} ${flowArrow()}` },
+    ], this.tab, (id) => {
+      if (id === 'shop') {
+        // A link, not a page: the shop opens over the Journal, which stays on the tab it was on.
         this.signature = '';
         this.refresh(state);
-      }));
-    }
-    enhanceTabs(tabs, i18n.t('journal.title'));
+        this.showShop(state);
+        return;
+      }
+      this.tab = id as 'finds' | 'story';
+      this.signature = '';
+      this.refresh(state);
+    }, i18n.t('journal.title'));
+    tabs.classList.add('journal-tabs');
     root.appendChild(tabs);
-    if (this.tab === 'shop' && this.shop) {
-      this.shopPanel.onBuy = id => this.onBuy?.(id);
-      root.appendChild(this.shopPanel.render(state, this.shop));
-      this.sheet.body.replaceChildren(root);
-      return;
-    }
     if (this.tab === 'story') {
       root.appendChild(this.renderStory(state));
       this.sheet.body.replaceChildren(root);
       return;
     }
     root.appendChild(el('p', 'bp-hint', i18n.t('journal.intro')));
-    if (state.lore.length === 0) root.appendChild(el('div', 'journal-empty', `[[broom]] ${i18n.t('journal.empty')}`));
+    if (state.lore.length === 0) root.appendChild(kEmpty('broom', i18n.t('journal.empty'))); // [ux-redesign W2d] empty state
     for (const id of state.lore) {
       const e = getLore(id);
       if (!e) continue;
@@ -94,7 +110,7 @@ export class JournalPanel {
       root.appendChild(item);
     }
     const missing = LORE.length - state.lore.length;
-    if (missing > 0) root.appendChild(el('div', 'journal-missing', `[[question]] ${i18n.t('journal.missing', { n: missing })}`));
+    if (missing > 0) root.appendChild(el('div', 'journal-missing', `[[question]] ${plural('journal.missing', missing)}`));
     this.sheet.body.replaceChildren(root);
   }
 
