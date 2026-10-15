@@ -157,6 +157,9 @@ export class HUD {
 
   private resizeObs: ResizeObserver | null = null;
   private unsubA11y: (() => void) | null = null;
+  /** [ux-redesign w2fix] The window resize listener and the pending frame of a measure, removed in destroy(). */
+  private offResize: (() => void) | null = null;
+  private measureRaf = 0;
   private nav!: HTMLElement;
 
   /**
@@ -171,7 +174,9 @@ export class HUD {
     sync();
     this.unsubA11y = subscribeA11y(sync);
     const measure = (): void => {
-      const vh = window.innerHeight;
+      this.measureRaf = 0;
+      // [ux-redesign w2fix] The layout viewport (what position: fixed and 100% use), not innerHeight (which counts a pinch-zoomed view).
+      const vh = document.documentElement.clientHeight || window.innerHeight;
       // The compact landscape layout (touch.css / hud.css) turns the status row and the nav into full-height side columns: they take
       // nothing from the top or bottom band then, so the heights are 0.
       const isColumn = (r: DOMRect): boolean => r.height > vh * 0.8;
@@ -187,10 +192,15 @@ export class HUD {
       setHudInsets({ top, bottom, objective });
       if (this.pop) this.placePop();
     };
-    if (typeof ResizeObserver === 'undefined') { measure(); return; }
-    this.resizeObs = new ResizeObserver(measure);
-    for (const n of [this.topBar, this.nav, this.objectiveEl, this.powerBanner, this.incidentBanner, this.placementBanner]) this.resizeObs.observe(n);
-    window.addEventListener('resize', measure);
+    // [ux-redesign w2fix B4] Measured in the next frame, not inside the observer's callback: publishing the insets and placing the
+    // list re-lays out the observed nodes, which made the browser report "ResizeObserver loop completed with undelivered notifications".
+    const later = (): void => { if (!this.measureRaf) this.measureRaf = requestAnimationFrame(measure); };
+    window.addEventListener('resize', later);
+    this.offResize = () => window.removeEventListener('resize', later);
+    if (typeof ResizeObserver !== 'undefined') {
+      this.resizeObs = new ResizeObserver(later);
+      for (const n of [this.topBar, this.nav, this.objectiveEl, this.powerBanner, this.incidentBanner, this.placementBanner]) this.resizeObs.observe(n);
+    }
     measure();
   }
 
@@ -198,6 +208,7 @@ export class HUD {
 
   private actBtn!: HTMLButtonElement;
   private actName!: HTMLElement;
+  private actNum!: HTMLElement;
   private actPct!: HTMLElement;
   private actBar!: HTMLElement;
   private popBtn!: HTMLButtonElement;
@@ -254,14 +265,17 @@ export class HUD {
     // The Act: its name, how far through it, as a labelled progress bar. Opens the Command panel.
     this.actBtn = el('button', 'hx-chip hx-act');
     this.actBtn.type = 'button';
+    // [ux-redesign w2fix B1] Two short lines a phone can read: "Act III  38%" over the Act's own word ("Settle"); the progress is a
+    // slim bar along the chip's bottom edge, so it no longer shares (and squeezes) the name's line.
     const actHead = el('span', 'hx-act__head');
-    this.actName = el('span', 'hx-act__name');
+    this.actNum = el('span', 'hx-act__num');
     this.actPct = el('span', 'hx-act__pct');
-    actHead.append(this.actName, this.actPct);
+    actHead.append(this.actNum, this.actPct);
+    this.actName = el('span', 'hx-act__name');
     this.actBar = kProgress(0, 100);
     this.actBar.classList.add('hx-act__bar');
     this.actBar.setAttribute('aria-hidden', 'true');
-    this.actBtn.append(actHead, this.actBar);
+    this.actBtn.append(actHead, this.actName, this.actBar);
     this.actBtn.addEventListener('click', () => this.onEra?.());
 
     this.popBtn = el('button', 'hx-chip hx-stat hx-people');
@@ -483,18 +497,27 @@ export class HUD {
   // ───────────────────────────── Act chip, clock, objective ─────────────────────────────
 
   /**
-   * The Act and how far through it, as a labelled bar ("Survive 45%"); the era stays the bunker's look. Opens the Command panel.
-   * `actTag` is "III·45%" from the app; without it (legacy runs) the chip names the era only.
+   * The Act and how far through it, as a labelled bar ("Act III 45%" over "Settle"); the era stays the bunker's look. Opens the
+   * Command panel. `act` is the Act's numeral and percent; without it (legacy runs) the chip names the era only.
+   * [ux-redesign w2fix] The numeral and the percent arrive as data (no "III·45%" string to parse) and sit in bidi isolates on screen.
    */
-  setEra(key: string, name: string, actTag = '', title = name): void {
-    const sig = `${key}|${name}|${actTag}|${title}`;
+  setEra(key: string, name: string, act: { roman: string; pct: number } | null = null, title = name): void {
+    const sig = `${key}|${name}|${act ? `${act.roman}|${act.pct}` : ''}|${title}`;
     if (this.actBtn.dataset.sig === sig) return;
     this.actBtn.dataset.sig = sig;
     this.actBtn.dataset.era = key;
-    const m = /^([IVX]+)\D*?(\d+)%/.exec(actTag);
-    const roman = m?.[1] ?? '';
-    const pct = m ? Number(m[2]) : -1;
-    this.setText(this.actName, roman ? `${i18n.t('wp6.hud.actShort')} ${roman} · ${name}` : name);
+    const pct = act ? act.pct : -1;
+    if (act) {
+      const roman = document.createElement('bdi');
+      roman.className = 'hx-act__roman';
+      roman.dir = 'ltr';
+      roman.textContent = act.roman;
+      this.actNum.replaceChildren(`${i18n.t('wp6.hud.actShort')} `, roman);
+    } else {
+      this.actNum.replaceChildren();
+    }
+    this.actNum.hidden = !act;
+    this.setText(this.actName, name);
     this.setText(this.actPct, pct >= 0 ? `${pct}%` : '');
     this.actBar.hidden = pct < 0;
     if (pct >= 0) setProgress(this.actBar, pct, 100);
@@ -872,7 +895,7 @@ export class HUD {
     // [ux-wp4] R3: the Act holds the number: a neutral lock that names the next Act. No free bed: a warning in words. Else: the next arrival.
     const caption = lock ? `[[lock]] ${i18n.t('ux2b.popLock')}`
       : full ? `[[warning]] ${i18n.t('ux2b.popFull')}`
-        : state.survivors.length > 0 && !state.activeEvent ? `[[door]] ${fmtDuration(left)}` : i18n.t('ux2b.survivors');
+        : i18n.t('ux2b.survivors'); // [ux-redesign w2fix #7] the next arrival's countdown is in the spoken label only (one number less)
     this.setText(this.popCaption, caption);
     this.setState(this.popBtn, 'door', lock ? 'is-lock' : full ? 'is-full' : capped ? 'is-capped' : '');
     if (ariaDue) {
@@ -917,6 +940,8 @@ export class HUD {
   destroy(): void {
     this.closePop();
     this.resizeObs?.disconnect();
+    this.offResize?.();
+    if (this.measureRaf) cancelAnimationFrame(this.measureRaf);
     this.unsubA11y?.();
     this.nav.remove();
     this.container.remove();

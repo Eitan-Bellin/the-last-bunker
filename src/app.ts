@@ -764,7 +764,8 @@ export class GameApp {
     // [ux-wp1 C1] The chip names the Act only ("I·34% Survive"); the era stays the bunker's look (banner, Command panel).
     const actName = act.name[i18n.currentLocale];
     const short = actName.split('·').pop()?.trim() || actName;
-    this.hud.setEra(era.key, short, `${roman}·${pct}%`, `${actName} · ${pct}%`);
+    // [ux-redesign w2fix] Numeral and percent as data: the HUD isolates them (no "I·20%" string mixed into right-to-left text).
+    this.hud.setEra(era.key, short, { roman, pct }, `${actName} · ${pct}%`);
   }
 
   private updateAudio(): void {
