@@ -182,7 +182,11 @@ export class FeedbackController {
       if (inc.kind !== 'breach') setTimeout(() => this.app.audio.play('alarm'), 400);
       this.app.renderer.shake(inc.kind === 'breach' ? 6 : 4, 0.5);
       haptic('warning');
-      this.app.toasts.show(`[[${def.icon}]] ${i18n.t('incident.started', { name: def.name[i18n.currentLocale], room: this.app.roomName(inc.buildingId) })}`, 'bad');
+      // [ux-redesign w3fix B6] One channel per incident: the HUD's incident banner tells it (room, floor, "tap to help"). A toast only
+      // when a raid or disaster has the banner, so the room trouble would otherwise go unsaid.
+      if (this.app.danger.dangerBanner()) {
+        this.app.toasts.show(`[[${def.icon}]] ${i18n.t('incident.started', { name: def.name[i18n.currentLocale], room: this.app.roomName(inc.buildingId) })}`, 'bad');
+      }
       // [plan4:AC-11] Said to a screen reader as an alert, with the floor (when the player turned announcements on).
       const floor = this.app.state.buildings.find(b => b.id === inc.buildingId)?.position.floor ?? 0;
       announce(i18n.t('announce.incident', { name: def.name[i18n.currentLocale], floor: floor + 1 }), 'assertive');
