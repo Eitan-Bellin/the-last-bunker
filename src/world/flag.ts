@@ -14,7 +14,7 @@
  */
 
 /** The world a player gets with no `?city` param and nothing remembered. Flip to true to ship the city by default. */
-export const DEFAULT_CITY = false;
+export const DEFAULT_CITY = true;
 
 /** localStorage key of the remembered choice ('1' city, '0' classic). */
 export const CITY_STORE_KEY = 'lastbunker_city';

@@ -7,7 +7,7 @@ g.localStorage ??= {
   removeItem: k => mem.delete(k), clear: () => mem.clear(), key: i => [...mem.keys()][i] ?? null,
   get length() { return mem.size; },
 };
-g.location ??= { search: '', href: 'http://sim.local/', hostname: 'sim.local' };
+g.location ??= { search: '?city=0', href: 'http://sim.local/', hostname: 'sim.local' };
 g.requestAnimationFrame ??= () => 0;
 g.cancelAnimationFrame ??= () => {};
 const el = () => ({ style: {}, classList: { add() {}, remove() {}, toggle() {} }, appendChild() {}, addEventListener() {}, setAttribute() {}, getContext: () => null });
