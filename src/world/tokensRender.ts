@@ -237,3 +237,83 @@ export const PINS = {
 export const SHELL_RENDER = {
   forceBatchMaxFloors: 8,
 } as const;
+
+/**
+ * [world:M2] The far-zoom strata map (src/world/render/strataMap.ts): a schematic cross-section "atlas" of the city, shown below
+ * CAMERA.zoom.far. World units unless noted; `*Px` values are screen pixels (labels and markers are counter-scaled to the zoom).
+ * Ink colours are the map's own palette (one per stratum, surface first), not the scene's light colours.
+ */
+export const MAP = {
+  paper: 0x050a14 as Hex,
+  paperAlpha: 1,
+  /** Unreached strata: the next one (glimpsed: dark with a faint hatch) and the deeper ones (darkness). */
+  unknown: 0x080b12 as Hex,
+  dark: 0x020306 as Hex,
+  hatch: 0x3a4a66 as Hex,
+  hatchAlpha: 0.16,
+  hatchStep: 46,
+  ink: [0xd8b890, 0xffc27a, 0x6ad0c8, 0x9aa8ff, 0xff9a5a, 0x7affb0, 0xff6a7a] as readonly Hex[],
+  bandAlpha: 0.07,
+  bandAltAlpha: 0.025,
+  seamW: 3,
+  seamAlpha: 0.55,
+  ground: 0xd8a46a as Hex,
+  groundW: 5,
+  grid: 92,
+  gridAlpha: 0.045,
+  gridColor: 0x5ab8ff as Hex,
+  /** A dug storey: a lit strip (inset of the storey height top and bottom) with the rooms as windows in their trade colour. */
+  stripInset: 0.12,
+  stripAlpha: 0.16,
+  stripEdgeAlpha: 0.6,
+  roomInset: 6,
+  roomFill: 0.42,
+  roomEdge: 0.85,
+  ruin: 0x6a6a72 as Hex,
+  gallery: 0xff9a3a as Hex,
+  galleryAlpha: 0.5,
+  dash: 26,
+  gap: 16,
+  edge: 0x8a9ab0 as Hex,
+  edgeLen: 70,
+  pocket: 0x6affd0 as Hex,
+  districtFill: 0.16,
+  spine: 0xffd47a as Hex,
+  spineW: 8,
+  spineGlowW: 30,
+  spineAlpha: 0.55,
+  /** A reached stratum's hub as a station node on the spine. */
+  hubR: 40,
+  hubRing: 7,
+  hubCore: 15,
+  /** The dig front: a pulsing line and a progress bar under the deepest storey. */
+  dig: 0xffb547 as Hex,
+  digPulse: 2.6,
+  digBarH: 12,
+  /** Survivors as dots (density), crises, new-discovery pins. */
+  dot: 0xfff3d6 as Hex,
+  dotR: 7,
+  dotChildR: 5,
+  crisis: 0xff3a2a as Hex,
+  pinPx: 7,
+  /** Counter-scaled labels and markers (screen px). */
+  labelPx: 15,
+  labelFont: 30,
+  labelPadPx: 10,
+  labelText: 0xe6f2ff as Hex,
+  labelUnknown: 0x9ab0c8 as Hex,
+  roomDefault: 0xffe2b0 as Hex,
+  labelBg: 0x06101e as Hex,
+  labelBgAlpha: 0.9,
+  markPx: 22,
+  /** Taps near a marker (screen px) focus it. */
+  tapPx: 30,
+  /** Build the map ahead while the zoom is below far x prewarm, so the switch itself only fades. */
+  prewarm: 1.45,
+  /** Animated layer redraws per second while the map shows. */
+  animHz: 12,
+  /** Camera zoom after a tap on the map: a place (room, district, pocket, dig) or a band (the stratum's overview). */
+  focusPlaceDesktop: 0.85,
+  focusPlacePhone: 0.7,
+  focusBand: 0.56,
+} as const;

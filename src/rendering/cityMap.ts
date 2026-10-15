@@ -1,4 +1,4 @@
-import { Container, Graphics, Text } from 'pixi.js';
+import { Container, Graphics, Text, type Renderer } from 'pixi.js';
 import type { BuildingType, GameState } from '../core/GameState';
 import { isDistrict, isHall, roomSlots } from '../data/buildingDefs';
 import { zoneForFloor } from '../data/zones';
@@ -9,7 +9,20 @@ import { hashString } from './draw';
 export interface CityMap {
   container: Container;
   animate: (state: GameState, t: number, night: number) => void;
+  /** [world:M2] City strata map: per-frame placement of the counter-scaled labels and markers (the classic map has none). */
+  frame?: (v: MapView, t: number) => void;
+  /** [world:M2] City strata map: where a tap at a world point should take the camera (null: nothing there). */
+  focusAt?: (x: number, y: number) => MapFocus | null;
+  /** [world:M2] City strata map: one step of first-render work ahead of the switch; true when warm. */
+  warm?: (renderer: Renderer) => boolean;
+  destroy?: () => void;
 }
+
+/** [world:M2] The view the far map is seen through: world rect, zoom, and the HUD's insets in world units. */
+export interface MapView { x0: number; y0: number; x1: number; y1: number; z: number; insetTop: number; insetBottom: number }
+
+/** [world:M2] A tap on the map: a place (room, district, pocket, dig) or a stratum band (its overview). */
+export interface MapFocus { x: number; y: number; kind: 'place' | 'band' }
 
 /** [airy:B1] Exported: the room clarity layer (roomClarity.ts) colours rooms by the same trade colours as the far map. */
 export const CATEGORY: Partial<Record<BuildingType, number>> = {

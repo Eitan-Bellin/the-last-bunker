@@ -29,6 +29,7 @@ import { freeCaches } from './chunks';
 import { cityTextures } from './lighting';
 import { CityRenderer, parallaxFromWorld, type ParallaxInfo, type RenderTier } from './CityRenderer';
 import { cityLayoutProvider, shellMounter, type MountedShell } from './citySeams';
+import { buildStrataMap, strataMapKey, type StrataMap } from './strataMap';
 import type { FloorRect, RoomLightInput } from './lighting';
 import type { CityLayout, Rect } from './layoutTypes';
 
@@ -133,6 +134,7 @@ export class CityHost {
     if (sig !== this.layoutSig || !this.layout) {
       this.layoutSig = sig;
       this.layout = p.build(state);
+      this.layoutGen++;
       this.city.setLayout(this.layout);
       this.roomSig = '';
     }
@@ -295,6 +297,25 @@ export class CityHost {
     uiSound('reveal');
     this.pinKey = '';
     return true;
+  }
+
+  // ------------------------------------------------------------------ far map (M2)
+
+  /** [world:M2] Bumped on every new layout object: part of the far map's key. */
+  private layoutGen = 0;
+
+  /**
+   * [world:M2] The far-zoom strata map's key: it changes when the map must be rebuilt (a new layout, rooms, locale). BunkerRenderer builds
+   * the map ahead of the switch (MAP.prewarm), so the switch itself only fades.
+   */
+  mapKey(state: GameState, locale: string): string {
+    return this.layout ? `${this.layoutGen}|${strataMapKey(state, locale)}` : '';
+  }
+
+  /** [world:M2] The strata map for the current layout (null before the first layout). */
+  buildMap(state: GameState, locale: string, rtl: boolean): StrataMap | null {
+    if (!this.layout) return null;
+    return buildStrataMap({ state, layout: this.layout, locale, rtl, pins: () => this.pinTargets });
   }
 
   // ------------------------------------------------------------------ per frame

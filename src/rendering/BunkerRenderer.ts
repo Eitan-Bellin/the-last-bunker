@@ -13,7 +13,7 @@ import { buildingX, districtXAt, eastmostSlotX, fallbackToClassic, slotX, stripX
 import { CITY } from '../world/flag'; // [world:C1] the city renderer behind ?city [world:M1] session fallback
 import type { CityHost } from '../world/render/cityHost'; // [world:C1] loaded on demand (mountCity): classic never downloads the city renderer
 import { setLightSink } from '../world/life/lanterns'; // [world:C1-Li] // [world:C2] the real city layout and shell into the seams
-import { PEOPLE_RENDER } from '../world/tokensRender'; // [world:C1]
+import { MAP, PEOPLE_RENDER } from '../world/tokensRender'; // [world:C1] [world:M2]
 import { hashString, seeded } from './draw';
 import { PEOPLE_STYLE, Person, ROOM_ACTIVITY, type Activity, type Lane } from './people';
 import { crowdFor, restCountFor, settleCrowds } from './workSpots'; // gfx-p0 people
@@ -37,7 +37,7 @@ import { depthCam } from './roomDepth'; // [airy2:C2]
 import { lineWidth, richLine } from './richText';
 import { ArtLibrary } from '../art/ArtLibrary';
 import { artEntry, buildingArtKey, roomTier, ruinArtKey } from '../art/registry';
-import { buildCityMap, type CityMap } from './cityMap';
+import { buildCityMap, type CityMap, type MapView } from './cityMap';
 import { updateLabelScale } from './LabelScale'; // [plan4:ST-12]
 import { SlopArea, hitState } from './HitSlop'; // [plan4:ST-12]
 import { PostFX, startQuality, targetResolution } from './postfx';
@@ -576,7 +576,7 @@ export class BunkerRenderer {
     });
     this.setupRenderGroups(); // [perf]
     this.cam.setup();
-    setPopupBlocker((x, y) => this.inIncident(x, y)); // [camera]
+    setPopupBlocker((x, y) => this.inIncident(x, y) || (!!this.cityHost && this.mapCovers)); // [camera] [world:M2] no "+N" numbers over the strata map
     this.cam.fitToScreen();
     // gfx-p0 light: the composite takes over the era grade and reads the era/night for vignette and night lighting.
     this.postfx = new PostFX(this.app, this.worldContainer, this.grade, () => ({ era: this.surfaceEra, night: this.nightNow, target: this.frameTarget }));
@@ -873,6 +873,15 @@ export class BunkerRenderer {
   private onCanvasTap(sx: number, sy: number): void {
     if (this.ghostDrag || this.drag) return;
     const p = this.worldContainer.toLocal({ x: sx, y: sy });
+    // [world:M2] A tap on the strata map takes the camera there: a place at the home zoom, a stratum band at its overview zoom.
+    if (this.cityHost && this.lod === 'far' && this.cityMap?.focusAt && this.cityMap.container.visible) {
+      const f = this.cityMap.focusAt(p.x, p.y);
+      if (f) {
+        const phone = this.app.screen.width < 600;
+        this.cam.focusTo(f.x, f.y, f.kind === 'band' ? MAP.focusBand : phone ? MAP.focusPlacePhone : MAP.focusPlaceDesktop);
+      }
+      return;
+    }
     if (this.cityHost && !this.mapCovers && this.cityHost.tapPocket(p.x, p.y)) return; // [world:M1] a glimpsed pocket: found (cosmetic)
     const r = this.ghost.rect();
     if (r && p.x >= r.x && p.x <= r.x + r.w && p.y >= r.y && p.y <= r.y + r.h) return;
@@ -1609,8 +1618,32 @@ export class BunkerRenderer {
     const lod = z < (this.lod === 'far' ? FAR_ZOOM * 1.07 : FAR_ZOOM) ? 'far' : z > (this.lod === 'close' ? 1.1 : 1.2) ? 'close' : 'mid';
     if (lod !== this.lod) this.onLodChange?.(lod);
     this.lod = lod;
-    const sig = lod === 'far' ? `${this.floors}|${LAYOUT.util}|${i18n.currentLocale}` : ''; // [perf] only needed while the map is up
-    if (lod === 'far' && (!this.cityMap || sig !== this.cityMapSig)) {
+    const host = this.cityHost;
+    if (host) {
+      // [world:M2] City: the fog-aware strata map (src/world/render/strataMap.ts), built ahead of the switch while the zoom approaches the
+      // far threshold, so the switch itself only fades (MAP.prewarm; the < 8 ms toggle budget).
+      if (z < FAR_ZOOM * MAP.prewarm && host.current) {
+        const key = host.mapKey(state, i18n.currentLocale);
+        if (!this.cityMap || key !== this.cityMapSig) {
+          const alpha = this.cityMap?.container.alpha ?? 0;
+          if (this.cityMap) this.cityMap.destroy ? this.cityMap.destroy() : this.cityMap.container.destroy({ children: true });
+          this.cityMap = host.buildMap(state, i18n.currentLocale, i18n.isRTL);
+          this.cityMapSig = key;
+          this.mapWarm = false;
+          if (this.cityMap) {
+            this.cityMap.container.alpha = alpha;
+            this.cityMap.container.visible = alpha > 0.01;
+            this.mapAt = -1;
+            this.group(this.cityMap.container, 'cityMap');
+            this.worldContainer.addChildAt(this.cityMap.container, this.worldContainer.getChildIndex(this.labelLayer));
+          }
+        }
+      }
+    }
+    // [world:M2] One step of the new map's first-render work per frame (tessellation, text textures) while it is not shown yet.
+    if (host && this.cityMap?.warm && !this.mapWarm) this.mapWarm = this.cityMap.warm(this.app.renderer);
+    const sig = !host && lod === 'far' ? `${this.floors}|${LAYOUT.util}|${i18n.currentLocale}` : ''; // [perf] only needed while the map is up
+    if (!host && lod === 'far' && (!this.cityMap || sig !== this.cityMapSig)) {
       this.cityMap?.container.destroy({ children: true });
       this.cityMap = buildCityMap(state, this.floors, i18n.currentLocale);
       this.cityMapSig = sig;
@@ -1618,7 +1651,8 @@ export class BunkerRenderer {
       this.worldContainer.addChildAt(this.cityMap.container, this.worldContainer.getChildIndex(this.labelLayer));
     }
     if (this.cityMap) {
-      const target = lod === 'far' ? 1 : 0;
+      // [world:M2] A city map that is not warm yet waits (a few frames) before it fades in, so no frame pays its whole first render.
+      const target = lod === 'far' && (!host || this.mapWarm || this.cityMap.container.alpha > 0) ? 1 : 0;
       let a = this.cityMap.container.alpha + (target - this.cityMap.container.alpha) * (1 - Math.exp(-dt * 6)); // [camera] dt-exact
       // Plan 2026-10 Q11: the far-zoom map's labels end their fade instead of lingering as a faint ghost over the rooms.
       if (target === 0 && a < 0.06) a = 0;
@@ -1629,6 +1663,7 @@ export class BunkerRenderer {
         this.mapAt = this.time;
         this.cityMap.animate(state, this.time, this.nightNow);
       }
+      if (this.cityMap.container.visible && this.cityMap.frame) this.cityMap.frame(this.mapView(), this.time); // [world:M2] sticky labels
       this.labelLayer.alpha = 1 - a;
       this.labelLayer.visible = a < 0.99;
       // Once the map is (all but) opaque, the rooms, the structure and the people under it are not drawn at all.
@@ -1640,9 +1675,25 @@ export class BunkerRenderer {
       }
     }
   }
+  /** [world:M2] The view the far map is seen through (world rect, zoom, HUD insets in world units); one object, no allocation. */
+  private mapView(): MapView {
+    const wc = this.worldContainer, z = wc.scale.x || 1, v = this.mapViewObj;
+    v.z = z;
+    v.x0 = -wc.x / z;
+    v.y0 = -wc.y / z;
+    v.x1 = v.x0 + this.app.screen.width / z;
+    v.y1 = v.y0 + this.app.screen.height / z;
+    v.insetTop = hudTop() / z;
+    v.insetBottom = hudBottom() / z;
+    return v;
+  }
+  private readonly mapViewObj: MapView = { x0: 0, y0: 0, x1: 0, y1: 0, z: 1, insetTop: 0, insetBottom: 0 };
+
   /** [perf] The far-zoom city map is up and covers the scene (see updateLod); time of its last redraw. */
   private mapCovers = false;
   private mapAt = -1;
+  /** [world:M2] The city map's first-render work is done (see StrataMap.warm). */
+  private mapWarm = false;
   /** [perf] The camera is far below the ground: the surface is hidden and not animated (see updateScene). */
   private surfaceOff = false;
 
