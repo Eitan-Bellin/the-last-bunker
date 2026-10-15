@@ -163,6 +163,24 @@ const TAIL_REWARD: Partial<Record<ResourceType, number>> = ONBOARDING.slice(TUTO
   return sum;
 }, {} as Partial<Record<ResourceType, number>>);
 
+/** [phase3] The first tutorial step after the generator, the pump and the farm are restored and staffed. */
+const BASE_STEP = ONBOARDING.findIndex(o => o.id === 'drain');
+
+/**
+ * [phase3] "The base stands": the generator, the pump and the farm work (the tutorial is past "staff the generator"). Research and
+ * expeditions wait for it, so a new player meets one thing at a time. A bunker that already researched or sent a team never locks again.
+ */
+export function baseStands(s: GameState): boolean {
+  if ((s.tutorialStep ?? 0) >= BASE_STEP) return true;
+  if (s.stats.totalMissionsCompleted > 0 || Object.values(s.research).some(r => r.completed)) return true;
+  return (['generator', 'waterPump', 'farm'] as BuildingType[]).every(t => ready(s, t) && staffed(s, t));
+}
+
+/** [phase3] True once the whole tutorial is over (same as ObjectiveSystem.tutorialDone, for readers without the system). */
+export function tutorialOver(s: GameState): boolean {
+  return (s.tutorialStep ?? 0) >= ONBOARDING.length;
+}
+
 /** Objective ids of the onboarding before the restoration update, for migrating old saves. */
 const LEGACY_IDS = ['farm', 'pump', 'staff', 'generator', 'workshop', 'lab', 'hazmat', 'expedition', 'pop5', 'canteen', 'upgrade', 'radio', 'research5'];
 

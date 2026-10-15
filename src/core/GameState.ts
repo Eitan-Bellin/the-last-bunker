@@ -6,6 +6,11 @@ export interface ResourceState {
   cap: number;
   productionRate: number;
   consumptionRate: number;
+  /**
+   * [phase3] Per second of spare stock the Act rooms' surplus draws take (data/chains.ts surplusShare). Not part of consumptionRate,
+   * which stays what the bunker needs: the stock changes by productionRate - consumptionRate - surplusRate. Absent in older saves.
+   */
+  surplusRate?: number;
 }
 
 export type ResourceType =
@@ -265,6 +270,10 @@ export interface GameStats {
   totalPrestigeResets: number;
   /** [plan4:BL-25] The fraction of a blueprint the pre-war vault has made so far (blueprints are whole numbers; whole ones move to the resource). migrateState fills 0. */
   planDust: number;
+  /** Contracts finished (ContractSystem counts them; absent in saves from before contracts). */
+  contractsDone?: number;
+  /** [phase3] Contracts already paid in credits (ResourceSystem.payContracts); absent = none owed back. */
+  contractsPaid?: number;
 }
 
 export interface ActiveEvent {
@@ -511,6 +520,8 @@ export interface GameState {
   // [Economy A2/A3] Credits shop purchases (reset daily / weekly) and the big project fed by overflow while away.
   shop: ShopState;
   activeProjectId: string | null;
+  /** [phase3] Per basic resource, the share (0..1) of the Act rooms' surplus draw it covered last tick (ResourceSystem; absent = 0). */
+  surplusShare?: Partial<Record<ResourceType, number>>;
   // [LateGame B1-B4] big projects, trade, weekly challenge (older saves start empty).
   lateGame: LateGameState;
   /** [plan4:GP-1] Daily orders: today's three, the streak and the blueprint pieces (older saves start with none). */

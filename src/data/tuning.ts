@@ -12,8 +12,17 @@ export const TUNING = {
   /**
    * Ceiling on the product of all global output modifiers (morale, Echo, research, laws, seasons...) on one room.
    * They used to stack to x12-20; the long game holds them under this. Infinity = no ceiling.
+   * [phase3] 4 (was Infinity): farms ran at x7-9.5 by Act VII and made 20-50x what people ate. The Act currencies' own stacks sit at
+   * x2.4-3.8, so the ceiling bites the basics, not the Act's pace.
    */
-  multiplierCeiling: Infinity,
+  multiplierCeiling: 4,
+  /**
+   * [phase3] Each person eats and drinks this many times more in every Act after the first (a bigger colony lives better: rations,
+   * baths, kitchens), so farms and pumps keep a reason to grow. Act VII is about x9 of Act I.
+   */
+  appetitePerAct: 1.45,
+  /** [phase3] The new Act's appetite comes in over this many hours of world time (no famine on the day the Act turns). */
+  appetiteRampHours: 6,
   /** L1: an upgrade to level L costs `priceMinutes * priceGrowth^(L-1)` minutes of its Act's reference income. */
   priceMinutes: 3,
   priceGrowth: 1.74,
@@ -24,8 +33,13 @@ export const TUNING = {
    * bring income on top of the rooms, so the same Acts take the same days.
    */
   priceScale: 3.5,
-  /** From Act III on, this share of a price is also asked in each older currency (in its own reference income). */
-  olderCurrencyShare: 0.4,
+  /**
+   * From Act III on, this share of a price is also asked in each older tier-2 currency (in its own reference income).
+   * [phase3] 0 (was 0.4): an Act VII price listed six goods. A price now asks at most materials plus the Act's own currency.
+   */
+  olderCurrencyShare: 0,
+  /** [phase3] From Act III on, this share of a price is still asked in materials (the one older good every price keeps). */
+  materialsShare: 0.4,
   /**
    * L2: each Act's currency can be stored for this many hours of its reference income (index = current Act).
    * [ux-wp2 R7/R10] Act I (2.5, was 0.9): food, water and knowledge hold at least this many hours of the bunker's own
@@ -59,8 +73,16 @@ export const TUNING = {
   /**
    * [Q10] From this Act, storage overflow turns into this share of the credits it used to. [ux-wp2 R5] From Act III and to a twentieth
    * (it was Act IV and a quarter): 1-6M credits of nothing piled up; credits now come mostly from the daily orders and buy Act goods.
+   * [phase3] From Act II only tier-2 goods still convert (resources.ts overflowCredits); the basics' overflow feeds the project or is
+   * lost, and credits come from the daily orders and finished contracts (ResourceSystem.payContracts).
    */
   overflowDecayAct: 3,
+  /**
+   * [phase3] The last Act in which the tier-1 basics' overflow still turns into credits (0 = never). Act I has no contracts and the
+   * Vault Seal's scrap leaned on the shop: with 0, Act II came 20-35 min of play later in the casual sim (one visit later, +50% wall
+   * time). Act I made about 4K credits in all, so this is no runaway pile.
+   */
+  basicOverflowCreditsLastAct: 1,
   overflowDecay: 0.05,
   /** [Q10] Shop prices rise by this share of the base price for every Act after the first. */
   shopActRamp: 0.5,

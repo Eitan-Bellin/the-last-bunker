@@ -1,4 +1,5 @@
 import type { GameState, ResourceType } from '../core/GameState';
+import { systemOpen } from './acts';
 
 /**
  * [Long game P3/R2] Laws (long-game plan, pillar C): standing rules with a clear price. The Acts open a few slots
@@ -64,6 +65,7 @@ export const LAWS: LawDef[] = [
 const SLOTS = [0, 0, 0, 1, 1, 2, 3, 3];
 
 export function lawSlots(state: GameState): number {
+  if (!systemOpen(state, 'laws')) return 0; // [phase3] the unlock schedule
   return SLOTS[Math.min(SLOTS.length - 1, state.longGame?.meta.act ?? 0)];
 }
 

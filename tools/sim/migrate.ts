@@ -126,7 +126,8 @@ export async function checkMigration(json: string): Promise<MigrateCheck> {
       const ps = e.projectSystem;
       const paidBefore = Object.values(ps.progressOf(s, active).paid).reduce((a, v) => a + (v ?? 0), 0);
       const stageBefore = ps.progressOf(s, active).stage;
-      const could = Object.entries(ps.missing(s, active)).some(([r, left]) => ps.deliverable(s, r as ResourceType, left as number) > 0.01);
+      // [phase3] Judged with the pledge's own keep (PLEDGE_KEEP), not the hand-delivery reserve: a store the pledge may not touch is not a miss.
+      const could = Object.entries(ps.missing(s, active)).some(([r, left]) => ps.deliverable(s, r as ResourceType, left as number, true) > 0.01);
       ps.setPledge(active, true);
       const low: string[] = [];
       for (let i = 0; i < 60; i++) {

@@ -9,7 +9,7 @@ import { bunkerDefense } from '../../systems/EventSystem';
 import { BUILDING_ICONS, RESOURCE_ICONS, STAT_ICONS, bar, bidiNumbers, button, costRow, el, rateText, setBar, setRich } from '../dom';
 import { flowArrow } from '../rtl'; // [ux-wp4] B3 "Next" points along the reading direction
 import { INCIDENTS, quickFixCost } from '../../data/incidents';
-import { boostReserve, chainInputs, inputFed, inputRate } from '../../data/chains';
+import { boostReserve, chainInputs, inputFed, inputRate, surplusShare } from '../../data/chains';
 import { roomPowerDraw } from '../../systems/ResourceSystem';
 import { bedsBuilt } from '../../systems/BuildingSystem';
 import { MORALE_CAPS } from '../../systems/PopulationSystem'; // [plan4:BL-39]
@@ -235,7 +235,7 @@ export class BuildingPanel {
     if (def.production && !def.production.power && state.powerRatio < 0.99) {
       notes.push(el('div', 'bp-warning', `[[warning]] ${i18n.t('building.powerLow')}`));
     }
-    for (const input of chainInputs(b)) {
+    for (const input of chainInputs(b, state)) { // [phase3] inputs of a later Act are not listed yet
       const fed = inputFed(state, input);
       // M1: fuel below the reserve is being saved for digs and research, not missing.
       const saving = input.boost && !fed && (state.resources[input.resource]?.amount ?? 0) > 0.5;
@@ -245,7 +245,8 @@ export class BuildingPanel {
       const r = el('div', `bp-row chain-row ${fed ? 'ok' : input.boost ? '' : 'bad'}`);
       r.append(
         el('span', '', `[[recycle]] ${i18n.t(input.boost ? 'chain.fuel' : 'chain.input')} ${RESOURCE_ICONS[input.resource] ?? ''}`),
-        el('span', 'bp-value', `−${inputRate(input, b).toFixed(2)} · ${status}`),
+        // [phase3] A surplus draw takes only what would spill: show the share it really gets.
+        el('span', 'bp-value', `−${(inputRate(input, b) * (input.surplus ? surplusShare(state, input.resource) : 1)).toFixed(2)} · ${status}`),
       );
       nums.push(r);
     }

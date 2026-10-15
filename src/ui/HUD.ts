@@ -18,6 +18,7 @@ import { TIMER_ENDING_S } from './kit/tokens';
 import { fmtDuration, fmtNum, fmtTile, plural } from './format';
 import '../styles/hud.css';
 import { CountUp } from './fx/countUp'; // [ux-redesign W4]
+import { baseStands, tutorialOver } from '../systems/ObjectiveSystem'; // [phase3]
 
 /** [Long game] Every resource the top bar can show; the Act decides which are in play (components, alloys... join from their Act on). */
 const VISIBLE_RESOURCES: ResourceType[] = ['food', 'water', 'power', 'materials', 'medicine', 'knowledge', 'scrap', 'components', 'alloys', 'data', 'influence', 'seedCores'];
@@ -36,6 +37,30 @@ const DANGER_PCT = 15;
 const STEADY = 0.005;
 
 export type NavKey = 'build' | 'surface' | 'research' | 'people';
+
+/**
+ * [phase3] "Life support" (economy-pacing fix 3): food, water and power that each make at least twice what the bunker uses and hold
+ * 30 minutes of it (or a nearly full store: power's store is small) fold into ONE tile. A store leaves it the moment it falls short:
+ * under 1.5x, under 20 minutes, or in trouble (hysteresis, so a tile does not blink in and out).
+ */
+const LIFE: ResourceType[] = ['food', 'water', 'power'];
+const LIFE_RATIO = 2;
+const LIFE_KEEP_RATIO = 1.5;
+const LIFE_STOCK_S = 1800;
+const LIFE_KEEP_STOCK_S = 1200;
+const LIFE_NEAR_FULL = 0.9;
+
+/** [phase3] One basic store is "OK" for the life-support tile (`held`: it is in the tile now, the looser bar applies). */
+export function lifeSupportOk(state: GameState, r: ResourceType, held = false): boolean {
+  const res = state.resources[r];
+  if (!res) return false;
+  const use = res.consumptionRate;
+  if (use <= STEADY) return res.productionRate > STEADY || res.amount > 0;
+  const ratio = held ? LIFE_KEEP_RATIO : LIFE_RATIO;
+  const want = use * (held ? LIFE_KEEP_STOCK_S : LIFE_STOCK_S);
+  const stocked = res.amount >= want || (res.cap > 0 && isFinite(res.cap) && res.amount >= res.cap * LIFE_NEAR_FULL);
+  return res.productionRate >= ratio * use && stocked;
+}
 
 /**
  * [ux-wp4] R3: the bunker is full because the Act holds the number of people (the rooms already give the beds), so the red door "!"
@@ -160,6 +185,9 @@ export class HUD {
   readonly counts = new CountUp<ResourceType>();
   /** Which resources the current Act opens. */
   private actShow = new Map<ResourceType, boolean>();
+  /** [phase3] The life-support tile and the basics it stands for now (empty: the tile is hidden). */
+  private lifeEl!: { root: HTMLButtonElement; value: HTMLElement; label: HTMLElement };
+  private lifeIn = new Set<ResourceType>();
   private topBar!: HTMLElement;
   private resRow!: HTMLElement;
   private moreBtn!: HTMLButtonElement;
@@ -311,6 +339,29 @@ export class HUD {
       root.addEventListener('click', () => this.onResourceTap?.(rt));
       resourceRow.appendChild(root);
       this.resourceEls.set(rt, { root, chip, value, trend, rate, bar });
+    }
+    // [phase3] The life-support tile: one tile for food, water and power while all three are comfortable (see lifeSupportOk).
+    {
+      const root = el('button', 'hx-res hx-life');
+      root.type = 'button';
+      root.title = i18n.t('p3p.life.title');
+      const chip = kResourceChip({ icon: 'heart', amount: 0 });
+      chip.removeAttribute('role');
+      chip.removeAttribute('aria-label');
+      chip.setAttribute('aria-hidden', 'true');
+      const value = chip.querySelector<HTMLElement>('.k-chip__amount')!;
+      value.textContent = i18n.t('p3p.life.ok');
+      chip.querySelector<HTMLElement>('.k-chip__rate')?.remove();
+      const line2 = el('span', 'hx-res__line2');
+      const label = el('span', 'hx-life__label', i18n.t('p3p.life.short'));
+      label.dir = 'auto';
+      line2.appendChild(label);
+      chip.appendChild(line2);
+      root.appendChild(chip);
+      root.style.display = 'none';
+      root.addEventListener('click', () => this.onResourceTap?.([...this.lifeIn][0] ?? 'food'));
+      resourceRow.appendChild(root);
+      this.lifeEl = { root, value, label };
     }
     // [phase2] The Act's other stores: a tile of its own at the row's end (from Act II; hidden under 360 px, where every tile's sheet
     // lists the other stores instead). A hidden store in trouble turns it red, it never swaps places with a shown tile.
@@ -984,15 +1035,17 @@ export class HUD {
     if (ariaDue) this.lastAria = nowMs;
 
     this.counts.instant = reducedMotion(); // [ux-redesign W4]
+    this.updateLife(state);
     const tiles = this.pickTiles(act);
-    const tileSig = `${act}|${tiles.join(',')}`;
+    const life = this.lifeIn.size > 0;
+    const tileSig = `${act}|${life ? `life:${[...this.lifeIn].join('+')}|` : ''}${tiles.join(',')}|${i18n.currentLocale}`;
     const hidden: ResourceType[] = [];
     for (const [rt, els] of this.resourceEls) {
       const res = state.resources[rt];
       const visible = tiles.includes(rt);
       if (!visible && this.actShow.get(rt)) hidden.push(rt);
       this.setStyle(els.root, 'display', visible ? '' : 'none');
-      if (visible) this.setStyle(els.root, 'order', String(tiles.indexOf(rt)));
+      if (visible) this.setStyle(els.root, 'order', String(tiles.indexOf(rt) + 1)); // [phase3] 0 is the life-support tile
       // Counters roll toward their value instead of jumping; [ux-redesign W4] a jump of more than 5 % counts up (fx/countUp.ts).
       const prev = this.shown.get(rt) ?? res.amount;
       const next = this.counts.step(rt, prev, res.amount, nowMs, dtRoll);
@@ -1003,6 +1056,16 @@ export class HUD {
     if (tileSig !== this.lastSlots) {
       this.lastSlots = tileSig;
       this.hiddenRes = hidden;
+      // [phase3] The life-support tile (first in the row) and its spoken label.
+      this.setStyle(this.lifeEl.root, 'display', life ? '' : 'none');
+      this.setStyle(this.lifeEl.root, 'order', '0');
+      if (life) {
+        const names = LIFE.filter(r => this.lifeIn.has(r)).map(r => i18n.t(`resources.${r}`)).join(', ');
+        this.setAttr(this.lifeEl.root, 'aria-label', i18n.t('p3p.life.label', { list: names }));
+        this.lifeEl.root.title = i18n.t('p3p.life.title');
+        this.setText(this.lifeEl.value, i18n.t('p3p.life.ok'));
+        this.setText(this.lifeEl.label, i18n.t('p3p.life.short'));
+      }
       // [phase2] No overflow in Act I (the four basics are the whole game then); from Act II a tile at the row's end.
       this.setStyle(this.moreBtn, 'display', hidden.length && act >= 2 ? '' : 'none');
       this.setText(this.moreText, i18n.formatNumber(hidden.length));
@@ -1100,6 +1163,15 @@ export class HUD {
    */
   private pickTiles(act: number): ResourceType[] {
     const shown = (r: ResourceType): boolean => this.actShow.get(r) !== false;
+    if (this.lifeIn.size > 0) {
+      // [phase3] The life-support tile takes one place: the basics not in it keep theirs, then the Act's currency, materials, knowledge.
+      const currency = VISIBLE_RESOURCES.filter(r => shown(r) && (resourceDef(r)?.act ?? 0) > 0)
+        .sort((a, b) => (resourceDef(b)?.act ?? 0) - (resourceDef(a)?.act ?? 0));
+      const out: ResourceType[] = LIFE.filter(r => !this.lifeIn.has(r) && shown(r));
+      if (act >= 3 && currency[0]) out.push(currency[0]);
+      for (const r of ['materials', 'knowledge', 'medicine'] as ResourceType[]) if (!out.includes(r) && shown(r)) out.push(r);
+      return out.slice(0, MAX_TILES - 1);
+    }
     if (act < 3) return [...CORE_RESOURCES].filter(shown).slice(0, MAX_TILES);
     const currency = VISIBLE_RESOURCES.filter(r => shown(r) && (resourceDef(r)?.act ?? 0) > 0)
       .sort((a, b) => (resourceDef(b)?.act ?? 0) - (resourceDef(a)?.act ?? 0));
@@ -1107,6 +1179,21 @@ export class HUD {
     if (currency[0]) out.push(currency[0]);
     for (const r of CORE_RESOURCES) if (out.length < MAX_TILES && !out.includes(r) && shown(r)) out.push(r);
     return out.slice(0, MAX_TILES);
+  }
+
+  /**
+   * [phase3] Which basics the life-support tile stands for. It appears once the tutorial is over and all three are comfortable; a store
+   * that falls short leaves it at once (its own tile comes back); with fewer than two left in it, the tile goes and the three are tiles.
+   */
+  private updateLife(state: GameState): void {
+    if (!tutorialOver(state) || !state.longGame) {
+      this.lifeIn.clear();
+    } else if (this.lifeIn.size === 0) {
+      if (LIFE.every(r => this.actShow.get(r) !== false && !this.urgent(state, r) && lifeSupportOk(state, r))) for (const r of LIFE) this.lifeIn.add(r);
+    } else {
+      for (const r of [...this.lifeIn]) if (this.urgent(state, r) || !lifeSupportOk(state, r, true)) this.lifeIn.delete(r);
+      if (this.lifeIn.size < 2) this.lifeIn.clear();
+    }
   }
 
   /** A store that is empty, runs dry within five minutes, or drains under 15 %. */
@@ -1165,7 +1252,9 @@ export class HUD {
     this.navLocksAt = nowMs;
     const lab = state.buildings.some(b => b.type === 'laboratory' && !(b.isConstructing && b.level <= 1));
     const started = Object.values(state.research).some(r => r.completed || r.isResearching);
-    const text = lab || started ? null : i18n.t('p2h.lock.research', { name: getDef('laboratory')?.name[i18n.currentLocale] ?? '' });
+    // [phase3] First the base stands (generator, pump and farm working), then a lab: a new player meets one thing at a time.
+    const text = !baseStands(state) && !started ? i18n.t('p3p.lock.base')
+      : lab || started ? null : i18n.t('p2h.lock.research', { name: getDef('laboratory')?.name[i18n.currentLocale] ?? '' });
     if (this.navLocks.get('research') === text && this.navLocks.has('research')) return;
     this.navLocks.set('research', text);
     const tab = this.nav.querySelector<HTMLElement>('.hx-tab[data-key="research"]');

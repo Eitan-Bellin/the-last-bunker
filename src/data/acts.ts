@@ -55,7 +55,8 @@ export const ACTS: ActDef[] = [
     tagline: { he: 'להחזיר חיים למקום מת', en: 'Bring a dead place back to life' },
     levelCap: 3, popCap: 12, floorCap: 5,
     goals: [
-      { kind: 'era', text: { he: 'הגיעו לעידן המושבה', en: 'Reach the Colony era' }, progress: s => atLeast(s.era ?? 0, 2) },
+      // [phase3] Said as what it takes, not as an era number: the guide lists the steps under it (Guide.ts 'era').
+      { kind: 'era', text: { he: 'הפעילו את הבונקר והגיעו ל־10 ניצולים', en: 'Get the bunker running and reach 10 survivors' }, progress: s => atLeast(s.era ?? 0, 2) },
       { kind: 'ruins', text: { he: 'פנו את כל ההריסות', en: 'Clear every ruin' }, progress: allCleared },
       { kind: 'research', text: { he: 'השלימו 10 מחקרים', en: 'Complete 10 researches' }, progress: s => atLeast(researched(s), 10) },
     ],
@@ -65,14 +66,15 @@ export const ACTS: ActDef[] = [
     id: 2,
     name: { he: 'מערכה II · לשקם', en: 'Act II · Rebuild' },
     tagline: { he: 'מבונקר לבית', en: 'From a bunker to a home' },
-    levelCap: 5, popCap: 30, floorCap: 8,
+    levelCap: 5, popCap: 40, floorCap: 8, // [phase3] 40 (was 30): casual players sat ~10 days at a full house
     goals: [
       { kind: 'dig', text: { he: 'חפרו 8 קומות', en: 'Dig 8 levels' }, progress: s => atLeast(s.currentFloors, 8) },
       { kind: 'research', text: { he: 'השלימו 22 מחקרים', en: 'Complete 22 researches' }, progress: s => atLeast(researched(s), 22) },
       { kind: 'levels', level: 5, text: { he: '10 חדרים ברמה 5', en: '10 rooms at level 5' }, progress: s => atLeast(roomsAt(s, 5), 10) },
     ],
     charter: ['radioMast', 'purifier'],
-    opens: { he: 'נפתחים: חוזים עם העולם בחוץ, מנהל העבודה, עונות השנה, ודוקטרינות חשמל ומזון במחקר. החלטות שאינן דחופות מחכות בתיבת ההחלטות.', en: 'Opens: contracts with the world outside, the Foreman, the seasons, and power and food doctrines in research. Decisions that can wait now wait in the Decisions inbox.' },
+    // [phase3] Caravans wait for Act III (with the outposts), the seasons for Act IV.
+    opens: { he: 'נפתחים: מנהל העבודה, ודוקטרינות חשמל ומזון במחקר, ובהמשך המערכה חוזים עם העולם בחוץ. החלטות שאינן דחופות מחכות בתיבת ההחלטות.', en: 'Opens: the Foreman, power and food doctrines in research, and later in the Act contracts with the world outside. Decisions that can wait now wait in the Decisions inbox.' },
   },
   {
     id: 3,
@@ -80,12 +82,15 @@ export const ACTS: ActDef[] = [
     tagline: { he: 'קהילה שמייצרת בעצמה', en: 'A community that makes its own' },
     levelCap: 7, popCap: 65, floorCap: 11,
     goals: [
-      { kind: 'era', text: { he: 'הגיעו לעידן העיר התחתית', en: 'Reach the Undercity era' }, progress: s => atLeast(s.era ?? 0, 3) },
+      // [phase3] One step, said as what it means (40 people, power, the surface, contracts, a district: listed under it by the guide).
+      { kind: 'era', text: { he: 'הצמיחו עיר מתחת לאדמה', en: 'Grow into a city under the ground' }, progress: s => [(s.era ?? 0) >= 3 ? 1 : 0, 1] },
       { kind: 'dig', text: { he: 'חפרו 11 קומות', en: 'Dig 11 levels' }, progress: s => atLeast(s.currentFloors, 11) },
       { kind: 'levels', level: 7, text: { he: '8 חדרים ברמה 7', en: '8 rooms at level 7' }, progress: s => atLeast(roomsAt(s, 7), 8) },
     ],
     charter: ['greenhouse', 'archive', 'metroTunnel'],
-    opens: { he: 'נפתחים: רכיבים (פס הרכבה בבית המלאכה), מאחזים על פני השטח, החוק הראשון, ודוקטרינות חברה והגנה.', en: 'Opens: components (Assembly Line in the workshop), outposts on the surface, the first law, and society and defense doctrines.' },
+    // [phase3] One system at a time (SYSTEM_SCHEDULE): components and the society doctrine now, the first law after 2 days, outposts
+    // and caravans after 4, the defense doctrine after 6.
+    opens: { he: 'נפתחים: רכיבים (פס הרכבה בבית המלאכה) ודוקטרינת חברה. אחרי יומיים החוק הראשון, אחרי 4 ימים מאחזים ושיירות, ואחר כך דוקטרינת הגנה.', en: 'Opens: components (Assembly Line in the workshop) and the society doctrine. The first law follows in 2 days, outposts and caravans in 4, then the defense doctrine.' },
   },
   {
     id: 4,
@@ -99,7 +104,7 @@ export const ACTS: ActDef[] = [
       { kind: 'pop', text: { he: 'הגיעו ל־90 ניצולים', en: 'Reach 90 survivors' }, progress: s => atLeast(s.survivors.length, 90) },
     ],
     charter: ['wall', 'deepFoundry'],
-    opens: { he: 'נפתחים: סגסוגות (כבשן קשת בגנרטור), חדרים עד רמה 9, ועוד מאחזים.', en: 'Opens: alloys (Arc Furnace in the generator), rooms up to level 9, and more outposts.' },
+    opens: { he: 'נפתחים: סגסוגות (כבשן קשת בגנרטור), חדרים עד רמה 9, עוד מאחזים, ועונות השנה.', en: 'Opens: alloys (Arc Furnace in the generator), rooms up to level 9, more outposts, and the seasons.' }, // [phase3] seasons
   },
   {
     id: 5,
@@ -146,17 +151,84 @@ export const ACTS: ActDef[] = [
 /** The deepest the bunker can ever go in this release, and the highest room level. */
 export const MAX_ACT = ACTS.length;
 
-/**
- * [Q7] Contracts and seasons open this long after Act II begins (day ~4 for an engaged player), so the second Act no longer
- * lands five new systems on day 1.5. A bunker from before the long game, and every later Act, has them from the start.
- */
-export const ACT2_LATE_SYSTEMS_AFTER = 2.5 * 86_400;
+const DAY = 86_400;
 
-export function lateActTwoSystems(state: GameState): boolean {
+/** [phase3] The systems an Act opens one at a time (economy-pacing fix 7). */
+export type SystemId = 'inbox' | 'foreman' | 'laws' | 'outposts' | 'contracts' | 'caravans' | 'doctrine2' | 'seasons';
+
+/**
+ * [phase3] When each system opens: its Act, and how long (world seconds) after that Act begins. Generalizes the old [Q7]
+ * `lateActTwoSystems` stagger: Act II opens the Inbox and the Foreman on day 0 and contracts after 2.5 days; Act III opens one thing
+ * at a time (laws +2 days, outposts and caravans +4 days, the second doctrine fork +6 days); the seasons wait for Act IV.
+ * Every later Act has them all from its first day.
+ */
+export const SYSTEM_SCHEDULE: Record<SystemId, { act: number; after: number }> = {
+  inbox: { act: 2, after: 0 },
+  foreman: { act: 2, after: 0 },
+  laws: { act: 3, after: 2 * DAY },
+  outposts: { act: 3, after: 4 * DAY },
+  // [phase3] Contracts stay in Act II (+2.5 days, as [Q7]): moving them to Act III took Act II's main materials income away and the
+  // engaged sims reached Act III at day 11.5 instead of 7.7 (+50%). The lead may move them once Act II pays its charters another way.
+  contracts: { act: 2, after: 2.5 * DAY },
+  caravans: { act: 3, after: 4 * DAY },
+  doctrine2: { act: 3, after: 6 * DAY },
+  seasons: { act: 4, after: 0 },
+};
+
+/** [phase3] The doctrine forks that wait for a scheduled system (the others open with their research node's Act). */
+export const FORK_SYSTEM: Record<string, SystemId> = { defense: 'doctrine2' };
+
+/** [phase3] Research ids of the delayed fork, for "already in use" below. */
+const DELAYED_FORK_NODES = ['fortress', 'rangers', 'diplomacy'];
+
+/**
+ * [phase3] A save from before the schedule must not lose what it already uses: a law in force, an outpost held, a contract waiting
+ * in the inbox, a caravan on the road, or a delayed doctrine chosen keeps that system open.
+ */
+function inUse(state: GameState, id: SystemId): boolean {
+  const lg = state.longGame!;
+  switch (id) {
+    case 'laws': return (lg.policy?.laws?.length ?? 0) > 0;
+    case 'outposts': return ((lg.world?.outposts ?? []) as unknown[]).length > 0;
+    case 'contracts': return (lg.inbox?.items ?? []).some(i => i.kind === 'contract');
+    case 'caravans': return (state.activeMissions ?? []).some(m => m.type === 'caravan');
+    case 'doctrine2': return DELAYED_FORK_NODES.some(r => !!(state.research[r]?.completed || state.research[r]?.isResearching));
+    default: return false;
+  }
+}
+
+/** [phase3] Is this system open in this run now? Bunkers from before the long game keep the old rule (everything from Act II). */
+export function systemOpen(state: GameState, id: SystemId): boolean {
   const lg = state.longGame;
   if (!lg) return false;
-  if (lg.meta.legacy || lg.meta.act >= 3) return lg.meta.act >= 2;
-  return lg.meta.act === 2 && lg.meta.worldT - lg.meta.actSince >= ACT2_LATE_SYSTEMS_AFTER;
+  const at = SYSTEM_SCHEDULE[id];
+  if (lg.meta.legacy) return lg.meta.act >= Math.min(at.act, 2);
+  if (lg.meta.act > at.act) return true;
+  if (lg.meta.act < at.act) return false;
+  return inUse(state, id) || lg.meta.worldT - lg.meta.actSince >= at.after;
+}
+
+/** [phase3] World seconds until a system opens in the current Act (0: open; Infinity: a later Act). */
+export function systemOpensIn(state: GameState, id: SystemId): number {
+  if (systemOpen(state, id)) return 0;
+  const lg = state.longGame;
+  const at = SYSTEM_SCHEDULE[id];
+  if (!lg || lg.meta.act !== at.act) return Infinity;
+  return Math.max(0, at.after - (lg.meta.worldT - lg.meta.actSince));
+}
+
+/** [phase3] A doctrine fork that waits for its scheduled system (FORK_SYSTEM). */
+export function forkOpen(state: GameState, fork: string): boolean {
+  const sys = FORK_SYSTEM[fork];
+  return !sys || systemOpen(state, sys);
+}
+
+/**
+ * [Q7] Kept for its callers (ContractSystem.active, orders, seasons): the contracts' schedule (Act II + 2.5 days).
+ * [phase3] seasons.ts should ask `systemOpen(state, 'seasons')` (Act IV) instead.
+ */
+export function lateActTwoSystems(state: GameState): boolean {
+  return systemOpen(state, 'contracts');
 }
 
 export function actOf(state: GameState): ActDef {

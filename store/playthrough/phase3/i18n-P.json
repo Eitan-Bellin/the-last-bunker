@@ -1,0 +1,19 @@
+{
+  "en": {
+    "p3p.life.ok": "OK",
+    "p3p.life.short": "Life support",
+    "p3p.life.title": "Life support: food, water and power are fine",
+    "p3p.life.label": "Life support OK: {list} make at least twice what is used. Tap for details",
+    "p3p.life.sheet": "Life support: this makes at least twice what is used and holds 30 minutes of it, so the top bar folds it into one tile. Its own tile comes back the moment it runs short.",
+    "p3p.lock.base": "Opens once the generator, the pump and the farm are working"
+  },
+  "he": {
+    "p3p.life.ok": "תקין",
+    "p3p.life.short": "מערכות חיים",
+    "p3p.life.title": "מערכות חיים: מזון, מים וחשמל בסדר",
+    "p3p.life.label": "מערכות חיים תקינות: {list} מייצרים לפחות פי שניים ממה שנצרך. הקישו לפרטים",
+    "p3p.life.sheet": "מערכות חיים: מייצרים כאן לפחות פי שניים ממה שנצרך ויש מלאי לחצי שעה, ולכן הסרגל העליון מאחד את זה לאריח אחד. האריח הנפרד חוזר ברגע שיש מחסור.",
+    "p3p.lock.base": "ייפתח כשהגנרטור, המשאבה והחווה יעבדו"
+  },
+  "replace": { "en": {}, "he": {} }
+}

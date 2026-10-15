@@ -180,6 +180,13 @@
 }
 #hud .hx-res.empty .k-chip { background: color-mix(in srgb, var(--danger) 18%, var(--surface-1)); }
 
+/* [phase3] The life-support tile: food, water and power folded into one calm tile (HUD.updateLife). Same box as a resource tile. */
+#hud .hx-life .k-chip { --k-chip-color: var(--success); }
+#hud .hx-life .k-chip__icon { color: var(--success); }
+#hud .hx-life .k-chip__amount { color: var(--success); font-weight: var(--weight-bold); }
+#hud .hx-life .hx-res__line2 { direction: inherit; color: var(--text-secondary); }
+#hud .hx-life__label { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+
 /* [phase2] The overflow tile (Act II on): "+3" at the row's end, a full hit area. Hidden under 360 px (every tile's sheet lists the
    other stores there). A hidden store in trouble turns it red (dashed edge, a shape as well as a colour). */
 #hud .hx-more {
@@ -653,6 +660,6 @@
 .sheet.resource-sheet .res-switch__amount { unicode-bidi: isolate; }
 
 /* [phase2 lead] 320 px: a four-character amount ("2.2K") must fit the narrow tile whole, not end in an ellipsis. */
-@media (max-width: 359px) {
-  #hud .hx-res .k-chip__amount { font-size: 0.9em; letter-spacing: -0.03em; text-overflow: clip; }
+@media (max-width: 419px) {
+  #hud .hx-res .k-chip__amount { font-size: 0.84em; letter-spacing: -0.04em; text-overflow: clip; } /* [phase3] up to 419 px: the life tile leaves narrower tiles */
 }

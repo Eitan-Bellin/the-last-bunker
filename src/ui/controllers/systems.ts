@@ -4,7 +4,7 @@ import type { GameApp } from '../../app';
 import { RESEARCH } from '../../data/research';
 import { lawSlots } from '../../data/laws';
 import { seasonsActive } from '../../data/seasons';
-import { actOf } from '../../data/acts';
+import { actOf, forkOpen, systemOpen } from '../../data/acts';
 import { getProject } from '../../data/projects';
 import type { SpotKey } from '../HUD';
 import { el } from '../dom';
@@ -54,10 +54,11 @@ const CARDS: SystemCard[] = [
   { id: 'seasons', icon: '[[clover]]', ready: s => seasonsActive(s), spot: 'season', book: 'seasons' },
   {
     id: 'doctrines', icon: '[[books]]', spot: 'research', book: 'doctrine',
-    ready: (s, app) => act(s) >= 2 && RESEARCH.some(r => r.fork && app.engine.researchSystem.status(s, r.id) === 'available'),
+    ready: (s, app) => act(s) >= 2 && RESEARCH.some(r => r.fork && forkOpen(s, r.fork) && app.engine.researchSystem.status(s, r.id) === 'available'), // [phase3]
   },
-  { id: 'outposts', icon: '[[surface]]', ready: s => act(s) >= 3, spot: 'surface', book: 'outposts' },
-  { id: 'laws', icon: '[[books]]', ready: s => lawSlots(s) > 0, spot: 'era', book: 'laws' },
+  // [phase3] Act III opens these one at a time (data/acts.ts SYSTEM_SCHEDULE): each comes as its own news card.
+  { id: 'outposts', icon: '[[surface]]', ready: s => act(s) >= 3 && systemOpen(s, 'outposts'), spot: 'surface', book: 'outposts' },
+  { id: 'laws', icon: '[[books]]', ready: s => lawSlots(s) > 0 && systemOpen(s, 'laws'), spot: 'era', book: 'laws' },
   tier2('alloys', 4, 'alloys'),
   tier2('data', 5, 'data'),
   tier2('influence', 6, 'influence'),

@@ -90,8 +90,8 @@ export const BOOK: BookEntry[] = [
     id: 'resources', icon: '[[materials]]', group: 'basics',
     title: { he: 'משאבים ומחסנים', en: 'Resources and storage' },
     text: {
-      he: 'לכל משאב יש מחסן עם תקרה. הקישו על משאב למעלה כדי לראות ממה הוא בא, לאן הוא הולך, ובעוד כמה זמן הוא מתמלא או נגמר. "▾" למעלה מראה את שאר המשאבים. מה שעולה על התקרה לא הולך לאיבוד לגמרי: הפרויקט הפעיל לוקח ממנו, והשאר הופך לזיכויי סחר.',
-      en: 'Every resource has a store with a ceiling. Tap a resource at the top to see where it comes from, where it goes, and when it fills up or runs out. The "▾" at the top shows the rest of the resources. What exceeds the ceiling is not lost entirely: the active project takes some, and the rest becomes trade credits.',
+      he: 'לכל משאב יש מחסן עם תקרה. הקישו על משאב למעלה כדי לראות ממה הוא בא, לאן הוא הולך, ובעוד כמה זמן הוא מתמלא או נגמר. "▾" למעלה מראה את שאר המשאבים. מה שעולה על התקרה לא הולך לאיבוד לגמרי: הפרויקט הפעיל לוקח ממנו, ומהמערכה השנייה חדרי משאב המערכה מנצלים את העודף.',
+      en: 'Every resource has a store with a ceiling. Tap a resource at the top to see where it comes from, where it goes, and when it fills up or runs out. The "▾" at the top shows the rest of the resources. What exceeds the ceiling is not lost entirely: the active project takes some, and from Act II the rooms of the Act put the surplus to work.',
     },
   },
   {
@@ -106,8 +106,8 @@ export const BOOK: BookEntry[] = [
     id: 'credits', icon: '[[credits]]', group: 'basics',
     title: { he: 'זיכויי סחר וחנות', en: 'Trade credits and the shop' },
     text: {
-      he: 'זיכויי סחר נצברים מגלישת מחסנים ומהזמנות יום. מוציאים אותם בחנות (ביומן, לשונית חנות): שרטוטים, האצת מחקר, האצת פרויקט, איזוטופ-7. לכל פריט הגבלה יומית, והמחירים עולים עם המערכה.',
-      en: 'Trade credits come from storage overflow and daily orders. Spend them in the shop (Journal, Shop tab): blueprints, research speed-ups, project boosts, Isotope-7. Each item has a daily limit, and prices rise with the Act.',
+      he: 'זיכויי סחר מגיעים מהזמנות יום ומחוזים (ובמערכה הראשונה גם מגלישת מחסנים). מוציאים אותם בחנות (ביומן, לשונית חנות): שרטוטים, האצת מחקר, האצת פרויקט, איזוטופ-7. לכל פריט הגבלה יומית, והמחירים עולים עם המערכה.',
+      en: 'Trade credits come from daily orders and contracts (and, in Act I, from storage overflow). Spend them in the shop (Journal, Shop tab): blueprints, research speed-ups, project boosts, Isotope-7. Each item has a daily limit, and prices rise with the Act.',
     },
   },
   {
@@ -331,7 +331,7 @@ export const BOOK: BookEntry[] = [
     },
   },
   {
-    id: 'seasons', icon: '[[clover]]', group: 'world', act: 2,
+    id: 'seasons', icon: '[[clover]]', group: 'world', act: 4,
     title: { he: 'עונות', en: 'Seasons' },
     text: {
       he: 'ארבע עונות, כל אחת בערך ארבעה ימים, גם כשאתם רחוקים. כל עונה משנה את הייצור והסכנה (אביב: יותר אוכל, קיץ: פחות מים ופושטים חזקים, סתיו: קציר, חורף: פחות אוכל וצריכת חשמל גבוהה). הקישו על סמל העונה בראש המסך לתחזית.',

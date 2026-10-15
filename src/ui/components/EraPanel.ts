@@ -7,7 +7,7 @@ import { fmtNum, plural } from '../format';
 import { ERAS, eraOf, type EraDef } from '../../data/eras';
 import { Sheet } from './Sheet';
 import { RESOURCE_ICONS, bar, button, costRow, el, setBar, setRich } from '../dom';
-import { ACTS, actOf, type ActDef } from '../../data/acts';
+import { ACTS, actOf, systemOpen, type ActDef } from '../../data/acts';
 import { FOREMAN_ACT, FOREMAN_ORDERS, type ForemanSystem } from '../../systems/ForemanSystem';
 import { actEta, actFraction, actRequirements, type Requirement } from '../../systems/Guide';
 import type { ObjectiveAction } from '../../systems/ObjectiveSystem';
@@ -23,6 +23,9 @@ import { PROJECTS } from '../../data/projects'; // [phase2]
 import { RESEARCH } from '../../data/research'; // [phase2]
 import { ProjectsView } from './ProjectsPanel'; // [phase2]
 import '../../styles/screens-p2.css'; // [phase2]
+
+/** [phase3] Laws show once their slot exists AND the Act's schedule has opened them (Act III + 2 days). */
+const lawsShown = (state: GameState) => lawSlots(state) > 0 && systemOpen(state, 'laws');
 
 /**
  * [ux2e #32] The Command panel's tabs. [phase2] Now (the next step, three goals, and the whole Act behind one button) · Projects (the big
@@ -166,7 +169,7 @@ export class EraPanel {
     const goals = this.tab === 'now' && !this.actOpen ? topGoals(reqs).map(r => r.id).join(',') : '';
     const tabs = this.tabs(state).map(t => t.id).join(','); // [phase2] a tab appears when its system opens
     const doctrines = this.tab === 'policies' && this.engine ? RESEARCH.filter(r => r.fork).map(r => this.engine!.researchSystem.status(state, r.id)).join(',') : '';
-    const sig = `${era.id}|${act?.id ?? 0}|${orders}|${state.tutorialStep}|${i18n.currentLocale}|${this.tab}|${this.actOpen}|${goals}|${tabs}|${doctrines}|${this.tab === 'policies' ? lawSlots(state) : ''}`;
+    const sig = `${era.id}|${act?.id ?? 0}|${orders}|${state.tutorialStep}|${i18n.currentLocale}|${this.tab}|${this.actOpen}|${goals}|${tabs}|${doctrines}|${this.tab === 'policies' ? `${lawSlots(state)}${lawsShown(state)}` : ''}`;
     if (sig !== this.signature) {
       this.signature = sig;
       this.projectsSig = '';
@@ -514,7 +517,7 @@ export class EraPanel {
     const ps = this.engine.projectSystem;
     const out: { id: CommandTab; label: string }[] = [{ id: 'now', label: `[[target]] ${i18n.t('ux2e.cmd.now')}` }];
     if (PROJECTS.some(d => ps.isAvailable(state, d))) out.push({ id: 'projects', label: `[[build]] ${i18n.t('p2s.cmd.projects')}` });
-    if ((act.id >= FOREMAN_ACT && !!this.foreman) || lawSlots(state) > 0) out.push({ id: 'policies', label: `[[books]] ${i18n.t('p2s.cmd.policies')}` });
+    if ((act.id >= FOREMAN_ACT && !!this.foreman) || lawsShown(state)) out.push({ id: 'policies', label: `[[books]] ${i18n.t('p2s.cmd.policies')}` });
     out.push({ id: 'endings', label: `[[star]] ${i18n.t('ux2e.cmd.endings')}` });
     return out;
   }
@@ -594,7 +597,7 @@ export class EraPanel {
         panel.appendChild(this.projectsBox);
       } else if (this.tab === 'policies') {
         const extras = el('div', 'bp-card');
-        if (lawSlots(state) > 0) extras.appendChild(this.renderLaws(state));
+        if (lawsShown(state)) extras.appendChild(this.renderLaws(state)); // [phase3]
         if (act.id >= FOREMAN_ACT && this.foreman) extras.appendChild(this.renderForeman(state));
         const doctrines = this.renderDoctrines(state);
         if (doctrines) extras.appendChild(doctrines);
@@ -610,13 +613,16 @@ export class EraPanel {
       }
     }
     // The era is the bunker's look and mood; only a bunker from before the long game still plays toward its goals.
-    const head = el('div', `era-head era-${era.key}${longGame ? ' compact' : ''}`);
-    head.append(
-      el('div', 'era-num', i18n.t('era.number', { n: era.id + 1 })),
-      el('div', 'era-name', era.name[locale]),
-      el('div', 'era-tagline', era.tagline[locale]),
-    );
-    root.appendChild(head);
+    // [phase3] One progress bar: a long-game run sees the Act only (no era number, name or bar; eras stay the art's backdrop).
+    if (!longGame) {
+      const head = el('div', `era-head era-${era.key}`);
+      head.append(
+        el('div', 'era-num', i18n.t('era.number', { n: era.id + 1 })),
+        el('div', 'era-name', era.name[locale]),
+        el('div', 'era-tagline', era.tagline[locale]),
+      );
+      root.appendChild(head);
+    }
     this.bars = [];
     this.labels = [];
     if (!longGame) {
