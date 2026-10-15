@@ -307,8 +307,21 @@
   #hud .hx-act__head { font-size: calc(var(--type-caption) * var(--fs, 1)); }
 }
 
-/* Large text: the tiles go 2 x 2 so the numbers keep their size. */
-#hud .hx-top.fs-big .hx-res-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+/*
+ * Large text: the numbers keep their size and are never cut. [w5] The tiles used to go 2 x 2 (three HUD rows); now each tile stacks its
+ * icon above the number, so the four still share one row and the HUD stays two rows at text size 1.25 to 1.6.
+ */
+#hud .hx-top.fs-big .hx-res .k-chip {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas: 'icon' 'amount' 'line2';
+  justify-items: center;
+  text-align: center;
+  padding-inline: var(--border-w);
+}
+#hud .hx-top.fs-big .hx-res .k-chip:not(.is-low):not(.is-danger):not(.is-countdown) { grid-template-areas: 'icon' 'amount'; }
+#hud .hx-top.fs-big .hx-res .k-chip__amount { max-width: 100%; direction: ltr; }
+#hud .hx-top.fs-big .hx-res__line2,
+[dir='rtl'] #hud .hx-top.fs-big .hx-res__line2 { justify-content: center; }
 
 /* ---------- nav console ---------- */
 
@@ -417,6 +430,12 @@
 :root[data-contrast='high'] #hud .hx-chip,
 :root[data-contrast='high'] #hud-nav .hx-tab::before { border: calc(var(--border-w) * 2) solid var(--text-secondary); }
 :root[data-contrast='high'] #hud .hx-res .k-chip__amount { color: var(--text-primary); }
+/* [w5] The 2 px high-contrast edge must not wipe the state edges: low stays amber, danger stays a dashed red edge (a shape, not only a colour). */
+:root[data-contrast='high'] #hud .hx-res .k-chip.is-low { border-color: var(--warning); }
+:root[data-contrast='high'] #hud .hx-res .k-chip.is-danger { border-color: var(--danger); border-style: dashed; }
+:root[data-contrast='high'] #hud .objective.adv .adv-main,
+:root[data-contrast='high'] #hud .objective.adv .adv-more { background: var(--surface-0); border: calc(var(--border-w) * 2) solid var(--text-secondary); }
+:root[data-contrast='high'] #hud .objective.adv .objective-meta { color: var(--text-primary); }
 :root[data-large='on'] #hud .hx-info { gap: var(--sp-2); }
 
 /* ---------- [ux-redesign W3a] the objective strip = the "What now?" advisor ----------
