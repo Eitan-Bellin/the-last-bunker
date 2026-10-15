@@ -359,3 +359,9 @@ export function edgeAt(layout: CityLayout, floor: number, side: Side): EdgeSite 
   return layout.edges.find(e => e.floor === floor && e.side === side);
 }
 
+
+/** Where a storey's zone plate hangs in the city (signage.ts): on the hub wall over the doorway into the east vestibule. */
+export function zonePlateAt(floor: number): { x: number; y: number } {
+  const F = frameOfStratum(stratumOf(floor));
+  return { x: F.hubR + 4, y: floorTop(floor) + 36 };
+}
