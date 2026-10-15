@@ -192,3 +192,44 @@ export const ROCK_RENDER = {
 export const CITY_NIGHT_GRADE = {
   underground: 0.45,
 } as const;
+
+/**
+ * [world:M1] "New" discovery pins (CitySystem.unseen): a small pulsing marker with an additive glow over an area logic has revealed and the
+ * player has not looked at yet. Hidden under the far map (like labels). Sizes are world units at zoom 1; the marker keeps a readable screen
+ * size between `minScreen` and `maxScreen` px. `seenAfter` s of the anchor inside the view (inset by `viewInset` of the view) marks it seen.
+ */
+export const PINS = {
+  color: 0xffc25a as Hex,
+  core: 0xfff3d6 as Hex,
+  glow: 0xffa83a as Hex,
+  /** Marker radius and glow diameter at zoom 1 (world units). */
+  r: 7,
+  glowD: 48,
+  glowAlpha: 0.45,
+  /** Pulse: period (s) and the scale / alpha swing of the ring. */
+  pulse: 1.6,
+  ringScale: 2.4,
+  /** The marker floats this far above its anchor (world units) and bobs by `bob`. */
+  lift: 26,
+  bob: 3,
+  minScreen: 9,
+  maxScreen: 16,
+  seenAfter: 1,
+  viewInset: 0.08,
+  /** Visibility checks per second (cheap: one point-in-rect per pin). */
+  checkHz: 5,
+  /** Fade out after seen / in when born (s). */
+  fade: 0.5,
+  /** A found pocket: the fog reveal brush radius (world units) and the found sparkle. */
+  findRevealR: 150,
+  findGlowD: 160,
+} as const;
+
+/**
+ * [world:M1] The shell's big vector Graphics (300-5000 vertices) are forced into the batcher only while the bunker is small. Measured on a
+ * 4x CPU-throttled phone (375x812@2, Medium): a fresh game gains 9-18 draw calls at no CPU cost, but at e55 (20 floors) forcing them
+ * cost 12-27 ms more draw CPU per idle picture (about 20 %) and more while panning, for no steady draw-call gain.
+ */
+export const SHELL_RENDER = {
+  forceBatchMaxFloors: 8,
+} as const;

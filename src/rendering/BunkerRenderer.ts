@@ -9,8 +9,8 @@ import type { BuildingInstance, BuildingType, GameState, Position, Ruin, Survivo
 import { effectiveLevel, isDistrict, roomFloors, roomSlots } from '../data/buildingDefs';
 import { i18n } from '../i18n/I18nManager';
 import { BASE_EAST, BUILDING_W, FLOOR_H, ROOM_H, SHAFT_W, SLOT_W, TOPSOIL, buildingH, extentsFor, floorExtent, floorIndexAt, floorTop, type Ext } from './layout';
-import { buildingX, districtXAt, eastmostSlotX, slotX, stripX, westmostSlotX } from '../world/project';
-import { CITY } from '../world/flag'; // [world:C1] the city renderer behind ?city
+import { buildingX, districtXAt, eastmostSlotX, slotX, stripX, useClassicProjection, westmostSlotX } from '../world/project';
+import { CITY, disableCityForSession } from '../world/flag'; // [world:C1] the city renderer behind ?city [world:M1] session fallback
 import type { CityHost } from '../world/render/cityHost'; // [world:C1] loaded on demand (mountCity): classic never downloads the city renderer
 import { setLightSink } from '../world/life/lanterns'; // [world:C1-Li] // [world:C2] the real city layout and shell into the seams
 import { PEOPLE_RENDER } from '../world/tokensRender'; // [world:C1]
@@ -48,7 +48,7 @@ import { coneTexture } from '../art/ArtLibrary';
 import { buildRuinVisual } from './ruinArt';
 import { iconSprite } from './richText';
 import { glowTexture, moteTexture } from '../art/ArtLibrary';
-import { Sprite } from 'pixi.js';
+import { Sprite, Texture } from 'pixi.js';
 import { IncidentLayer, DisasterLayer } from './incidentFx';
 import { PopulationSystem } from '../systems/PopulationSystem';
 /** [Danger C5] Only used to turn a stored name into its Hebrew form for the plaque. */
@@ -66,6 +66,45 @@ import { KIT_KEYS, buildBays,buildCasing, depthGains, structureAmbient, gfx2Enab
 
 /** [world:C2] World units the camera may pan past a city edge site or district cavern. */
 const CITY_EDGE_PAD = 90;
+/**
+ * [world:M1] After a lost GL context: blanks every sprite (plain, tiling, nine-slice) whose texture was destroyed and clears every
+ * Graphics that fills with one. Returns how many it fixed. A destroyed texture has no source, and Pixi's batcher reads
+ * `texture._source.alphaMode` for every element, so one stale reference threw on every picture after a restore.
+ */
+export function dropDeadTextures(root: Container): number {
+  let n = 0;
+  const dead = (t: Texture): boolean => t.destroyed || !t.source || t.source.destroyed;
+  const walk = (o: Container): void => {
+    if (o.destroyed) return;
+    // A render group keeps its draw list (and the batches' texture sources) until its structure changes: rebuild every one.
+    const rg = (o as unknown as { renderGroup?: { structureDidChange: boolean } | null }).renderGroup;
+    if (rg && o.isRenderGroup) rg.structureDidChange = true;
+    const sp = o as unknown as { texture?: Texture };
+    const tx = o instanceof Text || o instanceof Graphics ? undefined : sp.texture; // a Text owns and remakes its texture
+    if (tx && dead(tx)) { sp.texture = Texture.EMPTY; n++; }
+    const ctx = o instanceof Graphics ? o.context : null;
+    if (ctx && !ctx.destroyed) {
+      for (const ins of ctx.instructions) {
+        const t = (ins.data as { style?: { texture?: Texture } }).style?.texture;
+        if (t && dead(t)) { ctx.clear(); n++; break; }
+      }
+    }
+    for (const c of o.children) walk(c);
+  };
+  walk(root);
+  return n;
+}
+
+/** [world:M1] A city chunk that has not arrived after this long counts as failed (the boot falls back to classic rather than hang). */
+const CITY_CHUNK_TIMEOUT_MS = 12_000;
+
+/** [world:M1] The two city chunks, or a rejection when either fails (offline, 404 after an update) or takes longer than the timeout. */
+function loadCityChunks(): Promise<[typeof import('../world/render/cityHost'), typeof import('../world/render/cityWiring')]> {
+  let timer = 0;
+  const timeout = new Promise<never>((_, reject) => { timer = window.setTimeout(() => reject(new Error('city chunk timeout')), CITY_CHUNK_TIMEOUT_MS); });
+  const load = Promise.all([import('../world/render/cityHost'), import('../world/render/cityWiring')]);
+  return Promise.race([load, timeout]).finally(() => window.clearTimeout(timer));
+}
 
 interface Burst {
   s: Sprite;
@@ -494,7 +533,7 @@ export class BunkerRenderer {
 
     this.surface = buildSurface();
     if (CITY) await this.mountCity(canvas); // [world:C1] the city's layer stack around the same holders (its own chunk)
-    else this.worldContainer.addChild(
+    if (!this.cityHost) this.worldContainer.addChild( // [world:M1] classic, or the city chunk could not be loaded (mountCity fell back)
       this.surfaceHolder, this.projectSites.layer, this.projectSites.smokeLayer, this.projectSites.glowLayer, this.projectSites.crew, this.projectSites.signLayer, this.undergroundHolder, this.bayHolder, this.slotLayer, this.highlightLayer,
       this.roomLayer, this.shaftHolder, this.utilitiesHolder, this.walkers.layer, this.dust.container, this.digHolder, this.wingSigns.container, this.districtSignHolder, this.fxLayer, this.incidents.fx, this.disasterFx.fx,
       this.labelLayer, this.incidents.badges, this.ghost.layer,
@@ -538,7 +577,18 @@ export class BunkerRenderer {
    * replaced by a neutral one (life-systems owns walkers.ts; this override goes when their city lighting lands).
    */
   private async mountCity(canvas: HTMLCanvasElement): Promise<void> {
-    const [{ CityHost }, { installCityWorld }] = await Promise.all([import('../world/render/cityHost'), import('../world/render/cityWiring')]);
+    let mods: [typeof import('../world/render/cityHost'), typeof import('../world/render/cityWiring')];
+    try {
+      mods = await loadCityChunks();
+    } catch (err) {
+      // [world:M1] Offline before the service worker had the city chunks (or a flaky first load): never a dead boot. This session runs the
+      // classic tower (flag and projection both flip before anything is projected for drawing); the next visit tries the city again.
+      logCrash('city-chunk', err, { fallback: 'classic' });
+      disableCityForSession(String((err as Error)?.message ?? err));
+      useClassicProjection();
+      return;
+    }
+    const [{ CityHost }, { installCityWorld }] = mods;
     installCityWorld(); // [world:C2] cityLayout + shell (the stub layout stays the seams' fallback)
     const host = new CityHost(this.app.renderer, isLiteMode() ? 'lite' : startQuality(), canvas);
     this.cityHost = host;
@@ -808,6 +858,7 @@ export class BunkerRenderer {
   private onCanvasTap(sx: number, sy: number): void {
     if (this.ghostDrag || this.drag) return;
     const p = this.worldContainer.toLocal({ x: sx, y: sy });
+    if (this.cityHost && !this.mapCovers && this.cityHost.tapPocket(p.x, p.y)) return; // [world:M1] a glimpsed pocket: found (cosmetic)
     const r = this.ghost.rect();
     if (r && p.x >= r.x && p.x <= r.x + r.w && p.y >= r.y && p.y <= r.y + r.h) return;
     if (this.placement.insideBunker(p.x, p.y)) return;
@@ -1333,8 +1384,21 @@ export class BunkerRenderer {
     this.utilitiesSig = '';
     this.surfaceSig = '';
     this.cityMapSig = '';
+    // [world:M1] Every holder that is rebuilt from a signature: after a context restore ArtLibrary.reset() has destroyed the paintings and
+    // kit pieces they were built with (the dig sign, the wing and district signs, the drop ring kept pointing at dead textures).
+    this.digSig = '';
+    this.wingSig = '';
+    this.districtSig = '';
+    this.dropRingSig = '';
     this.refreshSurface();
+    // [world:M1] Safety net: anything still drawing a destroyed texture (a sprite built outside the signatures above, a texture fill) is
+    // blanked, so the batcher never meets a texture without a source ('alphaMode of null' on every frame, both classic and city).
+    dropDeadTextures(this.app.stage);
+    this.deadSweeps = 3; // and again for the next few pictures (late arrivals rebuild against the reset library)
   }
+
+  /** [world:M1] Pictures left in which recoverGraphics' dead-texture sweep runs again. */
+  private deadSweeps = 0;
 
   /** Updates the scene, then draws it; the picture is drawn even when the update threw halfway. */
   render(state: GameState, dt: number, alpha: number): void {
@@ -1356,6 +1420,7 @@ export class BunkerRenderer {
   private draw(): void {
     const gl = (this.app.renderer as { gl?: WebGL2RenderingContext }).gl;
     if (this.contextLost || gl?.isContextLost()) return;
+    if (this.deadSweeps > 0) { this.deadSweeps--; dropDeadTextures(this.app.stage); } // [world:M1] context restore
     try {
       this.app.render();
       this.drawFails = 0;
@@ -1469,7 +1534,7 @@ export class BunkerRenderer {
   /** [world:C1] The layout follows the provider; a new one (or a new era / kit) flags the shell, mounted in updateCity (CityHost.ensureShell). */
   private syncCityLayout(state: GameState): void {
     const host = this.cityHost!;
-    const key = (Math.imul(LAYOUT.ext, 31) ^ Math.imul(LAYOUT.rooms, 17) ^ Math.imul(this.surfaceEra + 2, 7919) ^ state.currentFloors) >>> 0;
+    const key = (Math.imul(LAYOUT.ext, 31) ^ Math.imul(LAYOUT.rooms, 17) ^ Math.imul(this.surfaceEra + 2, 7919) ^ state.currentFloors ^ Math.imul((state.city?.found.length ?? 0) + 1, 104729)) >>> 0; // [world:M1] a found pocket opens in the layout
     if (key === this.cityKey && host.current) return;
     this.cityKey = key;
     if (host.syncLayout(state, `${this.surfaceEra}|${this.gfx2 && kitReady()}`)) this.applyCityExtents();
@@ -1499,6 +1564,7 @@ export class BunkerRenderer {
       host.ensureShell(state, this.surfaceEra); // [world:C2] new layout / era / kit / tier: the shell is rebuilt
       host.syncProgress(state, this.time); // [world:C2] digs and districts move the fog and the rubble (2x a second)
       host.syncRooms(state, this.roomProbe, this.time, LAYOUT.rooms);
+      host.syncPins(state, this.time); // [world:M1] "new" discovery pins
     }
     const tier = isLiteMode() ? 'lite' : this.postfx?.quality ?? 'high';
     host.frame(this.worldContainer, this.app.screen.width, this.app.screen.height, this.time, dt, tier, this.mapCovers, this.surfaceEra, this.nightNow);

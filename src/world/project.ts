@@ -46,6 +46,15 @@ export function __setProjectionForTests(k: ProjectionKind, cityFrameTokens?: rea
   frames = k === 'city' ? cityFrames : classicFrames;
 }
 
+/**
+ * [world:M1] The session kill switch: the city chunk could not be loaded (offline before the service worker had it), so this session runs
+ * the classic tower. Called by BunkerRenderer.init together with flag.ts `disableCityForSession`, before anything is projected for drawing.
+ */
+export function useClassicProjection(): void {
+  PROJECTION = 'classic';
+  frames = classicFrames;
+}
+
 /** The classic frame (the tower of today). */
 export const CLASSIC_FRAME: Readonly<StratumFrame> = classicFrames[0];
 

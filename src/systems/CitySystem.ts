@@ -3,6 +3,13 @@ import { bus } from '../core/EventBus';
 import { createCity, normalizeCity, revealedAreaIds, sortedIds, type CityState } from '../core/state/city';
 import { pocketById, pocketStratum, strataReached } from '../data/strata';
 
+let active: CitySystem | null = null;
+
+/** [world:M1] The CitySystem of the running game (the last one constructed), for the city renderer's pins and pocket taps. Null in tools. */
+export function activeCitySystem(): CitySystem | null {
+  return active;
+}
+
 /**
  * [world:C0] The city's discovery bookkeeping (architecture 1.5 and 4). ECONOMY-NEUTRAL: it writes only `state.city`, pays nothing, costs
  * nothing, has no tick (it is not in GameEngine.tick, so the sim's step list and every run stay identical) and the sim bot never calls it.
@@ -14,6 +21,7 @@ export class CitySystem {
 
   constructor(sm: StateManager) {
     this.sm = sm;
+    active = this; // [world:M1] the renderer's pins and pocket taps reach the running game's system through activeCitySystem()
   }
 
   /** The slice as saved (a state from an older engine path without one reads as empty). */

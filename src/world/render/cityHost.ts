@@ -19,7 +19,14 @@ import { artEntry, buildingArtKey, roomTier } from '../../art/registry';
 import { FLOOR_H, ROOM_H, SLOT_W, extentsFor, floorTop } from '../../rendering/geom';
 import { buildingRect, slotX, stripX } from '../project';
 import { stratumOf } from '../../data/strata';
-import { LIGHT } from '../tokens';
+import { CAMERA, LIGHT } from '../tokens';
+import { PINS } from '../tokensRender';
+import { revealedAreaIds } from '../../core/state/city';
+import { activeCitySystem } from '../../systems/CitySystem';
+import { uiSound } from '../../audio/uiSound';
+import { DiscoveryPins, pinAnchor } from './pins';
+import { freeCaches } from './chunks';
+import { cityTextures } from './lighting';
 import { CityRenderer, parallaxFromWorld, type ParallaxInfo, type RenderTier } from './CityRenderer';
 import { cityLayoutProvider, shellMounter, type MountedShell } from './citySeams';
 import type { FloorRect, RoomLightInput } from './lighting';
@@ -49,6 +56,7 @@ export interface RoomProbe {
 }
 
 const ROOM_SYNC_S = 0.25;
+const CAMERA_FAR = CAMERA.zoom.far;
 
 export class CityHost {
   readonly city: CityRenderer;
@@ -75,6 +83,11 @@ export class CityHost {
   private extra: FloorRect[] = [];
   private t = 0;
   private snapDepth = 0;
+  /** [world:M1] "New" discovery pins (above the fog) and the key their set was last built from. */
+  readonly pins: DiscoveryPins;
+  private pinKey = '';
+  private pinAt = -1;
+  private readonly pinTargets: { id: string; x: number; y: number }[] = [];
 
   constructor(renderer: Renderer, tier: RenderTier, canvas: HTMLCanvasElement) {
     this.city = new CityRenderer({ renderer, tier, canvas });
@@ -87,6 +100,7 @@ export class CityHost {
     // play layer changes every frame); here it is only when the shell itself changes (a cull flip, a dig step).
     this.shellBack.isRenderGroup = true;
     this.shellFront.isRenderGroup = true;
+    this.pins = new DiscoveryPins(cityTextures().halo);
     this.wrapExtract(renderer);
   }
 
@@ -101,7 +115,7 @@ export class CityHost {
       if (h === L.shaft) c.playLayer.addChild(this.shellFront);
     }
     world.addChild(c.planes.far.container, c.planes.back.container, ...L.surface, c.litGroup, ...L.overLit, c.glowLayer, ...L.overGlow,
-      c.fogLayer, c.teaseLayer, c.planes.fore.container, ...L.top);
+      c.fogLayer, c.teaseLayer, this.pins.layer, c.planes.fore.container, ...L.top);
   }
 
   /** The current layout (null until the first sync). */
@@ -139,6 +153,10 @@ export class CityHost {
 
   /** Mounts the level-builder's shell into the shell holders. False when no mounter is set (the holders stay empty). */
   mountShell(state: GameState, era: number): boolean {
+    // [world:M1] The rock chunks' texture caches go now, not back to Pixi's TexturePool (which never frees: a tier switch left 62 MB of
+    // High-tier 512² caches behind at e55).
+    freeCaches(this.shellBack);
+    freeCaches(this.shellFront);
     this.shell?.destroy();
     this.shell = null;
     this.shellBack.removeChildren().forEach(ch => ch.destroy({ children: true }));
@@ -234,6 +252,50 @@ export class CityHost {
     this.city.selectRoom(id);
   }
 
+  // ------------------------------------------------------------------ discovery (M1)
+
+  /**
+   * The pin set follows revealed-but-unseen areas. Checked twice a second on a cheap key (layout sig, floors, buildings, seen and found
+   * counts); the id list and anchors are rebuilt only when the key moves.
+   */
+  syncPins(state: GameState, t: number): void {
+    if (!this.layout || (this.pinAt >= 0 && t - this.pinAt < 0.5)) return;
+    this.pinAt = t;
+    const city = state.city;
+    const key = `${this.layout.sig}|${state.currentFloors}|${state.buildings.length}|${city?.seen.length ?? -1}|${city?.found.length ?? -1}`;
+    if (key === this.pinKey) return;
+    this.pinKey = key;
+    const seen = new Set(city?.seen ?? []);
+    const out = this.pinTargets;
+    out.length = 0;
+    if (city) {
+      for (const id of revealedAreaIds(state)) {
+        if (seen.has(id)) continue;
+        const a = pinAnchor(this.layout, id);
+        if (a) out.push({ id, x: a.x, y: a.y });
+      }
+    }
+    this.pins.set(out, t);
+  }
+
+  /**
+   * A tap at a world point: a glimpsed pocket under it is found (CitySystem.find, cosmetic), with a fog reveal brush, a glow flash and the
+   * 'reveal' sound. True when the tap was used.
+   */
+  tapPocket(x: number, y: number): boolean {
+    const a = this.city.areaAt(x, y);
+    if (!a || a.kind !== 'pocket' || a.state === 'revealed') return false;
+    const sys = activeCitySystem();
+    if (!sys || !sys.find(a.id)) return false;
+    const at = pinAnchor(this.layout ?? { areas: [a] } as CityLayout, a.id) ?? { x, y };
+    const cx = a.label ? a.label.x : at.x, cy = a.label ? a.label.y + 12 : at.y;
+    this.city.reveal(cx, cy, PINS.findRevealR);
+    this.pins.flash(cx, cy, this.t);
+    uiSound('reveal');
+    this.pinKey = '';
+    return true;
+  }
+
   // ------------------------------------------------------------------ per frame
 
   /**
@@ -258,14 +320,15 @@ export class CityHost {
       this.nightNow = n;
       c.setEra(e, n);
     }
-    if (this.shell?.update) {
-      const z = wc.scale.x || 1, v = this.view;
-      v.x = -wc.x / z;
-      v.y = -wc.y / z;
-      v.w = sw / z;
-      v.h = sh / z;
-      this.shell.update(t, dt, v);
-    }
+    const z = wc.scale.x || 1, v = this.view;
+    v.x = -wc.x / z;
+    v.y = -wc.y / z;
+    v.w = sw / z;
+    v.h = sh / z;
+    if (this.shell?.update) this.shell.update(t, dt, v);
+    // [world:M1] Pins: hidden under the far map; an anchor in view for PINS.seenAfter s is marked seen.
+    const seen = this.pins.update(v, z, t, dt, mapCovers || z < CAMERA_FAR);
+    if (seen) activeCitySystem()?.markSeen(...seen);
     c.update(this.parallaxSource ? this.parallaxSource() : this.parallaxInfo(wc, sw, sh), t, dt, { mapCovers });
   }
 
@@ -298,6 +361,9 @@ export class CityHost {
   }
 
   destroy(): void {
+    this.pins.destroy();
+    freeCaches(this.shellBack);
+    freeCaches(this.shellFront);
     this.shell?.destroy();
     this.city.destroy();
   }

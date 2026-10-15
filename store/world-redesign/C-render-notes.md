@@ -621,3 +621,73 @@ Classic compare: `tools/compare/run.mjs` on saves-v6 e30 and c, 390x844@2x, 17 s
 - Baseline against round 1: **1.45 % mean, 4.04 % max.** Classic is unchanged.
 
 Shots refreshed: `C-hub` (slice; the loiterer is on the B1 balcony, not in the west tunnel) and `C-dig` (slice-dig; both diggers at the face, headlamps on, dig at 74 %).
+
+## M1 (tech-artist, branch `world/m1-T`, 2026-10-15)
+
+Flag, boot fallback, pins and pocket finds, context loss: see `M1-T-notes.md`. This section is the perf re-measure.
+
+### Performance
+
+**Method.**
+- Production build (`vite build` into the scratchpad), headless Chrome on the iGPU (UHD 630, ANGLE D3D11).
+- `ct-frames7.mjs`: A2's `frames.mjs` at the same absolute zoom (overview 0.8 on desktop, 0.62 on phone). Classic and city were measured in the same run on build `M1-final`.
+- Desktop is 1280x800 @1; phone is 375x812 @2 with touch.
+- e55 = `saves-v7/e55-seed1` (20 floors, 190 people).
+- GPU MB is Pixi's managed-texture estimate:
+  - "sweep": after a 10 s camera sweep at that tier (the column of the earlier tables);
+  - "idle": at the overview after settling.
+
+| Medium | Draw calls, classic → city | GPU MB sweep, classic → city | GPU MB idle, classic → city | Raw frame med ms, classic → city | Idle CPU draw med ms, classic → city |
+|---|---|---|---|---|---|
+| fresh desktop | 203 → **201** | 165 → **165 (±0)** | 97 → 100 | 3.1 → 6.3 | 2.3 → 3.3 |
+| e55 desktop | 628 → **601** | 231 → 264 (+33) | 182 → 207 (+25) | 14.5 → 19.8 | 5.5 → 13.4 |
+| fresh phone | 205 → **200** | 346 → **383** | 85 → 121 | 2.9 → 5.1 | 2.2 → 3.1 |
+| e55 phone | 648 → **560** | 371 → 402 | 187 → 215 | 17.7 → 17.8 | 6.6 → 11.3 |
+
+| High | Draw calls, classic → city | GPU MB sweep, classic → city | GPU MB idle, classic → city | Raw frame med ms, classic → city |
+|---|---|---|---|---|
+| fresh desktop | 207 → 242 | 169 → 173 | 166 → 157 | 5.2 → 30.3 |
+| e55 desktop | 643 → 674 | 250 → 313 | 251 → 280 | 42.4 → 44.9 |
+| fresh phone | 208 → 223 | 347 → 386 | 85 → 122 | 2.8 → 6.6 |
+| e55 phone | 664 → 605 | 386 → 424 | 187 → 224 | 19.0 → 19.7 |
+
+**What changed in memory (desktop Medium, city).**
+
+| | Before M1 (C2 / Round 1) | M1 |
+|---|---|---|
+| fresh, vs classic | +39 MB | **±0 MB** |
+| e55, vs classic | +115 MB | +33 MB sweep / +25 MB idle |
+
+- **Chunk caches freed on park and on remount** (`chunks.ts` `freeCaches`, `CityHost.mountShell`). Pixi's `cacheAsTexture` returned each cache to `TexturePool`, which never frees.
+- **The pool is emptied on a quality or density change** (`postfx.ts`). The High tier's 2x filter buffers (4096x2048, 32 MB each) stayed for the rest of the session. This also lowers classic: e55 desktop went from 256–290 to 231.
+
+**What is left at e55 desktop (+25 to +33 MB), by owner (texture dump):**
+- the world-kit paintings, about 15 MB with mipmaps (art is the level-builder's: `worldKit` `autoGenerateMipmaps`);
+- the lit group's filter texture, a pooled 2048x1024 (8 MB) nested inside the composite's;
+- rock caches at Medium, 15 x 256², about 4 MB;
+- the plane cache, light, fog and glow textures, about 4 MB.
+
+**Budgets.**
+- **Desktop ≤ classic + 20 MB:** met for a fresh game. Not met at e55 (+25 idle / +33 sweep). The remaining owners are the art mipmaps and the nested filter texture, above.
+- **Phone vs the Round-1 table:**
+  - fresh city is 383 MB against Round 1's 411: met;
+  - e55 city is 402 MB against Round 1's 372: not met in absolute terms. Round 1's classic was 389 MB and is 371 MB now, so the sessions differ.
+  - Idle (no sweep pool noise): +28 MB e55, +36 MB fresh.
+- The sweep number moves by about ±20 MB between runs with the pooled filter sizes the sweep happened to need. The idle column is the steadier one.
+
+**Rock caches at High** use `DETAIL.rockRes` 0.6: (512 + 2 × overlap) × 0.6 ≈ 315 px, which the pool rounds up to 512². That is 2.6x the pixels needed: 62 caches = 62 MB at e55 High. A `rockRes` of 0.49 or less would keep them at 256² (`tokens.ts` is the level-builder's; proposal for M2).
+
+**forceBatch on a CPU-throttled phone** (`m1-batch2.mjs`):
+- Setup: 375x812@2, Medium, 4x CPU throttle. A/B toggled at runtime with `context.onUpdate()`, two pairs each, idle overview 10 s plus an 8 s pan.
+
+| | Idle draw ms, batch → auto | Pan draw ms, batch → auto | Idle calls, batch → auto |
+|---|---|---|---|
+| fresh | 25.1 / 24.6 → 24.5 / 22.4 | 21.3 / 25.2 → 21.4 / 25.2 | 204 / 177 → 222 / 186 |
+| e55 | 85.9 / 116.7 → 73.7 / 89.3 | 153.2 / 104.6 → 92.6 / 95.0 | 534 / 688 → 574 / 587 |
+
+- Fresh: the forced batching saves 9–18 calls at no CPU cost.
+- e55: it costs 12–27 ms (about 20 %) more draw CPU per picture, with no steady call gain.
+- So it is now applied only up to `SHELL_RENDER.forceBatchMaxFloors` = 8 floors.
+- **Open:** the e55 idle CPU draw is still about 2x classic in the matrix (13.4 vs 5.5 ms desktop). It needs a profile in M2. Suspects: the lit group's draw list, the shell culling flips.
+
+**Machine note.** Other worktrees were building during this session. The frame-time columns are noisier than in Round 1; the draw calls and GPU MB are not affected.

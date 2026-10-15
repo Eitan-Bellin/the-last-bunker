@@ -12,6 +12,7 @@ import { buildShell } from './shell';
 import { onWorldKitLoaded } from '../../art/worldKit';
 import { Graphics, type Container } from 'pixi.js';
 import type { Rect } from './layoutTypes';
+import { SHELL_RENDER } from '../tokensRender';
 import { setCityLayoutProvider, setShellMounter, type ShellMounter } from './citySeams';
 
 const mountCityShell: ShellMounter = ctx => {
@@ -20,7 +21,7 @@ const mountCityShell: ShellMounter = ctx => {
   ctx.front.addChild(parts.front);
   const ids = parts.lights.map(l => ctx.addLight(l));
   batchOrder(parts.back, parts.front);
-  forceBatch(parts.back, parts.front);
+  if (ctx.state.currentFloors <= SHELL_RENDER.forceBatchMaxFloors) forceBatch(parts.back, parts.front); // [world:M1] small shells only (see SHELL_RENDER)
   const cull = cullList(parts.back, parts.front);
   let destroyed = false;
   // The rock chunks bake into texture caches (cacheAsTexture): a world-kit painting that arrives after a bake would leave the stand-in baked in

@@ -15,10 +15,11 @@ import { setDoorBlocked, walkBlocked } from '../../src/rendering/routes';
 import { CITY } from '../../src/world/tokens';
 import type { CityFrameTokens } from '../../src/world/tokens';
 import {
-  __setProjectionForTests, buildingRect, districtXAt, frameOf, hubRect, roomsEastX, roomsWestX, slotAtX, slotSpanX, slotX, stripX,
+  __setProjectionForTests, buildingRect, districtXAt, frameOf, hubRect, roomsEastX, roomsWestX, slotAtX, slotSpanX, slotX, stripX, useClassicProjection,
   type ProjectionKind,
 } from '../../src/world/project';
 import type { Rect } from '../../src/world/types';
+import { DEFAULT_CITY, resolveCity } from '../../src/world/flag';
 
 /** Every stratum 37 u further out than the one above, with odd vestibules and tunnels (stratum 0 stays classic: project.ts forces it). */
 export const SKEW: CityFrameTokens[] = [0, 1, 2, 3, 4, 5, 6].map(s => ({
@@ -143,5 +144,17 @@ export function projectChecks(games: { name: string; json: string }[]): { proble
   }
   // The city frames come from tokens and are not the classic ones (or this test would prove nothing).
   if (CITY.frames[1].hubR === CITY.classic.hubR) problems.push('city: the underground frame equals the classic one');
+  // [world:M1] The flag: the query wins (and `?city=0` beats a remembered '1'), then the remembered '1' / '0', then DEFAULT_CITY.
+  const flagCases: [string, string | null, boolean][] = [
+    ['?city', null, true], ['?city=1', '0', true], ['?city=0', '1', false], ['?slot=a&city', null, true], ['', '1', true], ['', '0', false],
+    ['', null, DEFAULT_CITY], ['', 'junk', DEFAULT_CITY], ['?slot=x', null, DEFAULT_CITY],
+  ];
+  for (const [q, st, want] of flagCases) if (resolveCity(q, st) !== want) problems.push(`flag: resolveCity(${q || '(none)'}, ${st}) is not ${want}`);
+  // The session kill switch puts the classic frames back on every stratum.
+  __setProjectionForTests('city');
+  useClassicProjection();
+  for (let f = 0; f < MAX_FLOORS; f++) if (slotX(f, 0) !== legacy.slotX(0)) { problems.push(`flag: after useClassicProjection floor ${f} slot 0 is not classic`); break; }
+  __setProjectionForTests('classic');
+  notes.push(`flag: ${flagCases.length} resolution cases, kill switch restores classic`);
   return { problems, notes };
 }

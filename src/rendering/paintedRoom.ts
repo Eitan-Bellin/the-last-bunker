@@ -875,7 +875,7 @@ function hazeFx(layer: Container, texture: Texture, entry: ArtEntry, spot: FxSpo
   const key = `${entry.key}|${idx}`;
   let sub = subTextures.get(key);
   const fr = texture.frame;
-  if (!sub) {
+  if (!sub || sub.source !== texture.source) { // [world:M1] the painting was reloaded (context restore, memory sweep): the old crop points at a destroyed source
     const fx0 = Math.max(0, (spot.x - rw / 2) * fr.width), fy0 = Math.max(0, (spot.y - rh / 2) * fr.height);
     const fw = Math.min(fr.width - fx0, rw * fr.width), fh = Math.min(fr.height - fy0, rh * fr.height);
     sub = new Texture({ source: texture.source, frame: new Rectangle(fr.x + fx0, fr.y + fy0, fw, fh) });
