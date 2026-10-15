@@ -22,6 +22,7 @@ const slot = `measure-${Date.now()}`;
 const idle = process.argv.includes('--idle'); // do nothing: the first-minute check
 const STATE = `(() => { const s = __app.state; const h = s.survivors.map(p => p.happiness); return { act: s.longGame?.act, paused: __engine.paused, morale: Math.round(h.reduce((a, b) => a + b, 0) / Math.max(1, h.length)), people: s.survivors.length, power: Math.round(s.resources.power.amount), food: Math.round(s.resources.food.amount), playSeconds: Math.round(s.stats.totalPlayTime) }; })()`;
 const samples = [];
+const shots = (arg('shots', '') || '').split(',').filter(Boolean).map(Number); // wall seconds after the start to save a PNG (needs --out)
 const CHROMES = ['C:/Program Files/Google/Chrome/Application/chrome.exe', 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe'];
 const chromePath = CHROMES.find(p => existsSync(p));
 if (!chromePath) throw new Error('no Chrome/Edge found');
@@ -70,6 +71,11 @@ try {
   await evaluate(`${stage ? '' : '__pt.reset(); '}__pt.speed(${speed}); __pt.autoplay(${!idle})`);
   const wallMs = (minutes * 60 * 1000) / speed;
   const t0 = Date.now();
+  for (const at of shots) { // screenshots first, then the rest of the run
+    await sleep(Math.max(0, at * 1000 - (Date.now() - t0)));
+    const shot = await send('Page.captureScreenshot', { format: 'png' });
+    if (out) writeFileSync(out.replace(/.json$/, '') + `-${at}s.png`, Buffer.from(shot.data, 'base64'));
+  }
   while (Date.now() - t0 < wallMs) {
     await sleep(Math.min(idle ? 5000 : 15000, wallMs));
     const r = await evaluate('__pt.report()');

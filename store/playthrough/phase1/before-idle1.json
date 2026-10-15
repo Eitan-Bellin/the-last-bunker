@@ -3,34 +3,26 @@
  "gameMinutes": 1,
  "dialogs": 0,
  "story": 0,
- "spotlights": 1,
+ "spotlights": 0,
  "toasts": 0,
  "sheets": 0,
  "blocking": [],
  "state": {
   "paused": false,
-  "morale": 59,
+  "morale": 56,
   "people": 3,
   "power": 0,
-  "food": 143,
-  "playSeconds": 30
+  "food": 138,
+  "playSeconds": 31
  },
  "samples": [
   {
    "paused": false,
-   "morale": 68,
+   "morale": 66,
    "people": 3,
    "power": 5,
-   "food": 149,
-   "playSeconds": 5
-  },
-  {
-   "paused": false,
-   "morale": 67,
-   "people": 3,
-   "power": 0,
    "food": 148,
-   "playSeconds": 10
+   "playSeconds": 5
   },
   {
    "paused": false,
@@ -38,31 +30,39 @@
    "people": 3,
    "power": 0,
    "food": 146,
+   "playSeconds": 10
+  },
+  {
+   "paused": false,
+   "morale": 62,
+   "people": 3,
+   "power": 0,
+   "food": 144,
    "playSeconds": 15
   },
   {
    "paused": false,
-   "morale": 63,
+   "morale": 60,
    "people": 3,
    "power": 0,
-   "food": 145,
+   "food": 142,
    "playSeconds": 20
   },
   {
    "paused": false,
-   "morale": 61,
+   "morale": 58,
    "people": 3,
    "power": 0,
-   "food": 144,
-   "playSeconds": 25
+   "food": 140,
+   "playSeconds": 26
   },
   {
    "paused": false,
-   "morale": 59,
+   "morale": 56,
    "people": 3,
    "power": 0,
-   "food": 143,
-   "playSeconds": 30
+   "food": 138,
+   "playSeconds": 31
   }
  ],
  "config": {
@@ -70,6 +70,7 @@
   "minutes": 1,
   "speed": 1,
   "stage": "",
+  "away": 0,
   "lang": "he"
  }
 }

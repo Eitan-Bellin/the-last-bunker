@@ -1,0 +1,38 @@
+{
+ "wallSeconds": 21,
+ "gameMinutes": 2441,
+ "dialogs": 1,
+ "story": 0,
+ "spotlights": 0,
+ "toasts": 6,
+ "sheets": 2,
+ "blocking": [
+  "2440m dialog: ברוכים השבים נעדרתם למשך 8 ש׳ מה קרה הופק בינתיים: ⁦+911⁩ המחסן היה מלא, והעודף הפך ל־1144"
+ ],
+ "state": {
+  "paused": false,
+  "morale": 100,
+  "people": 110,
+  "power": 3200,
+  "food": 29400,
+  "playSeconds": 146432
+ },
+ "samples": [
+  {
+   "paused": false,
+   "morale": 100,
+   "people": 110,
+   "power": 3200,
+   "food": 29400,
+   "playSeconds": 146432
+  }
+ ],
+ "config": {
+  "base": "http://localhost:5180",
+  "minutes": 6,
+  "speed": 2,
+  "stage": "d20",
+  "away": 8,
+  "lang": "he"
+ }
+}

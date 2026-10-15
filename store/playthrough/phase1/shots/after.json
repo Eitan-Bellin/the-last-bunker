@@ -1,0 +1,38 @@
+{
+ "wallSeconds": 41,
+ "gameMinutes": 1,
+ "dialogs": 1,
+ "story": 0,
+ "spotlights": 7,
+ "toasts": 6,
+ "sheets": 7,
+ "blocking": [
+  "0m dialog: כמה קשה העולם שם בחוץ? \"שומר\" הוא המשחק כפי שתוכנן. הבחירה קבועה לבונקר הזה: אי אפשר לשנות"
+ ],
+ "state": {
+  "paused": false,
+  "morale": 64,
+  "people": 3,
+  "power": 50,
+  "food": 140,
+  "playSeconds": 32
+ },
+ "samples": [
+  {
+   "paused": false,
+   "morale": 64,
+   "people": 3,
+   "power": 50,
+   "food": 140,
+   "playSeconds": 32
+  }
+ ],
+ "config": {
+  "base": "http://localhost:5180",
+  "minutes": 1,
+  "speed": 1,
+  "stage": "",
+  "away": 0,
+  "lang": "he"
+ }
+}

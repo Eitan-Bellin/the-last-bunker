@@ -1,5 +1,5 @@
 {
- "wallSeconds": 361,
+ "wallSeconds": 360,
  "gameMinutes": 29,
  "dialogs": 3,
  "story": 0,
@@ -13,16 +13,16 @@
  ],
  "state": {
   "paused": false,
-  "morale": 41,
+  "morale": 47,
   "people": 3,
   "power": 0,
-  "food": 481,
-  "playSeconds": 1758
+  "food": 405,
+  "playSeconds": 1757
  },
  "samples": [
   {
    "paused": false,
-   "morale": 55,
+   "morale": 56,
    "people": 3,
    "power": 0,
    "food": 143,
@@ -30,7 +30,7 @@
   },
   {
    "paused": false,
-   "morale": 51,
+   "morale": 55,
    "people": 3,
    "power": 50,
    "food": 140,
@@ -38,138 +38,138 @@
   },
   {
    "paused": false,
-   "morale": 48,
+   "morale": 56,
    "people": 3,
    "power": 50,
-   "food": 135,
+   "food": 134,
    "playSeconds": 180
+  },
+  {
+   "paused": false,
+   "morale": 60,
+   "people": 3,
+   "power": 34,
+   "food": 163,
+   "playSeconds": 256
+  },
+  {
+   "paused": false,
+   "morale": 60,
+   "people": 3,
+   "power": 0,
+   "food": 176,
+   "playSeconds": 331
+  },
+  {
+   "paused": false,
+   "morale": 55,
+   "people": 3,
+   "power": 0,
+   "food": 185,
+   "playSeconds": 406
   },
   {
    "paused": false,
    "morale": 51,
    "people": 3,
-   "power": 50,
-   "food": 149,
-   "playSeconds": 256
+   "power": 0,
+   "food": 192,
+   "playSeconds": 481
   },
   {
    "paused": false,
-   "morale": 54,
+   "morale": 50,
    "people": 3,
    "power": 0,
-   "food": 166,
-   "playSeconds": 331
+   "food": 200,
+   "playSeconds": 556
   },
   {
    "paused": false,
    "morale": 49,
    "people": 3,
    "power": 0,
-   "food": 179,
-   "playSeconds": 406
+   "food": 208,
+   "playSeconds": 631
+  },
+  {
+   "paused": false,
+   "morale": 48,
+   "people": 3,
+   "power": 0,
+   "food": 215,
+   "playSeconds": 706
+  },
+  {
+   "paused": false,
+   "morale": 48,
+   "people": 3,
+   "power": 0,
+   "food": 222,
+   "playSeconds": 781
+  },
+  {
+   "paused": false,
+   "morale": 48,
+   "people": 3,
+   "power": 0,
+   "food": 229,
+   "playSeconds": 856
+  },
+  {
+   "paused": false,
+   "morale": 48,
+   "people": 3,
+   "power": 0,
+   "food": 238,
+   "playSeconds": 931
+  },
+  {
+   "paused": false,
+   "morale": 48,
+   "people": 3,
+   "power": 0,
+   "food": 246,
+   "playSeconds": 1006
+  },
+  {
+   "paused": false,
+   "morale": 48,
+   "people": 3,
+   "power": 0,
+   "food": 254,
+   "playSeconds": 1081
+  },
+  {
+   "paused": false,
+   "morale": 48,
+   "people": 3,
+   "power": 0,
+   "food": 263,
+   "playSeconds": 1156
+  },
+  {
+   "paused": false,
+   "morale": 48,
+   "people": 3,
+   "power": 0,
+   "food": 271,
+   "playSeconds": 1231
   },
   {
    "paused": false,
    "morale": 45,
    "people": 3,
    "power": 0,
-   "food": 189,
-   "playSeconds": 481
-  },
-  {
-   "paused": false,
-   "morale": 43,
-   "people": 3,
-   "power": 0,
-   "food": 199,
-   "playSeconds": 556
-  },
-  {
-   "paused": false,
-   "morale": 42,
-   "people": 3,
-   "power": 0,
-   "food": 209,
-   "playSeconds": 631
-  },
-  {
-   "paused": false,
-   "morale": 42,
-   "people": 3,
-   "power": 0,
-   "food": 218,
-   "playSeconds": 706
-  },
-  {
-   "paused": false,
-   "morale": 42,
-   "people": 3,
-   "power": 0,
-   "food": 233,
-   "playSeconds": 782
-  },
-  {
-   "paused": false,
-   "morale": 41,
-   "people": 3,
-   "power": 0,
-   "food": 247,
-   "playSeconds": 857
-  },
-  {
-   "paused": false,
-   "morale": 41,
-   "people": 3,
-   "power": 0,
-   "food": 262,
-   "playSeconds": 932
-  },
-  {
-   "paused": false,
-   "morale": 41,
-   "people": 3,
-   "power": 0,
-   "food": 277,
-   "playSeconds": 1007
-  },
-  {
-   "paused": false,
-   "morale": 41,
-   "people": 3,
-   "power": 0,
-   "food": 292,
-   "playSeconds": 1082
-  },
-  {
-   "paused": false,
-   "morale": 41,
-   "people": 3,
-   "power": 0,
-   "food": 308,
-   "playSeconds": 1157
-  },
-  {
-   "paused": false,
-   "morale": 41,
-   "people": 3,
-   "power": 0,
-   "food": 321,
-   "playSeconds": 1232
-  },
-  {
-   "paused": false,
-   "morale": 41,
-   "people": 3,
-   "power": 0,
-   "food": 331,
+   "food": 279,
    "playSeconds": 1307
   },
   {
    "paused": false,
-   "morale": 41,
+   "morale": 42,
    "people": 3,
    "power": 0,
-   "food": 342,
+   "food": 287,
    "playSeconds": 1382
   },
   {
@@ -177,7 +177,7 @@
    "morale": 41,
    "people": 3,
    "power": 0,
-   "food": 434,
+   "food": 294,
    "playSeconds": 1457
   },
   {
@@ -185,32 +185,32 @@
    "morale": 41,
    "people": 3,
    "power": 0,
-   "food": 446,
+   "food": 300,
    "playSeconds": 1532
   },
   {
    "paused": false,
-   "morale": 41,
+   "morale": 43,
    "people": 3,
    "power": 0,
-   "food": 457,
+   "food": 307,
    "playSeconds": 1607
   },
   {
    "paused": false,
-   "morale": 41,
+   "morale": 46,
    "people": 3,
    "power": 0,
-   "food": 469,
-   "playSeconds": 1683
+   "food": 396,
+   "playSeconds": 1682
   },
   {
    "paused": false,
-   "morale": 41,
+   "morale": 47,
    "people": 3,
    "power": 0,
-   "food": 481,
-   "playSeconds": 1758
+   "food": 405,
+   "playSeconds": 1757
   }
  ],
  "config": {
@@ -218,6 +218,7 @@
   "minutes": 30,
   "speed": 5,
   "stage": "",
+  "away": 0,
   "lang": "he"
  }
 }

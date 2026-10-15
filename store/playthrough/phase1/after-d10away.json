@@ -1,0 +1,38 @@
+{
+ "wallSeconds": 20,
+ "gameMinutes": 1241,
+ "dialogs": 1,
+ "story": 0,
+ "spotlights": 0,
+ "toasts": 3,
+ "sheets": 2,
+ "blocking": [
+  "1240m dialog: ברוכים השבים נעדרתם למשך 8 ש׳ מה קרה המחסן היה מלא, והעודף הפך ל־6520 זיכויי סחר מחקר שהוש"
+ ],
+ "state": {
+  "paused": false,
+  "morale": 100,
+  "people": 65,
+  "power": 1700,
+  "food": 25800,
+  "playSeconds": 74433
+ },
+ "samples": [
+  {
+   "paused": false,
+   "morale": 100,
+   "people": 65,
+   "power": 1700,
+   "food": 25800,
+   "playSeconds": 74433
+  }
+ ],
+ "config": {
+  "base": "http://localhost:5180",
+  "minutes": 6,
+  "speed": 2,
+  "stage": "d10",
+  "away": 8,
+  "lang": "he"
+ }
+}

@@ -1,189 +1,113 @@
 {
- "wallSeconds": 300,
- "gameMinutes": 10,
- "dialogs": 3,
+ "wallSeconds": 165,
+ "gameMinutes": 6,
+ "dialogs": 0,
  "story": 0,
- "spotlights": 3,
- "toasts": 21,
- "sheets": 63,
- "blocking": [
-  "0m dialog: כמה קשה העולם שם בחוץ? \"שומר\" הוא המשחק כפי שתוכנן. הבחירה קבועה לבונקר הזה: אי אפשר לשנות",
-  "0m dialog: ארגז אספקה ארגז עם מצנח נחת ליד הפתח. מישהו שם בחוץ עוד זוכר את בונקר 17. ⁦+15⁩ ⁦+10⁩ ⁦+30",
-  "1m dialog: מצאתם משהו! קלטת: איך מתניעים את הזקן · ד\"ר נועה הלפרין קראו עכשיו אחר כך"
- ],
+ "spotlights": 0,
+ "toasts": 11,
+ "sheets": 36,
+ "blocking": [],
  "state": {
   "paused": false,
-  "morale": 45,
-  "people": 3,
-  "power": 0,
-  "food": 241,
-  "playSeconds": 583
+  "morale": 100,
+  "people": 65,
+  "power": 1700,
+  "food": 25800,
+  "playSeconds": 74733
  },
  "samples": [
   {
    "paused": false,
-   "morale": 61,
-   "people": 3,
-   "power": 0,
-   "food": 147,
-   "playSeconds": 12
+   "morale": 100,
+   "people": 65,
+   "power": 1700,
+   "food": 25800,
+   "playSeconds": 74433
   },
   {
    "paused": false,
-   "morale": 55,
-   "people": 3,
-   "power": 50,
-   "food": 155,
-   "playSeconds": 42
+   "morale": 100,
+   "people": 65,
+   "power": 1700,
+   "food": 25800,
+   "playSeconds": 74463
   },
   {
    "paused": false,
-   "morale": 56,
-   "people": 3,
-   "power": 50,
-   "food": 148,
-   "playSeconds": 72
+   "morale": 100,
+   "people": 65,
+   "power": 1700,
+   "food": 25800,
+   "playSeconds": 74493
   },
   {
    "paused": false,
-   "morale": 55,
-   "people": 3,
-   "power": 50,
-   "food": 148,
-   "playSeconds": 102
+   "morale": 100,
+   "people": 65,
+   "power": 1700,
+   "food": 25800,
+   "playSeconds": 74523
   },
   {
    "paused": false,
-   "morale": 56,
-   "people": 3,
-   "power": 50,
-   "food": 141,
-   "playSeconds": 132
+   "morale": 100,
+   "people": 65,
+   "power": 1700,
+   "food": 25800,
+   "playSeconds": 74553
   },
   {
    "paused": false,
-   "morale": 57,
-   "people": 3,
-   "power": 46,
-   "food": 164,
-   "playSeconds": 162
+   "morale": 100,
+   "people": 65,
+   "power": 1700,
+   "food": 25800,
+   "playSeconds": 74583
   },
   {
    "paused": false,
-   "morale": 58,
-   "people": 3,
-   "power": 24,
-   "food": 172,
-   "playSeconds": 192
+   "morale": 100,
+   "people": 65,
+   "power": 1700,
+   "food": 25800,
+   "playSeconds": 74613
   },
   {
    "paused": false,
-   "morale": 58,
-   "people": 3,
-   "power": 3,
-   "food": 180,
-   "playSeconds": 222
+   "morale": 100,
+   "people": 65,
+   "power": 1700,
+   "food": 25800,
+   "playSeconds": 74643
   },
   {
    "paused": false,
-   "morale": 57,
-   "people": 3,
-   "power": 0,
-   "food": 187,
-   "playSeconds": 252
+   "morale": 100,
+   "people": 65,
+   "power": 1700,
+   "food": 25800,
+   "playSeconds": 74673
   },
   {
    "paused": false,
-   "morale": 56,
-   "people": 3,
-   "power": 0,
-   "food": 192,
-   "playSeconds": 282
+   "morale": 100,
+   "people": 65,
+   "power": 1700,
+   "food": 25800,
+   "playSeconds": 74703
   },
   {
    "paused": false,
-   "morale": 54,
-   "people": 3,
-   "power": 0,
-   "food": 198,
-   "playSeconds": 313
-  },
-  {
-   "paused": false,
-   "morale": 52,
-   "people": 3,
-   "power": 0,
-   "food": 203,
-   "playSeconds": 343
-  },
-  {
-   "paused": false,
-   "morale": 50,
-   "people": 3,
-   "power": 0,
-   "food": 208,
-   "playSeconds": 373
-  },
-  {
-   "paused": false,
-   "morale": 49,
-   "people": 3,
-   "power": 0,
-   "food": 213,
-   "playSeconds": 403
-  },
-  {
-   "paused": false,
-   "morale": 48,
-   "people": 3,
-   "power": 0,
-   "food": 218,
-   "playSeconds": 433
-  },
-  {
-   "paused": false,
-   "morale": 47,
-   "people": 3,
-   "power": 0,
-   "food": 222,
-   "playSeconds": 463
-  },
-  {
-   "paused": false,
-   "morale": 46,
-   "people": 3,
-   "power": 0,
-   "food": 227,
-   "playSeconds": 493
-  },
-  {
-   "paused": false,
-   "morale": 46,
-   "people": 3,
-   "power": 0,
-   "food": 232,
-   "playSeconds": 523
-  },
-  {
-   "paused": false,
-   "morale": 46,
-   "people": 3,
-   "power": 0,
-   "food": 236,
-   "playSeconds": 553
-  },
-  {
-   "paused": false,
-   "morale": 45,
-   "people": 3,
-   "power": 0,
-   "food": 241,
-   "playSeconds": 583
+   "morale": 100,
+   "people": 65,
+   "power": 1700,
+   "food": 25800,
+   "playSeconds": 74733
   }
  ],
  "config": {
   "base": "http://localhost:5180",
-  "minutes": 10,
+  "minutes": 6,
   "speed": 2,
   "stage": "d10",
   "lang": "he"
