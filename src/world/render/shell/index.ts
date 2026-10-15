@@ -25,6 +25,7 @@ import { buildEdges } from './edges';
 import { buildEntrance } from './entrance';
 import { buildDoors } from './doors';
 import { buildTransfers } from './transfers';
+import type { GalleryTransfer } from '../../model/transfers';
 import { ForeSilhouettes } from './fore';
 import { buildHub } from './hub';
 import { grain, palette, shade, tile, vfill } from './kit';
@@ -84,7 +85,8 @@ export function buildShell(layout: CityLayout, state: Pick<GameState, 'era'> & P
   const dig = layout.cavities.find(c => c.id.startsWith('c:dig:'));
   if (dig) pieces.push(buildDigFront(dig, layout.areas.find(a => a.id === `f:${dig.id.split(':')[2]}`)));
   pieces.push(buildPockets(layout.areas, layout.cavities));
-  pieces.push(buildTransfers(layout.cavities, layout.hubs));
+  // [world:M2] buildCityLayout returns a CityModel (the layout plus its gallery transfers); a bare CityLayout draws no runs.
+  pieces.push(buildTransfers(layout.cavities, layout.hubs, (layout as CityLayout & { transfers?: GalleryTransfer[] }).transfers ?? []));
   pieces.push(buildDoors(state));
 
   for (const p of pieces) if (p.back) back.addChild(p.back);

@@ -1,10 +1,24 @@
 import { Container, Graphics, Sprite, Texture, TilingSprite } from 'pixi.js';
 import { glowTexture } from '../art/ArtLibrary';
 import { GALLERY_EVERY, GALLERY_H, SHAFT_W, SLOT_W, galleryCount, galleryExt, galleryTop, type Ext } from './geom';
-import { slotX } from '../world/project';
+import { frameOfStratum, slotX } from '../world/project';
+import { CITY } from '../world/flag';
+import { CITY as CITY_T } from '../world/tokens';
+import { stratumOf } from '../data/strata';
 
 /** [world:C0] The floor above gallery g (4g + 3): the band lies in that floor's stratum, so its x follows that floor's frame. */
 const gFloor = (g: number): number => g * GALLERY_EVERY + GALLERY_EVERY - 1;
+
+/**
+ * [world:M2] The part of gallery g's band that belongs to the seam's landing hall: classic, the shaft (0..SHAFT_W); city, from the inner west
+ * wall to the inner east wall of the wider of the two hubs it joins (the city shell's transfers draw the landing, the stair wells and the
+ * flights there, so this band leaves it open).
+ */
+function hubSpan(g: number): [number, number] {
+  if (!CITY) return [0, SHAFT_W];
+  const a = frameOfStratum(stratumOf(gFloor(g))), b = frameOfStratum(stratumOf(gFloor(g) + 1));
+  return [Math.min(a.hubL, b.hubL) + CITY_T.hub.wallW, Math.max(a.hubR, b.hubR) - CITY_T.hub.wallW];
+}
 import { seeded } from './draw';
 import { VIEW } from './perfFx';
 import { depthGains, kitTex, softTexture, type KitState } from './structure';
@@ -64,7 +78,8 @@ export function galleryVents(floors: number, exts: readonly Ext[]): { x: number;
     const n = 1 + Math.floor((x1 - x0) / (SLOT_W * 7));
     for (let i = 0; i < n; i++) {
       let x = x0 + SLOT_W * 2 + r() * (x1 - x0 - SLOT_W * 4);
-      if (x > -SLOT_W && x < SHAFT_W + SLOT_W) x = x < SHAFT_W / 2 ? -SLOT_W : SHAFT_W + SLOT_W; // never in the lift
+      const [ha, hb] = hubSpan(g);
+      if (x > ha - SLOT_W && x < hb + SLOT_W) x = x < (ha + hb) / 2 ? ha - SLOT_W : hb + SLOT_W; // never in the lift (city: the landing hall)
       out.push({ x: Math.round(x / 23) * 23 + 6, y });
     }
   }
@@ -98,8 +113,9 @@ export function buildGalleries(floors: number, exts: readonly Ext[], st: KitStat
     const r = seeded(4100 + g * 17);
     const tint = tintAt(base, y0 + GALLERY_H / 2);
     // Both halves of the band: east of the shaft, and west of it when the floors above reach that way.
-    const spans: [number, number][] = [[SHAFT_W, slotX(gFloor(g), ext.e) + 6]];
-    if (ext.w > 0) spans.push([slotX(gFloor(g), -ext.w) - 6, 0]);
+    const [ha, hb] = hubSpan(g);
+    const spans: [number, number][] = [[hb, slotX(gFloor(g), ext.e) + 6]];
+    if (ext.w > 0 && slotX(gFloor(g), -ext.w) - 6 < ha) spans.push([slotX(gFloor(g), -ext.w) - 6, ha]);
     const g2 = new Graphics();
     for (const [xa, xb] of spans) {
       const w = xb - xa;
