@@ -75,6 +75,11 @@ export class OnboardingController {
   private popTimer = 0;
   private offPopOutside: (() => void) | null = null;
   private origNav: ((key: NavKey) => void) | null = null;
+  /**
+   * [ux-redesign w3fix] Something covers the bunker (app.ts passes its `covered` check: every sheet including the structure list, a
+   * dialog, placement, the tour, a story scene). Until it is set, the open sheets alone.
+   */
+  covered: (() => boolean) | null = null;
 
   constructor(app: GameApp) {
     this.app = app;
@@ -85,6 +90,11 @@ export class OnboardingController {
   /** A spotlight is up: ordinary dialogs and tip cards wait (TipsController.isShowing). */
   get holdsScreen(): boolean {
     return !!this.spot?.isVisible;
+  }
+
+  /** [ux-redesign w3fix] A locked tab's popover is open (back / Escape close it first). */
+  get popOpen(): boolean {
+    return !!this.pop;
   }
 
   /** Something urgent takes the screen: put the spotlight away; it comes back when the screen is calm. */
@@ -162,7 +172,7 @@ export class OnboardingController {
     if (!this.profile.done && ftueFinished(f)) this.saveProfile({ done: true });
     this.refreshLocks();
     const calm = this.calm();
-    const panel = this.app.anyPanelOpen();
+    const panel = this.covered?.() ?? this.app.anyPanelOpen();
     if (!calm) {
       this.spot?.hide();
       this.hand?.hide();
@@ -173,7 +183,11 @@ export class OnboardingController {
     // A gesture tip card waits for the spotlight (it is put away unread and comes back in a calm moment).
     if (step && this.app.tips.cardShowing) this.app.tips.defer();
     if (step) this.showStage(step.stage, step.spot, now);
-    else if (this.spot?.isVisible) { this.spot.hide(); this.stage = null; }
+    else if (this.spot?.isVisible) {
+      this.spot.hide();
+      // [w3fix] The "Tutorial again" walk only pauses while a panel is open: it goes on from the same step when the panel closes.
+      if (this.stage?.kind !== 'walk') this.stage = null;
+    }
     this.idleHint(now, f, panel);
   }
 
@@ -183,7 +197,8 @@ export class OnboardingController {
     // "Tutorial again" walkthrough.
     if (st?.kind === 'walk') {
       const steps = this.walkSteps();
-      if (panel || st.i >= steps.length) return null;
+      if (st.i >= steps.length) { this.stage = null; return null; }
+      if (panel) return null;
       const w = steps[st.i];
       return { stage: st, spot: { target: w.target, text: w.text, mode: 'next', nextLabel: i18n.t(st.i === steps.length - 1 ? 'ux3a.done' : 'ux3a.next') } };
     }
@@ -396,7 +411,7 @@ export class OnboardingController {
     return true;
   }
 
-  private closePop(): void {
+  closePop(): void {
     window.clearTimeout(this.popTimer);
     this.offPopOutside?.();
     this.offPopOutside = null;

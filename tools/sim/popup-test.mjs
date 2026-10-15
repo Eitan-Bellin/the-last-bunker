@@ -79,6 +79,13 @@ eq(P.gateBlock({ ...tapping, waitedMs: P.CRITICAL_PATIENCE_MS + 1 }), '', 'a cri
 eq(P.gateBlock({ ...tapping, waitedMs: 60_000, pointersDown: 1 }), 'finger', 'a patient crisis still waits for the finger');
 eq(P.gateBlock({ ...tapping, waitedMs: 60_000, placing: true }), 'placement', 'a patient crisis still waits for a placement');
 eq(P.gateBlock({ ...base, lastGestureAt: base.now - 200, waitedMs: 60_000 }), 'gesture', 'an ordinary dialog never skips the quiet moment');
+// [ux-redesign w3fix] a tutorial spotlight holds an ordinary dialog only until it has waited SPOTLIGHT_PATIENCE_MS; a crisis never waits for it
+eq(P.gateBlock({ ...base, spotlightShowing: true }), 'spotlight', 'a spotlight holds a fresh ordinary dialog');
+eq(P.gateBlock({ ...base, spotlightShowing: true, waitedMs: P.SPOTLIGHT_PATIENCE_MS }), 'spotlight', 'a spotlight still holds at exactly the patience limit');
+eq(P.gateBlock({ ...base, spotlightShowing: true, waitedMs: P.SPOTLIGHT_PATIENCE_MS + 1 }), '', 'a dialog that waited past the patience limit lands over a spotlight');
+eq(P.gateBlock({ ...base, spotlightShowing: true, critical: true }), '', 'a crisis comes over a spotlight at once');
+eq(P.gateBlock({ ...base, spotlightShowing: true, waitedMs: 60_000, lastGestureAt: base.now - 200 }), 'gesture', 'a patient dialog still waits for a quiet moment');
+eq(P.gateBlock({ ...base, spotlightShowing: false, waitedMs: 0 }), '', 'no spotlight: open');
 
 // ---- tap guard of a fresh dialog ----------------------------------------------------------------------------------------------------
 ok(P.tapBlocked(1000, 1000 + 100, 1), 'tap 100 ms after open is swallowed');
@@ -95,6 +102,13 @@ eq(P.backAction({ ...b0, placing: true, sheetOpen: true }), 'placement', 'placem
 eq(P.backAction({ ...b0, readerOpen: true, sheetOpen: true }), 'reader', 'the lore page over its sheet');
 eq(P.backAction({ ...b0, sheetOpen: true }), 'sheet', 'a sheet');
 eq(P.backAction(b0), 'leave', 'nothing open');
+// [ux-redesign w3fix] the goals list / lock popover close first; a spotlight is never "Leave the game?"
+eq(P.backAction({ ...b0, popoverOpen: true, sheetOpen: true }), 'popover', 'a floating list closes before the sheet under it');
+eq(P.backAction({ ...b0, popoverOpen: true }), 'popover', 'the goals list closes, not "leave"');
+eq(P.backAction({ ...b0, modalOpen: true, modalDismiss: 0, popoverOpen: true }), 'modalDismiss', 'a dialog over a list goes first');
+eq(P.backAction({ ...b0, spotlight: true }), 'spotlight', 'back on a spotlight stays');
+eq(P.backAction({ ...b0, spotlight: true, sheetOpen: true }), 'spotlight', 'back on a spotlight over a sheet stays');
+eq(P.backAction({ ...b0, spotlight: true, popoverOpen: true }), 'popover', 'a list above the spotlight closes first');
 eq(P.dismissIndex([{}], undefined), 0, 'one-button dialog is info');
 eq(P.dismissIndex([{}, {}], undefined), null, 'two choices: a decision by default');
 eq(P.dismissIndex([{}, {}], 1), 1, 'named "Later"');

@@ -426,7 +426,7 @@
   align-items: stretch;
   gap: var(--sp-2);
   padding: 0;
-  max-width: min(calc(100% - 2 * var(--sp-4)), 460px);
+  max-width: min(calc(100% - 2 * var(--sp-4)), var(--strip-max));
   cursor: default;
   transform: none;
 }

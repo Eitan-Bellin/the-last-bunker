@@ -15,7 +15,10 @@ import { UPDATE_MS } from './edgeArrows';
 
 /** Below this share of the visible band showing rooms (or ruins), the camera counts as "away from the bunker". */
 const AWAY_SHARE = 0.08;
-/** Screens narrower than this open on the shaft side (CameraController's phone rule); wider ones centre the whole building. */
+/**
+ * Screens narrower than this open on the shaft side; wider ones centre the whole building. [w3fix] The same number as CameraController's
+ * own PHONE_W, which is not exported (rendering/ is read-only for UI work): keep the two equal if either changes.
+ */
 const PHONE_W = 700;
 /** After a tap the button stays away while the camera glides home (the glide passes through "away" views). */
 const GLIDE_QUIET_MS = 2_000;

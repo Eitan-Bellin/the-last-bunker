@@ -1,11 +1,12 @@
 import { i18n } from '../../i18n/I18nManager';
 import { el } from '../dom';
-import { kButton } from '../kit';
+import { kButton, PX } from '../kit';
+import { setInert } from '../a11yDom';
 import { reducedMotion } from '../../utils/a11y';
 import { ghostHand } from '../controllers/tips';
 
-/** Space between the element and the edge of the cut-out (px, the --sp-2 token). */
-const PAD = 8;
+/** Space between the element and the edge of the cut-out (px): the --sp-2 token, through the kit's PX mirror. */
+const PAD = PX['sp-2'];
 
 export interface SpotStep {
   /** The element to cut out (looked up every frame: sheets re-render). */
@@ -29,10 +30,20 @@ const visible = (n: HTMLElement | null): n is HTMLElement => {
   return r.width > 0 && r.height > 0;
 };
 
+/** Marks the nodes the spotlight made inert, so a dialog opening over it (Modal.ts) takes them over instead of skipping them. */
+export const OB_INERT_ATTR = 'data-ob-inert';
+
+/** Body-level parts that never go inert under the spotlight: its own layer, toasts, screen-reader text, the splash, the idle hand. */
+const KEEP_LIVE = '.ob-spot, .toast-stack, .sr-only, #splash, .ob-hand, .ob-ring';
+
 /**
  * [ux-redesign W3a] The tutorial spotlight: a dark layer (--overlay) with a cut-out around one element, a bubble that says what to do,
  * and "Skip tutorial" always in reach. Input: four transparent blockers around the hole catch every touch except on the element itself
  * (in 'next' mode a fifth one covers the hole too). The hole follows the element every frame (sheets slide, the strip changes width).
+ *
+ * [ux-redesign w3fix] The frame loop only reads: it writes the layout when the target's rectangle or the viewport changed, and measures
+ * the bubble only when its text changed (it used to write every frame: 60 DOM mutations a second). Keyboard: while it is up everything
+ * but the target (and the spotlight itself) is inert, so Tab + Enter cannot reach a nav tab past it; restored when it goes.
  */
 export class Spotlight {
   private root: HTMLElement;
@@ -46,6 +57,16 @@ export class Spotlight {
   private handlers: SpotHandlers | null = null;
   private raf = 0;
   private offClick: (() => void) | null = null;
+  /** The last layout written (target rectangle + viewport); '' forces the next frame to write. */
+  private sig = '';
+  /** The bubble's size, measured when its text (or the viewport) changes. */
+  private bubbleSize: { w: number; h: number } | null = null;
+  private skipRect: DOMRect | null = null;
+  private side = '';
+  private lost: boolean | null = null;
+  /** Nodes made inert, and for which target ('all' = everything but the spotlight). */
+  private inerted: Element[] = [];
+  private inertFor: HTMLElement | 'all' | null = null;
 
   constructor() {
     this.root = el('div', 'ob-spot');
@@ -81,7 +102,7 @@ export class Spotlight {
   show(step: SpotStep, handlers: SpotHandlers): void {
     this.step = step;
     this.handlers = handlers;
-    this.bubbleText.textContent = step.text;
+    if (this.bubbleText.textContent !== step.text) this.bubbleText.textContent = step.text;
     this.nextBox.replaceChildren();
     if (step.mode === 'next') {
       this.nextBox.appendChild(kButton({ variant: 'primary', label: step.nextLabel ?? i18n.t('ux3a.next'), onPress: () => this.handlers?.onNext?.() }));
@@ -91,12 +112,17 @@ export class Spotlight {
     }));
     this.blockers[4].hidden = step.mode !== 'next';
     this.root.dataset.mode = step.mode;
+    // Reduced motion: the ring around the cut-out stays still (onboarding.css stops its breathing).
     this.root.classList.toggle('is-still', reducedMotion());
     if (this.root.hidden) {
       this.root.hidden = false;
       requestAnimationFrame(() => this.root.classList.add('in'));
     }
+    // New text or buttons: measure the bubble again and write the layout on the next look.
+    this.bubbleSize = null;
+    this.sig = '';
     this.watchTap();
+    cancelAnimationFrame(this.raf);
     this.place();
   }
 
@@ -107,6 +133,9 @@ export class Spotlight {
     this.handlers = null;
     cancelAnimationFrame(this.raf);
     this.raf = 0;
+    this.sig = '';
+    this.lost = null;
+    this.releaseInert();
     this.root.classList.remove('in');
     this.root.hidden = true;
   }
@@ -126,59 +155,114 @@ export class Spotlight {
     this.offClick = () => document.removeEventListener('click', onClick, { capture: true });
   }
 
+  // ---- keyboard: the rest of the page is inert ------------------------------------------------------------------------------
+
+  /** Makes everything inert except the path to `keep` (null: everything but the spotlight). */
+  private inertAround(keep: HTMLElement | null): void {
+    const want = keep ?? 'all';
+    if (this.inertFor === want) return;
+    this.releaseInert();
+    this.inertFor = want;
+    const path = new Set<Element>();
+    for (let n: Element | null = keep; n && n !== document.body; n = n.parentElement) path.add(n);
+    const walk = (parent: Element): void => {
+      for (const c of [...parent.children]) {
+        if (path.has(c)) { if (c !== keep) walk(c); continue; }
+        if (c.tagName === 'SCRIPT' || c.tagName === 'STYLE' || c.matches(KEEP_LIVE) || (c as HTMLElement).inert || c.hasAttribute('aria-hidden')) continue;
+        setInert(c, true);
+        c.setAttribute(OB_INERT_ATTR, '');
+        this.inerted.push(c);
+      }
+    };
+    walk(document.body);
+  }
+
+  private releaseInert(): void {
+    // A dialog that opened over the spotlight took the page-level parts over (Modal.ts): it gives them back when it closes.
+    const dialogUp = !!document.querySelector('.modal-overlay.open');
+    for (const n of this.inerted) {
+      n.removeAttribute(OB_INERT_ATTR);
+      if (!(dialogUp && n.parentElement === document.body)) setInert(n, false);
+    }
+    this.inerted = [];
+    this.inertFor = null;
+  }
+
+  // ---- layout ---------------------------------------------------------------------------------------------------------------
+
+  private box(n: HTMLElement, x: number, y: number, w: number, h: number): void {
+    n.style.transform = `translate(${x}px, ${y}px)`;
+    n.style.width = `${Math.max(0, w)}px`;
+    n.style.height = `${Math.max(0, h)}px`;
+  }
+
   private place = (): void => {
     this.raf = 0;
     const step = this.step;
     if (!step) return;
+    this.raf = requestAnimationFrame(this.place);
     const t = step.target();
     const vw = document.documentElement.clientWidth || window.innerWidth;
     const vh = document.documentElement.clientHeight || window.innerHeight;
     const ok = visible(t);
-    this.root.classList.toggle('is-lost', !ok);
+    // Keyboard: the target stays reachable in a 'tap' step; a 'next' step (or a target not on screen) leaves only the spotlight.
+    this.inertAround(ok && step.mode === 'tap' ? t : null);
+    let x0 = 0, y0 = 0, x1 = 0, y1 = 0;
     if (ok) {
       const r = t.getBoundingClientRect();
-      const x0 = Math.max(0, r.left - PAD);
-      const y0 = Math.max(0, r.top - PAD);
-      const x1 = Math.min(vw, r.right + PAD);
-      const y1 = Math.min(vh, r.bottom + PAD);
-      const box = (n: HTMLElement, x: number, y: number, w: number, h: number): void => {
-        n.style.transform = `translate(${x}px, ${y}px)`;
-        n.style.width = `${Math.max(0, w)}px`;
-        n.style.height = `${Math.max(0, h)}px`;
-      };
-      box(this.hole, x0, y0, x1 - x0, y1 - y0);
-      box(this.blockers[0], 0, 0, vw, y0);
-      box(this.blockers[1], 0, y1, vw, vh - y1);
-      box(this.blockers[2], 0, y0, x0, y1 - y0);
-      box(this.blockers[3], x1, y0, vw - x1, y1 - y0);
-      box(this.blockers[4], x0, y0, x1 - x0, y1 - y0);
-      // The bubble goes on the side with more room, centred on the element and kept on screen.
-      const bw = this.bubble.offsetWidth;
-      const bh = this.bubble.offsetHeight;
-      const above = y0 > vh - y1;
-      const gap = PAD * 2;
-      const bx = Math.min(Math.max(PAD * 2, (x0 + x1) / 2 - bw / 2), vw - bw - PAD * 2);
-      const by = above ? Math.max(PAD, y0 - gap - bh) : Math.min(vh - bh - PAD, y1 + gap);
-      this.bubble.style.transform = `translate(${bx}px, ${by}px)`;
-      this.bubble.dataset.side = above ? 'above' : 'below';
-    } else {
-      // The element is not on screen (a sheet still opening): the whole screen waits, the bubble in the middle.
-      for (const b of this.blockers.slice(0, 4)) { b.style.transform = 'translate(0, 0)'; b.style.width = '0'; b.style.height = '0'; }
-      this.blockers[0].style.width = `${vw}px`;
-      this.blockers[0].style.height = `${vh}px`;
+      x0 = Math.round(Math.max(0, r.left - PAD));
+      y0 = Math.round(Math.max(0, r.top - PAD));
+      x1 = Math.round(Math.min(vw, r.right + PAD));
+      y1 = Math.round(Math.min(vh, r.bottom + PAD));
     }
-    this.raf = requestAnimationFrame(this.place);
+    const sig = `${ok ? 1 : 0}|${x0}|${y0}|${x1}|${y1}|${vw}|${vh}`;
+    if (sig === this.sig && this.bubbleSize) return; // nothing moved: no writes
+    const resized = !this.sig.endsWith(`|${vw}|${vh}`);
+    this.sig = sig;
+    if (this.lost !== !ok) { this.lost = !ok; this.root.classList.toggle('is-lost', !ok); }
+    if (!ok) {
+      // The element is not on screen (a sheet still opening): the whole screen waits, the bubble in the middle.
+      for (const b of this.blockers.slice(1, 4)) this.box(b, 0, 0, 0, 0);
+      this.box(this.blockers[0], 0, 0, vw, vh);
+      return;
+    }
+    this.box(this.hole, x0, y0, x1 - x0, y1 - y0);
+    this.box(this.blockers[0], 0, 0, vw, y0);
+    this.box(this.blockers[1], 0, y1, vw, vh - y1);
+    this.box(this.blockers[2], 0, y0, x0, y1 - y0);
+    this.box(this.blockers[3], x1, y0, vw - x1, y1 - y0);
+    this.box(this.blockers[4], x0, y0, x1 - x0, y1 - y0);
+    // The bubble goes on the side with more room, centred on the element and kept on screen. Measured only when its text or the
+    // viewport changed (a read of offsetWidth after the writes above would force a layout every frame).
+    if (!this.bubbleSize || resized) {
+      this.bubbleSize = { w: this.bubble.offsetWidth, h: this.bubble.offsetHeight };
+      this.skipRect = this.skipBox.getBoundingClientRect();
+    }
+    const { w: bw, h: bh } = this.bubbleSize;
+    const above = y0 > vh - y1;
+    const gap = PAD * 2;
+    const bx = Math.min(Math.max(PAD * 2, (x0 + x1) / 2 - bw / 2), vw - bw - PAD * 2);
+    let by = above ? Math.max(PAD, y0 - gap - bh) : Math.min(vh - bh - PAD, y1 + gap);
+    // Below a target at the top (the bell), the bubble must not sit on "Skip tutorial": it goes under it.
+    if (!above && this.skipRect && by < this.skipRect.bottom && by + bh > this.skipRect.top && bx < this.skipRect.right && bx + bw > this.skipRect.left) {
+      by = Math.min(vh - bh - PAD, this.skipRect.bottom + PAD);
+    }
+    this.bubble.style.transform = `translate(${Math.round(bx)}px, ${Math.round(by)}px)`;
+    const side = above ? 'above' : 'below';
+    if (this.side !== side) { this.side = side; this.bubble.dataset.side = side; }
   };
 }
 
 /**
  * [ux-redesign W3a] The idle hint: the tip cards' ghost finger tapping on an element, or (reduced motion) a still ring around it.
- * Never takes a touch (pointer-events: none).
+ * Never takes a touch (pointer-events: none). [w3fix] Follows the element every frame but writes only when its rectangle changed.
  */
 export class IdleHand {
   private node: HTMLElement | null = null;
   private target: HTMLElement | null = null;
   private raf = 0;
+  private sig = '';
+  private size: { w: number; h: number } | null = null;
 
   get isVisible(): boolean {
     return !!this.node;
@@ -203,6 +287,8 @@ export class IdleHand {
     this.node?.remove();
     this.node = null;
     this.target = null;
+    this.sig = '';
+    this.size = null;
   }
 
   private follow = (): void => {
@@ -210,15 +296,19 @@ export class IdleHand {
     const t = this.target;
     if (!n || !t) return;
     if (!visible(t)) { this.hide(); return; }
-    const r = t.getBoundingClientRect();
-    if (n.classList.contains('ob-ring')) {
-      n.style.transform = `translate(${r.left - PAD / 2}px, ${r.top - PAD / 2}px)`;
-      n.style.width = `${r.width + PAD}px`;
-      n.style.height = `${r.height + PAD}px`;
-    } else {
-      // The finger lands on the middle of the element.
-      n.style.transform = `translate(${r.left + r.width / 2 - n.offsetWidth / 2}px, ${r.top + r.height / 2 - n.offsetHeight / 2}px)`;
-    }
     this.raf = requestAnimationFrame(this.follow);
+    const r = t.getBoundingClientRect();
+    const sig = `${Math.round(r.left)}|${Math.round(r.top)}|${Math.round(r.width)}|${Math.round(r.height)}`;
+    if (sig === this.sig) return;
+    this.sig = sig;
+    if (n.classList.contains('ob-ring')) {
+      n.style.transform = `translate(${Math.round(r.left - PAD / 2)}px, ${Math.round(r.top - PAD / 2)}px)`;
+      n.style.width = `${Math.round(r.width + PAD)}px`;
+      n.style.height = `${Math.round(r.height + PAD)}px`;
+    } else {
+      // The finger lands on the middle of the element (its own size measured once).
+      this.size ??= { w: n.offsetWidth, h: n.offsetHeight };
+      n.style.transform = `translate(${Math.round(r.left + r.width / 2 - this.size.w / 2)}px, ${Math.round(r.top + r.height / 2 - this.size.h / 2)}px)`;
+    }
   };
 }

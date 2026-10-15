@@ -26,7 +26,7 @@ import { i18n } from './i18n/I18nManager';
 import { bus } from './core/EventBus';
 import { getDef } from './data/buildingDefs';
 import { RESEARCH } from './data/research';
-import { RESOURCE_ICONS, el } from './ui/dom';
+import { el } from './ui/dom';
 import { isBuildingUnlocked } from './systems/ResearchSystem';
 import type { BuildingType, GameState, Position, ResourceType, SurvivorState } from './core/GameState';
 import { preloadIcons } from './rendering/richText';
@@ -61,7 +61,7 @@ import { Notifier, type NotifyItem } from './ui/notifications';
 import type { TourMode } from './ui/tour'; // [plan4:GP-6] type only: the tour's code loads on first use
 import { arrivalGap, type RaidResult } from './systems/EventSystem';
 import { DialogQueue, type DialogSource } from './ui/dialogQueue'; // [plan4:UX-10]
-import { backAction, gateBlock, LOST_POINTER_MS, lowStoreStep, SHEET_SETTLE_MS, wantsWelcome } from './ui/popupRules'; // [ux-redesign w2a]
+import { backAction, gateBlock, LOST_POINTER_MS, lowStoreStep, SHEET_SETTLE_MS, wantsWelcome, type BackAction, type BackInput } from './ui/popupRules'; // [ux-redesign w2a]
 import { getChapter } from './data/story';
 import { districtDef } from './data/districts';
 import { haptic } from './utils/haptics'; // [plan4:UX-20]
@@ -367,24 +367,14 @@ export class GameApp {
     {
       const covered = () => this.anyPanelOpen() || this.structurePanel.isVisible || this.modal.isVisible || !!this.placementMode || !!this.tour?.active
         || this.welcomeOpen || this.introPlaying || this.storyOpen || this.storyDialog.isVisible;
+      this.onboarding.covered = covered; // [ux-redesign w3fix] the hint and the spotlight never show over the structure sheet either
       const click = () => this.audio.play('click');
       new EdgeArrows({ renderer: this.renderer, getState: () => this.state, blocked: covered, click }).start();
       new BackToBunker({ renderer: this.renderer, getState: () => this.state, blocked: covered, click }).start();
       installResourceLongPress(r => this.hud.onResourceTap?.(r as ResourceType));
       installNativeBack({
-        input: () => ({
-          touring: !!this.tour?.active, modalOpen: this.modal.isVisible, modalDismiss: this.modal.isVisible && this.modal.canDismiss ? 0 : null,
-          placing: !!this.placementMode, readerOpen: this.loreReader.isVisible, surfaceOpen: this.surfacePanel.isVisible,
-          sheetOpen: this.anyPanelOpen() || this.structurePanel.isVisible,
-        }),
-        act: act => {
-          if (act === 'tour') this.tour?.stop();
-          else if (act === 'modalDismiss') this.modal.back();
-          else if (act === 'placement') this.world.cancelPlacement();
-          else if (act === 'reader') this.loreReader.hide();
-          else if (act === 'surface') this.surfacePanel.hide();
-          else if (act === 'sheet' && !Sheet.closeTop()) this.closeSheets();
-        },
+        input: () => this.backInput(),
+        act: act => this.doBack(act),
         confirmLeave: (title, body, stay, leave, onLeave) => this.modal.show({
           title, body, dismiss: 0,
           actions: [
@@ -599,16 +589,19 @@ export class GameApp {
     const now = performance.now();
     for (const [id, t] of this.pointersDown) if (now - t > LOST_POINTER_MS) this.pointersDown.delete(id); // a lost pointerup must not block forever
     // [ux-redesign w2a #5] The rules live in popupRules.gateBlock: 1.5 s after any touch, and never while a sheet is still moving.
+    // [ux-redesign w3fix] A tutorial spotlight is its own input: it holds ordinary dialogs only up to SPOTLIGHT_PATIENCE_MS.
     const why = gateBlock({
       now, critical, placing: !!this.placementMode, touring: !!this.tour?.active, pointersDown: this.pointersDown.size,
       lastGestureAt: this.lastGestureAt, ceremony: this.ceremonyActive(now), panelOpen: this.anyPanelOpen(),
-      sheetMovingUntil: this.sheetMovingUntil, tipShowing: this.tips.isShowing, waitedMs,
+      sheetMovingUntil: this.sheetMovingUntil, tipShowing: this.tips.isShowing, spotlightShowing: this.onboarding.holdsScreen, waitedMs,
     });
     this.lastGateBlock = why;
     if (why) return false;
     // [ux-wp3 C1] A tip card and a dialog never share the screen: an ordinary dialog waits for the tip (it goes by itself within
     // seconds); an emergency puts the tip away (it is not marked seen, so it comes back in a calm moment).
     if (this.tips.isShowing) this.tips.defer();
+    // [ux-redesign w3fix] A dialog that may land puts the spotlight away first (it comes back when the screen is calm).
+    if (this.onboarding.holdsScreen) this.onboarding.defer();
     return true;
   }
 
@@ -785,9 +778,8 @@ export class GameApp {
     this.danger.updateIncidentBanner();
     // [plan4:UX-11] The gesture tips (pinch, double tap, hold a survivor, wings), once each; the old drag toast is the "hold" tip now.
     this.tips.update(performance.now());
-    const obj = this.engine.objectiveSystem.current(state);
-    const reward = (Object.entries(obj.reward) as [ResourceType, number][]).map(([r, v]) => `${RESOURCE_ICONS[r] ?? ''}${v}`).join(' ');
-    this.hud.setObjective(obj.icon, obj.text[i18n.currentLocale] ?? obj.text.en, obj.progress(state), reward);
+    // [ux-redesign W3a] The strip says what the onboarding advisor picks (and routes there on tap: OnboardingController wires it).
+    this.hud.setObjective();
   }
 
   /** [Q2] The chip: the Act and how far through it, with the era as the quieter second half. */
@@ -821,11 +813,6 @@ export class GameApp {
     this.audio.setEra(state.era ?? 0);
     this.audio.setExpedition(state.activeMissions.length > 0);
     this.audio.setAmbience(this.renderer.getAmbienceMix(state));
-  }
-
-  private onObjectiveTap(): void {
-    this.audio.play('click');
-    this.runAction(this.engine.objectiveSystem.current(this.state).action);
   }
 
   /** [plan4:ST-9] Opens the Command panel and draws the eye to its wing line. */
@@ -1088,7 +1075,6 @@ export class GameApp {
       this.audio.play('click');
       this.openRuin(ruinId);
     };
-    this.hud.onObjectiveTap = () => this.onObjectiveTap();
     this.renderer.onDigClick = () => this.dig.confirmDig();
     this.renderer.onWingDig = (floor, side) => { this.audio.play('click'); this.dig.confirmWingDig(floor, side); }; // [plan4:ST-3]
     this.renderer.onElevator = () => {
@@ -1221,6 +1207,28 @@ export class GameApp {
 
   // ---- the phone's back button ----
 
+  /** [ux-redesign w3fix] What is open, for the back button and Escape (popupRules.backAction). */
+  private backInput(): BackInput {
+    return {
+      touring: !!this.tour?.active, modalOpen: this.modal.isVisible, modalDismiss: this.modal.isVisible && this.modal.canDismiss ? 0 : null,
+      placing: !!this.placementMode, readerOpen: this.loreReader.isVisible, surfaceOpen: this.surfacePanel.isVisible,
+      sheetOpen: this.anyPanelOpen() || this.structurePanel.isVisible,
+      popoverOpen: this.hud.floatingOpen || this.onboarding.popOpen, spotlight: this.onboarding.holdsScreen,
+    };
+  }
+
+  /** [ux-redesign w3fix] One back step (web back, Escape and the Android back button share it). */
+  private doBack(act: Exclude<BackAction, 'leave' | 'modalStay' | 'spotlight'>): void {
+    if (act === 'tour') this.tour?.stop(); // [plan4:GP-6] back ends the tour first
+    else if (act === 'modalDismiss') this.modal.back();
+    else if (act === 'popover') { this.hud.closeFloating(); this.onboarding.closePop(); }
+    else if (act === 'placement') this.world.cancelPlacement();
+    else if (act === 'reader') this.loreReader.hide();
+    else if (act === 'surface') this.surfacePanel.hide();
+    // [ux-wp4] the book opened over a room panel goes back to that panel, not to the bunker
+    else if (act === 'sheet' && !Sheet.closeTop()) this.closeSheets();
+  }
+
   anyPanelOpen(): boolean {
     return this.buildMenu.isVisible || this.buildingPanel.isVisible || this.peoplePanel.isVisible || this.researchPanel.isVisible
       || this.surfacePanel.isVisible || this.menuPanel.isVisible || this.ruinPanel.isVisible || this.journal.isVisible
@@ -1234,21 +1242,22 @@ export class GameApp {
   private installBackNavigation(): void {
     let lastBack = 0;
     history.pushState({ lastbunker: 1 }, '');
+    // [ux-redesign w3fix] Escape knows the floating lists and the spotlight too (the dialog, the sheets and placement keep their own
+    // Escape handlers): a list closes alone; on a spotlight Escape does nothing (it must not close the sheet under it).
+    window.addEventListener('keydown', e => {
+      if (e.key !== 'Escape') return;
+      const act = backAction(this.backInput());
+      if (act !== 'popover' && act !== 'spotlight') return;
+      e.preventDefault();
+      e.stopPropagation();
+      if (act === 'popover') this.doBack(act);
+    }, { capture: true });
     window.addEventListener('popstate', () => {
       // [ux-redesign w2a #20] Back closes the top layer only (popupRules.backAction): an info dialog closes, a decision stays.
-      const act = backAction({
-        touring: !!this.tour?.active, modalOpen: this.modal.isVisible, modalDismiss: this.modal.isVisible && this.modal.canDismiss ? 0 : null,
-        placing: !!this.placementMode, readerOpen: this.loreReader.isVisible, surfaceOpen: this.surfacePanel.isVisible,
-        sheetOpen: this.anyPanelOpen() || this.structurePanel.isVisible,
-      });
+      // [ux-redesign w3fix] A floating list closes first; on a spotlight back does nothing (never "press again to leave").
+      const act = backAction(this.backInput());
       if (act !== 'leave') {
-        if (act === 'tour') this.tour?.stop(); // [plan4:GP-6] back ends the tour first
-        else if (act === 'modalDismiss') this.modal.back();
-        else if (act === 'placement') this.world.cancelPlacement();
-        else if (act === 'reader') this.loreReader.hide();
-        else if (act === 'surface') this.surfacePanel.hide();
-        // [ux-wp4] the book opened over a room panel goes back to that panel, not to the bunker
-        else if (act === 'sheet' && !Sheet.closeTop()) this.closeSheets();
+        if (act !== 'modalStay' && act !== 'spotlight') this.doBack(act);
         history.pushState({ lastbunker: 1 }, '');
         return;
       }

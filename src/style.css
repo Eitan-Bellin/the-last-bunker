@@ -567,18 +567,11 @@ body.placement-mode #game-canvas { cursor: crosshair; }
   padding: 6px 12px;
   border-radius: 12px;
   border: 1px solid rgba(255, 212, 71, 0.45);
-  background:
-    linear-gradient(90deg, rgba(255, 212, 71, 0.18) var(--obj-progress, 0%), transparent var(--obj-progress, 0%)),
-    rgba(16, 16, 34, 0.92);
+  background: rgba(16, 16, 34, 0.92); /* [ux-redesign w3fix] the old --obj-progress fill is gone: the advisor strip has its own bar */
   font-size: calc(12px * var(--fs, 1));
   cursor: pointer;
   text-align: start;
   /* [perf] no backdrop-filter (see the nav bar) */
-}
-[dir="rtl"] .objective {
-  background:
-    linear-gradient(270deg, rgba(255, 212, 71, 0.18) var(--obj-progress, 0%), transparent var(--obj-progress, 0%)),
-    rgba(16, 16, 34, 0.88);
 }
 .objective:active { transform: scale(0.98); }
 .objective-tag { font-size: calc(14px * var(--fs, 1)); }

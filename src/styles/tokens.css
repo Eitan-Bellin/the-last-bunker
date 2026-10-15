@@ -156,6 +156,7 @@
   --icon-m: 20px;
   --icon-l: 24px;
   --tooltip-max: 280px;
+  --strip-max: 460px;              /* the widest the advisor strip grows (tablets): one line stays readable */
   --measure-short: 32ch;           /* the widest line of an empty-state sentence */
   --ghost-opacity: 0.45;           /* the trailing "ghost" of a progress bar */
 

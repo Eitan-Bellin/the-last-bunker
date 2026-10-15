@@ -62,6 +62,11 @@ export function jobRoom(state: GameState): { idle: number; free: number } {
   }
   return { idle, free };
 }
+/** [ux-redesign w3fix] Sets `hidden` only when it changes (writing the same value is still a DOM mutation). */
+function setHidden(node: HTMLElement, on: boolean): void {
+  if (node.hidden !== on) node.hidden = on;
+}
+
 /** [ux-redesign W3a] What the advisor strip says: one line, its reward or countdown, and its progress (null: no bar). */
 export interface StripView {
   key: string;
@@ -580,9 +585,16 @@ export class HUD {
     return this.objectiveMain;
   }
 
-  setObjective(icon: string, text: string, progress: [number, number], reward: string): void {
-    const v = this.advisor?.() ?? { key: 'objective', kind: 'goal', icon, text, progress, reward };
-    this.objectiveEl.dataset.kind = v.urgent ? 'crisis' : v.kind;
+  /**
+   * Redraws the strip from `advisor` (about once a second). [w3fix] Every write is skipped when the value is already there: setting
+   * `hidden` or a dataset value to what it already is still counts as a DOM mutation. Until the onboarding wires `advisor` (its first
+   * tick, 250 ms in) the strip keeps its empty first look.
+   */
+  setObjective(): void {
+    const v = this.advisor?.();
+    if (!v) return;
+    const kind = v.urgent ? 'crisis' : v.kind;
+    if (this.objectiveEl.dataset.kind !== kind) this.objectiveEl.dataset.kind = kind;
     this.setText(this.objectiveIcon, v.icon);
     this.setText(this.objectiveText, v.text);
     const [cur, target] = v.progress ?? [0, 0];
@@ -591,9 +603,9 @@ export class HUD {
     else if (target > 1) parts.push(`${fmtNum(Math.min(cur, target))}/${fmtNum(target)}`);
     if (v.reward) parts.push(`[[gift]] ${v.reward}`);
     this.setText(this.objectiveMeta, parts.join(' · '));
-    this.objectiveMeta.hidden = parts.length === 0;
+    setHidden(this.objectiveMeta, parts.length === 0);
     const showBar = !!v.progress && target > 0 && !v.urgent;
-    this.objectiveBar.hidden = !showBar;
+    setHidden(this.objectiveBar, !showBar);
     if (showBar && this.objectiveBar.dataset.sig !== `${cur}/${target}`) {
       this.objectiveBar.dataset.sig = `${cur}/${target}`;
       setProgress(this.objectiveBar, cur, target);
@@ -607,7 +619,7 @@ export class HUD {
     } else if (now - this.objectiveListAt > 1000) {
       this.objectiveListAt = now;
       const n = this.goals?.().length ?? 0;
-      this.objectiveMore.hidden = n < 2;
+      setHidden(this.objectiveMore, n < 2);
       this.setText(this.objectiveMoreN, n >= 2 ? String(n) : '');
     }
   }
@@ -631,7 +643,25 @@ export class HUD {
     this.offListOutside = () => document.removeEventListener('pointerdown', outside, { capture: true });
   }
 
+  /** [ux-redesign w3fix] A small floating list is open (the goals list, or the alerts / more-resources list): back closes it first. */
+  get floatingOpen(): boolean {
+    return !!this.objectiveList || !!this.pop;
+  }
+
+  /** [ux-redesign w3fix] Closes the goals list and the alerts / more list (back / Escape). True when something was open. */
+  closeFloating(): boolean {
+    const was = this.floatingOpen;
+    const opener = this.objectiveList ? this.objectiveMore : this.popKind === 'alerts' ? this.alertsBtn : this.popKind === 'more' ? this.moreBtn : null;
+    const box = this.objectiveList ?? this.pop;
+    const focusInside = !!box && box.contains(document.activeElement);
+    this.closeGoals();
+    this.closePop();
+    if (focusInside) opener?.focus({ preventScroll: true }); // the focus does not fall to the page when its list goes
+    return was;
+  }
+
   closeGoals(): void {
+    if (!this.objectiveList) return; // [w3fix] nothing to close: no writes
     this.offListOutside?.();
     this.offListOutside = null;
     this.objectiveList?.remove();
@@ -789,7 +819,7 @@ export class HUD {
   setBadge(key: NavKey, text: string | null): void {
     const badge = this.badges.get(key);
     if (!badge) return;
-    badge.hidden = !text;
+    setHidden(badge, !text); // [w3fix] no write when unchanged
     if (text) this.setText(badge, text);
   }
 

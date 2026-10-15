@@ -16,5 +16,7 @@ export function floorTag(floor: number): string {
  * numbers ("Farm · B2 (1/3)"), so "B2" or "קומה 2" never trades places with its neighbours in the other direction.
  */
 export function floorTagIso(floor: number): string {
-  return String.fromCharCode(0x2068) + floorTag(floor) + String.fromCharCode(0x2069);
+  // [ux-redesign w3fix B7] The isolate keeps the order, not the line together: a no-break space (U+00A0) between the word and the
+  // number keeps "קומה 3" on one line ("Surface" and "B3" have no space to replace).
+  return String.fromCharCode(0x2068) + floorTag(floor).replace(/ /g, String.fromCharCode(0xa0)) + String.fromCharCode(0x2069);
 }
