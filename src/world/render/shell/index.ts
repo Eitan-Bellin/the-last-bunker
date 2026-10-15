@@ -22,6 +22,10 @@ import type { Cavity, CityLayout, Rect } from '../layoutTypes';
 import { buildCaverns } from './cavern';
 import { buildDigFront } from './digFront';
 import { buildEdges } from './edges';
+import { buildEntrance } from './entrance';
+import { buildDoors } from './doors';
+import { buildTransfers } from './transfers';
+import { ForeSilhouettes } from './fore';
 import { buildHub } from './hub';
 import { grain, palette, shade, tile, vfill } from './kit';
 import { buildPockets } from './pockets';
@@ -56,7 +60,8 @@ function buildBacks(cavs: readonly Cavity[]): Container {
   return c;
 }
 
-export function buildShell(layout: CityLayout, state: Pick<GameState, 'era'>, quality: RenderTier, opts: ShellOptions = {}): ShellParts {
+/** [world:M1] `state`: the era, and (city doors) the layout's doors and the floor count when given. */
+export function buildShell(layout: CityLayout, state: Pick<GameState, 'era'> & Partial<Pick<GameState, 'layout' | 'currentFloors'>>, quality: RenderTier, opts: ShellOptions = {}): ShellParts {
   const era = opts.era ?? state.era ?? 0;
   const back = new Container();
   const front = new Container();
@@ -72,17 +77,23 @@ export function buildShell(layout: CityLayout, state: Pick<GameState, 'era'>, qu
   for (const h of layout.hubs) failing.add(`${h.floors[Math.min(1, h.floors.length - 1)]}:e`);
   pieces.push(buildVestibules(layout.cavities.filter(c => c.back === 'tile'), failing));
   for (const h of layout.hubs) pieces.push(buildHub(h, quality, era));
+  const top = layout.hubs.find(h => h.s === 1 && h.floors[0] === 0);
+  if (top) pieces.push(buildEntrance(top));
   pieces.push(buildCaverns(layout.areas, layout.cavities, era));
   pieces.push(buildEdges(layout.edges, layout.cavities));
   const dig = layout.cavities.find(c => c.id.startsWith('c:dig:'));
   if (dig) pieces.push(buildDigFront(dig, layout.areas.find(a => a.id === `f:${dig.id.split(':')[2]}`)));
   pieces.push(buildPockets(layout.areas, layout.cavities));
+  pieces.push(buildTransfers(layout.cavities, layout.hubs));
+  pieces.push(buildDoors(state));
 
   for (const p of pieces) if (p.back) back.addChild(p.back);
   const rock = new RockLayer(layout, quality);
   back.addChild(rock.container);
   for (const p of pieces) if (p.front) front.addChild(p.front);
 
+  // [world:M1] The fore plane's silhouettes (High only; they join the renderer's fore plane on the first update).
+  const fore = new ForeSilhouettes(layout);
   const lights: LightDef[] = pieces.flatMap(p => p.lights);
   const progress: Record<string, (p: number) => void> = Object.assign({}, ...pieces.map(p => p.progress ?? {}));
   const stats = { rockChunks: 0, rockShown: 0 };
@@ -90,6 +101,7 @@ export function buildShell(layout: CityLayout, state: Pick<GameState, 'era'>, qu
     back, front, lights, stats,
     update(view: Rect, now: number) {
       rock.update(view, now);
+      fore.update(front, view);
       stats.rockChunks = rock.manager.stats.built;
       stats.rockShown = rock.manager.stats.shown;
     },
@@ -101,6 +113,7 @@ export function buildShell(layout: CityLayout, state: Pick<GameState, 'era'>, qu
     },
     destroy() {
       rock.destroy();
+      fore.destroy();
       back.destroy({ children: true });
       front.destroy({ children: true });
     },
