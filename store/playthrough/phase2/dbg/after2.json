@@ -1,0 +1,131 @@
+{
+ "wallSeconds": 122,
+ "gameMinutes": 9,
+ "dialogs": 1,
+ "story": 0,
+ "cards": 0,
+ "spotlights": 5,
+ "toasts": 20,
+ "sheets": 24,
+ "blocking": [
+  "0m dialog: כמה קשה העולם שם בחוץ? \"שומר\" הוא המשחק כפי שתוכנן. הבחירה קבועה לבונקר הזה: אי אפשר לשנות"
+ ],
+ "state": {
+  "paused": false,
+  "morale": 49,
+  "people": 3,
+  "power": 0,
+  "food": 206,
+  "playSeconds": 557,
+  "strip": "מלאי חשמל אוזל",
+  "sheet": " חשמל",
+  "rooms": 4,
+  "probe": null
+ },
+ "samples": [
+  {
+   "paused": false,
+   "morale": 67,
+   "people": 3,
+   "power": 27,
+   "food": 144,
+   "playSeconds": 23,
+   "strip": "שקמו את הגנרטור ב⁨קומה 3⁩",
+   "sheet": " גנרטור הרוס · ⁨קומה 3⁩",
+   "rooms": 1,
+   "probe": null
+  },
+  {
+   "paused": false,
+   "morale": 62,
+   "people": 3,
+   "power": 50,
+   "food": 146,
+   "playSeconds": 99,
+   "strip": "קראו את הפתק ביומן",
+   "sheet": "",
+   "rooms": 2,
+   "probe": null
+  },
+  {
+   "paused": false,
+   "morale": 57,
+   "people": 3,
+   "power": 50,
+   "food": 128,
+   "playSeconds": 174,
+   "strip": "שקמו את החווה ב⁨קומה 2⁩",
+   "sheet": " חווה הרוס · ⁨קומה 2⁩",
+   "rooms": 3,
+   "probe": null
+  },
+  {
+   "paused": false,
+   "morale": 58,
+   "people": 3,
+   "power": 32,
+   "food": 153,
+   "playSeconds": 250,
+   "strip": "מלאי חשמל אוזל",
+   "sheet": "",
+   "rooms": 4,
+   "probe": null
+  },
+  {
+   "paused": false,
+   "morale": 58,
+   "people": 3,
+   "power": 0,
+   "food": 170,
+   "playSeconds": 327,
+   "strip": "מלאי חשמל אוזל",
+   "sheet": "",
+   "rooms": 4,
+   "probe": null
+  },
+  {
+   "paused": false,
+   "morale": 53,
+   "people": 3,
+   "power": 0,
+   "food": 183,
+   "playSeconds": 403,
+   "strip": "מלאי חשמל אוזל",
+   "sheet": " חשמל",
+   "rooms": 4,
+   "probe": null
+  },
+  {
+   "paused": false,
+   "morale": 50,
+   "people": 3,
+   "power": 0,
+   "food": 194,
+   "playSeconds": 480,
+   "strip": "מלאי חשמל אוזל",
+   "sheet": "",
+   "rooms": 4,
+   "probe": null
+  },
+  {
+   "paused": false,
+   "morale": 49,
+   "people": 3,
+   "power": 0,
+   "food": 206,
+   "playSeconds": 556,
+   "strip": "מלאי חשמל אוזל",
+   "sheet": " חשמל",
+   "rooms": 4,
+   "probe": null
+  }
+ ],
+ "config": {
+  "base": "http://localhost:5175",
+  "minutes": 10,
+  "speed": 5,
+  "stage": "",
+  "away": 0,
+  "lang": "he"
+ }
+}

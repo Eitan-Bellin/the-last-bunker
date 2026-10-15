@@ -18,10 +18,13 @@ const COSMETIC_COLORS: Record<string, string> = {
 export class ProjectsPanel {
   private sheet = new Sheet('projects-sheet', 'projects');
   private engine: GameEngine;
+  /** [phase2] The projects list itself (the Command panel's Projects tab shows the same view). */
+  private view: ProjectsView;
   private sig = '';
 
   constructor(engine: GameEngine) {
     this.engine = engine;
+    this.view = new ProjectsView(engine, () => this.rerender());
   }
 
   show(): void {
@@ -39,9 +42,37 @@ export class ProjectsPanel {
   }
 
   refresh(state: GameState): void {
+    const sig = this.view.signature(state);
+    if (sig === this.sig) return;
+    this.sig = sig;
+    this.sheet.setTitle(`[[build]] ${i18n.t('proj.title')}`);
+    this.sheet.body.replaceChildren(this.view.render(state));
+  }
+
+  private rerender(): void {
+    this.sig = '';
+    this.refresh(this.engine.stateManager.state);
+  }
+}
+
+/**
+ * [phase2] The big projects as a view: the panel above and the Command panel's Projects tab both draw it. `changed` runs after the
+ * player changed something here (the host redraws).
+ */
+export class ProjectsView {
+  private engine: GameEngine;
+  private changed: () => void;
+
+  constructor(engine: GameEngine, changed: () => void) {
+    this.engine = engine;
+    this.changed = changed;
+  }
+
+  /** What the view shows, as a string: redraw when it changes. */
+  signature(state: GameState): string {
     const ps = this.engine.projectSystem;
     const active = state.activeProjectId;
-    const sig = [
+    return [
       i18n.currentLocale, state.era, active, JSON.stringify(state.lateGame.projects),
       active ? ps.crew(state, active).map(s => s.id).join(',') : '',
       // Coarse: the numbers move every tick, the panel redraws a few times a minute.
@@ -49,20 +80,15 @@ export class ProjectsPanel {
       JSON.stringify(state.lateGame.weekly),
       JSON.stringify(state.lateGame.pledges ?? {}), // [phase1]
     ].join('|');
-    if (sig === this.sig) return;
-    this.sig = sig;
-    this.render(state);
   }
 
   private rerender(): void {
-    this.sig = '';
-    this.refresh(this.engine.stateManager.state);
+    this.changed();
   }
 
-  private render(state: GameState): void {
+  render(state: GameState): HTMLElement {
     const ps = this.engine.projectSystem;
     const locale = i18n.currentLocale;
-    this.sheet.setTitle(`[[build]] ${i18n.t('proj.title')}`);
     const root = el('div', 'projects');
     const t = ps.totals(state);
     root.appendChild(el('p', 'bp-hint', i18n.t('proj.intro', { done: t.done, all: t.all })));
@@ -89,7 +115,7 @@ export class ProjectsPanel {
     }
 
     for (const def of PROJECTS) root.appendChild(this.renderProject(state, def));
-    this.sheet.body.replaceChildren(root);
+    return root;
   }
 
   /** [P2-2] The two designs of a project: pick one before the first stage is done. */
@@ -109,8 +135,7 @@ export class ProjectsPanel {
         if (ps.setDesign(def.id, o.id)) {
           uiSound('click');
           this.engine.requestSave();
-          this.sig = '';
-          this.refresh(this.engine.stateManager.state);
+          this.rerender();
         }
       }, locked && chosen !== o.id);
       b.setAttribute('aria-pressed', String(chosen === o.id));

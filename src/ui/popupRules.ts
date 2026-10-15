@@ -1,6 +1,7 @@
 /**
  * [ux-redesign w2a] The rules of interruptions, as pure functions (no DOM, no game state), so tools/sim/popup-test.mjs can check them:
- * which dialog goes first, when one may land, what the back button closes, when a store is worth a warning, how toasts queue.
+ * which dialog goes first, when one may land, what the back button closes, when a store is worth a warning, how toasts queue,
+ * [phase2] how many dialogs may open by themselves (the budget) and how a knock at the door is told.
  * The game reads them; they never change a game rule (rates, rewards and saves are untouched).
  */
 import { MS } from './kit/tokens';
@@ -41,6 +42,39 @@ export function returningQuiet(now: number, closedAt: number, critical: boolean)
 /** [phase1] An offer may come only once this session has lasted OFFER_SESSION_S. */
 export function offerSessionReady(sessionSeconds: number): boolean {
   return sessionSeconds >= OFFER_SESSION_S;
+}
+
+// ---- [phase2] the interruption budget -------------------------------------------------------------------------------------------
+
+/**
+ * [phase2] At most one ordinary dialog opens by itself per this long (ms). Emergencies (critical sources: a raid, a fire, a death, the
+ * welcome-back) and sources marked exempt (a raid at the door, the first knock that teaches the door) always pass; everything else waits
+ * silently (it stays ready, the bell shows it) and is never dropped. Logic timing, not a motion token.
+ */
+export const BUDGET_GAP_MS = 180_000;
+/** [phase2] The stricter gap while the tutorial runs and for the first half hour after it. */
+export const BUDGET_GAP_EARLY_MS = 300_000;
+/** [phase2] How long after the tutorial the stricter gap holds (play seconds). */
+export const BUDGET_EARLY_S = 1800;
+
+/** [phase2] The gap for now. `tutorialDoneAt`: play seconds when the tutorial ended (null: still running). */
+export function budgetGapMs(playSeconds: number, tutorialDoneAt: number | null): number {
+  return tutorialDoneAt === null || playSeconds - tutorialDoneAt < BUDGET_EARLY_S ? BUDGET_GAP_EARLY_MS : BUDGET_GAP_MS;
+}
+
+/** [phase2] The budget holds this source back (`lastAutoAt`: when the last ordinary auto-dialog opened, -Infinity: none yet). */
+export function budgetBlocks(now: number, lastAutoAt: number, gapMs: number, free: boolean): boolean {
+  return !free && now - lastAutoAt < gapMs;
+}
+
+/**
+ * [phase2] Door knocks: only the first knock of a game opens a dialog (it teaches the door). Later ones are a small card (Let in / Later)
+ * and a bell line; with "let newcomers in by themselves" on, they walk in while a bed is free and the price is paid.
+ */
+export type KnockWay = 'dialog' | 'auto' | 'card';
+export function knockWay(taught: boolean, autoOn: boolean, canAccept: boolean): KnockWay {
+  if (!taught) return 'dialog';
+  return autoOn && canAccept ? 'auto' : 'card';
 }
 
 /** A pointer whose "up" was lost stops blocking after this long. */

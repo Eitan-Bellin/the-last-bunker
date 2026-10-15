@@ -106,7 +106,7 @@ const NEW_SCENES = [
       await app(c, `a.welcome.showWelcome({ seconds: 7200, gained: { food: 120, water: 80 }, wasted: {}, converted: {}, credits: 0, absorbed: {}, arrivals: 1, missions: 1, research: [] })`);
       await sleep(1000);
     }, after: async (c) => { await app(c, 'a.welcomeOpen = false; a.modal.hide()'); await sleep(450); } },
-  { name: 'whatsnew', run: async (c) => { await app(c, 'a.whatsNew.open(st)'); await sleep(900); }, after: async (c) => { await app(c, 'a.modal.hide()'); await sleep(450); } },
+  { name: 'whatsnew', run: async (c) => { await app(c, 'a.whatsNew.offer(st)'); await sleep(900); }, after: async (c) => { await app(c, 'a.modal.hide()'); await sleep(450); } },
   { name: 'gesture-tip', run: async (c) => { await app(c, `a.tips.show({ id: 'pinch', flag: 'tip:audit', textKey: 'tip.pinch', ghost: 'pinch', due: () => true })`); await sleep(900); }, after: async (c) => { await app(c, 'a.tips.hide()'); await sleep(450); } },
   // The depth ruler is asleep (an 18 px grab strip) until the camera moves vertically: wake it so its names and chips are measured.
   { name: 'depth-ruler', run: async (c) => { await c.evalJs(`document.querySelectorAll('.depth-ruler').forEach(r => r.classList.add('on')); true`); await sleep(400); }, after: async (c) => { await c.evalJs(`document.querySelectorAll('.depth-ruler').forEach(r => r.classList.remove('on')); true`); } },

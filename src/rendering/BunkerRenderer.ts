@@ -43,7 +43,7 @@ import { SlopArea, hitState } from './HitSlop'; // [plan4:ST-12]
 import { PostFX, startQuality, targetResolution } from './postfx';
 import { isLiteMode, logCrash } from '../core/crashGuard';
 import { isTouchDevice } from '../utils/device';
-import { statusTint, pressMs } from '../utils/a11y';
+import { statusTint, pressMs, reducedMotion, flashOk } from '../utils/a11y'; // [phase2] celebrations respect reduced motion and the flash setting
 import { coneTexture } from '../art/ArtLibrary';
 import { buildRuinVisual } from './ruinArt';
 import { iconSprite } from './richText';
@@ -128,6 +128,19 @@ interface Burst {
   max: number;
 }
 
+/** [phase2] A celebration glow (see celebrate): one additive sprite, its base scale and its clock. */
+interface Glow {
+  s: Sprite;
+  sx: number;
+  sy: number;
+  life: number;
+}
+/** [phase2] Celebration glow: length (s), peak alpha, at most this many at once; the tint is the burst's gold motes. */
+const GLOW_S = 0.9;
+const GLOW_PEAK = 0.34;
+const GLOW_MAX = 3;
+const GLOW_TINT = 0xffd27a;
+
 
 /** [ux-w2f #26] Canvas size from the layout viewport: innerWidth/Height can stay large after the window gets smaller. */
 const viewportW = (): number => document.documentElement.clientWidth || window.innerWidth;
@@ -176,6 +189,12 @@ export class BunkerRenderer {
   private ruinViews = new Map<string, RuinView>();
   private fxLayer = new Container();
   private bursts: Burst[] = [];
+  /** [phase2] Celebration glows, and where RoomViews' last room burst was (its punch follows it at once). */
+  private glows: Glow[] = [];
+  private readonly roomBurst = { x: 0, w: 0 };
+  /** [phase2] The state the home view reads its busy rooms from, and whether the camera was told the rooms exist (once per load). */
+  private homeSrc: GameState | null = null;
+  private homed = false;
   private grade = new ColorMatrixFilter();
   private gradeNow = { r: 1, g: 1, b: 1, saturation: 1, brightness: 1, contrast: 1 };
   private gradeTarget = { r: 1, g: 1, b: 1, saturation: 1, brightness: 1, contrast: 1 };
@@ -270,6 +289,7 @@ export class BunkerRenderer {
       endCarry: (sx, sy, overHud) => { if (r.ghostDrag) r.endGhostDrag(); else r.endDrag(sx, sy, overHud); },
       cancelPress: () => window.clearTimeout(r.pressTimer),
       canvasTap: (sx, sy) => r.onCanvasTap(sx, sy), // [plan4:ST-19]
+      homeFocus: (vw, vh) => r.homeFocus(vw, vh), // [phase2]
     });
     this.placement = new PlacementController({
       isDragging: () => r.cam.isDragging,
@@ -284,9 +304,9 @@ export class BunkerRenderer {
       carrying: () => !!r.drag || !!r.ghostDrag,
       projectRight: () => r.projectSites.right,
       setExtentR: x => { r.extentR = Math.max(x, r.extentWingR); }, // [plan4:ST-4] the widest floor counts too
-      burstAt: (x, y, w) => r.burstAt(x, y, w),
+      burstAt: (x, y, w) => { r.burstAt(x, y, w); r.roomBurst.x = x; r.roomBurst.w = w; },
       onScreen: (x, y) => r.onScreen(x, y),
-      punch: k => r.punch(k),
+      punch: k => { r.punch(k); r.celebrateRoomBurst(); }, // [phase2] a room just built or upgraded, on screen: the celebration glow
       mapCovers: () => r.mapCovers,
     }, this.views, this.ruinViews, this.roomLayer, this.labelLayer);
     // [plan4:ST-4] Dev only: `__setExt(floor, w, e)` edits state.layout.ext (the structure rebuilds on the next picture) to look at wings before the dig flow exists.
@@ -675,7 +695,7 @@ export class BunkerRenderer {
 
   /** [perf] Short animations on the picture (bursts, floating icons, a crisis in a room) that would stutter at the idle rate. */
   get fxActive(): boolean {
-    return this.bursts.length > 0 || this.floaters.length > 0 || this.blockN > 0;
+    return this.bursts.length > 0 || this.glows.length > 0 || this.floaters.length > 0 || this.blockN > 0; // [phase2] glows
   }
 
   /** Dev tools: put the camera at a world point with a zoom relative to the fit-to-screen zoom. */
@@ -711,6 +731,37 @@ export class BunkerRenderer {
       acc.set(key, entry);
     }
     return [...acc.entries()].map(([key, e]) => ({ key, level: e.level, pan: e.w > 0 ? (e.panSum / e.w) * 0.8 : 0 }));
+  }
+
+  /**
+   * [phase2] The phone home view's focus (CameraHost.homeFocus): the busiest room (most people at work, a build counts as one) and the busy rooms
+   * around it that fit one view (vw x vh world units) with it, worker-weighted. No busy room: the middle of the built rooms that fit around the
+   * first one. Nothing built yet: null (the camera keeps its own home view).
+   */
+  private homeFocus(vw: number, vh: number): { x: number; y: number } | null {
+    const st = this.homeSrc;
+    if (!st || !this.views.size) return null;
+    let anchor: { x: number; y: number } | null = null, best = 0;
+    for (const b of st.buildings) {
+      const v = this.views.get(b.id);
+      if (!v) continue;
+      const n = b.assignedSurvivorIds.length + (b.isConstructing ? 1 : 0);
+      if (!anchor || n > best) { anchor = { x: v.root.x + v.width / 2, y: v.root.y + v.height / 2 }; best = n; }
+    }
+    if (!anchor) return null;
+    // Rooms whose middle sits within the view (less a margin) around the anchor count; empty rooms only when nothing is busy.
+    const hw = vw * 0.4, hh = vh * 0.4;
+    let sx = 0, sy = 0, sw = 0;
+    for (const b of st.buildings) {
+      const v = this.views.get(b.id);
+      if (!v) continue;
+      const cx = v.root.x + v.width / 2, cy = v.root.y + v.height / 2;
+      if (Math.abs(cx - anchor.x) > hw || Math.abs(cy - anchor.y) > hh) continue;
+      const n = best > 0 ? b.assignedSurvivorIds.length + (b.isConstructing ? 1 : 0) : 1;
+      if (n <= 0) continue;
+      sx += cx * n; sy += cy * n; sw += n;
+    }
+    return sw > 0 ? { x: sx / sw, y: sy / sw } : anchor;
   }
 
   roomCenter(b: BuildingInstance): { x: number; y: number } {
@@ -1466,6 +1517,7 @@ export class BunkerRenderer {
     hashLayout(state); // [perf] one cheap pass instead of strings joined from every building several times per picture
     this.updateSpan(state);
     if (this.cityHost) this.syncCityLayout(state); // [world:C1]
+    if (this.floors > 0 && state.currentFloors === this.floors + 1) this.celebrateFloor(state, this.floors); // [phase2] a new floor was dug
     if (state.currentFloors !== this.floors || this.structureGloom !== this.gloom || this.undergroundSig !== this.structureSig(state)) this.rebuildStructure(state);
     this.cam.stepCamera(dt); // [camera]
     this.ghost.update(dt); // [plan4:ST-19]
@@ -1475,6 +1527,9 @@ export class BunkerRenderer {
     this.front?.update(now); // [plan4:ST-7] chunks near the camera are built, the ones in view shown, the far ones given back
     this.updateLod(state, dt);
     this.roomViews.render(state);
+    // [phase2] Once the rooms of a load exist, an untouched camera refits so the phone opens on the busy rooms.
+    this.homeSrc = state;
+    if (!this.homed && this.views.size > 0) { this.homed = true; this.cam.homeReady(); }
     this.renderRuins(state);
     this.renderUtilities(state);
     this.updateWingSigns(state);
@@ -1746,11 +1801,14 @@ export class BunkerRenderer {
         view.bar.roundRect(-22, 13, Math.max(3, 44 * pct), 5, 2.5).fill(0xffb547);
       }
     }
+    // [phase2] One ruin gone in a picture is a restore or a clear (a celebration); many at once is a load (none).
+    const gone = this.ruinViews.size - active.size; // every active ruin has its view by now
     for (const [id, view] of this.ruinViews) {
       if (active.has(id)) continue;
       const cx = view.root.x + view.width / 2;
       const cy = view.root.y + ROOM_H * 0.6;
       this.burstAt(cx, cy, view.width);
+      if (gone === 1 && this.onScreen(cx, cy)) this.celebrate({ x: view.root.x, y: view.root.y, w: view.width, h: ROOM_H });
       for (const child of [...view.people.children]) view.people.removeChild(child);
       view.root.destroy({ children: true });
       view.label.destroy({ children: true });
@@ -1809,6 +1867,65 @@ export class BunkerRenderer {
   }
 
   /**
+   * [phase2] A success moment in the world (a room built, upgraded or restored, a floor dug): a soft warm glow swells over the rectangle and
+   * fades (GLOW_S), and when the rectangle is not fully in view the camera eases just enough to frame it (`frame`). The sound and the card
+   * belong to the ceremony (ui/ceremony.ts); this is the picture's part. Reduced motion: nothing (no glow, no camera move); the flash setting
+   * and its budget (flashOk) and the quality ladder (no glow on Low or in lite mode) are respected. One additive sprite, never takes input.
+   */
+  celebrate(r: { x: number; y: number; w: number; h: number }, frame = true): void {
+    if (reducedMotion()) return;
+    if (frame) this.cam.frameRect(r);
+    const low = isLiteMode() || this.postfx?.quality === 'low';
+    if (low || this.glows.length >= GLOW_MAX || !flashOk('celebrate')) return;
+    const s = new Sprite(glowTexture());
+    s.anchor.set(0.5);
+    s.blendMode = 'add';
+    s.tint = GLOW_TINT;
+    s.eventMode = 'none';
+    s.position.set(r.x + r.w / 2, r.y + r.h / 2);
+    s.width = Math.min(900, r.w * 1.5);
+    s.height = r.h * 1.7;
+    s.alpha = 0;
+    this.fxLayer.addChild(s);
+    this.glows.push({ s, sx: s.scale.x, sy: s.scale.y, life: 0 });
+  }
+
+  /** [phase2] RoomViews just burst a room that finished building or levelled up (and punched, so it is on screen): celebrate that room. */
+  private celebrateRoomBurst(): void {
+    const { x, w } = this.roomBurst;
+    for (const v of this.views.values()) {
+      if (Math.abs(v.width - w) > 0.5 || Math.abs(v.root.x + v.width / 2 - x) > 0.5) continue;
+      this.celebrate({ x: v.root.x, y: v.root.y, w: v.width, h: v.height });
+      return;
+    }
+  }
+
+  /** [phase2] A new floor was dug: the glow runs along its strip (the dig ceremony moves the camera, so this does not). */
+  private celebrateFloor(state: GameState, f: number): void {
+    const ex = floorExtent(state, f);
+    let x: number, w: number;
+    if (this.cityHost) { const s = stripX(f, ex); x = s.x0; w = s.x1 - s.x0; } else { x = slotX(f, -ex.w); w = Math.max(1, ex.w + ex.e) * SLOT_W; }
+    this.celebrate({ x, y: floorTop(f), w, h: ROOM_H }, false);
+  }
+
+  /** [phase2] The glows: swell to GLOW_PEAK in the first fifth, then fade out, growing a little. */
+  private updateGlows(dt: number): void {
+    for (let i = this.glows.length - 1; i >= 0; i--) {
+      const g = this.glows[i];
+      g.life += dt;
+      const t = g.life / GLOW_S;
+      if (t >= 1) {
+        g.s.destroy();
+        this.glows.splice(i, 1);
+        continue;
+      }
+      g.s.alpha = GLOW_PEAK * (t < 0.2 ? t / 0.2 : 1 - (t - 0.2) / 0.8);
+      const k = 1 + 0.12 * t;
+      g.s.scale.set(g.sx * k, g.sy * k);
+    }
+  }
+
+  /**
    * Dust cloud when a ruin is cleared. [plan4:GP-2] `count` < 26 is a small burst for the ceremonies.
    * [plan4 perf] The plain motes go into the layer first and the additive ones after them: a blend change breaks the batch, so the old
    * alternation (every third one additive) cost a draw call per mote, this costs two.
@@ -1832,6 +1949,7 @@ export class BunkerRenderer {
   }
 
   private updateBursts(dt: number): void {
+    this.updateGlows(dt); // [phase2]
     for (let i = this.bursts.length - 1; i >= 0; i--) {
       const b = this.bursts[i];
       b.life += dt;

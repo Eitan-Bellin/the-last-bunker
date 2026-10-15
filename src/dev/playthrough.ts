@@ -11,7 +11,7 @@
  * Everything is observed from the DOM (no UI code is changed), so the counts match what the player sees.
  */
 
-interface Hit { kind: 'dialog' | 'story' | 'spotlight' | 'toast' | 'sheet'; text: string; wall: number; game: number }
+interface Hit { kind: 'dialog' | 'story' | 'spotlight' | 'toast' | 'sheet' | 'card'; text: string; wall: number; game: number }
 
 const STAGES = ['d1', 'd4', 'd10', 'd20', 'd35', 'd50', 'd70'];
 
@@ -34,7 +34,10 @@ export function installPlaythrough(getPlayTime: () => number): void {
         else if (el.classList.contains('sheet-overlay') && opened(el, 'open') && !was.includes('open')) push('sheet', el);
       }
       if (m.type === 'childList') {
-        for (const n of m.addedNodes) if (n instanceof HTMLElement && n.classList.contains('toast')) queueMicrotask(() => push('toast', n));
+        for (const n of m.addedNodes) {
+          if (n instanceof HTMLElement && n.classList.contains('toast')) queueMicrotask(() => push('toast', n));
+          else if (n instanceof HTMLElement && n.classList.contains('news-card')) queueMicrotask(() => push('card', n)); // [phase2] non-blocking news cards
+        }
       }
     }
   }).observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ['class'], attributeOldValue: true });
@@ -102,7 +105,12 @@ export function installPlaythrough(getPlayTime: () => number): void {
           if (main) press(main);
           return;
         }
+        const card = [...document.querySelectorAll('.news-card')].find(vis); // [phase2] a knock / news card: take its main button
+        const cardMain = card && [...card.querySelectorAll<HTMLElement>('.btn-primary')].find(b => vis(b) && !b.classList.contains('is-disabled'));
+        if (cardMain && tick % 2 === 0) { press(cardMain); return; }
         const sheet = [...document.querySelectorAll('.sheet-overlay.open')].find(vis);
+        const unread = sheet?.querySelector('.journal-new')?.parentElement; // a new note in the journal: read it, like a player would
+        if (unread && vis(unread)) { unread.click(); return; }
         if (sheet) {
           const main = [...sheet.querySelectorAll<HTMLElement>('.k-btn--primary, .btn-primary')].find(b => vis(b) && !b.classList.contains('is-disabled'));
           if (main && main !== lastPressed) { lastPressed = main; press(main); } // each main button once, then close the sheet
@@ -122,7 +130,7 @@ export function installPlaythrough(getPlayTime: () => number): void {
       return {
         wallSeconds: Math.round((performance.now() - t0) / 1000),
         gameMinutes: Math.round((getPlayTime() - g0) / 60),
-        dialogs: count('dialog'), story: count('story'), spotlights: count('spotlight'), toasts: count('toast'), sheets: count('sheet'),
+        dialogs: count('dialog'), story: count('story'), cards: count('card'), spotlights: count('spotlight'), toasts: count('toast'), sheets: count('sheet'),
         blocking: blocking.map(h => `${Math.round(h.game / 60)}m ${h.kind}: ${h.text}`),
       };
     },

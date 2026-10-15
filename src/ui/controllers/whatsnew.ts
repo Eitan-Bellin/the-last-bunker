@@ -12,7 +12,7 @@ const AFTER_PLAY_S = 1800;
 
 /**
  * [plan4:ST-9] The one-time "what's new" card for a save that came over from v6: the bunker can now grow sideways and upward.
- * It is a source of the dialog queue (lowest priority: everything else goes first), only once the player is in Act II or later,
+ * [phase2] A news card (was the dialog queue's lowest source), only once the player is in Act II or later,
  * the wings are available and the first half hour is over. "Show me" opens the Command panel at its wing line.
  * A new game never owes it (no `whatsnew:v7` flag), so only migrated saves see it, once.
  */
@@ -31,21 +31,20 @@ export class WhatsNewController {
     return state.stats.totalPlayTime >= AFTER_PLAY_S;
   }
 
-  /** Opens the card and marks it seen (a card that was shown once is never owed again). */
-  open(state: GameState): void {
+  /**
+   * Shows the card and marks it seen (a card that was shown once is never owed again). [phase2] A news card now (non-blocking, hides by
+   * itself), never a dialog in a chain: "Show me" opens the Command panel at its wing line. Called a few times a second (inbox.refresh).
+   */
+  offer(state: GameState): void {
+    if (!this.hasDue(state)) return;
     this.app.engine.stateManager.applyDelta({ path: 'storyFlags', value: [...new Set([...state.storyFlags, WHATSNEW_SEEN])] });
-    this.app.audio.play('paper');
-    this.app.modal.show({
-      icon: '[[build]]',
-      title: i18n.t('whatsnew.wings.title'),
-      body: i18n.t('whatsnew.wings.body'),
+    this.app.tips.pushNews({
+      key: 'whatsnew:wings', icon: '[[build]]',
+      text: i18n.t('p2p.whatsnew.wings'),
+      onTimeout: () => this.app.inbox.keepNews({ key: 'whatsnew:wings', icon: '[[build]]', title: i18n.t('p2p.whatsnew.wings'), open: () => this.app.showWingLine() }),
       actions: [
-        {
-          label: i18n.t('whatsnew.wings.show'),
-          className: 'btn-primary',
-          onClick: () => { this.app.modal.hide(); this.app.showWingLine(); },
-        },
-        { label: i18n.t('sys.ok'), className: 'btn-secondary', onClick: () => this.app.modal.hide() },
+        { label: i18n.t('sys.ok'), onPress: () => undefined },
+        { label: i18n.t('whatsnew.wings.show'), primary: true, onPress: () => this.app.showWingLine() },
       ],
     });
   }

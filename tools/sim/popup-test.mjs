@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // [ux-redesign w2a] Interruption rules test: src/ui/popupRules.ts (the dialog queue's order and offer cap, the dialog gate, the tap
-// guard of a fresh dialog ([phase1] pre-open presses only), the quiet after a welcome-back, what back closes, store warnings, the one-toast lane, folding, the stale-save note, welcome back).
+// guard of a fresh dialog ([phase1] pre-open presses only), the quiet after a welcome-back, [phase2] the interruption budget and the first-knock rule, what back closes, store warnings, the one-toast lane, folding, the stale-save note, welcome back).
 // Exit 1 on any problem. Usage: node tools/sim/popup-test.mjs
 import { rmSync } from 'node:fs';
 import { join, resolve, dirname } from 'node:path';
@@ -109,6 +109,48 @@ ok(!P.returningQuiet(10_000, 5_000, true), 'an emergency still comes');
 ok(!P.returningQuiet(5_000 + P.RETURNING_QUIET_MS, 5_000, false), 'two minutes later dialogs flow again');
 ok(!P.returningQuiet(10_000, -Infinity, false), 'no welcome this session: no hold');
 ok(!P.offerSessionReady(599) && P.offerSessionReady(600), 'offers wait for ten minutes of this session');
+
+// ---- [phase2] the interruption budget: one ordinary auto-dialog per 3 min (5 min until 30 min after the tutorial) ---------------------
+eq(P.BUDGET_GAP_MS, 180_000, 'budget gap is 3 minutes');
+eq(P.BUDGET_GAP_EARLY_MS, 300_000, 'early budget gap is 5 minutes');
+eq(P.budgetGapMs(120, null), P.BUDGET_GAP_EARLY_MS, 'during the tutorial: the early gap');
+eq(P.budgetGapMs(1000 + P.BUDGET_EARLY_S - 1, 1000), P.BUDGET_GAP_EARLY_MS, 'just under 30 min after the tutorial: still early');
+eq(P.budgetGapMs(1000 + P.BUDGET_EARLY_S, 1000), P.BUDGET_GAP_MS, '30 min after the tutorial: 3 minutes');
+ok(!P.budgetBlocks(1000, -Infinity, P.BUDGET_GAP_MS, false), 'nothing opened yet: the first ordinary dialog passes');
+ok(P.budgetBlocks(1000 + 60_000, 1000, P.BUDGET_GAP_MS, false), '1 min after the last one: an ordinary dialog waits');
+ok(P.budgetBlocks(1000 + P.BUDGET_GAP_MS - 1, 1000, P.BUDGET_GAP_MS, false), 'just under the gap: still waits');
+ok(!P.budgetBlocks(1000 + P.BUDGET_GAP_MS, 1000, P.BUDGET_GAP_MS, false), 'at the gap: it may land');
+ok(!P.budgetBlocks(1000 + 10, 1000, P.BUDGET_GAP_MS, true), 'an emergency (or exempt source) always passes');
+// A simulated half hour after the tutorial: a pile of ordinary sources every 30 s, one emergency at 4 min. The budget lets one ordinary
+// dialog through per gap, the emergency at once (spending nothing), and nothing is lost (the rest wait, still ready).
+{
+  const gap = P.BUDGET_GAP_EARLY_MS;
+  let last = -Infinity;
+  const opened = [];
+  const waiting = [];
+  for (let t = 0; t <= 30 * 60_000; t += 30_000) {
+    waiting.push({ id: `soft@${t}`, critical: false });
+    if (t === 240_000) waiting.unshift({ id: 'raid', critical: true });
+    const top = waiting[0];
+    if (P.budgetBlocks(t, last, gap, top.critical)) continue;
+    waiting.shift();
+    opened.push({ id: top.id, t });
+    if (!top.critical) last = t;
+  }
+  const soft = opened.filter(o => o.id !== 'raid');
+  ok(soft.every((o, i) => i === 0 || o.t - soft[i - 1].t >= gap), 'ordinary auto-dialogs are at least the gap apart');
+  ok(soft.length <= Math.floor(30 * 60_000 / gap) + 1, `at most one per gap in 30 min (got ${soft.length})`);
+  eq(opened.find(o => o.id === 'raid')?.t, 240_000, 'the emergency lands at once');
+  eq(soft.length + waiting.filter(w => !w.critical).length, 61, 'nothing is dropped: the rest still wait');
+}
+
+// ---- [phase2] the door: only the first knock of a game is a dialog -------------------------------------------------------------------
+eq(P.knockWay(false, false, true), 'dialog', 'the first knock opens its dialog (it teaches the door)');
+eq(P.knockWay(false, true, true), 'dialog', 'the first knock is a dialog even with "let them in by themselves" on');
+eq(P.knockWay(true, false, true), 'card', 'a later knock is a card, not a dialog');
+eq(P.knockWay(true, true, true), 'auto', 'auto on and a bed free: they walk in');
+eq(P.knockWay(true, true, false), 'card', 'auto on but no bed (or the food is short): a card');
+eq(P.knockWay(true, false, false), 'card', 'nothing possible: still a card (its button opens the details)');
 
 // ---- back closes the top layer only -------------------------------------------------------------------------------------------------
 const b0 = { touring: false, modalOpen: false, modalDismiss: null, placing: false, readerOpen: false, surfaceOpen: false, sheetOpen: false };

@@ -310,3 +310,16 @@ body.intro-active .hud-bottom { visibility: hidden; }
 :root[data-large="on"] .coupon-amount { min-height: var(--tap); }
 :root[data-large="on"] .modal-actions, :root[data-large="on"] .btn-row, :root[data-large="on"] .person-actions { gap: 8px; }
 :root[data-large="on"] .vol-slider { height: var(--tap); }
+
+/* [phase2] The news card (controllers/tips.ts showNews): the gesture-tip slot with a narrow icon column instead of the 76 px gesture
+   picture, so a 320 px phone keeps the line wide. tips.ts may drop its two inline icon styles once this is merged. */
+.gesture-tip.news-card { grid-template-columns: var(--sp-7) minmax(0, 1fr); border-color: var(--primary); }
+.gesture-tip.news-card .news-icon {
+  justify-self: center;
+  display: inline-flex;
+  line-height: 0;
+  font-size: calc(var(--type-headline) * var(--fs, 1));
+  color: var(--primary);
+}
+.gesture-tip.news-card .news-icon .ic { width: var(--sp-6); height: var(--sp-6); }
+.gesture-tip.news-card .tip-text { font-weight: var(--weight-medium); }

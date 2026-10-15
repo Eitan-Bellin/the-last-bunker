@@ -67,6 +67,32 @@ export function ghostHand(kind: TipDef['ghost'], extraClass = ''): HTMLElement {
   return ghost;
 }
 
+/**
+ * [phase2] A news card: a non-blocking card in the tip slot (above the nav) for things that used to open a dialog of their own (a find,
+ * a knock at the door after the first, what's new, a system that opened mid-Act). It hides by itself; whatever it offered stays
+ * reachable from the bell or the journal, so nothing is lost when it goes. One at a time, in the order they came.
+ */
+export interface NewsCard {
+  /** Same key = same card (queued once; `dropNews` takes it back). */
+  key: string;
+  icon: string;
+  text: string;
+  /** One or two buttons in the first row (the last one is the main one); more go to a second row. */
+  actions: { label: string; primary?: boolean; onPress: () => void }[];
+  /** Shows even in the quiet minutes after a welcome-back (a knock at the door). */
+  urgent?: boolean;
+  /** It hid by itself, unanswered (the bell or journal still has it). */
+  onTimeout?: () => void;
+  /** Still worth showing (checked when its turn comes; false drops it). */
+  valid?: () => boolean;
+  /** The sound it comes with (default: paper). */
+  sound?: Parameters<GameApp['audio']['play']>[0];
+}
+
+/** [phase2] A news card stays up this long (relaxed timing doubles it), and the next one waits this long after it. */
+const NEWS_MS = 12_000;
+const NEWS_GAP_MS = 4_000;
+
 /** Time between two tips (ms): they teach one thing at a time. */
 const GAP_MS = 40_000;
 const SHOW_MS = 14_000;
@@ -85,6 +111,10 @@ export class TipsController {
   private cardDef: TipDef | null = null;
   private hideTimer = 0;
   private downs: { t: number; x: number; y: number }[] = [];
+  /** [phase2] News cards waiting their turn, and the one on screen (shares the tip slot: one card at a time). */
+  private news: NewsCard[] = [];
+  private newsDef: NewsCard | null = null;
+  private lastNewsAt = -Infinity;
 
   constructor(app: GameApp) {
     this.app = app;
@@ -151,6 +181,23 @@ export class TipsController {
     return !!this.card;
   }
 
+  /** [phase2] Queues a news card (a card with the same key already waiting or showing is kept, not doubled). */
+  pushNews(card: NewsCard): void {
+    if (this.newsDef?.key === card.key || this.news.some(n => n.key === card.key)) return;
+    this.news.push(card);
+  }
+
+  /** [phase2] Takes a news card back (answered elsewhere: the dialog, the bell). */
+  dropNews(key: string): void {
+    this.news = this.news.filter(n => n.key !== key);
+    if (this.newsDef?.key === key) this.hide(false);
+  }
+
+  /** [phase2] A news card with this key is waiting or on screen. */
+  hasNews(key: string): boolean {
+    return this.newsDef?.key === key || this.news.some(n => n.key === key);
+  }
+
   /** Called every frame; looks about twice a second. Shows at most one tip, and only in a calm moment. */
   update(now: number): void {
     const app = this.app;
@@ -162,14 +209,60 @@ export class TipsController {
     }
     if (now - this.lastCheck < CHECK_MS) return;
     if (app.onboarding?.holdsScreen) return; // [ux-redesign W3a] one teacher at a time
+    // [phase2] News first (a knock at the door may come in the quiet minutes after a welcome-back; the rest waits them out).
+    if (!this.card && this.news.length && now - this.lastNewsAt >= NEWS_GAP_MS && this.calm()) {
+      this.news = this.news.filter(n => n.valid?.() !== false);
+      const quiet = !!app.dialogs?.quietAfterWelcome(now);
+      const at = this.news.findIndex(n => n.urgent || !quiet);
+      if (at >= 0 && app.dialogGate(false)) {
+        this.lastCheck = now;
+        this.showNews(this.news.splice(at, 1)[0]);
+        return;
+      }
+    }
     if (app.dialogs?.quietAfterWelcome(now)) return; // [phase1] nothing auto in the first two minutes after a welcome-back
     this.lastCheck = now;
     const s = app.state;
-    if (this.card || now - this.lastTipAt < GAP_MS) return;
-    if (!s.storyFlags.includes('intro:done') || app.introPlaying || app.storyOpen || app.modal.isVisible || app.welcomeOpen) return;
-    if (app.placementMode || app.anyPanelOpen() || !app.dialogGate(false)) return;
+    if (this.card || now - this.lastTipAt < GAP_MS || now - this.lastNewsAt < NEWS_GAP_MS) return;
+    if (!s.storyFlags.includes('intro:done') || !this.calm() || !app.dialogGate(false)) return;
     const next = TIPS.find(t => !this.seen(t.flag) && t.due(s, this));
     if (next) this.show(next);
+  }
+
+  /** Nothing else holds the screen (a tip or a news card may come up). */
+  private calm(): boolean {
+    const app = this.app;
+    if (!app.state?.storyFlags.includes('intro:done')) return false;
+    return !(app.introPlaying || app.storyOpen || app.modal.isVisible || app.welcomeOpen || app.placementMode || app.anyPanelOpen()
+      || app.loreReader.isVisible || app.storyDialog.isVisible);
+  }
+
+  /** [phase2] A news card in the tip slot: icon, one line, its buttons; it hides by itself (the bell or journal keeps what it offered). */
+  private showNews(n: NewsCard): void {
+    this.newsDef = n;
+    const card = el('div', 'gesture-tip news-card');
+    card.setAttribute('role', 'status');
+    const icon = el('span', 'news-icon', n.icon);
+    icon.setAttribute('aria-hidden', 'true');
+    card.append(icon, el('p', 'tip-text', n.text));
+    const btn = (a: NewsCard['actions'][number]) => kButton({
+      variant: a.primary ? 'primary' : 'secondary', className: `${a.primary ? 'btn-primary' : 'btn-secondary'} tip-btn`, label: a.label,
+      onPress: () => { this.hide(false); a.onPress(); },
+    });
+    const first = n.actions.slice(0, 2), rest = n.actions.slice(2);
+    const row = el('div', 'tip-actions');
+    row.append(...first.map(btn));
+    card.appendChild(row);
+    if (rest.length) {
+      const row2 = el('div', 'tip-actions');
+      row2.append(...rest.map(btn));
+      card.appendChild(row2);
+    }
+    document.body.appendChild(card);
+    this.card = card;
+    requestAnimationFrame(() => card.classList.add('in'));
+    this.app.audio.play(n.sound ?? 'paper');
+    this.hideTimer = window.setTimeout(() => { const d = this.newsDef; this.hide(false); d?.onTimeout?.(); }, relaxedMs(NEWS_MS));
   }
 
   private show(def: TipDef): void {
@@ -197,7 +290,10 @@ export class TipsController {
   defer(): void {
     this.app.onboarding?.defer(); // [ux-redesign W3a] an emergency dialog puts the spotlight away too (it comes back when calm)
     if (!this.card) return;
+    // [phase2] A news card put away by a dialog goes back to the front of the line (not lost).
+    const news = this.newsDef;
     this.hide(false);
+    if (news) { this.news.unshift(news); return; }
     this.lastTipAt = performance.now() - GAP_MS + RETRY_MS;
   }
 
@@ -206,12 +302,15 @@ export class TipsController {
     window.clearTimeout(this.hideTimer);
     const card = this.card;
     const def = this.cardDef;
+    const news = this.newsDef;
     this.card = null;
     this.cardDef = null;
+    this.newsDef = null;
     if (!card) return;
     if (read && def) this.mark(def.flag);
     card.classList.remove('in');
-    this.lastTipAt = performance.now();
+    if (news) this.lastNewsAt = performance.now(); // [phase2] a news card does not push the next gesture tip back by the full gap
+    else this.lastTipAt = performance.now();
     window.setTimeout(() => card.remove(), 300);
   }
 }

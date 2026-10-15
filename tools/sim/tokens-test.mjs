@@ -175,6 +175,17 @@ kitCss.split('\n').forEach((line, i) => {
   if (/\b(margin|padding|border)-(left|right)\b|\b(left|right):/.test(line) && !/k-tip-x/.test(line)) fail(`kit.css:${i + 1}: physical left/right (use logical properties for RTL): ${line.trim()}`);
 });
 
+// ---- 7b. [phase2] hud.css: token colours only, no new z-index numbers, and the one-row HUD stays one row --------------------------------
+const hudCss = stripComments(read('src/styles/hud.css'));
+hudCss.split('\n').forEach((line, i) => {
+  if (/#[0-9a-f]{3,8}\b(?![\w-])|rgba?\(|hsla?\(/i.test(line.replace(/#hud[\w-]*/g, ''))) fail(`hud.css:${i + 1}: raw colour (use a token): ${line.trim()}`);
+  const z = /z-index:\s*([^;]+);/.exec(line);
+  if (z && !/var\(--z-/.test(z[1]) && !/^-?1$|^0$/.test(z[1].trim())) fail(`hud.css:${i + 1}: z-index ${z[1]} (use a --z-* token)`);
+});
+if (/\.hx-info\b/.test(hudCss)) fail('hud.css: the second HUD row (.hx-info) is back; the HUD is one row (ui-architecture fix 8)');
+const hudTs = read('src/ui/HUD.ts');
+if (/'hx-info'/.test(hudTs)) fail('HUD.ts: builds a second info row (.hx-info); the HUD is one row');
+
 // ---- 8. fonts are self-hosted -----------------------------------------------------------------------------------------------------------
 const html = read('index.html');
 if (/fonts\.googleapis\.com/.test(html)) fail('index.html still loads Google Fonts over the network');

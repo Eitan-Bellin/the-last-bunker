@@ -1,0 +1,223 @@
+{
+ "wallSeconds": 219,
+ "gameMinutes": 10,
+ "dialogs": 0,
+ "story": 1,
+ "cards": 0,
+ "spotlights": 1,
+ "toasts": 3,
+ "sheets": 0,
+ "blocking": [
+  "10m story: פרק 1 קול ברעש הלבן"
+ ],
+ "state": {
+  "paused": true,
+  "morale": 27,
+  "people": 4,
+  "power": 50,
+  "food": 0,
+  "playSeconds": 578
+ },
+ "samples": [
+  {
+   "paused": false,
+   "morale": 65,
+   "people": 3,
+   "power": 20,
+   "food": 143,
+   "playSeconds": 30
+  },
+  {
+   "paused": false,
+   "morale": 60,
+   "people": 3,
+   "power": 50,
+   "food": 145,
+   "playSeconds": 106
+  },
+  {
+   "paused": false,
+   "morale": 56,
+   "people": 4,
+   "power": 50,
+   "food": 125,
+   "playSeconds": 181
+  },
+  {
+   "paused": false,
+   "morale": 52,
+   "people": 4,
+   "power": 50,
+   "food": 100,
+   "playSeconds": 257
+  },
+  {
+   "paused": false,
+   "morale": 50,
+   "people": 4,
+   "power": 50,
+   "food": 76,
+   "playSeconds": 333
+  },
+  {
+   "paused": false,
+   "morale": 53,
+   "people": 4,
+   "power": 50,
+   "food": 47,
+   "playSeconds": 409
+  },
+  {
+   "paused": false,
+   "morale": 40,
+   "people": 4,
+   "power": 50,
+   "food": 23,
+   "playSeconds": 484
+  },
+  {
+   "paused": false,
+   "morale": 32,
+   "people": 4,
+   "power": 50,
+   "food": 0,
+   "playSeconds": 559
+  },
+  {
+   "paused": false,
+   "morale": 16,
+   "people": 4,
+   "power": 50,
+   "food": 0,
+   "playSeconds": 634
+  },
+  {
+   "paused": false,
+   "morale": 36,
+   "people": 4,
+   "power": 50,
+   "food": 11,
+   "playSeconds": 519
+  },
+  {
+   "paused": false,
+   "morale": 35,
+   "people": 4,
+   "power": 50,
+   "food": 7,
+   "playSeconds": 535
+  },
+  {
+   "paused": false,
+   "morale": 33,
+   "people": 4,
+   "power": 50,
+   "food": 2,
+   "playSeconds": 550
+  },
+  {
+   "paused": false,
+   "morale": 30,
+   "people": 4,
+   "power": 50,
+   "food": 0,
+   "playSeconds": 565
+  },
+  {
+   "paused": true,
+   "morale": 27,
+   "people": 4,
+   "power": 50,
+   "food": 0,
+   "playSeconds": 578
+  },
+  {
+   "paused": true,
+   "morale": 27,
+   "people": 4,
+   "power": 50,
+   "food": 0,
+   "playSeconds": 578
+  },
+  {
+   "paused": true,
+   "morale": 27,
+   "people": 4,
+   "power": 50,
+   "food": 0,
+   "playSeconds": 578
+  },
+  {
+   "paused": true,
+   "morale": 27,
+   "people": 4,
+   "power": 50,
+   "food": 0,
+   "playSeconds": 578
+  },
+  {
+   "paused": true,
+   "morale": 27,
+   "people": 4,
+   "power": 50,
+   "food": 0,
+   "playSeconds": 578
+  },
+  {
+   "paused": true,
+   "morale": 27,
+   "people": 4,
+   "power": 50,
+   "food": 0,
+   "playSeconds": 578
+  },
+  {
+   "paused": true,
+   "morale": 27,
+   "people": 4,
+   "power": 50,
+   "food": 0,
+   "playSeconds": 578
+  },
+  {
+   "paused": true,
+   "morale": 27,
+   "people": 4,
+   "power": 50,
+   "food": 0,
+   "playSeconds": 578
+  },
+  {
+   "paused": true,
+   "morale": 27,
+   "people": 4,
+   "power": 50,
+   "food": 0,
+   "playSeconds": 578
+  },
+  {
+   "paused": true,
+   "morale": 27,
+   "people": 4,
+   "power": 50,
+   "food": 0,
+   "playSeconds": 578
+  },
+  {
+   "paused": true,
+   "morale": 27,
+   "people": 4,
+   "power": 50,
+   "food": 0,
+   "playSeconds": 578
+  }
+ ],
+ "config": {
+  "base": "http://localhost:5175",
+  "minutes": 30,
+  "speed": 5,
+  "stage": "",
+  "away": 0,
+  "lang": "he"
+ }
+}

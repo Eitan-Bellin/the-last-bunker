@@ -52,7 +52,7 @@ type Stage =
 interface Guided { id: string; target: () => HTMLElement | null; text: string }
 
 /** Nav tabs that can be closed early on. Research is not one: it runs without a Laboratory (the lab speeds it up and makes knowledge). */
-const LOCKABLE: NavKey[] = ['surface'];
+const LOCKABLE: NavKey[] = ['surface', 'research']; // [phase2] research: locked until a lab is built (HUD.navLockText)
 const navTab = (key: string) => document.querySelector<HTMLElement>(`#hud-nav .hx-tab[data-key="${key}"]`);
 
 export class OnboardingController {
@@ -338,6 +338,7 @@ export class OnboardingController {
       const node = RESEARCH.find(r => r.effects.some(e => e.type === 'feature' && e.feature === 'surface'));
       return i18n.t('ux2d.surface.needs', { name: node ? node.name[i18n.currentLocale] ?? node.name.en : '' });
     }
+    if (key === 'research') return this.app.hud.navLockText('research'); // [phase2]
     return null;
   }
 
@@ -431,7 +432,7 @@ export class OnboardingController {
    * Returns false when this player already had it (or skipped the tutorial).
    */
   guideTo(spot: SpotKey, id: string): boolean {
-    const target = (): HTMLElement | null => spot === 'inbox' || spot === 'season' ? document.querySelector<HTMLElement>('.hx-alerts')
+    const target = (): HTMLElement | null => spot === 'inbox' ? document.querySelector<HTMLElement>('.hx-alerts') : spot === 'season' ? document.querySelector<HTMLElement>('.hx-act')
       : spot === 'era' ? document.querySelector<HTMLElement>('.hx-act') : navTab(spot);
     return this.enqueue({ id: `sys:${id}`, target, text: i18n.t('ux3a.guide.here') });
   }

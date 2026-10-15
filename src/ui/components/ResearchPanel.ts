@@ -15,6 +15,7 @@ import { kButton, kRow, kTabs, kEmpty, setKButtonHighlighted } from '../kit';
 import { uiSound } from '../../audio/uiSound';
 import { genesisRequirements } from './MenuPanel';
 import '../../styles/research.css';
+import '../../styles/screens-p2.css'; // [phase2]
 
 /** [ux-redesign W2d] A node another panel asked to show (Surface: "Research Hazmat Suits"): consumed by the next show(). */
 let pendingFocus: string | null = null;
@@ -119,6 +120,15 @@ export class ResearchPanel {
     const rs = this.engine.researchSystem;
     this.sheet.setTitle(`[[research]] ${i18n.t('research.title')}`);
     const root = el('div', 'bp');
+    // [phase2] Nothing begun and nothing can start yet (Act I): one line that says when research opens, no empty branch tabs.
+    const notYet = this.notYet(state);
+    if (notYet) {
+      root.appendChild(notYet);
+      this.activeBar = null;
+      this.activeTime = null;
+      this.sheet.body.replaceChildren(root);
+      return;
+    }
 
     const head = el('div', 'bp-card research-head');
     const activeId = rs.activeId(state);
@@ -238,6 +248,47 @@ export class ResearchPanel {
       root.appendChild(kButton({ variant: 'secondary', label: `[[isotope7]] ${i18n.t('genesis.open')}`, onPress: () => this.onOpenGenesis?.() }));
     }
     this.sheet.body.replaceChildren(root);
+  }
+
+  /**
+   * [phase2] The card for a bunker that cannot research yet: nothing done, running or queued (no refinement either) and no node that
+   * can start now. It says what the first research waits for (the cheapest open node's missing price, and the room that makes it, as
+   * a way there), or the Act research opens in. Null once anything can start or has been begun.
+   */
+  private notYet(state: GameState): HTMLElement | null {
+    const rs = this.engine.researchSystem;
+    const ids = [...RESEARCH.map(r => r.id), ...REFINEMENTS.map(r => r.id)];
+    if (ids.some(id => { const st = rs.status(state, id); return st === 'done' || st === 'active' || st === 'queued' || rs.canStart(state, id); })) return null;
+    if (REFINEMENTS.some(r => refinementLevel(state, r.id) > 0)) return null;
+    const card = el('div', 'bp-card research-head p2s-research-wait');
+    const open = RESEARCH.filter(r => rs.status(state, r.id) === 'available');
+    const total = (d: ResearchDef) => Object.values(d.cost as Record<string, number>).reduce((s, v) => s + v, 0);
+    const first = [...open].sort((a, b) => total(a) - total(b) || a.tier - b.tier)[0];
+    if (!first) {
+      const act = state.longGame?.meta.act ?? 1;
+      const next = Math.min(...RESEARCH.map(r => r.act ?? 1).filter(n => n > act));
+      card.appendChild(el('div', 'p2s-research-wait__line', `[[lock]] ${isFinite(next) ? i18n.t('p2s.research.opensAct', { n: next }) : i18n.t('p2s.research.later')}`));
+      return card;
+    }
+    const cost = first.cost as Record<string, number>;
+    const short = missingList(state, cost);
+    const room = short.length ? this.producerFor(state, short[0].resource) : null;
+    if (room) {
+      const roomName = getDef(room)?.name[i18n.currentLocale] ?? room;
+      const s0 = short[0];
+      card.appendChild(el('div', 'p2s-research-wait__line', `[[lock]] ${i18n.t('p2s.research.needRoom', { n: fmtCost(s0.need), icon: RESOURCE_ICONS[s0.resource] ?? '', name: i18n.t(`resources.${s0.resource}`), room: roomName })}`));
+      if (this.onGo) {
+        card.appendChild(kButton({
+          variant: 'secondary',
+          className: 'btn-secondary research-route',
+          label: `${i18n.t('p2s.research.build', { room: roomName })} ${flowArrow()}`,
+          onPress: () => this.onGo?.({ kind: 'build', type: room }),
+        }));
+      }
+    } else {
+      card.appendChild(el('div', 'p2s-research-wait__line', `[[lock]] ${i18n.t('p2s.research.wait', { what: short.length ? describeMissing(state, cost) : i18n.t('p2s.research.soon') })}`));
+    }
+    return card;
   }
 
   /** A folded group: a summary line (48 px) that opens a short list of names. */

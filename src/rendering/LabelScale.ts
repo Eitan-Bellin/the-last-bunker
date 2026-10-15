@@ -16,9 +16,12 @@ export const LABEL_SCREEN_PX = 11;
 // 3.2 keeps them at their 11 screen px up to the camera's 3x zoom limit (and a little beyond).
 export const LABEL_MIN_WORLD = 3.2;
 /** [plan4:polish] The smallest a tag may be drawn on the glass when it has to shrink to fit its room (the readability floor). */
-export const LABEL_FLOOR_SCREEN_PX = 10;
+// [phase2] was 10: a room name is never under 11 css px on a phone (it is cut with an ellipsis or staggered instead of shrinking further).
+export const LABEL_FLOOR_SCREEN_PX = 11;
 export const LABEL_MAX_WORLD = 22;
-export const LABEL_ICON_ZOOM = 0.7;
+// [phase2] was 0.7: the city's phone home zoom can sit at 0.62-0.7 (narrow phones: people >= 30 px), and there the tags were colour chips only.
+// Names now show down to 0.6, so the default view always names its rooms; below that (the overview) the chips stay.
+export const LABEL_ICON_ZOOM = 0.6;
 export const LABEL_HIDE_ZOOM = 0.45;
 /** Text size the screen px above were designed for (a11y TEXT_SCALES default); the setting scales them, capped at 1.4. */
 const DESIGN_TEXT_SCALE = 1.1;

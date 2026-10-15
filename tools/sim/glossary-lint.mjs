@@ -28,7 +28,7 @@ const RULES = [
   { re: /מטבע המערכה/, use: 'משאב המערכה / "מה שהמחירים במערכה דורשים"' },
   { re: new RegExp(`${B}${P}מורשת${E}`), use: 'איזוטופ-7 (the Genesis payout)' },
   { re: /תיבת יום|תיבת היום/, use: 'מטמון היום (the day chest)' },
-  { re: new RegExp(`${B}${P}תיבה${E}`), use: 'תיבת ההחלטות (inbox) / מטמון היום (day chest); "התיבה" only for the Ark ending', allow: /חבר העמים|^התיבה$/ },
+  { re: new RegExp(`${B}${P}תיבה${E}`), use: 'הודעות (the inbox) / מטמון היום (day chest); "התיבה" only for the Ark ending', allow: /חבר העמים|^התיבה$/ },
   { re: new RegExp(`${B}${P}דיירי?ם?${E}(?! הקודמים)`), use: 'ניצולים (the bunker\'s people; "הדיירים הקודמים" only for the old residents in the lore)', allow: /41 הדיירים/ },
   // [ux-redesign final] the bare word too ("שני שורדים" slipped through when only the prefixed forms were caught)
   { re: new RegExp(`${B}(?:ה|ל|מה|של|ו|וה|ב|כ)?שורד(ים)?${E}`), use: 'ניצול / ניצולים (survivors)', allow: /משקמים את בונקר 17 ושורדים/ }, // the verb ("and survive") is fine

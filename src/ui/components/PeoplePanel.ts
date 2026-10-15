@@ -17,9 +17,12 @@ import { flowArrow } from '../rtl'; // [plan4:UX-22]
 import { jobRoom } from '../HUD'; // [ux-wp4] B4
 import { kButton } from '../kit'; // [ux2e]
 import { reducedMotion } from '../../utils/a11y';
+import '../../styles/screens-p2.css'; // [phase2]
 
 /** [ux2e #29] Filters (one chip row) only above this many people; below it every survivor fits on a phone anyway. */
 const FILTER_FROM = 12;
+/** [phase2] The fit score that fills the "fit for the job" bar: a key skill of 10 (the best a newcomer rolls), or less plus a suiting trait. */
+const FIT_FULL = 10;
 
 interface Bars {
   health: HTMLElement;
@@ -363,16 +366,13 @@ export class PeoplePanel {
     const jobText = s.isOnMission ? `[[backpack]] ${i18n.t('wp4.onMission')}` : this.jobLabel(state, s);
     const main = el('span', 'pr-main');
     main.append(name, el('span', `pr-job${job || s.child || s.isOnMission || s.assignedBuildingId ? '' : ' warn'}`, jobText));
-    // [ux2e #29] A small card: the five skills as icon + number (the room's key skill marked), then health and morale bars.
-    const jobStat = job ? getDef(job.type)?.optimalStat : undefined;
-    const skills = el('span', 'ux2e-skills');
-    for (const k of STAT_KEYS) {
-      const chip = el('span', `ux2e-skill${k === jobStat ? ' active' : ''}`, `${STAT_ICONS[k]} ${s.stats[k]}`);
-      chip.title = i18n.t(`stats.${k}`);
-      chip.setAttribute('aria-label', `${i18n.t(`stats.${k}`)} ${s.stats[k]}`);
-      skills.appendChild(chip);
-    }
+    // [phase2] A small card says two things in words instead of five bare numbers: the person's best skill by name, and (with a job)
+    // how well they fit it as one bar. Every skill is on the full card (a tap). Then the health and morale bars, as before.
+    const top = STAT_KEYS.reduce((a, k) => (s.stats[k] > s.stats[a] ? k : a), STAT_KEYS[0]);
+    const skills = el('span', 'ux2e-skills p2s-topstat');
+    skills.appendChild(el('span', 'ux2e-skill', `${STAT_ICONS[top]} ${i18n.t('p2s.people.best', { stat: i18n.t(`stats.${top}`), n: s.stats[top] })}`));
     main.appendChild(skills);
+    if (job && !s.child && !s.isOnMission && getDef(job.type)?.optimalStat) main.appendChild(this.fitBar(s, job.type, locale));
     const bars = el('span', 'ux2e-minibars');
     const health = bar(s.health, 'health');
     const morale = bar(s.happiness, 'happiness');
@@ -389,6 +389,22 @@ export class PeoplePanel {
       this.refresh(this.engine.stateManager.state);
     });
     return row;
+  }
+
+  /**
+   * [phase2] "Fit for the Farm" and one bar: the room's key skill out of FIT_FULL, a trait that suits the room counts as in fitScore.
+   * The word under the bar (good / fair / poor) says it without colour.
+   */
+  private fitBar(s: SurvivorState, type: BuildingType, locale: string): HTMLElement {
+    const pct = Math.min(100, Math.round((fitScore(s, type) / FIT_FULL) * 100));
+    const word = i18n.t(pct >= 70 ? 'p2s.people.fitGood' : pct >= 40 ? 'p2s.people.fitFair' : 'p2s.people.fitPoor');
+    const room = getDef(type)?.name[locale] ?? getDef(type)?.name.en ?? type;
+    const box = el('span', 'p2s-fit');
+    const track = bar(pct, pct >= 70 ? 'health' : 'accent');
+    track.setAttribute('role', 'img');
+    track.setAttribute('aria-label', `${i18n.t('p2s.people.fit', { room })}: ${word}`);
+    box.append(el('span', 'p2s-fit__label', `${BUILDING_ICONS[type] ?? ''} ${i18n.t('p2s.people.fit', { room })}`), track, el('span', 'p2s-fit__word', word));
+    return box;
   }
 
   /** Family tree: founding couples at the top, each child under its parents, grandchildren under them. */

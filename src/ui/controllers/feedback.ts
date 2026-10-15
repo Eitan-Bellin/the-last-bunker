@@ -454,23 +454,7 @@ export class FeedbackController {
     });
 
     // [Long game] A new Act: its title card once nothing else holds the screen, and the beds it opens fill again.
-    bus.on('act:advance', (n: unknown) => {
-      const act = ACTS[(n as number) - 1];
-      if (!act) return;
-      this.app.engine.requestSave();
-      // [plan4:GP-2] The camera steps back to show the whole bunker, the sting plays, then the title card opens (the ceremony's beat); closing the card
-      // takes the camera back to where the player had it. If the ceremony is off (reduced motion keeps the sound, a hidden page skips it) the card opens at once.
-      const cam = this.app.renderer.camera;
-      const back = { x: cam.camX, y: cam.camY, z: cam.zoom };
-      const show = () => {
-        if (this.app.storyOpen || this.app.modal.isVisible || document.querySelector('.era-banner')) { setTimeout(show, 1500); return; }
-        this.app.storyOpen = true;
-        this.app.closeSheets();
-        showActBanner(act, () => { this.app.storyOpen = false; if (!reducedMotion()) cam.focusTo(back.x, back.y, back.z); });
-      };
-      this.app.renderer.shake(4, 1);
-      void this.app.ceremony.fire({ kind: 'act', beat: show });
-    });
+    bus.on('act:advance', (n: unknown) => this.showActCard(n as number));
     // [P2] The turn of the seasons.
     bus.on('season:change', (id: unknown) => {
       const s = SEASONS.find(x => x.id === id);
@@ -523,5 +507,27 @@ export class FeedbackController {
       this.app.renderer.focusFloor(floor as number);
       void this.app.ceremony.fire({ kind: 'dig', floor: floor as number, side: side as 'w' | 'e', icon: '[[pick]]', title: i18n.t('wing.done', { n: (floor as number) + 1, side: i18n.t(`wing.side.${side as string}`) }) }); // [plan4:GP-2]
     });
+  }
+
+  /**
+   * [Long game] A new Act: its title card once nothing else holds the screen. [phase2] Public: on a cold start the Act may have begun
+   * during the catch-up, before this controller listened; the app then calls this after the welcome-back (dialog source 'actCard').
+   */
+  showActCard(n: number): void {
+    const act = ACTS[n - 1];
+    if (!act) return;
+    this.app.engine.requestSave();
+    // [plan4:GP-2] The camera steps back to show the whole bunker, the sting plays, then the title card opens (the ceremony's beat); closing the card
+    // takes the camera back to where the player had it. If the ceremony is off (reduced motion keeps the sound, a hidden page skips it) the card opens at once.
+    const cam = this.app.renderer.camera;
+    const back = { x: cam.camX, y: cam.camY, z: cam.zoom };
+    const show = () => {
+      if (this.app.storyOpen || this.app.modal.isVisible || document.querySelector('.era-banner')) { setTimeout(show, 1500); return; }
+      this.app.storyOpen = true;
+      this.app.closeSheets();
+      showActBanner(act, () => { this.app.storyOpen = false; if (!reducedMotion()) cam.focusTo(back.x, back.y, back.z); });
+    };
+    this.app.renderer.shake(4, 1);
+    void this.app.ceremony.fire({ kind: 'act', beat: show });
   }
 }

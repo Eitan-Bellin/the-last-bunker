@@ -1,0 +1,58 @@
+{
+ "wallSeconds": 121,
+ "gameMinutes": 9,
+ "dialogs": 3,
+ "story": 0,
+ "cards": 1,
+ "spotlights": 26,
+ "toasts": 12,
+ "sheets": 22,
+ "blocking": [
+  "0m dialog: כמה קשה העולם שם בחוץ? \"שומר\" הוא המשחק כפי שתוכנן. הבחירה קבועה לבונקר הזה: אי אפשר לשנות",
+  "3m dialog: דפיקות בדלת מצלמת הכניסה מראה דמות אחת, עטופה בסמרטוטים. יגאל מרים ידיים לאט: \"אני לבד. אנ",
+  "6m dialog: סוחר נודד חריקת גלגלים במעלה הרמפה. סוחר עם עגלה עמוסה מנופף לשומר: \"אל תירו, באתי לעשות ע"
+ ],
+ "state": {
+  "paused": false,
+  "morale": 19,
+  "people": 4,
+  "power": 50,
+  "food": 0,
+  "playSeconds": 562,
+  "strip": "קראו את הפתק ביומן",
+  "sheet": "",
+  "rooms": 2
+ },
+ "samples": [
+  {
+   "paused": false,
+   "morale": 35,
+   "people": 4,
+   "power": 50,
+   "food": 11,
+   "playSeconds": 485,
+   "strip": "קראו את הפתק ביומן",
+   "sheet": "",
+   "rooms": 2
+  },
+  {
+   "paused": false,
+   "morale": 20,
+   "people": 4,
+   "power": 50,
+   "food": 0,
+   "playSeconds": 561,
+   "strip": "קראו את הפתק ביומן",
+   "sheet": "",
+   "rooms": 2
+  }
+ ],
+ "config": {
+  "base": "http://localhost:5175",
+  "minutes": 10,
+  "speed": 5,
+  "stage": "",
+  "away": 0,
+  "lang": "he"
+ }
+}

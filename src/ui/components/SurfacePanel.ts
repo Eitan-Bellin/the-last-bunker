@@ -8,14 +8,18 @@ import { MAX_TEAM, maxTeams } from '../../systems/ExplorationSystem';
 import { RESOURCE_ICONS, STAT_ICONS, bar, el, setBar, setRich, costRow } from '../dom';
 import { flowArrow } from '../rtl';
 import { describeMissing } from '../missing';
-import { kButton, kEmpty, kRow } from '../kit';
+import { kButton, kEmpty, kRow, kTabs } from '../kit'; // [phase2] kTabs
 import { uiSound } from '../../audio/uiSound';
 import { renderTrade } from './TradePanel'; // [LateGame B2]
-import { getPartner } from '../../data/trade';
+import { getPartner, openPartners } from '../../data/trade'; // [phase2] openPartners
 import { ICON_SVG, isIcon } from '../icons';
 import { ensureBiomeTiles, paintWorldMap } from './worldMap'; // plan 2026-10 M6
 import { ResearchPanel } from './ResearchPanel';
 import '../../styles/surface.css';
+import '../../styles/screens-p2.css'; // [phase2]
+
+/** [phase2] The Surface panel's tabs: three picked areas (the panel opens here), every area with the map, and trade. */
+type SurfaceView = 'home' | 'all' | 'trade';
 
 const S = 20;
 const SQRT3 = Math.sqrt(3);
@@ -60,6 +64,8 @@ export class SurfacePanel {
   private centerPending = false;
   /** The region list shows the nearest REGION_LIST_MAX until "Show all" is pressed (reset on open). */
   private allRegions = false;
+  /** [phase2] The tab on screen ('home' whenever the panel opens); the map shows on "All areas" only. */
+  private view: SurfaceView = 'home';
 
   onOpenResearch: (() => void) | null = null;
 
@@ -95,6 +101,7 @@ export class SurfacePanel {
     this.mapSig = this.cardSig = this.missionSig = '';
     this.centerPending = true;
     this.allRegions = false;
+    this.view = 'home'; // [phase2]
     this.overlay.classList.add('open');
     this.refresh(this.engine.stateManager.state);
   }
@@ -128,6 +135,7 @@ export class SurfacePanel {
 
   refresh(state: GameState): void {
     if (!this.engine.explorationSystem.isUnlocked(state)) {
+      this.overlay.classList.remove('p2s-nomap'); // [phase2] the locked card lives in the map box
       this.overlay.classList.add('is-locked');
       this.renderLocked(state);
       return;
@@ -136,7 +144,13 @@ export class SurfacePanel {
       this.overlay.classList.remove('is-locked');
       this.mapSig = this.cardSig = this.missionSig = '';
     }
-    this.renderMap(state);
+    // [phase2] The map is the "All areas" view (and an area picked on it); the other tabs give the screen to their list.
+    const noMap = this.view !== 'all';
+    if (this.overlay.classList.contains('p2s-nomap') !== noMap) {
+      this.overlay.classList.toggle('p2s-nomap', noMap);
+      if (!noMap) { this.centerPending = true; this.mapSig = ''; }
+    }
+    if (!noMap) this.renderMap(state); // a hidden map is not drawn (its painted terrain is a few MB of canvas)
     this.renderMissions(state);
     this.renderCard(state);
   }
@@ -343,6 +357,87 @@ export class SurfacePanel {
     return box;
   }
 
+  /** [phase2] The tab row and the tab's content: three picks, every area (with the map above), or trade. */
+  private renderTabs(state: GameState): HTMLElement[] {
+    const tradeOpen = openPartners(state).length > 0 || state.activeMissions.some(m => m.type === 'caravan');
+    if (this.view === 'trade' && !tradeOpen) this.view = 'home';
+    const panel = el('div', 'p2s-surface-panel');
+    panel.id = 'surface-tabpanel';
+    const tabs = kTabs([
+      { id: 'home', label: `[[star]] ${i18n.t('p2s.surface.tabRec')}` },
+      { id: 'all', label: `[[map]] ${i18n.t('p2s.surface.tabAll')}` },
+      ...(tradeOpen ? [{ id: 'trade', label: `[[cart]] ${i18n.t('p2s.surface.tabTrade')}` }] : []),
+    ], this.view, (id) => {
+      this.view = id as SurfaceView;
+      uiSound('switch');
+      this.redraw();
+      this.card.scrollTop = 0;
+    }, i18n.t('surface.title'), panel);
+    tabs.classList.add('p2s-surface-tabs');
+    if (this.view === 'all') panel.appendChild(this.renderRegionList(state));
+    else if (this.view === 'trade') panel.appendChild(renderTrade(this.engine, state, () => { this.cardSig = this.missionSig = ''; this.refresh(this.engine.stateManager.state); }));
+    else panel.appendChild(this.renderRecommended(state));
+    return [tabs, panel];
+  }
+
+  /**
+   * [phase2] Three different areas worth a trip now: the safest, the one with the best loot, and something new (an unexplored place,
+   * a find first). Each is a 48 px row that opens the area's card; everything else is on "All areas".
+   */
+  private renderRecommended(state: GameState): HTMLElement {
+    const ex = this.engine.explorationSystem;
+    const locale = i18n.currentLocale;
+    const box = el('div', 'surface-regions p2s-recs');
+    const out = new Set(state.activeMissions.map(m => `${m.hexX},${m.hexY}`));
+    const pool = state.explorationMap.filter(h => h.revealed && h.biome !== 'bunker' && ex.inReach(state, h) && !out.has(`${h.x},${h.y}`));
+    const full = ex.teamsFull(state);
+    if (full) box.appendChild(el('div', 'bp-hint', `[[people]] ${i18n.t('surface.teamsFull')}`));
+    if (pool.length === 0) {
+      box.appendChild(kEmpty('map', i18n.t('ux2d.surface.noRegions')));
+      return box;
+    }
+    const danger = (h: ExplorationHex) => BIOMES[h.biome as BiomeId]?.danger ?? 1;
+    const dist = (h: ExplorationHex) => hexDistance(h.x, h.y);
+    // A rough worth of a trip: the area's average loot, plus a find's loot while it is still there to take.
+    const loot = (h: ExplorationHex) => {
+      const biome = Object.values(BIOMES[h.biome as BiomeId]?.loot ?? {}).reduce((s, v) => s + ((v?.[0] ?? 0) + (v?.[1] ?? 0)) / 2, 0);
+      const poi = h.poi && !h.explored ? Object.values(POIS[h.poi]?.loot ?? {}).reduce((s, v) => s + (v ?? 0), 0) : 0;
+      return biome + poi;
+    };
+    const picks: { tag: string; icon: string; hex: ExplorationHex }[] = [];
+    const take = (tag: string, icon: string, list: ExplorationHex[]) => {
+      const h = list.find(x => !picks.some(p => p.hex === x));
+      if (h) picks.push({ tag, icon, hex: h });
+    };
+    take('p2s.surface.recSafe', 'endurance', [...pool].sort((a, b) => danger(a) - danger(b) || dist(a) - dist(b)));
+    take('p2s.surface.recLoot', 'backpack', [...pool].sort((a, b) => loot(b) - loot(a) || dist(a) - dist(b)));
+    const fresh = pool.filter(h => !h.explored).sort((a, b) => Number(!!b.poi) - Number(!!a.poi) || dist(a) - dist(b));
+    take('p2s.surface.recNew', 'question', fresh.length ? fresh : [...pool].sort((a, b) => dist(a) - dist(b)));
+    for (const p of picks) {
+      const h = p.hex;
+      const biome = BIOMES[h.biome as BiomeId];
+      const poi = h.poi ? POIS[h.poi] : undefined;
+      const name = `${biome.name[locale]}${poi ? ` · ${poi.icon} ${poi.name[locale]}` : ''}`;
+      const value = `${'[[skull]]'.repeat(Math.max(0, biome.danger))} [[clock]] ${i18n.formatDuration(ex.missionDuration(state, h))}`;
+      const row = kRow({
+        icon: p.icon,
+        label: `${i18n.t(p.tag)} · ${name}`,
+        value,
+        trailing: el('span', 'surface-region__go', full ? '' : `${i18n.t('ux2d.surface.plan')} ${flowArrow()}`),
+        onPress: () => this.select(h.x, h.y),
+      });
+      row.classList.add('surface-region', 'p2s-rec');
+      box.appendChild(row);
+    }
+    box.appendChild(kButton({
+      variant: 'tertiary',
+      className: 'btn-ghost p2s-link',
+      label: `[[map]] ${i18n.t('p2s.surface.seeAll', { n: pool.length })} ${flowArrow()}`,
+      onPress: () => { this.view = 'all'; this.redraw(); this.card.scrollTop = 0; },
+    }));
+    return box;
+  }
+
   /**
    * [ux-redesign W2d #9] The regions in reach as a list: each row is a 48 px button that picks it (the map is the picture, the list is
    * the easy way to tap). Unexplored first, then by distance; home (trade) last.
@@ -368,15 +463,7 @@ export class SurfacePanel {
         onPress: () => { this.allRegions = true; this.cardSig = ''; this.refresh(this.engine.stateManager.state); },
       }));
     }
-    const home = state.explorationMap.find(h => h.biome === 'bunker');
-    if (home) {
-      box.appendChild(kRow({
-        icon: 'vault',
-        label: `${BIOMES.bunker.name[locale]} · ${i18n.t('trade.title')}`,
-        trailing: el('span', 'surface-region__go', flowArrow()),
-        onPress: () => this.select(home.x, home.y),
-      }));
-    }
+    // [phase2] Trade has its own tab now (it used to be the last row here).
     const far = state.explorationMap.filter(h => h.revealed && h.biome !== 'bunker' && !ex.inReach(state, h)).length;
     if (far > 0) box.appendChild(el('div', 'bp-hint', `[[car]] ${plural('ux2d.surface.far', far)}`));
     return box;
@@ -407,13 +494,14 @@ export class SurfacePanel {
       eligible.map(s => s.id).join(','),
       state.activeMissions.map(m => `${m.hexX},${m.hexY}`).join(';'),
       i18n.currentLocale,
-      hex?.biome === 'bunker' ? `${JSON.stringify(state.lateGame.trade)}|${state.storyFlags.length}|${Math.floor(state.stats.totalPlayTime / 20)}` : '', // [LateGame B2]
+      this.view, // [phase2]
+      hex?.biome === 'bunker' || (!hex && this.view === 'trade') ? `${JSON.stringify(state.lateGame.trade)}|${state.storyFlags.length}|${Math.floor(state.stats.totalPlayTime / 20)}` : '', // [LateGame B2]
     ].join('|');
     if (sig === this.cardSig) return;
     this.cardSig = sig;
 
     if (!hex) {
-      this.card.replaceChildren(this.renderRegionList(state));
+      this.card.replaceChildren(...this.renderTabs(state));
       return;
     }
     const locale = i18n.currentLocale;
@@ -422,7 +510,7 @@ export class SurfacePanel {
     box.appendChild(kButton({
       variant: 'tertiary',
       className: 'btn-ghost surface-back',
-      label: `${flowArrow() === '[[arrowLeft]]' ? '[[arrowRight]]' : '[[arrowLeft]]'} ${i18n.t('ux2d.surface.allRegions')}`,
+      label: `${flowArrow() === '[[arrowLeft]]' ? '[[arrowRight]]' : '[[arrowLeft]]'} ${i18n.t(this.view === 'all' ? 'ux2d.surface.allRegions' : 'p2s.surface.back')}`, // [phase2] back to the tab it came from
       onPress: () => { this.selected = null; this.team.clear(); this.mapSig = this.cardSig = ''; this.refresh(this.engine.stateManager.state); },
     }));
     const title = el('div', 'bp-row');

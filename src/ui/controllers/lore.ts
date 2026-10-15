@@ -2,7 +2,7 @@ import { i18n } from '../../i18n/I18nManager';
 import { getLore } from '../../data/lore';
 import type { GameApp } from '../../app';
 
-/** Finds from the previous residents: queued "found" dialogs and the reader. */
+/** Finds from the previous residents: the "found" news cards ([phase2], were dialogs) and the reader. */
 export class LoreController {
   private app: GameApp;
 
@@ -10,53 +10,36 @@ export class LoreController {
     this.app = app;
   }
 
-  /** Finds wait their turn so two discoveries never fight over the same dialog. */
-  loreQueue: string[] = [];
-
+  /**
+   * Finds wait their turn so two discoveries never fight over the same spot. [phase2] A find is a news card now ("Found: <title>",
+   * Read now / Later) that hides by itself; it is never a dialog of its own. An unread find stays in the journal (and the bell's finds line).
+   */
   queueLore(id: string): void {
-    if (!this.loreQueue.includes(id)) this.loreQueue.push(id);
-  }
-
-  /** [plan4:UX-10] A find is waiting for its dialog (the dialog queue asks, then calls flushLoreQueue when the gate is open). */
-  get hasQueued(): boolean {
-    this.dropRead();
-    return this.loreQueue.length > 0;
-  }
-
-  /** [ux-redesign final F4] A find the player already read (from the journal, or the tutorial's "read the note" step) needs no "Found something!". */
-  private dropRead(): void {
-    if (!this.loreQueue.length) return;
-    const unread = this.app.state?.loreUnread;
-    if (!unread) return;
-    const left = this.loreQueue.filter(id => unread.includes(id));
-    if (left.length !== this.loreQueue.length) this.loreQueue = left;
-  }
-
-  /** Shows the next queued find once nothing else is on screen. */
-  flushLoreQueue(): void {
-    this.dropRead();
-    if (!this.loreQueue.length || this.app.modal.isVisible || this.app.storyOpen || this.app.introPlaying || this.app.loreReader.isVisible) return;
-    if (document.querySelector('.era-banner')) return;
-    this.showLoreFound(this.loreQueue.shift()!);
-  }
-
-  /** "You found something": offers to read a newly found note, log or tape. */
-  showLoreFound(id: string): void {
     const entry = getLore(id);
     if (!entry) return;
-    this.app.audio.play('lore');
+    if (!this.told.includes(id)) this.told.push(id);
     const locale = i18n.currentLocale;
-    this.app.storyOpen = true;
-    this.app.modal.show({
+    this.app.tips.pushNews({
+      key: `lore:${id}`,
       icon: entry.kind === 'tape' ? '[[tape]]' : entry.kind === 'photo' ? '[[eye]]' : '[[note]]',
-      title: i18n.t('journal.found'),
-      body: `${entry.title[locale]} · ${entry.author[locale]}`,
+      text: `${i18n.t('journal.found')} ${entry.title[locale]} · ${entry.author[locale]}`,
       actions: [
-        { label: i18n.t('journal.readNow'), className: 'btn-primary', onClick: () => { this.app.modal.hide(); this.readLore(id); } },
-        { label: i18n.t('journal.later'), className: 'btn-secondary', onClick: () => { this.app.modal.hide(); this.app.storyOpen = false; } },
+        { label: i18n.t('journal.later'), onPress: () => undefined },
+        { label: i18n.t('journal.readNow'), primary: true, onPress: () => this.readLore(id) },
       ],
-      dismiss: 1, // [ux-redesign w2a #20] back / Escape = "Later"
+      // [ux-redesign final F4] A find the player already read (from the journal, or the tutorial's "read the note" step) needs no card.
+      valid: () => !!this.app.state?.loreUnread?.includes(id),
+      sound: 'lore',
     });
+  }
+
+  /** [phase2] Finds told this session (newest last). */
+  private told: string[] = [];
+
+  /** [phase2] Finds told this session and still unread, newest first (the bell's finds line). */
+  sessionUnread(): string[] {
+    const unread = this.app.state?.loreUnread ?? [];
+    return this.told.filter(id => unread.includes(id)).reverse();
   }
 
   readLore(id: string): void {

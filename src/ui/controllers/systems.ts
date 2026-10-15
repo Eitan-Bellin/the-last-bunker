@@ -7,6 +7,7 @@ import { seasonsActive } from '../../data/seasons';
 import { actOf } from '../../data/acts';
 import { getProject } from '../../data/projects';
 import type { SpotKey } from '../HUD';
+import { el } from '../dom';
 
 /** One system a run meets along the way: a card says what it is, once, and the button to use it glows for a moment. */
 interface SystemCard {
@@ -63,9 +64,16 @@ const CARDS: SystemCard[] = [
   tier2('seedCores', 7, 'seedCores'),
 ];
 
-/** Minimum play seconds between two cards. */
+/** Minimum play seconds between two cards ([phase2] between two news cards; the Act's own card lists everything at once). */
 const CARD_GAP = 120;
 
+/** [phase2] Set once the Act's "what opens" card was shown (or the Act was already under way when this arrived). */
+const actFlag = (s: GameState) => `sys:act${act(s)}`;
+
+/**
+ * [phase2] Never a chain of "new system" dialogs: at most ONE card per Act transition, listing everything that opened ("New in Act II:
+ * Decisions, Foreman, Doctrines"). A system that opens later in the same Act is a news card (non-blocking, hides by itself, "Show me").
+ */
 export class SystemsController {
   private app: GameApp;
   private lastShown = -Infinity;
@@ -75,46 +83,79 @@ export class SystemsController {
     this.app = app;
   }
 
-  /** [plan4:UX-10] The card that is due now. Shows and flags nothing, except the one-time marking of what an older save already knew. */
-  private due(state: GameState): SystemCard | null {
-    if (!state.longGame || !state.storyFlags.includes('intro:done')) return null;
-    const flags = state.storyFlags;
+  /** [plan4:UX-10] The cards that are due now. Shows nothing; flags only what an older save already knew. */
+  private dueAll(state: GameState): SystemCard[] {
+    if (!state.longGame || !state.storyFlags.includes('intro:done')) return [];
     if (!this.initDone) {
       this.initDone = true;
       // A game that was already past these systems when this feature arrived has seen them: mark, don't show.
-      if (!flags.includes('sys:init')) {
+      if (!state.storyFlags.includes('sys:init')) {
         const known = CARDS.filter(c => c.ready(state, this.app)).map(c => `sys:${c.id}`);
-        this.flag(state, ['sys:init', ...known]);
-        return null;
+        this.flag(['sys:init', ...known]);
+        return [];
       }
+      // [phase2] A save loaded in the middle of an Act (nothing owed now) had its Act card: later systems of this Act come as news.
+      const owed = CARDS.some(c => !state.storyFlags.includes(`sys:${c.id}`) && c.ready(state, this.app));
+      if (!owed && (act(state) > 1 || this.app.engine.objectiveSystem.tutorialDone(state)) && !state.storyFlags.includes(actFlag(state))) this.flag([actFlag(state)]);
     }
-    const now = state.stats.totalPlayTime;
-    if (now - this.lastShown < CARD_GAP) return null;
-    return CARDS.find(c => !flags.includes(`sys:${c.id}`) && c.ready(state, this.app)) ?? null;
+    const flags = this.app.state.storyFlags;
+    return CARDS.filter(c => !flags.includes(`sys:${c.id}`) && c.ready(state, this.app));
   }
 
-  /** A card is due (for the dialog queue). */
+  /** [phase2] The Act's card is owed: something opened and this Act has not had its card yet (for the dialog queue). */
   hasDue(state: GameState): boolean {
-    return this.due(state) !== null;
+    return !state.storyFlags.includes(actFlag(state)) && this.dueAll(state).length > 0;
   }
 
   /** Title of the card due now, for the "N waiting" line. */
   dueTitle(state: GameState): string {
-    const card = this.due(state);
+    const due = this.dueAll(state);
+    if (due.length > 1) return i18n.t('p2p.sys.actTitle', { act: actOf(state).name[i18n.currentLocale] });
+    const card = due[0];
     return card ? i18n.t(card.title ?? `sys.${card.id}.title`, card.params?.(state) ?? {}) : '';
   }
 
-  /** Called while no dialog is open. Shows at most one card, and only when the last one is a while ago. */
+  /** Called by the dialog queue while no dialog is open: the Act's one card, listing everything that opened. */
   update(state: GameState): void {
-    const card = this.due(state);
-    if (!card) return;
+    const due = this.dueAll(state);
+    if (!due.length) return;
     this.lastShown = state.stats.totalPlayTime;
-    this.flag(state, [`sys:${card.id}`]);
-    this.show(card, state);
+    this.flag([actFlag(state), ...due.map(c => `sys:${c.id}`)]);
+    if (due.length === 1) this.show(due[0], state);
+    else this.showMany(due, state);
   }
 
-  private flag(state: GameState, add: string[]): void {
-    this.app.engine.stateManager.applyDelta({ path: 'storyFlags', value: [...new Set([...state.storyFlags, ...add])] });
+  /**
+   * [phase2] Called a few times a second (inbox.refresh): a system that opened after this Act's card is told as a news card, one at a
+   * time, CARD_GAP apart. "Show me" guides to where it lives; "Tell me more" opens its Bunker Book page.
+   */
+  offerNews(state: GameState): void {
+    if (!state.storyFlags.includes(actFlag(state))) return;
+    if (state.stats.totalPlayTime - this.lastShown < CARD_GAP) return;
+    const card = this.dueAll(state)[0];
+    if (!card) return;
+    this.lastShown = state.stats.totalPlayTime;
+    this.flag([`sys:${card.id}`]);
+    const params = card.params?.(state) ?? {};
+    const title = i18n.t(card.title ?? `sys.${card.id}.title`, params);
+    this.app.tips.pushNews({
+      key: `sys:${card.id}`, icon: card.icon, text: title,
+      // Hid unanswered: it stays in the bell as a line ("Show me" from there).
+      onTimeout: () => this.app.inbox.keepNews({ key: `sys:${card.id}`, icon: card.icon, title, open: () => this.goTo(card) }),
+      actions: [
+        { label: i18n.t('sys.more'), onPress: () => this.app.openBook(card.book) },
+        { label: i18n.t('p2p.sys.show'), primary: true, onPress: () => this.goTo(card) },
+      ],
+    });
+  }
+
+  private flag(add: string[]): void {
+    this.app.engine.stateManager.applyDelta({ path: 'storyFlags', value: [...new Set([...this.app.state.storyFlags, ...add])] });
+  }
+
+  /** Once per player a guided tap on where it lives; [w3fix] one highlight only: the HUD's own short glow otherwise. */
+  private goTo(card: SystemCard): void {
+    if (!this.app.onboarding.guideTo(card.spot, card.id)) this.app.hud.spotlight(card.spot);
   }
 
   private show(card: SystemCard, state: GameState): void {
@@ -128,13 +169,34 @@ export class SystemsController {
         {
           label: i18n.t('sys.ok'), className: 'btn-primary', onClick: () => {
             this.app.modal.hide();
-            // [ux-redesign W3a] Once per player a guided tap on where it lives; [w3fix] one highlight only: the HUD's own short
-            // glow when the guided step is not given (seen before, or the tutorial was skipped).
-            if (!this.app.onboarding.guideTo(card.spot, card.id)) this.app.hud.spotlight(card.spot);
+            // [ux-redesign W3a] Once per player a guided tap on where it lives.
+            this.goTo(card);
           },
         },
         { label: i18n.t('sys.more'), className: 'btn-secondary', onClick: () => { this.app.modal.hide(); this.app.openBook(card.book); } },
       ],
+    });
+  }
+
+  /** [phase2] One card for everything this Act opened: a line each (name and what it does); "Got it" guides to the first one. */
+  private showMany(cards: SystemCard[], state: GameState): void {
+    const locale = i18n.currentLocale;
+    const short = (c: SystemCard) => (c.id.startsWith('cur:') ? i18n.t(c.title ?? '', c.params?.(state) ?? {}) : i18n.t(`p2p.sys.short.${c.id}`));
+    const body = el('div', 'dq-fold');
+    body.appendChild(el('p', 'modal-body', i18n.t('p2p.sys.actBody', { list: cards.map(short).join(' · ') })));
+    const ul = el('ul', 'dq-list');
+    for (const c of cards) ul.appendChild(el('li', '', `${c.icon} ${i18n.t(c.body ?? `sys.${c.id}.body`, c.params?.(state) ?? {})}`));
+    body.appendChild(ul);
+    this.app.audio.play('paper');
+    this.app.modal.show({
+      icon: '[[flag]]',
+      title: i18n.t('p2p.sys.actTitle', { act: actOf(state).name[locale] }),
+      body,
+      actions: [
+        { label: i18n.t('sys.ok'), className: 'btn-primary', onClick: () => { this.app.modal.hide(); this.goTo(cards[0]); } },
+        { label: i18n.t('sys.more'), className: 'btn-secondary', onClick: () => { this.app.modal.hide(); this.app.openBook(cards[0].book); } },
+      ],
+      dismiss: 0,
     });
   }
 }

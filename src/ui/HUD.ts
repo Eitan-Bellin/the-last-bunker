@@ -15,7 +15,7 @@ import { setHudInsets } from '../utils/hudInsets';
 import { initViewportUi } from './viewportUi';
 import { kResourceChip, kProgress, setProgress, kBadge, setBadge, kRow, kTooltip, bindPress } from './kit';
 import { TIMER_ENDING_S } from './kit/tokens';
-import { fmtDuration, fmtNum, plural } from './format';
+import { fmtDuration, fmtNum, fmtTile, plural } from './format';
 import '../styles/hud.css';
 import { CountUp } from './fx/countUp'; // [ux-redesign W4]
 
@@ -64,6 +64,11 @@ export function jobRoom(state: GameState): { idle: number; free: number } {
   }
   return { idle, free };
 }
+/** [phase2] True when the node has a box on screen (a CSS media rule may hide it while its inline display is ''). */
+function onScreen(node: HTMLElement): boolean {
+  return node.isConnected && node.getClientRects().length > 0;
+}
+
 /** [ux-redesign w3fix] Sets `hidden` only when it changes (writing the same value is still a DOM mutation). */
 function setHidden(node: HTMLElement, on: boolean): void {
   if (node.hidden !== on) node.hidden = on;
@@ -114,6 +119,19 @@ interface Alert {
   value?: string;
   count: number;
   action: boolean;
+  open: () => void;
+}
+
+/** [phase2] A row another controller puts in the Inbox (HUD.setBellRows). `action` false: news to read (grey count); default true. */
+export interface BellRow {
+  key: string;
+  /** An icon name (kit row icon, e.g. 'door'), not the [[...]] markup. */
+  icon: string;
+  label: string;
+  value?: string;
+  /** What it adds to the bell's count (default 1). */
+  count?: number;
+  action?: boolean;
   open: () => void;
 }
 
@@ -238,19 +256,21 @@ export class HUD {
     measure();
   }
 
-  // ───────────────────────────── top bar: resource tiles + one info row ─────────────────────────────
+  // ───────────────────────────── top bar: ONE row — resource tiles, the status chip, the inbox bell ─────────────────────────────
 
+  /** [phase2] The status chip (class hx-act, the onboarding's 'era' target): the Act and its %, survivors and morale. Opens Command. */
   private actBtn!: HTMLButtonElement;
   private actName!: HTMLElement;
   private actNum!: HTMLElement;
   private actPct!: HTMLElement;
   private actBar!: HTMLElement;
-  private popBtn!: HTMLButtonElement;
   private popValue!: HTMLElement;
-  private popCaption!: HTMLElement;
-  private moraleBtn!: HTMLButtonElement;
-  private moraleValue!: HTMLElement;
+  private popIcon!: HTMLElement;
   private moraleIcon!: HTMLElement;
+  /** [phase2] The spoken parts of the status chip (the Act title, the people line, the morale line), joined into its label. */
+  private statusTitle = '';
+  private statusPeople = '';
+  private statusMorale = '';
   private creditsBtn!: HTMLButtonElement;
   private creditsValue!: HTMLElement;
   private alertsBtn!: HTMLButtonElement;
@@ -261,7 +281,9 @@ export class HUD {
 
   private createTopBar(): void {
     // `.hud-top` stays for the safe-area and landscape-column rules in touch.css; everything inside is the W2b layout (styles/hud.css).
+    // [phase2] One row (ui-architecture fix 8): four tiles, the overflow tile (Act II on), the status chip and the bell.
     const topBar = el('div', 'hud-top hx-top');
+    const row = el('div', 'hx-row');
     const resourceRow = el('div', 'hx-res-row');
     for (const rt of VISIBLE_RESOURCES) {
       const root = el('button', 'hx-res');
@@ -281,54 +303,49 @@ export class HUD {
       const bar = kProgress(0, 100);
       bar.classList.add('hx-res__bar');
       bar.setAttribute('aria-hidden', 'true');
-      chip.append(line2, bar);
+      // [phase2] The tile's one state cue on a phone: a warning sign in its corner when it is in danger (the edge says low / danger).
+      const cue = el('span', 'hx-res__cue', '[[warning]]');
+      cue.setAttribute('aria-hidden', 'true');
+      chip.append(line2, bar, cue);
       root.appendChild(chip);
       root.addEventListener('click', () => this.onResourceTap?.(rt));
       resourceRow.appendChild(root);
       this.resourceEls.set(rt, { root, chip, value, trend, rate, bar });
     }
-    // "N more": hangs off the bottom edge of the bar (adds no row); opens the list of the Act's other stores.
+    // [phase2] The Act's other stores: a tile of its own at the row's end (from Act II; hidden under 360 px, where every tile's sheet
+    // lists the other stores instead). A hidden store in trouble turns it red, it never swaps places with a shown tile.
     this.moreBtn = el('button', 'hx-more');
     this.moreBtn.type = 'button';
     this.moreText = el('span', 'hx-more__text');
-    this.moreBtn.append(this.moreText);
+    this.moreBtn.append(el('span', 'hx-more__icon', '[[plus]]'), this.moreText);
+    this.moreBtn.setAttribute('aria-haspopup', 'dialog');
+    this.moreBtn.setAttribute('aria-expanded', 'false');
     this.moreBtn.addEventListener('click', () => { haptic('tap'); this.togglePop('more'); });
     this.resRow = resourceRow;
 
-    const info = el('div', 'hx-info');
-    // The Act: its name, how far through it, as a labelled progress bar. Opens the Command panel.
-    this.actBtn = el('button', 'hx-chip hx-act');
+    // [phase2] The status chip: "I · 34%" over survivors and the morale face; the Act's progress is a slim bar along its bottom edge.
+    // Wide screens add the Act's word. One tap opens Command; a long press says the biggest thing moving morale.
+    this.actBtn = el('button', 'hx-chip hx-act hx-status');
     this.actBtn.type = 'button';
-    // [ux-redesign w2fix B1] Two short lines a phone can read: "Act III  38%" over the Act's own word ("Settle"); the progress is a
-    // slim bar along the chip's bottom edge, so it no longer shares (and squeezes) the name's line.
     const actHead = el('span', 'hx-act__head');
     this.actNum = el('span', 'hx-act__num');
     this.actPct = el('span', 'hx-act__pct');
     actHead.append(this.actNum, this.actPct);
     this.actName = el('span', 'hx-act__name');
+    const people = el('span', 'hx-status__people');
+    this.popValue = el('span', 'hx-status__pop', '0/0');
+    this.moraleIcon = el('span', 'hx-status__mood', '[[neutral]]');
+    this.popIcon = el('span', 'hx-status__icon', '[[people]]');
+    people.append(this.popIcon, this.popValue, this.moraleIcon);
     this.actBar = kProgress(0, 100);
     this.actBar.classList.add('hx-act__bar');
     this.actBar.setAttribute('aria-hidden', 'true');
-    this.actBtn.append(actHead, this.actName, this.actBar);
+    this.actBtn.append(actHead, this.actName, people, this.actBar);
+    // Long press (or hover / keyboard focus): the biggest single cause of the mood. Bound before the click so the press that ends it is swallowed.
+    kTooltip(this.actBtn, () => this.statusTip());
     this.actBtn.addEventListener('click', () => this.onEra?.());
 
-    this.popBtn = el('button', 'hx-chip hx-stat hx-people');
-    this.popBtn.type = 'button';
-    this.popValue = el('span', 'hx-stat__value', '0/0');
-    this.popCaption = el('span', 'hx-stat__caption', i18n.t('ux2b.survivors'));
-    this.popBtn.append(el('span', 'hx-stat__icon', '[[people]]'), this.wrap(this.popValue, this.popCaption));
-    this.popBtn.addEventListener('click', () => this.onPopulation?.());
-
-    this.moraleBtn = el('button', 'hx-chip hx-stat hx-morale');
-    this.moraleBtn.type = 'button';
-    this.moraleValue = el('span', 'hx-stat__value', '50%');
-    this.moraleIcon = el('span', 'hx-stat__icon', '[[neutral]]');
-    this.moraleBtn.append(this.moraleIcon, this.wrap(this.moraleValue, el('span', 'hx-stat__caption', i18n.t('hud.morale'))));
-    // Long press (or hover / keyboard focus): the biggest single cause. Bound before the click so the press that ends it is swallowed.
-    kTooltip(this.moraleBtn, () => this.moraleTopCause());
-    this.moraleBtn.addEventListener('click', () => this.onMoraleTap?.());
-
-    // #23: the shop's own way in (wide screens; on a phone it is the last line of the alerts list).
+    // #23: the shop's own way in (wide screens; on a phone the Menu's top row has it). [phase2]
     this.creditsBtn = el('button', 'hx-chip hx-stat hx-credits');
     this.creditsBtn.type = 'button';
     this.creditsValue = el('span', 'hx-stat__value', '0');
@@ -342,17 +359,17 @@ export class HUD {
     clock.append(this.clockIcon, this.clockValue);
     clock.setAttribute('aria-hidden', 'true');
 
-    // One inbox for everything that waits: decisions, the supply crate, daily orders, the journal, the season, the shop.
+    // [phase2] The bell = the Inbox: only what the player can act on (decisions, the crate, daily orders, door knocks, finds, news).
     this.alertsBtn = el('button', 'hx-chip hx-alerts');
     this.alertsBtn.type = 'button';
     this.alertsBadge = kBadge(0);
-    this.alertsBtn.append(el('span', 'hx-stat__icon', '[[bell]]'), el('span', 'hx-alerts__label', i18n.t('ux2b.alerts')), this.alertsBadge);
+    this.alertsBtn.append(el('span', 'hx-stat__icon', '[[bell]]'), el('span', 'hx-alerts__label', i18n.t('p2h.inbox')), this.alertsBadge);
     this.alertsBtn.setAttribute('aria-haspopup', 'dialog');
     this.alertsBtn.setAttribute('aria-expanded', 'false');
     this.alertsBtn.addEventListener('click', () => { haptic('tap'); this.togglePop('alerts'); });
 
-    info.append(this.actBtn, this.popBtn, this.moraleBtn, this.creditsBtn, clock, this.alertsBtn);
-    topBar.append(resourceRow, info, this.moreBtn);
+    row.append(resourceRow, this.moreBtn, this.actBtn, this.creditsBtn, clock, this.alertsBtn);
+    topBar.append(row);
     this.topBar = topBar;
     this.container.appendChild(topBar);
     this.refreshAlerts();
@@ -364,9 +381,9 @@ export class HUD {
     return box;
   }
 
-  /** [Q7] Makes a HUD button glow for a few seconds, so the player sees where the new thing lives. */
+  /** [Q7] Makes a HUD button glow for a few seconds, so the player sees where the new thing lives. [phase2] The season lives on the status chip. */
   spotlight(key: SpotKey): void {
-    const target = key === 'inbox' || key === 'season' ? this.alertsBtn : key === 'era' ? this.actBtn
+    const target = key === 'inbox' ? this.alertsBtn : key === 'era' || key === 'season' ? this.actBtn
       : this.nav.querySelector<HTMLElement>(`.hx-tab[data-key="${key}"]`);
     if (!target) return;
     target.classList.remove('spotlight');
@@ -391,6 +408,17 @@ export class HUD {
   private season: { icon: string; label: string } | null = null;
   private credits = 0;
   private alertsSig = '';
+  /** [phase2] Rows other controllers put in the Inbox (door knocks, finds, system news), by source; see setBellRows. */
+  private extraRows = new Map<string, BellRow[]>();
+
+  /**
+   * [phase2] Public: a controller (inbox.ts, events.ts, systems.ts, lore.ts...) puts its own rows in the Inbox list, replacing that
+   * source's earlier rows (an empty list removes them). Each row must be something the player can do or read now.
+   */
+  setBellRows(source: string, rows: BellRow[]): void {
+    if (rows.length) this.extraRows.set(source, rows); else this.extraRows.delete(source);
+    this.refreshAlerts();
+  }
 
   /** [plan4:GP-1] Daily orders: a line in the alerts list ("1/3"); `claimable` > 0 makes it an action. */
   setDaily(visible: boolean, done: number, n: number, claimable: number, title: string): void {
@@ -414,14 +442,20 @@ export class HUD {
     this.refreshAlerts();
   }
 
+  /**
+   * [phase2] The Inbox (ui-architecture fix 9): only rows the player can act on. The Journal, the Chronicle and the Book moved to the
+   * Menu's Archive row, the shop to the credits chip and the Menu; the season to the status chip's long press.
+   */
   private alerts(): Alert[] {
     const out: Alert[] = [];
-    if (this.inbox.visible) out.push({ key: 'inbox', icon: 'inbox', label: i18n.t('ux2b.inbox'), value: this.inbox.count > 0 ? String(this.inbox.count) : '', count: this.inbox.count, action: this.inbox.count > 0, open: () => this.onInbox?.() });
+    if (this.inbox.visible && this.inbox.count > 0) out.push({ key: 'inbox', icon: 'inbox', label: i18n.t('p2h.inboxRow'), value: String(this.inbox.count), count: this.inbox.count, action: true, open: () => this.onInbox?.() });
     if (this.supplyReady) out.push({ key: 'supply', icon: 'gift', label: i18n.t('a11y.supply'), value: i18n.t('ux2b.supplyReady'), count: 1, action: true, open: () => this.onSupply?.() });
     if (this.daily.visible) out.push({ key: 'daily', icon: 'target', label: this.daily.title, value: `${this.daily.done}/${this.daily.n}`, count: this.daily.claimable, action: this.daily.claimable > 0, open: () => this.onDaily?.() });
-    if (this.season) out.push({ key: 'season', icon: this.season.icon, label: this.season.label, count: 0, action: false, open: () => this.onSeason?.() });
-    out.push({ key: 'journal', icon: 'journal', label: i18n.t('journal.title'), value: this.journalUnread > 0 ? i18n.t('ux2b.unread', { n: this.journalUnread }) : '', count: this.journalUnread, action: false, open: () => this.onJournal?.() });
-    out.push({ key: 'shop', icon: 'credits', label: i18n.t('ux2b.shop'), value: fmtNum(this.credits), count: 0, action: false, open: () => this.openShop() });
+    for (const rows of this.extraRows.values()) {
+      for (const r of rows) out.push({ key: `x:${r.key}`, icon: r.icon, label: r.label, value: r.value, count: r.count ?? 1, action: r.action ?? true, open: r.open });
+    }
+    // New finds to read (news: a grey count). The journal itself is in the Menu's Archive row.
+    if (this.journalUnread > 0) out.push({ key: 'finds', icon: 'journal', label: plural('p2h.finds', this.journalUnread), count: this.journalUnread, action: false, open: () => this.onJournal?.() });
     return out;
   }
 
@@ -437,7 +471,7 @@ export class HUD {
     setBadge(this.alertsBadge, n);
     this.alertsBadge.classList.toggle('is-news', acts === 0);
     this.alertsBtn.classList.toggle('has-action', acts > 0);
-    const label = acts > 0 ? i18n.t('ux2b.alertsAct', { n: acts }) : news > 0 ? i18n.t('ux2b.alertsNews', { n: news }) : i18n.t('ux2b.alerts');
+    const label = acts > 0 ? i18n.t('p2h.inboxAct', { n: acts }) : news > 0 ? i18n.t('p2h.inboxNews', { n: news }) : i18n.t('p2h.inbox');
     this.alertsBtn.setAttribute('aria-label', label);
     this.alertsBtn.title = label;
     if (this.popKind === 'alerts') this.fillPop();
@@ -462,7 +496,7 @@ export class HUD {
     const pop = el('div', 'hx-pop');
     pop.id = 'hud-pop';
     pop.setAttribute('role', 'dialog');
-    pop.setAttribute('aria-label', kind === 'alerts' ? i18n.t('ux2b.alerts') : i18n.t('ux2b.moreTitle'));
+    pop.setAttribute('aria-label', kind === 'alerts' ? i18n.t('p2h.inbox') : i18n.t('ux2b.moreTitle'));
     this.pop = pop;
     this.fillPop();
     document.body.appendChild(pop);
@@ -506,7 +540,10 @@ export class HUD {
     pop.replaceChildren();
     const go = (fn: () => void) => (): void => { this.closePop(); fn(); };
     if (this.popKind === 'alerts') {
-      for (const a of this.alerts()) {
+      const list = this.alerts();
+      // [phase2] An empty Inbox says so in one line (it no longer pads itself with the journal and the shop).
+      if (!list.length) pop.appendChild(el('p', 'hx-pop__empty', i18n.t('p2h.inboxEmpty')));
+      for (const a of list) {
         const row = kRow({ icon: a.icon, label: a.label, value: a.value || undefined, onPress: go(a.open) });
         row.classList.add('hx-pop__row');
         if (a.action) {
@@ -546,17 +583,26 @@ export class HUD {
       roman.className = 'hx-act__roman';
       roman.dir = 'ltr';
       roman.textContent = act.roman;
-      this.actNum.replaceChildren(`${i18n.t('wp6.hud.actShort')} `, roman);
+      // [phase2] The word "Act" only on wide screens (hud.css): a phone's status chip reads "I · 34%".
+      this.actNum.replaceChildren(el('span', 'hx-act__word', `${i18n.t('wp6.hud.actShort')} `), roman);
     } else {
       this.actNum.replaceChildren();
     }
     this.actNum.hidden = !act;
+    this.actBtn.classList.toggle('no-act', !act);
     this.setText(this.actName, name);
     this.setText(this.actPct, pct >= 0 ? `${pct}%` : '');
     this.actBar.hidden = pct < 0;
     if (pct >= 0) setProgress(this.actBar, pct, 100);
-    this.actBtn.title = title;
-    this.actBtn.setAttribute('aria-label', title);
+    this.statusTitle = title;
+    this.statusLabel();
+  }
+
+  /** [phase2] The status chip's spoken label and title: the Act, the people, the mood, and where a tap goes. */
+  private statusLabel(): void {
+    const label = i18n.t('p2h.status', { act: this.statusTitle, people: this.statusPeople, morale: this.statusMorale });
+    this.setAttr(this.actBtn, 'aria-label', label);
+    this.setAttr(this.actBtn, 'title', label);
   }
 
   private updateClock(state: GameState): void {
@@ -812,12 +858,12 @@ export class HUD {
     this.setText(this.incidentBanner, text);
   }
 
-  /** Where a resource's tile is (fly-to-HUD); a resource without a tile flies to the "more" handle. */
+  /** Where a resource's tile is (fly-to-HUD); a resource without a tile flies to the "more" tile. [phase2] Only to a box on screen. */
   resourceRect(r: ResourceType): DOMRect | null {
-    if (r === 'credits' && !this.resourceEls.has(r)) return this.creditsBtn.isConnected ? this.creditsBtn.getBoundingClientRect() : null; // [ux-redesign W4]
+    if (r === 'credits' && !this.resourceEls.has(r)) return onScreen(this.creditsBtn) ? this.creditsBtn.getBoundingClientRect() : null; // [ux-redesign W4]
     const root = this.resourceEls.get(r)?.root;
     if (root && root.style.display !== 'none') return root.getBoundingClientRect();
-    return this.moreBtn.style.display !== 'none' ? this.moreBtn.getBoundingClientRect() : null;
+    return onScreen(this.moreBtn) ? this.moreBtn.getBoundingClientRect() : null;
   }
 
   /** [ux-redesign W4] Goods are flying to this tile: its number waits `ms` for them before it counts up. */
@@ -834,7 +880,7 @@ export class HUD {
   pulseResource(r: ResourceType): void {
     // [ux-redesign W4] The tile the goods flew to: the store's own, the credits chip, or the "more" handle of a store without a tile.
     const own = this.resourceEls.get(r)?.root;
-    const root = own && own.style.display !== 'none' ? own : r === 'credits' ? this.creditsBtn : this.moreBtn.style.display !== 'none' ? this.moreBtn : null;
+    const root = own && own.style.display !== 'none' ? own : r === 'credits' ? this.creditsBtn : onScreen(this.moreBtn) ? this.moreBtn : null;
     if (!root) return;
     root.classList.remove('pulse');
     void root.offsetWidth;
@@ -914,20 +960,18 @@ export class HUD {
         this.actShow.set(rt, opens === 0 || (act >= opens && opens >= act - 1));
       }
     }
-    // [P2] The season (from the second Act): a line in the alerts list.
+    // [P2] The season (from the second Act). [phase2] Not an Inbox row any more (nothing to do): the status chip's long press says it.
     const season = seasonsActive(state) ? seasonAt(state) : null;
     const sSig = season ? `${season.def.id}|${Math.ceil(season.left / 86400)}|${i18n.currentLocale}` : '';
     if (sSig !== this.seasonSig) {
       this.seasonSig = sSig;
       this.season = season ? { icon: season.def.icon, label: i18n.t('ux2b.season', { name: season.def.name[i18n.currentLocale], t: i18n.formatDuration(season.left) }) } : null;
-      this.refreshAlerts();
     }
     const credits = Math.floor(state.resources.credits?.amount ?? 0);
     if (credits !== this.credits) {
       this.credits = credits;
       this.setText(this.creditsValue, fmtNum(credits));
       this.setAttr(this.creditsBtn, 'aria-label', i18n.t('ux2b.creditsLabel', { n: fmtNum(credits) }));
-      this.refreshAlerts();
     }
 
     const nowMs = performance.now();
@@ -940,8 +984,8 @@ export class HUD {
     if (ariaDue) this.lastAria = nowMs;
 
     this.counts.instant = reducedMotion(); // [ux-redesign W4]
-    const tiles = this.pickTiles(state, act);
-    const tileSig = tiles.join(',');
+    const tiles = this.pickTiles(act);
+    const tileSig = `${act}|${tiles.join(',')}`;
     const hidden: ResourceType[] = [];
     for (const [rt, els] of this.resourceEls) {
       const res = state.resources[rt];
@@ -959,18 +1003,22 @@ export class HUD {
     if (tileSig !== this.lastSlots) {
       this.lastSlots = tileSig;
       this.hiddenRes = hidden;
-      this.setStyle(this.moreBtn, 'display', hidden.length ? '' : 'none');
-      this.setText(this.moreText, i18n.t('ux2b.more', { n: hidden.length }));
+      // [phase2] No overflow in Act I (the four basics are the whole game then); from Act II a tile at the row's end.
+      this.setStyle(this.moreBtn, 'display', hidden.length && act >= 2 ? '' : 'none');
+      this.setText(this.moreText, i18n.formatNumber(hidden.length));
       const label = plural('wp6.hud.more', hidden.length);
       this.setAttr(this.moreBtn, 'aria-label', label);
       this.moreBtn.title = label;
     }
+    // [phase2] A hidden store in trouble: the overflow tile turns red (tiles never swap places).
+    this.setState(this.moreBtn, 'urgent', this.hiddenRes.some(r => this.urgent(state, r)) ? 'is-danger' : '');
     if (this.popKind === 'more' && ariaDue) {
       const sig = this.hiddenRes.map(r => `${fmtNum(state.resources[r].amount)}`).join(',');
       if (sig !== this.popSig) { this.popSig = sig; this.fillPop(); }
     }
 
     this.updatePeople(state, ariaDue);
+    this.updateNavLocks(state, nowMs);
 
     const ratio = state.powerRatio ?? 1;
     // No alarm before there is any power plant to blame: the dead bunker is simply dark.
@@ -1018,7 +1066,7 @@ export class HUD {
     // [phase1] The strip already counts this one down: the tile keeps its colour (danger / low) but not a second clock.
     const countdown = timer && this.stripRes !== rt;
 
-    this.setText(els.value, fmtNum(shownAmount));
+    this.setText(els.value, fmtTile(shownAmount)); // [phase2] fits the one-row tile (the sheet shows the exact amount)
     let line: string;
     let mode: string;
     if (full) { line = i18n.t('ux2b.full'); mode = 'is-full'; }
@@ -1046,53 +1094,32 @@ export class HUD {
   }
 
   /**
-   * At most four tiles. Acts I-II: the four basics. From Act III what holds progress back (phoneSlots). A resource that runs short
-   * swaps itself in for the calmest tile.
+   * [phase2] At most four tiles, in a fixed order for the whole Act (ui-architecture fix 8: no live re-sort). Acts I-II: the four basics.
+   * From Act III: food, water and power, then the newest currency in play (the rest are behind the overflow tile). A store in trouble
+   * keeps its place: its tile (or the overflow tile) changes colour, and the advisor strip carries the crisis.
    */
-  private pickTiles(state: GameState, act: number): ResourceType[] {
-    const slots = this.phoneSlots(state, act);
-    const base = [...(slots ?? CORE_RESOURCES)].filter(r => this.actShow.get(r) !== false).slice(0, MAX_TILES);
-    const urgent = (r: ResourceType): boolean => {
-      const res = state.resources[r];
-      const net = res.productionRate - res.consumptionRate;
-      if (res.amount <= 0 && res.consumptionRate > 0) return true;
-      if (net < -STEADY && res.amount / -net < COUNTDOWN_S) return true;
-      return res.cap > 0 && isFinite(res.cap) && res.amount / res.cap < DANGER_PCT / 100 && net < -STEADY;
-    };
-    for (const r of VISIBLE_RESOURCES) {
-      if (this.actShow.get(r) === false || base.includes(r) || !urgent(r)) continue;
-      const calm = [...base].reverse().find(b => !urgent(b));
-      if (!calm) break;
-      base[base.indexOf(calm)] = r;
-    }
-    return base;
-  }
-
-  /**
-   * [ux-wp4] M2: which resources the row shows (four places). Early on (Acts I-II) the four basics. From Act III the row shows what holds
-   * progress back: the Act's currency (and the last Act's), then the basics that are not full (a full store says nothing), the emptiest first.
-   */
-  private phoneSlots(state: GameState, act: number): Set<ResourceType> | null {
-    if (act < 3) return null;
-    const fill = (r: ResourceType): number => {
-      const res = state.resources[r];
-      return res && res.cap > 0 && isFinite(res.cap) ? res.amount / res.cap : 0;
-    };
-    const currency = [...this.actShow.entries()].filter(([rt, s]) => s && (resourceDef(rt)?.act ?? 0) > 0).map(([rt]) => rt)
+  private pickTiles(act: number): ResourceType[] {
+    const shown = (r: ResourceType): boolean => this.actShow.get(r) !== false;
+    if (act < 3) return [...CORE_RESOURCES].filter(shown).slice(0, MAX_TILES);
+    const currency = VISIBLE_RESOURCES.filter(r => shown(r) && (resourceDef(r)?.act ?? 0) > 0)
       .sort((a, b) => (resourceDef(b)?.act ?? 0) - (resourceDef(a)?.act ?? 0));
-    const basics = [...CORE_RESOURCES].sort((a, b) => fill(a) - fill(b));
-    const out = new Set<ResourceType>(currency.slice(0, 2));
-    for (const r of basics) {
-      if (out.size >= MAX_TILES) break;
-      const res = state.resources[r];
-      const draining = res.productionRate - res.consumptionRate < -STEADY;
-      if (fill(r) < 0.9 || draining) out.add(r);
-    }
-    for (const r of basics) if (out.size < MAX_TILES) out.add(r);
-    return out;
+    const out: ResourceType[] = (['food', 'water', 'power'] as ResourceType[]).filter(shown);
+    if (currency[0]) out.push(currency[0]);
+    for (const r of CORE_RESOURCES) if (out.length < MAX_TILES && !out.includes(r) && shown(r)) out.push(r);
+    return out.slice(0, MAX_TILES);
   }
 
-  /** Population (with the door's state as a caption) and morale. */
+  /** A store that is empty, runs dry within five minutes, or drains under 15 %. */
+  private urgent(state: GameState, r: ResourceType): boolean {
+    const res = state.resources[r];
+    if (!res) return false;
+    const net = res.productionRate - res.consumptionRate;
+    if (res.amount <= 0 && res.consumptionRate > 0) return true;
+    if (net < -STEADY && res.amount / -net < COUNTDOWN_S) return true;
+    return res.cap > 0 && isFinite(res.cap) && res.amount / res.cap < DANGER_PCT / 100 && net < -STEADY;
+  }
+
+  /** [phase2] The status chip's people half: survivors (the door's state as the icon and colour) and the morale face. */
   private updatePeople(state: GameState, ariaDue: boolean): void {
     const built = bedsBuilt(state);
     const capped = built > state.maxPopulation;
@@ -1100,28 +1127,58 @@ export class HUD {
     const full = state.survivors.length >= state.maxPopulation && state.maxPopulation > 0;
     const lock = full ? actLock(state) : null;
     const left = Math.max(0, Math.ceil((state.nextArrivalAt ?? 0) - state.stats.totalPlayTime));
-    // [ux-wp4] R3: the Act holds the number: a neutral lock that names the next Act. No free bed: a warning in words. Else: the next arrival.
-    const caption = lock ? `[[lock]] ${i18n.t('ux2b.popLock')}`
-      : full ? `[[warning]] ${i18n.t('ux2b.popFull')}`
-        : i18n.t('ux2b.survivors'); // [ux-redesign w2fix #7] the next arrival's countdown is in the spoken label only (one number less)
-    this.setText(this.popCaption, caption);
-    this.setState(this.popBtn, 'door', lock ? 'is-lock' : full ? 'is-full' : capped ? 'is-capped' : '');
-    if (ariaDue) {
-      const popTitle = lock ? plural('wp4.actLock', lock.more, { act: lock.next.name[i18n.currentLocale] })
-        : full ? `${i18n.t('wp6.hud.population', { n: state.survivors.length, max: state.maxPopulation })}. ${i18n.t('wp6.hud.arrivalFull')}`
-          : capped ? i18n.t('building.bedsCapped', { built, cap: state.maxPopulation })
-            : `${i18n.t('wp6.hud.population', { n: state.survivors.length, max: state.maxPopulation })}. ${i18n.t('wp6.hud.arrival', { t: i18n.formatDuration(left) })}`;
-      this.setAttr(this.popBtn, 'aria-label', popTitle);
-      this.setAttr(this.popBtn, 'title', popTitle);
-    }
+    // [ux-wp4] R3: the Act holds the number: a neutral lock. No free bed: a warning sign (a shape, not colour alone).
+    this.setText(this.popIcon, lock ? '[[lock]]' : full ? '[[warning]]' : '[[people]]');
+    this.setState(this.actBtn, 'door', lock ? 'is-lock' : full ? 'is-full' : capped ? 'is-capped' : '');
     const morale = state.survivors.length > 0
       ? Math.round(state.survivors.reduce((s, sv) => s + sv.happiness, 0) / state.survivors.length)
       : 50;
-    this.setText(this.moraleValue, `${morale}%`);
     // [plan4:AC-7] The mood is a face as well as a colour: happy / neutral / sad.
     this.setText(this.moraleIcon, morale < 35 ? '[[sad]]' : morale > 70 ? '[[happy]]' : '[[neutral]]');
-    this.setState(this.moraleBtn, 'mood', morale < 35 ? 'is-down' : morale > 70 ? 'is-up' : '');
-    if (ariaDue) this.setAttr(this.moraleBtn, 'aria-label', `${i18n.t('wp6.hud.morale', { pct: morale })}`);
+    this.setState(this.actBtn, 'mood', morale < 35 ? 'is-down' : morale > 70 ? 'is-up' : '');
+    if (ariaDue) {
+      const count = i18n.t('p2h.people', { n: state.survivors.length, max: state.maxPopulation });
+      const door = lock ? i18n.t('ux2b.popLock')
+        : full ? i18n.t('wp6.hud.arrivalFull')
+          : capped ? i18n.t('building.bedsCapped', { built, cap: state.maxPopulation })
+            : i18n.t('wp6.hud.arrival', { t: i18n.formatDuration(left) });
+      this.statusPeople = `${count}. ${door}`;
+      this.statusMorale = i18n.t('p2h.morale', { pct: morale });
+      this.statusLabel();
+    }
+  }
+
+  /**
+   * [phase2] Nav tabs whose panel would be empty show a lock and say when they open (the same look as the Surface lock, onboarding.css):
+   * Research, until there is something to research (a finished laboratory, or research already done or under way). Public reader:
+   * navLockText (the onboarding's lock popover can use it). Checked once a second.
+   */
+  private navLocks = new Map<NavKey, string | null>();
+  private navLocksAt = 0;
+
+  navLockText(key: NavKey): string | null {
+    return this.navLocks.get(key) ?? null;
+  }
+
+  private updateNavLocks(state: GameState, nowMs: number): void {
+    if (nowMs - this.navLocksAt < 1000) return;
+    this.navLocksAt = nowMs;
+    const lab = state.buildings.some(b => b.type === 'laboratory' && !(b.isConstructing && b.level <= 1));
+    const started = Object.values(state.research).some(r => r.completed || r.isResearching);
+    const text = lab || started ? null : i18n.t('p2h.lock.research', { name: getDef('laboratory')?.name[i18n.currentLocale] ?? '' });
+    if (this.navLocks.get('research') === text && this.navLocks.has('research')) return;
+    this.navLocks.set('research', text);
+    const tab = this.nav.querySelector<HTMLElement>('.hx-tab[data-key="research"]');
+    if (!tab) return;
+    tab.classList.toggle('ob-locked', !!text);
+    let badge = tab.querySelector<HTMLElement>('.ob-lock');
+    if (text && !badge) {
+      badge = el('span', 'ob-lock', '[[lock]]');
+      badge.setAttribute('aria-hidden', 'true');
+      tab.querySelector('.hx-tab__icon')?.appendChild(badge);
+    }
+    if (badge) badge.hidden = !text;
+    if (text) { tab.setAttribute('aria-description', text); tab.title = text; } else { tab.removeAttribute('aria-description'); tab.removeAttribute('title'); }
   }
 
   private moraleRules: PopulationSystem | null = null;
@@ -1142,7 +1199,14 @@ export class HUD {
     }
     if (!best) return i18n.t('wp4.moraleCalm');
     const v = Math.round(best[1]);
-    return `${i18n.t('ux2b.moraleTop', { cause: i18n.t(`morale.${best[0]}`), v: `${v > 0 ? '+' : v < 0 ? '−' : ''}${Math.abs(v)}` })} ${i18n.t('ux2b.moraleMore')}`;
+    return `${i18n.t('ux2b.moraleTop', { cause: i18n.t(`morale.${best[0]}`), v: `${v > 0 ? '+' : v < 0 ? '−' : ''}${Math.abs(v)}` })}`;
+  }
+
+  /** [phase2] The status chip's long press: the mood's biggest cause, then the season (it left the Inbox: nothing to do there). */
+  private statusTip(): string {
+    const parts = [this.statusMorale, this.moraleTopCause()].filter(Boolean);
+    if (this.season) parts.push(`[[${this.season.icon}]] ${this.season.label}`);
+    return parts.join(' · ');
   }
 
   destroy(): void {

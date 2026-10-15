@@ -16,7 +16,7 @@ import { enhanceTabs } from '../a11yDom';
 import { isIosBrowserTab } from '../../utils/platform'; // [plan4:UX-15]
 import { lastExportAt, markExported } from '../pwa';
 import { markPopupsChosen, popupMode } from './NumberPopup';
-import { kButton, kRow, kTabs, MS } from '../kit'; // [ux2e]
+import { kBadge, kButton, kRow, kTabs, MS } from '../kit'; // [ux2e]
 
 /** [ux2e #25] The groups of the Settings tab. */
 type SettingsGroup = 'game' | 'display' | 'saves' | 'more' | 'about';
@@ -93,6 +93,13 @@ export interface MenuActions {
   openBook: () => void;
   /** [Q14] Opens the Chronicle (the run's milestones). */
   openChronicle: () => void;
+  /** [phase2] The Archive row (Menu top): the journal (lore finds, story). Optional until the app wires it (button hidden). */
+  openJournal?: () => void;
+  /** [phase2] The trade shop (it left the Inbox list): a row under the Archive. Optional until the app wires it (row hidden). */
+  openShop?: () => void;
+  /** [phase2] Door knocks: newcomers come in by themselves while there is a bed (app.events.autoDoor / setAutoDoor). Row hidden until wired. */
+  autoDoor?: () => boolean;
+  setAutoDoor?: (on: boolean) => void;
   /** [plan4:UX-11] Forget which gesture tips were seen / play the opening story again (no change to the game). */
   showTipsAgain?: () => void;
   replayIntro?: () => void;
@@ -153,23 +160,66 @@ export class MenuPanel {
       this.backups?.map(b => `${b.kind}${b.timestamp}`).join(',') ?? 'loading',
       this.tab === 'a11y' ? JSON.stringify(getA11y()) : '',
       this.tab === 'genesis' ? meta.rebirthRequirements(state).map(r => r.current).join(',') : '',
+      // [phase2] The Archive row's unread count, the shop's credits, and whether Genesis is on the tab row.
+      state.loreUnread?.length ?? 0, Math.floor(state.resources.credits?.amount ?? 0), this.genesisShown(state), this.actions.autoDoor?.() ?? '',
     ].join('|');
     if (sig === this.signature) return;
     this.signature = sig;
     this.render(state);
   }
 
+  /**
+   * [phase2] Genesis (prestige) is on the tab row from Act VI, or at any time when this save already has prestige (a rebirth done, or
+   * Isotope-7 earned). A legacy run (no long game) keeps it. An explicit show('genesis') (the Command panel's route) still opens it.
+   */
+  private genesisShown(state: GameState): boolean {
+    const lg = state.longGame;
+    if (!lg || lg.meta.legacy || (lg.meta.act ?? 1) >= 6) return true;
+    return state.prestige.rebirthCount > 0 || state.prestige.totalIsotope7Earned > 0 || this.engine.metaSystem.isotope(state) > 0;
+  }
+
+  /**
+   * [phase2] The Menu's top row (ui-architecture fix 9): the Archive, one tap each (Journal, Chronicle, Bunker Book; they left the
+   * Inbox and the Settings > More group), and the trade shop with the credits. Buttons the app has not wired are left out.
+   */
+  private renderTop(state: GameState): HTMLElement {
+    const card = el('div', 'bp-card menu-archive');
+    card.appendChild(el('div', 'bp-section-title', `[[books]] ${i18n.t('p2h.archive')}`));
+    const grid = el('div', 'menu-archive__grid');
+    const open = (fn: () => void) => () => { uiSound('click'); fn(); };
+    const unread = state.loreUnread?.length ?? 0;
+    if (this.actions.openJournal) {
+      const journal = kButton({ variant: 'secondary', className: 'btn-secondary menu-archive__btn', icon: 'journal', label: i18n.t('journal.title'), onPress: open(() => this.actions.openJournal?.()) });
+      if (unread > 0) journal.appendChild(kBadge(unread));
+      grid.appendChild(journal);
+    }
+    grid.append(
+      kButton({ variant: 'secondary', className: 'btn-secondary menu-archive__btn', icon: 'flag', label: i18n.t('chronicle.title'), onPress: open(() => this.actions.openChronicle()) }),
+      kButton({ variant: 'secondary', className: 'btn-secondary menu-archive__btn', icon: 'question', label: i18n.t('p2h.book'), ariaLabel: i18n.t('book.title'), onPress: open(() => this.actions.openBook()) }),
+    );
+    card.appendChild(grid);
+    if (this.actions.openShop) {
+      const shop = kRow({ icon: 'credits', label: i18n.t('ux2b.shop'), value: fmtNum(Math.floor(state.resources.credits?.amount ?? 0)), onPress: open(() => this.actions.openShop?.()) });
+      shop.classList.add('menu-archive__shop');
+      shop.querySelector<HTMLElement>('.k-row__value')?.setAttribute('dir', 'ltr');
+      card.appendChild(shop);
+    }
+    return card;
+  }
+
   private render(state: GameState): void {
     this.sheet.setTitle(`[[menu]] ${i18n.t('menu.title')}`);
     const root = el('div', 'bp');
+    root.appendChild(this.renderTop(state)); // [phase2]
     const tabs = el('div', 'tab-row');
     const tabDefs: { id: MenuTab; icon: string }[] = [
       { id: 'settings', icon: '[[settings]]' },
       { id: 'a11y', icon: '[[eye]]' },
       { id: 'stats', icon: '[[chart]]' },
       { id: 'achievements', icon: '[[trophy]]' },
-      { id: 'genesis', icon: '[[isotope7]]' },
     ];
+    // [phase2] Genesis only when it matters (see genesisShown), or when it was opened on purpose.
+    if (this.genesisShown(state) || this.tab === 'genesis') tabDefs.push({ id: 'genesis', icon: '[[isotope7]]' });
     for (const t of tabDefs) {
       tabs.appendChild(button(`${t.icon} ${i18n.t(`menu.${t.id}`)}`, `tab ${t.id === this.tab ? 'active' : ''}`, () => {
         this.tab = t.id;
@@ -341,6 +391,15 @@ export class MenuPanel {
       notifyHint.textContent = i18n.t('settings.notifyIosHint');
     }
     card.append(lang, sound, music, fx, haptics, notify, notifyHint);
+    // [phase2] The door: let newcomers in by themselves while there is a free bed (on by default after the first knock).
+    if (this.actions.autoDoor && this.actions.setAutoDoor) {
+      const on = this.actions.autoDoor();
+      card.appendChild(this.setRow(`[[door]] ${i18n.t('p2p.door.setting')}`, i18n.t(on ? 'settings.on' : 'settings.off'), () => {
+        uiSound('switch');
+        this.actions.setAutoDoor?.(!on);
+        this.redraw();
+      }));
+    }
     return [card];
   }
 
@@ -471,9 +530,7 @@ export class MenuPanel {
     const card = el('div', 'bp-card');
     const open = (fn: () => void) => () => { uiSound('click'); fn(); };
     card.append(
-      // [Q6/Q14] The book and the chronicle: the questions a new player asks.
-      this.setRow(`[[question]] ${i18n.t('book.title')}`, i18n.t('book.open'), open(() => this.actions.openBook())),
-      this.setRow(`[[journal]] ${i18n.t('chronicle.title')}`, i18n.t('book.open'), open(() => this.actions.openChronicle())),
+      // [phase2] The book and the chronicle moved to the Menu's top row (the Archive).
       // [ux-wp4] M5/D5: the rooms list (with filters).
       this.setRow(`[[build]] ${i18n.t('wp4.roomsList')}`, i18n.t('book.open'), open(() => this.actions.openStructure())),
     );
