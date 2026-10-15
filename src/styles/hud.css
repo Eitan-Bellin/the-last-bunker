@@ -651,3 +651,8 @@
 .sheet.resource-sheet .res-switch__icon { display: inline-flex; line-height: 0; }
 .sheet.resource-sheet .res-switch__icon .ic { width: var(--icon-s); height: var(--icon-s); }
 .sheet.resource-sheet .res-switch__amount { unicode-bidi: isolate; }
+
+/* [phase2 lead] 320 px: a four-character amount ("2.2K") must fit the narrow tile whole, not end in an ellipsis. */
+@media (max-width: 359px) {
+  #hud .hx-res .k-chip__amount { font-size: 0.9em; letter-spacing: -0.03em; text-overflow: clip; }
+}

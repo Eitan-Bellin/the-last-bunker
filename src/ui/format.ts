@@ -45,6 +45,22 @@ export function fmtNum(n: number): string {
 }
 
 /**
+ * [phase2] An amount for a narrow HUD tile (at most 4 characters): exact up to 999, then 2 significant digits with K / M / B
+ * ("1.7K", "19K", "250K", "1.5M"). Cut, never rounded up, like fmtNum. The tile's sheet shows the exact number.
+ */
+export function fmtTile(n: number): string {
+  if (!Number.isFinite(n)) return String(n);
+  if (n < 0) return MINUS + fmtTile(-n);
+  if (n < 1000) return String(Math.floor(n));
+  for (const [size, unit] of [[1e9, 'B'], [1e6, 'M'], [1e3, 'K']] as const) {
+    if (n < size) continue;
+    const v = n / size;
+    return (v < 10 ? (Math.floor(v * 10) / 10).toString() : String(Math.floor(v))) + unit;
+  }
+  return String(Math.floor(n));
+}
+
+/**
  * A price for a cost chip ([ux-wp4] P17, moved here from dom.ts `costAmount`): exact up to 9,999, then short like the HUD ("470K", "2.4M"),
  * always rounded UP so a short price is never less than what is asked.
  */

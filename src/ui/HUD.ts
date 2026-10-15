@@ -15,7 +15,7 @@ import { setHudInsets } from '../utils/hudInsets';
 import { initViewportUi } from './viewportUi';
 import { kResourceChip, kProgress, setProgress, kBadge, setBadge, kRow, kTooltip, bindPress } from './kit';
 import { TIMER_ENDING_S } from './kit/tokens';
-import { fmtDuration, fmtNum, plural } from './format';
+import { fmtDuration, fmtNum, fmtTile, plural } from './format';
 import '../styles/hud.css';
 import { CountUp } from './fx/countUp'; // [ux-redesign W4]
 
@@ -1066,7 +1066,7 @@ export class HUD {
     // [phase1] The strip already counts this one down: the tile keeps its colour (danger / low) but not a second clock.
     const countdown = timer && this.stripRes !== rt;
 
-    this.setText(els.value, fmtNum(shownAmount));
+    this.setText(els.value, fmtTile(shownAmount)); // [phase2] fits the one-row tile (the sheet shows the exact amount)
     let line: string;
     let mode: string;
     if (full) { line = i18n.t('ux2b.full'); mode = 'is-full'; }
