@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // [ux-redesign W4 qa] HUD count-up test: src/ui/fx/countUp.ts. A big jump counts up and ends exactly on the real amount, a held number
 // waits for the goods and then counts, reduced motion jumps at once, small changes keep the gentle roll, production ticking during a count
-// is followed, a drop counts down, and nothing is left busy afterwards. Exit 1 on any problem. Usage: node tools/sim/countup-test.mjs
+// is followed, a drop (spending) shows at once, a hold drops a running count and nothing is left busy afterwards. Exit 1 on any problem. Usage: node tools/sim/countup-test.mjs
 import { rmSync } from 'node:fs';
 import { join, resolve, dirname } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -26,6 +26,8 @@ function run(cu, key, shown, target, ms, t0 = 0) {
   return out;
 }
 const last = f => f[f.length - 1].shown;
+/** Counting or waiting (the class keeps this private; the bundle does not). */
+const busy = cu => cu.tweens.size > 0 || cu.holds.size > 0;
 
 // ---- countMs: 300 ms for a small jump, 1000 ms for a doubling or more ------------------------------------------------------------------
 ok(C.countMs(100, 106) >= C.COUNT_MIN_MS && C.countMs(100, 106) < 400, `countMs small ${C.countMs(100, 106)}`);
@@ -44,26 +46,27 @@ ok(C.countMs(0, 500) === C.COUNT_MAX_MS, `countMs from zero ${C.countMs(0, 500)}
   ok(mid > 100 && mid < 250, `jump is mid-count at 300 ms: ${mid}`);
   const done = f.find(x => x.shown === 250).t;
   ok(done <= C.COUNT_MAX_MS + 40, `jump done by ~1000 ms: ${done}`);
-  ok(!cu.busy, 'not busy after the count');
+  ok(!busy(cu), 'not busy after the count');
 }
 
-// ---- a drop counts down and ends exactly ----------------------------------------------------------------------------------------------
+// ---- a drop (spending) shows at once ------------------------------------------------------------------------------------------------
 {
   const cu = new C.CountUp();
   const f = run(cu, 'water', 500, 120, 1500);
+  ok(f[0].shown === 120, `drop snaps: ${f[0].shown}`);
   ok(last(f) === 120, `drop ends on target: ${last(f)}`);
-  ok(f.find(x => x.t >= 200).shown < 500, 'drop starts counting');
+  ok(!busy(cu), 'drop makes no tween');
 }
 
 // ---- hold: the number waits for the goods, then counts and ends on target ---------------------------------------------------------------
 {
   const cu = new C.CountUp();
   cu.hold('scrap', 600, 0);
-  ok(cu.busy, 'busy while held');
+  ok(busy(cu), 'busy while held');
   const f = run(cu, 'scrap', 40, 140, 2000);
   ok(f.filter(x => x.t < 590).every(x => x.shown === 40), 'held number stays until the landing');
   ok(last(f) === 140, `held jump ends on target: ${last(f)}`);
-  ok(!cu.busy, 'hold cleared');
+  ok(!busy(cu), 'hold cleared');
 }
 
 // ---- release early: counting starts at once -------------------------------------------------------------------------------------------
@@ -82,7 +85,7 @@ ok(C.countMs(0, 500) === C.COUNT_MAX_MS, `countMs from zero ${C.countMs(0, 500)}
   const cu = new C.CountUp();
   cu.hold('materials', 600, 0);
   const f = run(cu, 'materials', 300, 100, 1500);
-  ok(f.find(x => x.t >= 200).shown < 300, 'drop is not held');
+  ok(f[0].shown === 100, 'drop is not held');
   ok(last(f) === 100, 'drop under hold ends on target');
 }
 
@@ -98,7 +101,7 @@ ok(C.countMs(0, 500) === C.COUNT_MAX_MS, `countMs from zero ${C.countMs(0, 500)}
 {
   const cu = new C.CountUp();
   const f = run(cu, 'food', 100, 102, 1000);
-  ok(!cu.busy, 'small change makes no tween');
+  ok(!busy(cu), 'small change makes no tween');
   ok(last(f) === 102, `small change settles: ${last(f)}`);
 }
 
@@ -124,8 +127,8 @@ ok(C.countMs(0, 500) === C.COUNT_MAX_MS, `countMs from zero ${C.countMs(0, 500)}
   ok(last(f) === 3, `0 -> 3 ends on 3: ${last(f)}`);
 }
 
-// ---- KNOWN BUG (qa-wave-4 C1): a HUD frame between the gain and the fly() callback starts the tween; the hold then hides it while
-// its clock runs, so at the landing the number jumps most of the way in one frame. Reported, not fatal unless COUNTUP_STRICT=1. -------
+// ---- qa-wave-4 C1: a HUD frame between the gain and the burst starts a count; the hold drops it, and the count starts at the landing from
+// the shown value (no jump of most of the gain in one frame). ----------------------------------------------------------------------------
 {
   const cu = new C.CountUp();
   let shown = 504000;
@@ -136,15 +139,23 @@ ok(C.countMs(0, 500) === C.COUNT_MAX_MS, `countMs from zero ${C.countMs(0, 500)}
     if (t >= 608 && t < 624) cu.release('m');
     const prev = shown;
     shown = cu.step('m', shown, 1104000, t, 1 / 60);
+    if (t < 608) ok(shown === 504000, `held at ${t}: ${shown}`);
     if (t >= 608 && t < 624) { atLand = prev; after = shown; }
   }
   const leap = (after - atLand) / (1104000 - 504000);
-  const msg = `count-up after a hold jumps ${Math.round(leap * 100)}% of the gain in the first frame after the landing (want < 25%)`;
-  if (leap >= 0.25) {
-    if (process.env.COUNTUP_STRICT) problems.push(msg);
-    else console.warn(`countup-test KNOWN BUG: ${msg}`);
-  }
+  ok(leap < 0.25, `count-up after a hold jumps ${Math.round(leap * 100)}% of the gain in the first frame after the landing (want < 25%)`);
   ok(shown === 1104000, 'held jump with an early tween still ends on target');
+  ok(!busy(cu), 'nothing busy after the held count');
+}
+
+// ---- a hold that runs out on its own (nothing landed) counts from the shown value too ---------------------------------------------------
+{
+  const cu = new C.CountUp();
+  cu.hold('k', 300, 0);
+  const f = run(cu, 'k', 1000, 3000, 1800);
+  const first = f.find(x => x.t >= 300 + 20).shown;
+  ok(first < 1000 + 0.25 * 2000, `expired hold starts gently: ${first}`);
+  ok(last(f) === 3000, 'expired hold ends on target');
 }
 
 if (problems.length) {

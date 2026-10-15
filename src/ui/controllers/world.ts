@@ -21,6 +21,7 @@ import { hasFreeSpot, missingText, noSpaceRoute, noSpaceText } from '../componen
 import type { IconName } from '../../ui/icons';
 import type { GameApp } from '../../app';
 import { popupMode } from '../components/NumberPopup'; // [plan4:UX-21]
+import { fmtNum } from '../format'; // [w4fix C4]
 
 /** A bubble is worth two minutes of the room's output (NICE1), so a tap still matters after the first hour. */
 const BUBBLE_SECONDS = 120;
@@ -507,36 +508,21 @@ export class WorldController {
     const main = rs[0];
     this.app.audio.play(main === 'water' ? 'drip' : main === 'materials' || main === 'scrap' ? 'coin' : 'collect');
     if (main === 'water' || n > 1) this.app.audio.play('collect', { volume: 0.6 });
-    haptic(n > 1 ? 'success' : 'tap');
-    rs.forEach((r, i) => window.setTimeout(() => this.flyToHud(r, from!.x, from!.y, `+${i18n.formatCompact(totals.get(r)!)}`), i * 90));
+    // [w4fix] One buzz per collect: the landing's (feedback.ts), not a second one at the tap.
+    this.app.feedback.flyGoods(gain, from);
     if (n > 1) {
       const b = state.buildings.find(x => x.id === buildingId);
       if (b) {
         const c = this.app.renderer.roomCenter(b);
-        this.app.popups.spawn(c.x, c.y - 20, `[[star]] ×${n} ${rs.map(r => `${RESOURCE_ICONS[r] ?? ''}+${i18n.formatCompact(totals.get(r)!)}`).join(' ')}`, 0xffe2a0);
+        this.app.popups.spawn(c.x, c.y - 20, `[[star]] ×${n} ${rs.map(r => `${RESOURCE_ICONS[r] ?? ''}+${fmtNum(totals.get(r)!)}`).join(' ')}`, 0xffe2a0);
       }
     }
     this.app.engine.notifyInteraction();
   }
 
-  /** A collected resource icon arcs up into its HUD counter, which then pulses. */
+  /** A collected resource icon arcs up into its HUD counter (the pooled fx layer; [w4fix] the old .fly-icon element is gone). */
   flyToHud(r: ResourceType, x: number, y: number, label: string): void {
-    const target = this.app.hud.resourceRect(r);
-    const fly = el('div', 'fly-icon', `${RESOURCE_ICONS[r] ?? ''} ${label}`);
-    fly.style.left = `${x}px`;
-    fly.style.top = `${y}px`;
-    document.body.appendChild(fly);
-    requestAnimationFrame(() => {
-      fly.classList.add('go');
-      if (target) {
-        fly.style.left = `${target.left + target.width / 2}px`;
-        fly.style.top = `${target.top + target.height / 2}px`;
-      }
-    });
-    setTimeout(() => {
-      fly.remove();
-      this.app.hud.pulseResource(r);
-    }, 650);
+    this.app.feedback.fly.fly(r, { x, y }, 0, label);
   }
 
   // ───────────────────────────── [ux-wp4] HUD and panel shortcuts ─────────────────────────────

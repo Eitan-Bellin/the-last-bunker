@@ -1,8 +1,8 @@
 import { i18n } from '../../i18n/I18nManager';
 import { BIOMES, POIS, type BiomeId } from '../../data/surface';
-import { el } from '../../ui/dom';
+import { RESOURCE_ICONS, el } from '../../ui/dom';
+import { fmtNum } from '../format';
 import type { MissionReport, ResourceType, SurvivorState } from '../../core/GameState';
-import { gainsText } from '../../ui/components/StoryDialog';
 import { genderOf, portraitFor, portraitUrl } from '../../data/portraits';
 import { biomeImage, journalTimeline } from '../../ui/expeditionText';
 import { expeditionEvent } from '../../data/expeditionEvents';
@@ -93,12 +93,10 @@ export class EventController {
     if (eventId === 'stash' && !(result.injured ?? []).length) {
       this.app.modal.hide();
       const gains = result.gains ?? {};
-      const got = gainsText(gains);
+      // [w4fix C4] Amounts read like the HUD ("400K", not "400000").
+      const got = (Object.entries(gains) as [ResourceType, number][]).filter(([, v]) => v > 0).map(([r, v]) => `${RESOURCE_ICONS[r] ?? ''}${fmtNum(v)}`).join(' ');
       this.app.toasts.show(`${EVENT_ICONS.stash} ${i18n.t(`event.${eventId}.result.${result.key}`, params)}${got ? ` ${got}` : ''}`, 'good');
-      const x = window.innerWidth / 2;
-      const y = window.innerHeight / 2;
-      (Object.entries(gains) as [ResourceType, number][]).filter(([, v]) => v > 0)
-        .forEach(([r, v], i) => window.setTimeout(() => this.app.world.flyToHud(r, x, y, `+${i18n.formatCompact(v)}`), i * 90));
+      this.app.feedback.flyGoods(gains, null); // [w4fix C1] from the middle; the numbers wait for the goods, then count
       return;
     }
     const body = el('div', 'modal-result');
