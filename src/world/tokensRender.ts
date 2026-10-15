@@ -183,3 +183,12 @@ export const ROCK_RENDER = {
   /** How far the rock extends past the layout bounds on each side. */
   sideRun: 2400,
 } as const;
+
+/**
+ * [world:C1] City night grade (postfx, behind `?city`). Underground the lightmap already carries the night (civic lamps at 60%, the sky
+ * ambient of strata 0-1 to moonlight, style guide section 9), so the composite's underground night mood runs at this share of its classic
+ * strength (the grade never touches the sky). Classic mode never reads it.
+ */
+export const CITY_NIGHT_GRADE = {
+  underground: 0.45,
+} as const;

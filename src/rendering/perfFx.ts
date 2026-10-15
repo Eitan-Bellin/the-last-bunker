@@ -9,10 +9,10 @@ import type { GameState } from '../core/GameState';
 import { isDistrict } from '../data/buildingDefs';
 import { ROOMS_W, FLOOR_H, floorTop } from './layout';
 import { eastmostSlotX } from '../world/project';
+import { hashString, seeded } from './draw';
 
 /** [world:C0] The dust band: the default east strip, from where the east rooms begin (a global extent: the east-most frame). */
 const dustX0 = (): number => eastmostSlotX(0);
-import { hashString, seeded } from './draw';
 
 /**
  * The world rectangle the camera sees right now (plus a margin), refreshed by the renderer once per picture. Effects that animate

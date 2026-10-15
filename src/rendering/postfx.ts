@@ -9,15 +9,7 @@ import { isLiteMode } from '../core/crashGuard';
 import { isTouchDevice } from '../utils/device';
 import { viewport } from '../utils/viewport'; // [perf] window size without forcing layout
 import { CITY } from '../world/flag'; // [world:C1]
-
-/**
- * [world:C1] City night grade (behind `?city`). Underground the lightmap already carries the night (civic lamps at 60%, the sky ambient
- * of strata 0-1 to moonlight, style guide section 9), so the composite's underground night mood runs at this share of its classic strength
- * (the grade never touches the sky). Classic mode never reads it.
- */
-export const CITY_NIGHT_GRADE = {
-  underground: 0.45,
-} as const;
+import { CITY_NIGHT_GRADE } from '../world/tokensRender'; // [world:C1]
 
 const BLOOM_SCALE = 0.25;
 const QUALITY_KEY = 'lastbunker_gfx';
