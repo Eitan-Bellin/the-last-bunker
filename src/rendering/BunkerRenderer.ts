@@ -829,6 +829,7 @@ export class BunkerRenderer {
   private onCanvasTap(sx: number, sy: number): void {
     if (this.ghostDrag || this.drag) return;
     const p = this.worldContainer.toLocal({ x: sx, y: sy });
+    if (this.cityHost && !this.mapCovers && this.cityHost.tapPocket(p.x, p.y)) return; // [world:M1] a glimpsed pocket: found (cosmetic)
     const r = this.ghost.rect();
     if (r && p.x >= r.x && p.x <= r.x + r.w && p.y >= r.y && p.y <= r.y + r.h) return;
     if (this.placement.insideBunker(p.x, p.y)) return;
@@ -1490,7 +1491,7 @@ export class BunkerRenderer {
   /** [world:C1] The layout follows the provider; a new one (or a new era / kit) flags the shell, mounted in updateCity (CityHost.ensureShell). */
   private syncCityLayout(state: GameState): void {
     const host = this.cityHost!;
-    const key = (Math.imul(LAYOUT.ext, 31) ^ Math.imul(LAYOUT.rooms, 17) ^ Math.imul(this.surfaceEra + 2, 7919) ^ state.currentFloors) >>> 0;
+    const key = (Math.imul(LAYOUT.ext, 31) ^ Math.imul(LAYOUT.rooms, 17) ^ Math.imul(this.surfaceEra + 2, 7919) ^ state.currentFloors ^ Math.imul((state.city?.found.length ?? 0) + 1, 104729)) >>> 0; // [world:M1] a found pocket opens in the layout
     if (key === this.cityKey && host.current) return;
     this.cityKey = key;
     if (host.syncLayout(state, `${this.surfaceEra}|${this.gfx2 && kitReady()}`)) this.applyCityExtents();
@@ -1520,6 +1521,7 @@ export class BunkerRenderer {
       host.ensureShell(state, this.surfaceEra); // [world:C2] new layout / era / kit / tier: the shell is rebuilt
       host.syncProgress(state, this.time); // [world:C2] digs and districts move the fog and the rubble (2x a second)
       host.syncRooms(state, this.roomProbe, this.time, LAYOUT.rooms);
+      host.syncPins(state, this.time); // [world:M1] "new" discovery pins
     }
     const tier = isLiteMode() ? 'lite' : this.postfx?.quality ?? 'high';
     host.frame(this.worldContainer, this.app.screen.width, this.app.screen.height, this.time, dt, tier, this.mapCovers, this.surfaceEra, this.nightNow);
