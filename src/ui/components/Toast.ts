@@ -127,7 +127,15 @@ export class Toasts {
     if (this.pollTimer) return;
     this.pollTimer = window.setTimeout(() => {
       this.pollTimer = 0;
-      if (this.pause?.()) for (const v of [...this.visible]) if (v.kind !== 'critical') this.dismiss(v, false);
+      // [ux-redesign w2fix] The toast that had to make way goes back to the front of the line (it was not read yet), not away.
+      if (this.pause?.()) {
+        for (const v of [...this.visible]) {
+          if (v.kind === 'critical') continue;
+          this.dismiss(v, false);
+          this.queue.unshift({ text: v.text, kind: v.kind, count: v.count, node: null, countEl: null, timer: 0, shownAt: 0 });
+        }
+        while (this.queue.length > MAX_QUEUED) this.queue.pop();
+      }
       this.next(); // schedules the next look while still paused
     }, PAUSE_POLL_MS);
   }
