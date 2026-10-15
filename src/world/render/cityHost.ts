@@ -25,6 +25,7 @@ import { revealedAreaIds } from '../../core/state/city';
 import { activeCitySystem } from '../../systems/CitySystem';
 import { uiSound } from '../../audio/uiSound';
 import { DiscoveryPins, pinAnchor } from './pins';
+import { freeCaches } from './chunks';
 import { cityTextures } from './lighting';
 import { CityRenderer, parallaxFromWorld, type ParallaxInfo, type RenderTier } from './CityRenderer';
 import { cityLayoutProvider, shellMounter, type MountedShell } from './citySeams';
@@ -152,6 +153,10 @@ export class CityHost {
 
   /** Mounts the level-builder's shell into the shell holders. False when no mounter is set (the holders stay empty). */
   mountShell(state: GameState, era: number): boolean {
+    // [world:M1] The rock chunks' texture caches go now, not back to Pixi's TexturePool (which never frees: a tier switch left 62 MB of
+    // High-tier 512² caches behind at e55).
+    freeCaches(this.shellBack);
+    freeCaches(this.shellFront);
     this.shell?.destroy();
     this.shell = null;
     this.shellBack.removeChildren().forEach(ch => ch.destroy({ children: true }));
@@ -357,6 +362,8 @@ export class CityHost {
 
   destroy(): void {
     this.pins.destroy();
+    freeCaches(this.shellBack);
+    freeCaches(this.shellFront);
     this.shell?.destroy();
     this.city.destroy();
   }

@@ -10,6 +10,20 @@
 import { Container } from 'pixi.js';
 import type { Rect } from './layoutTypes';
 
+/**
+ * [world:M1] A parked chunk's texture caches (`cacheAsTexture`) are destroyed, not handed back to Pixi's TexturePool: the pool never gives
+ * memory back, so every chunk ever built stayed on the GPU (86 rock caches of 1 MB at e55 desktop, most of the city's extra memory).
+ */
+export function freeCaches(o: Container): void {
+  const rg = (o as unknown as { renderGroup?: { isCachedAsTexture?: boolean; texture?: { destroy(all?: boolean): void } | null } | null }).renderGroup;
+  if (rg?.isCachedAsTexture && rg.texture) {
+    const t = rg.texture;
+    rg.texture = null;
+    t.destroy(true);
+  }
+  for (const ch of o.children) freeCaches(ch);
+}
+
 export interface ChunkSource {
   /** Builds the content of one chunk (or null when it is empty). `x0..x1, y0..y1` is the chunk rectangle. */
   build(cx: number, cy: number, x0: number, y0: number, x1: number, y1: number): Container | null;
@@ -96,7 +110,10 @@ export class ChunkManager {
   }
 
   private drop(c: Chunk): void {
-    if (c.content) c.content.destroy({ children: true });
+    if (c.content) {
+      freeCaches(c.content);
+      c.content.destroy({ children: true });
+    }
     c.content = null;
     c.built = false;
     c.shown = false;

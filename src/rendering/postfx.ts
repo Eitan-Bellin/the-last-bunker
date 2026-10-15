@@ -1,5 +1,5 @@
 import {
-  ColorMatrixFilter, Filter, GlProgram, Rectangle, RenderTexture, RendererType, Texture, defaultFilterVert,
+  ColorMatrixFilter, Filter, GlProgram, Rectangle, RenderTexture, RendererType, Texture, TexturePool, defaultFilterVert,
   type Application, type Container, type FilterSystem, type RenderSurface,
 } from 'pixi.js';
 import { PerformanceMonitor, type QualityLevel } from '../utils/PerformanceMonitor';
@@ -248,6 +248,7 @@ export class PostFX {
     if (Math.abs(r.resolution - want) < 0.01 || now - this.lastResize < 8000) return;
     this.lastResize = now;
     r.resize(this.app.screen.width, this.app.screen.height, want);
+    TexturePool.clear(true); // [world:M1] buffers sized for the old pixel density are dead weight now
   }
 
   private screenSize(): [number, number] {
@@ -270,6 +271,9 @@ export class PostFX {
     const fl = this.world.filters as readonly Filter[] | null | undefined;
     if (!fl?.includes(c)) this.world.filters = [...(fl ?? []).filter(x => x !== this.grade), c];
     if (q !== this.applied) {
+      // [world:M1] Pixi's TexturePool never frees: the filter textures of the old level (High: 2x-resolution 4096x2048 buffers, 32 MB each)
+      // stayed on the GPU after a switch. Between pictures every pooled texture is idle, so the pool is emptied; the next picture takes what it needs.
+      if (this.applied !== null) TexturePool.clear(true);
       this.applied = q;
       const p = profileOf(q);
       c.passes = p.passes;
