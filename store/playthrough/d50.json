@@ -7,24 +7,24 @@
   "seeds": [
    1
   ],
-  "startedAt": "2026-10-15T13:16:42.145Z",
-  "finishedAt": "2026-10-15T14:06:17.526Z",
-  "seconds": 2975,
+  "startedAt": "2026-10-15T16:37:08.516Z",
+  "finishedAt": "2026-10-15T18:22:31.402Z",
+  "seconds": 6323,
   "note": null,
   "fingerprint": {
    "src": "src",
    "hash": "6014963098ce",
    "files": 97,
-   "newestChange": "2026-10-15T13:04:10.868Z",
+   "newestChange": "2026-10-15T16:31:12.498Z",
    "lastChanged": [
-    "systems/ProjectSystem.ts @ 2026-10-15T13:04:10.868Z",
-    "systems/ResearchSystem.ts @ 2026-10-15T12:53:06.233Z",
-    "data/resources.ts @ 2026-10-15T12:52:45.233Z",
-    "data/shop.ts @ 2026-10-15T12:52:45.220Z",
-    "core/GameEngine.ts @ 2026-10-15T12:51:40.936Z",
-    "data/projects.ts @ 2026-10-15T12:51:40.932Z",
-    "systems/PopulationSystem.ts @ 2026-10-15T12:51:25.747Z",
-    "systems/ResourceSystem.ts @ 2026-10-15T12:51:25.744Z"
+    "systems/morale.ts @ 2026-10-15T16:31:12.498Z",
+    "systems/ResourceSystem.ts @ 2026-10-15T16:31:12.496Z",
+    "systems/ResearchSystem.ts @ 2026-10-15T16:31:12.494Z",
+    "systems/ProjectSystem.ts @ 2026-10-15T16:31:12.492Z",
+    "systems/PopulationSystem.ts @ 2026-10-15T16:31:12.491Z",
+    "data/shop.ts @ 2026-10-15T16:31:12.474Z",
+    "data/resources.ts @ 2026-10-15T16:31:12.472Z",
+    "data/projects.ts @ 2026-10-15T16:31:12.471Z"
    ]
   },
   "node": "v22.13.1",
@@ -62,7 +62,7 @@
    "mode": "engaged",
    "wallSeconds": 4320000,
    "playSeconds": 362400,
-   "runMs": 2974869,
+   "runMs": 6322368,
    "milestones": {
     "research insulatedWiring": {
      "play": 59,

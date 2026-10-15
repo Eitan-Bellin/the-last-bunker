@@ -1,0 +1,77 @@
+{
+ "wallSeconds": 30,
+ "gameMinutes": 1,
+ "dialogs": 0,
+ "story": 0,
+ "cards": 0,
+ "spotlights": 0,
+ "toasts": 0,
+ "sheets": 0,
+ "blocking": [],
+ "state": {
+  "paused": false,
+  "morale": 66,
+  "people": 3,
+  "power": 19,
+  "food": 143,
+  "playSeconds": 31
+ },
+ "samples": [
+  {
+   "paused": false,
+   "morale": 72,
+   "people": 3,
+   "power": 45,
+   "food": 149,
+   "playSeconds": 5
+  },
+  {
+   "paused": false,
+   "morale": 71,
+   "people": 3,
+   "power": 40,
+   "food": 148,
+   "playSeconds": 10
+  },
+  {
+   "paused": false,
+   "morale": 70,
+   "people": 3,
+   "power": 35,
+   "food": 146,
+   "playSeconds": 15
+  },
+  {
+   "paused": false,
+   "morale": 68,
+   "people": 3,
+   "power": 29,
+   "food": 145,
+   "playSeconds": 21
+  },
+  {
+   "paused": false,
+   "morale": 67,
+   "people": 3,
+   "power": 24,
+   "food": 144,
+   "playSeconds": 26
+  },
+  {
+   "paused": false,
+   "morale": 66,
+   "people": 3,
+   "power": 19,
+   "food": 143,
+   "playSeconds": 31
+  }
+ ],
+ "config": {
+  "base": "http://localhost:5175",
+  "minutes": 1,
+  "speed": 1,
+  "stage": "",
+  "away": 0,
+  "lang": "he"
+ }
+}
