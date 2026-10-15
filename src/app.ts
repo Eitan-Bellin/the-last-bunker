@@ -79,6 +79,11 @@ import './styles/placement.css'; // [plan4:ST-19] the confirm bar and the chips 
 import './styles/pwa.css'; // [plan4:UX-13] update chip, home-screen card, copy box
 import './styles/ux-wp4.css'; // [ux-wp4] convenience and HUD (upgrade bar, people rows, build menu folds)
 import './styles/a11y.css'; // [plan4:AC-2] the accessibility layer, last of all: reduced motion, colour modes, focus rings
+// [ux-redesign W3b] main-screen helpers: off-screen event arrows, back to the bunker, the Android back button, long press on a store tile
+import './styles/edge.css';
+import { EdgeArrows, installResourceLongPress } from './ui/edgeArrows';
+import { BackToBunker } from './ui/backToBunker';
+import { installNativeBack } from './ui/nativeBack';
 import { FeedbackController } from './ui/controllers/feedback';
 import { InboxController } from './ui/controllers/inbox';
 import { SaveController } from './ui/controllers/saves';
@@ -354,6 +359,37 @@ export class GameApp {
     if (this.state.storyFlags.includes('intro:done')) this.queueWelcome(this.engine.offlineReport);
     this.engine.start();
     this.installBackNavigation();
+    // [ux-redesign W3b] main-screen helpers (DOM only; the camera is driven through the renderer's public focus API)
+    {
+      const covered = () => this.anyPanelOpen() || this.structurePanel.isVisible || this.modal.isVisible || !!this.placementMode || !!this.tour?.active
+        || this.welcomeOpen || this.introPlaying || this.storyOpen || this.storyDialog.isVisible;
+      const click = () => this.audio.play('click');
+      new EdgeArrows({ renderer: this.renderer, getState: () => this.state, blocked: covered, click }).start();
+      new BackToBunker({ renderer: this.renderer, getState: () => this.state, blocked: covered, click }).start();
+      installResourceLongPress(r => this.hud.onResourceTap?.(r as ResourceType));
+      installNativeBack({
+        input: () => ({
+          touring: !!this.tour?.active, modalOpen: this.modal.isVisible, modalDismiss: this.modal.isVisible && this.modal.canDismiss ? 0 : null,
+          placing: !!this.placementMode, readerOpen: this.loreReader.isVisible, surfaceOpen: this.surfacePanel.isVisible,
+          sheetOpen: this.anyPanelOpen() || this.structurePanel.isVisible,
+        }),
+        act: act => {
+          if (act === 'tour') this.tour?.stop();
+          else if (act === 'modalDismiss') this.modal.back();
+          else if (act === 'placement') this.world.cancelPlacement();
+          else if (act === 'reader') this.loreReader.hide();
+          else if (act === 'surface') this.surfacePanel.hide();
+          else if (act === 'sheet' && !Sheet.closeTop()) this.closeSheets();
+        },
+        confirmLeave: (title, body, stay, leave, onLeave) => this.modal.show({
+          title, body, dismiss: 0,
+          actions: [
+            { label: stay, className: 'btn-primary', onClick: () => this.modal.hide() },
+            { label: leave, className: 'btn-secondary', onClick: () => { this.modal.hide(); onLeave(); } },
+          ],
+        }),
+      });
+    }
     // Ask the browser to keep the save safe (it may clear site data when the phone runs low on space): after the first tap, and once more later.
     window.addEventListener('pointerdown', () => void ensurePersistentStorage(), { once: true });
     setTimeout(() => void ensurePersistentStorage(), 10 * 60_000);
