@@ -484,3 +484,95 @@ Production build, iGPU, A2 method; classic and city measured in the same session
 `shots/C-overview.png`, `C-hub.png`, `C-corridor.png`, `C-district.png`, `C-edge.png` (slice) and `C-dig.png` (slice-dig). All at High, 1600x900.
 
 The camera still clamps vertically. The east edge choke is framed from the rooms' side.
+
+## Phase 2c: camera and life wiring, open items, budgets (tech-artist, world-redesign, 2026-10-15)
+
+### What changed
+
+**Wiring**
+- `CityHost.parallaxSource = () => cam.parallaxInfo()` gives the city camera-nav's official parallax camera, so the local derivation is only a fallback.
+- `cam.setCityLayout(layout)` is called on every layout sync.
+- `setLightSink(...)` (C1-Li §1) replaces the walkers' `ambientAt` override.
+- `walkers.life(...)` runs after `walkers.update` in `renderPeople`. It only runs in city mode.
+
+**Wing signs (`wingSigns.ts`)**
+- In the city, an edge the Act holds shut shows no price plate; the shell's choke is the blocked look.
+- The tap target stays, so the wing card still explains why it is shut.
+
+**Gradient leak (`shell/kit.ts`)**
+- `vfill` gradients are now shared. Same arguments, same `FillGradient`.
+- Before, every shell build left about 330 textures of 256x1 behind. On e55 the count now stays flat across three remounts (815 before and after); it used to grow from 1987 to 2976.
+
+**Art arrival**
+- When world-kit art arrives, only the rock is refreshed: `ShellParts.refreshRock()` drops the rock chunks.
+- The whole shell is no longer rebuilt. The other pieces swap their stand-ins themselves (`pendingSprites`).
+
+**Rock caches**
+- One cache per rock chunk (it was two). The AO is drawn over the erased rock: it still shades the hole, and now also slightly darkens the cut lip.
+
+**Far and back planes**
+- On Medium the far plane is merged into the back plane's cache (`TIER_RENDER.medium.planes = 'merged'`), as on Low.
+
+**Batching**
+- Each shell piece's children are regrouped by blend mode: normal, then multiply, then add.
+- The vestibules went from 15 draw calls to 4 on a fresh game.
+
+**Fore plane: off** (`BACKDROP.fore.enabled = false`)
+- At parallax 1.32 its seam lip drifted over the dig face, the dig sign and the rooms. The style guide does not allow that.
+- It needs a layout-aware fore before it comes back.
+
+### Checked in the game
+
+**Camera**
+- City bounds come from camera-nav: y −140..716 in the slice, the edges are included, and the camera now pans vertically.
+- Phone framing: hub shot at 375x812@2.
+
+**Life**
+- slice: 1 loiterer, at the west edge tunnel.
+- slice-dig: 2 diggers, who walk down the hub stairs to the face. The dig ends after about 20 s; the B4 hub then holds them.
+- e55: 10 loiterers and 1 lantern, a moving light.
+- No console errors.
+
+**People update** (`renderPeople` median / p95, dev build)
+- slice: 0.3 / 0.6 ms.
+- e55: 2.1 / 6.0 ms, against 1.3 / 3.5 ms in classic.
+
+**Classic compare** (baseline 0ec099d): 3.04 % mean, 8.1 % max. The diff images show only rain, people and lamp flicker; nothing in the structure changed.
+
+### Performance
+
+Production build, iGPU. Classic and city were measured in the same session at the **same absolute zoom**: overview 0.8 on desktop, 0.62 on phone; the sweep runs over 0.7–2.3.
+
+| Medium | Draw calls, classic → city | GPU MB, classic → city | Raw frame med ms, classic → city |
+|---|---|---|---|
+| fresh desktop | 203 → 219 (+16) | 169 → 208 | 3.5 → 6.8 |
+| e55 desktop | 625 → **601** | 256 → 371 | 24.4 → 25.1 |
+| fresh phone | 205 → 217 (+12) | 370 → **383 (+13)** | 3.5 → 4.2 |
+| e55 phone | 645 → **558** | 449 → **299** | 23.8 → 21.8 |
+
+| High | Draw calls, classic → city | GPU MB, classic → city | Raw frame med ms, classic → city |
+|---|---|---|---|
+| fresh desktop | 207 → 259 | 146 → 200 | 33.8 → 51.4 |
+| e55 desktop | 645 → 665 | 251 → 334 | 41.6 → 47.7 |
+| fresh phone | 208 → 240 | 370 → 315 | 3.9 → 6.1 |
+| e55 phone | 666 → 597 | 321 → 281 | 20.9 → 35.7 |
+
+**Budgets at Medium**
+- **Phone memory: met.** The city is at most classic + 20 MB: +13 MB fresh, −150 MB at e55.
+- **Fresh-game draw calls: not met.** The budget is classic + 10; the city is +12 on phone and +16 on desktop.
+  - What remains is non-batchable shell Graphics: the edge chokes and the hub front, each above Pixi's 200-vertex batching limit.
+- **Desktop memory:** +39 MB fresh, +115 MB at e55. The new world-kit art is most of it.
+
+The earlier tables measured at a relative zoom. Camera-nav's city fit changed the base zoom, so city and classic were no longer framing the same view. They are not comparable with this one.
+
+**Next steps**
+- Cache the edge chokes and the hub front as small textures, or simplify their Graphics.
+- Check the desktop world-kit texture sizes, which use mipmaps.
+
+### Shots
+
+All at High, 1600x900:
+- `C-overview`, `C-hub`, `C-corridor`, `C-district`, `C-edge`: the slice, now with life.
+- `C-dig`: slice-dig at 59 %, with the crew on the hub stairs.
+
+`C-phone-hub` is the mobile preset, 375x812@2.
