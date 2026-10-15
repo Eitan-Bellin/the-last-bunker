@@ -1,5 +1,6 @@
 import type { GameState, ResourceType } from '../core/GameState';
 import { i18n } from '../i18n/I18nManager';
+import { fmtCost } from './format';
 import { RESOURCE_ICONS } from './dom';
 
 /**
@@ -48,7 +49,7 @@ export function etaSeconds(list: Shortfall[]): number | null {
   return worst;
 }
 
-const amountText = (n: number): string => i18n.formatCompact(Math.ceil(n));
+const amountText = (n: number): string => fmtCost(n);
 
 /**
  * One readable line: "Need 120 more [[materials]] Materials · ~4 min", "Need 40 [[materials]] and 12 [[scrap]] · ~3 min",

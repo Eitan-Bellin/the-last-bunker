@@ -3,6 +3,7 @@ import type { GameEngine } from '../../core/GameEngine';
 import type { BuildingType } from '../../core/GameState';
 import type { ObjectiveAction } from '../../systems/ObjectiveSystem';
 import { i18n } from '../../i18n/I18nManager';
+import { fmtCost, fmtDuration, plural } from '../format';
 import { BRANCHES, REFINEMENTS, RESEARCH, type ResearchBranch, type ResearchDef } from '../../data/research';
 import { BUILDABLE_TYPES, getDef } from '../../data/buildingDefs';
 import { isBuildingUnlocked, refinementLevel } from '../../systems/ResearchSystem';
@@ -93,7 +94,7 @@ export class ResearchPanel {
     if (id && this.activeBar && this.activeTime) {
       const node = state.research[id];
       setBar(this.activeBar, (node.progress / node.total) * 100);
-      setRich(this.activeTime, `[[clock]] ${i18n.formatDuration((node.total - node.progress) / rs.speed(state))}`);
+      setRich(this.activeTime, `[[clock]] ${fmtDuration((node.total - node.progress) / rs.speed(state))}`);
     }
   }
 
@@ -210,7 +211,7 @@ export class ResearchPanel {
       if (now.length === 0) list.appendChild(kEmpty('check', i18n.t('ux2d.research.allDone')));
       const later = of('later');
       if (later.length) {
-        list.appendChild(this.fold('later', `[[lock]] ${i18n.t('ux2d.research.laterNow', { n: later.length })}`, later.map(d => this.foldRow(state, d))));
+        list.appendChild(this.fold('later', `[[lock]] ${plural('ux2d.research.laterNow', later.length)}`, later.map(d => this.foldRow(state, d))));
       }
       // Next Act's nodes by name only (no Doctrine or Genesis talk before they open); the ones after that as a count.
       const act = state.longGame?.meta.act ?? 1;
@@ -223,7 +224,7 @@ export class ResearchPanel {
         list.appendChild(this.fold(`act${n}`, `[[lock]] ${i18n.t('ux2d.research.opensAct', { n, count: defs.length })}`, defs.map(d => this.foldRow(state, d))));
       }
       const hidden = inBranch.filter(r => !places.has(r.id)).length;
-      if (hidden > 0) list.appendChild(el('div', 'bp-hint research-later', `[[lock]] ${i18n.t('wp6.research.later', { n: hidden })}`));
+      if (hidden > 0) list.appendChild(el('div', 'bp-hint research-later', `[[lock]] ${plural('wp6.research.later', hidden)}`));
       const done = of('done');
       if (done.length) {
         list.appendChild(this.fold('done', `[[check]] ${i18n.t('ux2d.research.done', { n: done.length })}`, done.map(d => kRow({ label: `${d.icon} ${this.name(d)}`, value: i18n.t('research.done') }))));
@@ -344,7 +345,7 @@ export class ResearchPanel {
       const row = el('div', 'research-queue-row');
       row.append(
         el('span', 'research-queue-name', `${i + 1}. ${def.icon} ${this.name(def)}`),
-        el('span', 'bp-hint', `[[clock]] ${i18n.formatDuration(rs.etaSeconds(state, id))}`),
+        el('span', 'bp-hint', `[[clock]] ${fmtDuration(rs.etaSeconds(state, id))}`),
       );
       const cancel = kButton({
         variant: 'close',
@@ -391,7 +392,7 @@ export class ResearchPanel {
       const room = this.producerFor(state, first.resource);
       if (room) {
         const text = i18n.t('ux2d.research.needRoom', {
-          n: i18n.formatCompact(Math.ceil(first.need)), icon: RESOURCE_ICONS[first.resource] ?? '', name: i18n.t(`resources.${first.resource}`),
+          n: fmtCost(first.need), icon: RESOURCE_ICONS[first.resource] ?? '', name: i18n.t(`resources.${first.resource}`),
           room: getDef(room)?.name[i18n.currentLocale] ?? room,
         });
         if (this.onGo) {
@@ -433,7 +434,7 @@ export class ResearchPanel {
       card.appendChild(el('div', 'research-done active', `[[clock]] ${i18n.t('research.queued', { n: pos })}`));
     } else {
       const meta = el('div', 'bp-upgrade-info');
-      meta.append(costRow(state, def.cost as Record<string, number>), el('span', 'bp-hint', `[[clock]] ${i18n.formatDuration(def.time / rs.speed(state))}`));
+      meta.append(costRow(state, def.cost as Record<string, number>), el('span', 'bp-hint', `[[clock]] ${fmtDuration(def.time / rs.speed(state))}`));
       card.appendChild(meta);
       const pending = new Set([rs.activeId(state), ...rs.queue(state)]);
       const missing = def.requires.filter(r => !state.research[r]?.completed && !pending.has(r));

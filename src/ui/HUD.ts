@@ -14,7 +14,7 @@ import { subscribeA11y, getA11y, reducedMotion } from '../utils/a11y';
 import { setHudInsets } from '../utils/hudInsets';
 import { initViewportUi } from './viewportUi';
 import { kResourceChip, kProgress, setProgress, kBadge, setBadge, kRow, kTooltip, bindPress } from './kit';
-import { fmtDuration, fmtNum } from './format';
+import { fmtDuration, fmtNum, plural } from './format';
 import '../styles/hud.css';
 import { CountUp } from './fx/countUp'; // [ux-redesign W4]
 
@@ -950,7 +950,7 @@ export class HUD {
       this.hiddenRes = hidden;
       this.setStyle(this.moreBtn, 'display', hidden.length ? '' : 'none');
       this.setText(this.moreText, i18n.t('ux2b.more', { n: hidden.length }));
-      const label = i18n.t('wp6.hud.more', { n: hidden.length });
+      const label = plural('wp6.hud.more', hidden.length);
       this.setAttr(this.moreBtn, 'aria-label', label);
       this.moreBtn.title = label;
     }
@@ -983,7 +983,7 @@ export class HUD {
         this.jobsText = text;
         this.peopleBadge.hidden = n === 0;
         this.setText(this.peopleBadge, text);
-        this.peopleBadge.title = n > 0 ? i18n.t('wp4.badgeJobs', { n }) : '';
+        this.peopleBadge.title = n > 0 ? plural('wp4.badgeJobs', n) : '';
       }
     }
   }
@@ -1024,7 +1024,7 @@ export class HUD {
     if (ariaDue) {
       // "Food: 124 of 150, +0.4 per second" (the real value, not the rolling counter); then FULL or the time it runs out.
       const name = i18n.t(`resources.${rt}`);
-      let label = i18n.t(hasCap ? 'a11y.resLabel' : 'a11y.resLabelNoCap', { name, amount: i18n.formatCompact(res.amount), cap: hasCap ? i18n.formatCompact(res.cap) : '', rate: i18n.formatRate(net) });
+      let label = i18n.t(hasCap ? 'a11y.resLabel' : 'a11y.resLabelNoCap', { name, amount: fmtNum(res.amount), cap: hasCap ? fmtNum(res.cap) : '', rate: i18n.formatRate(net) });
       if (full) label += `. ${i18n.t('ux2b.fullLabel')}`;
       else if (countdown) label += `. ${i18n.t('ux2b.runsOut', { t: fmtDuration(tte) })}`;
       this.setAttr(els.root, 'aria-label', label);
@@ -1093,7 +1093,7 @@ export class HUD {
     this.setText(this.popCaption, caption);
     this.setState(this.popBtn, 'door', lock ? 'is-lock' : full ? 'is-full' : capped ? 'is-capped' : '');
     if (ariaDue) {
-      const popTitle = lock ? i18n.t('wp4.actLock', { act: lock.next.name[i18n.currentLocale], n: lock.more })
+      const popTitle = lock ? plural('wp4.actLock', lock.more, { act: lock.next.name[i18n.currentLocale] })
         : full ? `${i18n.t('wp6.hud.population', { n: state.survivors.length, max: state.maxPopulation })}. ${i18n.t('wp6.hud.arrivalFull')}`
           : capped ? i18n.t('building.bedsCapped', { built, cap: state.maxPopulation })
             : `${i18n.t('wp6.hud.population', { n: state.survivors.length, max: state.maxPopulation })}. ${i18n.t('wp6.hud.arrival', { t: i18n.formatDuration(left) })}`;

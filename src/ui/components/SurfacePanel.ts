@@ -1,6 +1,7 @@
 import type { ExplorationHex, GameState } from '../../core/GameState';
 import type { GameEngine } from '../../core/GameEngine';
 import { i18n } from '../../i18n/I18nManager';
+import { fmtDuration, fmtNum, plural } from '../format';
 import { BIOMES, MAP_RADIUS, POIS, hexDistance, mapRadiusFor, type BiomeId } from '../../data/surface';
 import { RESEARCH } from '../../data/research';
 import { MAX_TEAM, maxTeams } from '../../systems/ExplorationSystem';
@@ -292,7 +293,7 @@ export class SurfacePanel {
       const refs = this.missionBars.get(m.id);
       if (!refs) continue;
       setBar(refs.bar, (m.progress / m.total) * 100);
-      setRich(refs.time, `[[clock]] ${i18n.formatDuration(m.total - m.progress)}`);
+      setRich(refs.time, `[[clock]] ${fmtDuration(m.total - m.progress)}`);
     }
   }
 
@@ -316,7 +317,7 @@ export class SurfacePanel {
         }));
       } else {
         const y2 = os.yieldPerHour(state, o);
-        const pos = Object.entries(y2).filter(([, v]) => (v ?? 0) > 0).map(([r, v]) => `${RESOURCE_ICONS[r] ?? ''} +${i18n.formatCompact(v ?? 0)}`).join('  ');
+        const pos = Object.entries(y2).filter(([, v]) => (v ?? 0) > 0).map(([r, v]) => `${RESOURCE_ICONS[r] ?? ''} +${fmtNum(v ?? 0)}`).join('  ');
         box.appendChild(el('div', 'bp-hint', i18n.t('outpost.yield', { list: pos })));
       }
       return box;
@@ -377,7 +378,7 @@ export class SurfacePanel {
       }));
     }
     const far = state.explorationMap.filter(h => h.revealed && h.biome !== 'bunker' && !ex.inReach(state, h)).length;
-    if (far > 0) box.appendChild(el('div', 'bp-hint', `[[car]] ${i18n.t('ux2d.surface.far', { n: far })}`));
+    if (far > 0) box.appendChild(el('div', 'bp-hint', `[[car]] ${plural('ux2d.surface.far', far)}`));
     return box;
   }
 
@@ -386,7 +387,7 @@ export class SurfacePanel {
     const biome = BIOMES[h.biome as BiomeId];
     const poi = h.poi ? POIS[h.poi] : undefined;
     const label = `${h.explored ? '' : '[[question]] '}${biome.name[locale]}${poi ? ` · ${poi.icon} ${poi.name[locale]}` : ''}`;
-    const value = `[[clock]] ${i18n.formatDuration(ex.missionDuration(state, h))}`;
+    const value = `[[clock]] ${fmtDuration(ex.missionDuration(state, h))}`;
     const go = teamOut ? `[[walker]] ${i18n.t('ux2d.surface.out')}` : full ? '' : `${i18n.t('ux2d.surface.plan')} ${flowArrow()}`;
     const row = kRow({ label, value, trailing: el('span', 'surface-region__go', go), onPress: () => this.select(h.x, h.y) });
     row.classList.add('surface-region');
@@ -442,7 +443,7 @@ export class SurfacePanel {
     const info = el('div', 'surface-info');
     info.append(
       el('span', '', `[[ruler]] ${hexDistance(hex.x, hex.y)}`),
-      el('span', '', `[[clock]] ${i18n.formatDuration(ex.missionDuration(state, hex))}`),
+      el('span', '', `[[clock]] ${fmtDuration(ex.missionDuration(state, hex))}`),
       el('span', '', hex.explored ? `[[check]] ${i18n.t('surface.explored')}` : `[[question]] ${i18n.t('surface.unexplored')}`),
     );
     box.appendChild(info);

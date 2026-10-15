@@ -3,6 +3,7 @@ import { ENDINGS, endingScore, type EndingDef } from '../../data/endings';
 import type { GameEngine } from '../../core/GameEngine';
 import type { GameState, ResourceType } from '../../core/GameState';
 import { i18n } from '../../i18n/I18nManager';
+import { fmtNum, plural } from '../format';
 import { ERAS, eraOf, type EraDef } from '../../data/eras';
 import { Sheet } from './Sheet';
 import { RESOURCE_ICONS, bar, button, costRow, el, setBar, setRich } from '../dom';
@@ -297,15 +298,15 @@ export class EraPanel {
       if (net < -0.0005 && res.amount > 0) {
         const t = res.amount / -net;
         if (t < FORECAST_SECONDS) { text = i18n.t('command.empty', { t: i18n.formatDuration(t) }); kind = 'bad'; }
-        else text = `${i18n.formatCompact(Math.max(0, res.amount + net * FORECAST_SECONDS))}`;
+        else text = `${fmtNum(Math.max(0, res.amount + net * FORECAST_SECONDS))}`;
       } else if (net > 0.0005 && finite) {
         const t = (cap - res.amount) / net;
         if (t <= 0) { text = i18n.t('command.full'); kind = 'warn'; }
         else if (t < FORECAST_SECONDS) { text = i18n.t('command.fullIn', { t: i18n.formatDuration(t) }); kind = 'warn'; }
-        else text = `${i18n.formatCompact(Math.min(cap, res.amount + net * FORECAST_SECONDS))}`;
+        else text = `${fmtNum(Math.min(cap, res.amount + net * FORECAST_SECONDS))}`;
       } else if (res.amount <= 0 && net < 0) { text = i18n.t('command.empty', { t: '0' }); kind = 'bad'; }
       const row = el('div', `forecast-row ${kind}`);
-      row.append(el('span', 'forecast-res', `${RESOURCE_ICONS[r] ?? ''} ${i18n.t(`resources.${r}`)}`), el('span', 'forecast-now', i18n.formatCompact(res.amount)), el('span', 'forecast-then', text));
+      row.append(el('span', 'forecast-res', `${RESOURCE_ICONS[r] ?? ''} ${i18n.t(`resources.${r}`)}`), el('span', 'forecast-now', fmtNum(res.amount)), el('span', 'forecast-then', text));
       rows.push(row);
     }
     const sig = rows.map(r => r.textContent).join('|');
@@ -431,7 +432,7 @@ export class EraPanel {
       const r = f.last[o];
       const line = this.foremanReports[i];
       if (!line) return;
-      line.textContent = !f.isOn(state, o) ? '' : r ? i18n.t(`foreman.report.${r.key}`, { n: r.n ?? 0 }) : i18n.t('foreman.report.waiting');
+      line.textContent = !f.isOn(state, o) ? '' : r ? (i18n.has(`foreman.report.${r.key}.other`) ? plural(`foreman.report.${r.key}`, r.n ?? 0) : i18n.t(`foreman.report.${r.key}`, { n: r.n ?? 0 })) : i18n.t('foreman.report.waiting');
     });
   }
 

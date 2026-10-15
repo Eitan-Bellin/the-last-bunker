@@ -1,4 +1,5 @@
 import { i18n } from '../../i18n/I18nManager';
+import { fmtNum } from '../format';
 import { BIOMES, POIS, type BiomeId } from '../../data/surface';
 import { el } from '../../ui/dom';
 import type { MissionReport, ResourceType, SurvivorState } from '../../core/GameState';
@@ -98,7 +99,7 @@ export class EventController {
       const x = window.innerWidth / 2;
       const y = window.innerHeight / 2;
       (Object.entries(gains) as [ResourceType, number][]).filter(([, v]) => v > 0)
-        .forEach(([r, v], i) => window.setTimeout(() => this.app.world.flyToHud(r, x, y, `+${i18n.formatCompact(v)}`), i * 90));
+        .forEach(([r, v], i) => window.setTimeout(() => this.app.world.flyToHud(r, x, y, `+${fmtNum(v)}`), i * 90));
       return;
     }
     const body = el('div', 'modal-result');

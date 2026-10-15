@@ -15,7 +15,7 @@ import { BUILDING_ICONS, RESOURCE_ICONS, el, rateText } from '../dom';
 import { describeMissing, missingList } from '../missing';
 import { floorTag } from '../floorTag';
 import { BATTERY_ROOMS, BED_ROOMS, KID_ROOMS, MORALE_ROOMS, NEED_ROOMS } from '../../systems/BuildAdvice'; // [ux-redesign w2fix] one source for the lists
-import { fmtCost, fmtDuration } from '../format';
+import { fmtCost, fmtDuration, plural } from '../format';
 import { kButton } from '../kit';
 import { haptic } from '../../utils/haptics';
 import { uiSound } from '../../audio/uiSound';
@@ -495,7 +495,7 @@ export class BuildMenu {
     const slots = roomSlots(type);
     const dots = el('span', 'bm-dots');
     dots.setAttribute('role', 'img');
-    dots.setAttribute('aria-label', i18n.t('build.width', { n: slots }));
+    dots.setAttribute('aria-label', plural('build.width', slots));
     for (let i = 0; i < slots; i++) dots.appendChild(el('span', 'bm-dot'));
     head.appendChild(dots);
     info.appendChild(head);
@@ -523,7 +523,7 @@ export class BuildMenu {
         meta.appendChild(el('span', 'zone-chip', place === 'entrance' ? `${zone.icon} ${i18n.t('build.entranceOnly')}` : `${zone.icon} B${zone.floor + 1} ${zone.name[locale] ?? zone.name.en}`));
       }
     }
-    meta.appendChild(el('span', '', `[[clock]] ${i18n.formatDuration(def.constructionTime)}`));
+    meta.appendChild(el('span', '', `[[clock]] ${fmtDuration(def.constructionTime)}`));
     if (def.powerConsumption > 0) meta.appendChild(el('span', '', `[[power]] \u2212${def.powerConsumption}`));
     if (def.maxWorkers > 0) meta.appendChild(el('span', '', `[[worker]] ${def.maxWorkers}`));
     if (def.maxCopies !== undefined) meta.appendChild(el('span', '', `[[district]] ${i18n.t('build.copies', { n: e.count, max: def.maxCopies })}`));

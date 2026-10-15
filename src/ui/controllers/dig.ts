@@ -1,4 +1,5 @@
 import { i18n } from '../../i18n/I18nManager';
+import { fmtDuration, plural } from '../format';
 import { RESOURCE_ICONS, costRow, el } from '../../ui/dom';
 import { floorExtent, type ResourceType } from '../../core/GameState';
 import { availableDistricts, districtDef, nextDistrict, type DistrictDef, type DistrictKind } from '../../data/districts';
@@ -25,7 +26,7 @@ export class DigController {
       const pct = Math.floor((d.progress / Math.max(1, d.total)) * 100);
       const eta = ds.eta(state);
       const crew = `[[people]] ${ds.crew(state).length}/${ds.wanted(state)}`;
-      const status = isFinite(eta) ? `${pct}%   ${crew}   [[clock]] ${i18n.formatDuration(eta)}` : `${pct}%   ${crew}   ${i18n.t('dig.noCrew')}`;
+      const status = isFinite(eta) ? `${pct}%   ${crew}   [[clock]] ${fmtDuration(eta)}` : `${pct}%   ${crew}   ${i18n.t('dig.noCrew')}`;
       this.app.renderer.setDigSign(true, this.digTitle(d), status);
     } else {
       this.updateIdleDigSign();
@@ -34,7 +35,7 @@ export class DigController {
     this.app.renderer.setDistrictSign(next ? {
       floor: next.floor,
       slot: floorExtent(state, next.floor).e, // [plan4:ST-8]
-      text: availableDistricts(state).length > 1 ? i18n.t('district.digMany', { n: availableDistricts(state).length }) : i18n.t('district.dig', { name: next.name[i18n.currentLocale] }),
+      text: availableDistricts(state).length > 1 ? plural('district.digMany', availableDistricts(state).length) : i18n.t('district.dig', { name: next.name[i18n.currentLocale] }),
       cost: (Object.entries(next.cost) as [ResourceType, number][]).map(([r, v]) => `${RESOURCE_ICONS[r] ?? ''} ${v}`).join('   '),
     } : null);
   }

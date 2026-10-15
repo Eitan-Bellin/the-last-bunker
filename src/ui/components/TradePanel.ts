@@ -1,6 +1,7 @@
 import type { GameState, ResourceType } from '../../core/GameState';
 import type { GameEngine } from '../../core/GameEngine';
 import { i18n } from '../../i18n/I18nManager';
+import { plural } from '../format';
 import { CARAVAN_CREW, CARGO_TIERS, MAX_RELATION, ambushChance, dealsToNext, openPartners, relationLevel, specialKey } from '../../data/trade';
 import { RESOURCE_ICONS, el } from '../dom';
 import { kButton, kEmpty } from '../kit';
@@ -30,7 +31,7 @@ export function renderTrade(engine: GameEngine, state: GameState, changed: () =>
     const next = dealsToNext(state, p.id);
     head.append(
       el('span', 'research-name', `${p.icon} ${p.name[locale]}`),
-      el('span', 'bp-hint', `${'[[star]]'.repeat(lvl)}${'·'.repeat(MAX_RELATION - lvl)}${next ? ` ${i18n.t('trade.next', { n: next })}` : ''}`),
+      el('span', 'bp-hint', `${'[[star]]'.repeat(lvl)}${'·'.repeat(MAX_RELATION - lvl)}${next ? ` ${plural('trade.next', next)}` : ''}`),
     );
     card.append(head, el('div', 'bp-hint', p.desc[locale]));
     const out = state.activeMissions.find(m => m.type === 'caravan' && m.partner === p.id);

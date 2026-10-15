@@ -2,6 +2,7 @@ import { flashOk, reducedMotion } from '../utils/a11y';
 import { haptic, type HapticKind } from '../utils/haptics';
 import { el } from './dom';
 import { i18n } from '../i18n/I18nManager';
+import { plural } from './format';
 import { buildingH, buildingX, floorTop, slotX, SLOT_W } from '../rendering/geom';
 import { floorExtent, type BuildingInstance } from '../core/GameState';
 import { roomSlots } from '../data/buildingDefs';
@@ -280,7 +281,7 @@ export class Ceremonies {
     const c = el('div', 'cer-card');
     // Folded moments say so: "5 workers leveled up", "We remember the 3 we lost".
     const many = (spec.n ?? 1) > 1;
-    const title = many && spec.kind === 'person' ? i18n.t('cer.person.many', { n: spec.n ?? 1 }) : many && spec.kind === 'death' ? i18n.t('cer.deathMany', { n: spec.n ?? 1 }) : spec.title;
+    const title = many && spec.kind === 'person' ? plural('cer.persons', spec.n ?? 1) : many && spec.kind === 'death' ? plural('cer.deaths', spec.n ?? 1) : spec.title;
     const sub = many && spec.kind === 'person' ? undefined : spec.sub;
     if (spec.kind === 'achievement') c.style.top = '9%'; // [ux-wp3 F15] a badge near the top, out of the bunker's middle
     if (spec.icon) c.appendChild(el('div', 'cer-icon', spec.icon));
