@@ -11,6 +11,20 @@ export const RUSH_PER_CRATE = 2;
 export const RUSH_WEEK_BONUS = 3;
 
 /**
+ * [phase4] Favours: the credits shop sells rush too. When the bunker holds no charge, a rush is paid in credits through the shop (the
+ * ShopSystem registers itself here when it is made; one game engine per page, and one per simulator worker).
+ */
+export interface FavourBuyer {
+  price(state: GameState): number;
+  /** Buys one charge with credits (false when the credits are short). */
+  buy(): boolean;
+}
+let favour: FavourBuyer | null = null;
+export function setFavourBuyer(b: FavourBuyer | null): void {
+  favour = b;
+}
+
+/**
  * Rush charges ("accelerators"): a scarce gift the player spends where it matters most, on a room still
  * being built or upgraded, the research in progress, or a team out on the surface. Few by design, so the
  * choice of where to spend them is the strategy.
@@ -32,8 +46,21 @@ export class RushSystem {
     if (n > 0) this.sm.applyDelta({ path: 'rush', value: this.count(this.sm.state) + n });
   }
 
+  /** [phase4] A rush can be paid: a charge in hand, or enough credits for the favour. */
+  canPay(state: GameState): boolean {
+    return this.count(state) > 0 || this.creditPrice(state) !== null;
+  }
+
+  /** [phase4] The credits a rush costs right now when no charge is left (null: a charge is held, or the credits are short). */
+  creditPrice(state: GameState): number | null {
+    if (this.count(state) > 0 || !favour) return null;
+    const p = favour.price(state);
+    return (state.resources.credits?.amount ?? 0) >= p ? p : null;
+  }
+
   private spend(): boolean {
-    const n = this.count(this.sm.state);
+    let n = this.count(this.sm.state);
+    if (n <= 0 && favour?.buy()) n = this.count(this.sm.state); // [phase4] no charge: buy the favour with credits
     if (n <= 0) return false;
     this.sm.applyDelta({ path: 'rush', value: n - 1 });
     return true;
@@ -41,7 +68,7 @@ export class RushSystem {
 
   canRushBuilding(state: GameState, id: string): boolean {
     const b = state.buildings.find(x => x.id === id);
-    return !!b?.isConstructing && this.count(state) > 0;
+    return !!b?.isConstructing && this.canPay(state);
   }
 
   /** Skips 15 minutes of a room's construction or upgrade; the building system finishes it on its next tick. */
@@ -55,7 +82,7 @@ export class RushSystem {
   }
 
   canRushResearch(state: GameState): boolean {
-    return !!this.research.activeId(state) && this.count(state) > 0;
+    return !!this.research.activeId(state) && this.canPay(state);
   }
 
   /** Skips 15 minutes of the active research (points run at the lab speed). */
@@ -70,7 +97,7 @@ export class RushSystem {
 
   canRushMission(state: GameState, id: string): boolean {
     const m = state.activeMissions.find(x => x.id === id);
-    return !!m && !m.waiting && this.count(state) > 0;
+    return !!m && !m.waiting && this.canPay(state);
   }
 
   /**

@@ -5,14 +5,13 @@ import { i18n } from '../../i18n/I18nManager';
 import { plural } from '../format';
 import { crewCount, getDef, traitBonus } from '../../data/buildingDefs';
 import { childCapacityOf } from '../../data/roomEffects'; // [plan4:BL-4]
-import { MORALE_KINDS, STAT_KEYS, xpForNextLevel } from '../../systems/PopulationSystem';
+import { LEVEL_CAP, MORALE_KINDS, STAT_KEYS, fitScore, freePlaces, shownLevel, xpForNextLevel } from '../../systems/PopulationSystem'; // [phase4]
 import { Sheet } from './Sheet';
 import { genderOf, portraitFor, portraitUrl } from '../../data/portraits';
 import { enhanceTabs } from '../a11yDom';
 import { BUILDING_ICONS, STAT_ICONS, bar, button, el, localizedTrait, setBar, setRich } from '../dom';
 import { uiSound } from '../../audio/uiSound';
-import { MAX_RANK, SPECS, rankOf, rankProgress, trainingCost } from '../../data/mastery'; // [LateGame B3]
-import { RESOURCE_ICONS } from '../dom';
+import { MAX_RANK, SPECS, rankOf, rankProgress } from '../../data/mastery'; // [LateGame B3] [phase4] no paid training here
 import { flowArrow } from '../rtl'; // [plan4:UX-22]
 import { jobRoom } from '../HUD'; // [ux-wp4] B4
 import { kButton } from '../kit'; // [ux2e]
@@ -36,17 +35,7 @@ interface Bars {
 const VIEW_KEY = 'lastbunker_people_view';
 type PeopleView = 'rows' | 'cards';
 
-/** [ux-wp4] B4: how well a survivor suits a room (its key stat, and a trait that fits the room counts as 20). */
-function fitScore(s: SurvivorState, type: BuildingType): number {
-  const stat = getDef(type)?.optimalStat;
-  return (stat ? s.stats[stat] : 5) + traitBonus(s.traits, type) * 20;
-}
-
-/** [ux-wp4] B4: places a room still has for adults (a room being built for the first time takes nobody yet). */
-function freePlaces(state: GameState, b: BuildingInstance): number {
-  if (b.isConstructing && b.level <= 1) return 0;
-  return Math.max(0, (getDef(b.type)?.maxWorkers ?? 0) - crewCount(state, b));
-}
+// [phase4] fitScore and freePlaces moved to PopulationSystem (best-fit staffing is the system's default now: assignIdleBestFit).
 
 export class PeoplePanel {
   private sheet = new Sheet('people-sheet', 'people');
@@ -155,8 +144,6 @@ export class PeoplePanel {
       this.expandedId, this.choosingFor, state.maxPopulation, view, this.filter, this.roomFilter, this.floorFilter, this.query, this.assignedNote,
       state.longGame?.meta.act ?? 1,
       this.expandedId ? JSON.stringify(this.engine.populationSystem.getMoraleFactors(state, state.survivors.find(s => s.id === this.expandedId) ?? state.survivors[0])) : '',
-      // The training buttons of the cards on screen grey out and light up with what the bunker can pay.
-      [...listed, ...state.survivors.filter(s => s.id === this.expandedId)].map(s => (this.engine.populationSystem.canTrain(state, this.engine.resourceSystem, s) ? 1 : 0)).join(''),
     ].join('|');
     if (sig !== this.signature) {
       this.signature = sig;
@@ -167,7 +154,7 @@ export class PeoplePanel {
       if (b) {
         setBar(b.health, s.health);
         setBar(b.happiness, s.happiness);
-        if (b.xp) setBar(b.xp, (s.xp / xpForNextLevel(s.level)) * 100);
+        if (b.xp) setBar(b.xp, (shownLevel(s) >= LEVEL_CAP ? 100 : (s.xp / xpForNextLevel(s.level)) * 100) /* [phase4] */);
         if (b.rank) {
           const [cur, span] = rankProgress(s);
           setBar(b.rank, rankOf(s) >= MAX_RANK ? 100 : (cur / span) * 100);
@@ -176,7 +163,7 @@ export class PeoplePanel {
       const lv = this.levels.get(s.id);
       if (lv && lv.level !== s.level) {
         lv.level = s.level;
-        setRich(lv.node, ` · ${i18n.t('people.level', { n: s.level })}`);
+        setRich(lv.node, ` · ${i18n.t('people.level', { n: shownLevel(s) }) /* [phase4] */}`);
       }
     }
   }
@@ -254,9 +241,8 @@ export class PeoplePanel {
           this.redraw();
         },
       }));
-    } else if (idle > 0) {
-      box.appendChild(el('div', 'pp-nojob', `[[worker]] ${plural('wp4.noJobs', idle)}`));
     }
+    // [phase4] (C5) No "people without work" nag line: with no free place it is a fact of the Act, and the Foreman staffs new places as they open.
     if (this.assignedNote) box.appendChild(el('div', 'bp-hint pp-note', `[[check]] ${this.assignedNote}`));
     return box;
   }
@@ -266,30 +252,7 @@ export class PeoplePanel {
    * and a fitting trait, and taken from the best down while the person is still free and the room has room. Returns how many were placed.
    */
   assignIdle(): number {
-    const sm = this.engine.stateManager;
-    const ps = this.engine.populationSystem;
-    const st = sm.state;
-    const idle = st.survivors.filter(s => !s.assignedBuildingId && !s.isOnMission && !s.child);
-    const left = new Map<string, number>();
-    for (const b of st.buildings) {
-      const n = freePlaces(st, b);
-      if (n > 0 && ps.canAssign(st, b.id)) left.set(b.id, n);
-    }
-    const pairs: { s: string; b: string; score: number }[] = [];
-    for (const s of idle) {
-      for (const b of st.buildings) if (left.has(b.id)) pairs.push({ s: s.id, b: b.id, score: fitScore(s, b.type) });
-    }
-    pairs.sort((x, y) => y.score - x.score);
-    const done = new Set<string>();
-    let placed = 0;
-    for (const p of pairs) {
-      if (done.has(p.s) || (left.get(p.b) ?? 0) <= 0) continue;
-      if (!ps.assignSurvivorToBuilding(sm, p.s, p.b)) { left.set(p.b, 0); continue; }
-      done.add(p.s);
-      left.set(p.b, (left.get(p.b) ?? 1) - 1);
-      placed++;
-    }
-    return placed;
+    return this.engine.populationSystem.assignIdleBestFit(this.engine.stateManager); // [phase4]
   }
 
   /** [ux-wp4] M5/D5: the search field, the idle filter, room and floor pickers, and the rows/cards switch. Built once, kept across renders. */
@@ -360,7 +323,7 @@ export class PeoplePanel {
     face.alt = '';
     face.loading = 'lazy';
     const name = el('span', 'pr-name', this.engine.populationSystem.getLocalizedName(s, locale));
-    const lv = el('span', 'worker-level', ` · ${i18n.t('people.level', { n: s.level })}`);
+    const lv = el('span', 'worker-level', ` · ${i18n.t('people.level', { n: shownLevel(s) }) /* [phase4] */}`);
     this.levels.set(s.id, { node: lv, level: s.level });
     name.appendChild(lv);
     const jobText = s.isOnMission ? `[[backpack]] ${i18n.t('wp4.onMission')}` : this.jobLabel(state, s);
@@ -487,7 +450,7 @@ export class PeoplePanel {
     portrait.loading = 'lazy';
     head.appendChild(portrait);
     const name = el('div', 'person-name', this.engine.populationSystem.getLocalizedName(s, locale));
-    const lv = el('span', 'worker-level', ` · ${i18n.t('people.level', { n: s.level })}`);
+    const lv = el('span', 'worker-level', ` · ${i18n.t('people.level', { n: shownLevel(s) }) /* [phase4] */}`);
     this.levels.set(s.id, { node: lv, level: s.level });
     name.appendChild(lv);
     head.appendChild(name);
@@ -529,7 +492,7 @@ export class PeoplePanel {
     }
     card.appendChild(statsRow);
 
-    const xp = bar((s.xp / xpForNextLevel(s.level)) * 100, 'xp');
+    const xp = bar((shownLevel(s) >= LEVEL_CAP ? 100 : (s.xp / xpForNextLevel(s.level)) * 100) /* [phase4] */, 'xp');
     const bars: Bars = { health: bar(s.health, 'health'), happiness: bar(s.happiness, 'happiness'), xp, rank: null };
     this.bars.set(s.id, bars);
     const barGrid = el('div', 'bar-grid');
@@ -540,7 +503,8 @@ export class PeoplePanel {
     );
     card.appendChild(barGrid);
 
-    // [LateGame B3] Mastery: rank 1-5 (+5% room output per rank), paid quick training, the rank-5 specialization.
+    // [LateGame B3] Mastery: rank 1-5 (+5% room output per rank) and the rank-5 specialization.
+    // [phase4] (C5) No paid "quick training" button: rank rises with work by itself, and the Foreman runs the training room's sessions.
     if (!s.child) {
       const rank = rankOf(s);
       const [cur, span] = rankProgress(s);
@@ -553,18 +517,7 @@ export class PeoplePanel {
       );
       card.appendChild(mastery);
       const row = el('div', 'person-actions');
-      if (rank < MAX_RANK) {
-        const cost = trainingCost(s, state.longGame?.meta.act ?? 1);
-        const label = Object.entries(cost).map(([r, v]) => `${RESOURCE_ICONS[r] ?? r}${v}`).join(' ');
-        row.appendChild(button(`[[books]] ${i18n.t('mastery.train')} ${label}`, 'btn-small', () => {
-          if (this.engine.populationSystem.train(this.engine.stateManager, this.engine.resourceSystem, s.id)) {
-            uiSound('click');
-            this.engine.requestSave();
-            this.signature = '';
-            this.refresh(this.engine.stateManager.state);
-          }
-        }, !this.engine.populationSystem.canTrain(state, this.engine.resourceSystem, s)));
-      } else if (!s.spec) {
+      if (rank >= MAX_RANK && !s.spec) {
         for (const sp of SPECS) {
           const b2 = button(`${sp.icon} ${sp.name[locale]}`, 'btn-small', () => {
             this.engine.populationSystem.chooseSpec(this.engine.stateManager, s.id, sp.id);

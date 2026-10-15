@@ -4,7 +4,7 @@ import type { GameState, SurvivorState, SurvivorStats, BuildingInstance, Buildin
 import type { StateManager } from '../core/StateManager';
 import type { SeededRandom } from '../core/Random';
 import { bus } from '../core/EventBus';
-import { getDef, effectiveLevel, synergyBonus, workforceMultiplier, type MoraleKind } from '../data/buildingDefs';
+import { getDef, effectiveLevel, synergyBonus, workforceMultiplier, crewCount, traitBonus, type MoraleKind } from '../data/buildingDefs';
 import { childCapacityOf, ventilationRelief } from '../data/roomEffects'; // [plan4:BL-3/4/8]
 import { roomSlots } from '../data/buildingDefs'; // plan4:ST-14
 import { isSealedOff } from './doors'; // plan4:ST-14
@@ -107,6 +107,29 @@ export function xpForNextLevel(level: number): number {
   return 120 * level;
 }
 
+/**
+ * [phase4] A survivor's level stops here: past it the number only ran away (a day-35 bunker toasted "level 432") and fed expedition power
+ * (ExplorationSystem reads level × 0.5) without limit. Older saves above it are brought down to it on the first tick (PopulationSystem.update).
+ */
+export const LEVEL_CAP = 50;
+
+/** [phase4] (C5) How well a survivor suits a room: its key stat, and a trait that fits the room counts as 20 (was PeoplePanel's fitScore). */
+export function fitScore(s: SurvivorState, type: BuildingType): number {
+  const stat = getDef(type)?.optimalStat;
+  return (stat ? s.stats[stat] : 5) + traitBonus(s.traits, type) * 20;
+}
+
+/** [phase4] Places a room still has for adults (a room being built for the first time takes nobody yet). */
+export function freePlaces(state: GameState, b: BuildingInstance): number {
+  if (b.isConstructing && b.level <= 1) return 0;
+  return Math.max(0, (getDef(b.type)?.maxWorkers ?? 0) - crewCount(state, b));
+}
+
+/** [phase4] The level to show for a survivor (an older save may still hold a bigger number until its first tick). */
+export function shownLevel(s: { level: number }): number {
+  return Math.min(LEVEL_CAP, s.level);
+}
+
 export class PopulationSystem {
   /** [ux-wp5 C5] The game whose living people's names are taken (known from the first update or newcomer). */
   private sm: StateManager | null = null;
@@ -185,7 +208,9 @@ export class PopulationSystem {
 
       const job = s.assignedBuildingId ? state.buildings.find(b => b.id === s.assignedBuildingId) : undefined;
       const clearing = !job && !!s.assignedBuildingId?.startsWith('r_') && state.ruins.some(r => r.id === s.assignedBuildingId && r.started);
-      if (((job && effectiveLevel(job) > 0) || clearing) && !s.isOnMission && !s.child) { // [plan4:BL-4] a child at school is not at work
+      if (s.level >= LEVEL_CAP) { // [phase4] capped: older saves rescale here, and nobody gains past it
+        if (s.level > LEVEL_CAP || s.xp !== 0) { s.level = LEVEL_CAP; s.xp = 0; }
+      } else if (((job && effectiveLevel(job) > 0) || clearing) && !s.isOnMission && !s.child) { // [plan4:BL-4] a child at school is not at work
         let rate = 1;
         if (s.traits.includes('quickLearner')) rate *= 2;
         if (s.traits.includes('lazy')) rate *= 0.5;
@@ -193,7 +218,7 @@ export class PopulationSystem {
         s.xp += rate * dt;
         const needed = xpForNextLevel(s.level);
         if (s.xp >= needed) {
-          s.xp -= needed;
+          s.xp = s.level + 1 >= LEVEL_CAP ? 0 : s.xp - needed; // [phase4] LEVEL_CAP
           s.level += 1;
           const stat = job ? getDef(job.type)?.optimalStat ?? STAT_KEYS[s.level % STAT_KEYS.length] : 'strength';
           s.stats[stat] = Math.min(STAT_CAP, s.stats[stat] + 1);
@@ -408,6 +433,39 @@ export class PopulationSystem {
     const kids = b.assignedSurvivorIds.filter(id => state.survivors.find(s => s.id === id)?.child).length;
     if (child) return kids < childCapacityOf(b, state);
     return b.assignedSurvivorIds.length - kids < (getDef(b.type)?.maxWorkers ?? 0);
+  }
+
+  /**
+   * [phase4] (C5) Best-fit staffing, the default everywhere (People "Assign idle", a room's "Fill", the Foreman's staff order):
+   * every (idle adult, free place) pair is scored by the room's key stat and a fitting trait, and taken from the best down while the person is
+   * still free and the room has room. `onlyRoom` limits it to one room. Never moves anyone who already has a job. Returns how many were placed.
+   */
+  assignIdleBestFit(sm: StateManager, onlyRoom?: string): number {
+    const st = sm.state;
+    const idle = st.survivors.filter(s => !s.assignedBuildingId && !s.isOnMission && !s.child);
+    if (idle.length === 0) return 0;
+    const left = new Map<string, number>();
+    for (const b of st.buildings) {
+      if (onlyRoom && b.id !== onlyRoom) continue;
+      const n = freePlaces(st, b);
+      if (n > 0 && this.canAssign(st, b.id)) left.set(b.id, n);
+    }
+    if (left.size === 0) return 0;
+    const pairs: { s: string; b: string; score: number }[] = [];
+    for (const s of idle) {
+      for (const b of st.buildings) if (left.has(b.id)) pairs.push({ s: s.id, b: b.id, score: fitScore(s, b.type) });
+    }
+    pairs.sort((x, y) => y.score - x.score);
+    const done = new Set<string>();
+    let placed = 0;
+    for (const p of pairs) {
+      if (done.has(p.s) || (left.get(p.b) ?? 0) <= 0) continue;
+      if (!this.assignSurvivorToBuilding(sm, p.s, p.b)) { left.set(p.b, 0); continue; }
+      done.add(p.s);
+      left.set(p.b, (left.get(p.b) ?? 1) - 1);
+      placed++;
+    }
+    return placed;
   }
 
   assignSurvivorToBuilding(sm: StateManager, survivorId: string, buildingId: string | null): boolean {

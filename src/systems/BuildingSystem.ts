@@ -11,7 +11,8 @@ import { availableDistricts, districtDef } from '../data/districts';
 import { WING_STEP, floorDigging, freeDigSlot, wingBlock, wingCost, wingCrew, wingOptions, wingSeconds, type WingOption } from '../data/wings';
 import type { DigState } from '../core/state/longGame';
 import { BASE_FLOORS, MAX_FLOORS, allowedFloors, crossesGallery } from '../data/zones';
-import { RETOOL_PRICE_MULT, RETOOL_SECONDS, SPEC_COST, specTotal, specsFor } from '../data/specializations';
+import { RETOOL_PRICE_MULT, RETOOL_SECONDS, SPEC_COST, specTotal, specsFor,
+  SPECIALIZATIONS, TYPE_ROLE_ACT, actRoleFor, deriveRoomRoles, isActRole, roomRolesOf, typeRoleCooldown, typeRoleOf, typeRolesFor } from '../data/specializations'; // [phase4] type roles
 import { RELOCATE_SECONDS, relocateBlock, relocateCost, stateWithout } from './relocate'; // [plan4:ST-19]
 import { isInfra } from '../data/buildingDefs'; // plan4:ST-14
 import { infraOccupies, pruneOrphanDoors } from './doors'; // plan4:ST-15, plan4:polish
@@ -49,6 +50,9 @@ export class BuildingSystem {
     nextBuildingId = max + 1;
   }
 
+  /** [phase4] Seconds until the next type-role sync (0 = on the next tick: the first tick after a load maps an older save's roles). */
+  private roleClock = 0;
+
   update(sm: StateManager, dt: number): void {
     const state = sm.state;
     this.artisan = !!state.prestige.upgrades['ksArtisan'];
@@ -85,6 +89,62 @@ export class BuildingSystem {
     if (changed) {
       this.recalculateMaxPopulation(sm);
     }
+    // [phase4] Rooms that reached their role level (or a save from before type roles) take their type's role.
+    this.roleClock -= dt;
+    if (changed || this.roleClock <= 0) {
+      this.roleClock = 30;
+      this.syncRoles(sm);
+    }
+  }
+
+  /**
+   * [phase4] (C2) Gives every finished room at its specLevel its type's role (rooms in an Act role keep it). A save from before type roles
+   * gets them here: each type takes the role most of its rooms had, and the rest of its rooms follow (deriveRoomRoles). Returns rooms changed.
+   */
+  syncRoles(sm: StateManager): number {
+    const state = sm.state;
+    let rr = roomRolesOf(state);
+    const fresh = !rr;
+    if (!rr) rr = deriveRoomRoles(state);
+    let n = 0;
+    const next = state.buildings.map(b => {
+      const role = rr!.roles[b.type];
+      if (!role || b.isConstructing || b.specialization === role || isActRole(b.specialization)) return b;
+      const def = getDef(b.type);
+      if (!def || b.level < specLevel(def) || !SPECIALIZATIONS.some(s => s.id === role && s.type === b.type)) return b;
+      n++;
+      return { ...b, specialization: role };
+    });
+    if (fresh) sm.applyDelta({ path: 'lateGame.roomRoles', value: rr });
+    if (n > 0) {
+      sm.applyDelta({ path: 'buildings', value: next });
+      this.recalculateMaxPopulation(sm);
+    }
+    return n;
+  }
+
+  /** [phase4] Whether a type's role can be changed to another plain role now (it has one, and its cooldown is over). */
+  canChangeTypeRole(state: GameState, type: BuildingType, specId: string): boolean {
+    const cur = typeRoleOf(state, type);
+    return !!cur && cur !== specId && typeRolesFor(type, state).some(s => s.id === specId) && typeRoleCooldown(state, type) <= 0;
+  }
+
+  /** [phase4] Changes the role of every room of a type (free; the choice is then held for TYPE_ROLE_COOLDOWN). */
+  changeTypeRole(sm: StateManager, type: BuildingType, specId: string): boolean {
+    if (!this.canChangeTypeRole(sm.state, type, specId)) return false;
+    this.setTypeRole(sm, type, specId, true);
+    return true;
+  }
+
+  private setTypeRole(sm: StateManager, type: BuildingType, specId: string, cooldown: boolean): void {
+    const rr = roomRolesOf(sm.state) ?? deriveRoomRoles(sm.state);
+    const at = sm.state.longGame?.meta.worldT ?? 0;
+    sm.applyDelta({ path: 'lateGame.roomRoles', value: {
+      roles: { ...rr.roles, [type]: specId },
+      changedAt: cooldown ? { ...rr.changedAt, [type]: at } : rr.changedAt,
+    } });
+    this.syncRoles(sm);
+    bus.emit('roles:changed', type, specId);
   }
 
   getBuildCost(type: BuildingType, state: GameState): Record<string, number> {
@@ -470,17 +530,27 @@ export class BuildingSystem {
     bus.emit('wing:dug', floor, side);
   }
 
-  /** A room at its top level can be fitted out for one of its two roles (permanent). */
+  /**
+   * A room at its role level without a role can take one (specialize, paid by the caller):
+   * [phase4] the type's role when the type has none yet (from Act III; it then applies to every room of the type), or the type's Act role
+   * for this one room.
+   */
   canSpecialize(state: GameState, buildingId: string): boolean {
     const b = state.buildings.find(x => x.id === buildingId);
     const def = b ? getDef(b.type) : undefined;
-    return !!b && !!def && !b.isConstructing && !b.specialization && b.level >= specLevel(def) && specsFor(b.type, state).length > 0;
+    if (!b || !def || b.isConstructing || b.specialization || b.level < specLevel(def)) return false;
+    if (actRoleFor(b.type, state)) return true;
+    return (state.longGame?.meta.act ?? 99) >= TYPE_ROLE_ACT && !typeRoleOf(state, b.type) && typeRolesFor(b.type, state).length > 0;
   }
 
-  /** [Long game] A specialized room may change its role (for a price, and it stands still for a while). */
+  /**
+   * [Long game] A specialized room may change its role (for a price, and it stands still for a while).
+   * [phase4] Only between the type's role and its Act role: a type's own role changes for all its rooms at once (changeTypeRole).
+   */
   canRetool(state: GameState, buildingId: string, specId: string): boolean {
     const b = state.buildings.find(x => x.id === buildingId);
-    return !!b && !b.isConstructing && !!b.specialization && b.specialization !== specId && specsFor(b.type, state).some(s => s.id === specId);
+    if (!b || b.isConstructing || !b.specialization || b.specialization === specId || !specsFor(b.type, state).some(s => s.id === specId)) return false;
+    return isActRole(specId) || (isActRole(b.specialization) && specId === typeRoleOf(state, b.type));
   }
 
   retoolCost(): Record<string, number> {
@@ -504,6 +574,13 @@ export class BuildingSystem {
     const state = sm.state;
     const b = state.buildings.find(x => x.id === buildingId);
     if (!b || !this.canSpecialize(state, buildingId) || !specsFor(b.type, state).some(s => s.id === specId)) return false;
+    if (!isActRole(specId)) {
+      // [phase4] A plain role is the type's: every room of the type at its role level takes it (this one included, through the sync).
+      if (typeRoleOf(state, b.type) || (state.longGame?.meta.act ?? 99) < TYPE_ROLE_ACT) return false;
+      this.setTypeRole(sm, b.type, specId, false);
+      bus.emit('building:specialized', buildingId);
+      return true;
+    }
     sm.applyDelta({ path: 'buildings', value: state.buildings.map(x => (x.id === buildingId ? { ...x, specialization: specId } : x)) });
     this.recalculateMaxPopulation(sm);
     bus.emit('building:specialized', buildingId);

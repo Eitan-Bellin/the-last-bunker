@@ -49,6 +49,8 @@ export class InboxController {
   private resume: { at: number; sawDialog: boolean } | null = null;
   /** [phase2] News cards that hid unanswered (a system that opened, what's new): a line each until opened (this session). */
   private kept: { key: string; icon: string; title: string; open: () => void }[] = [];
+  /** [phase4] When the last "new partner request" toast was shown (performance.now ms). */
+  private lastRequestToast = -Infinity;
 
   constructor(app: GameApp) {
     this.app = app;
@@ -66,8 +68,19 @@ export class InboxController {
       const params = this.app.events.eventParams(x.data);
       this.app.toasts.show(`[[clock]] ${i18n.t('inbox.expired', { name: i18n.t(`event.${x.id}.title`, params), choice: i18n.t(`event.${x.id}.choice.${x.key}`, params) })}`, 'info');
     });
+    // [phase4] A new partner request: one quiet line (at most every 10 minutes, so a return from away is not a burst) saying where it waits.
+    bus.on('inbox:posted', (it: unknown) => {
+      const item = it as InboxItem;
+      if (item.kind !== 'contract' || !this.defers(this.app.state)) return;
+      const now = performance.now();
+      if (now - this.lastRequestToast < 600_000) return;
+      this.lastRequestToast = now;
+      const who = this.app.engine.contractSystem.describe(item, i18n.currentLocale).issuer;
+      this.app.toasts.show(`[[cart]] ${i18n.t('p4o.req.new', { name: who })}`, 'info');
+    });
     bus.on('inbox:expired', (it: unknown) => {
       const item = it as InboxItem;
+      if (item.kind === 'contract') return; // [phase4] a partner request that lapses costs nothing: no toast
       const def = inboxKind(item.kind);
       if (def) this.app.toasts.show(`[[clock]] ${i18n.t('inbox.expiredItem', { name: i18n.t(def.title, this.params(item)) })}`, 'info');
     });
@@ -117,12 +130,13 @@ export class InboxController {
     }
     const worldT = state.longGame?.meta.worldT ?? 0;
     for (const item of state.longGame?.inbox.items ?? []) {
+      // [phase4] Contracts are partner requests on Surface > Trade now, not Inbox cards (TradePanel shows them).
+      if (item.kind === 'contract') continue;
       const def = inboxKind(item.kind);
       if (!def) continue;
       out.push({
         key: `item:${item.id}`, icon: def.icon, title: i18n.t(def.title, this.params(item)),
         detail: def.preview?.(item, i18n.currentLocale), value: def.value?.(item),
-        safe: item.kind === 'contract' && this.app.engine.contractSystem.isSafe(state, item),
         left: item.deadline === null ? null : Math.max(0, item.deadline - worldT), urgent: item.urgent,
         open: () => this.openItem(item.id),
       });
@@ -139,7 +153,7 @@ export class InboxController {
     const daily = this.app.daily.inboxEntry(state);
     if (daily) {
       const s = this.app.engine.dailySystem.summary(state);
-      out.push({ key: 'daily', icon: '[[target]]', title: i18n.t('daily.title'), detail: `${daily.title} · ${daily.detail}`, tag: `${s.done}/${s.n}`, value: Infinity, left: null, urgent: false, open: () => this.app.daily.show() });
+      out.push({ key: 'daily', icon: '[[target]]', title: i18n.t('p4o.today.title'), detail: `${daily.title} · ${daily.detail}`, tag: s.n > 0 ? `${s.done}/${s.n}` : undefined, /* [phase4] the Today card */ value: Infinity, left: null, urgent: false, open: () => this.app.daily.show() });
     }
     // [Q4] Most pressing first: urgent, then whatever lapses within the hour, then the richest, then the nearest deadline.
     const soon = (e: Entry) => e.left !== null && e.left < 3600;
@@ -158,7 +172,7 @@ export class InboxController {
     // budget never loses anything. The line shows only while something waits; from Act II it is always there, as before.
     const list = this.entries(state);
     // [plan4:GP-1] The daily orders card is a standing card: it counts on the badge only while a reward waits, and is never announced.
-    const waiting = list.filter(e => e.key !== 'daily' || this.app.engine.dailySystem.summary(state).claimable > 0).length;
+    const waiting = list.filter(e => e.key !== 'daily' || this.app.daily.todayClaimable(state) > 0).length; // [phase4] the crate counts too
     const visible = deferring || waiting > 0;
     if (waiting !== this.lastCount || visible !== this.lastVisible) {
       this.lastCount = waiting;
@@ -221,18 +235,7 @@ export class InboxController {
         body.appendChild(el('p', 'inbox-empty', i18n.t('inbox.empty')));
         return;
       }
-      // [Q4] One tap for every contract that costs nothing the bunker would miss.
-      const safeCount = list.filter(e => e.safe).length;
-      if (safeCount >= 2) {
-        body.appendChild(button(i18n.t('contract.acceptSafe', { n: safeCount }), 'btn-primary btn-small inbox-all', () => {
-          const n = this.app.engine.contractSystem.acceptSafe();
-          if (n > 0) {
-            this.app.engine.requestSave();
-            this.app.audio.play('click');
-            this.app.toasts.show(`[[cart]] ${plural('contract.safeTaken', n)}`, 'good');
-          }
-        }));
-      }
+      // [phase4] The "take all safe contracts" button left with the contracts (they are partner requests on Surface > Trade).
       for (const e of list) {
         const card = el('button', `inbox-card${e.urgent ? ' urgent' : ''}`);
         card.dataset.key = e.key;

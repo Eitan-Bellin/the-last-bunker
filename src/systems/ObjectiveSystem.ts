@@ -251,6 +251,13 @@ function dynamicObjective(i: number, step: number): Objective {
   }
 }
 
+/** [phase4] The line between two guide steps in a long-game run: "see the Act" (ids starting with 'guide:' are never paid). */
+const ACT_POINTER: Objective = {
+  id: 'guide:act', icon: '[[flag]]', reward: {}, action: { kind: 'command' },
+  text: { he: 'המערכה: ראו מה הלאה', en: 'The Act: see what comes next' },
+  progress: () => [0, 1],
+};
+
 export class ObjectiveSystem {
   private sm: StateManager;
   private resources: ResourceSystem;
@@ -290,7 +297,11 @@ export class ObjectiveSystem {
     }
     // [Q2] The guide answers "what do I do now and why"; the endless generic tasks only fill in when it has no step.
     const guided = this.guide?.(state);
-    return guided ?? dynamicObjective(Math.max(0, step - ONBOARDING.length), step);
+    if (guided) return guided;
+    // [phase4] In a long-game run the Act list is the only progress list: the endless generic tasks are retired. Between the guide's
+    // steps (the Act's goals all met, the next Act about to open) the line points at the Act (a pointer: no reward, no step counted).
+    if (this.longRun(state)) return ACT_POINTER;
+    return dynamicObjective(Math.max(0, step - ONBOARDING.length), step);
   }
 
   /** Maps a tutorial step saved under the old onboarding list onto the current list. */

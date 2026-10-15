@@ -1,0 +1,14 @@
+/* [phase4] Agent D: the Exposure sheet and the Foreman's policies (ui/controllers/danger.ts). Tokens only. */
+
+.p4d-exposure .p4d-exp-head { font-weight: var(--weight-bold); }
+.p4d-exposure .p4d-exp-head.is-mid { color: var(--warning); }
+.p4d-exposure .p4d-exp-head.is-high { color: var(--danger-text); }
+.p4d-exposure .p4d-exp-bar { margin-block: var(--sp-1) var(--sp-2); }
+.p4d-exposure .p4d-drivers { display: flex; flex-direction: column; gap: var(--sp-1); margin-block-end: var(--sp-2); }
+.p4d-exposure .p4d-drivers .k-row__value { font-variant-numeric: var(--num-tabular); unicode-bidi: isolate; direction: ltr; }
+
+.p4d-policies { display: flex; flex-direction: column; gap: var(--sp-2); }
+.p4d-policies .p4d-policy-name { margin-block-start: var(--sp-2); font-weight: var(--weight-bold); color: var(--text-primary); }
+/* The choices wrap on a 320 px phone instead of scrolling sideways; each keeps the full touch height. */
+.p4d-policies .k-tabs { flex-wrap: wrap; gap: var(--sp-1); }
+.p4d-policies .k-tab { flex: 1 1 auto; min-height: var(--hit-min); min-width: 0; white-space: normal; }

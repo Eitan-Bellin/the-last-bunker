@@ -1,0 +1,64 @@
+/* [plan4:GP-2] Ceremonies: the key moments. Everything here moves by transform and opacity only, nothing goes brighter than a warm glow
+   (no flash), and under reduced motion (data-motion="reduced", or the .still class the code adds) every shape is gone and only the
+   still card remains. The root never takes the tap unless the moment is a blocking one (death, Genesis). */
+.ceremony { position: fixed; inset: 0; z-index: 37; pointer-events: none; overflow: hidden; transition: opacity 0.25s; }
+.ceremony.block { pointer-events: auto; }
+.ceremony.out { opacity: 0; }
+.ceremony.still { transition: none; }
+
+/* ---------- the card (research, death, Genesis; and every moment under reduced motion) ---------- */
+.cer-card {
+  position: absolute; inset-inline: 16px; top: 22%; max-width: 360px; margin-inline: auto; text-align: center;
+  padding: 14px 16px; border-radius: 14px; background: rgba(16, 20, 18, 0.95); border: 1px solid var(--border); box-shadow: 0 10px 30px rgba(0, 0, 0, 0.55);
+  color: var(--text-primary); animation: cerCardIn 0.45s ease-out both;
+}
+.cer-icon { font-size: 28px; line-height: 1.2; margin-bottom: 4px; }
+.cer-title { font-size: calc(17px * var(--fs, 1)); font-weight: 700; line-height: 1.35; overflow-wrap: anywhere; }
+.cer-sub { font-size: calc(13px * var(--fs, 1)); line-height: 1.4; color: var(--text-secondary); margin-top: 4px; overflow-wrap: anywhere; }
+.cer-hint { font-size: calc(11px * var(--fs, 1)); color: var(--text-secondary); margin-top: 10px; opacity: 0.8; }
+.cer-lines { list-style: none; margin: 10px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; text-align: start; }
+.cer-lines li { font-size: calc(14px * var(--fs, 1)); line-height: 1.4; padding: 6px 10px; border-radius: 8px; background: rgba(0, 0, 0, 0.3); animation: cerLine 0.6s ease-out both; animation-delay: calc(var(--i, 0) * 0.9s + 0.4s); }
+.cer-genesis .cer-card { top: 16%; }
+@keyframes cerCardIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+@keyframes cerLine { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+/* ---------- tracked shapes: the element's own transform is the position (set by the code), so the motion lives on children / pseudo-elements ---------- */
+.cer-frame, .cer-ring, .cer-glow, .cer-light { position: absolute; left: 0; top: 0; will-change: transform; }
+
+/* build: the scaffold, four gold brackets that rise and settle */
+.cer-frame i { position: absolute; width: 14px; height: 14px; border: 0 solid #ffd27a; opacity: 0; animation: cerBracket 1.5s ease-out both; }
+.cer-frame .tl { left: 0; top: 0; border-left-width: 3px; border-top-width: 3px; transform-origin: 0 100%; }
+.cer-frame .tr { right: 0; top: 0; border-right-width: 3px; border-top-width: 3px; transform-origin: 100% 100%; }
+.cer-frame .bl { left: 0; bottom: 0; border-left-width: 3px; border-bottom-width: 3px; transform-origin: 0 0; }
+.cer-frame .br { right: 0; bottom: 0; border-right-width: 3px; border-bottom-width: 3px; transform-origin: 100% 0; }
+@keyframes cerBracket { 0% { opacity: 0; transform: scale(0.4); } 30% { opacity: 1; transform: scale(1.15); } 60% { opacity: 1; transform: scale(1); } 100% { opacity: 0; transform: scale(1); } }
+
+/* room level-up: a gold ring that opens once */
+.cer-ring::after { content: ''; position: absolute; inset: -4px; border-radius: 12px; border: 3px solid #ffd27a; box-shadow: 0 0 14px rgba(255, 210, 122, 0.6); opacity: 0; animation: cerRing 1.2s ease-out both; }
+@keyframes cerRing { 0% { opacity: 0; transform: scale(0.94); } 25% { opacity: 0.95; transform: scale(1); } 100% { opacity: 0; transform: scale(1.08); } }
+
+/* research: the laboratory warms up (a slow glow, never a flash) */
+.cer-glow::after { content: ''; position: absolute; inset: -6px; border-radius: 14px; background: radial-gradient(ellipse at 50% 70%, rgba(255, 184, 96, 0.55), rgba(255, 150, 60, 0) 70%); opacity: 0; animation: cerGlow 1.4s ease-in-out both; }
+@keyframes cerGlow { 0% { opacity: 0; } 45% { opacity: 0.85; } 100% { opacity: 0; } }
+
+/* dig: a work light opens at the new edge */
+.cer-light::after { content: ''; position: absolute; inset: 0; background: linear-gradient(90deg, rgba(255, 214, 140, 0.6), rgba(255, 214, 140, 0)); transform-origin: 0 50%; opacity: 0; animation: cerLight 2s ease-out both; }
+.cer-light { }
+@keyframes cerLight { 0% { opacity: 0; transform: scaleX(0.1); } 30% { opacity: 1; transform: scaleX(1); } 75% { opacity: 0.9; transform: scaleX(1); } 100% { opacity: 0; transform: scaleX(1); } }
+
+/* death: a gentle dimming (it stays above 65% brightness), a candle, one line */
+.cer-dim { position: absolute; inset: 0; background: rgba(4, 6, 10, 0.35); opacity: 0; animation: cerDim 3s ease-in-out both; }
+@keyframes cerDim { 0% { opacity: 0; } 25% { opacity: 1; } 80% { opacity: 1; } 100% { opacity: 0; } }
+.cer-candle { position: absolute; left: 50%; top: calc(22% + 150px); width: 12px; height: 46px; margin-left: -6px; opacity: 0; animation: cerDim 3s ease-in-out both; }
+.cer-candle .wax { position: absolute; left: 2px; bottom: 0; width: 8px; height: 26px; border-radius: 2px; background: #e8e2d2; opacity: 0.9; }
+.cer-candle .flame { position: absolute; left: 1px; bottom: 24px; width: 10px; height: 18px; border-radius: 50% 50% 50% 50% / 62% 62% 38% 38%; background: radial-gradient(ellipse at 50% 70%, #fff3c4, #ffb547 60%, rgba(255, 140, 40, 0)); transform-origin: 50% 100%; animation: cerFlame 1.6s ease-in-out infinite; }
+@keyframes cerFlame { 0%, 100% { transform: scale(1, 1); opacity: 0.95; } 50% { transform: scale(0.92, 1.08); opacity: 0.85; } }
+
+/* Genesis: the montage sits on a soft dim */
+.cer-genesis .cer-dim { background: rgba(4, 6, 10, 0.55); animation: cerDimHold 6s ease-in-out both; }
+@keyframes cerDimHold { 0% { opacity: 0; } 12% { opacity: 1; } 88% { opacity: 1; } 100% { opacity: 0; } }
+
+/* Reduced motion: no shape, no animation; the still card is all that is left. */
+:root[data-motion="reduced"] .ceremony *, .ceremony.still * { animation: none !important; transition: none !important; }
+:root[data-motion="reduced"] .ceremony { transition: none; }
+.ceremony.still .cer-card, :root[data-motion="reduced"] .cer-card { opacity: 1; }

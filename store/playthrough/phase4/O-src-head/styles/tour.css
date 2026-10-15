@@ -1,0 +1,25 @@
+/* [plan4:GP-6] Tour mode: the HUD and everything laid over the picture is hidden (visibility, not display, so the measured bands the camera
+   uses stay the same), and one full-screen button takes every tap. The tag inside it is the only thing on screen. */
+body.tour-on #hud,
+body.tour-on .depth-ruler,
+body.tour-on .dr-chips,
+body.tour-on .hud-bottom, /* the nav console lives on <body>, outside #hud */
+body.tour-on .sound-chip,
+body.tour-on .toast-stack,
+body.tour-on .gesture-tip,
+body.tour-on .a11y-caption { visibility: hidden !important; }
+
+.tour-shield {
+  position: fixed; inset: 0; z-index: 90000;
+  margin: 0; padding: 0; border: 0; background: transparent; cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  display: flex; align-items: flex-end; justify-content: center;
+}
+.tour-shield:focus-visible { outline: 3px solid var(--accent, #ffb547); outline-offset: -3px; }
+.tour-tag {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-height: 44px; min-width: 44px; padding: 0 20px; margin-bottom: calc(18px + env(safe-area-inset-bottom, 0px));
+  border-radius: 22px; background: rgba(11, 12, 14, 0.72); color: var(--text-primary, #e8e2d2);
+  font-size: calc(15px * var(--fs, 1)); letter-spacing: 0.02em;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+}

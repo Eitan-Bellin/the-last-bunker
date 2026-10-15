@@ -12,15 +12,17 @@ import { INCIDENTS, quickFixCost } from '../../data/incidents';
 import { boostReserve, chainInputs, inputFed, inputRate, surplusShare } from '../../data/chains';
 import { roomPowerDraw } from '../../systems/ResourceSystem';
 import { bedsBuilt } from '../../systems/BuildingSystem';
-import { MORALE_CAPS } from '../../systems/PopulationSystem'; // [plan4:BL-39]
+import { MORALE_CAPS, shownLevel } from '../../systems/PopulationSystem'; // [plan4:BL-39] [phase4] shownLevel
 import { allowedFloors } from '../../data/zones';
-import { RETOOL_SECONDS, specOf, specsFor } from '../../data/specializations';
+import { RETOOL_SECONDS, specOf, TYPE_ROLE_ACT, TYPE_ROLE_COOLDOWN, actRoleFor, getSpec, roleRoomCount, typeRoleCooldown, typeRoleOf, typeRolesFor } from '../../data/specializations'; // [phase4] type roles
+import { specLevel } from '../../data/buildingDefs';
 import type { Incident } from '../../core/GameState';
 import { uiSound } from '../../audio/uiSound';
 import { maintenanceCard } from './MaintenanceCard'; // [Danger C3]
 import { relocateBlock } from '../../systems/relocate'; // [plan4:ST-19]
 import { infraCard, infraSignature } from './InfraCard'; // plan4:ST-14
 import { kButton } from '../kit'; // [ux2e]
+import { plural } from '../format'; // [phase4]
 import { masteryMultiplier } from '../../data/mastery';
 
 /** [ux2e #45] How many number rows the stats card shows before "More numbers" (with the upgrade price and time: about 7 in view). */
@@ -38,6 +40,8 @@ export class BuildingPanel {
   private effOpen = false;
   private detailsOpen = false;
   private signature = '';
+  /** [phase4] The "change the role of every room of this type" list is open. */
+  private roleOpen = false;
 
   private statusText: HTMLElement | null = null;
   private statusBar: HTMLElement | null = null;
@@ -77,6 +81,7 @@ export class BuildingPanel {
     this.demolishOpen = false;
     this.moreOpen = false;
     this.effOpen = false;
+    this.roleOpen = false; // [phase4]
     this.signature = '';
     this.refresh(this.engine.stateManager.state);
     this.sheet.show();
@@ -114,6 +119,8 @@ export class BuildingPanel {
       this.engine.buildingSystem.canSpecialize(state, b.id),
       state.longGame?.meta.act ?? 0, Math.ceil(Math.max(0, (b.retoolUntil ?? 0) - (state.longGame?.meta.worldT ?? 0)) / 60), // [Long game]
       this.engine.resourceSystem.canAfford(state, this.engine.buildingSystem.specCost()),
+      this.engine.resourceSystem.canAfford(state, this.engine.buildingSystem.retoolCost()), typeRoleOf(state, b.type) ?? '', // [phase4]
+      Math.ceil(typeRoleCooldown(state, b.type) / 60), this.roleOpen,
       this.demolishOpen, this.engine.buildingSystem.demolishBlock(state, b.id), state.maxPopulation,
       this.moreOpen, this.effOpen, this.detailsOpen, relocateBlock(state, b) ?? '', // [ux2e]
       Object.values(state.resources).map(r => Math.floor(r.cap)).join(','), state.buildings.length, state.currentFloors,
@@ -279,8 +286,8 @@ export class BuildingPanel {
     const infra = infraCard(this.engine, state, b, () => this.refresh(this.engine.stateManager.state)); // plan4:ST-14/15 doors, stairwell, vent stack
     if (infra) root.appendChild(infra);
     root.appendChild(this.renderUpgrade(state, b, upgradeAffordable));
-    if (this.engine.buildingSystem.canSpecialize(state, b.id)) root.appendChild(this.renderSpecs(state, b));
-    else if (b.specialization && specsFor(b.type, state).length > 1) root.appendChild(this.renderRetool(state, b)); // [Long game]
+    const roles = this.renderRoles(state, b); // [phase4] one role per room type, plus this room's Act role
+    if (roles) root.appendChild(roles);
     root.appendChild(this.renderDemolish(state, b));
     this.sheet.body.replaceChildren(root);
   }
@@ -316,48 +323,89 @@ export class BuildingPanel {
     return card;
   }
 
-  private renderSpecs(state: GameState, b: BuildingInstance): HTMLElement {
-    const locale = i18n.currentLocale;
-    const card = el('div', 'bp-card');
-    card.appendChild(el('div', 'bp-section-title', `[[crown]] ${i18n.t('spec.title')}`));
-    card.appendChild(el('div', 'bp-hint', i18n.t('spec.hint')));
-    const cost = this.engine.buildingSystem.specCost();
-    const affordable = this.engine.resourceSystem.canAfford(state, cost);
-    const grid = el('div', 'spec-grid');
-    for (const spec of specsFor(b.type, state)) {
-      const opt = el('div', 'spec-card');
-      opt.append(el('div', 'spec-name', `[[${spec.icon}]] ${spec.name[locale]}`), el('div', 'spec-desc', spec.desc[locale]));
-      opt.appendChild(button(i18n.t('spec.choose'), 'btn-primary btn-small', () => this.onSpecialize?.(b.id, spec.id), !affordable));
-      grid.appendChild(opt);
-    }
-    card.append(grid, costRow(state, cost));
-    return card;
-  }
-
-  /** [Long game] A specialized room can be refitted to another role: double the price, and it stands still meanwhile. */
-  private renderRetool(state: GameState, b: BuildingInstance): HTMLElement {
+  /**
+   * [phase4] (C2) The room's role card. A role is chosen once for the whole room type (from Act III; every room of the type at its role
+   * level takes it, and changing it is free but holds for TYPE_ROLE_COOLDOWN). The one per-room choice left is the type's Act role: this
+   * room makes the Act's currency instead of part of its own output. Null when the room has nothing to choose or show.
+   */
+  private renderRoles(state: GameState, b: BuildingInstance): HTMLElement | null {
     const locale = i18n.currentLocale;
     const bs = this.engine.buildingSystem;
+    const def = getDef(b.type)!;
+    const level = specLevel(def);
+    const typeRole = getSpec(typeRoleOf(state, b.type));
+    const plain = typeRolesFor(b.type, state);
+    const actRole = actRoleFor(b.type, state);
+    const typeOpen = (state.longGame?.meta.act ?? 99) >= TYPE_ROLE_ACT && plain.length > 0;
+    if (!typeRole && !typeOpen && !(actRole && b.level >= level)) return null;
+    const roomName = def.name[locale] ?? def.name.en;
     const card = el('div', 'bp-card');
-    const now = state.longGame?.meta.worldT ?? 0;
-    const left = (b.retoolUntil ?? 0) - now;
-    card.appendChild(el('div', 'bp-section-title', `[[crown]] ${specOf(b)?.name[locale] ?? ''}`));
-    if (left > 0) {
-      card.appendChild(el('div', 'bp-hint', `[[settings]] ${i18n.t('spec.retooling', { t: i18n.formatDuration(left) })}`));
-      return card;
-    }
-    card.appendChild(el('div', 'bp-hint', i18n.t('spec.retoolBody', { t: i18n.formatDuration(RETOOL_SECONDS) })));
-    const cost = bs.retoolCost();
-    const affordable = this.engine.resourceSystem.canAfford(state, cost);
-    const grid = el('div', 'spec-grid');
-    for (const spec of specsFor(b.type, state)) {
-      if (spec.id === b.specialization) continue;
+    card.appendChild(el('div', 'bp-section-title', `[[crown]] ${i18n.t('p4r.role.title', { room: roomName })}`));
+    const left = (b.retoolUntil ?? 0) - (state.longGame?.meta.worldT ?? 0);
+    if (left > 0) card.appendChild(el('div', 'bp-hint', `[[settings]] ${i18n.t('spec.retooling', { t: i18n.formatDuration(left) })}`));
+    const option = (spec: { icon: string; name: Record<'he' | 'en', string>; desc: Record<'he' | 'en', string> }, action?: HTMLElement) => {
       const opt = el('div', 'spec-card');
       opt.append(el('div', 'spec-name', `[[${spec.icon}]] ${spec.name[locale]}`), el('div', 'spec-desc', spec.desc[locale]));
-      opt.appendChild(button(i18n.t('spec.retool'), 'btn-secondary btn-small', () => this.onRetool?.(b.id, spec.id), !affordable || b.isConstructing));
-      grid.appendChild(opt);
+      if (action) opt.appendChild(action);
+      return opt;
+    };
+
+    // The type's role: one choice for every room of the type.
+    if (typeRole) {
+      if (b.specialization !== typeRole.id) card.appendChild(option(typeRole)); // the room's own specialty is the card at the top
+      card.appendChild(el('div', 'bp-hint', plural('p4r.role.applies', roleRoomCount(state, b.type, level), { level })));
+      const others = plain.filter(s => s.id !== typeRole.id);
+      const cd = typeRoleCooldown(state, b.type);
+      if (others.length > 0 && cd > 0) {
+        card.appendChild(el('div', 'bp-hint', `[[clock]] ${i18n.t('p4r.role.cooldown', { t: i18n.formatDuration(cd) })}`));
+      } else if (others.length > 0 && !this.roleOpen) {
+        card.appendChild(button(i18n.t('p4r.role.change'), 'btn-ghost btn-small', () => { this.roleOpen = true; this.refresh(this.engine.stateManager.state); }));
+      } else if (others.length > 0) {
+        card.appendChild(el('div', 'bp-hint', i18n.t('p4r.role.switchBody', { t: i18n.formatDuration(TYPE_ROLE_COOLDOWN) })));
+        const grid = el('div', 'spec-grid');
+        for (const spec of others) {
+          grid.appendChild(option(spec, button(i18n.t('p4r.role.switchAll'), 'btn-secondary btn-small', () => {
+            if (bs.changeTypeRole(this.engine.stateManager, b.type, spec.id)) {
+              uiSound('click');
+              this.engine.requestSave();
+            }
+            this.roleOpen = false;
+            this.refresh(this.engine.stateManager.state);
+          })));
+        }
+        card.appendChild(grid);
+      }
+    } else if (typeOpen && b.level >= level && !b.specialization) {
+      const cost = bs.specCost();
+      const affordable = this.engine.resourceSystem.canAfford(state, cost);
+      card.appendChild(el('div', 'bp-hint', i18n.t('p4r.role.pickHint', { room: roomName, level, n: roleRoomCount(state, b.type, level) })));
+      const grid = el('div', 'spec-grid');
+      for (const spec of plain) grid.appendChild(option(spec, button(i18n.t('p4r.role.chooseAll'), 'btn-primary btn-small', () => this.onSpecialize?.(b.id, spec.id), !affordable)));
+      card.append(grid, costRow(state, cost));
+    } else if (typeOpen && b.level < level) {
+      card.appendChild(el('div', 'bp-hint', i18n.t('p4r.role.atLevel', { level })));
     }
-    card.append(grid, costRow(state, cost));
+
+    // This room's Act role (a maker of the Act's currency).
+    if (actRole && b.level >= level) {
+      const here = b.specialization === actRole.id;
+      const refit = !!b.specialization;
+      const cost = refit ? bs.retoolCost() : bs.specCost();
+      const affordable = this.engine.resourceSystem.canAfford(state, cost);
+      let action: HTMLElement | undefined;
+      if (here && typeRole) {
+        action = button(i18n.t('p4r.role.backTo', { role: typeRole.name[locale] }), 'btn-secondary btn-small', () => this.onRetool?.(b.id, typeRole.id), !affordable || left > 0);
+      } else if (!here) {
+        action = button(i18n.t('p4r.role.actMake'), 'btn-primary btn-small', () => (refit ? this.onRetool : this.onSpecialize)?.(b.id, actRole.id), !affordable || left > 0);
+      }
+      card.appendChild(el('div', 'bp-section-title', i18n.t(here ? 'p4r.role.actHere' : 'p4r.role.actTitle')));
+      if (!here) card.appendChild(option(actRole, action));
+      else if (action) card.appendChild(action);
+      if (action) {
+        if (refit) card.appendChild(el('div', 'bp-hint', i18n.t('p4r.role.actRefit', { t: i18n.formatDuration(RETOOL_SECONDS) })));
+        card.appendChild(costRow(state, cost));
+      }
+    }
     return card;
   }
 
@@ -465,7 +513,7 @@ export class BuildingPanel {
       const row = el('div', 'worker-row');
       row.appendChild(this.face(s));
       const name = el('div', 'worker-name', this.engine.populationSystem.getLocalizedName(s, i18n.currentLocale));
-      name.appendChild(el('span', 'worker-level', ` · ${i18n.t('people.level', { n: s.level })}`));
+      name.appendChild(el('span', 'worker-level', ` · ${i18n.t('people.level', { n: shownLevel(s) }) /* [phase4] */}`));
       row.appendChild(name);
       if (def.optimalStat) row.appendChild(el('span', 'worker-stat', `${STAT_ICONS[def.optimalStat]} ${s.stats[def.optimalStat]}`));
       if (traitBonus(s.traits, b.type) > 0) row.appendChild(el('span', 'worker-trait', '[[star]]'));
@@ -482,8 +530,23 @@ export class BuildingPanel {
       card.appendChild(row);
     }
 
-    for (let i = b.assignedSurvivorIds.length; i < def.maxWorkers; i++) {
-      card.appendChild(button(i18n.t('building.addWorker'), 'btn-slot', () => {
+    // [phase4] (C5) Best fit is the default: one tap fills the open places with the idle people who suit the room best;
+    // picking by hand stays one tap further (the manual override). The slot buttons used to be the only way in.
+    const open = def.maxWorkers - b.assignedSurvivorIds.length;
+    if (open > 0) {
+      const idle = state.survivors.filter(s => !s.assignedBuildingId && !s.isOnMission && !s.child).length;
+      const fill = Math.min(open, idle);
+      if (fill > 0 && this.engine.populationSystem.canAssign(state, b.id)) {
+        card.appendChild(kButton({
+          variant: 'primary', className: 'btn-primary ux2e-48', icon: 'worker', label: plural('p4r.staff.fill', fill),
+          onPress: () => {
+            uiSound(this.engine.populationSystem.assignIdleBestFit(this.engine.stateManager, b.id) ? 'assign' : 'error');
+            this.engine.requestSave();
+            this.refresh(this.engine.stateManager.state);
+          },
+        }));
+      }
+      card.appendChild(button(i18n.t(fill > 0 ? 'p4r.staff.byHand' : 'building.addWorker'), 'btn-slot', () => {
         this.pickerOpen = true;
         this.refresh(this.engine.stateManager.state);
       }));

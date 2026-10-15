@@ -1,0 +1,204 @@
+/* [plan4:BL-39] The categorized build menu: search, category chips, "available now", a recommended row and room cards.
+   Every control is at least 48px tall (--hit-min, or the large-targets --tap); state is always said with an icon or a word, never colour alone.
+   [ux-redesign w2c] Tokens only (styles/tokens.css). A room with no free spot shows one primary "where the space is" button (.bm-route);
+   price chips show how much is short (.ux2c-short, shared with the placement bar and the wrecked-room sheet). */
+
+.bm { display: flex; flex-direction: column; gap: var(--sp-3); }
+
+/* Search and the "available now" switch. The input stays at 16px so iOS does not zoom on focus. */
+.bm-tools { display: flex; gap: var(--sp-2); align-items: stretch; flex-wrap: wrap; }
+.bm-search {
+  flex: 1 1 calc(var(--sp-8) * 2.5);
+  min-width: 0;
+  min-height: max(var(--hit-min), var(--tap, 0px));
+  padding: 0 var(--sp-3);
+  font-size: max(var(--type-body-l), calc(var(--type-body) * var(--fs, 1)));
+  color: var(--text-primary);
+  background: var(--surface-0);
+  border: var(--border-w) solid var(--border);
+  border-radius: var(--r-panel);
+  outline: none;
+}
+.bm-search:focus { border-color: var(--primary); box-shadow: 0 0 0 var(--ring-w) var(--primary-glow); }
+.bm-toggle {
+  flex: 0 0 auto;
+  min-height: max(var(--hit-min), var(--tap, 0px));
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: 0 var(--sp-3);
+  font-size: calc(var(--type-body) * var(--fs, 1));
+  font-weight: var(--weight-medium);
+  color: var(--text-primary);
+  background: var(--surface-0);
+  border: var(--border-w) solid var(--border);
+  border-radius: var(--r-panel);
+  cursor: pointer;
+}
+.bm-toggle.on { color: var(--primary); border-color: var(--primary); background: var(--primary-glow); }
+.bm-toggle .ic { width: var(--icon-m); height: var(--icon-m); }
+
+/* Category chips: one horizontal strip that scrolls. */
+.bm-chips { display: flex; gap: var(--sp-2); overflow-x: auto; padding-bottom: var(--sp-1); scrollbar-width: none; }
+.bm-chips::-webkit-scrollbar { display: none; }
+.bm-chip {
+  flex: 0 0 auto;
+  min-height: max(var(--hit-min), var(--tap, 0px));
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: 0 var(--sp-3);
+  font-size: calc(var(--type-body) * var(--fs, 1));
+  color: var(--text-secondary);
+  background: var(--surface-1);
+  border: var(--border-w) solid var(--border);
+  border-radius: var(--r-panel);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.bm-chip .ic { width: var(--icon-m); height: var(--icon-m); }
+.bm-chip.active { color: var(--primary); border-color: var(--primary); background: var(--primary-glow); font-weight: var(--weight-bold); }
+.bm-chip-n { font-size: calc(var(--type-caption) * var(--fs, 1)); color: var(--text-tertiary); font-variant-numeric: var(--num-tabular); }
+
+/* Recommended now: by real need (what runs out first). Each chip is a kit button; one that cannot be paid for says why when pressed. */
+.bm-rec {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  padding: var(--sp-2);
+  border-radius: var(--r-panel);
+  border: var(--border-w) dashed var(--primary);
+  background: var(--surface-1);
+}
+.bm-rec-title { font-size: calc(var(--type-caption) * var(--fs, 1)); font-weight: var(--weight-bold); color: var(--primary); }
+.bm-rec-title .ic { width: var(--icon-s); height: var(--icon-s); vertical-align: middle; }
+/* Room for the key edge of the kit buttons under the row (it scrolls sideways). */
+.bm-rec-row { display: flex; gap: var(--sp-2); overflow-x: auto; scrollbar-width: none; padding-bottom: var(--sp-2); }
+.bm-rec-row::-webkit-scrollbar { display: none; }
+.btn.k-btn.bm-rec-chip {
+  flex: 0 0 auto;
+  min-height: max(var(--hit-min), var(--tap, 0px));
+  justify-content: flex-start;
+  padding: var(--sp-1) var(--sp-3);
+  text-align: start;
+  color: var(--text-primary);
+  background: var(--surface-2);
+  border: var(--border-w) solid var(--primary);
+  border-radius: var(--r-panel);
+  font-family: var(--font-body);
+  font-weight: var(--weight-regular);
+}
+.bm-rec-body { display: inline-flex; align-items: center; gap: var(--sp-2); }
+.bm-rec-ic .ic { width: var(--icon-l); height: var(--icon-l); }
+.bm-rec-text { display: flex; flex-direction: column; line-height: var(--lh-tight); }
+.bm-rec-name { font-weight: var(--weight-bold); font-size: calc(var(--type-body) * var(--fs, 1)); }
+.bm-rec-why { font-size: calc(var(--type-caption) * var(--fs, 1)); color: var(--text-secondary); unicode-bidi: plaintext; }
+.btn.k-btn.bm-rec-chip.is-disabled .bm-rec-why { color: var(--text-disabled); }
+
+/* Cards. */
+.bm-list { display: flex; flex-direction: column; gap: var(--sp-2); }
+.bm-empty { padding: var(--sp-4) var(--sp-2); text-align: center; color: var(--text-secondary); font-size: calc(var(--type-body) * var(--fs, 1)); }
+.bm-card {
+  display: flex;
+  gap: var(--sp-3);
+  align-items: flex-start;
+  min-height: calc(var(--hit-min) * 2);
+  padding: var(--sp-2);
+  border-radius: var(--r-card);
+  cursor: pointer;
+  background: var(--surface-1);
+  border: var(--border-w) solid var(--border);
+  transition: transform var(--dur-press) var(--ease-out), border-color var(--dur-release) var(--ease-out);
+}
+.bm-card:active, .bm-card:focus-visible { border-color: var(--primary); transform: scale(var(--press-scale)); outline: none; }
+.bm-card[role="group"]:active { transform: none; }
+.bm-card.disabled .bm-thumb, .bm-card.disabled .bm-outs { filter: grayscale(1); }
+.bm-card.disabled { border-style: dashed; }
+.bm-card.locked { cursor: default; }
+.bm-card.locked .bm-thumb { filter: grayscale(1) brightness(var(--press-darken)); }
+.bm-card.no-space { cursor: default; border-color: var(--warning); }
+.bm-thumb { flex: 0 0 auto; display: grid; place-items: center; }
+.bm-thumb-ic { color: var(--text-primary); display: grid; place-items: center; }
+.bm-thumb-ic .ic { width: calc(var(--icon-l) + var(--sp-2)); height: calc(var(--icon-l) + var(--sp-2)); }
+.bm-info { gap: var(--sp-1); min-width: 0; }
+.bm-head { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2); }
+.bm-dots { display: inline-flex; gap: var(--sp-1); flex: 0 0 auto; }
+.bm-dot { width: var(--sp-2); height: var(--sp-2); border-radius: var(--border-w); background: var(--text-secondary); }
+.bm-outs { display: flex; flex-wrap: wrap; gap: var(--sp-1) var(--sp-2); }
+.bm-out {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  padding: 0 var(--sp-2);
+  font-size: calc(var(--type-caption) * var(--fs, 1));
+  font-weight: var(--weight-medium);
+  color: var(--text-primary);
+  background: var(--surface-2);
+  border-radius: var(--r-panel);
+  unicode-bidi: isolate;
+}
+.bm-out .ic, .bm-cost .ic { width: var(--icon-s); height: var(--icon-s); }
+.bm-cost { gap: var(--sp-1) var(--sp-2); }
+.bm-act .ic, .bm-limit .ic, .bm-lock .ic, .bm-nospace .ic { width: var(--icon-s); height: var(--icon-s); vertical-align: middle; }
+.bm-nospace { color: var(--text-secondary); }
+
+/* [w2c #2] The card's one action when there is no free spot: go where the space is. */
+.btn.k-btn.bm-route {
+  align-self: stretch;
+  margin-top: var(--sp-1);
+  margin-bottom: var(--sp-2);
+  min-height: max(var(--hit-min), var(--tap, 0px));
+  padding: var(--sp-2) var(--sp-3);
+  justify-content: flex-start;
+  text-align: start;
+  white-space: normal;
+  font-size: calc(var(--type-body) * var(--fs, 1));
+  line-height: var(--lh-tight);
+}
+.btn.k-btn.bm-route .k-btn__label { flex: 1 1 auto; }
+
+/* What unlocks a locked room: a kit button (tertiary) that opens the research panel. */
+.btn.k-btn.bm-unlock {
+  align-self: flex-start;
+  min-height: max(var(--hit-min), var(--tap, 0px));
+  padding: var(--sp-1) var(--sp-3);
+  justify-content: flex-start;
+  text-align: start;
+  white-space: normal;
+  font-family: var(--font-body);
+  font-size: calc(var(--type-caption) * var(--fs, 1));
+  color: var(--primary);
+  border: var(--border-w) solid var(--primary);
+  border-radius: var(--r-panel);
+}
+.bm-unlock .ic { width: var(--icon-s); height: var(--icon-s); flex: 0 0 auto; }
+
+/* [w2c] Price chips that say how much is short ("20 · 8 short"); used by the cards, the placement bar and the wrecked-room sheet. */
+.ux2c-cost .cost-chip { display: inline-flex; align-items: center; gap: var(--sp-1); unicode-bidi: isolate; }
+.ux2c-cost .cost-chip .ic { width: var(--icon-s); height: var(--icon-s); }
+.ux2c-cost .cost-chip.expensive { border: var(--border-w) dashed currentColor; }
+.ux2c-short {
+  font-size: calc(var(--type-caption) * var(--fs, 1));
+  font-weight: var(--weight-medium);
+  color: var(--danger-text);
+  padding-inline-start: var(--sp-1);
+  border-inline-start: var(--border-w) solid currentColor;
+}
+
+/* [w2c #16] The wrecked-room sheet: the restored room's power use against what is spare (red with a warning icon when short). */
+.ux2c-power { display: flex; align-items: center; gap: var(--sp-1); margin-top: var(--sp-1); color: var(--text-secondary); }
+.ux2c-power .ic { width: var(--icon-s); height: var(--icon-s); color: var(--power); flex: none; }
+.ux2c-power.is-short { color: var(--danger-text); font-weight: var(--weight-medium); }
+.ux2c-power.is-short .ic { color: var(--danger-text); }
+
+/* Short phones (375x667): keep the toolbar compact so more than one card shows. */
+@media (max-height: 720px) {
+  .bm { gap: var(--sp-2); }
+  .bm-rec { padding: var(--sp-1) var(--sp-2); }
+  .bm-rec-title { display: none; }
+}
+
+@media (max-width: 380px) {
+  .bm-thumb { width: calc(var(--sp-8) - var(--sp-1)); height: calc(var(--sp-7) + var(--sp-1)); }
+  .bm-card { gap: var(--sp-2); }
+}

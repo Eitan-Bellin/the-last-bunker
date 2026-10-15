@@ -5,6 +5,20 @@ import { ENDINGS, endingOf, endingScore } from '../data/endings';
 import type { BuildingSystem } from './BuildingSystem';
 import { registerInboxKind, type InboxSystem } from './InboxSystem';
 import { i18n } from '../i18n/I18nManager';
+import { lawUpkeep, policyExtras } from '../data/laws'; // [phase4]
+
+/** [phase4] Upkeep is charged in steps of at least this many world seconds. */
+const UPKEEP_STEP = 60;
+
+/**
+ * [phase4] Notes that a law left the books (repealed by the player or lapsed), so it waits its cooldown (laws.ts lawCooldown).
+ * GameEngine.repealLaw should call this too (see the phase 4 report); the Command panel calls it after a repeal.
+ */
+export function noteRepeal(sm: StateManager, id: string): void {
+  const lg = sm.state.longGame;
+  if (!lg) return;
+  sm.applyDelta({ path: 'longGame.policy.repealedAt', value: { ...(policyExtras(sm.state).repealedAt ?? {}), [id]: lg.meta.worldT } });
+}
 
 /** An ending a run may choose must score at least this much, and at least this share of the best one. */
 const OPTION_MIN_SCORE = 1.5;
@@ -69,6 +83,7 @@ export class ActSystem {
     const state = this.sm.state;
     const lg = state.longGame;
     if (!lg) return;
+    this.chargeUpkeep(); // [phase4]
     const act = actOf(state);
     // [P5] The last Act done: the run's ending is told once (and kept for the Legacy).
     if (act.id >= MAX_ACT) {
@@ -87,6 +102,38 @@ export class ActSystem {
     ]);
     this.buildings.recalculateMaxPopulation(this.sm);
     bus.emit('act:advance', next.id);
+  }
+
+  /**
+   * [phase4] Laws cost upkeep per hour of world time (online and away). What can't be paid lapses the newest law (it then waits its
+   * cooldown) and tells the app ('law:lapsed', id).
+   */
+  private chargeUpkeep(): void {
+    const sm = this.sm;
+    const lg = sm.state.longGame;
+    if (!lg) return;
+    const now = lg.meta.worldT;
+    const since = policyExtras(sm.state).upkeepAt;
+    if (since === undefined || since > now || lg.policy.laws.length === 0) {
+      if (since !== now) sm.applyDelta({ path: 'longGame.policy.upkeepAt', value: now });
+      return;
+    }
+    const dt = now - since;
+    if (dt < UPKEEP_STEP) return;
+    sm.applyDelta({ path: 'longGame.policy.upkeepAt', value: now });
+    let short = false;
+    for (const [r, perHour] of Object.entries(lawUpkeep(sm.state))) {
+      const res = sm.state.resources[r as keyof typeof sm.state.resources];
+      if (!res || !perHour) continue;
+      const due = perHour * lg.policy.laws.length * dt / 3600;
+      if (res.amount < due) short = true;
+      sm.applyDelta({ path: `resources.${r}.amount`, value: Math.max(0, res.amount - due) });
+    }
+    if (!short) return;
+    const lapsed = lg.policy.laws[lg.policy.laws.length - 1];
+    sm.applyDelta({ path: 'longGame.policy.laws', value: lg.policy.laws.slice(0, -1) });
+    noteRepeal(sm, lapsed);
+    bus.emit('law:lapsed', lapsed);
   }
 
   /** Release 1: Genesis needs the last Act's goals and charter done. */

@@ -10,6 +10,10 @@ import { getDef, isPowerPlant } from '../data/buildingDefs';
  * Wear makes a malfunction likelier (IncidentSystem reads `wearRisk`), a worn reactor risks a meltdown,
  * and a click on "Maintain" in the building panel resets it for 5% of the room's build price per level.
  * An engineer on the crew halves the wear.
+ * [phase4] (C5) Maintenance is no longer a chore with a button: the crew services every room whose wear passes CREW_SERVICE_AT on its own,
+ * paying the same price, but only out of materials above CREW_RESERVE of the store. A bunker that spends its materials down to the floor
+ * lets its rooms wear (and a worn reactor can melt): the danger comes from a spending decision, not from forgetting a tap.
+ * The button stays only for a room shut down by a disaster ("repair now" instead of waiting it out).
  */
 export const WEAR_FROM_LEVEL = 3;
 const WEAR_PER_HOUR = 1;
@@ -19,6 +23,10 @@ const HOT_ROOMS: BuildingType[] = ['batteryBank', 'recycler', 'dataCenter', 'all
 const isHot = (type: BuildingType) => (isPowerPlant(type) && !getDef(type)?.shape) || HOT_ROOMS.includes(type);
 /** Wear is written back to the state in chunks (it changes slowly; no need to touch the state every tick). */
 const FLUSH_SECONDS = 20;
+/** [phase4] Wear (%) at which the crew services a room by itself (the Foreman's old threshold). */
+export const CREW_SERVICE_AT = 40;
+/** [phase4] The crew only pays for upkeep out of materials above this share of the store. */
+export const CREW_RESERVE = 0.3;
 
 export function wearOf(b: BuildingInstance): number {
   return b.wear ?? 0;
@@ -66,6 +74,26 @@ export class MaintenanceSystem {
       return { ...b, wear: Math.min(100, cur + wearRate(b) * span * (this.engineered(state, b) ? 0.5 : 1)) };
     });
     if (changed) this.sm.applyDelta({ path: 'buildings', value: next });
+    this.crewService(); // [phase4]
+  }
+
+  /** [phase4] The crew services worn rooms by itself, most worn first, while the materials above the reserve last. Returns how many. */
+  crewService(): number {
+    const state = this.sm.state;
+    const worn = state.buildings.filter(b => !b.isConstructing && wearOf(b) >= CREW_SERVICE_AT).sort((a, b) => wearOf(b) - wearOf(a));
+    if (worn.length === 0) return 0;
+    const done = new Set<string>();
+    for (const b of worn) {
+      const cost = this.cost(this.sm.state, b);
+      const mats = this.sm.state.resources.materials;
+      if (!mats || mats.amount - (cost.materials ?? 0) < CREW_RESERVE * mats.cap) break;
+      if (!this.resources.spend(this.sm, cost)) break;
+      done.add(b.id);
+    }
+    if (done.size === 0) return 0;
+    this.sm.applyDelta({ path: 'buildings', value: this.sm.state.buildings.map(x => (done.has(x.id) ? { ...x, wear: 0 } : x)) });
+    bus.emit('maintenance:crew', done.size);
+    return done.size;
   }
 
   /** Materials: 5% of the room's build price for every level it has. */

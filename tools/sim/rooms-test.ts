@@ -9,7 +9,10 @@ import { StateManager } from '../../src/core/StateManager';
 import { isBuildingUnlocked, unlockingResearch } from '../../src/systems/ResearchSystem';
 import { BUILDABLE_TYPES, DISTRICT_KINDS, getDef, effectiveLevel, isDistrict, levelMultiplier } from '../../src/data/buildingDefs';
 import { cargoMult, childCapacityOf, earlyWarningLead, expeditionTeamsBonus, hygieneMult, mourningMult, quarantineCapacity, returnSafetyMult, roomChildGrowth } from '../../src/data/roomEffects';
-import { specsFor, SPECIALIZATIONS } from '../../src/data/specializations';
+import { specsFor, SPECIALIZATIONS, typeRoleOf } from '../../src/data/specializations';
+import { specLevel } from '../../src/data/buildingDefs'; // [phase4]
+import { MaintenanceSystem } from '../../src/systems/MaintenanceSystem'; // [phase4]
+import { LEVEL_CAP } from '../../src/systems/PopulationSystem'; // [phase4]
 import { availableDistricts, DISTRICTS } from '../../src/data/districts'; // plan4:BL-24,25
 import { IncidentSystem } from '../../src/systems/IncidentSystem'; // plan4:BL-24
 import { SeededRandom } from '../../src/core/Random'; // plan4:BL-24
@@ -328,6 +331,56 @@ export function roomsChecks(games: { name: string; json: string }[]): { problems
       const deep = allowedFloors('seedLab', 10);
       if (!deep.length || deep.some(f => f < 3)) fail(`${g.name}: the seed lab may stand on ${deep} (deep levels only)`);
       if (!allowedFloors('componentsPlant', 10).includes(2) || !allowedFloors('forum', 10).includes(0)) fail(`${g.name}: plants belong in engineering and the forum in the living level`);
+    }
+    // ---- [phase4] (C2/C5) type roles, the per-room Act role, crew upkeep and the survivor level cap ----
+    {
+      const sm = new StateManager();
+      const withAct = (st: GameState, act: number): GameState => {
+        const lg = st.longGame ?? base.longGame;
+        return { ...st, lateGame: { ...st.lateGame }, longGame: lg ? { ...lg, meta: { ...lg.meta, act } } : lg };
+      };
+      const fl = specLevel(getDef('farm')!), wl = specLevel(getDef('workshop')!);
+      const others = base.buildings.filter(b => b.type !== 'farm' && b.type !== 'workshop');
+      const farms = [mk('farm', fl, 40, 0), mk('farm', fl, 40, 2), mk('farm', fl, 40, 4), mk('farm', Math.max(1, fl - 1), 40, 6)];
+      farms[0].specialization = 'orchard'; farms[1].specialization = 'orchard'; farms[2].specialization = 'seedBank';
+      const st0 = withAct({ ...base, buildings: [...others, ...farms] }, 4);
+      delete (st0.lateGame as { roomRoles?: unknown }).roomRoles;
+      sm.loadState(st0);
+      bs.syncRoles(sm);
+      const spec = (id: string) => sm.state.buildings.find(b => b.id === id)?.specialization ?? null;
+      if (typeRoleOf(sm.state, 'farm') !== 'orchard') fail(`${g.name}: an older save's farms map to ${typeRoleOf(sm.state, 'farm')}, expected the most common role (orchard)`);
+      if (farms.slice(0, 3).some(f => spec(f.id) !== 'orchard')) fail(`${g.name}: not every farm at its role level took the type's role`);
+      if (fl > 1 && spec(farms[3].id) !== null) fail(`${g.name}: a farm below its role level took a role`);
+      if (bs.canRetool(sm.state, farms[0].id, 'seedBank')) fail(`${g.name}: a plain role can still be retooled per room`);
+      if (!bs.changeTypeRole(sm, 'farm', 'seedBank') || farms.slice(0, 3).some(f => spec(f.id) !== 'seedBank')) fail(`${g.name}: changing the farm role did not switch every farm`);
+      if (bs.changeTypeRole(sm, 'farm', 'orchard')) fail(`${g.name}: the farm role changed again inside its cooldown`);
+      // The Act role stays per room; the plain role is the type's.
+      const ws = [mk('workshop', wl, 40, 8), mk('workshop', wl, 40, 10)];
+      sm.loadState(withAct({ ...sm.state, buildings: [...sm.state.buildings, ...ws] }, 2));
+      if (bs.canSpecialize(sm.state, ws[0].id)) fail(`${g.name}: a workshop can take a role in Act II`);
+      sm.loadState(withAct(sm.state, 3));
+      if (!bs.specialize(sm, ws[0].id, 'assemblyLine') || spec(ws[0].id) !== 'assemblyLine') fail(`${g.name}: a workshop could not become an assembly line`);
+      if (!bs.specialize(sm, ws[1].id, 'foundry') || typeRoleOf(sm.state, 'workshop') !== 'foundry' || spec(ws[1].id) !== 'foundry') fail(`${g.name}: choosing Foundry did not set the workshop type's role`);
+      if (spec(ws[0].id) !== 'assemblyLine') fail(`${g.name}: the type role took over a room in its Act role`);
+      if (!bs.canRetool(sm.state, ws[0].id, 'foundry') || bs.canRetool(sm.state, ws[1].id, 'salvageYard') || !bs.canRetool(sm.state, ws[1].id, 'assemblyLine')) fail(`${g.name}: per-room refits are not limited to the Act role and back`);
+      // Crew upkeep: a worn room is serviced from materials above the reserve, and left worn below it.
+      const worn = (amount: number) => {
+        const st = withAct({ ...base, buildings: [...others, { ...mk('generator', 5, 40, 12), wear: 70 }] }, 3);
+        st.resources = { ...st.resources, materials: { ...st.resources.materials, amount: st.resources.materials.cap * amount } };
+        sm.loadState(st);
+        new MaintenanceSystem(sm, rs, bs).update(25);
+        return sm.state.buildings[sm.state.buildings.length - 1].wear ?? 0;
+      };
+      if (worn(1) !== 0) fail(`${g.name}: the crew did not service a 70% worn generator with a full store`);
+      if (worn(0.1) < 70) fail(`${g.name}: the crew dipped into the materials reserve`);
+      // The level cap: an older save's level 432 comes down to LEVEL_CAP on the first tick.
+      const adult = base.survivors.find(s => !s.child);
+      if (adult) {
+        sm.loadState({ ...base, survivors: base.survivors.map(s => (s.id === adult.id ? { ...s, level: 432, xp: 5 } : s)) });
+        ps.update(sm, 1);
+        const after = sm.state.survivors.find(s => s.id === adult.id);
+        if (after && after.level !== LEVEL_CAP) fail(`${g.name}: a level 432 survivor is level ${after.level} after a tick, expected ${LEVEL_CAP}`);
+      }
     }
     notes.push(`${g.name}: wave 2 effects, weather, children, placement and the memorial flag, then wave 3 districts, vault plans, steam bursts and Act rooms checked`);
     void effectiveLevel;

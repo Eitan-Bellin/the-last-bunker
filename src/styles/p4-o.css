@@ -1,0 +1,30 @@
+/* [phase4] Agent O: partner requests on the Trade tab, the outpost claim's payback line, the one Today card and the Favours sheet.
+   Tokens only (no hex, no raw z-index); phones first: every row wraps at 320 px and buttons keep the 44 px touch target. */
+
+/* ---------- partner requests (Surface > Trade) ---------- */
+.p4o-requests { display: flex; flex-direction: column; gap: var(--sp-2); margin-block-start: var(--sp-2); }
+.p4o-requests__title { font-size: var(--type-caption); color: var(--text-secondary); font-weight: var(--weight-bold); }
+.p4o-request {
+  display: flex; flex-direction: column; gap: var(--sp-1);
+  padding: var(--sp-2) var(--sp-3); border-radius: var(--r-m);
+  background: var(--surface-1); border: var(--border-w) solid var(--border);
+  border-inline-start: 3px solid var(--accent);
+  min-width: 0;
+}
+.p4o-request__deal { font-size: var(--type-body); color: var(--text-primary); overflow-wrap: anywhere; line-height: var(--lh-body); }
+.p4o-request__safe { color: var(--positive); }
+.p4o-request__row { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
+.p4o-request__row .btn { flex: 1 1 120px; min-height: var(--hit-min); }
+
+/* ---------- outpost claim card ---------- */
+.p4o-payback { font-variant-numeric: tabular-nums; }
+.p4o-payback.is-rich { color: var(--accent); }
+
+/* ---------- the Today card ---------- */
+.p4o-today-claim { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
+.p4o-today-claim .btn { flex: 1 1 140px; min-height: var(--hit-min); }
+.p4o-crate.ready { border-color: var(--accent); }
+.p4o-weekly { gap: var(--sp-2); }
+
+/* ---------- Favours ---------- */
+.p4o-favours-rush { margin: 0; font-size: var(--type-body); color: var(--text-primary); font-variant-numeric: tabular-nums; }

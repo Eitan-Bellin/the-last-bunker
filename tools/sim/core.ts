@@ -623,6 +623,14 @@ export async function runSim(o: SimOptions): Promise<SimResult> {
     const forks = [...new Set(all.map(r => r.fork).filter(Boolean))] as string[];
     const chosen = new Set(forks.map((f, fi) => { const opts = all.filter(r => r.fork === f); return opts[(o.seed + fi) % opts.length].id; }));
     const onPath = (id: string) => { const f = all.find(r => r.id === id)?.fork; return !f || chosen.has(id); };
+    // [phase4] A fork that waits on the Crossroads is chosen there (the doctrine is no longer researched like a node).
+    const choose = fn(e.researchSystem, 'chooseDoctrine'), waiting = fn(e.researchSystem, 'waitingForks');
+    if (choose && waiting) {
+      for (const f of waiting(state()) as string[]) {
+        const id = [...chosen].find(c => all.find(r => r.id === c)?.fork === f);
+        if (id && choose(sm, id)) acted('doctrine');
+      }
+    }
     // Main tree first (cheapest), endless refinements only when nothing else is open; fill the queue if there is one.
     for (let i = 0; i < 6; i++) {
       // [plan4:BL-15..32] A wave 2 room's node is researched after the main tree (like a Refinement, but before one): the rooms are a choice, not the road to the next Act.

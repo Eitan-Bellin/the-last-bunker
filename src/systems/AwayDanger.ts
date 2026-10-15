@@ -4,7 +4,10 @@ import type { DisasterKind, GameState } from '../core/GameState';
 import type { StateManager } from '../core/StateManager';
 import type { SeededRandom } from '../core/Random';
 import { DAY_MS, isQuiet } from './DeathSystem';
-import { raidProfile, raidStrength, type EventSystem } from './EventSystem';
+import { raidOdds, raidProfile, raidStrength, type EventSystem } from './EventSystem';
+import { foremanPolicy } from './ForemanSystem'; // [phase4] the away raid policy
+import { doctrineAwayTruce } from './ResearchSystem'; // [phase4] Diplomacy (Agent C)
+import type { RaidKind, RaidStance } from '../core/GameState';
 import type { IncidentSystem } from './IncidentSystem';
 import type { DeathSystem } from './DeathSystem';
 
@@ -99,18 +102,24 @@ export class AwayDanger {
       const ignored = this.sm.state.danger.ignoredSince;
       const allowDeath = deathBudget > 0 && ignored !== null && when - ignored > DAY_MS && difficultyOf(this.sm.state).awayDeaths;
       if (ignored === null) this.sm.applyDelta({ path: 'danger', value: { ...this.sm.state.danger, ignoredSince: when } });
+      const truce = doctrineAwayTruce(this.sm.state); // [phase4] Diplomacy (Agent C): nobody is lost while away
       if (ev.type === 'raid') {
         if (!this.sm.state.danger.raid) {
-          const raid = { hitAt: play, strength: raidStrength(this.sm.state, this.rng.next()) };
+          // [phase4] Away raids know their kind too, so the policy weighs the same odds the player would see.
+          const kind: RaidKind = this.rng.chance(0.5) ? 'scavengers' : 'marauders';
+          const raid = { hitAt: play, strength: raidStrength(this.sm.state, this.rng.next()), kind, stance: 'hold' as RaidStance };
           this.sm.applyDelta({ path: 'danger', value: { ...this.sm.state.danger, raid } });
         }
-        const res = this.events.resolveRaid('fight', { soft: true, allowDeath });
+        // [phase4] Diplomacy's truce overrides the away policy: the toll is paid by itself and nobody dies.
+        const plan = truce && this.events.canPayTribute() ? 'tribute' : this.plan();
+        const res = plan === 'tribute' ? this.events.resolveRaid('tribute', { soft: true })
+          : this.events.resolveRaid('fight', { soft: true, allowDeath: allowDeath && !truce, stance: plan, at: when });
         if (!res) continue;
         report.raids++;
         if (res.key === 'loseSmall' || res.key === 'loseBig') report.raidsLost++;
         report.hurt += res.injured.length;
         if (res.died) { report.died.push(res.died); deathBudget--; }
-        else if (allowDeath && deathBudget > 0 && res.injured.length > 0 && this.ignoredToll()) { deathBudget--; this.lose(report); }
+        else if (!truce && allowDeath && deathBudget > 0 && res.injured.length > 0 && this.ignoredToll()) { deathBudget--; this.lose(report); }
       } else {
         const dz = ev.disasterId ? this.sm.state.danger.disasters.find(x => x.id === ev.disasterId) : this.rollDisaster(this.sm.state);
         if (!dz) continue;
@@ -118,10 +127,27 @@ export class AwayDanger {
         report.disasters.push(res.kind);
         report.hurt += res.hurt;
         if (res.died.length) { report.died.push(...res.died); deathBudget -= res.died.length; }
-        else if (allowDeath && deathBudget > 0 && res.hurt > 0 && this.ignoredToll()) { deathBudget--; this.lose(report); }
+        else if (!truce && allowDeath && deathBudget > 0 && res.hurt > 0 && this.ignoredToll()) { deathBudget--; this.lose(report); }
       }
     }
     return report;
+  }
+
+  /**
+   * [phase4] The away raid policy (the Foreman screen, C3/C5): a stance the player already chose for this raid stands; otherwise fight
+   * (with the better of hold and sally) when the odds reach the policy's line, else pay the toll (if the store has it) or hide.
+   */
+  private plan(): RaidStance | 'tribute' {
+    const state = this.sm.state;
+    const set = state.danger.raid?.stance;
+    if (set === 'sally' || set === 'hide') return set;
+    const p = foremanPolicy(state);
+    const hold = raidOdds(state, 'hold') ?? 0;
+    const sally = state.danger.raid?.kind ? raidOdds(state, 'sally') ?? 0 : 0;
+    const best: RaidStance = sally > hold ? 'sally' : 'hold';
+    if (Math.max(hold, sally) >= p.fightAt) return best;
+    if (p.otherwise === 'pay' && this.events.canPayTribute()) return 'tribute';
+    return 'hide';
   }
 
   /** After more than a day of ignored danger, an injury sometimes turns fatal (by difficulty). */

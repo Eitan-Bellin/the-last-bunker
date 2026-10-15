@@ -197,6 +197,12 @@ export class HUD {
   /** [plan4:AC-8] The resource buttons' spoken labels are refreshed at most 4 times a second (a screen reader must not be flooded). */
   private lastAria = 0;
 
+  /** [phase4] The Exposure gauge (status chip edge, wide-screen chip) opens the Exposure sheet (DangerController wires it). */
+  onExposure: (() => void) | null = null;
+  private expChip!: HTMLButtonElement;
+  private expValue!: HTMLElement;
+  private expEdge!: HTMLElement;
+  private exposure: { n: number; level: string; label: string } | null = null;
   onNav: ((key: NavKey) => void) | null = null;
   onResourceTap: ((r: ResourceType) => void) | null = null;
   onMenu: (() => void) | null = null;
@@ -391,7 +397,12 @@ export class HUD {
     this.actBar = kProgress(0, 100);
     this.actBar.classList.add('hx-act__bar');
     this.actBar.setAttribute('aria-hidden', 'true');
-    this.actBtn.append(actHead, this.actName, people, this.actBar);
+    // [phase4] Exposure as a slim gauge along the chip's top edge (costs no width at 320 px); its number is in the long press and the
+    // bell's Exposure row, and wide screens get a chip of its own (below).
+    this.expEdge = el('span', 'hx-exp-edge');
+    this.expEdge.setAttribute('aria-hidden', 'true');
+    this.expEdge.style.display = 'none';
+    this.actBtn.append(actHead, this.actName, people, this.actBar, this.expEdge);
     // Long press (or hover / keyboard focus): the biggest single cause of the mood. Bound before the click so the press that ends it is swallowed.
     kTooltip(this.actBtn, () => this.statusTip());
     this.actBtn.addEventListener('click', () => this.onEra?.());
@@ -402,6 +413,14 @@ export class HUD {
     this.creditsValue = el('span', 'hx-stat__value', '0');
     this.creditsBtn.append(el('span', 'hx-stat__icon', RESOURCE_ICONS.credits ?? '[[credits]]'), this.wrap(this.creditsValue, el('span', 'hx-stat__caption', i18n.t('shop.tab'))));
     this.creditsBtn.addEventListener('click', () => this.openShop());
+
+    // [phase4] Wide screens (600 px+): an Exposure chip of its own, "eye 47", that opens the sheet.
+    this.expChip = el('button', 'hx-chip hx-exp');
+    this.expChip.type = 'button';
+    this.expValue = el('span', 'hx-stat__value', '0');
+    this.expChip.append(el('span', 'hx-stat__icon', '[[eye]]'), this.expValue);
+    this.expChip.style.display = 'none';
+    this.expChip.addEventListener('click', () => { haptic('tap'); this.onExposure?.(); });
 
     const clock = el('div', 'hx-clock');
     this.clockValue = el('span', 'hx-stat__value', '06:00');
@@ -419,7 +438,7 @@ export class HUD {
     this.alertsBtn.setAttribute('aria-expanded', 'false');
     this.alertsBtn.addEventListener('click', () => { haptic('tap'); this.togglePop('alerts'); });
 
-    row.append(resourceRow, this.moreBtn, this.actBtn, this.creditsBtn, clock, this.alertsBtn);
+    row.append(resourceRow, this.moreBtn, this.actBtn, this.expChip, this.creditsBtn, clock, this.alertsBtn);
     topBar.append(row);
     this.topBar = topBar;
     this.container.appendChild(topBar);
@@ -1291,9 +1310,27 @@ export class HUD {
     return `${i18n.t('ux2b.moraleTop', { cause: i18n.t(`morale.${best[0]}`), v: `${v > 0 ? '+' : v < 0 ? '−' : ''}${Math.abs(v)}` })}`;
   }
 
+  /**
+   * [phase4] The Exposure gauge: the status chip's top edge (width = the meter, colour + a dashed edge when hunted) and the wide-screen chip.
+   * null hides both (before raids open).
+   */
+  setExposure(x: { n: number; level: 'low' | 'mid' | 'high'; label: string } | null): void {
+    this.exposure = x;
+    this.setStyle(this.expEdge, 'display', x ? '' : 'none');
+    this.setStyle(this.expChip, 'display', x ? '' : 'none');
+    if (!x) return;
+    this.setStyle(this.expEdge, '--exp', `${Math.max(4, Math.min(100, x.n))}%`);
+    this.setState(this.expEdge, 'level', `is-${x.level}`);
+    this.setState(this.expChip, 'level', `is-${x.level}`);
+    this.setText(this.expValue, i18n.formatNumber(x.n));
+    this.setAttr(this.expChip, 'aria-label', x.label);
+    this.expChip.title = x.label;
+  }
+
   /** [phase2] The status chip's long press: the mood's biggest cause, then the season (it left the Inbox: nothing to do there). */
   private statusTip(): string {
     const parts = [this.statusMorale, this.moraleTopCause()].filter(Boolean);
+    if (this.exposure) parts.push(`[[eye]] ${this.exposure.label}`); // [phase4]
     if (this.season) parts.push(`[[${this.season.icon}]] ${this.season.label}`);
     return parts.join(' · ');
   }

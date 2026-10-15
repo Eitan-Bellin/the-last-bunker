@@ -380,6 +380,8 @@ export interface DangerState {
   /** Wall-clock ms of the first danger that struck while away and was never answered (the offline safety net). */
   ignoredSince: number | null;
   nextId: number;
+  /** [phase4] Wall-clock ms until which everyone hid below after a raid: the work rooms stand still (optional: absent = 0). */
+  hiddenUntil?: number;
 }
 
 export function createDanger(): DangerState {
@@ -593,6 +595,8 @@ export interface LateGameState {
   pledgeDefault?: boolean;
   /** [Q1] Play seconds before which no story chapter may start (kept in the save: closing the game must not shorten the gap). */
   storyUntil?: number;
+  /** [phase4] (Agent R) One specialization per room TYPE and when it last changed (optional: absent in older saves). */
+  roomRoles?: { roles: Partial<Record<BuildingType, string>>; changedAt: Partial<Record<BuildingType, number>> };
 }
 
 /** [plan4:GP-1] No orders yet: the first ones are made once the guided half hour is over. */

@@ -4,6 +4,8 @@ import { systemOpen } from './acts';
 /**
  * [Long game P3/R2] Laws (long-game plan, pillar C): standing rules with a clear price. The Acts open a few slots
  * (one in Act III, two in Act V, three in Act VI); passing a law costs knowledge, repealing it is free.
+ * [phase4] A law in force also costs upkeep every hour (knowledge in Acts III-V, influence from Act VI; ActSystem charges it and lets a
+ * law lapse when it cannot be paid), and a repealed law waits LAW_COOLDOWN before it can be passed again.
  * [ux-wp2 S4] What a law does in this bunker right now (morale and output): lawImpact() in src/systems/morale.ts, for the laws UI.
  */
 export interface LawDef {
@@ -87,3 +89,37 @@ export const lawAppetite = (s: GameState) => product(activeLaws(s).map(l => l.ap
 export const lawArrivals = (s: GameState) => product(activeLaws(s).map(l => l.arrivals));
 export const lawThreat = (s: GameState) => sum(activeLaws(s).map(l => l.threat));
 export const lawDefense = (s: GameState) => product(activeLaws(s).map(l => l.defense));
+
+// ---- [phase4] Policies (C2): a law is a standing budget, not a one-off unlock ----
+
+/** [phase4] World seconds a repealed (or lapsed) law waits before it can be passed again. */
+export const LAW_COOLDOWN = 12 * 3600;
+/** [phase4] Knowledge per hour per law in force, per Act (Acts III-V: knowledge is what the bunker has most of to spend). */
+const KNOWLEDGE_UPKEEP_PER_ACT = 1500;
+/** [phase4] Influence per hour per law in force from Act VI (the Council's currency). */
+const INFLUENCE_UPKEEP: Record<number, number> = { 6: 8, 7: 10 };
+
+/**
+ * [phase4] Optional bookkeeping kept in `longGame.policy` (older saves have none: read with defaults, no migration needed; the
+ * load merges `{ ...fresh.policy, ...saved.policy }`, so extra keys survive). `upkeepAt`: world time upkeep was last charged;
+ * `repealedAt`: world time each law was last repealed or lapsed.
+ */
+export interface PolicyExtras { upkeepAt?: number; repealedAt?: Record<string, number> }
+
+export function policyExtras(state: GameState): PolicyExtras {
+  return (state.longGame?.policy ?? {}) as PolicyExtras;
+}
+
+/** [phase4] What ONE law costs per hour in this Act. */
+export function lawUpkeep(state: GameState): Partial<Record<ResourceType, number>> {
+  const act = state.longGame?.meta.act ?? 1;
+  if (act >= 6) return { influence: INFLUENCE_UPKEEP[Math.min(7, act)] ?? 10 };
+  return { knowledge: KNOWLEDGE_UPKEEP_PER_ACT * Math.max(1, act) };
+}
+
+/** [phase4] Seconds before this law can be passed again (0: now). */
+export function lawCooldown(state: GameState, id: string): number {
+  const at = policyExtras(state).repealedAt?.[id];
+  if (at === undefined) return 0;
+  return Math.max(0, at + LAW_COOLDOWN - (state.longGame?.meta.worldT ?? 0));
+}

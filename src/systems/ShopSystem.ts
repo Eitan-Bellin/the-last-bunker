@@ -8,6 +8,7 @@ import { TUNING } from '../data/tuning';
 import { hasFeature } from './ResearchSystem';
 import { ACT_GOODS_HOURS, PROJECT_BOOST_SHARE, RESEARCH_BOOST_SECONDS, SCRAP_BUNDLE, SHOP_ITEMS, SHOP_PRICE_RAMP, type ShopItem, type ShopItemId } from '../data/shop';
 import { actGoods } from '../data/pricing';
+import { setFavourBuyer } from './RushSystem';
 
 /** What the Projects system offers the shop (feature-detected: absent until that system exists). */
 export interface ProjectBooster { boostStage?(state: GameState, share: number): boolean }
@@ -37,6 +38,9 @@ export class ShopSystem {
     this.resources = resources;
     this.research = research;
     this.supply = supply;
+    // [phase4] A rush button with no charge left pays its favour in credits through the shop (same price, same weekly ramp).
+    const rush = SHOP_ITEMS.find(i => i.id === 'rush');
+    if (rush) setFavourBuyer({ price: s => this.price(s, rush), buy: () => this.buy('rush') });
   }
 
   /** Counters for today / this week; stale ones read as zero (the reset is applied on the next purchase). */
@@ -47,24 +51,25 @@ export class ShopSystem {
 
   price(state: GameState, item: ShopItem): number {
     const c = this.counts(state);
-    const n = (item.weeklyRamp ? c.week[item.id] : c.day[item.id]) ?? 0;
+    const n = c.week[item.id] ?? 0; // [phase4] every favour ramps with this week's purchases (no daily caps)
     // [Q10] Dearer in later Acts, so the credits of a bigger bunker do not buy more than the first ones did.
     const act = state.longGame?.meta.act ?? 1;
     const doctrine = hasFeature(state, 'merchantRepublic') ? 0.85 : 1; // [P2-1]
     return Math.round(item.price * (1 + TUNING.shopActRamp * Math.max(0, act - 1)) * doctrine * Math.pow(item.weeklyRamp ?? SHOP_PRICE_RAMP, n));
   }
 
+  /** [phase4] How many of an item were bought this week (the ramp's exponent; shown on the Favours sheet). */
+  boughtThisWeek(state: GameState, id: ShopItemId): number {
+    return this.counts(state).week[id] ?? 0;
+  }
+
   offers(state: GameState): ShopOffer[] {
-    const c = this.counts(state);
     return SHOP_ITEMS.map(item => {
       const price = this.price(state, item);
       const visible = (item.id !== 'projectBoost' || !!this.getProjects?.()?.boostStage) && (state.longGame?.meta.act ?? 1) >= (item.fromAct ?? 0);
-      let left: number | undefined;
-      if (item.weeklyLimit) left = item.weeklyLimit - (c.week[item.id] ?? 0);
-      if (item.dailyLimit) left = item.dailyLimit - (c.day[item.id] ?? 0);
+      const left: number | undefined = undefined; // [phase4] no caps: the price ramp is the limit
       let block: ShopBlock = null;
-      if (left !== undefined && left <= 0) block = 'limit';
-      else if (item.id === 'researchBoost' && !this.research.activeId(state)) block = 'noResearch';
+      if (item.id === 'researchBoost' && !this.research.activeId(state)) block = 'noResearch';
       else if (item.id === 'projectBoost' && !state.activeProjectId) block = 'noProject';
       else if (item.id === 'scrap20' && state.resources.scrap.amount >= state.resources.scrap.cap) block = 'full';
       else if ((state.resources.credits?.amount ?? 0) < price) block = 'credits';
@@ -96,6 +101,7 @@ export class ShopSystem {
     const add = (r: 'blueprints' | 'isotope7' | 'scrap', n: number) => sm.applyDelta({ path: `resources.${r}.amount`, value: state.resources[r].amount + n });
     switch (id) {
       case 'blueprint': add('blueprints', 1); return true;
+      case 'rush': sm.applyDelta({ path: 'rush', value: (state.rush ?? 0) + 1 }); return true; // [phase4] a favour: one time skip
       case 'isotope': add('isotope7', 1); return true;
       case 'scrap20': add('scrap', SCRAP_BUNDLE); return true;
       case 'researchBoost': {

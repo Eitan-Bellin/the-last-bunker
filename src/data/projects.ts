@@ -38,7 +38,11 @@ export interface ProjectEffects {
   morale?: number;
 }
 
-/** [P2-2] A second design for a project: same cost and crew, a different reward (chosen before the first stage is done). */
+/**
+ * [P2-2] A second design for a project: same cost and crew, a different reward (chosen before the first stage is done).
+ * [phase4] Only pairs that trade two things the bunker is short of are kept (people, defense, trip time, an Act currency); the pairs that
+ * only moved base resources around (purifier, greenhouse, archive, Genesis core) were cut: a save that chose their B builds A (designOf).
+ */
 export interface ProjectVariant {
   label: Record<'he' | 'en', string>;
   finale: Record<'he' | 'en', string>;
@@ -110,11 +114,6 @@ export const PROJECTS: ProjectDef[] = [
     finale: { he: 'המים בבונקר +40%, ואין יותר הרעלת מים', en: 'Bunker water +40%, and no more water poisoning' },
     stages: rep(4, i => ({ cost: charter(2, { water: 5000 })(i), hours: 4.5, crew: crewAt(i) })),
     effects: { resourceMult: { water: 0.4 } },
-    variant: {
-      label: { he: 'קולטי גשם', en: 'Rain collectors' },
-      finale: { he: 'מים +25% ואוכל +10%', en: 'Water +25% and food +10%' },
-      effects: { resourceMult: { water: 0.25, food: 0.1 } },
-    },
   },
   {
     id: 'greenhouse', icon: '[[wheat]]', flag: 'project:greenhouse', era: 2, act: 3,
@@ -123,11 +122,6 @@ export const PROJECTS: ProjectDef[] = [
     finale: { he: 'האוכל +30%, וחממה ירוקה עומדת מעל הבונקר', en: 'Food +30%, and a green glasshouse stands above the bunker' },
     stages: rep(5, i => ({ cost: charter(3, { food: 4000, knowledge: 1500 })(i), hours: 6, crew: crewAt(i) })),
     effects: { resourceMult: { food: 0.3 } },
-    variant: {
-      label: { he: 'כיפת ספריית זרעים', en: 'Seed-library dome' },
-      finale: { he: 'אוכל +15% וידע +15%', en: 'Food +15% and knowledge +15%' },
-      effects: { resourceMult: { food: 0.15, knowledge: 0.15 } },
-    },
   },
   {
     id: 'metroTunnel', icon: '[[car]]', flag: 'project:metroTunnel', era: 2, act: 3,
@@ -149,11 +143,6 @@ export const PROJECTS: ProjectDef[] = [
     finale: { he: 'תור מחקר נוסף, ומחקרי שכלול זולים ב־25%', en: 'One more research queue slot, and refinement research is 25% cheaper' },
     stages: rep(4, i => ({ cost: charter(3, { knowledge: 8000, blueprints: 3 })(i), hours: 7.5, crew: crewAt(i) })),
     effects: { researchQueue: 1, refineDiscount: 0.25 },
-    variant: {
-      label: { he: 'בית ספר פתוח', en: 'Open school' },
-      finale: { he: 'תור מחקר נוסף וידע +15%', en: 'One more research queue slot and knowledge +15%' },
-      effects: { researchQueue: 1, resourceMult: { knowledge: 0.15 } },
-    },
   },
   {
     id: 'wall', icon: '[[armory]]', flag: 'project:wall', era: 2, act: 4,
@@ -176,11 +165,6 @@ export const PROJECTS: ProjectDef[] = [
     finale: { he: 'פרויקט בראשית נפתח', en: 'Project Genesis opens' },
     stages: rep(6, i => ({ cost: charter(7, {}, 0.15)(i), hours: 10, crew: 4 + Math.floor(i / 2) })),
     effects: { resourceMult: { knowledge: 0.3 } },
-    variant: {
-      label: { he: 'ליבת הד', en: 'Echo core' },
-      finale: { he: 'ידע +20% ואוכל +10%', en: 'Knowledge +20% and food +10%' },
-      effects: { resourceMult: { knowledge: 0.2, food: 0.1 } },
-    },
   },
   {
     // [P5] Act IV: the furnaces under the deepest floor.
@@ -218,9 +202,10 @@ export const PROJECTS: ProjectDef[] = [
     stages: rep(5, i => ({ cost: charter(5, { food: 20000 })(i), hours: 10, crew: 5 })),
     effects: { resourceMult: { food: 0.2 }, morale: 8 },
     variant: {
+      // [phase4] B kept the morale of A and added data on top (it dominated A): now it trades the morale for the Act's data.
       label: { he: 'כיפת תצפית', en: 'Observatory dome' },
-      finale: { he: 'מורל +8, נתונים +15% וידע +10%', en: '+8 morale, data +15% and knowledge +10%' },
-      effects: { morale: 8, resourceMult: { data: 0.15, knowledge: 0.1 } },
+      finale: { he: 'נתונים +20% וידע +10% · בלי תוספת מורל', en: 'Data +20% and knowledge +10% · no morale bonus' },
+      effects: { resourceMult: { data: 0.2, knowledge: 0.1 } },
     },
   },
   {

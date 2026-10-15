@@ -53,6 +53,14 @@ export interface ThreatState {
   /** No new threat before this worldT (a breather after a hard hit, or after the long-game update). */
   breatherUntil: number;
   scars: string[];
+  /** [phase4] Exposure lever: stores held at 60% of their caps, the rest turned into the Act's currency (optional: absent = off). */
+  hideStores?: boolean;
+  /** [phase4] Exposure lever: the radio is silent, no newcomers find the door (optional: absent = off). */
+  radioSilence?: boolean;
+  /** [phase4] Sessions (returns after > 5 min away) since a raid warning last came while the player was online. */
+  sessions?: number;
+  /** [phase4] World time of the last raid warning that came while the player was online. */
+  warnAt?: number;
 }
 
 /** [Danger lane] Seasons (about four real days each). */
@@ -112,6 +120,14 @@ export interface ForemanState {
   orders: Record<string, unknown>;
   /** [plan4:GP-8] Door keys ("floor:x") the 'sealOnAlarm' order shut and has not yet opened again (optional: absent in older saves). */
   sealed?: string[];
+  /** [phase4] Away raid policy: fight when the odds are at least this (0..1; 0 = always fight). Absent = RAID_POLICY_DEFAULT. */
+  raidFightAt?: number;
+  /** [phase4] Away raid policy when the odds are lower: pay the toll or hide everyone below. Absent = 'pay'. */
+  raidElse?: 'pay' | 'hide';
+  /** [phase4] Which rooms the Foreman fills first: as before (emptiest), the Act's currency, or the basics. Absent = 'even'. */
+  priority?: 'even' | 'act' | 'basics';
+  /** [phase4] The Foreman pays a quick fix by itself up to this share of the Act's currency (0 = never). Absent = 0. */
+  autoPay?: number;
 }
 
 /** [Q14] One line of the Chronicle (src/systems/ChronicleSystem.ts). */

@@ -436,6 +436,84 @@ export function specOf(b: BuildingInstance): SpecDef | undefined {
   return b.specialization ? BY_ID.get(b.specialization) : undefined;
 }
 
+// ---- [phase4] (C2) Roles per room TYPE ----
+/**
+ * A role is chosen once for a whole room type (every farm, every generator...), from Act III; each room of the type takes it when it reaches its
+ * specLevel. Changing the type's role is free but holds the choice for TYPE_ROLE_COOLDOWN of world time. The per-room retool is gone.
+ * The one per-room decision left is the Act's own: an "Act role" (the tier-2 roles that make an Act currency: components, alloys, data,
+ * influence, seed cores) turns this one room into a maker of the currency, at the cost of part of its normal output. How many rooms
+ * of a type make the currency is a real trade (a workshop that makes components makes 40% less materials), so it stays per room.
+ * The state: `lateGame.roomRoles` (optional; absent in older saves: deriveRoomRoles maps each type to its most common role).
+ */
+export const TYPE_ROLE_ACT = 3;
+export const TYPE_ROLE_COOLDOWN = 12 * 3600;
+export const ACT_ROLES: readonly string[] = ['assemblyLine', 'arcFurnace', 'dataVault', 'councilHall', 'seedForge'];
+
+export interface RoomRoles {
+  /** The role of every room of a type (a plain role id). */
+  roles: Partial<Record<BuildingType, string>>;
+  /** World time (longGame.meta.worldT) of the last change per type (the cooldown runs from it). */
+  changedAt: Partial<Record<BuildingType, number>>;
+}
+
+export function isActRole(id: string | null | undefined): boolean {
+  return !!id && ACT_ROLES.includes(id);
+}
+
+export function getSpec(id: string | null | undefined): SpecDef | undefined {
+  return id ? BY_ID.get(id) : undefined;
+}
+
+/** The plain roles a type can take (open in this Act). */
+export function typeRolesFor(type: BuildingType, state?: GameState): SpecDef[] {
+  return specsFor(type, state).filter(s => !isActRole(s.id));
+}
+
+/** The Act role of a type, if it has one (open in this Act). */
+export function actRoleFor(type: BuildingType, state?: GameState): SpecDef | undefined {
+  return specsFor(type, state).find(s => isActRole(s.id));
+}
+
+/** The saved type roles (undefined in a save from before them). */
+export function roomRolesOf(state: GameState): RoomRoles | undefined {
+  return (state.lateGame as unknown as { roomRoles?: RoomRoles } | undefined)?.roomRoles;
+}
+
+/** The type's role (undefined when the player has not chosen one). */
+export function typeRoleOf(state: GameState, type: BuildingType): string | undefined {
+  return roomRolesOf(state)?.roles[type];
+}
+
+/** Seconds before the type's role may be changed again (0 = it may). */
+export function typeRoleCooldown(state: GameState, type: BuildingType): number {
+  const at = roomRolesOf(state)?.changedAt[type];
+  if (at === undefined) return 0;
+  return Math.max(0, at + TYPE_ROLE_COOLDOWN - (state.longGame?.meta.worldT ?? 0));
+}
+
+/** A save from before type roles: each type takes the plain role most of its rooms had (the earlier one in the list on a tie). */
+export function deriveRoomRoles(state: GameState): RoomRoles {
+  const count = new Map<BuildingType, Map<string, number>>();
+  for (const b of state.buildings) {
+    if (!b.specialization || isActRole(b.specialization) || !BY_ID.has(b.specialization)) continue;
+    const m = count.get(b.type) ?? new Map<string, number>();
+    m.set(b.specialization, (m.get(b.specialization) ?? 0) + 1);
+    count.set(b.type, m);
+  }
+  const roles: Partial<Record<BuildingType, string>> = {};
+  for (const [type, m] of count) {
+    let best: string | undefined;
+    for (const s of SPECIALIZATIONS) if (s.type === type && (m.get(s.id) ?? 0) > (best ? m.get(best) ?? 0 : 0)) best = s.id;
+    if (best) roles[type] = best;
+  }
+  return { roles, changedAt: {} };
+}
+
+/** How many finished rooms of a type are at the level that takes a role (the "in your bunker" count of a type role). */
+export function roleRoomCount(state: GameState, type: BuildingType, level: number): number {
+  return state.buildings.filter(b => b.type === type && b.level >= level && !isActRole(b.specialization)).length;
+}
+
 /** Sum of a numeric spec field over every finished, specialized room. */
 export function specTotal(state: GameState, field: 'morale' | 'defense' | 'population' | 'expeditionLoot' | 'expeditionChance'): number {
   let n = 0;

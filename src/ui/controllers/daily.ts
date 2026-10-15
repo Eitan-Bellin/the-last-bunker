@@ -6,8 +6,12 @@ import { Sheet } from '../components/Sheet';
 import { haptic } from '../../utils/haptics';
 import { getOrder, orderTier, REWARD_GOLD, REWARD_SILVER, actCreditScale, FRAGS_PER_PLAN, type OrderTier } from '../../data/orders';
 import { nextResetAt } from '../../systems/DailySystem';
+import { localDay } from '../../systems/SupplySystem'; // [phase4]
 import type { ChestClaim, DailyClaim } from '../../systems/DailySystem';
-import type { DailyOrder, GameState } from '../../core/GameState';
+import type { DailyOrder, GameState, ResourceType } from '../../core/GameState';
+import { WEEKLY_CREDITS } from '../../data/challenges'; // [phase4] the weekly challenge is a row of the Today card
+import { kButton } from '../kit';
+import '../../styles/p4-o.css'; // [phase4]
 import type { GameApp } from '../../app';
 
 /**
@@ -120,16 +124,69 @@ export class DailyController {
     const d = state.daily;
     const sum = this.sys.summary(state);
     // [ux-wp4] D3: once the Decision inbox holds the orders card, the chip shows only while a reward waits (the inbox has the rest).
-    const show = d.orders.length > 0 && this.sys.active(state) && (sum.claimable > 0 || !this.app.inbox.defers(state));
-    this.app.hud.setDaily(show, sum.done, sum.n, sum.claimable, i18n.t('daily.chip', { done: sum.done, n: sum.n }));
+    // [phase4] The Today card: the supply crate counts as one more thing to take, and the card shows even before the orders start.
+    const ready = this.todayClaimable(state);
+    const show = (d.orders.length > 0 && this.sys.active(state) && (ready > 0 || !this.app.inbox.defers(state))) || this.crateReady(state);
+    this.app.hud.setDaily(show, sum.done, sum.n, ready, sum.n > 0 ? i18n.t('daily.chip', { done: sum.done, n: sum.n }) : i18n.t('p4o.today.title'));
     if (this.sheet?.isVisible) this.render();
   }
 
   /** The Decision Inbox card (inbox.ts adds it above the others). null while there are no orders. */
   inboxEntry(state: GameState): { title: string; detail: string; claimable: number } | null {
-    if (state.daily.orders.length === 0 || !this.sys.active(state)) return null;
+    const crate = this.crateReady(state);
+    if ((state.daily.orders.length === 0 || !this.sys.active(state)) && !crate) return null;
     const s = this.sys.summary(state);
-    return { title: i18n.t('daily.chip', { done: s.done, n: s.n }), detail: this.streakText(), claimable: s.claimable };
+    const title = s.n > 0 ? i18n.t('daily.chip', { done: s.done, n: s.n }) : i18n.t('supply.title');
+    return { title, detail: crate ? `[[gift]] ${i18n.t('supply.title')} · ${this.streakText()}` : this.streakText(), claimable: this.todayClaimable(state) };
+  }
+
+  /** [phase4] The supply crate waits (it is part of the Today card now, not a HUD chip of its own). */
+  crateReady(state: GameState): boolean {
+    return this.app.engine.supplySystem.isReady(state);
+  }
+
+  /** [phase4] Everything the one Today claim would take: finished orders, the day chest, the supply crate. */
+  todayClaimable(state: GameState): number {
+    return this.sys.summary(state).claimable + (this.crateReady(state) ? 1 : 0);
+  }
+
+  /**
+   * [phase4] The single claim of the Today card: every finished order (gold as credits, or as a piece of a blueprint when `gold` says
+   * so), the day chest when all three are done, and the supply crate. One result dialog says what came in.
+   */
+  claimToday(gold: 'credits' | 'frag' = 'credits'): void {
+    const state = this.app.state;
+    const gains: Partial<Record<ResourceType, number>> = {};
+    const add = (g: Partial<Record<string, number>> | undefined) => {
+      for (const [r, v] of Object.entries(g ?? {})) if ((v ?? 0) > 0) gains[r as ResourceType] = (gains[r as ResourceType] ?? 0) + (v ?? 0);
+    };
+    let rush = 0, frag = 0, plans = 0, crateStreak = 0, n = 0;
+    state.daily.orders.forEach((o, i) => {
+      if (!o.done || o.claimed) return;
+      const c = this.sys.claim(i, orderTier(o.id) === 'new' ? gold : 'credits', true);
+      if (!c) return;
+      n++;
+      rush += c.rush; frag += c.frag; plans += c.blueprints;
+      add({ credits: c.credits }); add(c.gains);
+    });
+    if (this.sys.chestReady()) { const c = this.sys.claimChest(true); if (c) { n++; add(c.gains); } }
+    const crate = this.app.engine.supplySystem.claim();
+    if (crate) { n++; rush += crate.rush; crateStreak = crate.streak; add(crate.gains); }
+    if (n === 0) return;
+    this.app.engine.requestSave();
+    this.app.audio.play('achievement');
+    haptic('success');
+    const body = el('div', 'modal-result');
+    body.appendChild(this.app.welcome.gainsList(gains));
+    const extras: string[] = [];
+    if (rush > 0) extras.push(`[[hourglass]] ${plural('rush.gift', rush)}`);
+    if (plans > 0) extras.push(`[[blueprints]] ${i18n.t('daily.gotPlan')}`);
+    else if (frag > 0) extras.push(`[[blueprints]] ${i18n.t('daily.frags', { n: `${this.app.state.daily.frag}/${FRAGS_PER_PLAN}` })}`);
+    if (crateStreak > 0) extras.push(`[[fire]] ${i18n.t('supply.streak', { n: crateStreak })}`);
+    for (const x of extras) body.appendChild(el('p', 'modal-sub', x));
+    this.app.modal.show({ icon: '[[gift]]', title: i18n.t('p4o.today.got'), body, actions: [{ label: i18n.t('event.ok'), onClick: () => this.app.modal.hide() }] });
+    this.renderedKey = '';
+    this.render();
   }
 
   private streakText(): string {
@@ -143,7 +200,7 @@ export class DailyController {
 
   show(): void {
     this.sheet ??= new Sheet('daily-sheet');
-    this.sheet.setTitle(`[[target]] ${i18n.t('daily.title')}`);
+    this.sheet.setTitle(`[[target]] ${i18n.t('p4o.today.title')}`); // [phase4] one Today card
     this.renderedKey = '';
     this.render();
     this.sheet.show();
@@ -153,7 +210,9 @@ export class DailyController {
     if (!this.sheet) return;
     const state = this.app.state;
     const d = state.daily;
-    const key = JSON.stringify([d.orders.map(o => [o.id, o.done, o.claimed, Math.floor(o.p / Math.max(1, o.need / 20))]), d.chest, d.swapped, d.spare.length, d.streak, d.frag, i18n.currentLocale]);
+    const wk = this.app.engine.objectiveSystem.weekly(state); // [phase4] the weekly row and the crate are part of the card
+    const key = JSON.stringify([d.orders.map(o => [o.id, o.done, o.claimed, Math.floor(o.p / Math.max(1, o.need / 20))]), d.chest, d.swapped, d.spare.length, d.streak, d.frag, i18n.currentLocale,
+      this.crateReady(state), wk ? [wk.def.id, wk.cur, wk.done] : null]);
     if (key !== this.renderedKey) {
       this.renderedKey = key;
       this.build(state);
@@ -165,36 +224,73 @@ export class DailyController {
     }
   }
 
+  /**
+   * [phase4] The Today card: the supply crate, the three orders, the weekly challenge and the day chest in one list, with ONE claim
+   * for everything that is ready (orders no longer have a claim button each).
+   */
   private build(state: GameState): void {
     const body = this.sheet!.body;
     body.replaceChildren();
     const d = state.daily;
-    if (d.orders.length === 0) {
-      body.appendChild(el('p', 'daily-empty', i18n.t('daily.empty')));
-      return;
-    }
     const head = el('div', 'daily-head');
-    head.append(el('span', 'daily-sub', i18n.t('daily.sub')), el('span', 'daily-reset'));
+    head.append(el('span', 'daily-sub', i18n.t('p4o.today.sub')), el('span', 'daily-reset'));
     body.appendChild(head);
 
+    // The one claim, on top: what it takes, and (with a gold order ready) where the gold goes.
+    const ready = this.todayClaimable(state);
+    const goldReady = d.orders.some(o => o.done && !o.claimed && orderTier(o.id) === 'new');
+    const claim = el('div', 'p4o-today-claim');
+    claim.appendChild(kButton({
+      label: ready > 0 ? `[[gift]] ${plural('p4o.today.claim', ready)}` : i18n.t('p4o.today.nothing'),
+      className: 'btn-primary daily-all',
+      disabledReason: ready > 0 ? null : i18n.t('p4o.today.nothing'),
+      onPress: () => this.claimToday('credits'),
+    }));
+    if (goldReady) {
+      claim.appendChild(kButton({
+        variant: 'secondary',
+        label: `[[blueprints]] ${i18n.t('p4o.today.goldFrag')}`,
+        onPress: () => this.claimToday('frag'),
+      }));
+    }
+    body.appendChild(claim);
+
+    // The supply crate (it was a HUD chip of its own).
+    const crate = this.crateReady(state);
+    const crateRow = el('div', `daily-chest p4o-crate${crate ? ' ready' : ' taken'}`);
+    const cm = el('div', 'daily-main');
+    cm.append(el('span', 'daily-name', `[[gift]] ${i18n.t('supply.title')}`), el('span', 'daily-hint', crate ? i18n.t('p4o.today.crateReady') : i18n.t('p4o.today.crateTaken')));
+    crateRow.appendChild(cm);
+    if (crate || state.supplyDrop?.day === localDay()) body.appendChild(crateRow); // not before the first crate can land
+
+    if (d.orders.length === 0) body.appendChild(el('p', 'daily-empty', i18n.t('daily.empty')));
     d.orders.forEach((o, i) => body.appendChild(this.card(o, i)));
 
-    const sum = this.sys.summary(state);
-    const ready = d.orders.filter(o => o.done && !o.claimed).length;
-    if (ready >= 2) {
-      body.appendChild(button(i18n.t('daily.claimAll'), 'btn-primary daily-all', () => { this.sys.claimAll(); this.render(); }));
+    // The weekly challenge: a row of the same card (its prize is paid by itself when it is done).
+    const wk = this.app.engine.objectiveSystem.weekly(state);
+    if (wk) {
+      const row = el('div', `daily-card p4o-weekly${wk.done ? ' claimed' : ''}`);
+      const main = el('div', 'daily-main');
+      main.append(
+        el('span', 'daily-name', `[[trophy]] ${i18n.t('weekly.title')}: ${wk.def.text[i18n.currentLocale as 'he' | 'en'] ?? wk.def.text.en}`),
+        el('span', 'daily-hint', wk.done ? `[[check]] ${i18n.t('weekly.done')}` : i18n.t('weekly.prize', { n: WEEKLY_CREDITS, cur: wk.cur, target: wk.target })),
+      );
+      row.append(main, bar(wk.done ? 100 : (wk.cur / Math.max(1, wk.target)) * 100, 'daily-bar'));
+      body.appendChild(row);
     }
 
-    // The day chest: all three orders done.
-    const chest = el('div', `daily-chest${sum.chestReady ? ' ready' : ''}${d.chest ? ' taken' : ''}`);
-    const main = el('div', 'daily-main');
-    main.append(
-      el('span', 'daily-name', `[[gift]] ${i18n.t('daily.chest')}`),
-      el('span', 'daily-hint', d.chest ? i18n.t('daily.chestTaken') : sum.chestReady ? i18n.t('daily.chestHint') : i18n.t('daily.chestLocked')),
-    );
-    chest.appendChild(main);
-    if (!d.chest) chest.appendChild(button(i18n.t('daily.chestOpen'), sum.chestReady ? 'btn-primary' : 'btn-secondary', () => { this.sys.claimChest(); this.render(); }, !sum.chestReady));
-    body.appendChild(chest);
+    // The day chest: all three orders done (taken by the claim above).
+    if (d.orders.length > 0) {
+      const sum = this.sys.summary(state);
+      const chest = el('div', `daily-chest${sum.chestReady ? ' ready' : ''}${d.chest ? ' taken' : ''}`);
+      const main = el('div', 'daily-main');
+      main.append(
+        el('span', 'daily-name', `[[gift]] ${i18n.t('daily.chest')}`),
+        el('span', 'daily-hint', d.chest ? i18n.t('daily.chestTaken') : sum.chestReady ? i18n.t('daily.chestHint') : i18n.t('daily.chestLocked')),
+      );
+      chest.appendChild(main);
+      body.appendChild(chest);
+    }
 
     // The streak and the blueprint pieces.
     const foot = el('div', 'daily-foot');
@@ -230,21 +326,8 @@ export class DailyController {
     c.appendChild(prog);
     if (tier === 'new' && !o.done && i18n.has(`orders.${o.id}.hint`)) c.appendChild(el('p', 'daily-hint', i18n.t(`orders.${o.id}.hint`)));
 
-    const row = el('div', 'daily-actions');
-    if (o.done && !o.claimed) {
-      if (tier === 'new') {
-        // Gold: the player picks credits or a quarter of a blueprint.
-        row.append(
-          button(i18n.t('daily.goldCredits', { n: i18n.formatNumber(this.creditsFor('new')) }), 'btn-primary daily-claim', () => { this.sys.claim(i, 'credits'); this.render(); }),
-          button(i18n.t('daily.goldFrag'), 'btn-secondary daily-claim', () => { this.sys.claim(i, 'frag'); this.render(); }),
-        );
-      } else {
-        row.appendChild(button(i18n.t('daily.claim'), 'btn-primary daily-claim', () => { this.sys.claim(i, 'credits'); this.render(); }));
-      }
-    } else if (o.claimed) {
-      row.appendChild(el('span', 'daily-taken', `[[check]] ${i18n.t('daily.claimed')}`));
-    }
-    if (row.childElementCount > 0) c.appendChild(row);
+    // [phase4] No claim button per order: the Today card's one claim takes them all. A finished order says it is ready.
+    if (o.done) c.appendChild(el('span', 'daily-taken', o.claimed ? `[[check]] ${i18n.t('daily.claimed')}` : `[[gift]] ${i18n.t('p4o.today.orderReady')}`));
     // Keeps the bar honest on later refreshes without a rebuild.
     setBar(c.querySelector('.daily-bar'), o.done ? 100 : (o.p / o.need) * 100);
     return c;

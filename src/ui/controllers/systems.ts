@@ -1,10 +1,9 @@
 import { i18n } from '../../i18n/I18nManager';
 import type { GameState } from '../../core/GameState';
 import type { GameApp } from '../../app';
-import { RESEARCH } from '../../data/research';
 import { lawSlots } from '../../data/laws';
 import { seasonsActive } from '../../data/seasons';
-import { actOf, forkOpen, systemOpen } from '../../data/acts';
+import { actOf, systemOpen } from '../../data/acts';
 import { getProject } from '../../data/projects';
 import type { SpotKey } from '../HUD';
 import { el } from '../dom';
@@ -52,10 +51,7 @@ const CARDS: SystemCard[] = [
   { id: 'foreman', icon: '[[worker]]', ready: s => act(s) >= 2, spot: 'era', book: 'foreman' },
   { id: 'contracts', icon: '[[cart]]', ready: (_s, app) => app.engine.contractSystem.active(app.state), spot: 'inbox', book: 'contracts' },
   { id: 'seasons', icon: '[[clover]]', ready: s => seasonsActive(s), spot: 'season', book: 'seasons' },
-  {
-    id: 'doctrines', icon: '[[books]]', spot: 'research', book: 'doctrine',
-    ready: (s, app) => act(s) >= 2 && RESEARCH.some(r => r.fork && forkOpen(s, r.fork) && app.engine.researchSystem.status(s, r.id) === 'available'), // [phase3]
-  },
+  // [phase4] No "doctrines" card: each doctrine fork opens its own full-screen Crossroads (src/ui/components/Crossroads.ts, a dialog source).
   // [phase3] Act III opens these one at a time (data/acts.ts SYSTEM_SCHEDULE): each comes as its own news card.
   { id: 'outposts', icon: '[[surface]]', ready: s => act(s) >= 3 && systemOpen(s, 'outposts'), spot: 'surface', book: 'outposts' },
   { id: 'laws', icon: '[[books]]', ready: s => lawSlots(s) > 0 && systemOpen(s, 'laws'), spot: 'era', book: 'laws' },

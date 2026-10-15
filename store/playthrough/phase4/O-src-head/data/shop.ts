@@ -1,0 +1,50 @@
+/** [Economy A2] The Trade-credits shop. [phase3] Credits come from daily orders and contracts (no longer from storage overflow). */
+
+export type ShopItemId = 'blueprint' | 'scrap20' | 'researchBoost' | 'projectBoost' | 'isotope' | 'crate' | 'actGoods';
+
+export interface ShopItem {
+  id: ShopItemId;
+  /** Icon token shown next to the name. */
+  icon: string;
+  /** Base price in credits (rises x1.1 per purchase of the same item on the same day). */
+  price: number;
+  /** Purchases allowed per local day / per week (undefined = unlimited). */
+  dailyLimit?: number;
+  weeklyLimit?: number;
+  /** [ux-wp2 S11] No limit, but each purchase this week makes the next this many times dearer (instead of the daily ramp). */
+  weeklyRamp?: number;
+  /** [ux-wp2] Shown from this Act on. */
+  fromAct?: number;
+}
+
+/** Each purchase on a day makes the same item 10% dearer until local midnight. */
+export const SHOP_PRICE_RAMP = 1.1;
+/** Research boost: this many research-seconds are added at once (10 minutes). */
+export const RESEARCH_BOOST_SECONDS = 600;
+/** Project boost: this share of the current stage is completed. */
+export const PROJECT_BOOST_SHARE = 0.25;
+export const SCRAP_BUNDLE = 20;
+/** [ux-wp2 S11] Act goods: one purchase is this many hours of the Act currency's reference income. */
+export const ACT_GOODS_HOURS = 1;
+/**
+ * [phase3] Credits for each finished contract (before the Act scale every credit reward has, orders.actCreditScale). With the daily
+ * orders this is now the only source: the basics' storage overflow no longer turns into credits.
+ */
+export const CONTRACT_CREDITS = 40;
+
+export const SHOP_ITEMS: ShopItem[] = [
+  // [Q10] A few a day: the shop's two unlimited items let credits buy any amount of progress.
+  // [phase1] 1 a day (was 3): about 25 plans are needed in the whole game and a bunker held 25 by day 4.
+  { id: 'blueprint', icon: '[[blueprints]]', price: 150, dailyLimit: 1 },
+  // [phase3] Cheaper (scrap 40, research 60, project 120, crate 250, Act goods 300): credits now come only from the daily orders and
+  // contracts (no storage overflow), about a third of what a bunker used to make, so a day's credits still buy two or three things.
+  { id: 'scrap20', icon: '[[scrap]]', price: 30, dailyLimit: 5 },
+  // [Long game] Boosts are a treat, not a way around the game: a few a day.
+  { id: 'researchBoost', icon: '[[research]]', price: 40, dailyLimit: 3 },
+  { id: 'projectBoost', icon: '[[materials]]', price: 80, dailyLimit: 1 },
+  { id: 'isotope', icon: '[[isotope7]]', price: 400, weeklyLimit: 5 },
+  { id: 'crate', icon: '[[gift]]', price: 160, dailyLimit: 1 },
+  // [ux-wp2 S11] The one item without a limit: an hour of the Act currency, 25% dearer with every purchase in a week. Credits buy
+  // what the Act is waiting for, at a price that climbs fast enough to stay a treat.
+  { id: 'actGoods', icon: '[[credits]]', price: 200, weeklyRamp: 1.25, fromAct: 3 },
+];
