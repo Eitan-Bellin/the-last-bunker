@@ -82,7 +82,8 @@ export function buildCaverns(areas: readonly CityArea[], cavs: readonly Cavity[]
       }
       // Stalactites along the roof, clear of the room's top.
       const r = rng(seed);
-      for (let x = cb.x0 + 16; kind !== 'metro' && x < cb.x1 - 16; x += (kind === 'cave' ? 9 : 14) + r() * 18) {
+      // (The metro's tiled vault and the Old Vault's lined strongroom are built: no dripstone.)
+      for (let x = cb.x0 + 16; kind !== 'metro' && kind !== 'oldVault' && x < cb.x1 - 16; x += (kind === 'cave' ? 9 : 14) + r() * 18) {
         // [world:M1] Never west of the room: there the roof can rise under the floor above's last room.
         if (x < room.x0 - 4) continue;
         const roofY = roofAt(cave.poly, x);
