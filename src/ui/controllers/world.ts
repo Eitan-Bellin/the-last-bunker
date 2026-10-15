@@ -16,7 +16,8 @@ import { RUIN_KINDS } from '../../data/ruins';
 import type { PlaceBlock } from '../../systems/BuildingSystem';
 import { bestSpot, floorRangesLabel, nameOf, nearestSpot, placeEffects, spotForTap, validSpots } from '../../systems/placementRank';
 import { RELOCATE_SECONDS, relocateBlock, relocateCost, stateWithout } from '../../systems/relocate';
-import { SLOT_W, buildingH, floorTop, slotX } from '../../rendering/geom';
+import { SLOT_W, buildingH, floorTop } from '../../rendering/geom';
+import { slotX } from '../../world/project';
 import type { IconName } from '../../ui/icons';
 import type { GameApp } from '../../app';
 import { popupMode } from '../components/NumberPopup'; // [plan4:UX-21]
@@ -221,7 +222,7 @@ export class WorldController {
     const type = this.app.placementMode;
     if (!type) return;
     const w = roomSlots(type) * SLOT_W, h = buildingH(type);
-    const best = nearestSpot(this.spots, type, wx + w / 2, wy + h / 2, (t, p) => ({ x: slotX(p.x) + (roomSlots(t) * SLOT_W) / 2, y: floorTop(p.floor) + buildingH(t) / 2 }));
+    const best = nearestSpot(this.spots, type, wx + w / 2, wy + h / 2, (t, p) => ({ x: slotX(p.floor, p.x) + (roomSlots(t) * SLOT_W) / 2, y: floorTop(p.floor) + buildingH(t) / 2 }));
     if (!best) return;
     const at = this.app.renderer.ghostSpot;
     if (at && at.x === best.x && at.floor === best.floor && this.bar) return;

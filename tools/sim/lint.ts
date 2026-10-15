@@ -199,7 +199,7 @@ export function cityChecks(): string[] {
 }
 
 /** [world:C0] The x-conversion ratchet: legacy (classic, floor-less) imports of geom.ts plus ROOMS_X / SHAFT_GAP x-maths outside geom.ts / project.ts. It may only go down. */
-export const LEGACY_X_BASELINE = 5;
+export const LEGACY_X_BASELINE = 0;
 const LEGACY_X_NAMES = ['slotX', 'slotAtX', 'buildingX', 'districtXAt', 'DISTRICT_X', 'ROOMS_X', 'SHAFT_GAP'];
 
 /** Every legacy x use in src (see LEGACY_X_BASELINE), as "file:line: what". */
