@@ -109,6 +109,8 @@ export function installPlaythrough(getPlayTime: () => number): void {
         const cardMain = card && [...card.querySelectorAll<HTMLElement>('.btn-primary')].find(b => vis(b) && !b.classList.contains('is-disabled'));
         if (cardMain && tick % 2 === 0) { press(cardMain); return; }
         const sheet = [...document.querySelectorAll('.sheet-overlay.open')].find(vis);
+        const unread = sheet?.querySelector('.journal-new')?.parentElement; // a new note in the journal: read it, like a player would
+        if (unread && vis(unread)) { unread.click(); return; }
         if (sheet) {
           const main = [...sheet.querySelectorAll<HTMLElement>('.k-btn--primary, .btn-primary')].find(b => vis(b) && !b.classList.contains('is-disabled'));
           if (main && main !== lastPressed) { lastPressed = main; press(main); } // each main button once, then close the sheet

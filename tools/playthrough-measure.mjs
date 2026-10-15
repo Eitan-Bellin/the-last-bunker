@@ -20,7 +20,8 @@ const lang = arg('lang', 'he');
 const out = arg('out', '');
 const slot = `measure-${Date.now()}`;
 const idle = process.argv.includes('--idle'); // do nothing: the first-minute check
-const STATE = `(() => { const s = __app.state; const h = s.survivors.map(p => p.happiness); return { act: s.longGame?.act, paused: __engine.paused, morale: Math.round(h.reduce((a, b) => a + b, 0) / Math.max(1, h.length)), people: s.survivors.length, power: Math.round(s.resources.power.amount), food: Math.round(s.resources.food.amount), playSeconds: Math.round(s.stats.totalPlayTime) }; })()`;
+const probe = arg('probe', ''); // extra JS expression recorded with every sample (debugging)
+const STATE = `(() => { const s = __app.state; const h = s.survivors.map(p => p.happiness); return { act: s.longGame?.act, paused: __engine.paused, morale: Math.round(h.reduce((a, b) => a + b, 0) / Math.max(1, h.length)), people: s.survivors.length, power: Math.round(s.resources.power.amount), food: Math.round(s.resources.food.amount), playSeconds: Math.round(s.stats.totalPlayTime), strip: (document.querySelector('.objective-text')?.textContent ?? '').slice(0, 60), sheet: ([...document.querySelectorAll('.sheet-overlay.open .sheet-title, .sheet-overlay.open h2')][0]?.textContent ?? '').slice(0, 40), rooms: s.buildings.length, probe: (() => { try { return ${probe ? probe : 'null'}; } catch (e) { return String(e); } })() }; })()`;
 const samples = [];
 const tour = process.argv.includes('--tour'); // open every tab, the bell and the status chip: one PNG each (needs --out)
 const width = Number(arg('width', 375));
