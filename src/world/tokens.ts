@@ -1201,7 +1201,7 @@ export const PROPS = {
     /** Deep Caves: flowstone, crystal and violet crystal, fungus, still water, tarp and rope. */
     cavern: { flowstone: 0x6a5a88, crystal: 0x7af2ff, violet: 0xb07aff, fungus: 0x4affc8, water: 0x0a1822, tarp: 0x5a4a3a, rope: 0x8a7a5e },
     /** Core: basalt, heat-blued steel shields, vault brass, the magma seam. */
-    forge: { shield: 0x3a4a5e, shieldEdge: 0x6a7a90, brass: 0xc8a060, magma: 0xff5a1e, magmaCore: 0xffc060, basalt: 0x221a18 },
+    forge: { shield: 0x222a34, shieldEdge: 0x4e5c6e, brass: 0xc8a060, magma: 0xff5a1e, magmaCore: 0xffc060, basalt: 0x221a18 },
   },
   /** [world:M1] The stratum-1 districts' caverns. */
   district: {
