@@ -62,6 +62,11 @@ eq(P.gateBlock({ ...base, lastGestureAt: base.now - 1000 }), 'gesture', '1 s aft
 eq(P.gateBlock({ ...base, lastGestureAt: base.now - 1499 }), 'gesture', '1.499 s after a tap: wait');
 eq(P.gateBlock({ ...base, lastGestureAt: base.now - P.GESTURE_QUIET_MS }), '', '1.5 s after a tap: open');
 eq(P.gateBlock({ ...base, pointersDown: 1 }), 'finger', 'finger down');
+// [final F6] offers wait for calm: never ahead of a welcome-back, never into a crisis (and no patience lets them through)
+eq(P.gateBlock({ ...base, offer: true, returning: true, waitedMs: 600_000 }), 'returning', 'an offer waits while an absence is worked through');
+eq(P.gateBlock({ ...base, offer: true, crisis: true, waitedMs: 600_000 }), 'crisis', 'an offer waits out a fire');
+eq(P.gateBlock({ ...base, offer: true }), '', 'a calm moment: the offer may land');
+eq(P.gateBlock({ ...base, crisis: true, returning: true }), '', 'crisis/returning flags only hold offers');
 eq(P.gateBlock({ ...base, critical: true, pointersDown: 1 }), 'finger', 'even a crisis waits for a finger');
 eq(P.gateBlock({ ...base, placing: true, critical: true }), 'placement', 'placement holds everything');
 eq(P.gateBlock({ ...base, sheetMovingUntil: base.now + 10 }), 'sheetMoving', 'sheet still moving');
@@ -154,6 +159,54 @@ eq(P.wantsWelcome(null, 0), false, 'no report, no door: nothing');
 eq(P.wantsWelcome(120, 0, true), true, '[w2fix] 2 minutes away with a raid: the report shows');
 eq(P.wantsWelcome(120, 0, false), false, '[w2fix] 2 minutes away, nothing happened: no report');
 eq(P.wantsWelcome(null, 0, true), false, '[w2fix] no report at all: nothing to show');
+
+// ---- [final F1] who holds a page part inert: spotlight + dialog + sheet ------------------------------------------------------------
+{
+  const { file: f2 } = await bundleSim({ tag: 'inert', entry: join(ROOT, 'src', 'ui', 'inertOwners.ts') });
+  const I = await import(pathToFileURL(f2).href);
+  try { rmSync(f2); } catch { /* cache file */ }
+  const node = (cls, tag = 'DIV') => {
+    const attrs = new Set();
+    return {
+      inert: false, tagName: tag, parentElement: null, cls,
+      matches: (sel) => sel.split(',').map(x => x.trim()).some(x => x === `.${cls}` || x === `#${cls}`),
+      hasAttribute: (a) => attrs.has(a), removeAttribute: (a) => attrs.delete(a),
+      toggleAttribute: (a, on) => { if (on) attrs.add(a); else attrs.delete(a); return on; },
+    };
+  };
+  const hud = node('hud'), canvas = node('game-canvas'), modal = node('modal-overlay'), story = node('story-overlay'), toast = node('toast-stack'), script = node('x', 'SCRIPT');
+  const body = [hud, canvas, modal, story, toast, script];
+  // The spotlight's walk never takes a dialog, story, toast or script layer (the crate dialog stayed dead because it did).
+  const spotHeld = body.filter(n => I.shouldInert(n, '.ob-hand'));
+  eq(spotHeld.map(n => n.cls), ['hud', 'game-canvas'], 'spotlight inerts only the page, never a dialog layer');
+  for (const n of spotHeld) I.holdInert(n, 'spotlight');
+  // A dialog opens over the step: it holds the same parts too, and its own layer is forced live.
+  modal.inert = true; modal.toggleAttribute('aria-hidden', true);
+  const modalHeld = body.filter(n => n !== modal && I.shouldInert(n));
+  eq(modalHeld.map(n => n.cls), ['hud', 'game-canvas'], 'a dialog takes over parts the spotlight holds');
+  for (const n of modalHeld) I.holdInert(n, 'modal');
+  I.forceLive(modal);
+  eq([modal.inert, modal.hasAttribute('aria-hidden')], [false, false], 'Modal.show clears inert and aria-hidden on its own layer');
+  // The spotlight goes while the dialog is up: the page stays inert (the dialog still holds it), the dialog stays live.
+  for (const n of spotHeld) I.dropInert(n, 'spotlight');
+  eq([hud.inert, canvas.inert, modal.inert], [true, true, false], 'spotlight release with a dialog up: page inert, dialog live');
+  // The dialog closes: everything is live again, nothing leaks.
+  for (const n of modalHeld) I.dropInert(n, 'modal');
+  eq([hud.inert, canvas.inert], [false, false], 'dialog close after spotlight release: nothing left inert');
+  // The other order: dialog closes first, the spotlight still holds the page.
+  I.holdInert(hud, 'spotlight'); I.holdInert(hud, 'modal'); I.dropInert(hud, 'modal');
+  eq(hud.inert, true, 'dialog closes under a spotlight: the spotlight still holds the page');
+  I.dropInert(hud, 'spotlight');
+  eq(hud.inert, false, 'then the spotlight lets go: live');
+  // A sheet holds the HUD; the spotlight comes and goes; the sheet still holds it.
+  I.holdInert(hud, 'sheet'); I.holdInert(hud, 'spotlight'); I.dropInert(hud, 'spotlight');
+  eq(hud.inert, true, 'spotlight release leaves a sheet-held part inert');
+  I.dropInert(hud, 'sheet');
+  // A part made inert by something outside the registry is foreign: never taken, never freed.
+  const foreign = node('other'); foreign.inert = true;
+  eq(I.shouldInert(foreign), false, 'a foreign inert part is left alone');
+  eq(I.inertHolders(hud), [], 'no holder left');
+}
 
 if (problems.length) {
   console.error(`popup-test: ${problems.length} problem(s)\n - ${problems.join('\n - ')}`);

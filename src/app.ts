@@ -61,7 +61,7 @@ import { Notifier, type NotifyItem } from './ui/notifications';
 import type { TourMode } from './ui/tour'; // [plan4:GP-6] type only: the tour's code loads on first use
 import { arrivalGap, type RaidResult } from './systems/EventSystem';
 import { DialogQueue, type DialogSource } from './ui/dialogQueue'; // [plan4:UX-10]
-import { backAction, gateBlock, LOST_POINTER_MS, lowStoreStep, SHEET_SETTLE_MS, wantsWelcome, type BackAction, type BackInput } from './ui/popupRules'; // [ux-redesign w2a]
+import { backAction, gateBlock, LOST_POINTER_MS, lowStoreStep, SHEET_SETTLE_MS, wantsWelcome, type BackAction, type BackInput, type PopupTier } from './ui/popupRules'; // [ux-redesign w2a]
 import { getChapter } from './data/story';
 import { districtDef } from './data/districts';
 import { haptic } from './utils/haptics'; // [plan4:UX-20]
@@ -295,7 +295,7 @@ export class GameApp {
     this.resourceSheet = new ResourceSheet(this.engine);
     this.modal = new Modal();
     this.toasts = new Toasts();
-    this.dialogs = new DialogQueue(this.dialogSources(), this.modal, (c, w) => this.dialogGate(c, w), () => this.engine.stateManager.state?.stats.totalPlayTime ?? 0);
+    this.dialogs = new DialogQueue(this.dialogSources(), this.modal, (c, w, t) => this.dialogGate(c, w, t), () => this.engine.stateManager.state?.stats.totalPlayTime ?? 0);
   }
 
   async start(): Promise<void> {
@@ -585,7 +585,7 @@ export class GameApp {
    * a pinch, a carried survivor), a gesture ended less than 1.5 s ago, a sheet is sliding, a ceremony is playing, or (for anything that is not an
    * emergency) a sheet is open under the player's hands. A sheet left open and untouched for 20 s no longer holds the dialogs back.
    */
-  dialogGate(critical = false, waitedMs = 0): boolean {
+  dialogGate(critical = false, waitedMs = 0, tier?: PopupTier): boolean {
     const now = performance.now();
     for (const [id, t] of this.pointersDown) if (now - t > LOST_POINTER_MS) this.pointersDown.delete(id); // a lost pointerup must not block forever
     // [ux-redesign w2a #5] The rules live in popupRules.gateBlock: 1.5 s after any touch, and never while a sheet is still moving.
@@ -594,6 +594,11 @@ export class GameApp {
       now, critical, placing: !!this.placementMode, touring: !!this.tour?.active, pointersDown: this.pointersDown.size,
       lastGestureAt: this.lastGestureAt, ceremony: this.ceremonyActive(now), panelOpen: this.anyPanelOpen(),
       sheetMovingUntil: this.sheetMovingUntil, tipShowing: this.tips.isShowing, spotlightShowing: this.onboarding.holdsScreen, waitedMs,
+      // [ux-redesign final F6] Offers wait for a calm moment: not during a crisis, not while an absence is still being worked through
+      // (the engine's catch-up, read only) or its welcome-back is still to come.
+      offer: tier === 'offer',
+      crisis: tier === 'offer' && (this.onboarding.advisor.crisis() || !!this.danger.dangerBanner()),
+      returning: tier === 'offer' && (!!this.pendingWelcome || this.welcomeOpen || this.engine['catchingUp']),
     });
     this.lastGateBlock = why;
     if (why) return false;
@@ -1174,7 +1179,6 @@ export class GameApp {
     // HUD tile through the pooled fx layer (the bubbles' and the stash's own fly-to-HUD now use it too).
     setUiSound((name, volume, rate) => this.audio.play(name, { volume, rate }));
     this.audio.rateOf = name => soundRate(name);
-    this.world.flyToHud = (r, x, y, label) => { this.feedback.fly.fly(r, { x, y }, 10, label); }; // no amount here: 10 goods' worth (7 particles)
     const flashAttr = (): void => { document.documentElement.dataset.flash = getA11y().flash; }; // fx.css: no CRT flash in "no flashes"
     flashAttr();
     subscribeA11y(flashAttr);

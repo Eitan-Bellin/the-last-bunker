@@ -75,6 +75,12 @@ export interface GateInput {
   spotlightShowing?: boolean;
   /** [ux-redesign w2fix] How long this dialog has been ready and held back (ms; 0 or absent = it just became ready). */
   waitedMs?: number;
+  /** [ux-redesign final F6] This dialog is an offer (install, power saver, backup). */
+  offer?: boolean;
+  /** [final F6] A crisis is on (a fire, a raid, the advisor's urgent pick). */
+  crisis?: boolean;
+  /** [final F6] The bunker is still working through an absence, or its welcome-back has not been shown yet. */
+  returning?: boolean;
 }
 
 /** Why a dialog may not land right now ('' = it may). Emergencies ignore an open sheet and push a tip away; nothing ignores a finger. */
@@ -89,6 +95,9 @@ export function gateBlock(g: GateInput): string {
   if (!g.critical && g.panelOpen && g.now - g.lastGestureAt < SHEET_IDLE_MS) return 'sheet';
   if (!g.critical && g.tipShowing) return 'tip';
   if (!g.critical && g.spotlightShowing && (g.waitedMs ?? 0) <= SPOTLIGHT_PATIENCE_MS) return 'spotlight';
+  // [ux-redesign final F6] An offer never comes ahead of a welcome-back or into a crisis: it waits for a calm moment (no patience).
+  if (g.offer && g.returning) return 'returning';
+  if (g.offer && g.crisis) return 'crisis';
   return '';
 }
 

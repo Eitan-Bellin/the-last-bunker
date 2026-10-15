@@ -19,11 +19,22 @@ export class LoreController {
 
   /** [plan4:UX-10] A find is waiting for its dialog (the dialog queue asks, then calls flushLoreQueue when the gate is open). */
   get hasQueued(): boolean {
+    this.dropRead();
     return this.loreQueue.length > 0;
+  }
+
+  /** [ux-redesign final F4] A find the player already read (from the journal, or the tutorial's "read the note" step) needs no "Found something!". */
+  private dropRead(): void {
+    if (!this.loreQueue.length) return;
+    const unread = this.app.state?.loreUnread;
+    if (!unread) return;
+    const left = this.loreQueue.filter(id => unread.includes(id));
+    if (left.length !== this.loreQueue.length) this.loreQueue = left;
   }
 
   /** Shows the next queued find once nothing else is on screen. */
   flushLoreQueue(): void {
+    this.dropRead();
     if (!this.loreQueue.length || this.app.modal.isVisible || this.app.storyOpen || this.app.introPlaying || this.app.loreReader.isVisible) return;
     if (document.querySelector('.era-banner')) return;
     this.showLoreFound(this.loreQueue.shift()!);
