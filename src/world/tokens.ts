@@ -877,5 +877,39 @@ export const CITY = {
     bridgeH: 8,
     /** Vestibule ceiling light pitch (fluorescent tubes) along a vestibule. */
     vestLampEvery: 24,
+    /** [world:C1] The big arched observation window in the vault wall behind the spine (half width; 0 = none) and its frame. */
+    windowHalfW: 70,
+    windowMullion: 3,
+    /** [world:C1] The plaza floor slab under the hub's bottom storey (thicker than a balcony deck). */
+    plazaSlab: 18,
+  },
+  /**
+   * [world:C1] The cut of the city into the rock (src/world/model/cityLayout.ts): how ragged each cavity is and how far the dark edges, dig
+   * faces, districts and pockets reach. World units.
+   */
+  layout: {
+    /** Floor strips: the cut sits at least `stripHead` above the rooms' ceilings and is pushed out by up to `stripRag` (noise wavelength `stripWave`). */
+    stripHead: 6,
+    stripRag: 10,
+    stripWave: 34,
+    /** The blocked tunnel stub past the end of a floor (an edge site): its length, ceiling (below floorTop at the mouth), arch and raggedness. */
+    edgeLen: 132,
+    edgeTop: 24,
+    edgeRag: 8,
+    /** Where the rubble choke of an edge stands, as a share of edgeLen from the mouth. */
+    edgeChoke: 0.62,
+    /** The dig face under the bottom storey: from the hub's west wall to this many slots past the east vestibule. */
+    digSlots: 3,
+    digRag: 9,
+    /** District caverns around the painted district room: side pad, rise above the room, ledge below; how lumpy. */
+    cavernPad: 52,
+    cavernRise: 78,
+    cavernLumps: 0.16,
+    /** Pockets: how lumpy their blob is. */
+    pocketLumps: 0.24,
+    /** How many strata below the deepest reached one get (hidden) storey areas, so the fog keeps the next stratum dark. */
+    strataAhead: 1,
+    /** Layout bounds margin: sideways, above ground (the sky) and below the deepest area. */
+    boundsPad: { x: 420, top: 700, bottom: 520 },
   },
 } as const;
