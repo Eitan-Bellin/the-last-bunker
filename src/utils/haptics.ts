@@ -31,9 +31,9 @@ interface CapacitorHaptics {
   selectionChanged?: () => unknown;
 }
 
-/** Not more often than every 40 ms and at most 6 per second: a stream of ticks stops feeling like feedback. */
+/** Not more often than every 40 ms and at most 10 per second ([ux-redesign W4]: was 6): a stream of ticks stops feeling like feedback. */
 const MIN_GAP_MS = 40;
-const MAX_PER_SECOND = 6;
+const MAX_PER_SECOND = 10;
 const recent: number[] = [];
 
 let switchLabel: HTMLLabelElement | null = null;
@@ -115,4 +115,23 @@ export function haptic(kind: HapticKind): void {
   } catch {
     // haptics are a nicety, never a failure
   }
+}
+
+// ───────────────────────────── [ux-redesign W4] what each moment feels like ─────────────────────────────
+
+/** The moments of the game, by what the player feels (one place decides which buzz each one gets). */
+export type Feel = 'tap' | 'select' | 'collect' | 'upgrade' | 'levelUp' | 'victory' | 'blocked' | 'error' | 'warning' | 'raid' | 'explosion';
+
+/**
+ * tap / select: the lightest tick (selection); collect / upgrade: a medium knock; level up / victory: the success double tick;
+ * blocked / error: the error pattern; a raid or an explosion: heavy. All through `haptic`, so the setting, reduced motion and the
+ * 10-per-second limit apply.
+ */
+export const FEEL: Record<Feel, HapticKind> = {
+  tap: 'tap', select: 'select', collect: 'impact', upgrade: 'impact', levelUp: 'success', victory: 'success',
+  blocked: 'error', error: 'error', warning: 'warning', raid: 'heavy', explosion: 'heavy',
+};
+
+export function feel(moment: Feel): void {
+  haptic(FEEL[moment]);
 }
