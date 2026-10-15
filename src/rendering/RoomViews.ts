@@ -19,6 +19,8 @@ import { LABEL_BASE_FONT, LABEL_FLOOR_SCREEN_PX, labelState } from './LabelScale
 import { SURFACE_FLOOR } from '../core/GameState'; // plan4:ST-16
 import { pressMs } from '../utils/a11y'; // plan4:AC-13
 import { buildSurfaceBlock } from './surfaceRow'; // plan4:ST-16
+import { GFX } from './gfxFeatures';
+import { applyClarity, buildClarity, categoryColor, stepShade, type RoomClarity } from './roomClarity'; // [airy:B1]
 
 // [plan4 X-1] Split out of BunkerRenderer.ts with no change in behaviour: the room views (build queue, look rebuilds, name tags),
 // the "in zone" / parking logic and the per-picture culling of rooms, ruins and the structure.
@@ -28,6 +30,9 @@ const LONG_PRESS_MS = 450;
 
 /** [perf] A room out of the camera's reach for this long gives its look back (see render). */
 const PARK_AFTER_MS = 8000;
+
+/** [airy:B5] Most room name tags drawn at once (see capLabels). */
+const LABEL_CAP = 6;
 
 export interface RoomView {
   root: Container;
@@ -40,6 +45,8 @@ export interface RoomView {
   people: Container;
   outline: Graphics;
   label: Container;
+  /** [airy:B1/B4] Category wash + ceiling band + icon under the people, focus shade over them (null with `?gx=-airy` and on the surface row). */
+  clarity?: RoomClarity;
   /** [plan4:ST-12] The tag's two looks: name + stars + lamps (full), colour chip + lamps (icon-only); LabelScale picks one by zoom. */
   labelFull?: Container;
   labelMini?: Container;
@@ -124,6 +131,7 @@ export class RoomViews {
   private roomsH = -1;
   private roomGen = 0;
   private buildsLeft = 0;
+  private lastShadeAt = 0; // [airy:B4]
   private nextRoomZ = 0;
   /**
    * [P6] With up to 24 floors most of the structure is off screen: every part of the rock, casing and the empty-slot tiles
@@ -151,6 +159,8 @@ export class RoomViews {
     this.roomsH = LAYOUT.rooms;
     const gen = ++this.roomGen;
     const now = performance.now();
+    const dtShade = Math.min(0.1, (now - this.lastShadeAt) / 1000); // [airy:B4]
+    this.lastShadeAt = now;
     this.buildsLeft = 3; // looks built per picture for rooms nobody is looking at yet (the ones about to scroll in)
     for (const b of state.buildings) {
       const def = getDef(b.type);
@@ -255,10 +265,18 @@ export class RoomViews {
         this.drawLabel(view, b);
       }
       // New look: a room keeps its sign to itself unless it needs you (no workers, building) or is selected.
-      if (host.gfx2) {
-        const staffed = (def.maxWorkers ?? 0) === 0 || b.assignedSurvivorIds.length > 0;
-        view.labelOn = b.id === host.selectedId() || b.isConstructing || !staffed;
-      } else view.labelOn = true;
+      const staffed = (def.maxWorkers ?? 0) === 0 || b.assignedSurvivorIds.length > 0;
+      if (host.gfx2) view.labelOn = b.id === host.selectedId() || b.isConstructing || !staffed;
+      else view.labelOn = true;
+      // [airy:B4] Focus: with a room selected the others dim; the selected one and the rooms that need you (building, no workers, crisis) stay bright.
+      const cl = view.clarity;
+      if (cl) {
+        applyClarity(cl, labelState.clarity);
+        const sel = host.selectedId();
+        const needs = b.isConstructing || !staffed || (state.incidents?.some(i => i.buildingId === b.id) ?? false);
+        cl.shadeTo = sel === null || sel === b.id ? 0 : needs ? 0.1 : 0.46;
+        stepShade(cl, dtShade);
+      }
       if (view.progress) {
         const pct = b.constructionProgress / b.constructionTotal;
         view.progress.clear();
@@ -305,6 +323,14 @@ export class RoomViews {
     outline.rect(1, 1, width - 2, height - 2).stroke({ color: 0xffd47a, width: 2.5, alpha: 0.95 });
     outline.visible = b.id === host.selectedId();
     root.addChild(visualHolder, people, outline);
+    // [airy:B1/B4] The clarity layer: wash/band/icon between painting and people, the focus shade over the people.
+    let clarity: RoomClarity | undefined;
+    if (GFX.airy && b.position.floor !== SURFACE_FLOOR) {
+      clarity = buildClarity(b.type, categoryColor(b.type, parseInt((getDef(b.type)?.color ?? '#ffe2b0').replace('#', ''), 16)), width, height);
+      root.addChildAt(clarity.under, 1);
+      root.addChildAt(clarity.over, root.getChildIndex(people) + 1);
+      applyClarity(clarity, labelState.clarity);
+    }
     root.hitArea = { contains: (x: number, y: number) => x >= 0 && x <= width && y >= 0 && y <= height };
     root.eventMode = 'static';
     root.cursor = 'pointer';
@@ -331,7 +357,7 @@ export class RoomViews {
     const label = new Container();
     label.position.set(buildingX(b) + width / 2, floorTop(b.position.floor) - SLAB / 2);
     return {
-      root, visualHolder, visual: null, oldVisual: null, fade: 0, scaffold: null, people, outline, label, progress: null,
+      root, visualHolder, visual: null, oldVisual: null, fade: 0, scaffold: null, people, outline, label, progress: null, clarity,
       visualSig: '', labelSig: '', width, height, attached: true,
       lane: { x0: DEPTH_X + 10, x1: width - DEPTH_X - 10 },
     };
@@ -503,6 +529,27 @@ export class RoomViews {
     }
   }
 
+  /**
+   * [airy:B5] A screenful of name tags was part of the clutter: at most LABEL_CAP tags are shown at once. The selected room's tag always stays; the
+   * rest (rooms that need you: building, no workers) are kept nearest to the middle of the screen first. `cand` holds the rooms that want a tag.
+   */
+  private readonly cand: RoomView[] = [];
+  private capLabels(): void {
+    const lit = this.cand;
+    if (lit.length > LABEL_CAP) {
+      const sel = this.host.selectedId();
+      const cx = (VIEW.x0 + VIEW.x1) / 2, cy = (VIEW.y0 + VIEW.y1) / 2;
+      const selRoot = sel ? this.views.get(sel)?.root : undefined;
+      const rank = (v: RoomView): number => (v.root === selRoot ? -1 : Math.hypot(v.root.x + v.width / 2 - cx, v.root.y + v.height / 2 - cy));
+      lit.sort((a, b) => rank(a) - rank(b));
+    }
+    for (let i = 0; i < lit.length; i++) {
+      const on = i < LABEL_CAP;
+      if (lit[i].label.visible !== on) { lit[i].label.visible = on; this.rowsDirty = true; }
+    }
+    lit.length = 0;
+  }
+
   /** [plan4:ST-12] The zoom changed (LabelScale, at most 10 Hz): every tag follows. */
   applyLabelScale(): void {
     for (const v of this.views.values()) this.styleLabel(v);
@@ -572,8 +619,10 @@ export class RoomViews {
       if (v.visualHolder.visible !== shown) { v.visualHolder.visible = shown; v.people.visible = shown; }
       // The name tag goes with its room (it used to be drawn for all 119 rooms: 43% of the draw calls).
       const lv = !!v.labelOn && seen && labelState.mode !== 'hidden';
+      if (GFX.airy && lv) { this.cand.push(v); continue; } // [airy:B5] the cap below decides
       if (v.label.visible !== lv) { v.label.visible = lv; this.rowsDirty = true; } // plan4:polish
     }
+    if (GFX.airy) this.capLabels(); // [airy:B5]
     if (this.rowsDirty) this.layoutRows(); // [plan4:polish]
     for (const v of this.ruinViews.values()) {
       const r = v.root;

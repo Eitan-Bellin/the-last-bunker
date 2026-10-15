@@ -1,4 +1,5 @@
 import type { SurvivorState } from '../core/GameState';
+import { nameGenderOf } from './names'; // [ux-wp5 C5] the large name pool knows its genders
 
 export type Gender = 'm' | 'f' | 'n';
 export type HairStyle = 'short' | 'curly' | 'bald' | 'bun' | 'braids' | 'long' | 'cropped';
@@ -42,7 +43,7 @@ const NAME_GENDER: Record<string, Gender> = {
 };
 
 export function nameGender(name: string): Gender {
-  return NAME_GENDER[name] ?? 'n';
+  return NAME_GENDER[name] ?? nameGenderOf(name) ?? 'n';
 }
 
 /** Painted portraits that actually exist on disk (the rest fall back to adults of the same gender). */

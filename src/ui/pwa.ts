@@ -18,6 +18,7 @@ import { isIOS, isIOSBrowserTab, isIOSSafari, isNative, isStandalone } from '../
 import { getPersistStatus } from '../core/SaveManager';
 import { isTouchDevice } from '../utils/device';
 import { lowPowerSuspected, startPowerWatch } from '../utils/powerWatch';
+import { promptAllowed } from './onboarding/advisorRules'; // [ux-redesign W3a]
 
 const DAY_MS = 86_400_000;
 const KEY_INSTALL = 'lastbunker_hint_install'; // JSON { seen: boolean, next: epoch ms, n: times shown }
@@ -215,7 +216,8 @@ const KEY_POWER_ASKED = 'lastbunker_hint_power'; // epoch ms of the last battery
 export function powerHintDue(ctx: PwaContext): boolean {
   if (!isTouchDevice() || ctx.powerSaverOn()) return false;
   const seconds = ctx.playSeconds();
-  if (seconds < 120 || (!lowPowerSuspected() && seconds < 900)) return false;
+  // [ux-redesign W3a] Nothing asks for anything in the first five minutes of a game (it used to come at two minutes on a slow phone).
+  if (!promptAllowed(seconds) || (!lowPowerSuspected() && seconds < 900)) return false;
   return Date.now() - (Number(read(KEY_POWER_ASKED)) || 0) > 7 * DAY_MS;
 }
 

@@ -4,6 +4,8 @@ import type { GameApp } from '../../app';
 import { RESEARCH } from '../../data/research';
 import { lawSlots } from '../../data/laws';
 import { seasonsActive } from '../../data/seasons';
+import { actOf } from '../../data/acts';
+import { getProject } from '../../data/projects';
 import type { SpotKey } from '../HUD';
 
 /** One system a run meets along the way: a card says what it is, once, and the button to use it glows for a moment. */
@@ -34,6 +36,17 @@ const tier2 = (id: string, from: number, resource: string): SystemCard => ({
  * long version. Each card shows once per save (flag `sys:<id>`, kept across Genesis).
  */
 const CARDS: SystemCard[] = [
+  {
+    // [ux-wp1 F5] The tutorial is over: from here the Act leads. Says what Act I asks for and where the guide lives.
+    id: 'act1', icon: '[[flag]]', spot: 'era', book: 'act', title: 'wp1.act1.title', body: 'wp1.act1.body',
+    ready: (s, app) => act(s) === 1 && app.engine.objectiveSystem.tutorialDone(s),
+    params: s => {
+      const a = actOf(s);
+      const locale = i18n.currentLocale;
+      const charter = a.charter.map(id => getProject(id)?.name[locale]).filter((n): n is string => !!n);
+      return { act: a.name[locale], goals: [...a.goals.map(g => g.text[locale]), ...charter].join(' · ') };
+    },
+  },
   { id: 'inbox', icon: '[[inbox]]', ready: s => act(s) >= 2, spot: 'inbox', book: 'inbox' },
   { id: 'foreman', icon: '[[worker]]', ready: s => act(s) >= 2, spot: 'era', book: 'foreman' },
   { id: 'contracts', icon: '[[cart]]', ready: (_s, app) => app.engine.contractSystem.active(app.state), spot: 'inbox', book: 'contracts' },
@@ -112,7 +125,14 @@ export class SystemsController {
       title: i18n.t(card.title ?? `sys.${card.id}.title`, params),
       body: i18n.t(card.body ?? `sys.${card.id}.body`, params),
       actions: [
-        { label: i18n.t('sys.ok'), className: 'btn-primary', onClick: () => { this.app.modal.hide(); this.app.hud.spotlight(card.spot); } },
+        {
+          label: i18n.t('sys.ok'), className: 'btn-primary', onClick: () => {
+            this.app.modal.hide();
+            // [ux-redesign W3a] Once per player a guided tap on where it lives; [w3fix] one highlight only: the HUD's own short
+            // glow when the guided step is not given (seen before, or the tutorial was skipped).
+            if (!this.app.onboarding.guideTo(card.spot, card.id)) this.app.hud.spotlight(card.spot);
+          },
+        },
         { label: i18n.t('sys.more'), className: 'btn-secondary', onClick: () => { this.app.modal.hide(); this.app.openBook(card.book); } },
       ],
     });

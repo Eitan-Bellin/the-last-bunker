@@ -66,7 +66,7 @@ export class MetaSystem {
     for (const a of ACHIEVEMENTS) {
       if (state.achievements.includes(a.id) || !a.check(state)) continue;
       this.sm.applyDelta({ path: 'achievements', value: [...this.sm.state.achievements, a.id] });
-      this.resources.gain(this.sm, a.reward);
+      this.resources.gain(this.sm, a.reward, { overfill: true }); // [ux-wp2 R1] rewards are not lost to a full store
       bus.emit('achievement', a.id);
     }
   }

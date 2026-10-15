@@ -65,8 +65,14 @@ const START_LAYOUT: RuinSeed[] = [
 /** Flooded areas in a fresh bunker (the Remnant's goal asks for one of them to be drained). */
 export const START_FLOODED = START_LAYOUT.filter(r => r.flooded).length;
 
-/** Lore found deeper down when new levels are dug. */
-export const DIG_LORE: Record<number, string> = { 3: 'sickness', 4: 'reactorPlans', 5: 'lastTape' };
+/**
+ * Lore found deeper down when new levels are dug (key: the level index, 3 = B4). [ux-wp5 C4] From B8 on, a find every
+ * few levels down to B24, so the long dig still turns up the past.
+ */
+export const DIG_LORE: Record<number, string> = {
+  3: 'sickness', 4: 'reactorPlans', 5: 'lastTape',
+  7: 'builders', 9: 'borisTools', 11: 'bunker16', 14: 'quarantine', 17: 'waterTable', 20: 'handprints', 23: 'warmRock',
+};
 
 export function seedRuins(): Ruin[] {
   return START_LAYOUT.map((r, i) => {

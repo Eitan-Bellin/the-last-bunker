@@ -1,0 +1,34 @@
+# Airy 2: a real structural change (shared brief, 2026-10-09)
+
+Read `store/AIRY-AGENTS.md` first: ground rules, test recipe, flag `airy`, branch `feat/airy-bunker` (never push, never touch main or saves, commit only your own files). That pass (thicker slab, piers, clarity layer) was judged by the user as **"I do not see much change"**. The user (Hebrew) now asks for a **real structural change**: a bunker that is *spacious*, *higher quality*, *really more 3D*, with **corridors and stairs**. The first pass nudged things; this one must be visible at a glance in a phone screenshot (430x900) without reading labels. If someone looks at before/after thumbnails side by side they should say "different building".
+
+Stay in Pixi (decision made). All new drawing behind `GFX.airy` (default ON; `?gx=-airy` = old look). Phone frame budget unchanged (~3 ms, no per-frame allocation, batch sprites, new filters need `resolution:'inherit'`). Existing saves load; slot coordinates and people/room positions in saves never change.
+
+## What "3D" means here (target picture)
+Each floor is a **deep box seen from the front**, not a flat painting:
+- a **front corridor** (the walkway) runs along the whole floor in the foreground: a floor plane that visibly recedes (perspective lines / planks / grating), a railing or glass parapet, ceiling lamps casting pools on the floor, pipes overhead. This corridor is where people **walk between rooms** and where the stairs land;
+- **rooms are alcoves set back behind the corridor**: visible side walls and ceiling with perspective, a floor plane receding to the painted back wall (the existing room painting becomes the back wall), room lamp pools on the floor;
+- **stair flights** (visible, full-width at cluster ends and beside the shaft, switchback or straight with landings) connect floors; people use them (existing `LEG_STAIRS` routes);
+- **parallax layers** that really move against each other when the camera pans/zooms: far rock, room back walls, room interiors with people, front structure (pillars, rails, corridor edge). Foreground pillars move more than the back wall;
+- **depth cues**: contact shadows of people and props on the floor plane, rim light on the front edge, depth fog toward the back wall, slightly darker rock between clusters, a real **gap/void** (dark shaft of rock with strata) between clusters so the silhouette is not one rectangle.
+
+Quantities are up to you, but be bold: the corridor band should be ~40-48 units tall (slab/corridor band, `SLAB` or a new constant in `geom.ts`; ROOM_H stays 100 for existing art), rooms' `DEPTH_X/TOP/BOTTOM` perspective inset about doubled under `airy`, parallax strength ~6-12% of the pan, cluster voids 20-40 units wide.
+
+## Agent C "depth" owns: `paintedRoom.ts`, `roomArt.ts`, `roomComposer.ts`, `RoomViews.ts`, `roomClarity.ts`, `roomParts.ts`, `CameraController.ts` (parallax hook only), `BunkerRenderer.ts`
+1. **Room as a deep alcove**: side walls, ceiling, receding floor plane (procedural, cached textures; no per-room Graphics redraw per frame), room painting inset as the back wall; lamp pools projected on the floor plane; contact shadows under people/props.
+2. **Parallax**: camera-driven offsets per layer (back rock / back walls / interiors / front structure). Implement via a small `ParallaxLayers` helper that offsets container x by `(camera centre x - bunker centre x) * factor`; front structure containers (owned by Agent D: ask D for the container names, or add the hook in `BunkerRenderer` and pass the containers) get the largest factor. Disable on low quality and in far/city-map LOD. Hit-testing (`targetAt`) must stay correct (offsets are applied to display only, or compensate).
+3. **Depth lighting**: rim light along front edges, depth fog toward the back wall (cheap gradient sprites), warm/cool separation.
+4. Rebalance Agent B's clarity layer to fit the new look: the candy-colour trade wash is too strong (the user and coordinator saw it as garish): mix the colours 50% toward grey and cap alpha around 0.18.
+5. Fix doubled lamps (structure lamp brackets next to painted lamps): coordinate with D, who owns `frontChunks.ts`.
+
+## Agent D "circulation" owns: `frontChunks.ts`, `airyArt.ts`, `structure.ts`, `geom.ts`, `infra.ts`, `infraArt.ts`, `openings.ts`, `routes.ts`, `walkers` code, `world.ts`, `decals.ts`, `shaft.ts`, `signage.ts`
+1. **Front corridor** per floor (see above): replaces the thin ledge of the first pass. It is a visible, deep, walkable foreground band with railing and perspective floor; make people (`routes.ts` / walkers / `RoomViews` lanes: `lane` and `WALK_Y`; coordinate with C who owns RoomViews: you may change the walk lane constants in `geom.ts`) walk **in the corridor** when travelling between rooms and stand in the room's alcove when working.
+2. **Stairs**: wide visible stair flights with landings at cluster ends and on both sides of the shaft; two-storey halls get a gallery/balcony with a stair; people actually climb them (`LEG_STAIRS`). Art can be procedural (extend `stairsTexture`) but must look like solid steel/concrete with handrails and lamps, not a sticker.
+3. **Cluster voids and silhouette**: widen cluster separators into real **voids** (dark rock gap showing strata, 20-40 units) with a bridge/catwalk across, so the casing outline steps and the whole bunker reads as connected volumes, not one block (`buildCasing` already supports a stepped outline; extend the cluster grouping from the first pass in `airyArt.ts`). Keep slot grid math identical (`slotX`): voids are drawn over existing pier positions or between *groups*, never shifting slots. If a real gap needs extra horizontal space, render it as a pier that is wider than the first pass and visually opens into rock, not as new slots.
+4. **Shaft as a grand atrium spine**: wider-looking shaft (visual only) with an open stairwell beside the lift, landing balconies with railings at every floor.
+5. Update decals/placement/camera consumers affected by taller corridor band (A6 list from the first pass still applies: `PlacementController`, `share.ts`, `cityMap.ts`, `infra.ts`, elevator travel `floorAfterTravel`). Gallery period stays 4.
+
+## Both
+- Test at 430x900 with the recipe in `AIRY-AGENTS.md` (slot `airyC` / `airyD`), shoot before (`?gx=-airy`) and after in `store/compare/airy2-<C|D>/`, same camera, **at default phone framing and at zoom ~0.6**, scale 0.5-1.0 as needed; look at your own shots critically: if it does not look like a different building, push harder before you report.
+- Coordinate via the file ownership above; never edit another agent's files, message them via SendMessage if you need a constant (ids will be given in the reminder; otherwise report it).
+- tsc (both configs) + `node tools/sim/lint.mjs` before each commit; commit often; final short report: what changed, flag names, shots, perf, open issues.

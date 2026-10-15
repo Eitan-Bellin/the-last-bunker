@@ -2,7 +2,14 @@ import { el, setRich } from '../dom';
 import { haptic } from '../../utils/haptics';
 import { uiSound } from '../../audio/uiSound';
 import { i18n } from '../../i18n/I18nManager';
-import { setInert, trapTab } from '../a11yDom';
+import { trapTab } from '../a11yDom';
+import { dropInert, holdInert } from '../inertOwners';
+import { MS } from '../kit/tokens';
+
+/** [ux-redesign W4] Rows of a sheet that come in one by one (fx.css styles the same eight). */
+const STAGGER_ROWS = 8;
+/** [w4fix C3] How deep under the body the row list may sit (Build: .bm > .bm-list; Research: .bp > .research-list; Menu: a settings card six levels down). */
+const STAGGER_DEPTH = 6;
 
 /** Open sheets, newest last: Escape closes the top one. */
 const openSheets: Sheet[] = [];
@@ -11,6 +18,19 @@ let escBound = false;
 let openCount = 0;
 let titleSeq = 0;
 const behind = (): Element[] => [document.getElementById('hud'), document.getElementById('game-canvas')].filter((n): n is HTMLElement => !!n);
+
+/*
+ * [ux-w2f #38] Sheet motion (250 ms in, 180 ms out, `.sheet-instant` when one sheet replaces another) lives in style.css
+ * ([ux-redesign w2fix]: it used to be injected from here as <style id="sheet-motion">).
+ */
+
+/**
+ * [ux-redesign w2fix] Sheets that open OVER the sheet that asked for them instead of replacing it: the Bunker Book (help) and the
+ * Chronicle (opened from the Menu, which is still there when it closes). Every other sheet replaces the open one (coupon and projects
+ * close the others themselves before they open).
+ */
+const STACKING = ['help-sheet', 'chronicle-sheet'];
+const stacks = (s: Sheet): boolean => STACKING.some(c => s.panelHas(c));
 
 /** How far (px) or how fast (px/ms) a pull-down must go to dismiss the sheet. */
 const DISMISS_PX = 90;
@@ -78,7 +98,8 @@ export class Sheet {
     if (!escBound) {
       escBound = true;
       document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape') openSheets[openSheets.length - 1]?.hide();
+        // [ux-wp4] Escape closes the top sheet only, and not while a dialog is up (the dialog asks for an answer first).
+        if (e.key === 'Escape' && !document.querySelector('.modal-overlay.open')) Sheet.closeTop();
       });
     }
   }
@@ -178,6 +199,14 @@ export class Sheet {
     this.titleEl.addEventListener('pointerdown', grabMouse);
   }
 
+  /** [ux-wp4] Closes the newest open sheet (the phone's back button and Escape): false when no sheet is open. */
+  static closeTop(): boolean {
+    const top = openSheets[openSheets.length - 1];
+    if (!top) return false;
+    top.hide();
+    return true;
+  }
+
   setTitle(text: string): void {
     setRich(this.titleEl, text);
   }
@@ -197,6 +226,10 @@ export class Sheet {
       if (modal && modal.parentElement === document.body) document.body.insertBefore(this.overlay, modal);
       else document.body.appendChild(this.overlay);
     }
+    // [ux-w2f #38] Switching sheets: the old one goes at once (the stacking readers are the exception: see STACKING).
+    if (!stacks(this)) {
+      for (const other of [...openSheets]) if (other !== this && !stacks(other)) other.hideNow();
+    }
     this.open = true;
     this.panel.style.transform = '';
     const wasOpen = openSheets.includes(this);
@@ -205,10 +238,57 @@ export class Sheet {
     if (i >= 0) openSheets.splice(i, 1);
     openSheets.push(this);
     if (!wasOpen) {
-      if (openCount++ === 0) for (const n of behind()) setInert(n, true);
+      this.staggerRows();
+      if (openCount++ === 0) for (const n of behind()) holdInert(n, 'sheet');
       // The title takes the focus so a screen reader starts at the top of the panel (a repeated show() leaves it where the player is).
       this.titleEl.focus({ preventScroll: true });
     }
+  }
+
+  /**
+   * [ux-redesign W4] The first eight rows come in one after the other (fx.css, --stagger apart, skipped under reduced motion). The class
+   * stays only for the entrance, so rows a panel re-renders later simply appear. Taps are never held up: rows are tappable at once.
+   */
+  private staggerTimer = 0;
+  private staggerEl: HTMLElement | null = null;
+  private staggerRows(): void {
+    window.clearTimeout(this.staggerTimer);
+    this.staggerEl?.classList.remove('fx-stagger');
+    const list = this.staggerList();
+    this.staggerEl = list;
+    void list.offsetWidth;
+    list.classList.add('fx-stagger');
+    this.staggerTimer = window.setTimeout(() => list.classList.remove('fx-stagger'), MS['dur-popup-in'] + MS.stagger * STAGGER_ROWS);
+  }
+
+  /**
+   * [w4fix C3] Which rows come in one after the other: most panels put one wrapper in the body (Build, Research, Menu), so the rows are
+   * the children of the panel's longest list a few levels down (tab rows aside), else the body's own children.
+   */
+  private staggerList(): HTMLElement {
+    let best: HTMLElement = this.body;
+    let most = this.body.children.length;
+    let level: Element[] = [this.body];
+    for (let depth = 0; depth < STAGGER_DEPTH && level.length; depth++) {
+      const next: Element[] = [];
+      for (const n of level) {
+        for (const c of n.children) {
+          if (!(c instanceof HTMLElement) || c.matches('.tab-row, [role="tablist"]')) continue;
+          if (c.children.length > most) { best = c; most = c.children.length; }
+          next.push(c);
+        }
+      }
+      level = next;
+    }
+    return best;
+  }
+
+  /** [ux-w2f #38] Closes without the slide (another sheet is taking over). */
+  private hideNow(): void {
+    this.overlay.classList.add('sheet-instant');
+    this.hide();
+    void this.overlay.offsetWidth; // apply the instant state before the class goes
+    requestAnimationFrame(() => this.overlay.classList.remove('sheet-instant'));
   }
 
   hide(): void {
@@ -219,7 +299,7 @@ export class Sheet {
     if (i >= 0) openSheets.splice(i, 1);
     if (--openCount <= 0) {
       openCount = 0;
-      for (const n of behind()) setInert(n, false);
+      for (const n of behind()) dropInert(n, 'sheet');
     }
     const back = this.opener;
     this.opener = null;
@@ -230,5 +310,10 @@ export class Sheet {
 
   get isVisible(): boolean {
     return this.open;
+  }
+
+  /** The panel carries this class (which kind of sheet it is). */
+  panelHas(cls: string): boolean {
+    return this.panel.classList.contains(cls);
   }
 }

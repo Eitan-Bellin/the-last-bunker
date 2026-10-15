@@ -2,6 +2,7 @@ import type { Application, Container } from 'pixi.js';
 import { BUILDING_W, ROOM_H, SIDE_MARGIN, SLOT_W, floorTop } from './layout';
 import { reducedMotion, relaxedMs } from '../utils/a11y';
 import { ROW_X0, ROW_X1 } from './surfaceRow'; // plan4:ST-16
+import { GFX } from './gfxFeatures'; // [airy:A5]
 import { getHudInsets, subscribeHudInsets } from '../utils/hudInsets';
 
 // [plan4 X-1] Split out of BunkerRenderer.ts with no change in behaviour: everything about the camera (constants, pan / pinch / fling /
@@ -25,7 +26,8 @@ export function hudBottom(): number {
 export const VIEW_TOP = -140;
 export const MAX_ZOOM = 3;
 /** [plan4:ST-12] Zoom tracks. The default on a phone shows SECTOR_SLOTS slots across; the floor overview fits the widest floor. */
-export const SECTOR_SLOTS = 7;
+/** [airy:A5] The airy bunker shows 6 slots across (not 7): the piers and the taller slabs ask for more room per room, so the default is a few floors, not a screenful of boxes. */
+export const SECTOR_SLOTS = GFX.airy ? 6 : 7;
 export const MIN_ZOOM = 0.35;
 /** Below this absolute zoom the far-zoom city map takes over (it used to be relative to the fit zoom). */
 export const FAR_ZOOM = 0.42;
@@ -194,7 +196,7 @@ export class CameraController {
     this.punchDY = (dirY / len) * 6 * s;
   }
 
-  /** [plan4:ST-12] Zoom that shows SECTOR_SLOTS slots across: about 0.94 on a 390 px phone, 0.9 on 375, 1.04 on 430. */
+  /** [plan4:ST-12] Zoom that shows SECTOR_SLOTS slots across (7: about 0.94 on a 390 px phone, 0.9 on 375, 1.04 on 430; airy 6: 1.1, 1.02, 1.17). */
   sectorZoom(): number {
     const { width } = this.host.app.screen;
     return Math.max(0.9, Math.min(1.8, width / (SECTOR_SLOTS * SLOT_W + 2 * SIDE_MARGIN)));

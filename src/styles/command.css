@@ -1,3 +1,4 @@
+@import './panels.css'; /* [ux-redesign W2e] room panel, people, settings, command */
 /* ---------- Command panel (balance plan, phase 1): what to do now, every requirement, a forecast, the ending's lean ---------- */
 
 .command { display: flex; flex-direction: column; gap: 10px; }
@@ -19,6 +20,11 @@
 .req-row:active { opacity: 0.8; }
 .req-row.done { opacity: 0.55; }
 .req-hint { margin-top: 4px; line-height: 1.35; }
+/* [ux-wp1] Era steps listed under their Act goal, and the Act's ETA line. */
+.req-subs { margin-top: 4px; padding-inline-start: 10px; border-inline-start: 2px solid rgba(255, 255, 255, 0.08); }
+.req-sub { line-height: 1.35; padding: 1px 0; }
+.req-sub.done { opacity: 0.55; text-decoration: line-through; }
+.now-eta { margin-top: 2px; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
 
 .forecast-row { display: grid; grid-template-columns: 1.3fr 0.8fr 1.4fr; gap: 8px; align-items: baseline; padding: 3px 0; font-size: calc(13px * var(--fs, 1)); }
 .forecast-now { text-align: end; font-variant-numeric: tabular-nums; }
@@ -30,9 +36,6 @@
 
 .era-head.compact { padding: 8px 10px; }
 .era-head.compact .era-tagline { display: none; }
-
-/* The chip's Act tag stays on narrow screens (the era's name is the part that folds away). */
-.era-chip .act-tag { font-variant-numeric: tabular-nums; letter-spacing: 0.02em; }
 
 /* Inbox cards: what a contract asks and pays, and which ones are safe to take. */
 .inbox-title { display: flex; flex-direction: column; gap: 2px; }

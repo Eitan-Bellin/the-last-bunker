@@ -1,6 +1,7 @@
 import type { GameEngine } from '../../core/GameEngine';
 import type { ResourceType } from '../../core/GameState';
 import { i18n } from '../../i18n/I18nManager';
+import { plural } from '../format';
 import { uiSound } from '../../audio/uiSound';
 import { Sheet } from './Sheet';
 import { button, el } from '../dom';
@@ -104,14 +105,14 @@ export class CouponPanel {
     const e = this.engine;
     const state = e.stateManager.state;
     switch (kind) {
-      case 'rush': return i18n.t('coupon.rush.have', { n: e.rushSystem.count(state) });
+      case 'rush': return plural('coupon.rush.have', e.rushSystem.count(state));
       case 'research': {
         const id = e.researchSystem.activeId(state);
-        return id ? i18n.t('coupon.research.on', { n: 1 + e.researchSystem.queue(state).length }) : i18n.t('coupon.none');
+        return id ? plural('coupon.research.on', 1 + e.researchSystem.queue(state).length) : i18n.t('coupon.none');
       }
       case 'build': {
         const n = state.buildings.filter(b => b.isConstructing).length;
-        return n ? i18n.t('coupon.build.on', { n }) : i18n.t('coupon.none');
+        return n ? plural('coupon.build.on', n) : i18n.t('coupon.none');
       }
       case 'dig': {
         const d = e.digSystem.dig(state); // [plan4:ST-3] the primary dig (the floor dig, else the first running one)
@@ -124,7 +125,7 @@ export class CouponPanel {
       }
       case 'missions': {
         const n = state.activeMissions.length;
-        return n ? i18n.t('coupon.missions.on', { n }) : i18n.t('coupon.none');
+        return n ? plural('coupon.missions.on', n) : i18n.t('coupon.none');
       }
       case 'arrival': {
         if (state.survivors.length >= state.maxPopulation) return i18n.t('coupon.arrival.full');

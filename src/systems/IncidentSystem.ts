@@ -352,16 +352,8 @@ export class IncidentSystem {
     return dz;
   }
 
-  /** [Danger C4] When the player leaves with notifications on, trouble sometimes starts right then, so the phone can warn them. */
-  spawnOnLeave(): Disaster | null {
-    const state = this.sm.state;
-    const d = state.danger;
-    if ((state.era ?? 0) < 2 || d.disasters.length > 0 || d.raid || isQuiet(state) || disastersPaused(state)) return null;
-    if (!this.rng.chance(0.3)) return null;
-    const dz = this.spawnDisaster();
-    if (dz) this.scheduleDisaster();
-    return dz;
-  }
+  // [ux-wp3 E3/R8] spawnOnLeave (a 30% disaster each time the app went to the background, only with notifications on) was removed:
+  // it punished leaving, and only the players who allowed notifications. Away danger lives in AwayDanger, the same for everyone.
 
   /** Adults who could lend a hand right now. */
   freeCrew(state: GameState): SurvivorState[] {

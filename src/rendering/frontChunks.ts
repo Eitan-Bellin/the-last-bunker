@@ -8,7 +8,11 @@ import {
   ceilingPanelTexture, floorNumberTexture, floorStyles, heavySlabTexture, kindLight, latticeTexture, mulTint, perforatedSlabTexture, pipeColumnTexture, type FloorStyle,
 } from './floorIdentity';
 import { VIEW } from './perfFx';
-import { BASE_EAST, ROOMS_X, ROOM_H, SHAFT_GAP, SLAB, SLOT_W, TOPSOIL, floorAtY, floorTop, slotX, type Ext } from './layout';
+import type { Pier } from './airyArt';
+import { ANNEX_W, ANNEX_X, VOID_W, TOWER_W, hasAnnex, voidBoundaries } from './voids';
+import { PIER_AO, PIER_W, clusterSpan, pierKey, piersOfFloor } from './airyArt'; // [airy:A2]
+import { beamTexture, deckTexture, railTexture, seamBack, slotSlice, towerStubTexture, towerTexture } from './circulation'; // [airy2:D1]
+import { BASE_EAST, CORR_BEAM, CORR_DECK, CORR_LANE, CORR_RAIL, FLOOR_H, ROOMS_X, ROOM_H, SHAFT_GAP, SLAB, SLOT_W, TOPSOIL, floorAtY, floorH, floorTop, slotX, type Ext } from './layout';
 import {
   AO_CONTACT, AO_SIDE, COLUMN_SPILL_W, COLUMN_W, KIT_LIFT, LIP, PIPES_H, PIPES_Y, SLAB_DRAW,
   cellAt, depthGains, gridSegments, hallSpans, inSpan, kitTex, lampParts, lightOf, nightLight, shadeAt, slabExt, softTexture,
@@ -97,6 +101,8 @@ export class FrontChunks implements Animated {
   private ambient = 0.5;
   private st: KitState = 'F';
   private globalSig = '';
+  /** [airy2:D3] The stair annex west of the shaft (airy, no west wing on any floor). */
+  private annex = false;
   /** [plan4:ST-11] The look of every floor (empty while the `floorId` switch is off: every floor then draws the plain way). */
   private styles: FloorStyle[] = [];
   /** [plan4:ST-11] The overlays (lattice, girders, panels) are for Medium and High only. */
@@ -137,6 +143,7 @@ export class FrontChunks implements Animated {
     this.ambient = ambient;
     this.st = st;
     // [plan4:ST-11] Floor identity: a kind per floor, so a change of the rooms may restyle a floor (the signature below carries each style's key).
+    this.annex = GFX.airy && hasAnnex(grid);
     this.styles = GFX.floorId ? floorStyles(buildings, floors) : [];
     this.full = gfxLevel() !== 'low';
     this.lampsByFloor = Array.from({ length: floors }, () => []);
@@ -148,7 +155,7 @@ export class FrontChunks implements Animated {
     this.roomIds = ids;
     this.roomIdx = new Map(ids.map((r, i) => [r, i]));
     this.flicker = new Array(ids.length + 1).fill(1);
-    const gsig = `${st}|${this.full ? 1 : 0}${GFX.openings ? 'o' : ''}|${ambient.toFixed(3)}|${kitTex('pipes', st)?.uid}.${kitTex('slab', st)?.uid}.${kitTex('column', st)?.uid}`;
+    const gsig = `${st}|${this.full ? 1 : 0}${GFX.openings ? 'o' : ''}${GFX.airy ? 'a' + voidBoundaries(grid).join('.') + (this.annex ? 'x' : '') : ''}|${ambient.toFixed(3)}|${kitTex('pipes', st)?.uid}.${kitTex('slab', st)?.uid}.${kitTex('column', st)?.uid}`;
     const all = gsig !== this.globalSig;
     this.globalSig = gsig;
 
@@ -174,7 +181,7 @@ export class FrontChunks implements Animated {
         if (old) this.drop(old);
         const yTop = floorTop(fa) - 8, yBot = floorTop(fb - 1) + ROOM_H + SLAB + 8;
         want.set(key, {
-          cx, cy, x0: chunkX0(cx) - 22, x1: chunkX1(cx) + 22, y0: cy === 0 ? TOPSOIL - SLAB - 8 : yTop, y1: yBot, sig, container: null, parts: [],
+          cx, cy, x0: chunkX0(cx) - (cx === 0 && this.annex ? 60 : 30), x1: chunkX1(cx) + 30, y0: cy === 0 ? TOPSOIL - SLAB - 8 : yTop, y1: yBot, sig, container: null, parts: [],
           lit: [], spills: [], guides: [], markers: [], stamp: 0, shown: false, lastSeen: 0,
         });
       }
@@ -222,7 +229,7 @@ export class FrontChunks implements Animated {
       parts.push(`${f}:${e.w},${e.e}${f >= fa ? this.styles[f]?.key ?? '' : ''}`);
       if (f >= fa) {
         let row = '';
-        for (let sl = sLo; sl <= sHi; sl++) row += (cellAt(grid, f, sl)?.key ?? '-') + ',';
+        for (let sl = sLo; sl <= sHi; sl++) row += (GFX.airy ? pierKey(grid, f, sl) : cellAt(grid, f, sl)?.key ?? '-') + ','; // [airy:A2] a seam depends on the building ids
         parts.push(row);
       }
       for (const [a, b] of hallSpans(buildings, f)) if (b > x0 - 30 && a < x1 + 30) parts.push(`h${f}:${a}-${b}`);
@@ -340,7 +347,7 @@ export class FrontChunks implements Animated {
     // A column belongs to the chunk of the room it stands against (an east-facing end to the one on its right).
     const mineCol = (col: { x: number; l: boolean; r: boolean }) => cxOfX(col.x + (col.r && !col.l ? 0.01 : -0.01)) === cx;
 
-    const add = (tex: Texture, x: number, y: number, w: number, h: number, scale: number, ccx: number, ccy: number, lampGain = 1, baseGain = 1) => {
+    const add = (tex: Texture, x: number, y: number, w: number, h: number, scale: number, ccx: number, ccy: number, lampGain = 1, baseGain = 1, into: Container = root) => {
       const t = new TilingSprite({ texture: tex, width: w, height: h });
       t.position.set(x, y);
       t.tileScale.set(scale);
@@ -351,7 +358,7 @@ export class FrontChunks implements Animated {
       const node: Lit = { node: t, base: Math.min(0.9, ambient * lift * baseGain), parts, y: ccy, mul };
       lit.push(node);
       t.tint = mulTint(shadeAt(lightOf(node.base, node.parts, 1, flicker), ccy), mul);
-      root.addChild(t);
+      into.addChild(t);
       return t;
     };
     const addLit = (tex: Texture, x: number, y: number, w: number, h: number, ccx: number, ccy: number, lampGain: number, baseGain: number, into: Container = root) => {
@@ -404,6 +411,19 @@ export class FrontChunks implements Animated {
       }
     }
 
+    // The tint of a hand-coloured piece at depth y (timber, steel plates), as the lit pieces get it.
+    const woodAt = (col: number, y: number) => {
+      const [r, g, b] = depthGains(y);
+      const ch = (sh: number, k: number) => Math.round(Math.min(255, ((col >> sh) & 255) * k * (0.55 + 0.45 * ambient * lift)));
+      return (ch(16, r) << 16) | (ch(8, g) << 8) | ch(0, b);
+    };
+    const airy = GFX.airy; // [airy:A2] piers between all rooms, cluster bulkheads, walkway ledges
+    const ledgeLayer = new Container();
+    const railLayer = new Container(); // [airy2:D1]
+    const voidLayer = new Container(); // [airy2:D3] rock shafts between clusters: above the slab tilings, under the deck that bridges them
+    const towerLayer = new Container(); // [airy2:D3] stair towers, in front of the voids
+    const brackets = new Graphics();
+
     // Shadow under each slab and pipe run falls into the room below; a dark contact line where the room floor meets the slab lip.
     const fadeV = softTexture('fadeV');
     const drop = softTexture('drop');
@@ -436,25 +456,77 @@ export class FrontChunks implements Animated {
       const lip = softTexture('lip');
       const endFade = softTexture('fadeH');
       // The roof slab under the topsoil (first group only), then one under every level of the group.
-      const lines: { y: number; spans: [number, number][]; ext: Ext; f: number }[] = [];
-      if (cy === 0) lines.push({ y: TOPSOIL - SLAB - LIP, spans: [], ext: slabExt(grid.ext, floors, 0), f: 0 });
-      for (let f = fa; f < fb; f++) lines.push({ y: floorTop(f) + ROOM_H - LIP, spans: hallSpans(buildings, f), ext: slabExt(grid.ext, floors, f + 1), f });
+      const lines: { y: number; spans: [number, number][]; ext: Ext; f: number; piers: Pier[]; lo: number; hi: number }[] = [];
+      if (cy === 0) lines.push({ y: TOPSOIL - SLAB - LIP, spans: [], ext: slabExt(grid.ext, floors, 0), f: 0, piers: [], lo: 0, hi: 0 });
+      for (let f = fa; f < fb; f++) lines.push({ y: floorTop(f) + ROOM_H - LIP, spans: hallSpans(buildings, f), ext: slabExt(grid.ext, floors, f + 1), f, piers: airy ? piersOfFloor(grid, f, true) : [], lo: slotX(-grid.ext[f].w), hi: slotX(grid.ext[f].e) });
       const heavyTex = full ? heavySlabTexture() : null;
       const perfTex = full ? perforatedSlabTexture() : null;
       for (const line of lines) {
         const sty = styleOf(line.f);
         mul = sty.tint;
-        const sx0 = (line.ext.w > 0 ? slotX(-line.ext.w) : 0) - 12, sx1 = slotX(line.ext.e) + 12;
+        const sx0 = (line.ext.w > 0 ? slotX(-line.ext.w) : 0) - 12 - (this.annex && line.y > TOPSOIL ? 37 : 0), sx1 = slotX(line.ext.e) + 12;
         for (const [x, x1] of gridSegments(sx0, sx1, SLOT_W, line.ext.w > 0)) {
           const w = x1 - x;
-          if (!mine((x + x1) / 2, line.ext) || inSpan(x, x1, line.spans)) continue;
-          add(slabTex, x, line.y, w, SLAB_DRAW, scale, x + w / 2, line.y + SLAB_DRAW / 2);
+          if (!mine((x + x1) / 2, line.ext)) continue;
+          // [airy2:D1] A hall swallows the slab, but its mezzanine gallery (the corridor of the level) still crosses it, in front of the hall.
+          const hall = inSpan(x, x1, line.spans);
+          if (hall && !(airy && line.y > TOPSOIL)) continue;
+          if (!hall) add(slabTex, x, line.y, w, SLAB_DRAW, scale, x + w / 2, line.y + SLAB_DRAW / 2);
           // The nosing catches the lamps of the room standing on it.
-          addLit(lip, x, line.y, w, 6, x + w / 2, line.y - 6, 1.5, 0.95);
+          if (!hall) addLit(lip, x, line.y, w, 6, x + w / 2, line.y - 6, 1.5, 0.95);
           // [plan4:ST-11] Slab variants: heavy girders under reactors and generators, perforated plate on the working and deep levels (the roof slab stays plain).
-          if (line.y > TOPSOIL && sty.slab === 1 && heavyTex) addLit(heavyTex, x, line.y, w, SLAB_DRAW, x + w / 2, line.y + SLAB_DRAW / 2, 1, 0.9, ovl1);
+          if (hall) { /* the gallery only */ } else if (line.y > TOPSOIL && sty.slab === 1 && heavyTex) addLit(heavyTex, x, line.y, w, SLAB_DRAW, x + w / 2, line.y + SLAB_DRAW / 2, 1, 0.9, ovl1);
           else if (line.y > TOPSOIL && sty.slab === 2 && perfTex) {
             for (let px = x; px < x1 - 0.5; px += SLOT_W / 2) addLit(perfTex, px, line.y, Math.min(SLOT_W / 2, x1 - px), SLAB_DRAW, px + SLOT_W / 4, line.y + SLAB_DRAW / 2, 1, 0.9, ovl1);
+          }
+          // [airy2:D1] The front corridor: a receding deck, the beam face of the slab edge on brackets, a conduit in the zone colour under it, the railing on the front edge.
+          if (airy && line.y > TOPSOIL) {
+            const yb = line.y + LIP; // the room's floor line
+            const dy = yb + 1;
+            const by = dy + CORR_DECK + CORR_BEAM;
+            const bc = woodAt(0x34363a, by);
+            // Sub-slots of 46: the first segment (the shaft strip, and the annex west of it) is wider than a slot, and a stretched texture would stretch the perspective.
+            for (let sx = x; sx < x1 - 0.5; sx += SLOT_W) {
+              const sw = Math.min(SLOT_W, x1 - sx);
+              const ccx = sx + sw / 2;
+              addLit(slotSlice(deckTexture(), sw), sx, dy, sw, CORR_DECK, ccx, dy + CORR_DECK / 2, 1.3, 1.5, ledgeLayer);
+              // The cross seams lean toward the middle of the cluster (one-point perspective).
+              const [ca, cb] = clusterSpan(line.piers, ccx, line.lo, line.hi);
+              const vpx = (ca + cb) / 2;
+              for (let q = sx; q < sx + sw - 0.5; q += 11.5) {
+                const bx = seamBack(q, vpx);
+                brackets.poly([bx - 0.3, dy + 4, bx + 0.3, dy + 4, q + 0.55, dy + CORR_DECK - 1, q - 0.55, dy + CORR_DECK - 1]).fill({ color: 0x0a0a0c, alpha: 0.42 });
+                brackets.poly([bx + 0.4, dy + 4, bx + 0.8, dy + 4, q + 1.3, dy + CORR_DECK - 1, q + 0.7, dy + CORR_DECK - 1]).fill({ color: 0xf0ecd8, alpha: 0.1 });
+              }
+              addLit(slotSlice(beamTexture(), sw), sx, dy + CORR_DECK, sw, CORR_BEAM, ccx, dy + CORR_DECK + CORR_BEAM / 2, 1.2, 1);
+              addLit(slotSlice(railTexture(), sw), sx, dy + CORR_DECK - CORR_RAIL, sw, CORR_RAIL, ccx, dy + CORR_DECK - CORR_RAIL / 2, 1.2, 1.05, railLayer);
+              shade(drop, sx, by - 1, sw, 11, 0.5); // the beam throws its shadow on the soffit
+              // A lamp on a stanchion at the middle post of every slot: a caged bulb above the rail, its halo lights the deck.
+              if (sw > 40) {
+                const lx = ccx, lyb = dy + CORR_DECK - CORR_RAIL - 7;
+                brackets.rect(lx - 0.7, lyb, 1.4, 8).fill(woodAt(0x2a2c2e, by));
+                brackets.rect(lx - 2.2, lyb - 3.6, 4.4, 4).fill(woodAt(0x1c1c1e, by));
+                brackets.rect(lx - 1.5, lyb - 2.9, 3, 2.6).fill(0xe8b060);
+                const halo = new Sprite(glow);
+                halo.anchor.set(0.5);
+                halo.tint = 0xffc070;
+                halo.width = 40;
+                halo.height = 26;
+                halo.position.set(lx, lyb + 3);
+                spill.addChild(halo);
+                spills.push({ s: halo, a: 0.32, room: roomIndex() });
+                const pool = new Sprite(glow);
+                pool.anchor.set(0.5);
+                pool.tint = 0xffc070;
+                pool.width = 56;
+                pool.height = 16;
+                pool.position.set(lx, dy + 16);
+                spill.addChild(pool);
+                spills.push({ s: pool, a: 0.2, room: roomIndex() });
+              }
+            }
+            for (const bx of [x + 6, x1 - 6]) brackets.poly([bx - 2.5, by, bx + 2.5, by, bx - 2.5, by + 5]).fill(bc);
+            brackets.rect(x, by - 0.6, x1 - x, 1.2).fill({ color: 0x000000, alpha: 0.35 });
           }
         }
         // The slab ends bear into the casing walls: a soft dark where they enter.
@@ -475,7 +547,13 @@ export class FrontChunks implements Animated {
       }
     }
 
+    root.addChild(voidLayer);
     root.addChild(ovl1); // [plan4:ST-11] ceiling panels and slab overlays, above the pipe and slab tilings
+    ledgeLayer.addChild(brackets);
+    root.addChild(ledgeLayer); // [airy:A3]
+    root.addChild(railLayer); // [airy2:D1]
+    root.addChild(towerLayer);
+    root.addChild(railLayer); // [airy2:D1]
     // Warm night guide lights at the column feet (fixture always there, lit only at night).
     const guide = (x: number, floorY: number, kl?: FloorStyle) => {
       const fy = floorY - 13;
@@ -499,11 +577,6 @@ export class FrontChunks implements Animated {
     const streak = softTexture('streak');
 
     // The dug end of a wing: a timber post with a cap beam and a diagonal brace instead of a steel column, and a soft marker lamp.
-    const woodAt = (col: number, y: number) => {
-      const [r, g, b] = depthGains(y);
-      const ch = (sh: number, k: number) => Math.round(Math.min(255, ((col >> sh) & 255) * k * (0.55 + 0.45 * ambient * lift)));
-      return (ch(16, r) << 16) | (ch(8, g) << 8) | ch(0, b);
-    };
     // The west landing door: where the shaft meets the west wing the column becomes a steel doorframe, a lit passage and a door leaf ajar.
     const doorFrame = (x: number, top: number) => {
       const my = top + ROOM_H / 2;
@@ -656,24 +729,92 @@ export class FrontChunks implements Animated {
       spill.addChild(g2);
     };
 
+    // [airy2:D3] A void between two clusters: a shaft of cut rock the full height of the floor, concrete jambs with a shadow, strata, a cable and a warm far light; the
+    // deck of the corridor bridges it (drawn above this layer). `last` extends it to the next floor's top, and floor 0's up to the roof.
+    const voidShaft = (x: number, f: number, vw = VOID_W) => {
+      const top = floorTop(f);
+      const y0 = f === 0 ? TOPSOIL - SLAB - 4 : top - 1;
+      const y1 = (f + 1 < this.floors ? floorTop(f + 1) : top + FLOOR_H) + 1;
+      const x0 = x - vw / 2, w = vw;
+      const g = new Graphics();
+      const my = top + ROOM_H / 2;
+      g.rect(x0, y0, w, y1 - y0).fill(woodAt(0x120f0c, my));
+      // strata: slanted bands of rock in a few browns, thicker toward the middle of the floor
+      const bands = [0x2c241c, 0x1a1511, 0x3a2f24, 0x221b15, 0x463a2c];
+      let k = 0;
+      for (let y = y0; y < y1; k++) {
+        const h = 3 + hr(f + 211, y + x) * 8;
+        const tilt = (hr(f + 7, y + x) - 0.5) * 5;
+        const hh = Math.min(h, y1 - y);
+        g.poly([x0, y + tilt * 0.3, x0 + w, y - tilt * 0.3, x0 + w, y + hh - tilt * 0.3, x0, y + hh + tilt * 0.3]).fill({ color: woodAt(bands[k % bands.length], my), alpha: 0.85 });
+        y += h + hr(f + 5, y) * 3;
+      }
+      // the far light: the shaft glows warm toward its floor and the bottom is lost in the dark
+      for (let i = 0; i < 5; i++) g.rect(x0, top + ROOM_H - 40 + i * 8, w, 9).fill({ color: 0xffa860, alpha: 0.025 * (i + 1) });
+      // cables hanging across
+      for (const [sag, ay] of [[7, top + 14], [10, top + 30]] as [number, number][]) {
+        g.moveTo(x0, ay).quadraticCurveTo(x, ay + sag * 2, x0 + w, ay).stroke({ color: woodAt(0x1a1816, my), width: 1.6 });
+        g.moveTo(x0, ay - 0.5).quadraticCurveTo(x, ay + sag * 2 - 0.5, x0 + w, ay - 0.5).stroke({ color: 0xb8a888, width: 0.4, alpha: 0.25 });
+      }
+      // jambs: sawn concrete faces with a lit arris, and the shadow they throw
+      for (const side of [-1, 1] as const) {
+        const jx = side < 0 ? x0 - 3.2 : x0 + w - 0.8;
+        g.rect(jx, y0, 4, y1 - y0).fill(woodAt(0x6a665c, my));
+        g.rect(side < 0 ? jx + 3 : jx, y0, 1, y1 - y0).fill({ color: 0x000000, alpha: 0.55 });
+        g.rect(side < 0 ? jx : jx + 3, y0, 1, y1 - y0).fill({ color: 0xf0e8d8, alpha: 0.2 });
+        shade(softTexture('fadeH'), side < 0 ? x0 - 3.2 - 10 : x0 + w + 3.2, y0, 10, y1 - y0, 0.55, side < 0);
+      }
+      voidLayer.addChild(g);
+      // a pale shaft of light falling from above through the void (the stair tower catches it)
+      const lg = new Sprite(glow);
+      lg.anchor.set(0.5);
+      lg.tint = 0xb8d0e0;
+      lg.width = w * 1.2;
+      lg.height = (y1 - y0) * 0.9;
+      lg.alpha = 0.1;
+      lg.position.set(x, (y0 + y1) / 2);
+      spill.addChild(lg);
+    };
+    // [airy2:D3] A storey of the stair tower standing in front of the void.
+    const towerStorey = (x: number, f: number, stub = false) => {
+      const yb = floorTop(f) + ROOM_H;
+      const sp = new Sprite(stub ? towerStubTexture() : towerTexture());
+      const th = stub ? 72 : floorH(f);
+      sp.position.set(x - TOWER_W / 2, yb + CORR_LANE - (stub ? th : 0));
+      sp.width = TOWER_W;
+      sp.height = th;
+      const ccx = x, ccy = yb + (stub ? -th / 2 + CORR_LANE : floorH(f) / 2);
+      const parts = lampParts(ccx, ccy, near, roomIndex);
+      for (let i = 1; i < parts.length; i += 2) parts[i] *= 0.7;
+      const node: Lit = { node: sp, base: Math.min(0.9, ambient * lift * 1.25), parts, y: ccy, mul };
+      lit.push(node);
+      sp.tint = mulTint(shadeAt(lightOf(node.base, node.parts, 1, flicker), ccy), mul);
+      towerLayer.addChild(sp);
+      if (stub) return;
+      // the caged lamp on the left post
+      const lg = new Sprite(glow);
+      lg.anchor.set(0.5);
+      lg.tint = 0xffc070;
+      lg.width = 34;
+      lg.height = 34;
+      lg.position.set(x - TOWER_W / 2 + 5.7, stub ? yb + CORR_LANE - th + (58 - 72) : yb + CORR_LANE + 58 * floorH(f) / 144);
+      spill.addChild(lg);
+      spills.push({ s: lg, a: 0.4, room: roomIndex() });
+    };
+
     if (colTex) {
-      const scale = COLUMN_W / colTex.width;
       const fadeH = softTexture('fadeH');
       const blob = softTexture('blob');
       for (let f = fa; f < fb; f++) {
         const top = floorTop(f);
         const row = grid[f];
         const { w: ew, e: ee } = grid.ext[f];
-        const xs: { x: number; l: boolean; r: boolean; open: boolean; door?: boolean }[] = [
-          { x: ROOMS_X, l: false, r: true, open: false }, { x: slotX(ee), l: true, r: false, open: ee > BASE_EAST },
+        // [airy:A2] `tier` (see airyArt.piersOfFloor): the walls and the classic columns are 1; thin seams (0) and cluster bulkheads (2) exist only with the airy flag.
+        const xs: { x: number; l: boolean; r: boolean; open: boolean; door?: boolean; tier: 0 | 1 | 2 }[] = [
+          { x: ROOMS_X, l: false, r: true, open: false, tier: 1 }, { x: slotX(ee), l: true, r: false, open: ee > BASE_EAST, tier: 1 },
         ];
-        for (let i = 1; i < row.length; i++) {
-          const sl = i - ew;
-          if (sl === 0) continue; // the shaft stands between the last west slot and slot 0
-          const a = row[i - 1], b = row[i];
-          if ((a || b) && a?.key !== b?.key) xs.push({ x: slotX(sl), l: true, r: true, open: false });
-        }
-        if (ew > 0) xs.push({ x: slotX(-ew), l: false, r: true, open: true }, { x: -SHAFT_GAP, l: true, r: false, open: false, door: true });
+        for (const p of piersOfFloor(grid, f, airy)) xs.push({ x: p.x, l: true, r: true, open: false, tier: p.tier });
+        if (ew > 0) xs.push({ x: slotX(-ew), l: false, r: true, open: true, tier: 1 }, { x: -SHAFT_GAP, l: true, r: false, open: false, door: true, tier: 1 });
         const ceil = top + PIPES_Y + PIPES_H;
         const floorY = top + ROOM_H - LIP;
         const above = hallSpans(buildings, f - 1);
@@ -689,7 +830,15 @@ export class FrontChunks implements Animated {
         for (const col of xs) {
           const x = col.x;
           if (!mineCol(col)) continue;
-          if (col.open) {
+          // [airy:A2] Piers are wider than the classic 9-unit column (the walls, the shaft door and the classic default stay at COLUMN_W).
+          const wall = !col.l || !col.r || col.door;
+          const isVoid = airy && col.tier === 2 && !wall;
+          const cw = isVoid ? VOID_W : airy && !wall ? PIER_W[col.tier] : COLUMN_W;
+          const aoW = airy && !wall ? PIER_AO[col.tier] : AO_SIDE;
+          const cscale = cw / colTex.width;
+          if (isVoid) {
+            voidShaft(x, f);
+          } else if (col.open) {
             const dir = x < 0 ? 1 : -1;
             timberEnd(x, top, dir);
             // [plan4:ST-11] The floor's number on the post at the end of a wing.
@@ -697,36 +846,36 @@ export class FrontChunks implements Animated {
           } else if (col.door) doorFrame(x, top);
           else {
             // The lamps hang inside the rooms, so the column's front face only catches grazing light: half the lamp light and a little less ambient.
-            const cc = add(colTex, x - COLUMN_W / 2, top - 1, COLUMN_W, ROOM_H + 2, scale, x, top + ROOM_H / 2, 0.5, 0.8);
+            const cc = add(colTex, x - cw / 2, top - 1, cw, ROOM_H + 2, cscale, x, top + ROOM_H / 2, 0.5, 0.8);
             cc.tilePosition.set(0, 0);
             // [plan4:ST-11] Column variants: lattice-laced steel or a structural pipe laid over the kit column; the east wall column carries the floor's number.
             const over = latticeTex ?? pipeColTex;
-            if (over) addLit(over, x - COLUMN_W / 2, top - 1, COLUMN_W, ROOM_H + 2, x, top + ROOM_H / 2, 0.5, 0.8, ovl2);
+            if (over) addLit(over, x - cw / 2, top - 1, cw, ROOM_H + 2, x, top + ROOM_H / 2, 0.5, 0.8, ovl2);
             if (idOn && !col.r) addLit(floorNumberTexture(f, sty.band), x - 9, ceil + 7, 16, 9, x, top + ROOM_H / 2, 0.4, 0.8, ovl2);
           }
           // Base and cap plates where the column meets the slabs.
           const plates = new Graphics();
           for (const py of [top + PIPES_Y + PIPES_H - 1, top + ROOM_H - LIP - 4]) {
-            plates.rect(x - COLUMN_W / 2 - 1.5, py, COLUMN_W + 3, 4).fill(0x26282a);
-            plates.rect(x - COLUMN_W / 2 - 1.5, py, COLUMN_W + 3, 1).fill({ color: 0x8a8f94, alpha: 0.35 });
+            plates.rect(x - cw / 2 - 1.5, py, cw + 3, 4).fill(0x26282a);
+            plates.rect(x - cw / 2 - 1.5, py, cw + 3, 1).fill({ color: 0x8a8f94, alpha: 0.35 });
           }
           // [plan4:ST-11] The kind's paint band just under the cap plate of every steel column.
           if (idOn && !col.open && !col.door) {
-            plates.rect(x - COLUMN_W / 2, ceil + 3, COLUMN_W, 3.2).fill(woodAt(sty.band, top + ROOM_H / 2));
-            plates.rect(x - COLUMN_W / 2, ceil + 3, COLUMN_W, 0.7).fill({ color: 0xffffff, alpha: 0.22 });
+            plates.rect(x - cw / 2, ceil + 3, cw, 3.2).fill(woodAt(sty.band, top + ROOM_H / 2));
+            plates.rect(x - cw / 2, ceil + 3, cw, 0.7).fill({ color: 0xffffff, alpha: 0.22 });
           }
-          root.addChild(plates);
-          const op = !col.open && !col.door ? ops.get(Math.round(x)) : undefined;
+          if (!isVoid) root.addChild(plates);
+          const op = !col.open && !col.door && !isVoid ? ops.get(Math.round(x)) : undefined;
           if (op) {
             if (!dgf) { dgf = new Graphics(); doors.addChild(dgf); }
             doorway(dgf, x, top, op, sty, op.kind === 'stub' && op.rightId === null ? 1 : -1);
           }
           for (const side of [-1, 1] as const) {
-            const edge = x + side * COLUMN_W / 2;
+            const edge = x + side * cw / 2;
             // The outer walls only have a room on their inner side.
             if (side < 0 ? !col.l : !col.r) continue;
             // Ambient occlusion: the room darkens toward the column, most of all in the corners.
-            shade(fadeH, side < 0 ? edge - AO_SIDE : edge, ceil, AO_SIDE, floorY - ceil, 0.55, side < 0);
+            shade(fadeH, side < 0 ? edge - aoW : edge, ceil, aoW, floorY - ceil, 0.55, side < 0);
             const cxx = edge + side * 2;
             if (!inSpan(cxx - 1, cxx + 1, above)) shade(blob, cxx - 14, ceil - 9, 28, 24, 0.62);
             if (!inSpan(cxx - 1, cxx + 1, below)) shade(blob, cxx - 14, floorY - 15, 28, 24, 0.68);
@@ -752,11 +901,24 @@ export class FrontChunks implements Animated {
             s.tint = idOn ? kindLight(best.color, sty.light, 0.25) : best.color;
             s.width = COLUMN_SPILL_W;
             s.height = floorY - ceil + 6;
-            s.position.set(x + side * (COLUMN_W / 2 - 2), ceil - 3);
+            s.position.set(x + side * (cw / 2 - 2), ceil - 3);
             spill.addChild(s);
             spills.push({ s, a: 0.3 * Math.min(1, strength * 3), room: roomIndex(best.room) });
           }
-          if (!inSpan(x - 1, x + 1, below) && hr(f + 977, x) < 0.75) guide(x, floorY, idOn ? sty : undefined);
+          if (!(airy && col.tier === 0) && !inSpan(x - 1, x + 1, below) && hr(f + 977, x) < 0.75) guide(x, floorY, idOn ? sty : undefined);
+        }
+        // [airy2:D3] The stair annex beside the lift (chunk 0 draws it): the same rock shaft and tower as a void, cut into the casing west of the shaft.
+        if (this.annex && cx === 0) {
+          voidShaft(ANNEX_X, f, ANNEX_W);
+          if (f >= 1) towerStorey(ANNEX_X, f - 1);
+          else towerStorey(ANNEX_X, 0, true); // the top flights, up to a landing under the roof
+        }
+        // [airy2:D3] The stair tower is one tall stair through every floor, in front of the rock where there is one and in front of a bridging room where there is not. A storey
+        // runs from the lane of floor f-1 to the lane of floor f, so it is drawn with floor f (in this chunk row, above the void strip of floor f-1 and under none of the next).
+        if (airy && f >= 1) for (const sl of voidBoundaries(grid)) {
+          const vx = slotX(sl);
+          if (sl >= Math.min(ee, grid.ext[f - 1].e) || !mineCol({ x: vx, l: true, r: true })) continue;
+          towerStorey(vx, f - 1);
         }
       }
       root.addChild(ovl2);
@@ -786,6 +948,17 @@ export class FrontChunks implements Animated {
         pool.position.set(l.x, top + ROOM_H);
         spill.addChild(pool);
         spills.push({ s: pool, a: 0.2 * l.power, room });
+        if (airy) {
+          // [airy2:D1] The same lamp throws a second, wider pool on the deck of the corridor in front.
+          const dp = new Sprite(glow);
+          dp.anchor.set(0.5);
+          dp.tint = idOn ? kindLight(l.color, styleOf(f).light, 0.3) : l.color;
+          dp.width = Math.min(l.reach * 0.8, 110);
+          dp.height = 20;
+          dp.position.set(l.x, top + ROOM_H + 13);
+          spill.addChild(dp);
+          spills.push({ s: dp, a: 0.26 * l.power, room });
+        }
       }
     }
     ao.visible = root.visible = spill.visible = false;

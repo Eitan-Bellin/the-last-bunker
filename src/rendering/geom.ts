@@ -9,8 +9,23 @@ import { BASE_EAST, floorExtent as stateFloorExtent, type BuildingType, type Gam
 /** Side-on cross-section of the bunker: floors stacked downward from the surface. */
 export const SLOT_W = 46;
 export const ROOM_H = 100;
-export const SLAB = 16;
+/**
+ * [airy:A3] Thickness of the slab between two floors. The airy pass (flag `airy`, default on) takes it from 16 to 28: the floors breathe, and the slab has room for a
+ * visible walkway ledge. It is a module constant (read once, like `?gx=`), so every consumer sees one value; floors are addressed by (floor, slot) in saves, never by y,
+ * so the taller pitch moves nothing that is stored.
+ */
+export const SLAB_CLASSIC = 16;
+export const SLAB = GFX.airy ? 44 : SLAB_CLASSIC; // [airy2:D1] the corridor band: deck 30 + beam 7 + soffit 7
 export const FLOOR_H = ROOM_H + SLAB;
+/**
+ * [airy2:D1] The front corridor (the walkway in front of each floor's rooms), measured from `floorTop(f) + ROOM_H` (the room's floor line) downward: a deck that
+ * recedes (CORR_DECK deep), the beam face of the slab edge (CORR_BEAM) and the soffit under it. People travelling between rooms walk on the lane CORR_LANE below the
+ * floor line; the railing stands on the deck's front edge and is CORR_RAIL tall.
+ */
+export const CORR_DECK = 30;
+export const CORR_BEAM = 7;
+export const CORR_RAIL = 14;
+export const CORR_LANE = 13;
 export const SHAFT_W = 58;
 export const SHAFT_GAP = 6;
 export const ROOMS_X = SHAFT_W + SHAFT_GAP;
@@ -174,3 +189,10 @@ export function buildingH(type: BuildingType): number {
 
 /** Y of the walkable floor line inside a room (local to the room's top). */
 export const WALK_Y = ROOM_H - 7;
+
+/** Run and rise of one stair flight in the towers (a flight is 38 across and 36 high: 43 degrees), and how many flights make a floor. */
+export const FLIGHT_RUN = 38;
+export const FLIGHT_RISE = 36;
+export const FLIGHTS_PER_FLOOR = 4;
+/** Half the distance between the left and the right landing: where a person climbing zig-zags to. */
+export const TOWER_AMP = FLIGHT_RUN / 2;

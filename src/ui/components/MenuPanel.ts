@@ -1,6 +1,7 @@
 import type { GameState } from '../../core/GameState';
 import type { GameEngine } from '../../core/GameEngine';
 import { i18n } from '../../i18n/I18nManager';
+import { fmtNum, plural } from '../format';
 import { ACHIEVEMENTS } from '../../data/achievements';
 import { PRESTIGE_UPGRADES, upgradeCost } from '../../data/prestige';
 import { ERAS } from '../../data/eras';
@@ -15,6 +16,26 @@ import { enhanceTabs } from '../a11yDom';
 import { isIosBrowserTab } from '../../utils/platform'; // [plan4:UX-15]
 import { lastExportAt, markExported } from '../pwa';
 import { markPopupsChosen, popupMode } from './NumberPopup';
+import { kButton, kRow, kTabs, MS } from '../kit'; // [ux2e]
+
+/** [ux2e #25] The groups of the Settings tab. */
+type SettingsGroup = 'game' | 'display' | 'saves' | 'more' | 'about';
+/** [ux2e #25] How long New Game must be held: two long presses (~0.9 s). */
+const HOLD_MS = 2 * MS['long-press'];
+/** [ux-redesign w2fix] A click this soon after Enter/Space came from the keyboard (its hold already ran), not from a screen reader. */
+const KEY_CLICK_MS = MS['long-press'];
+
+/** [ux2e #25] The build id of the running service worker (production only), or '' when there is none or it does not answer. */
+function appBuild(): Promise<string> {
+  const w = typeof navigator !== 'undefined' ? navigator.serviceWorker?.controller : null;
+  if (!w) return Promise.resolve('');
+  return new Promise<string>(resolve => {
+    const channel = new MessageChannel();
+    const timer = window.setTimeout(() => resolve(''), MS['toast-hold']);
+    channel.port1.onmessage = ev => { window.clearTimeout(timer); resolve(typeof ev.data === 'string' ? ev.data : ''); };
+    try { w.postMessage({ type: 'build' }, [channel.port2]); } catch { window.clearTimeout(timer); resolve(''); }
+  });
+}
 
 export type MenuTab = 'settings' | 'a11y' | 'stats' | 'achievements' | 'genesis';
 
@@ -75,6 +96,8 @@ export interface MenuActions {
   /** [plan4:UX-11] Forget which gesture tips were seen / play the opening story again (no change to the game). */
   showTipsAgain?: () => void;
   replayIntro?: () => void;
+  /** [ux-redesign W3a] "Tutorial again": the first-session spotlight (or a short walk round the screen) for this player again. */
+  replayTutorial?: () => void;
   /** [plan4:GP-5/GP-6] Make the share picture / start the tour mode (the app closes the menu first). */
   shareBunker?: () => void;
   startTour?: () => void;
@@ -87,6 +110,9 @@ export class MenuPanel {
   private tab: MenuTab = 'settings';
   private signature = '';
   private backups: BackupInfo[] | null = null;
+  /** [ux2e #25] The settings group on screen (Game first: the language is its first row), and the app build once asked. */
+  private group: SettingsGroup = 'game';
+  private build: string | null = null;
 
   constructor(engine: GameEngine, actions: MenuActions) {
     this.engine = engine;
@@ -198,9 +224,12 @@ export class MenuPanel {
     const card = el('div', 'bp-card settings-learn');
     const tips = button(`[[hand]] ${i18n.t('settings.tipsAgain')}`, 'btn-secondary learn-btn', () => { uiSound('click'); this.actions.showTipsAgain?.(); });
     const intro = button(`[[flashlight]] ${i18n.t('settings.introAgain')}`, 'btn-secondary learn-btn', () => { uiSound('click'); this.actions.replayIntro?.(); });
+    // [ux-redesign W3a] The tutorial row.
+    const tutorial = button(`[[target]] ${i18n.t('ux3a.tutorialAgain')}`, 'btn-secondary learn-btn', () => { uiSound('click'); this.actions.replayTutorial?.(); });
     if (!this.actions.showTipsAgain) tips.hidden = true;
     if (!this.actions.replayIntro) intro.hidden = true;
-    card.append(tips, intro);
+    if (!this.actions.replayTutorial) tutorial.hidden = true;
+    card.append(tutorial, tips, intro);
     return card;
   }
 
@@ -226,30 +255,51 @@ export class MenuPanel {
     return card;
   }
 
+  /** [ux2e #25] A plain "label ... button" settings row (the old rows, on a 48 px kit button). */
+  private setRow(label: string, value: string, onPress: () => void): HTMLElement {
+    const row = el('div', 'bp-row ux2e-set-row');
+    row.append(el('span', '', label), kButton({ variant: 'secondary', className: 'btn-secondary ux2e-48 ux2e-set-btn', label: value, onPress }));
+    return row;
+  }
+
+  private redraw(): void {
+    this.signature = '';
+    this.refresh(this.engine.stateManager.state);
+  }
+
+  /**
+   * [ux2e #25] Settings in five groups, one on screen at a time (it was one ~25-row scroll): Game (language first), Display, Saves,
+   * More (book, chronicle, share, tour...) and About. The Accessibility tab is unchanged.
+   */
   private renderSettings(): HTMLElement {
-    const box = el('div', 'bp');
-    // [Q6/Q14] The book and the chronicle sit first: the questions a new player asks.
-    const guide = el('div', 'bp-card');
-    const book = el('div', 'bp-row');
-    book.append(el('span', '', `[[question]] ${i18n.t('book.title')}`), button(i18n.t('book.open'), 'btn-small', () => { uiSound('click'); this.actions.openBook(); }));
-    const chron = el('div', 'bp-row');
-    chron.append(el('span', '', `[[journal]] ${i18n.t('chronicle.title')}`), button(i18n.t('book.open'), 'btn-small', () => { uiSound('click'); this.actions.openChronicle(); }));
-    guide.append(book, chron);
-    box.appendChild(guide);
-    box.appendChild(this.renderTipsBlock());
-    box.appendChild(this.renderShareTourBlock());
-    const general = el('div', 'bp-card');
-    const lang = el('div', 'bp-row');
-    lang.append(el('span', '', `[[surface]] ${i18n.t('settings.language')}`),
-      button(i18n.currentLocale === 'he' ? 'English' : 'עברית', 'btn-small', () => { uiSound('switch'); this.actions.toggleLanguage(); }));
-    const sound = el('div', 'bp-row');
-    sound.append(el('span', '', `[[sound]] ${i18n.t('settings.sfx')}`),
-      button(this.actions.isSoundOn() ? i18n.t('settings.on') : i18n.t('settings.off'), 'btn-small', () => {
-        uiSound('switch');
-        this.actions.toggleSound();
-        this.signature = '';
-        this.refresh(this.engine.stateManager.state);
-      }));
+    const box = el('div', 'bp ux2e-settings');
+    const groups: SettingsGroup[] = ['game', 'display', 'saves', 'more', 'about'];
+    const body = el('div', 'ux2e-group');
+    body.id = 'menu-settings-group';
+    box.appendChild(kTabs(groups.map(g => ({ id: g, label: i18n.t(`ux2e.set.${g}`) })), this.group, (id) => {
+      this.group = id as SettingsGroup;
+      uiSound('click');
+      this.redraw();
+    }, i18n.t('menu.settings'), body));
+    if (this.group === 'game') body.append(...this.renderGame());
+    if (this.group === 'display') body.append(...this.renderDisplay());
+    if (this.group === 'saves') body.append(...this.renderSaves());
+    if (this.group === 'more') body.append(...this.renderMore());
+    if (this.group === 'about') body.append(...this.renderAbout());
+    box.appendChild(body);
+    return box;
+  }
+
+  private renderGame(): HTMLElement[] {
+    const card = el('div', 'bp-card');
+    // Language first: a player who cannot read the rest finds it at once (the button names the other language in its own script).
+    const lang = this.setRow(`[[surface]] ${i18n.t('settings.language')}`, i18n.currentLocale === 'he' ? 'English' : 'עברית', () => { uiSound('switch'); this.actions.toggleLanguage(); });
+    lang.classList.add('ux2e-lang');
+    const sound = this.setRow(`[[sound]] ${i18n.t('settings.sfx')}`, this.actions.isSoundOn() ? i18n.t('settings.on') : i18n.t('settings.off'), () => {
+      uiSound('switch');
+      this.actions.toggleSound();
+      this.redraw();
+    });
     const levels = this.actions.getLevels();
     const slider = (labelKey: string, icon: string, value: number, onInput: (v: number) => void): HTMLElement => {
       const row = el('div', 'bp-row vol-row');
@@ -271,85 +321,70 @@ export class MenuPanel {
     };
     const music = slider('settings.volumeMusic', '[[sound]]', levels.music, v => this.actions.setLevels(v, this.actions.getLevels().fx));
     const fx = slider('settings.volumeFx', '[[sound]]', levels.fx, v => this.actions.setLevels(this.actions.getLevels().music, v));
-    const gfx = el('div', 'bp-row');
-    gfx.append(el('span', '', `[[sparkle]] ${i18n.t('settings.graphics')}`),
-      button(this.actions.graphics(), 'btn-small', () => {
-        uiSound('switch');
-        this.actions.cycleGraphics();
-        this.signature = '';
-        this.refresh(this.engine.stateManager.state);
-      }));
-    const gfxHint = el('div', 'bp-hint', i18n.t('settings.gfxHint'));
-    const bright = el('div', 'bp-row');
-    bright.append(el('span', '', `[[sun]] ${i18n.t('settings.brightness')}`),
-      button(this.actions.brightness(), 'btn-small', () => {
-        uiSound('switch');
-        this.actions.cycleBrightness();
-        this.signature = '';
-        this.refresh(this.engine.stateManager.state);
-      }));
-    const textSize = el('div', 'bp-row');
-    textSize.append(el('span', '', `[[note]] ${i18n.t('settings.textSize')}`),
-      button(this.actions.textSize(), 'btn-small', () => {
-        uiSound('switch');
-        this.actions.cycleTextSize();
-        this.signature = '';
-        this.refresh(this.engine.stateManager.state);
-      }));
-    // [offline agent] Notifications toggle: turning it on asks the system for permission.
-    const notify = el('div', 'bp-row');
-    notify.append(el('span', '', `[[bell]] ${i18n.t('settings.notifications')}`),
-      button(this.actions.notifications(), 'btn-small', async () => {
-        uiSound('switch');
-        await this.actions.toggleNotifications();
-        this.signature = '';
-        this.refresh(this.engine.stateManager.state);
-      }));
+    const order = ['off', 'light', 'strong'] as const;
+    const h = getA11y().haptics;
+    const haptics = this.setRow(`[[hand]] ${i18n.t('a11y.haptics')}`, i18n.t(`a11y.haptics.${h}`), () => {
+      uiSound('switch');
+      setA11y({ haptics: order[(order.indexOf(h) + 1) % order.length] });
+      haptic('success'); // a sample of the new strength (nothing when it was just turned off)
+      this.redraw();
+    });
+    // [offline agent] Notifications: turning them on asks the system for permission.
+    const notify = this.setRow(`[[bell]] ${i18n.t('settings.notifications')}`, this.actions.notifications(), () => {
+      uiSound('switch');
+      void this.actions.toggleNotifications().then(() => this.redraw());
+    });
     const notifyHint = el('div', 'bp-hint', i18n.t('settings.notifyWebHint'));
-    // [plan4:UX-15] Safari in a tab on an iPhone cannot keep this promise (the page is suspended in seconds): no switch, an honest line instead.
-    // Android, desktop and the home-screen app keep the switch as it was.
-    const iosTab = isIosBrowserTab();
-    if (iosTab) {
+    // [plan4:UX-15] Safari in a tab on an iPhone cannot keep this promise: no switch, an honest line instead.
+    if (isIosBrowserTab()) {
       notify.replaceChildren(el('span', '', `[[bell]] ${i18n.t('settings.notifications')}`), el('span', 'bp-value', i18n.t('settings.notifyUnsupported')));
       notifyHint.textContent = i18n.t('settings.notifyIosHint');
     }
-    const diag = el('div', 'bp-row');
-    diag.append(el('span', '', `[[chart]] ${i18n.t('settings.diagnostics')}`),
-      button(i18n.t('settings.diagnosticsCopy'), 'btn-small', () => { uiSound('switch'); this.actions.copyDiagnostics(); }));
-    // [plan4:qa] The privacy page was only reachable by typing its address: link it from the settings next to the diagnostics.
-    const privacy = el('div', 'bp-row');
-    privacy.append(el('span', '', `[[eye]] ${i18n.t('settings.privacy')}`),
-      button(i18n.t('settings.privacyOpen'), 'btn-small', () => { uiSound('click'); window.open(new URL('privacy.html', document.baseURI).href, '_blank', 'noopener'); }));
-    general.append(lang, sound, music, fx, gfx, gfxHint, ...this.comfortRows(), bright, textSize, notify, notifyHint, diag, privacy);
-    box.appendChild(general);
+    card.append(lang, sound, music, fx, haptics, notify, notifyHint);
+    return [card];
+  }
 
-    const coupon = this.renderCouponBlock(); // [plan4:GP-12] only with ?debug
-    if (coupon) box.appendChild(coupon);
+  private renderDisplay(): HTMLElement[] {
+    const card = el('div', 'bp-card');
+    const cycle = (fn: () => void) => () => { uiSound('switch'); fn(); this.redraw(); };
+    card.append(
+      this.setRow(`[[sparkle]] ${i18n.t('settings.graphics')}`, this.actions.graphics(), cycle(() => this.actions.cycleGraphics())),
+      el('div', 'bp-hint', i18n.t('settings.gfxHint')),
+      this.setRow(`[[sun]] ${i18n.t('settings.brightness')}`, this.actions.brightness(), cycle(() => this.actions.cycleBrightness())),
+      this.setRow(`[[note]] ${i18n.t('settings.textSize')}`, this.actions.textSize(), cycle(() => this.actions.cycleTextSize())),
+      ...this.comfortRows(),
+    );
+    // Reduced motion and the other accessibility switches stay on their own tab: one tap away.
+    const a11y = kRow({
+      icon: 'eye', label: i18n.t('ux2e.set.motionLink'), value: i18n.t(`a11y.motion.${getA11y().motion}`),
+      onPress: () => { uiSound('click'); this.tab = 'a11y'; this.redraw(); },
+    });
+    a11y.classList.add('ux2e-link');
+    card.appendChild(a11y);
+    return [card];
+  }
 
+  private renderSaves(): HTMLElement[] {
     const saves = el('div', 'bp-card');
     saves.appendChild(el('div', 'bp-section-title', `[[save]] ${i18n.t('settings.save')}`));
     const area = el('textarea', 'save-area');
     area.placeholder = i18n.t('settings.pasteHere');
     area.setAttribute('aria-label', i18n.t('settings.save')); // [plan4:AC-8]
-    const row = el('div', 'btn-row');
+    const row = el('div', 'btn-row ux2e-btn-grid');
+    const b = (label: string, onPress: () => void) => kButton({ variant: 'secondary', className: 'btn-secondary ux2e-48', label, onPress });
     row.append(
-      button(i18n.t('settings.export'), 'btn-small', async () => {
+      b(i18n.t('settings.export'), () => {
         const data = this.engine.exportState();
         area.value = data;
         area.select();
-        try {
-          await navigator.clipboard.writeText(data);
+        void navigator.clipboard?.writeText(data).then(() => {
           markExported(); // [plan4:UX-13]
           area.placeholder = i18n.t('settings.copied');
-        } catch {
-          // clipboard blocked; the text stays selected in the box for manual copy
-        }
+        }, () => undefined); // clipboard blocked: the text stays selected in the box for manual copy
       }),
-      button(i18n.t('settings.exportFile'), 'btn-small', () => this.actions.exportFile()),
-      button(i18n.t('settings.import'), 'btn-small', () => {
-        if (area.value.trim()) this.actions.importSave(area.value);
-      }),
-      button(i18n.t('settings.importFile'), 'btn-small', () => this.actions.importFile()),
+      b(i18n.t('settings.exportFile'), () => this.actions.exportFile()),
+      b(i18n.t('settings.import'), () => { if (area.value.trim()) this.actions.importSave(area.value); }),
+      b(i18n.t('settings.importFile'), () => this.actions.importFile()),
     );
     saves.append(area, row);
     const persist = el('div', 'bp-row');
@@ -359,18 +394,17 @@ export class MenuPanel {
     const when = lastExport ? new Date(lastExport).toLocaleDateString(i18n.currentLocale === 'he' ? 'he-IL' : 'en-GB', { dateStyle: 'medium' }) : '';
     saves.append(persist, el('div', 'bp-hint', i18n.t('settings.persistHint')),
       el('div', 'bp-hint', lastExport ? i18n.t('settings.lastBackup', { when }) : i18n.t('settings.lastBackupNever')));
-    box.appendChild(saves);
 
     const backupCard = el('div', 'bp-card');
     backupCard.appendChild(el('div', 'bp-section-title', `[[refresh]] ${i18n.t('settings.backups')}`));
     if (this.backups && this.backups.length > 0) {
       const locale = i18n.currentLocale === 'he' ? 'he-IL' : 'en-GB';
-      for (const b of this.backups) {
+      for (const bk of this.backups) {
         const r = el('div', 'bp-row backup-row');
-        const when = new Date(b.timestamp).toLocaleString(locale, { dateStyle: 'short', timeStyle: 'short' });
+        const t = new Date(bk.timestamp).toLocaleString(locale, { dateStyle: 'short', timeStyle: 'short' });
         r.append(
-          el('span', 'backup-text', i18n.t('settings.backups.row', { kind: i18n.t(`save.kind.${b.kind}`), time: when, n: b.people })),
-          button(i18n.t('settings.backups.restore'), 'btn-small', () => this.actions.restoreBackup(b.kind)),
+          el('span', 'backup-text', plural('settings.backups.row', bk.people, { kind: i18n.t(`save.kind.${bk.kind}`), time: t })),
+          kButton({ variant: 'secondary', className: 'btn-secondary ux2e-48', label: i18n.t('settings.backups.restore'), onPress: () => this.actions.restoreBackup(bk.kind) }),
         );
         backupCard.appendChild(r);
       }
@@ -378,12 +412,103 @@ export class MenuPanel {
       backupCard.appendChild(el('div', 'bp-hint', i18n.t('settings.backups.none')));
     }
     backupCard.appendChild(el('div', 'bp-hint', i18n.t('settings.backups.hint')));
-    box.appendChild(backupCard);
 
-    const danger = el('div', 'bp-card');
-    danger.appendChild(button(`[[warning]] ${i18n.t('settings.newGame')}`, 'btn-ghost danger-btn', () => this.actions.newGame()));
-    box.appendChild(danger);
-    return box;
+    const danger = el('div', 'bp-card ux2e-danger-card');
+    const hint = el('div', 'bp-hint', i18n.t('ux2e.set.holdHint'));
+    hint.id = 'ux2e-hold-hint';
+    danger.append(this.holdButton(`[[warning]] ${i18n.t('settings.newGame')}`, () => this.actions.newGame()), hint);
+    return [saves, backupCard, danger];
+  }
+
+  /**
+   * [ux2e #25] Hold to confirm (New Game): the action fires only after the button is held for HOLD_MS (two long presses, ~0.9 s) while a
+   * bar fills; letting go or sliding off earlier cancels. Keyboard: hold Enter or Space. The app's own confirmation still follows.
+   */
+  private holdButton(label: string, onDone: () => void): HTMLButtonElement {
+    const btn = el('button', 'btn btn-ghost danger-btn ux2e-hold ux2e-48');
+    btn.type = 'button';
+    btn.setAttribute('aria-describedby', 'ux2e-hold-hint');
+    const fill = el('span', 'ux2e-hold-fill');
+    fill.setAttribute('aria-hidden', 'true');
+    btn.append(fill, el('span', 'ux2e-hold-label', label));
+    let timer = 0;
+    const cancel = (): void => {
+      window.clearTimeout(timer);
+      timer = 0;
+      btn.classList.remove('is-holding');
+    };
+    const start = (): void => {
+      if (timer) return;
+      btn.classList.add('is-holding');
+      haptic('tap');
+      timer = window.setTimeout(() => {
+        cancel();
+        haptic('success');
+        uiSound('confirm');
+        onDone();
+      }, HOLD_MS);
+    };
+    btn.addEventListener('pointerdown', (e) => {
+      if (e.button !== 0) return;
+      try { if (btn.hasPointerCapture(e.pointerId)) btn.releasePointerCapture(e.pointerId); } catch { /* synthetic pointer */ }
+      start();
+    });
+    for (const ev of ['pointerup', 'pointerleave', 'pointercancel', 'blur'] as const) btn.addEventListener(ev, cancel);
+    let keyAt = 0;
+    btn.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { keyAt = performance.now(); if (!e.repeat) { e.preventDefault(); start(); } } });
+    btn.addEventListener('keyup', (e) => { if (e.key === 'Enter' || e.key === ' ') { keyAt = performance.now(); cancel(); } });
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      // [ux-redesign w2fix] A click with no pointer (detail 0) and no held key is a screen reader or switch "activate": it cannot hold,
+      // so it goes straight on (the app's own confirmation dialog still follows). A keyboard hold already handled its own keys.
+      if (e.detail === 0 && performance.now() - keyAt > KEY_CLICK_MS && !timer) { haptic('success'); uiSound('confirm'); onDone(); }
+    });
+    btn.addEventListener('contextmenu', (e) => e.preventDefault()); // a long touch must not open the phone's menu
+    return btn;
+  }
+
+  private renderMore(): HTMLElement[] {
+    const card = el('div', 'bp-card');
+    const open = (fn: () => void) => () => { uiSound('click'); fn(); };
+    card.append(
+      // [Q6/Q14] The book and the chronicle: the questions a new player asks.
+      this.setRow(`[[question]] ${i18n.t('book.title')}`, i18n.t('book.open'), open(() => this.actions.openBook())),
+      this.setRow(`[[journal]] ${i18n.t('chronicle.title')}`, i18n.t('book.open'), open(() => this.actions.openChronicle())),
+      // [ux-wp4] M5/D5: the rooms list (with filters).
+      this.setRow(`[[build]] ${i18n.t('wp4.roomsList')}`, i18n.t('book.open'), open(() => this.actions.openStructure())),
+    );
+    const out: HTMLElement[] = [card, this.renderShareTourBlock(), this.renderTipsBlock()];
+    const coupon = this.renderCouponBlock(); // [plan4:GP-12] only with ?debug
+    if (coupon) out.push(coupon);
+    return out;
+  }
+
+  private renderAbout(): HTMLElement[] {
+    const card = el('div', 'bp-card');
+    const state = this.engine.stateManager.state;
+    const kv = (label: string, value: string) => {
+      const r = el('div', 'bp-row');
+      const v = el('span', 'bp-value ux2e-mono', value);
+      v.dir = 'ltr';
+      r.append(el('span', '', label), v);
+      return r;
+    };
+    if (this.build === null) {
+      this.build = '';
+      void appBuild().then(b => { this.build = b; if (this.sheet.isVisible && this.tab === 'settings' && this.group === 'about') this.redraw(); });
+    }
+    // The bunker's id: when this run's save was first made (the same on every copy and backup of it), readable to support.
+    const id = (state.createdAt || state.timestamp || 0).toString(36).toUpperCase();
+    card.append(
+      kv(`[[note]] ${i18n.t('ux2e.set.version')}`, this.build || (import.meta.env.DEV ? 'dev' : '…')),
+      kv(`[[save]] ${i18n.t('ux2e.set.saveFormat')}`, `v${state.version}`),
+      kv(`[[people]] ${i18n.t('ux2e.set.playerId')}`, id),
+      el('div', 'bp-hint', i18n.t('ux2e.set.playerIdHint')),
+      this.setRow(`[[chart]] ${i18n.t('settings.diagnostics')}`, i18n.t('settings.diagnosticsCopy'), () => { uiSound('switch'); this.actions.copyDiagnostics(); }),
+      // [plan4:qa] The privacy page, next to the diagnostics.
+      this.setRow(`[[eye]] ${i18n.t('settings.privacy')}`, i18n.t('settings.privacyOpen'), () => { uiSound('click'); window.open(new URL('privacy.html', document.baseURI).href, '_blank', 'noopener'); }),
+    );
+    return [card];
   }
 
   /**
@@ -516,7 +641,7 @@ export class MenuPanel {
     const card = el('div', 'bp-card');
     const rows: [string, string][] = [
       ['[[clock]] ' + i18n.t('stats2.playTime'), i18n.formatDuration(state.stats.totalPlayTime)],
-      ['[[food]] ' + i18n.t('stats2.food'), i18n.formatCompact(state.stats.totalFoodProduced)],
+      ['[[food]] ' + i18n.t('stats2.food'), fmtNum(state.stats.totalFoodProduced)],
       ['[[build]] ' + i18n.t('stats2.buildings'), String(state.stats.totalBuildingsBuilt)],
       ['[[people]] ' + i18n.t('stats2.recruited'), String(state.stats.totalSurvivorsRecruited)],
       ['[[walker]] ' + i18n.t('stats2.missions'), String(state.stats.totalMissionsCompleted)],

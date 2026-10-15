@@ -6,21 +6,27 @@
    One set of tokens for good / warning / bad / info; the colour-vision modes swap the values (the same table lives in utils/a11y.ts for the
    canvas: statusTint). The older --positive / --negative / --warning follow them in a colour mode, so every existing rule changes with them. */
 :root {
-  --ok: #7dff9e;
-  --warn: #ffb547;
-  --bad: #ff5555;
-  --info: #6fc3ff;
+  /* Default status colours come from the design tokens (styles/tokens.css); only the colour-vision modes below override them. */
+  --ok: var(--success);
+  --warn: var(--warning);
+  --bad: var(--danger-text);
 }
 :root[data-color="deuter"], :root[data-color="protan"] {
   --ok: #4aa3ff; --warn: #ffc83d; --bad: #e0457b; --info: #8fe0ff;
+  --danger-text: #f58fb3; /* [w5] --bad as running text was 3.4:1 on --surface-2; this lighter pink passes 4.5:1 */
 }
 :root[data-color="tritan"] {
   --ok: #3ed0a8; --warn: #ff9f6b; --bad: #ff3d5a; --info: #c7a6ff;
+  --danger-text: #ff8a99; /* [w5] as above */
 }
 :root[data-color="deuter"], :root[data-color="protan"], :root[data-color="tritan"] {
   --positive: var(--ok);
   --negative: var(--bad);
   --warning: var(--warn);
+  /* [ux-redesign w5] The design-system status tokens follow the mode too, so the kit, the HUD tiles, the edge chips and the advisor change
+     with it (they read --success / --danger / --danger-text, not the older names). */
+  --success: var(--ok);
+  --danger: var(--bad);
 }
 
 /* ---- AC-7: never colour alone ----------------------------------------------------------------------------------------------------------

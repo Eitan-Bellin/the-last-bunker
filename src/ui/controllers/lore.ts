@@ -19,11 +19,22 @@ export class LoreController {
 
   /** [plan4:UX-10] A find is waiting for its dialog (the dialog queue asks, then calls flushLoreQueue when the gate is open). */
   get hasQueued(): boolean {
+    this.dropRead();
     return this.loreQueue.length > 0;
+  }
+
+  /** [ux-redesign final F4] A find the player already read (from the journal, or the tutorial's "read the note" step) needs no "Found something!". */
+  private dropRead(): void {
+    if (!this.loreQueue.length) return;
+    const unread = this.app.state?.loreUnread;
+    if (!unread) return;
+    const left = this.loreQueue.filter(id => unread.includes(id));
+    if (left.length !== this.loreQueue.length) this.loreQueue = left;
   }
 
   /** Shows the next queued find once nothing else is on screen. */
   flushLoreQueue(): void {
+    this.dropRead();
     if (!this.loreQueue.length || this.app.modal.isVisible || this.app.storyOpen || this.app.introPlaying || this.app.loreReader.isVisible) return;
     if (document.querySelector('.era-banner')) return;
     this.showLoreFound(this.loreQueue.shift()!);
@@ -44,6 +55,7 @@ export class LoreController {
         { label: i18n.t('journal.readNow'), className: 'btn-primary', onClick: () => { this.app.modal.hide(); this.readLore(id); } },
         { label: i18n.t('journal.later'), className: 'btn-secondary', onClick: () => { this.app.modal.hide(); this.app.storyOpen = false; } },
       ],
+      dismiss: 1, // [ux-redesign w2a #20] back / Escape = "Later"
     });
   }
 
@@ -59,5 +71,22 @@ export class LoreController {
       this.app.journal.refresh(this.app.state);
     };
     this.app.loreReader.show(entry);
+    this.reserveText(entry.body[i18n.currentLocale]);
+  }
+
+  /**
+   * [ux-redesign w2a #18] A tape types itself out: the page keeps the height of the whole transcript from the start, so the Close button
+   * never slides away under a finger (a tap on the card still finishes the typing at once).
+   */
+  private reserveText(text: string): void {
+    const body = document.querySelector<HTMLElement>('.lore-overlay.open .lore-body');
+    if (!body || !body.parentElement) return;
+    const probe = body.cloneNode(false) as HTMLElement;
+    probe.textContent = text;
+    probe.setAttribute('aria-hidden', 'true');
+    probe.style.cssText = `position:absolute;visibility:hidden;pointer-events:none;inline-size:${body.clientWidth}px`;
+    body.parentElement.appendChild(probe);
+    body.style.minBlockSize = `${probe.offsetHeight}px`;
+    probe.remove();
   }
 }

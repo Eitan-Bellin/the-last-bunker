@@ -19,6 +19,11 @@ import { projectExpeditionSpeed } from '../data/projects'; // [LateGame B1]
 import { CARAVAN_CREW, CARGO_TIERS, TRADE_VALUE, ambushChance, cargoValue, getPartner, partnerOpen, relationLevel, tradeRate, specialKey, type CargoTier } from '../data/trade'; // [LateGame B2]
 import { MASTERY_STEPS } from '../data/mastery'; // [LateGame B3]
 import { scenarioOf } from '../data/scenarios';
+import { actGoods } from '../data/pricing';
+
+/** [ux-wp2 M6] From Act III a successful trip also brings the Act currency: this many hours of its reference income per point of loot multiplier, at most the max. */
+export const LOOT_ACT_HOURS = 0.15;
+export const LOOT_ACT_HOURS_MAX = 1;
 
 /** Seconds the team waits for an answer before taking the cautious option. */
 export const ANSWER_TIMEOUT = 180;
@@ -299,7 +304,6 @@ export class ExplorationSystem {
     const firstVisit = !hex.explored;
     let mult = (1 + 0.25 * (team.length - 1)) * (firstVisit ? 1 : 0.5) * (success ? 1 : 0.3);
     if (hasFeature(state, 'lootBonus')) mult *= 1.4;
-    mult *= 1 + 0.1 * (state.prestige.upgrades['lootLuck'] ?? 0);
     mult *= (mission.lootMult ?? 1) * (1 + specTotal(state, 'expeditionLoot'));
     mult *= distanceLootMult(hexDistance(hex.x, hex.y));
 
@@ -312,6 +316,8 @@ export class ExplorationSystem {
       for (const [r, v] of Object.entries(poi.loot) as [ResourceType, number][]) loot[r] = (loot[r] ?? 0) + v;
     }
     for (const [r, v] of Object.entries(mission.bonusLoot ?? {}) as [ResourceType, number][]) loot[r] = (loot[r] ?? 0) + v;
+    // [ux-wp2 M6] Hundreds of materials mean nothing next to a full store from Act III; the Act currency does.
+    if (success) for (const [r, v] of Object.entries(actGoods(state, Math.min(LOOT_ACT_HOURS_MAX, LOOT_ACT_HOURS * mult))) as [ResourceType, number][]) loot[r] = (loot[r] ?? 0) + v;
 
     let recruitName: string | null = null;
     if ((poi?.recruit || mission.recruit) && state.survivors.length < state.maxPopulation) {

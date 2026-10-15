@@ -1,6 +1,7 @@
 import type { GameState } from '../../core/GameState';
 import type { GameEngine } from '../../core/GameEngine';
 import { i18n } from '../../i18n/I18nManager';
+import { plural } from '../format';
 import { button, el } from '../dom';
 import { shutDoorCount } from '../../systems/doors';
 import { closeEmergencyDoors, doorsOperable, emergencyDoorTargets, fireCodeFloors, openAllDoors } from '../../systems/InfraSystem';
@@ -27,7 +28,7 @@ export function fillSafetyCard(box: HTMLElement | null, engine: GameEngine, stat
   const card = el('div', 'bp-card');
   card.appendChild(el('div', 'bp-section-title', `[[warning]] ${i18n.t('safety.title')}`));
   for (const f of floors.slice(0, 3)) card.appendChild(el('div', 'bp-row bad', `[[fire]] ${i18n.t('safety.fireCode', { f: f + 1 })}`)); // displayed floor = index + 1 (B9 = index 8)
-  if (floors.length > 3) card.appendChild(el('div', 'bp-hint', i18n.t('safety.fireCodeMore', { n: floors.length - 3 })));
+  if (floors.length > 3) card.appendChild(el('div', 'bp-hint', plural('safety.fireCodeMore', floors.length - 3)));
   if (floors.length > 0) card.appendChild(el('div', 'bp-hint', i18n.t('safety.fireCodeHint')));
   const sm = engine.stateManager;
   if (targets > 0) {

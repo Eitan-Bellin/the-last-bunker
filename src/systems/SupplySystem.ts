@@ -2,9 +2,12 @@ import type { GameState, ResourceType } from '../core/GameState';
 import type { StateManager } from '../core/StateManager';
 import type { ResourceSystem } from './ResourceSystem';
 import { RUSH_PER_CRATE, RUSH_WEEK_BONUS } from './RushSystem';
+import { actGoods } from '../data/pricing';
 
 /** Resources the crate holds, worth hours of the bunker's own production. */
 const CRATE_RESOURCES: ResourceType[] = ['food', 'water', 'materials', 'knowledge'];
+/** [ux-wp2] Hours of the Act currency's reference income in a crate (x1..2 with the streak), from Act III. */
+export const CRATE_ACT_HOURS = 0.5;
 /** The streak stops growing the crate after a week. */
 const STREAK_MAX = 7;
 
@@ -61,6 +64,9 @@ export class SupplySystem {
     }
     out.scrap = Math.round(Math.max(10, state.resources.scrap.cap * 0.05 * hours));
     if (streak % STREAK_MAX === 0) out.blueprints = 1;
+    // [ux-wp2 R1/R5] From Act III the basics are always full: the crate also carries the Act's own currency (half an hour of its
+    // reference income, an hour after a week in a row), the good the player is actually saving for.
+    for (const [r, v] of Object.entries(actGoods(state, CRATE_ACT_HOURS * hours)) as [ResourceType, number][]) out[r] = (out[r] ?? 0) + v;
     return out;
   }
 
@@ -72,7 +78,7 @@ export class SupplySystem {
     const contents = this.contents(state, streak);
     const before: Partial<Record<ResourceType, number>> = {};
     for (const r of Object.keys(contents) as ResourceType[]) before[r] = state.resources[r].amount;
-    this.resources.gain(this.sm, contents);
+    this.resources.gain(this.sm, contents, { overfill: true }); // [ux-wp2 R1] a full store never eats the crate
     const gains: Partial<Record<ResourceType, number>> = {};
     for (const r of Object.keys(contents) as ResourceType[]) {
       const got = Math.round(this.sm.state.resources[r].amount - (before[r] ?? 0));

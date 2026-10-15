@@ -1,0 +1,16 @@
+# Wave 2 leftovers to apply after merge (orchestrator)
+- w2f: canvas CSS width/height 100% needs `!important` in style.css (Pixi writes px width).
+- w2f: Sheet.ts injects <style id="sheet-motion">; move rules into style.css/kit.css.
+- w2f: nav badges 11px -> caption token (style.css/hud.css).
+- w2f: act chip "I·20%" built in app.ts ~736 (RTL isolate / label).
+- w2f: call AudioEngine.unlock() from Intro.ts "Tap to enter" click (iOS).
+- w2c: BuildAdvice.recommendedRooms now unused (ranking moved to BuildMenu) -> move to _deprecated or reuse.
+- w2c: frame camera when a room's own sheet opens (BuildingPanel/app.ts).
+- w2c: placement.css z-index 14/24/25 not tokenised.
+- w2c: BuildAdvice.recommendedRooms now unused (ranking moved to BuildMenu) -> move to _deprecated or reuse.
+- w2c: frame camera when a room's own sheet opens (BuildingPanel/app.ts).
+- w2c: placement.css z-index 14/24/25 not tokenised.
+- w2b: dead HUD rules left in bunker-os.css, story.css, daily.css, command.css, ux-wp4.css -> move to _deprecated or remove after check.
+- w2b: tablet 768x1024 layout not verified at real width; phone landscape untested.
+- w2e: hold-to-confirm 0.9s (no 800ms token).
+- w2d: shared node_modules/.vite cache breaks with parallel dev servers -> use per-worktree cacheDir.

@@ -3,6 +3,7 @@ import type { BuildingInstance, BuildingType } from '../core/GameState';
 import { isDistrict, isHall, roomSlots } from '../data/buildingDefs';
 import { zoneForFloor } from '../data/zones';
 import { rgba } from './draw';
+import { GFX } from './gfxFeatures';
 
 /**
  * [plan4:ST-11] Floor identity: every level of the bunker gets a kind, and the kind (with the depth) sets the colour of its concrete, the colour of its lamps,
@@ -96,7 +97,9 @@ export function floorStyle(kind: FloorKind, f: number, heavy: boolean): FloorSty
   const b = BASE[kind];
   // Below the ninth level every kind slides a little toward the cold, dark deep-b look (a third of the way at level 24).
   const deepK = kind === 'surface' ? 0 : Math.max(0, Math.min(0.34, (f - 6) / 50));
-  const tint = deepK > 0 ? mixRgb(b.tint, BASE['deep-b'].tint, deepK) : b.tint;
+  let tint = deepK > 0 ? mixRgb(b.tint, BASE['deep-b'].tint, deepK) : b.tint;
+  // [airy:B2] The kinds were all near-white (style rule 4) and read as one grey: push every tint away from white so a floor's zone shows in its concrete.
+  if (GFX.airy && kind !== 'surface') tint = pushFromWhite(tint, AIRY_TINT_K, 0x8a);
   const hc = floorHash(f, 1), hs = floorHash(f, 2), hl = floorHash(f, 3);
   // Columns: mostly plain, the deep levels take more lattice, the plant levels take the structural pipe.
   const latticeAt = kind === 'deep-a' || kind === 'deep-b' || kind === 'industrial' ? 0.4 : 0.2;
@@ -111,6 +114,14 @@ export function floorStyle(kind: FloorKind, f: number, heavy: boolean): FloorSty
 /** Every floor's style. */
 export function floorStyles(buildings: readonly BuildingInstance[], floors: number): FloorStyle[] {
   return floorKinds(buildings, floors).map((k, f) => floorStyle(k.kind, f, k.heavy));
+}
+
+/** [airy:B2] How far the floor tints are pushed away from white (1 = as designed). */
+const AIRY_TINT_K = 2.3;
+/** `c` moved k times as far from white as it is (clamped to `floor` per channel so a dark kind never goes black). */
+function pushFromWhite(c: number, k: number, floor: number): number {
+  const ch = (s: number) => Math.max(floor, Math.round(255 - (255 - ((c >> s) & 255)) * k));
+  return (ch(16) << 16) | (ch(8) << 8) | ch(0);
 }
 
 const mixRgb = (a: number, b: number, t: number): number => {

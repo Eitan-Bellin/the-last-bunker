@@ -6,8 +6,6 @@
 
 /* ---------- HUD additions ---------- */
 
-.journal-btn { position: relative; }
-.journal-btn .nav-badge { top: -6px; inset-inline-end: -6px; }
 .era-chip {
   border: 1px solid rgba(217, 164, 65, 0.45);
   background: linear-gradient(180deg, rgba(60, 46, 26, 0.9), rgba(30, 24, 16, 0.9));
@@ -104,7 +102,8 @@
 .lore-card.kind-tape .lore-body { font-family: 'Courier New', monospace; font-size: calc(14px * var(--fs, 1)); color: #bfe4ff; }
 .lore-bonus { font-size: calc(13px * var(--fs, 1)); font-weight: 700; padding: 8px 10px; border-radius: 8px; background: rgba(90, 160, 80, 0.18); color: #2f5a22; margin-bottom: 12px; }
 .lore-card.kind-tape .lore-bonus { color: #9fe38a; background: rgba(90, 200, 80, 0.12); }
-.lore-close { width: 100%; }
+/* [ux-redesign w2a #18] Close stays in reach at the foot of a long page (the controller also reserves the transcript's full height). */
+.lore-close { width: 100%; position: sticky; inset-block-end: 0; }
 .tape-deck { display: flex; align-items: center; justify-content: center; gap: 10px; margin-bottom: 12px; padding: 12px; border-radius: 10px; background: #0b0e14; border: 1px solid rgba(255, 255, 255, 0.06); }
 .tape-reel { width: 34px; height: 34px; border-radius: 50%; border: 3px dashed #6b7c94; animation: reel 1.4s linear infinite; }
 .tape-window { flex: 1; max-width: 120px; height: 18px; border-radius: 4px; background: linear-gradient(90deg, #3a2a1c, #5a4030, #3a2a1c); }
@@ -413,20 +412,6 @@ body.intro-active #hud, body.intro-active .toast-stack { visibility: hidden; }
   background: #1a1612;
 }
 .person-card.idle .person-portrait { border-color: rgba(255, 107, 107, 0.6); }
-.fly-icon {
-  position: fixed;
-  z-index: 80;
-  pointer-events: none;
-  transform: translate(-50%, -50%) scale(1);
-  font-weight: 800;
-  font-size: calc(15px * var(--fs, 1));
-  color: #fff3d6;
-  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.8);
-  transition: left 0.6s cubic-bezier(0.5, -0.4, 0.7, 1), top 0.6s cubic-bezier(0.2, 0.8, 0.3, 1), transform 0.6s ease, opacity 0.6s ease;
-}
-.fly-icon .ic { width: 22px; height: 22px; }
-.fly-icon.go { transform: translate(-50%, -50%) scale(0.6); opacity: 0.85; }
-.resource-item.pulse { animation: res-pulse 0.5s ease; }
 @keyframes res-pulse { 0% { transform: scale(1); } 40% { transform: scale(1.12); box-shadow: 0 0 14px rgba(255, 210, 120, 0.6); } 100% { transform: scale(1); } }
 .worker-face { width: 30px; height: 30px; border-radius: 8px; object-fit: cover; flex-shrink: 0; border: 1px solid rgba(217, 164, 65, 0.45); margin-inline-end: 8px; }
 .modal-portrait { width: 96px; height: 96px; border-radius: 16px; object-fit: cover; border: 2px solid rgba(217, 164, 65, 0.6); box-shadow: 0 6px 20px rgba(0, 0, 0, 0.6); margin: 0 auto 8px; display: block; }

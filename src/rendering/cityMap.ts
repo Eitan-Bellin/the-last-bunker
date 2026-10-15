@@ -10,7 +10,8 @@ export interface CityMap {
   animate: (state: GameState, t: number, night: number) => void;
 }
 
-const CATEGORY: Partial<Record<BuildingType, number>> = {
+/** [airy:B1] Exported: the room clarity layer (roomClarity.ts) colours rooms by the same trade colours as the far map. */
+export const CATEGORY: Partial<Record<BuildingType, number>> = {
   farm: 0x7dff6a, hydroponics: 0x7dff6a,
   waterPump: 0x4ab8ff, waterPurifier: 0x4ab8ff,
   generator: 0xffd84a, reactor: 0xffd84a, reactorHall: 0xfff07a,

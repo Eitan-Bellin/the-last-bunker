@@ -3,6 +3,7 @@ import { haptic } from '../utils/haptics';
 import { i18n } from '../i18n/I18nManager';
 import { iconSvg, isIcon, tok, type IconName } from './icons';
 import { uiSound } from '../audio/uiSound';
+import { fmtCost, fmtRate } from './format';
 
 /** Icon tokens for resources; embed them in any UI string. */
 export const RESOURCE_ICONS: Record<string, string> = {
@@ -86,8 +87,8 @@ BUILDING_ICONS.watchtower ??= tok('eye');
 
 const TOKEN = /\[\[([a-zA-Z0-9]+)\]\]/g;
 
-/** A signed number ("+2.9", "−1", "+10%", "+1.2K") that does not continue a word or a range like "3-5". */
-const SIGNED = /[+\-−–]\s?\d[\d.,]*(?:%|[KMB](?!\p{L}))?/gu;
+/** A signed number ("+2.9", "−1", "+10%", "+1.2K", "×1.25") that does not continue a word or a range like "3-5". [ux-wp4] I1: "×" too. */
+const SIGNED = /[+\-−–×]\s?\d[\d.,]*(?:%|[KMB](?!\p{L}))?/gu;
 
 /**
  * In right-to-left text a leading sign is a neutral character and drifts to the far side ("2.9+", "1–").
@@ -95,33 +96,51 @@ const SIGNED = /[+\-−–]\s?\d[\d.,]*(?:%|[KMB](?!\p{L}))?/gu;
  * number still takes its natural place in the Hebrew sentence.
  */
 export function bidiNumbers(text: string): string {
-  if (document.documentElement.dir !== 'rtl' || !/[+\-−–]\s?\d/.test(text)) return text;
+  if (document.documentElement.dir !== 'rtl' || !/[+\-−–×]\s?\d/.test(text)) return text;
   // A sign glued to a letter or digit ("A-5", "3-5") is not a signed number. (No regex lookbehind: older iPhones cannot even parse one.)
   return text.replace(SIGNED, (m, offset: number) => (/[\p{L}\p{N}]/u.test(text[offset - 1] ?? '') ? m : `⁦${m}⁩`));
 }
 
+/** [ux-redesign final F8] The shape (text / icon sequence) setRich last built in a node, so a new number only rewrites its text node. */
+const richShape = new WeakMap<Node, string>();
+
 /** Fills a node with text in which [[icon]] tokens become inline SVG icons. */
 export function setRich(node: HTMLElement, text: string): void {
   if (!text.includes('[[')) {
+    richShape.delete(node);
     node.textContent = bidiNumbers(text);
     return;
   }
-  node.textContent = '';
+  // The parts: text runs and icon names, in order.
+  const parts: { icon?: string; text?: string }[] = [];
   let last = 0;
   for (const m of text.matchAll(TOKEN)) {
-    if (m.index! > last) node.appendChild(document.createTextNode(bidiNumbers(text.slice(last, m.index))));
-    const name = m[1];
-    if (isIcon(name)) {
-      const span = document.createElement('span');
-      span.className = `ic ic-${name}`;
-      span.innerHTML = iconSvg(name as IconName);
-      node.appendChild(span);
-    } else {
-      node.appendChild(document.createTextNode(m[0]));
-    }
+    if (m.index! > last) parts.push({ text: bidiNumbers(text.slice(last, m.index)) });
+    parts.push(isIcon(m[1]) ? { icon: m[1] } : { text: m[0] });
     last = m.index! + m[0].length;
   }
-  if (last < text.length) node.appendChild(document.createTextNode(bidiNumbers(text.slice(last))));
+  if (last < text.length) parts.push({ text: bidiNumbers(text.slice(last)) });
+  const shape = parts.map(p => (p.icon ? `i:${p.icon}` : 't')).join('|');
+  // Same icons in the same places (a countdown, a counter): only the text nodes that changed are written, one mutation instead of three.
+  if (richShape.get(node) === shape && node.childNodes.length === parts.length) {
+    parts.forEach((p, i) => {
+      const n = node.childNodes[i];
+      if (p.text !== undefined && n.nodeType === Node.TEXT_NODE && (n as Text).data !== p.text) (n as Text).data = p.text;
+    });
+    return;
+  }
+  node.textContent = '';
+  for (const p of parts) {
+    if (p.icon) {
+      const span = document.createElement('span');
+      span.className = `ic ic-${p.icon}`;
+      span.innerHTML = iconSvg(p.icon as IconName);
+      node.appendChild(span);
+    } else {
+      node.appendChild(document.createTextNode(p.text!));
+    }
+  }
+  richShape.set(node, shape);
 }
 
 /** Strips icon tokens (for places that can only show plain text). */
@@ -140,18 +159,38 @@ export function el<K extends keyof HTMLElementTagNameMap>(
 
 /**
  * [plan4:BL-25,34..38] A production rate for the panels: per second as usual, but a trickle (the pre-war vault's blueprints, a forum's influence:
- * under 0.01 a second) is shown per hour, since "+0.00 /s" says nothing.
+ * under 0.01 a second) is shown per hour, since "+0.00 /s" says nothing. [ux-redesign W1] Lives in format.ts now (`fmtRate`).
  */
 export function rateText(perSecond: number): string {
-  if (perSecond > 0 && perSecond < 0.005) return `${i18n.formatRate(perSecond * 3600)} ${i18n.t('resources.perHour')}`;
-  return `${i18n.formatRate(perSecond)} ${i18n.t('resources.perSecond')}`;
+  return fmtRate(perSecond);
 }
 
-export function costRow(state: GameState, cost: Record<string, number>): HTMLDivElement {
+/**
+ * [ux-wp4] P17: a price for a cost chip. Up to 9,999 it is the exact number; above that it is short like the HUD ("470K", "2.4M"),
+ * always rounded up so a short price is never less than what is asked. [ux-redesign W1] Lives in format.ts now (`fmtCost`).
+ */
+export function costAmount(n: number): string {
+  return fmtCost(n);
+}
+
+/** [ux-wp4] A number with a sign, kept left-to-right inside Hebrew text ("+30%", "−3", "×1.25"), for places that set textContent. */
+export function signed(text: string): string {
+  return document.documentElement.dir === 'rtl' ? `⁦${text}⁩` : text;
+}
+
+/**
+ * A price as chips (icon + amount; green when you have it). [ux-wp4] P17: big amounts are short (470K), every chip names its resource
+ * for a screen reader and on hover, and `labelled` also writes the name next to the number (the upgrade card).
+ */
+export function costRow(state: GameState, cost: Record<string, number>, labelled = false): HTMLDivElement {
   const row = el('div', 'cost-row');
   for (const [r, amount] of Object.entries(cost)) {
     const have = state.resources[r as ResourceType]?.amount ?? 0;
-    row.appendChild(el('span', `cost-chip ${have >= amount ? 'affordable' : 'expensive'}`, `${RESOURCE_ICONS[r] ?? ''} ${amount}`));
+    const name = i18n.t(`resources.${r}`);
+    const chip = el('span', `cost-chip ${have >= amount ? 'affordable' : 'expensive'}`, `${RESOURCE_ICONS[r] ?? ''} ${costAmount(amount)}${labelled ? ` ${name}` : ''}`);
+    chip.title = `${name}: ${i18n.formatNumber(Math.ceil(amount))}`;
+    chip.setAttribute('aria-label', chip.title);
+    row.appendChild(chip);
   }
   return row;
 }

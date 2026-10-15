@@ -2,8 +2,10 @@ import { Container, Rectangle, Sprite, Texture } from 'pixi.js';
 import type { BuildingInstance, BuildingType } from '../core/GameState';
 import { isDistrict, isHall, roomSlots } from '../data/buildingDefs';
 import { ArtLibrary } from '../art/ArtLibrary';
+import { voidBoundaries } from './voids';
 import { BASE_EAST, ROOMS_X, ROOM_H, SHAFT_GAP, SHAFT_W, SLAB, SLOT_W, floorTop, slotX } from './layout';
 import { hashString, seeded } from './draw';
+import { GFX } from './gfxFeatures';
 import { depthGains, type Grid, type WorldLamp } from './structure';
 
 /**
@@ -249,6 +251,11 @@ export function buildDecals(
       if ((a || b) && a?.key !== b?.key) cols.push(slotX(s - ew));
     }
     cols.sort((a, b) => a - b);
+    if (GFX.airy) {
+      // [airy2:D3] A void is rock, not a column: nothing is stuck to it.
+      const vs = voidBoundaries(grid).map(slotX);
+      for (let i = cols.length - 1; i >= 0; i--) if (vs.includes(cols[i])) cols.splice(i, 1);
+    }
     const bays: [number, number][] = [];
     for (let s = 0; s < slots;) {
       if (row[s]) { s++; continue; }
@@ -265,11 +272,13 @@ export function buildDecals(
     const spot = (surface: Surface, w: number, h: number): { x: number; y: number; w: number; h: number } | null => {
       switch (surface) {
         case 'slab': {
-          if (h > SLAB + 3) { w *= (SLAB + 2) / h; h = SLAB + 2; }
+          // [airy2:D1] The airy slab is the corridor band (deck, beam, soffit): decals sit on the soffit under the beam, 5 tall.
+          const hMax = GFX.airy ? 5 : SLAB + 2;
+          if (h > hMax + (GFX.airy ? 0 : 1)) { w *= hMax / h; h = hMax; }
           const lo = ew > 0 ? xFirst - 6 : -6, hi = xLast + 6;
           const x = lo + w / 2 + r() * (hi - lo - w);
           if (inSlabGap(x - w / 2, x + w / 2) || x - w / 2 < SHAFT_W + 2 && x + w / 2 > -2 && r() < 0.6) return null;
-          return { x, y: bottom + 6.5 + (r() - 0.5) * 2, w, h };
+          return { x, y: bottom + (GFX.airy ? 41 : 6.5) + (r() - 0.5) * (GFX.airy ? 0.6 : 2), w, h };
         }
         case 'column': {
           if (w > 16) return null;
@@ -280,7 +289,7 @@ export function buildDecals(
           if (w > 22) { h *= 22 / w; w = 22; }
           const x = cols[Math.floor(r() * cols.length)];
           const side = x <= xFirst ? 1 : x >= xLast ? -1 : ew > 0 && x === -SHAFT_GAP ? -1 : ew > 0 && x === ROOMS_X ? 1 : r() < 0.5 ? -1 : 1;
-          return { x: x + side * (COLUMN_W / 2 + 1 + w / 2 + r() * 3), y: top + PIPES_BOTTOM + h / 2 - 1, w, h };
+          return { x: x + side * ((GFX.airy ? 7.5 : COLUMN_W / 2 + 1) + w / 2 + r() * 3), y: top + PIPES_BOTTOM + h / 2 - 1, w, h }; // [airy:A6] piers are 13 wide
         }
         case 'bay': {
           // One thing per open bay (two in a wide one), or every bay turns into a notice board.

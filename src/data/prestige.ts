@@ -23,7 +23,8 @@ export const PRESTIGE_UPGRADES: PrestigeUpgradeDef[] = [
   {
     id: 'echoPower', icon: '[[sparkle]]', maxLevel: 10, baseCost: 5, growth: 1.6,
     name: { he: 'הד העבר', en: 'Echo of the Past' },
-    desc: { he: '+10% לכל הייצור לכל רמה', en: '+10% all production per level' },
+    // [ux-wp2 M7] Now also the Act currencies (their roles go through the modifier stack).
+    desc: { he: '+10% לכל הייצור לכל רמה, כולל מטבע המערכה', en: '+10% all production per level, the Act currency included' },
   },
   {
     // +150 worth per level (120 materials + 30 scrap); amounts above the starting storage are lost,
@@ -35,7 +36,8 @@ export const PRESTIGE_UPGRADES: PrestigeUpgradeDef[] = [
   {
     id: 'fastResearch', icon: '[[research]]', maxLevel: 10, baseCost: 6, growth: 1.6,
     name: { he: 'זיכרון מדעי', en: 'Scientific Memory' },
-    desc: { he: '+10% מהירות מחקר לכל רמה', en: '+10% research speed per level' },
+    // [ux-wp2 M7] +5% Act currency per level too (the 'memory' modifier in ResourceSystem).
+    desc: { he: '+10% מהירות מחקר ו־+5% מטבע המערכה לכל רמה', en: '+10% research speed and +5% Act currency per level' },
   },
   {
     id: 'veteranSurvivors', icon: '[[people]]', maxLevel: 3, baseCost: 10, growth: 2.2,
@@ -53,9 +55,11 @@ export const PRESTIGE_UPGRADES: PrestigeUpgradeDef[] = [
     desc: { he: '+5% ייצור בזמן שאתה לא משחק', en: '+5% production while away' },
   },
   {
-    id: 'lootLuck', icon: '[[clover]]', maxLevel: 10, baseCost: 5, growth: 1.5,
-    name: { he: 'מזל של מלקטים', en: "Scavenger's Luck" },
-    desc: { he: '+10% שלל ממשלחות', en: '+10% expedition loot' },
+    // [ux-wp2 M7] Was Scavenger's Luck (+10% expedition loot, worth nothing past Act II); the id stays so bought levels carry over.
+    // Read by economy.ts: digs and charter work run faster (DigSystem/ProjectSystem speed), upgrades take less time (BuildingSystem).
+    id: 'lootLuck', icon: '[[clock]]', maxLevel: 10, baseCost: 5, growth: 1.5,
+    name: { he: 'זיכרון מערכות', en: 'Systems Memory' },
+    desc: { he: 'חפירות, שדרוגי חדרים ועבודת צ׳רטר מהירים ב־5% לכל רמה', en: 'Digs, room upgrades and charter work 5% faster per level' },
   },
   // Read by ResourceSystem.computeCaps (marked hook line).
   {

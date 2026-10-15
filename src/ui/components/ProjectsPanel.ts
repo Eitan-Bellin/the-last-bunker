@@ -1,11 +1,13 @@
 import type { GameState, ResourceType } from '../../core/GameState';
 import type { GameEngine } from '../../core/GameEngine';
 import { i18n } from '../../i18n/I18nManager';
+import { plural } from '../format';
 import { PROJECTS, designOf, projectDone, stagesDone, type ProjectDef } from '../../data/projects';
 import { Sheet } from './Sheet';
 import { RESOURCE_ICONS, bar, button, el } from '../dom';
 import { uiSound } from '../../audio/uiSound';
 import { WEEKLY_CREDITS } from '../../data/challenges';
+import { projectLockText } from '../../systems/Guide';
 
 /** Badge colours of the weekly prizes (ids from COSMETICS in src/data/challenges.ts). */
 const COSMETIC_COLORS: Record<string, string> = {
@@ -80,7 +82,7 @@ export class ProjectsPanel {
           chip.style.setProperty('--cos', COSMETIC_COLORS[c] ?? '#c9a35a');
           shelf.appendChild(chip);
         }
-        card.append(el('div', 'bp-hint', `[[star]] ${i18n.t('weekly.cosmetics', { n: cos.length })}`), shelf);
+        card.append(el('div', 'bp-hint', `[[star]] ${plural('weekly.cosmetics', cos.length)}`), shelf);
       }
       root.appendChild(card);
     }
@@ -136,7 +138,7 @@ export class ProjectsPanel {
       return card;
     }
     if (!open) {
-      card.appendChild(el('div', 'bp-hint', `[[lock]] ${def.act ? i18n.t('proj.lockedAct', { n: def.act }) : i18n.t('proj.locked')}`));
+      card.appendChild(el('div', 'bp-hint', `[[lock]] ${projectLockText(state, def)}`));
       return card;
     }
     const stage = ps.stageOf(state, def.id)!;
@@ -144,7 +146,8 @@ export class ProjectsPanel {
     card.appendChild(el('div', 'bp-section-title', i18n.t('proj.stage', { n: prog.stage + 1, all: def.stages.length })));
     const costs = el('div', 'cost-row');
     for (const [r, v] of Object.entries(stage.cost) as [ResourceType, number][]) {
-      const paid = Math.min(v, Math.floor(prog.paid[r] ?? 0));
+      const got = prog.paid[r] ?? 0;
+      const paid = v - got < 1 ? v : Math.min(v, Math.floor(got)); // [ux-wp1 E1] under one unit left counts as paid
       costs.appendChild(el('span', `cost-chip ${paid >= v ? 'affordable' : 'expensive'}`, `${RESOURCE_ICONS[r] ?? r} ${paid}/${v}`));
     }
     card.appendChild(costs);

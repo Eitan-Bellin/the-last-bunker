@@ -3,7 +3,7 @@ import type { GameState } from '../core/GameState';
 import { glowTexture } from '../art/ArtLibrary';
 import { i18n } from '../i18n/I18nManager';
 import { GFX, gfxLevel } from './gfxFeatures';
-import { BASE_EAST, ROOMS_X, ROOM_H, SHAFT_GAP, SLAB, SLOT_W, floorTop, slotX, type Ext } from './geom';
+import { BASE_EAST, ROOMS_X, ROOM_H, SHAFT_GAP, SLAB, SLAB_CLASSIC, SLOT_W, floorTop, slotX, type Ext } from './geom';
 import { VIEW } from './perfFx';
 import { hashString } from './draw';
 import { occupancy } from './occupancy';
@@ -12,6 +12,9 @@ import { LIP, PIPES_H, PIPES_Y, depthGains, type KitState } from './structure';
 import { reducedMotion, statusTint } from '../utils/a11y'; // plan4:AC-2/AC-6
 import { bulkheadLeafTexture, fanTexture, sealedSignTexture, stairsTexture, strapsTexture, ventTexture } from './infraArt';
 import type { Animated } from './world';
+
+/** [airy:A6] The stairwell and vent art are baked 116 tall (a 16 slab): a taller slab stretches them, so the pieces placed by hand on them move with it. */
+const ART_K = (ROOM_H + SLAB) / (ROOM_H + SLAB_CLASSIC);
 
 /**
  * [plan4:ST-14/ST-15/ST-17] The bunker's infrastructure drawn from the raw shape of the state, so it works before (and without) the systems that build it:
@@ -207,7 +210,7 @@ export class InfraLayer implements Animated {
       g.width = 44;
       g.height = 34;
       g.alpha = 0.4;
-      g.position.set(slotX(it.x) + 9.4, top + 19.3);
+      g.position.set(slotX(it.x) + 9.4, top + 19.3 * ART_K);
       this.container.addChild(s, g);
       this.sections.push({ s, glow: g, floor: f, y0: top, y1: top + ROOM_H + SLAB, ph: (it.x * 1.7 + f * 0.9) % 6.28 });
     }
@@ -230,9 +233,9 @@ export class InfraLayer implements Animated {
       if (first) {
         const fan = new Sprite(fanTexture());
         fan.anchor.set(0.5);
-        fan.position.set(slotX(it.x) + 23, top + 24);
+        fan.position.set(slotX(it.x) + 23, top + 24 * ART_K);
         fan.width = fan.height = 20;
-        fan.tint = tintAt(top + 24);
+        fan.tint = tintAt(top + 24 * ART_K);
         this.container.addChild(fan);
         this.fans.push({ s: fan, floor: f, y0: top, y1: top + ROOM_H, angle: (it.x * 0.7) % 6.28 });
       }

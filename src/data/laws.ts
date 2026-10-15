@@ -3,6 +3,7 @@ import type { GameState, ResourceType } from '../core/GameState';
 /**
  * [Long game P3/R2] Laws (long-game plan, pillar C): standing rules with a clear price. The Acts open a few slots
  * (one in Act III, two in Act V, three in Act VI); passing a law costs knowledge, repealing it is free.
+ * [ux-wp2 S4] What a law does in this bunker right now (morale and output): lawImpact() in src/systems/morale.ts, for the laws UI.
  */
 export interface LawDef {
   id: string;
@@ -32,9 +33,10 @@ export const LAWS: LawDef[] = [
     desc: { he: 'אוכל ומים −20% לאדם · מורל −6', en: 'Food and water −20% per person · morale −6' },
   },
   {
-    id: 'doubleShifts', icon: '[[clock]]', output: 1.12, morale: -8,
+    // [ux-wp2 S4] Morale −12 (was −8): with morale above 100 now worth something and low morale costing output, this is a trade.
+    id: 'doubleShifts', icon: '[[clock]]', output: 1.12, morale: -12,
     name: { he: 'משמרות כפולות', en: 'Double Shifts' },
-    desc: { he: 'כל החדרים +12% · מורל −8', en: 'Every room +12% · morale −8' },
+    desc: { he: 'כל החדרים +12% · מורל −12', en: 'Every room +12% · morale −12' },
   },
   {
     id: 'openDoors', icon: '[[door]]', arrivals: 0.7, threat: 10,

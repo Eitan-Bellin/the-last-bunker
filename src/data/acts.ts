@@ -94,7 +94,8 @@ export const ACTS: ActDef[] = [
     levelCap: 9, popCap: 110, floorCap: 14,
     goals: [
       { kind: 'dig', text: { he: 'חפרו 14 קומות', en: 'Dig 14 levels' }, progress: s => atLeast(s.currentFloors, 14) },
-      { kind: 'levels', level: 9, text: { he: '6 חדרים ברמה 9', en: '6 rooms at level 9' }, progress: s => atLeast(roomsAt(s, 9), 6) },
+      // [ux-wp2 M1] 4 rooms (was 6): the Mk9 wait was days of nothing to decide.
+      { kind: 'levels', level: 9, text: { he: '4 חדרים ברמה 9', en: '4 rooms at level 9' }, progress: s => atLeast(roomsAt(s, 9), 4) },
       { kind: 'pop', text: { he: 'הגיעו ל־90 ניצולים', en: 'Reach 90 survivors' }, progress: s => atLeast(s.survivors.length, 90) },
     ],
     charter: ['wall', 'deepFoundry'],
@@ -108,7 +109,8 @@ export const ACTS: ActDef[] = [
     goals: [
       { kind: 'outposts', text: { he: 'החזיקו 3 מאחזים', en: 'Hold 3 outposts' }, progress: s => atLeast(((s.longGame?.world.outposts ?? []) as unknown[]).length, 3) },
       { kind: 'dig', text: { he: 'חפרו 17 קומות', en: 'Dig 17 levels' }, progress: s => atLeast(s.currentFloors, 17) },
-      { kind: 'levels', level: 10, text: { he: '8 חדרים ברמה 10', en: '8 rooms at level 10' }, progress: s => atLeast(roomsAt(s, 10), 8) },
+      // [ux-wp2 M1] 5 rooms (was 8).
+      { kind: 'levels', level: 10, text: { he: '5 חדרים ברמה 10', en: '5 rooms at level 10' }, progress: s => atLeast(roomsAt(s, 10), 5) },
     ],
     charter: ['surfaceGate', 'skyDome'],
     opens: { he: 'נפתחים: נתונים (כספת נתונים במעבדה), רמה 10, חוק שני.', en: 'Opens: data (Data Vault in the lab), level 10, a second law.' },

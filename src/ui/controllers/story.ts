@@ -11,6 +11,9 @@ import { portraitFor, portraitUrl } from '../../data/portraits';
 import { getChapter } from '../../data/story';
 import type { GameApp } from '../../app';
 
+/** [ux-redesign w2fix] How often a waiting story scene looks again whether the dialog in its way was answered (logic, not motion). */
+const STORY_WAIT_POLL_MS = 400;
+
 /** Story chapters, their replays, and the intro. */
 export class StoryController {
   private app: GameApp;
@@ -38,7 +41,18 @@ export class StoryController {
     };
   }
 
+  /**
+   * [ux-redesign w2fix B2] A scene never starts over an open dialog (it would sit on top of a dialog that made it inert): it waits
+   * until the dialog is answered. Polled, like the ceremonies; returns true while it waits.
+   */
+  private waitForModal(start: () => void): boolean {
+    if (!this.app.modal.isVisible) return false;
+    window.setTimeout(start, STORY_WAIT_POLL_MS);
+    return true;
+  }
+
   playChapter(id: string): void {
+    if (this.waitForModal(() => this.playChapter(id))) return;
     this.app.pendingChapter = null;
     if (!getChapter(id) || this.app.state.storyFlags.includes(`story:${id}`)) {
       this.app.engine.storySystem.release();
@@ -63,6 +77,7 @@ export class StoryController {
   }
 
   replayChapter(id: string): void {
+    if (this.waitForModal(() => this.replayChapter(id))) return;
     const ch = getChapter(id);
     if (!ch) return;
     const choice = ch.choices?.find(c => this.app.state.storyFlags.includes(`choice:${id}:${c.key}`))?.key ?? null;
@@ -76,25 +91,28 @@ export class StoryController {
   }
 
   playIntroSequence(): void {
-    // [Long game] A new game first asks how hard the world should be.
-    if (!this.app.state.storyFlags.includes('difficulty:chosen')) {
-      this.chooseDifficulty(() => this.playIntroSequence());
-      return;
-    }
+    // [ux-wp6: clarity F1 / playtest P1] The world first (gate, comic, title), then the one question: how hard should it be.
+    // The game stays paused until the choice is made; 'intro:done' is set only after it, so a reload at the question asks again.
+    const begin = () => {
+      this.app.engine.paused = false;
+      this.app.engine.stateManager.applyDelta({ path: 'storyFlags', value: [...new Set([...this.app.state.storyFlags, 'intro:done'])] });
+      this.app.engine.requestSave();
+      this.app.toasts.show(`[[flashlight]] ${i18n.t('intro.firstHint')}`, 'info');
+    };
+    const ask = () => (this.app.state.storyFlags.includes('difficulty:chosen') ? begin() : this.chooseDifficulty(begin));
     this.app.introPlaying = true;
     this.app.engine.paused = true;
+    hideSplash();
     document.body.classList.add('intro-active');
     // Start looking at the dark dormitory where the newcomers make camp.
     this.app.renderer.focusOn(150, 120, 1.6);
     playIntro({
+      unlock: () => this.app.audio.unlock(), // [ux-redesign w2fix]
       play: (sfx) => this.app.audio.play(sfx),
       onDone: () => {
         this.app.introPlaying = false;
-        this.app.engine.paused = false;
         document.body.classList.remove('intro-active');
-        this.app.engine.stateManager.applyDelta({ path: 'storyFlags', value: [...new Set([...this.app.state.storyFlags, 'intro:done'])] });
-        this.app.engine.requestSave();
-        this.app.toasts.show(`[[flashlight]] ${i18n.t('intro.firstHint')}`, 'info');
+        ask();
       },
     });
   }
@@ -110,6 +128,7 @@ export class StoryController {
     this.app.engine.paused = true;
     document.body.classList.add('intro-active');
     playIntro({
+      unlock: () => this.app.audio.unlock(), // [ux-redesign w2fix]
       play: (sfx) => this.app.audio.play(sfx),
       onDone: () => {
         this.app.introPlaying = false;
@@ -183,6 +202,8 @@ export class StoryController {
           then();
         },
       })),
+      // [ux-redesign w2a #4] A decision for the whole run: back / Escape never pick it, and taps in the first 600 ms are ignored (Modal).
+      dismiss: 'none',
     });
   }
 }

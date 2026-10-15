@@ -50,6 +50,17 @@ export function actBundle(act: number, hours: number): Partial<Record<ResourceTy
   return out;
 }
 
+/**
+ * [ux-wp2 R1/R5] A reward in the current Act's own currency: `hours` of its reference income (no price scale), from Act III on
+ * (before that the Act currency is materials, which the old rewards already carry). Empty in Acts I-II.
+ */
+export function actGoods(state: GameState, hours: number): Partial<Record<ResourceType, number>> {
+  const act = state.longGame?.meta.act ?? 1;
+  if (act < 3 || hours <= 0) return {};
+  const v = Math.round(hours * refIncome(act));
+  return v >= 1 ? { [ACT_CURRENCY[act]]: v } : {};
+}
+
 /** The Act a room level belongs to (Mk2-3 Act I, Mk4-5 Act II, Mk6-7 Act III, Mk8-9 Act IV, Mk10 Act V). */
 export function levelAct(level: number): number {
   return level <= 3 ? 1 : Math.min(5, Math.floor((level - 4) / 2) + 2);

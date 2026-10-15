@@ -5,8 +5,10 @@ import { ROOM_H } from './layout';
 import { hGradient, vGradient } from './draw';
 import { crisisLight } from './crisisLight'; // gfx-p0 crisis
 import { GFX } from './gfxFeatures';
+import { labelState } from './LabelScale'; // [airy:B1]
 import type { Animator, RoomVisual } from './roomArt';
 import { viewport } from '../utils/viewport'; // [perf] window size without forcing layout
+import { buildShell, depthCam, type RoomShell, type ShellLamp } from './roomDepth'; // [airy2:C1]
 
 /**
  * Shared flicker (G4): every painted room publishes how far its lamps are dipped right now (1 = steady),
@@ -88,11 +90,12 @@ function addLight(layer: Container, spot: LightSpot, W: number, H: number, mirro
     layer.addChild(beam);
   }
   const flicker = spot.flicker ?? 0;
+  const calm = GFX.airy ? (tame < 0.9 ? 0.6 : 0.85) : 1;
   const bw = beam ? beam.width : 0;
   const bx = x;
   return (t) => {
     const w = flicker > 0 ? 1 - flicker * 0.35 * (1 - wobble(t, seed) * 1.4) : 1;
-    glow.alpha = Math.max(0.15, Math.min(1, w)) * 0.85 * tame;
+    glow.alpha = Math.max(0.15, Math.min(1, w)) * 0.85 * tame * calm; // [airy:B5] a bright painting already carries its lamp light
     if (cone) cone.alpha = glow.alpha * 0.36;
     if (beam) {
       const on = GFX.beams;
@@ -948,6 +951,21 @@ function frame(W: number, H: number, openLeft: boolean, openRight: boolean): Gra
   return g;
 }
 
+/** [airy2:C1] With an alcove behind it the front frame is only the edge of the walls: a dark post where this room meets a different one, and the ceiling's front fascia. */
+function frameAlcove(W: number, H: number, openLeft: boolean, openRight: boolean): Graphics {
+  const g = new Graphics();
+  g.rect(0, 0, W, 2.2).fill({ color: 0x0c0d10, alpha: 0.7 });
+  if (!openLeft) {
+    g.rect(0, 0, 2.2, H).fill({ color: 0x1b1c20, alpha: 0.9 });
+    g.rect(2.2, 0, 0.9, H).fill({ color: 0xa4a8b0, alpha: 0.28 });
+  }
+  if (!openRight) {
+    g.rect(W - 2.2, 0, 2.2, H).fill({ color: 0x1b1c20, alpha: 0.9 });
+    g.rect(W - 3.1, 0, 0.9, H).fill({ color: 0x000000, alpha: 0.45 });
+  }
+  return g;
+}
+
 /** Rough rock edges around a natural cavern (districts), instead of a steel frame. */
 function rockFrame(W: number, H: number, rnd: () => number): Graphics {
   const g = new Graphics();
@@ -986,6 +1004,11 @@ function onScreen(c: Container, W: number, H: number): boolean {
  * A room drawn from a painting, with live layers on top: lamp glows and light cones placed on the
  * painted lamps, flicker and blackout when power is short, particles on painted props, dust motes.
  */
+/** [airy:B6] Per-side inset of the painting inside its room under `airy`. */
+const PAINT_INSET = 4;
+/** [airy2:C1] Lamps that throw a pool of light on the alcove's floor (the biggest of the high ones), at most this many per room. */
+const POOLS = 3;
+
 export function buildPaintedRoom(
   texture: Texture, entry: ArtEntry, W: number, openLeft: boolean, openRight: boolean, mirror: boolean, rnd: () => number,
   H: number = ROOM_H,
@@ -997,11 +1020,15 @@ export function buildPaintedRoom(
   const container = new Container();
   const art = new Sprite(texture);
   // Paintings are made at the slot's aspect, so a plain fit keeps the painted lamps under the live lights.
-  art.width = W;
+  // [airy:B6] With `airy` the painting is inset a little per side so the pier between rooms (structure) reads as a real gap, not an overlay on the picture.
+  const alcove = GFX.airy && entry.kind !== 'district'; // [airy2:C1] the painting is the back wall of a deep box (roomDepth.ts)
+  const inset = GFX.airy && !alcove ? PAINT_INSET : 0;
+  art.width = W - 2 * inset;
   art.height = H;
+  art.x = inset;
   if (mirror) {
     art.scale.x *= -1;
-    art.x = W;
+    art.x = W - inset;
   }
   // Exposure lift for dark paintings (tier 0 is painted around luma 0.14, which read as "the screen is dark" in
   // play). A tint can only darken, so the lift is the same painting added on top: colour × (1 + boostK), shadows
@@ -1009,11 +1036,12 @@ export function buildPaintedRoom(
   const boostK = Math.max(0, Math.min(0.85, 0.26 / Math.max(0.05, ArtLibrary.lumOf(entry.key) ?? 0.26) - 1));
   const boost = boostK > 0.02 ? new Sprite(texture) : null;
   if (boost) {
-    boost.width = W;
+    boost.width = W - 2 * inset;
     boost.height = H;
+    boost.x = inset;
     if (mirror) {
       boost.scale.x *= -1;
-      boost.x = W;
+      boost.x = W - inset;
     }
     boost.blendMode = 'add';
   }
@@ -1040,9 +1068,29 @@ export function buildPaintedRoom(
     animators.push(spot.work && flickerKey ? (t, power) => an(t, power * (roomWorking.get(flickerKey) ?? 1)) : an);
   });
   animators.push(dustMotes(lights, W, H, rnd));
-  container.addChild(art);
-  if (boost) container.addChild(boost);
-  container.addChild(hazeLayer, fxLayer, lights, entry.kind === 'district' ? rockFrame(W, H, rnd) : frame(W, H, openLeft, openRight));
+  // [airy2:C1] An alcove: the painting and its live layers become the back wall (`back`, scaled and slid by the shell), the box around it is a mesh.
+  let shell: RoomShell | null = null;
+  let back: Container | null = null;
+  let poolBase = 0;
+  if (alcove) {
+    const lamps: ShellLamp[] = ArtLibrary.lightsFor(entry)
+      .filter(l => l.y < 0.5 && l.r >= 0.06)
+      .sort((a, b) => b.r - a.r)
+      .slice(0, POOLS)
+      .map(l => ({ fx: mirror ? 1 - l.x : l.x, w: Math.max(22, Math.min(W * 0.9, l.r * W * 3.6)), color: l.color, strength: 0.5 }));
+    poolBase = 0.55 * (0.45 + 0.55 * tame);
+    shell = buildShell(W, H, openLeft, openRight, lamps);
+    back = new Container();
+    back.addChild(art);
+    if (boost) back.addChild(boost);
+    back.addChild(hazeLayer, fxLayer, lights);
+    shell.place(back, 0, 0);
+    container.addChild(shell.layer, shell.pools, back, shell.ao, frameAlcove(W, H, openLeft, openRight));
+  } else {
+    container.addChild(art);
+    if (boost) container.addChild(boost);
+    container.addChild(hazeLayer, fxLayer, lights, entry.kind === 'district' ? rockFrame(W, H, rnd) : frame(W, H, openLeft, openRight));
+  }
 
   const flicker: PowerFlicker = { until: 0, depth: 1 };
   let shown = true;
@@ -1056,12 +1104,25 @@ export function buildPaintedRoom(
       const v = 255 * Math.min(1, level);
       const ch = (k: number) => Math.round(Math.min(255, v * k));
       art.tint = (ch(gains[0]) << 16) | (ch(gains[1]) << 8) | ch(gains[2] * (0.94 + 0.06 * power));
+      if (shell && back) {
+        // [airy2:C1/C2] The faces follow the room's light; the lamp pools on the floor follow the lamps; the back wall slides with the camera (a window box).
+        shell.layer.tint = art.tint;
+        shell.pools.alpha = Math.max(0, power * f) * poolBase * (1 - 0.7 * labelState.clarity);
+        let nx = 0, ny = 0;
+        const root = container.parent?.parent;
+        if (depthCam.on && root) {
+          nx = Math.max(-1, Math.min(1, (root.x + W / 2 - depthCam.cx) / depthCam.hw));
+          ny = Math.max(-1, Math.min(1, (root.y + H / 2 - depthCam.cy) / depthCam.hh));
+        }
+        shell.place(back, nx, ny);
+      }
       if (boost) {
         // The lift follows the lamps: a blackout still goes dark.
         boost.tint = art.tint;
         boost.alpha = boostK * Math.min(1, level);
       }
-      lights.alpha = Math.max(0, power * f);
+      // [airy:B1] Mid zoom: the lamp cones, beams, glows and dust fade out (the room's trade colour carries the read instead).
+      lights.alpha = Math.max(0, power * f) * (GFX.airy ? 1 - 0.8 * labelState.clarity : 1);
       // gfx-p0 rooms: painted motion follows the room light; off-screen rooms skip the work entirely.
       fxLayer.alpha = Math.min(1, 0.35 + 0.65 * level);
       const vis = onScreen(container, W, H);

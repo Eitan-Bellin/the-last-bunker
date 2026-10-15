@@ -16,8 +16,17 @@ import { actCapBonus } from '../data/pricing';
 import { TUNING } from '../data/tuning';
 import { scenarioOf } from '../data/scenarios';
 import { infraPowerDraw } from './InfraSystem'; // plan4:ST-14/15
+import { isTier2 } from './economy';
+import { moraleOutputMult, moraleRawAverage } from './morale';
 
 const EMERGENCY_EFFICIENCY = 0.25;
+/**
+ * [ux-wp2 R7] Stores that hold hours of production in Act I. Not materials: their overflow is what feeds the Vault Seal charter, and a
+ * deeper store delayed Act I by half a day in the sim (the materials went to upgrades instead).
+ */
+const ACT1_BUFFERED: ResourceType[] = ['food', 'water', 'knowledge'];
+/** [ux-wp2 R1] A reward may fill a store up to this many times its cap. */
+export const OVERFILL_CAPS = 3;
 const FOOD_PER_SURVIVOR = 0.08;
 const WATER_PER_SURVIVOR = 0.08;
 
@@ -48,6 +57,8 @@ registerModifier({
   mult: ({ resource }) => (resource === 'power' ? 1 : moraleNow),
 });
 registerModifier({ id: 'echo', mult: ({ state }) => prestigeMultiplier(state) });
+// [ux-wp2 M7] Scientific Memory (Genesis) also feeds the Act currencies: +5% per level.
+registerModifier({ id: 'memory', mult: ({ state, resource }) => (isTier2(resource) ? 1 + 0.05 * (state.prestige.upgrades['fastResearch'] ?? 0) : 1) });
 // [P3-5] The scenario's own rules (what grows well in this place and what does not).
 registerModifier({ id: 'scenario', mult: ({ state, resource }) => scenarioOf(state).output?.[resource] ?? 1 });
 // [P2-1] The Technocracy doctrine: every room +5%.
@@ -101,7 +112,9 @@ function moraleMultiplier(state: GameState): number {
   if (state.survivors.length === 0) return 1;
   const avg = state.survivors.reduce((sum, s) => sum + s.happiness, 0) / state.survivors.length;
   // S1: 0.75..1.5 (was 0.5..2.0); morale sat near 100 all game and was a free x2.
-  return 0.75 + (avg / 100) * 0.75;
+  // [ux-wp2 S4] Mood above 100 now counts at half value (people stay at 100%, the surplus is the bunker's), and below 60 it hurts
+  // twice as fast: a law's morale price is paid in output (src/systems/morale.ts).
+  return moraleOutputMult(avg, moraleRawAverage(state));
 }
 
 function prestigeMultiplier(state: GameState): number {
@@ -171,10 +184,8 @@ export class ResourceSystem {
         if (inputFed(state, input)) consumption[input.resource] = (consumption[input.resource] ?? 0) + inputRate(input, b) * (1 - inputSaving(b, input.resource));
       }
       const spec = specOf(b);
-      // [Long game] Tier-2 roles grow with the room's level, slow down when starved, and stop while the room retools.
-      const roleScale = spec?.levelScaled ? (effectiveLevel(b) / 5) * chainFactor(state, b) * (retooling(state, b) ? 0 : 1) : 1;
       for (const [r, v] of Object.entries(spec?.extra ?? {}) as [ResourceType, number][]) {
-        production[r] = (production[r] ?? 0) + v * powerRatio * roleScale;
+        production[r] = (production[r] ?? 0) + this.extraOutput(state, b, r, v, powerRatio);
       }
     }
 
@@ -193,9 +204,11 @@ export class ResourceSystem {
       const cons = consumption[rt] ?? 0;
       const cap = caps[rt] ?? res.cap;
       const raw = res.amount + (prod - cons) * dt;
-      const newAmount = Math.max(0, Math.min(cap, raw));
+      // [ux-wp2 R1] Stock above the cap (a reward that came in "overfilled") is kept until it is used; production never adds to it.
+      const hold = Math.max(cap, res.amount);
+      const newAmount = Math.max(0, Math.min(hold, raw));
       // [Economy A1/A3] Production beyond the cap is not thrown away: a project may absorb it first, the rest becomes credits.
-      const over = Math.min(raw - cap, (prod - cons) * dt);
+      const over = Math.min(raw - hold, (prod - cons) * dt);
       if (over > 1e-9 && OVERFLOW_CREDITS[rt]) this.convertOverflow(state, rt, over, deltas);
       deltas.push(
         { path: `resources.${rt}.amount`, value: newAmount },
@@ -213,6 +226,22 @@ export class ResourceSystem {
   }
 
   private pendingCredits = 0;
+
+  /**
+   * What a room's specialization adds of `r` beyond its own production (`v` per second from the spec).
+   * [Long game] Tier-2 roles grow with the room's level, slow down when starved, and stop while the room retools.
+   * [ux-wp2 S3] They also go through the room's crew (staffing, skill, mastery) and the whole modifier stack (morale, laws, research,
+   * doctrines, Echo...), like every other product; their base rates are divided by TUNING.roleOutputNorm to keep the pacing.
+   * Other extras (salvage yard, kitchen...) stay flat, as before.
+   */
+  private extraOutput(state: GameState, b: BuildingInstance, r: ResourceType, v: number, powerRatio: number): number {
+    const spec = specOf(b);
+    if (!spec?.levelScaled) return v * powerRatio;
+    const roleScale = (effectiveLevel(b) / 5) * chainFactor(state, b) * (retooling(state, b) ? 0 : 1);
+    if (roleScale <= 0) return 0;
+    // The blackout modifier carries the power ratio for these goods.
+    return (v / TUNING.roleOutputNorm) * roleScale * workforceMultiplier(state, b) * modifierProduct({ state, building: b, resource: r, powerRatio });
+  }
 
   private convertOverflow(state: GameState, rt: ResourceType, over: number, _deltas: StateDelta[]): void {
     let left = over;
@@ -267,13 +296,17 @@ export class ResourceSystem {
       } else {
         v = this.computeOutput(state, b, powerRatio)[r] ?? 0;
       }
+      // [ux-wp2 S3] The "why" list belongs to the biggest producer whose output goes through the modifier stack: a flat extra
+      // (salvage yard scrap, kitchen food...) is not multiplied, so it must not pick the list.
       const spec = specOf(b);
       const extra = spec?.extra?.[r];
+      let flat = 0;
       if (extra && !incidentBlocks(state, b)) {
-        const roleScale = spec?.levelScaled ? (level / 5) * chainFactor(state, b) * (retooling(state, b) ? 0 : 1) : 1;
-        v += extra * powerRatio * roleScale;
+        const e = this.extraOutput(state, b, r, extra, powerRatio);
+        if (spec?.levelScaled) v += e;
+        else flat = e;
       }
-      add(src, b.type, v);
+      add(src, b.type, v + flat);
       if (v > 0 && (!top || v > top.v)) top = { b, v };
       if (!incidentBlocks(state, b)) for (const input of chainInputs(b)) {
         if (input.resource === r && inputFed(state, input)) add(snk, b.type, inputRate(input, b) * (1 - inputSaving(b, input.resource)));
@@ -291,6 +324,11 @@ export class ResourceSystem {
     }
     const list = (m: Map<string, { value: number; count: number }>) => [...m.entries()].map(([key, e]) => ({ key, ...e })).sort((a, b) => b.value - a.value);
     const modifiers = top ? modifierBreakdown({ state, building: top.b, resource: r, powerRatio: r === 'power' ? 1 : powerRatio }) : [];
+    // [ux-wp2 S3/S7] The crew of that room (staffing, skill, mastery) leads the list: it now drives the Act currencies too.
+    if (top) {
+      const crew = workforceMultiplier(state, top.b);
+      if (Math.abs(crew - 1) > 1e-3) modifiers.unshift({ id: 'crew', mult: crew });
+    }
     return { sources: list(src), sinks: list(snk), modifiers };
   }
 
@@ -355,6 +393,10 @@ export class ResourceSystem {
     if (hasMutator(state, 'scarcity')) for (const r of Object.keys(caps) as ResourceType[]) if (r !== 'power') caps[r] = Math.round((caps[r] ?? 0) * 0.75);
     // [Long game] L2: the Act's currencies hold a set number of hours of their reference income, so any price fits.
     for (const [r, v] of Object.entries(actCapBonus(state)) as [ResourceType, number][]) caps[r] = (caps[r] ?? 0) + v;
+    // [ux-wp2 R7] Act I: the basics hold at least capHours[1] hours of what the bunker makes (its stores used to fill in minutes).
+    if ((state.longGame?.meta.act ?? 1) <= 1) {
+      for (const r of ACT1_BUFFERED) caps[r] = Math.max(caps[r] ?? 0, Math.round(TUNING.capHours[1] * (state.resources[r]?.productionRate ?? 0) * 3600));
+    }
     return caps;
   }
 
@@ -383,11 +425,18 @@ export class ResourceSystem {
     return true;
   }
 
-  gain(sm: StateManager, gains: Partial<Record<ResourceType, number>>): void {
+  /**
+   * Adds goods, held to storage. [ux-wp2 R1] `overfill`: a reward (supply crate, day chest, achievement) may go past the cap, up to
+   * OVERFILL_CAPS times it, so it is never lost to a full store; the surplus is spent first and production does not refill it.
+   */
+  gain(sm: StateManager, gains: Partial<Record<ResourceType, number>>, opts?: { overfill?: boolean }): void {
     for (const [resource, amount] of Object.entries(gains) as [ResourceType, number][]) {
       const res = sm.state.resources[resource];
+      if (!res) continue;
       const cap = res.cap ?? Infinity;
-      sm.applyDelta({ path: `resources.${resource}.amount`, value: Math.max(0, Math.min(cap, res.amount + amount)) });
+      // Never cuts a store that is already above its cap (an earlier reward).
+      const limit = Math.max(opts?.overfill ? cap * OVERFILL_CAPS : cap, res.amount);
+      sm.applyDelta({ path: `resources.${resource}.amount`, value: Math.max(0, Math.min(limit, res.amount + amount)) });
     }
   }
 

@@ -147,7 +147,9 @@ export function createLongGame(): LongGameState {
     policy: { laws: [], capital: 0, approval: {}, strikeUntil: 0 },
     world: { regions: {}, outposts: [], treaties: {}, contracts: [], seq: 0 },
     inbox: { items: [], seq: 0 },
-    foreman: { orders: {} },
+    // [ux-wp2 M4] The routine orders start on: they act once the Foreman opens (Act II); the player can switch them off.
+    // A save that already has a Foreman keeps its own orders (migrateLongGame); only a missing block gets these.
+    foreman: { orders: { maintain: true, deposit: true, staff: true } },
     chronicle: [],
   };
 }

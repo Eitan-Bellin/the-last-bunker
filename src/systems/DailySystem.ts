@@ -7,6 +7,7 @@ import {
 } from '../data/orders';
 import type { ResourceSystem } from './ResourceSystem';
 import type { RushSystem } from './RushSystem';
+import { actGoods } from '../data/pricing';
 
 /**
  * [plan4:GP-1] Daily orders. Three short goals a day, reset at 04:00 local time (not midnight: a player who plays late at night
@@ -109,6 +110,8 @@ export interface DailyClaim {
   blueprints: number;
   /** The share the streak added to the credits. */
   bonus: number;
+  /** [ux-wp2 R5] Goods paid besides the credits (a silver order from Act III: the Act currency). */
+  gains?: Partial<Record<ResourceType, number>>;
 }
 
 export interface ChestClaim {
@@ -125,6 +128,9 @@ export interface DailySummary {
 }
 
 const CHEST_RESOURCES: ResourceType[] = ['food', 'water', 'materials', 'knowledge'];
+/** [ux-wp2 R1/R5] From Act III a silver order and the day chest also pay this many hours of the Act currency's reference income. */
+export const SILVER_ACT_HOURS = 0.5;
+export const CHEST_ACT_HOURS = 0.5;
 
 export class DailySystem {
   private sm: StateManager;
@@ -337,6 +343,10 @@ export class DailySystem {
     } else if (tier === 'medium' || choice === 'credits') {
       out.credits = Math.round((tier === 'medium' ? REWARD_SILVER : REWARD_GOLD) * scale * (1 + bonus));
       this.resources.gain(this.sm, { credits: out.credits });
+      if (tier === 'medium') {
+        const goods = this.silverGoods();
+        if (Object.keys(goods).length) { out.gains = goods; this.resources.gain(this.sm, goods, { overfill: true }); }
+      }
     } else {
       const frag = this.sm.state.daily.frag + 1;
       out.frag = 1;
@@ -369,7 +379,13 @@ export class DailySystem {
     const out: Partial<Record<ResourceType, number>> = {};
     for (const r of CHEST_RESOURCES) out[r] = Math.round(Math.max(20, s.resources[r].productionRate * 3600 * CHEST_HOURS));
     out.scrap = Math.round(Math.max(10, s.resources.scrap.cap * 0.05 * CHEST_HOURS));
+    for (const [r, v] of Object.entries(actGoods(s, CHEST_ACT_HOURS)) as [ResourceType, number][]) out[r] = (out[r] ?? 0) + v;
     return out;
+  }
+
+  /** [ux-wp2 R5] What a silver order pays besides its credits: half an hour of the Act currency from Act III (nothing before). */
+  silverGoods(s: GameState = this.sm.state): Partial<Record<ResourceType, number>> {
+    return actGoods(s, SILVER_ACT_HOURS);
   }
 
   claimChest(auto = false): ChestClaim | null {
@@ -379,7 +395,7 @@ export class DailySystem {
     const contents = this.chestContents(s);
     const before: Partial<Record<ResourceType, number>> = {};
     for (const r of Object.keys(contents) as ResourceType[]) before[r] = s.resources[r].amount;
-    this.resources.gain(this.sm, contents);
+    this.resources.gain(this.sm, contents, { overfill: true }); // [ux-wp2 R1] a full store never eats the chest
     const gains: Partial<Record<ResourceType, number>> = {};
     for (const r of Object.keys(contents) as ResourceType[]) {
       const got = Math.round(this.sm.state.resources[r].amount - (before[r] ?? 0));

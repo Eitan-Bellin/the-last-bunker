@@ -31,7 +31,7 @@ const PANEL_MS = 6500;
  * Opening sequence: three painted story panels with slow camera drift and narration,
  * the title card, then a flashlight sweep that reveals the dead bunker behind the overlay.
  */
-export function playIntro(opts: { play: (s: 'siren' | 'wind' | 'door' | 'click') => void; onDone: () => void }): void {
+export function playIntro(opts: { play: (s: 'siren' | 'wind' | 'door' | 'click') => void; onDone: () => void; unlock?: () => void }): void {
   const base = import.meta.env.BASE_URL;
   const overlay = el('div', 'intro');
   const stage = el('div', 'intro-stage');
@@ -77,14 +77,21 @@ export function playIntro(opts: { play: (s: 'siren' | 'wind' | 'door' | 'click')
   const titleCard = () => {
     caption.classList.remove('in');
     const title = el('div', 'intro-title');
+    // [ux-wp6: retention R12] The long goal, said once at the very start: seven Acts, then Genesis, and four endings.
+    const goal = el('div', 'intro-title-sub intro-title-goal', i18n.t('wp6.intro.goal'));
+    goal.style.letterSpacing = 'normal';
+    goal.style.marginTop = '18px';
+    goal.style.maxWidth = '30em';
+    goal.style.marginInline = 'auto';
     title.append(
       el('div', 'intro-title-main', i18n.t('intro.title')),
       el('div', 'intro-title-sub', i18n.t('intro.day')),
+      goal,
     );
     stage.replaceChildren(title);
     void title.offsetWidth;
     title.classList.add('in');
-    timer = window.setTimeout(finish, 3200);
+    timer = window.setTimeout(finish, 4600);
   };
 
   /** A torch beam wanders over the dark bunker, then the darkness lifts. */
@@ -133,6 +140,7 @@ export function playIntro(opts: { play: (s: 'siren' | 'wind' | 'door' | 'click')
   overlay.addEventListener('click', (e) => {
     if (e.target === skip || finished || opening) return;
     if (index < 0) {
+      opts.unlock?.(); // [ux-redesign w2fix] "Tap to enter" is a known gesture: unlock audio here too (iOS), not only in the global listeners
       // The camera pushes into the vault door, then the story begins.
       opening = true;
       opts.play('click');

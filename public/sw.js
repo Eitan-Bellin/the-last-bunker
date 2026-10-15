@@ -9,7 +9,10 @@
 const CACHE = 'lastbunker-v4';
 const BUILD = '__BUILD_ID__';
 const PRECACHE = /*__PRECACHE__*/[];
-const SHELL = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png', './favicon-64.png'];
+// [ux-redesign W1] The self-hosted fonts (public/fonts) belong to the shell: a first offline launch must not fall back to system fonts.
+const FONTS = ['fonts.css', 'rubik-400-800-hebrew.woff2', 'rubik-400-800-latin.woff2', 'secular-one-400-hebrew.woff2', 'secular-one-400-latin.woff2',
+  'karantina-400-hebrew.woff2', 'karantina-400-latin.woff2', 'karantina-700-hebrew.woff2', 'karantina-700-latin.woff2'].map((f) => `./fonts/${f}`);
+const SHELL = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png', './favicon-64.png', ...FONTS];
 const NAVIGATE_TIMEOUT_MS = 4000;
 
 // Plan 4 wave 3: the build writes asset-manifest.json (every script and stylesheet, including the chunks fetched only on demand: the
@@ -59,6 +62,20 @@ self.addEventListener('activate', (event) => {
       }
     }
     await self.clients.claim();
+  })());
+});
+
+// [ux-wp3 B5] Tapping a notification ("the expedition is back") brings the game to the front, or opens it when it is closed.
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  event.waitUntil((async () => {
+    const scope = self.registration.scope;
+    const wins = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    const mine = wins.find((c) => c.url.startsWith(scope)) || wins[0];
+    if (mine && 'focus' in mine) {
+      try { await mine.focus(); return; } catch (err) { /* not allowed to focus: open a window instead */ }
+    }
+    if (self.clients.openWindow) await self.clients.openWindow(scope);
   })());
 });
 

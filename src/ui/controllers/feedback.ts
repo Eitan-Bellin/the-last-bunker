@@ -1,7 +1,10 @@
 import { ENDINGS } from '../../data/endings';
 import { SEASONS, nextSeason, seasonAt } from '../../data/seasons';
 import { ACTS } from '../../data/acts';
-import { haptic } from '../../utils/haptics';
+import { feel, haptic } from '../../utils/haptics';
+import { FLY_MS, FlyToHud, type Point } from '../fx/flyToHud'; // [ux-redesign W4]
+import { floorTop, slotX, SLOT_W } from '../../rendering/geom';
+import '../../styles/fx.css';
 import { reducedMotion } from '../../utils/a11y'; // [plan4:GP-2]
 import { statusTint } from '../../utils/a11y';
 import { announce } from '../a11yDom';
@@ -9,6 +12,7 @@ import { getProject } from '../../data/projects';
 import { getPartner } from '../../data/trade';
 import { WEEKLY_CREDITS } from '../../data/challenges';
 import { i18n } from '../../i18n/I18nManager';
+import { fmtNum, plural } from '../format';
 import { bus } from '../../core/EventBus';
 import { getDef, isPowerPlant } from '../../data/buildingDefs';
 import { getResearch } from '../../data/research';
@@ -27,14 +31,135 @@ import type { IncidentResolved } from '../../systems/IncidentSystem';
 import type { ChildBorn, CoupleFormed } from '../../systems/FamilySystem';
 import type { Incident } from '../../core/GameState';
 import { type RaidResult } from '../../systems/EventSystem';
+import { deathCause } from '../../systems/DeathSystem'; // [ux-wp3 W1]
 import type { GameApp } from '../../app';
+import { GOAL_FOLD_MS, goalLine } from '../popupRules';
+
+/** [ux-wp3 W1] The cause of a death in words (null when unknown: the old sentence is used). Also used by the memorial. */
+export function causeText(state: import('../../core/GameState').GameState, cause: string | undefined, g: Record<string, string | number>): string | null {
+  const c = deathCause(state, cause);
+  if (c.kind === 'other') return null;
+  const what = c.disaster ? DISASTERS[c.disaster as keyof typeof DISASTERS]?.name[i18n.currentLocale] ?? c.disaster : '';
+  return i18n.t(`wp3.cause.${c.kind}`, { what, ...g });
+}
+
+/** [ux-wp3 D1] Survivor level-up toasts fold into one line per this window. */
+const LEVEL_TOAST_GAP_MS = 60_000;
+/** [ux-redesign w2a #22] The first digest of a quiet minute still waits this long, so a burst of level-ups becomes one line. */
+const LEVEL_DIGEST_MIN_MS = 8_000;
+/** [ux-redesign w2fix B9 / #22] No level-up toast at all in a new game's first minutes (play seconds): the star over the head says it. */
+const LEVEL_QUIET_START_S = 300;
 
 /** What the player sees and hears when something happens in the bunker: toasts, sounds, little bursts over the rooms. */
+/** [ux-redesign W4] Bursts of different stores leave one after the other (ms), like the bubbles always did. */
+const FLY_GAP_MS = 90;
+/** [ux-redesign W4] The crisis siren sounds once for a cluster of crises starting together. */
+const CRISIS_SOUND_GAP_MS = 4000;
+/** [ux-redesign W4] At most one landing buzz in this window, however many stores land. */
+const LAND_BUZZ_GAP_MS = 250;
+
 export class FeedbackController {
   private app: GameApp;
 
   constructor(app: GameApp) {
     this.app = app;
+  }
+
+  // ───────────────────────────── [ux-redesign W4] goods fly to the HUD ─────────────────────────────
+
+  private landBuzzAt = -1e9;
+  readonly fly = new FlyToHud({
+    target: r => this.app.hud.resourceRect(r),
+    start: (r, ms) => this.app.hud.holdCount(r, ms),
+    land: r => {
+      this.app.hud.landResource(r);
+      const now = performance.now();
+      if (now - this.landBuzzAt > LAND_BUZZ_GAP_MS) { this.landBuzzAt = now; feel('collect'); }
+    },
+  });
+
+  /** A world point (the bunker's coordinates) on the screen, or null when it is outside the picture. */
+  worldToScreen(x: number, y: number): Point | null {
+    const wc = this.app.renderer.worldContainer;
+    const p = { x: wc.x + x * wc.scale.x, y: wc.y + y * wc.scale.y };
+    return p.x >= 0 && p.y >= 0 && p.x <= window.innerWidth && p.y <= window.innerHeight ? p : null;
+  }
+
+  /** The middle of the screen (goods from a dialog, a trip, a contract). */
+  private middle(): Point {
+    return { x: window.innerWidth / 2, y: window.innerHeight / 2 };
+  }
+
+  /** The centre of an element on the screen, or null when it is not laid out. */
+  private centerOf(node: Element | null | undefined): Point | null {
+    const r = node?.getBoundingClientRect();
+    return r && r.width ? { x: r.left + r.width / 2, y: r.top + r.height / 2 } : null;
+  }
+
+  /** Several stores at once: one burst each, a moment apart. Nothing flies for time away or on a hidden page. */
+  flyGoods(gains: Partial<Record<ResourceType, number>>, from: Point | null): void {
+    if (document.hidden || this.app.engine.awayRunning) return;
+    const at = from ?? this.middle();
+    const stores = (Object.entries(gains) as [ResourceType, number][]).filter(([, v]) => v > 0);
+    // [w4fix C1] Every number waits for its goods from now on: the gain is already in the state, and a HUD frame before the burst
+    // leaves would otherwise start the count early. The label reads like the tile it lands on (fmtNum, C4).
+    stores.forEach(([r], i) => this.app.hud.holdCount(r, FLY_MS + i * FLY_GAP_MS));
+    stores.forEach(([r, v], i) => window.setTimeout(() => this.fly.fly(r, at, v, `+${fmtNum(v)}`), i * FLY_GAP_MS));
+  }
+
+  /** The surface gate (trips come home through it). */
+  private gatePoint(): Point | null {
+    return this.worldToScreen(slotX(0) + SLOT_W, floorTop(0) + 30);
+  }
+
+  private crisisAt = -1e9;
+
+  /** A crisis begins: the soft siren once (several crises starting together share it); the music steps back under it. */
+  private crisisSound(): void {
+    const now = performance.now();
+    if (now - this.crisisAt < CRISIS_SOUND_GAP_MS) return;
+    this.crisisAt = now;
+    this.app.audio.duck(2);
+    this.app.audio.play('crisis');
+  }
+
+  /** [ux-wp3 D1/F5] Level-up toasts: at most one a minute; the ones in between become one line ("3 people levelled up"). */
+  private levelShownAt = -Infinity;
+  private levelWaiting: string[] = [];
+  private levelTimer = 0;
+
+  private levelToast(text: string): void {
+    if (this.app.engine.awayRunning) return; // [ux-wp3 D2] the hours away are told by the welcome report, not by a pile of level-ups
+    if (this.app.state.stats.totalPlayTime < LEVEL_QUIET_START_S) return;
+    const now = performance.now();
+    // [ux-redesign w2a #22] Never at once: the star over the person's head is the moment; the toast is a digest at the end of the minute.
+    this.levelWaiting.push(text);
+    if (this.levelTimer) return;
+    this.levelTimer = window.setTimeout(() => {
+      this.levelTimer = 0;
+      const list = this.levelWaiting;
+      this.levelWaiting = [];
+      if (!list.length || this.app.state.stats.totalPlayTime < LEVEL_QUIET_START_S) return;
+      this.levelShownAt = performance.now();
+      this.app.toasts.show(list.length === 1 ? list[0] : `[[star]] ${plural('wp3.levelUps', list.length)}`, 'good');
+    }, Math.max(LEVEL_DIGEST_MIN_MS, LEVEL_TOAST_GAP_MS - (now - this.levelShownAt)));
+  }
+
+  /** [ux-redesign w2a #21] Goals finished in the same moment (three "assign a worker" goals at once) are told as one line. */
+  private goalsWaiting: string[] = [];
+  private goalTimer = 0;
+
+  private goalToast(name: string): void {
+    this.goalsWaiting.push(name);
+    if (this.goalTimer) return;
+    this.goalTimer = window.setTimeout(() => {
+      this.goalTimer = 0;
+      const names = this.goalsWaiting;
+      this.goalsWaiting = [];
+      if (!names.length) return;
+      this.app.audio.play('complete');
+      this.app.toasts.show(`[[target]] ${goalLine(names, n => i18n.t('toast.objective', { name: n }), n => plural('ux2a.goals', n))}`, 'good');
+    }, GOAL_FOLD_MS);
   }
 
   install(): void {
@@ -67,18 +192,21 @@ export class FeedbackController {
       const survivor = s as SurvivorState;
       // [plan4:GP-2] A little star over their head and a bell (the ceremony queue folds several at once into one).
       void this.app.ceremony.fire({ kind: 'person', personId: survivor.id, title: this.app.localName(survivor.name), sub: i18n.t('cer.person.sub', { level: survivor.level }) });
-      this.app.toasts.show(`[[star]] ${i18n.t('toast.levelUp', {
+      this.levelToast(`[[star]] ${i18n.t('toast.levelUp', {
         name: this.app.localName(survivor.name),
         level: survivor.level,
         stat: i18n.t(`stats.${stat as keyof SurvivorStats}`),
         ...this.app.gOf(survivor),
-      })}`, 'good');
+      })}`);
     });
 
-    bus.on('survivor:died', (s: unknown) => {
+    bus.on('survivor:died', (s: unknown, cause: unknown) => {
       // [plan4:GP-2] A slow dimming, a candle and a line of remembrance; the memorial dialog waits behind it (dialog gate).
       void this.app.ceremony.fire({ kind: 'death', personId: (s as SurvivorState).id, icon: '[[heart]]', title: i18n.t('cer.death', { name: this.app.localName((s as SurvivorState).name) }) });
-      this.app.toasts.show(`[[skull]] ${i18n.t('toast.died', { name: this.app.localName((s as SurvivorState).name), ...this.app.gOf(s as SurvivorState) })}`, 'bad');
+      // [ux-wp3 W1] How they died, said with it ("fell defending the bunker from raiders", "died of thirst").
+      const sv = s as SurvivorState;
+      const why = causeText(this.app.state, cause as string | undefined, this.app.gOf(sv));
+      this.app.toasts.show(`[[skull]] ${why ? i18n.t('wp3.died', { name: this.app.localName(sv.name), cause: why }) : i18n.t('toast.died', { name: this.app.localName(sv.name), ...this.app.gOf(sv) })}`, 'bad');
     });
 
     bus.on('research:complete', (id: unknown) => {
@@ -99,14 +227,17 @@ export class FeedbackController {
     bus.on('achievement', (id: unknown) => {
       const a = ACHIEVEMENTS.find(x => x.id === id);
       if (!a) return;
-      this.app.audio.play('achievement');
-      haptic('success');
+      // [ux-wp3 F15] A badge card with the count; the ceremony brings the sound and the buzz (a hidden page gets the toast only).
+      const got = this.app.state.achievements?.length ?? 0;
+      void this.app.ceremony.fire({ kind: 'achievement', icon: '[[trophy]]', title: a.name[i18n.currentLocale] ?? a.name.en, sub: i18n.t('wp3.cer.achievement', { n: got, all: ACHIEVEMENTS.length }) });
       this.app.toasts.show(`[[trophy]] ${i18n.t('toast.achievement', { name: a.name[i18n.currentLocale] ?? a.name.en })}`, 'good');
       this.app.engine.requestSave();
     });
 
-    bus.on('mission:complete', () => {
+    bus.on('mission:complete', (rep: unknown) => {
       this.app.audio.play('mission');
+      const report = rep as { loot?: Partial<Record<ResourceType, number>> } | undefined;
+      if (report?.loot) this.flyGoods(report.loot, this.gatePoint()); // [ux-redesign W4] the trip's goods come in through the gate
       this.app.engine.requestSave();
     });
 
@@ -119,10 +250,15 @@ export class FeedbackController {
         fire: 'fire', flood: 'splash', blackout: 'powerDown', roaches: 'skitter', breach: 'alarm',
       };
       this.app.audio.play(sound[inc.kind]);
-      if (inc.kind !== 'breach') setTimeout(() => this.app.audio.play('alarm'), 400);
+      // [ux-redesign W4] The soft crisis siren (once) instead of the second, harsher alarm.
+      if (inc.kind !== 'breach') setTimeout(() => this.crisisSound(), 400);
       this.app.renderer.shake(inc.kind === 'breach' ? 6 : 4, 0.5);
-      haptic('warning');
-      this.app.toasts.show(`[[${def.icon}]] ${i18n.t('incident.started', { name: def.name[i18n.currentLocale], room: this.app.roomName(inc.buildingId) })}`, 'bad');
+      feel(inc.kind === 'breach' ? 'explosion' : 'warning');
+      // [ux-redesign w3fix B6] One channel per incident: the HUD's incident banner tells it (room, floor, "tap to help"). A toast only
+      // when a raid or disaster has the banner, so the room trouble would otherwise go unsaid.
+      if (this.app.danger.dangerBanner()) {
+        this.app.toasts.show(`[[${def.icon}]] ${i18n.t('incident.started', { name: def.name[i18n.currentLocale], room: this.app.roomName(inc.buildingId) })}`, 'bad');
+      }
       // [plan4:AC-11] Said to a screen reader as an alert, with the floor (when the player turned announcements on).
       const floor = this.app.state.buildings.find(b => b.id === inc.buildingId)?.position.floor ?? 0;
       announce(i18n.t('announce.incident', { name: def.name[i18n.currentLocale], floor: floor + 1 }), 'assertive');
@@ -155,14 +291,23 @@ export class FeedbackController {
     bus.on('raid:warning', (r: unknown) => {
       const raid = r as { hitAt: number };
       this.app.audio.play('alarm');
+      setTimeout(() => this.crisisSound(), 600); // [ux-redesign W4]
+      feel('raid');
       this.app.dangerPrompt = true;
       this.app.toasts.show(`[[armory]] ${i18n.t('danger.toast.raid', { time: i18n.formatDuration(raid.hitAt - this.app.state.stats.totalPlayTime) })}`, 'bad');
       announce(i18n.t('announce.raid', { time: i18n.formatDuration(raid.hitAt - this.app.state.stats.totalPlayTime) }), 'assertive'); // plan4:qa
     });
-    bus.on('raid:resolved', (r: unknown) => { this.app.raidResult = r as RaidResult; });
+    bus.on('raid:resolved', (r: unknown) => {
+      const res = r as RaidResult;
+      this.app.raidResult = res;
+      // [ux-wp3 F2] The raiders at the gate: siren, the camera at the entrance, the impact. The result dialog waits behind it (gate).
+      if (res.key !== 'tribute') void this.app.ceremony.fire({ kind: 'raid', win: res.key === 'hidden' ? undefined : res.key === 'win' || res.key === 'winCaptive' });
+    });
     bus.on('disaster:start', (d: unknown) => {
       const def = DISASTERS[(d as { kind: keyof typeof DISASTERS }).kind];
       this.app.audio.play('alarm');
+      setTimeout(() => this.crisisSound(), 600); // [ux-redesign W4]
+      feel('warning');
       this.app.dangerPrompt = true;
       this.app.toasts.show(`[[${def.icon}]] ${i18n.t('danger.toast.disaster', { name: def.name[i18n.currentLocale], time: i18n.formatDuration(def.countdown) })}`, 'bad');
     });
@@ -174,7 +319,7 @@ export class FeedbackController {
       const res = r as { kind: keyof typeof DISASTERS };
       const def = DISASTERS[res.kind];
       this.app.audio.play('error');
-      haptic('error');
+      feel('explosion'); // [ux-redesign W4] a disaster hitting is heavy
       this.app.toasts.show(`[[${def.icon}]] ${i18n.t('danger.toast.struck', { name: def.name[i18n.currentLocale], text: def.struck[i18n.currentLocale] })}`, 'bad');
     });
     bus.on('family:couple', (c: unknown) => {
@@ -224,17 +369,22 @@ export class FeedbackController {
     // [LateGame B1-B4] big projects, caravans, mastery, weekly challenge
     bus.on('project:stage', (id: unknown, stage: unknown) => {
       const def = getProject(id as string);
-      this.app.audio.play('complete');
+      // [ux-wp3 R4] A stage of a charter project gets its moment at the lot (sound and buzz come with it).
+      const all = def?.stages.length ?? 0;
+      if ((stage as number) < all) void this.app.ceremony.fire({ kind: 'project', projectId: id as string, icon: '[[build]]', sound: 'complete', title: def?.name[i18n.currentLocale] ?? '', sub: i18n.t('wp3.cer.projectStage', { n: stage as number, all }) });
       this.app.toasts.show(`[[build]] ${i18n.t('proj.stageDone', { name: def?.name[i18n.currentLocale] ?? '', n: stage as number, all: def?.stages.length ?? 0 })}`, 'good');
       this.app.engine.requestSave();
     });
     bus.on('project:done', (id: unknown) => {
       const def = getProject(id as string);
+      // [ux-wp3 R4] The whole project: the bigger moment (the last stage's own moment folds into this one).
+      void this.app.ceremony.fire({ kind: 'project', projectId: id as string, icon: '[[trophy]]', title: def?.name[i18n.currentLocale] ?? '', sub: i18n.t('wp3.cer.projectDone') });
       this.app.toasts.show(`[[trophy]] ${i18n.t('proj.done', { name: def?.name[i18n.currentLocale] ?? '' })}`, 'good');
     });
     bus.on('caravan:complete', (r: unknown) => {
       const c = r as { partner: string; ok: boolean; levelUp: boolean; recruitName: string | null };
       const name = getPartner(c.partner)?.name[i18n.currentLocale] ?? '';
+      if (c.ok) this.flyGoods((r as { goods?: Partial<Record<ResourceType, number>> }).goods ?? {}, this.gatePoint()); // [ux-redesign W4]
       this.app.toasts.show(c.ok ? `[[cart]] ${i18n.t('trade.home', { name })}${c.levelUp ? ` · ${i18n.t('trade.levelUp')}` : ''}${c.recruitName ? ` · ${i18n.t('mission.recruit', { name: this.app.localName(c.recruitName), ...this.app.gByName(c.recruitName) })}` : ''}` : `[[skull]] ${i18n.t('trade.ambush', { name })}`, c.ok ? 'good' : 'bad');
       this.app.engine.requestSave();
     });
@@ -247,10 +397,21 @@ export class FeedbackController {
       this.app.engine.requestSave();
     });
 
+    // [ux-redesign W4] The day chest and a claimed order: the goods fly from the chest (or the pressed button) to their counters.
+    bus.on('daily:chest', (c: unknown, auto: unknown) => {
+      if (auto) return;
+      this.flyGoods((c as { gains?: Partial<Record<ResourceType, number>> }).gains ?? {}, this.centerOf(document.querySelector('.daily-chest')));
+    });
+    bus.on('daily:claimed', (c: unknown, auto: unknown) => {
+      if (auto) return;
+      const claim = c as { credits?: number; gains?: Partial<Record<ResourceType, number>> };
+      const pressed = document.activeElement instanceof HTMLElement && document.activeElement.closest('.sheet') ? document.activeElement : null;
+      this.flyGoods({ ...(claim.gains ?? {}), ...(claim.credits ? { credits: claim.credits } : {}) }, this.centerOf(pressed));
+    });
+
     bus.on('objective:complete', (o: unknown) => {
       const obj = o as Objective;
-      this.app.audio.play('complete');
-      this.app.toasts.show(`[[target]] ${i18n.t('toast.objective', { name: obj.text[i18n.currentLocale] ?? obj.text.en })}`, 'good');
+      this.goalToast(obj.text[i18n.currentLocale] ?? obj.text.en);
       this.app.engine.requestSave();
     });
 
@@ -259,7 +420,8 @@ export class FeedbackController {
       const c = this.app.renderer.ruinCenter(ruin);
       this.app.audio.play('debris');
       const lootText = (Object.entries(loot) as [ResourceType, number][]).map(([r, v]) => `+${v} ${RESOURCE_ICONS[r] ?? ''}`);
-      lootText.forEach((t, i) => setTimeout(() => this.app.popups.spawn(c.x + (i - (lootText.length - 1) / 2) * 30, c.y, t, 0xffd27a), i * 160));
+      lootText.forEach((t, i) => setTimeout(() => this.app.popups.spawn(c.x + (i - (lootText.length - 1) / 2) * 30, c.y, t, 0xffd27a, true), i * 160)); // [ux-wp3 F10] loot is never "routine"
+      this.flyGoods(loot, this.worldToScreen(c.x, c.y)); // [ux-redesign W4] the finds fly up into their counters
       if (buildingId) {
         const b = this.app.state.buildings.find(x => x.id === buildingId);
         const name = b ? getDef(b.type)?.name[i18n.currentLocale] ?? '' : '';
@@ -323,8 +485,9 @@ export class FeedbackController {
       this.app.toasts.show(`[[${now.def.icon}]] ${i18n.t('season.forecast', { now: now.def.name[loc], desc: now.def.desc[loc], next: next.name[loc], t: i18n.formatDuration(now.left), nextDesc: next.desc[loc] })}`, 'info');
     };
     // [P4] A contract paid.
-    bus.on('contract:done', (issuer: unknown) => {
+    bus.on('contract:done', (issuer: unknown, reward: unknown) => {
       const p = getPartner(issuer as string);
+      this.flyGoods((reward as Partial<Record<ResourceType, number>> | undefined) ?? {}, null); // [ux-redesign W4]
       this.app.audio.play('coin');
       this.app.toasts.show(`[[cart]] ${i18n.t('contract.done', { issuer: p ? p.name[i18n.currentLocale] : i18n.t('contract.drifters') })}`, 'good');
       this.app.engine.requestSave();

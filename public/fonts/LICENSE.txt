@@ -1,0 +1,8 @@
+Fonts in this folder (woff2 subsets downloaded unmodified from Google Fonts, fonts.google.com):
+
+  Rubik        Copyright The Rubik Project Authors
+  Secular One  Copyright The Secular One Project Authors
+  Karantina    Copyright The Karantina Project Authors
+
+All three are licensed under the SIL Open Font License, Version 1.1.
+Full license text: https://openfontlicense.org/open-font-license-official-text/

@@ -1,7 +1,10 @@
-import type { GameState, ResourceType } from '../core/GameState';
+import type { GameState, ResourceType, SurvivorState } from '../core/GameState';
 import { hexDistance } from './surface';
 import { hasFeature } from '../systems/ResearchSystem';
 import { genesisGateMet } from '../systems/MetaSystem';
+import { localizeName } from './names';
+import { genderOf } from './portraits';
+import { resolveGender } from '../i18n/I18nManager';
 
 /**
  * The storyline (Sprint 6): chapters told by recurring characters, each unlocked by a milestone.
@@ -64,6 +67,8 @@ export interface StoryEffect {
   leaves?: number;
   /** Adults who get hurt (sickness, a fight); never below 15 HP, so a story choice can't kill. */
   hurt?: { count: number; damage: number };
+  /** [ux-wp5 C3] A find for the journal (lore id) that comes with this moment. */
+  lore?: string;
 }
 
 export interface StoryChoice {
@@ -88,6 +93,8 @@ export interface Chapter {
   choices?: StoryChoice[];
   /** Applied when a chapter without choices ends. */
   effect?: StoryEffect;
+  /** [ux-wp5 C10] A short moment between the chapters (no chapter number; not counted with the chapters). */
+  interlude?: boolean;
 }
 
 const has = (s: GameState, f: string) => s.storyFlags.includes(f);
@@ -172,9 +179,11 @@ export const CHAPTERS: Chapter[] = [
       { who: 'narrator', text: { he: 'מישהי דופקת על הדלת. שלוש דפיקות, הפסקה, ועוד שתיים. כמו מי שיודעת שזה הקוד.', en: 'Someone knocks. Three knocks, a pause, then two more. Like someone who knows it\'s the code.' } },
       { who: 'maya', text: { he: 'זה עדיין בונקר 17? ...אני מאיה. גרתי כאן. יוסי ואני יצאנו צפונה אחרי נועה, אבל יוסי לא הגיע. חזרתי לבד.', en: 'Is this still Bunker 17? ...I\'m Maya. I lived here. Yossi and I went north after Noa, but Yossi didn\'t make it. I came back alone.' } },
       { who: 'maya', text: { he: 'אמא תמיד אמרה שהשמש מחכה לנו. אני חושבת שהיא חיכתה לכם. אפשר להישאר?', en: 'Mom always said the sun was waiting for us. I think it was waiting for you. Can I stay?' } },
+      { who: 'maya', text: { he: 'ואת זה תשמרו אתם. מכתב מאבא שלי. הוא אף פעם לא שלח אותו, אבל אני יודעת אותו בעל פה.', en: 'And you keep this. A letter from my dad. He never sent it, but I know it by heart.' } },
     ],
     effect: {
       morale: 8,
+      lore: 'goodbye',
       joins: { name: 'Maya', portrait: 'p07', stats: { intelligence: 9, agility: 8, charisma: 7 }, traits: ['optimist'] },
     },
   },
@@ -619,6 +628,152 @@ export const CHAPTERS: Chapter[] = [
   },
 ];
 
+// ---- [ux-wp5 C10] Between the chapters: short moments from Act III on, so the long middle of a run still has a voice ----
+
+/** World seconds since the last story moment before an interlude may come (chapters keep their own pace). */
+export const INTERLUDE_GAP = 2.5 * 86400;
+
+/** World time of the last chapter or interlude told in this run (the Chronicle keeps it), or the start of the Act. */
+function lastStoryAt(s: GameState): number {
+  const lg = s.longGame;
+  if (!lg) return 0;
+  const run = lg.meta.runIndex;
+  const list = lg.chronicle ?? [];
+  for (let i = list.length - 1; i >= 0; i--) if (list[i].k === 'chapter' && list[i].run === run) return Math.max(list[i].t, lg.meta.actSince);
+  return lg.meta.actSince;
+}
+const quietLong = (s: GameState) => !!s.longGame && s.longGame.meta.worldT - lastStoryAt(s) >= INTERLUDE_GAP;
+const STORY_PEOPLE = new Set(['Maya', 'Gideon']);
+
+/** The people an interlude speaks of, picked from the bunker the same way every time (so a replay names the same people). */
+type CastKey = 'child' | 'baby' | 'kid' | 'a' | 'b' | 'elder';
+function castOf(s: GameState): Partial<Record<CastKey, SurvivorState>> {
+  const out: Partial<Record<CastKey, SurvivorState>> = {};
+  const ppl = s.survivors.filter(x => !STORY_PEOPLE.has(x.name));
+  out.child = ppl.find(x => (x.parentIds?.length ?? 0) > 0); // the first one born here
+  out.kid = ppl.find(x => x.child);
+  // The youngest one born here who is still small.
+  out.baby = ppl.filter(x => x.child && (x.parentIds?.length ?? 0) > 0).sort((p, q) => (q.bornAt ?? 0) - (p.bornAt ?? 0))[0];
+  const a = ppl.find(x => !x.child && x.partnerId && ppl.some(p => p.id === x.partnerId));
+  if (a) { out.a = a; out.b = ppl.find(p => p.id === a.partnerId); }
+  out.elder = ppl.find(x => !x.child && !x.parentIds?.length);
+  return out;
+}
+const cast = (s: GameState, ...keys: CastKey[]) => { const c = castOf(s); return keys.every(k => !!c[k]); };
+
+const tell = (he: string, en: string, who: StoryLine['who'] = 'narrator'): StoryLine => ({ who, text: { he, en } });
+
+export const INTERLUDES: Chapter[] = [
+  {
+    id: 'i_firstSteps', number: 0, interlude: true,
+    title: { he: 'צעד ראשון', en: 'A First Step' },
+    trigger: s => actAtLeast(s, 3) && quietLong(s) && cast(s, 'baby'),
+    lines: [
+      tell('{baby} עשה/תה צעד ראשון היום, בין השולחנות בחדר האוכל. ארבעים איש הפסיקו לאכול כדי להסתכל.', '{baby} took a first step today, between the canteen tables. Forty people stopped eating to watch.'),
+      tell('מישהו הציע לכתוב את זה ביומן. כתבנו. מתחת לדוח המים, באותיות גדולות.', 'Someone said we should write it in the log. We did. Under the water report, in big letters.', 'crew'),
+    ],
+    effect: { morale: 3, moraleFor: 900 },
+  },
+  {
+    id: 'i_curtain', number: 0, interlude: true,
+    title: { he: 'וילון משלושה דגלים', en: 'A Curtain of Three Flags' },
+    trigger: s => actAtLeast(s, 3) && quietLong(s) && cast(s, 'a', 'b'),
+    lines: [
+      tell('{a} ו{b} ביקשו פינה משלהם. קיבלו אחת בקומה השקטה, ווילון שתפרו להם משלושה דגלים ישנים.', '{a} and {b} asked for a corner of their own. They got one on the quiet level, and a curtain sewn for them from three old flags.'),
+      tell('אף אחד לא זוכר של מי היו הדגלים. עכשיו הם של שניהם.', 'Nobody remembers whose flags they were. Now they belong to the two of them.'),
+    ],
+    effect: { morale: 3, moraleFor: 900 },
+  },
+  {
+    id: 'i_stations', number: 0, interlude: true,
+    title: { he: 'שמות התחנות', en: 'The Names of the Stations' },
+    trigger: s => actAtLeast(s, 4) && quietLong(s) && has(s, 'story:terminus'),
+    lines: [
+      tell('הערב אין לי חדשות. רק רציתי להקריא את שמות התחנות של הקו הישן, אחת אחרי השנייה. שמישהו יזכור אותן.', 'No news tonight. I just wanted to read out the names of the stations on the old line, one after another. So someone remembers them.', 'ezra'),
+      tell('הוא הקריא שלושים ושבע תחנות. בחדר הרדיו אף אחד לא זז עד הסוף.', 'He read thirty-seven stations. In the radio room, nobody moved until the end.'),
+    ],
+    effect: { morale: 3, moraleFor: 900 },
+  },
+  {
+    id: 'i_reading', number: 0, interlude: true,
+    title: { he: 'יציאת חירום', en: 'Emergency Exit' },
+    trigger: s => actAtLeast(s, 4) && quietLong(s) && mayaHome(s) && cast(s, 'kid'),
+    lines: [
+      tell('אני מלמדת את הילדים לקרוא מהשלטים שעל הקירות. אין לנו ספרים, אבל יש לנו הרבה חצים.', 'I\'m teaching the children to read from the signs on the walls. We have no books, but we have a lot of arrows.', 'maya'),
+      tell('{kid} הקריא/ה בקול "יציאת חירום", ושאל/ה מה זה יציאה. מאיה חשבה הרבה זמן לפני שענתה.', '{kid} read "EMERGENCY EXIT" out loud and asked what an exit is. Maya thought for a long time before she answered.'),
+    ],
+    effect: { morale: 3, moraleFor: 900 },
+  },
+  {
+    id: 'i_gideonNote', number: 0, interlude: true,
+    title: { he: 'פתק על חץ', en: 'A Note on an Arrow' },
+    trigger: s => actAtLeast(s, 5) && quietLong(s) && has(s, 'story:clan'),
+    lines: [
+      tell('בבוקר מצאנו חץ נעוץ בדלת, ועליו פתק.', 'In the morning there was an arrow in the door, with a note on it.'),
+      { who: 'gideon', when: clanFriend, text: { he: '"השבט חי. החורף עבר. אם תצטרכו ידיים, תצעקו חזק. גדעון."', en: '"The Clan lives. Winter passed. If you need hands, shout loud. Gideon."' } },
+      { who: 'gideon', when: clanFoe, text: { he: '"אנחנו עדיין כאן. אנחנו עדיין זוכרים. אבל גם אנחנו עייפים. ג׳."', en: '"We are still here. We still remember. But we are tired too. G."' } },
+    ],
+    effect: { morale: 2, moraleFor: 900 },
+  },
+  {
+    id: 'i_elder', number: 0, interlude: true,
+    title: { he: 'איך היה פעם', en: 'How It Used to Be' },
+    trigger: s => actAtLeast(s, 5) && quietLong(s) && cast(s, 'elder') && s.survivors.length >= 40,
+    lines: [
+      tell('הערב, בחדר האוכל, הצעירים ביקשו מ{elder} לספר איך היה פעם: כשהמנורות היו ורודות, המרק היה דליל, והדלת נפתחה פעם בשבוע.', 'Tonight in the canteen, the young ones asked {elder} to tell how it used to be: when the lamps were pink, the soup was thin, and the door opened once a week.'),
+      tell('הסיפור נגמר מאוחר. בסוף כולם ביקשו לשמוע אותו שוב מחר.', 'The story ran late. At the end everyone asked to hear it again tomorrow.'),
+    ],
+    effect: { morale: 3, moraleFor: 900 },
+  },
+  {
+    id: 'i_cake', number: 0, interlude: true,
+    title: { he: 'עוגה משעועית', en: 'A Bean Cake' },
+    trigger: s => actAtLeast(s, 5) && quietLong(s) && cast(s, 'child') && has(s, 'story:i_firstSteps'),
+    lines: [
+      tell('הילדים אפו עוגה משעועית ומסוכר שאף אחד לא ידע שיש לנו. היום יום ההולדת של {child}, הראשון/ה שנולד/ה כאן.', 'The children baked a cake from beans and sugar nobody knew we had. It is {child}\'s birthday, the first one born here.'),
+      tell('לא היו נרות, אז כיבינו לרגע את כל האורות בקומה. כולם שרו בחושך.', 'There were no candles, so we turned off every light on the level for a moment. Everyone sang in the dark.', 'crew'),
+    ],
+    effect: { morale: 3, moraleFor: 900 },
+  },
+  {
+    id: 'i_noaNoticed', number: 0, interlude: true,
+    title: { he: 'מישהו שם לב', en: 'Someone Noticed' },
+    trigger: s => actAtLeast(s, 6) && quietLong(s) && has(s, 'story:genesis'),
+    lines: [
+      tell('מדדתי משהו הלילה: את קרינת האיזוטופ מהכיוון שלכם. היא עלתה. אתם בונים משהו.', 'I measured something tonight: the isotope reading from your direction. It went up. You are building something.', 'noa'),
+      tell('לא ביקשתי כלום. רק רציתי שתדעו שמישהו שם לב.', 'I\'m not asking for anything. I just wanted you to know someone noticed.', 'noa'),
+    ],
+    effect: { morale: 3, moraleFor: 900 },
+  },
+  {
+    id: 'i_quietNight', number: 0, interlude: true,
+    title: { he: 'לילה בלי אזעקה', en: 'A Night Without Alarms' },
+    trigger: s => actAtLeast(s, 6) && quietLong(s),
+    lines: [
+      tell('לילה שלם בלי אזעקה אחת. השומר נרדם ליד הדלת, ואף אחד לא העיר אותו.', 'A whole night without a single alarm. The lookout fell asleep by the door, and nobody woke them.'),
+      tell('בבוקר כולם עשו את עצמם כאילו לא שמו לב.', 'In the morning everyone pretended not to have noticed.'),
+    ],
+    effect: { morale: 3, moraleFor: 900 },
+  },
+];
+
+/** Fills an interlude's names ({child}, {a}, ...) in both languages; the Hebrew "/" forms follow the one person a line names. */
+function withNames(line: StoryLine, s: GameState | undefined): StoryLine {
+  if (!s || !line.text.en.includes('{')) return line;
+  const c = castOf(s);
+  const named = new Set<SurvivorState>();
+  const fill = (text: string, lang: 'he' | 'en') => text.replace(/\{(\w+)\}/g, (m, k: string) => {
+    const p = c[k as CastKey];
+    if (!p) return m;
+    named.add(p);
+    return lang === 'he' ? (localizeName(p.name, 'he') ?? p.name) : p.name;
+  });
+  const en = fill(line.text.en, 'en');
+  let he = fill(line.text.he, 'he');
+  if (named.size === 1) he = resolveGender(he, genderOf([...named][0]));
+  return { ...line, text: { he, en } };
+}
+
 /**
  * Lines and choices with a `when` depend on the live game (S9). StorySystem binds the state here,
  * so the dialog and the journal replay show exactly the variant that fits this bunker.
@@ -631,7 +786,7 @@ export function bindStoryState(get: () => GameState): void {
 
 export function shownLines(lines: StoryLine[]): StoryLine[] {
   const s = liveState?.();
-  return lines.filter(l => !l.when || (!!s && l.when(s)));
+  return lines.filter(l => !l.when || (!!s && l.when(s))).map(l => withNames(l, s));
 }
 
 export function shownChoices(ch: Chapter): StoryChoice[] {
@@ -640,5 +795,5 @@ export function shownChoices(ch: Chapter): StoryChoice[] {
 }
 
 export function getChapter(id: string): Chapter | undefined {
-  return CHAPTERS.find(c => c.id === id);
+  return CHAPTERS.find(c => c.id === id) ?? INTERLUDES.find(c => c.id === id);
 }

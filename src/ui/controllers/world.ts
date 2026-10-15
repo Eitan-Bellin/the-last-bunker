@@ -1,21 +1,25 @@
 import { haptic } from '../../utils/haptics';
 import { bus } from '../../core/EventBus'; // [plan4:GP-1]
 import { statusTint } from '../../utils/a11y';
-import { HUD } from '../../ui/HUD';
+import { HUD, actLock } from '../../ui/HUD';
 import { i18n } from '../../i18n/I18nManager';
+import { floorRangesTag } from '../floorTag';
+import { fmtNum, plural } from '../format';
 import { getDef } from '../../data/buildingDefs';
 import { allowedFloors } from '../../data/zones';
 import { BUILDING_ICONS, RESOURCE_ICONS, costRow, el } from '../../ui/dom';
-import type { BuildingType, GameState, Position, ResourceType } from '../../core/GameState';
+import type { BuildingType, GameState, Position, ResourceType, Ruin } from '../../core/GameState';
 import { roomFloors, roomSlots } from '../../data/buildingDefs';
 import { PlacementBar, type Chip } from '../components/PlacementBar'; // [plan4:ST-19]
 import { DropChip } from '../components/DropChip'; // [plan4:UX-20]
+import type { StructurePanel } from '../components/StructurePanel'; // [ux-wp4] M5
 import { getHudInsets } from '../../utils/hudInsets';
 import { RUIN_KINDS } from '../../data/ruins';
 import type { PlaceBlock } from '../../systems/BuildingSystem';
-import { bestSpot, floorRangesLabel, nameOf, nearestSpot, placeEffects, spotForTap, validSpots } from '../../systems/placementRank';
+import { bestSpot, nameOf, nearestSpot, placeEffects, spotForTap, validSpots } from '../../systems/placementRank';
 import { RELOCATE_SECONDS, relocateBlock, relocateCost, stateWithout } from '../../systems/relocate';
-import { SLOT_W, buildingH, floorTop, slotX } from '../../rendering/geom';
+import { ROOM_H, SLOT_W, buildingH, floorTop, slotX } from '../../rendering/geom';
+import { hasFreeSpot, missingText, noSpaceRoute, noSpaceText } from '../components/BuildMenu'; // [ux-redesign w2c #2]
 import type { IconName } from '../../ui/icons';
 import type { GameApp } from '../../app';
 import { popupMode } from '../components/NumberPopup'; // [plan4:UX-21]
@@ -25,6 +29,8 @@ const BUBBLE_SECONDS = 120;
 /** Now and then a bubble holds a surprise instead: salvage or a bit of know-how (share of that store's cap). */
 const BUBBLE_SURPRISE_CHANCE = 0.15;
 const BUBBLE_SURPRISE_SHARE = 0.04;
+/** [ux-wp4] F1: from this share of its cap a store counts as full for bubbles and the routine "+N" numbers. */
+const BUBBLE_FULL = 0.95;
 export const PRODUCTION_POPUP_MS = 4000;
 const MAX_PRODUCTION_POPUPS = 8;
 const RESOURCE_COLORS: Partial<Record<ResourceType, number>> = {
@@ -37,6 +43,30 @@ export class WorldController {
 
   constructor(app: GameApp) {
     this.app = app;
+    // [ux-redesign w2c #17] A sheet opened for a ruin (RuinPanel.show) frames it in the strip of world left above the sheet.
+    // [ux-redesign w2fix] The same for a room's own sheet (BuildingPanel.show).
+    window.addEventListener('lb:sheet-target', (ev) => {
+      const d = (ev as CustomEvent<{ ruinId?: string; buildingId?: string }>).detail;
+      const ruin = d?.ruinId ? this.app.state.ruins.find(r => r.id === d.ruinId) : undefined;
+      if (ruin) this.frameRuin(ruin);
+      const b = d?.buildingId ? this.app.state.buildings.find(x => x.id === d.buildingId) : undefined;
+      if (b) this.frameRoom(b.type, b.position);
+    });
+  }
+
+  /**
+   * [ux-redesign w2c #17] Glides the camera just enough that a ruin sits between the status row and the open sheet (CameraController measures
+   * the sheet and the HUD bands itself, utils/hudInsets). Waits two frames so the sheet has its height.
+   */
+  frameRuin(ruin: Ruin): void {
+    const go = () => this.app.renderer.revealRect(slotX(ruin.x), floorTop(ruin.floor), ruin.w * SLOT_W, ROOM_H, 0);
+    requestAnimationFrame(() => requestAnimationFrame(go));
+  }
+
+  /** [ux-redesign w2fix] The same framing for a built room whose sheet just opened (its full width and height, tall rooms too). */
+  frameRoom(type: BuildingType, pos: Position): void {
+    const go = () => this.app.renderer.revealRect(slotX(pos.x), floorTop(pos.floor), roomSlots(type) * SLOT_W, buildingH(type), 0);
+    requestAnimationFrame(() => requestAnimationFrame(go));
   }
 
   // ───────────────────────────── [plan4:ST-19] placing a room: ghost, confirm bar, best spot, moving a room ─────────────────────────────
@@ -45,7 +75,7 @@ export class WorldController {
   // is spent until Build. The same machinery moves a finished room (`relocateId`): the room is judged against the bunker without itself.
 
   /** After choosing a type, drop the ghost on the recommended spot at once (2 taps to build) instead of waiting for a tap on a frame. */
-  private static readonly AUTO_GHOST = false;
+  private static readonly AUTO_GHOST = true; // [ux-wp4] B2/P7: the ghost lands on the best spot at once (the green frames still move it)
 
   private bar: PlacementBar | null = null;
   /** Valid spots for the room being placed (recomputed when a drag starts and when the mode opens). */
@@ -75,13 +105,6 @@ export class WorldController {
       bar.onCancel = () => { this.app.audio.play('click'); this.cancelPlacement(); };
       bar.onRecommend = () => this.recommend();
       bar.onConfirm = () => this.confirmPlacement();
-      bar.onIdleBuild = () => {
-        haptic('error');
-        const at = r.ghostSpot;
-        const type = this.app.placementMode;
-        const block = at && type ? this.blockAt(type, at) : null;
-        bar.flash(block && type ? this.reasonText(block, type) : i18n.t('placement.noGhost'), 'warn');
-      };
       r.onGhostLift = () => {
         const type = this.app.placementMode;
         if (!type) return;
@@ -109,9 +132,12 @@ export class WorldController {
 
   startPlacement(type: BuildingType, relocateId: string | null = null): void {
     this.cancelPlacement();
-    this.relocateId = relocateId;
     const state = this.app.state;
     const bs = this.app.engine.buildingSystem;
+    // [ux-redesign w2c #2] A new room with no free spot anywhere never opens the console (a green "Build" over "No free spot" was a dead end):
+    // the player goes where the space is instead (restore the wreck, clear the rubble, dig a floor).
+    if (!relocateId && !hasFreeSpot(bs, state, type)) { this.routeNoSpace(type); return; }
+    this.relocateId = relocateId;
     const probe = this.placeState();
     const floors = allowedFloors(type, state.currentFloors);
     const target = floors.find(f => bs.findFreeSpot(type, f, probe)) ?? floors[0];
@@ -129,14 +155,58 @@ export class WorldController {
     bar.followGhost(() => this.app.renderer.ghostScreenRect());
     this.app.renderer.setCarryInset(bar.coverPx());
     this.spots = validSpots(type, probe, bs);
+    bar.setRecommendable(this.spots.length ? null : i18n.t('placement.noSpot'));
     window.clearInterval(this.costTimer);
     this.costTimer = window.setInterval(() => {
       const t = this.app.placementMode;
       if (!t) return;
-      const rr = this.relocateId ? this.app.state.buildings.find(b => b.id === this.relocateId) : null;
-      bar.setCost(this.app.state, rr ? relocateCost(bs, this.app.state, rr) : bs.getBuildCost(t, this.app.state));
+      bar.setCost(this.app.state, this.priceNow(t));
+      this.syncReady(); // the price may have become payable (or not) since
     }, 1000);
     if (WorldController.AUTO_GHOST && !rel) this.recommend();
+  }
+
+  /** The price of what is being placed now: a new room, or the move. */
+  private priceNow(type: BuildingType): Record<string, number> {
+    const bs = this.app.engine.buildingSystem;
+    const rel = this.relocateId ? this.app.state.buildings.find(b => b.id === this.relocateId) : null;
+    return rel ? relocateCost(bs, this.app.state, rel) : bs.getBuildCost(type, this.app.state);
+  }
+
+  /** [ux-redesign w2c #2] Why Build cannot go now (no ghost, a refused spot, what the price lacks), or null when it can. */
+  private buildBlock(): string | null {
+    const type = this.app.placementMode;
+    const at = this.app.renderer.ghostSpot;
+    if (!type || !at) return i18n.t('placement.noGhost');
+    const block = this.blockAt(type, at);
+    if (block) return this.reasonText(block, type);
+    return missingText(this.app.state, this.priceNow(type)) || null;
+  }
+
+  private syncReady(): void {
+    this.bar?.setReady(this.buildBlock());
+  }
+
+  /**
+   * [ux-redesign w2c #2] A room with no free spot: open what makes space (the wreck of this room, rubble in the way, the dig), framed on screen;
+   * when nothing can, say where the room may stand.
+   */
+  private routeNoSpace(type: BuildingType): void {
+    const app = this.app;
+    const state = app.state;
+    const route = noSpaceRoute(app.engine.buildingSystem, state, type);
+    haptic('warning');
+    if (route.kind === 'wreck' || route.kind === 'clear') {
+      app.openRuin(route.ruin.id); // RuinPanel.show frames it (see the constructor)
+      return;
+    }
+    if (route.kind === 'dig' || route.kind === 'digging') {
+      app.closeSheets();
+      app.dig.confirmDig();
+      return;
+    }
+    app.audio.play('error');
+    app.toasts.show(`[[warning]] ${noSpaceText(state, type, route)}`, 'bad');
   }
 
   cancelPlacement(): void {
@@ -156,7 +226,7 @@ export class WorldController {
   private reasonText(block: PlaceBlock | 'same', type: BuildingType): string {
     const state = this.app.state;
     const def = getDef(type);
-    if (block === 'zone') return i18n.t('placement.r.zone', { floors: `\u2066${floorRangesLabel(allowedFloors(type, state.currentFloors))}\u2069` }); // LRI..PDI keeps "B3–B14" in one piece inside a Hebrew line
+    if (block === 'zone') return i18n.t('placement.r.zone', { floors: `\u2068${floorRangesTag(allowedFloors(type, state.currentFloors))}\u2069` }); // [final F7] FSI..PDI keeps "B3–B14" / "קומות 3–14" in one piece
     if (block === 'adjacency') {
       const need = def?.place?.adjacentTo;
       return i18n.t('placement.r.adjacency', { room: need ? nameOf(need, i18n.currentLocale) : '' });
@@ -174,7 +244,7 @@ export class WorldController {
     const chips: Chip[] = [];
     if (fx.compound > 0) chips.push({ kind: 'good', text: i18n.t('placement.chip.compound', { pct: fx.compound * 10 }) });
     if (fx.synergy > 0) chips.push({ kind: 'good', text: i18n.t('placement.chip.synergy', { pct: Math.round(fx.synergy * 100) }) });
-    chips.push({ kind: 'info', text: fx.liftDist === 0 ? i18n.t('placement.chip.liftNear') : i18n.t('placement.chip.lift', { n: fx.liftDist }) });
+    chips.push({ kind: 'info', text: fx.liftDist === 0 ? i18n.t('placement.chip.liftNear') : plural('placement.chip.lift', fx.liftDist) });
     if (fx.fire) {
       chips.push({
         kind: 'warn',
@@ -191,7 +261,7 @@ export class WorldController {
     r.showGhost(type, pos, block === null);
     const { chips, say } = this.chipsFor(type, pos, block);
     this.bar?.setChips(chips, say);
-    this.bar?.setReady(block === null);
+    this.syncReady();
   }
 
   /** A tap on a slot (or on a room / ruin that is in the way) while choosing a spot. */
@@ -235,6 +305,7 @@ export class WorldController {
       haptic('warning');
       this.app.audio.play('error');
       this.bar?.flash(i18n.t('placement.noSpot'), 'warn');
+      this.bar?.setRecommendable(i18n.t('placement.noSpot'));
       return;
     }
     this.setGhost(type, best, this.blockAt(type, best));
@@ -247,7 +318,7 @@ export class WorldController {
   confirmPlacement(): void {
     const type = this.app.placementMode;
     const at = this.app.renderer.ghostSpot;
-    if (!type || !at) { this.bar?.onIdleBuild?.(); return; }
+    if (!type || !at) { haptic('error'); this.bar?.flash(i18n.t('placement.noGhost'), 'warn'); return; }
     const block = this.blockAt(type, at);
     if (block) { this.setGhost(type, at, block); this.refuse(); return; }
     if (this.relocateId) {
@@ -347,61 +418,194 @@ export class WorldController {
     haptic('error'); // [plan4:UX-2] every invalid placement is rejected through here
   }
 
-  /** Working rooms now and then offer a bonus to tap: about half a minute of their output. */
+  /** [ux-wp4] F1: what each open bubble holds (chosen when it appears, so it never offers a store that is already full). */
+  private bubbleRes = new Map<string, ResourceType>();
+
+  /** [ux-wp4] F1: a store at 95% of its cap or more gains (almost) nothing from a bubble. */
+  private nearCap(state: GameState, r: ResourceType): boolean {
+    const res = state.resources[r];
+    return !res || (res.cap > 0 && isFinite(res.cap) && res.amount >= res.cap * BUBBLE_FULL);
+  }
+
+  /**
+   * [ux-wp4] F1: the resource a room's bubble offers: what the room makes and the bunker still has room for (the emptiest first),
+   * else salvage or know-how when there is room for it, else nothing (no bubble: a tap that gives nothing teaches the player to stop tapping).
+   */
+  private bubbleOffer(state: GameState, buildingId: string): ResourceType | null {
+    const b = state.buildings.find(x => x.id === buildingId);
+    if (!b) return null;
+    const out = this.app.engine.resourceSystem.getBuildingOutput(state, b);
+    const fill = (r: ResourceType) => state.resources[r].amount / Math.max(1, state.resources[r].cap);
+    const made = (Object.entries(out) as [ResourceType, number][]).filter(([r, v]) => v > 0 && !!state.resources[r]).sort((x, y) => fill(x[0]) - fill(y[0]));
+    if (!made.length) return null;
+    const open = made.find(([r]) => !this.nearCap(state, r));
+    if (open) return open[0];
+    return (['scrap', 'knowledge'] as ResourceType[]).find(r => !this.nearCap(state, r)) ?? null;
+  }
+
+  /** Working rooms now and then offer a bonus to tap: about two minutes of their output. */
   spawnBubbles(): void {
     if (document.hidden || this.app.introPlaying) return;
     const state = this.app.state;
+    for (const id of [...this.bubbleRes.keys()]) if (!this.app.renderer.hasBubble(id)) this.bubbleRes.delete(id);
     for (const b of state.buildings) {
       if (this.app.renderer.hasBubble(b.id) || b.assignedSurvivorIds.length === 0 || Math.random() > 0.28) continue;
-      const out = this.app.engine.resourceSystem.getBuildingOutput(state, b);
-      const entry = (Object.entries(out) as [ResourceType, number][]).find(([, v]) => v > 0);
-      if (!entry) continue;
-      this.app.renderer.showBubble(b.id, entry[0] as IconName);
+      const r = this.bubbleOffer(state, b.id);
+      if (!r) continue;
+      this.bubbleRes.set(b.id, r);
+      this.app.renderer.showBubble(b.id, r as IconName);
     }
   }
 
+  /** [ux-wp4] B1: is the bubble over this room on the screen now (between the HUD bands)? */
+  private bubbleOnScreen(buildingId: string): boolean {
+    const rect = this.app.renderer.roomRect(buildingId);
+    if (!rect) return false;
+    const p = this.app.renderer.worldContainer.toGlobal({ x: rect.x + rect.w / 2, y: rect.y + 26 });
+    const ins = getHudInsets();
+    return p.x >= 0 && p.x <= window.innerWidth && p.y >= ins.top && p.y <= window.innerHeight - ins.bottom;
+  }
+
+  /** One bubble's prize (the room may have stopped making its resource, or the store filled up since: then the next best thing). */
+  private takeBubble(state: GameState, buildingId: string): { r: ResourceType; amount: number; pos: { x: number; y: number } } | null {
+    const b = state.buildings.find(x => x.id === buildingId);
+    let r = this.bubbleRes.get(buildingId) ?? null;
+    this.bubbleRes.delete(buildingId);
+    const pos = this.app.renderer.popBubble(buildingId);
+    if (!b || !pos) return null;
+    if (!r || this.nearCap(state, r)) r = this.bubbleOffer(state, buildingId);
+    if (!r) return { r: 'scrap', amount: 0, pos };
+    const rate = this.app.engine.resourceSystem.getBuildingOutput(state, b)[r] ?? 0;
+    // A room's own goods: two minutes of its output; now and then (and for salvage or know-how) a share of that store instead.
+    if (rate > 0 && Math.random() >= BUBBLE_SURPRISE_CHANCE) return { r, amount: Math.max(1, Math.round(rate * BUBBLE_SECONDS)), pos };
+    if (rate > 0) {
+      const order: ResourceType[] = Math.random() < 0.5 ? ['scrap', 'knowledge'] : ['knowledge', 'scrap'];
+      const alt = order.find(x => !this.nearCap(state, x));
+      if (!alt) return { r, amount: Math.max(1, Math.round(rate * BUBBLE_SECONDS)), pos };
+      r = alt;
+    }
+    return { r, amount: Math.max(3, Math.round(state.resources[r].cap * BUBBLE_SURPRISE_SHARE)), pos };
+  }
+
+  /** [ux-wp4] B1: a tap on one bubble collects every bubble on the screen, with one flying icon per resource and one combined popup. */
   collectBubble(buildingId: string): void {
     const state = this.app.state;
-    const b = state.buildings.find(x => x.id === buildingId);
-    const pos = this.app.renderer.popBubble(buildingId);
-    if (!b || !pos) return;
-    const out = this.app.engine.resourceSystem.getBuildingOutput(state, b);
-    const entry = (Object.entries(out) as [ResourceType, number][]).find(([, v]) => v > 0);
-    if (!entry) return;
-    const [made, rate] = entry;
-    let r: ResourceType = made;
-    let amount = Math.max(1, Math.round(rate * BUBBLE_SECONDS));
-    if (Math.random() < BUBBLE_SURPRISE_CHANCE) {
-      r = Math.random() < 0.5 ? 'scrap' : 'knowledge';
-      amount = Math.max(3, Math.round(state.resources[r].cap * BUBBLE_SURPRISE_SHARE));
+    const others = [...this.bubbleRes.keys()].filter(id => id !== buildingId && this.app.renderer.hasBubble(id) && this.bubbleOnScreen(id));
+    const totals = new Map<ResourceType, number>();
+    let from: { x: number; y: number } | null = null;
+    let n = 0;
+    for (const id of [buildingId, ...others]) {
+      const got = this.takeBubble(state, id);
+      if (!got) continue;
+      from ??= got.pos;
+      n++;
+      if (got.amount > 0) totals.set(got.r, (totals.get(got.r) ?? 0) + got.amount);
+      bus.emit('bubble:collected', id); // [plan4:GP-1] the "collect 10 bubbles" order
     }
-    this.app.engine.resourceSystem.gain(this.app.engine.stateManager, { [r]: amount });
-    this.app.audio.play(r === 'water' ? 'drip' : r === 'materials' || r === 'scrap' ? 'coin' : 'collect');
-    if (r === 'water') this.app.audio.play('collect', { volume: 0.6 });
-    haptic('tap');
-    this.flyToHud(r, pos.x, pos.y, `+${amount}`);
+    if (!from || n === 0) return;
+    const gain = Object.fromEntries(totals) as Partial<Record<ResourceType, number>>;
+    if (totals.size) this.app.engine.resourceSystem.gain(this.app.engine.stateManager, gain);
+    const rs = [...totals.keys()];
+    const main = rs[0];
+    this.app.audio.play(main === 'water' ? 'drip' : main === 'materials' || main === 'scrap' ? 'coin' : 'collect');
+    if (main === 'water' || n > 1) this.app.audio.play('collect', { volume: 0.6 });
+    // [w4fix] One buzz per collect: the landing's (feedback.ts), not a second one at the tap.
+    this.app.feedback.flyGoods(gain, from);
+    if (n > 1) {
+      const b = state.buildings.find(x => x.id === buildingId);
+      if (b) {
+        const c = this.app.renderer.roomCenter(b);
+        this.app.popups.spawn(c.x, c.y - 20, `[[star]] ×${n} ${rs.map(r => `${RESOURCE_ICONS[r] ?? ''}+${fmtNum(totals.get(r)!)}`).join(' ')}`, 0xffe2a0);
+      }
+    }
     this.app.engine.notifyInteraction();
-    bus.emit('bubble:collected', buildingId); // [plan4:GP-1] the "collect 10 bubbles" order
   }
 
-  /** A collected resource icon arcs up into its HUD counter, which then pulses. */
+  /** A collected resource icon arcs up into its HUD counter (the pooled fx layer; [w4fix] the old .fly-icon element is gone). */
   flyToHud(r: ResourceType, x: number, y: number, label: string): void {
-    const target = this.app.hud.resourceRect(r);
-    const fly = el('div', 'fly-icon', `${RESOURCE_ICONS[r] ?? ''} ${label}`);
-    fly.style.left = `${x}px`;
-    fly.style.top = `${y}px`;
-    document.body.appendChild(fly);
-    requestAnimationFrame(() => {
-      fly.classList.add('go');
-      if (target) {
-        fly.style.left = `${target.left + target.width / 2}px`;
-        fly.style.top = `${target.top + target.height / 2}px`;
+    this.app.feedback.fly.fly(r, { x, y }, 10, label); // no amount here: 10 goods' worth (7 particles)
+  }
+
+  // ───────────────────────────── [ux-wp4] HUD and panel shortcuts ─────────────────────────────
+
+  /**
+   * [ux-wp4] Wires the convenience hooks (one call from the app, after its own handlers): the low-power banner and the morale chip explain
+   * themselves (W2), the population chip at the Act's limit opens Command (R3), the room panel's "Next" opens the next room to upgrade (B3).
+   */
+  installHud(p: { openPeople: () => void; structure: StructurePanel }): void {
+    const app = this.app;
+    const hud = app.hud;
+    // M5: the rooms list filters by "can be upgraded now" (the Act ceiling and the busy rule live in BuildingSystem).
+    p.structure.canUpgrade = b => app.engine.buildingSystem.canUpgrade(b, app.state);
+    hud.onPowerTap = () => {
+      app.audio.play('click');
+      app.closeSheets();
+      app.resourceSheet.show('power', app.state);
+    };
+    hud.onMoraleTap = () => {
+      app.audio.play('click');
+      this.showMoraleWhy(p.openPeople);
+    };
+    const population = hud.onPopulation;
+    hud.onPopulation = () => {
+      if (actLock(app.state)) {
+        app.audio.play('click');
+        hud.onEra?.();
+        return;
       }
+      // The bunker full of beds-to-build keeps its toast; otherwise the chip opens the People panel (WP6 label: "tap for the People panel").
+      if (app.state.survivors.length >= app.state.maxPopulation) { population?.(); return; }
+      app.audio.play('click');
+      app.closeSheets();
+      p.openPeople();
+    };
+    app.buildingPanel.onOpenRoom = id => this.openRoom(id);
+  }
+
+  /** [ux-wp4] B3: shows a room's panel in place (no close first) and brings the camera to it. */
+  openRoom(id: string): void {
+    const r = this.app.renderer.roomRect(id);
+    if (r) this.app.renderer.focusOn(r.x + r.w / 2, r.y + 50, 1.6);
+    this.app.renderer.setSelected(id);
+    this.app.buildingPanel.show(id);
+  }
+
+  /** [ux-wp4] W2: "why is morale where it is": the bunker-wide causes, largest first (each the average over everyone), and a way to the people. */
+  private showMoraleWhy(openPeople: () => void): void {
+    const app = this.app;
+    const state = app.state;
+    const ps = app.engine.populationSystem;
+    const n = state.survivors.length;
+    const body = el('div', 'why-box');
+    if (n === 0) {
+      body.appendChild(el('p', 'modal-body', i18n.t('people.empty')));
+    } else {
+      const sums = new Map<string, number>();
+      for (const s of state.survivors) {
+        for (const f of ps.getMoraleFactors(state, s)) if (f.key !== 'base') sums.set(f.key, (sums.get(f.key) ?? 0) + f.value);
+      }
+      const avg = Math.round(state.survivors.reduce((a, s) => a + s.happiness, 0) / n);
+      const target = Math.round(state.survivors.reduce((a, s) => a + ps.getTargetHappiness(state, s), 0) / n);
+      body.appendChild(el('p', 'modal-body', i18n.t('wp4.moraleNow', { now: avg, target })));
+      const rows = [...sums.entries()].map(([k, v]) => [k, v / n] as const).filter(([, v]) => Math.abs(v) >= 0.5)
+        .sort((a, b) => Math.abs(b[1]) - Math.abs(a[1])).slice(0, 6);
+      for (const [k, v] of rows) {
+        const row = el('div', 'bp-row');
+        const val = Math.round(v);
+        row.append(el('span', '', i18n.t(`morale.${k}`)), el('span', `bp-value ${v >= 0 ? 'positive' : 'negative'}`, `${val > 0 ? '+' : val < 0 ? '\u2212' : ''}${Math.abs(val)}`));
+        body.appendChild(row);
+      }
+      if (!rows.length) body.appendChild(el('p', 'bp-hint', i18n.t('wp4.moraleCalm')));
+    }
+    app.modal.show({
+      icon: '[[happy]]',
+      title: i18n.t('wp4.moraleWhy'),
+      body,
+      actions: [
+        { label: `[[people]] ${i18n.t('hud.people')}`, className: 'btn-primary', onClick: () => { app.modal.hide(); app.closeSheets(); openPeople(); } },
+        { label: i18n.t('wp4.close'), className: 'btn-secondary', onClick: () => app.modal.hide() },
+      ],
     });
-    setTimeout(() => {
-      fly.remove();
-      this.app.hud.pulseResource(r);
-    }, 650);
   }
 
   // ───────────────────────────── [plan4:UX-20] carrying a survivor: the label and ring over the room under them ─────────────────────────────
@@ -488,7 +692,8 @@ export class WorldController {
     for (const b of state.buildings) {
       if (shown >= MAX_PRODUCTION_POPUPS) break;
       const out = this.app.engine.resourceSystem.getBuildingOutput(state, b);
-      const entry = (Object.entries(out) as [ResourceType, number][]).find(([r, v]) => v > 0 && r !== 'power');
+      // [ux-wp4] F1(c): no "+6" over a store that is full (the number would be a lie: nothing goes in).
+      const entry = (Object.entries(out) as [ResourceType, number][]).find(([r, v]) => v > 0 && r !== 'power' && !this.nearCap(state, r));
       if (!entry) continue;
       const [r, rate] = entry;
       const amount = rate * (PRODUCTION_POPUP_MS / 1000);
