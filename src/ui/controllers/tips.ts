@@ -162,6 +162,7 @@ export class TipsController {
     }
     if (now - this.lastCheck < CHECK_MS) return;
     if (app.onboarding?.holdsScreen) return; // [ux-redesign W3a] one teacher at a time
+    if (app.dialogs?.quietAfterWelcome(now)) return; // [phase1] nothing auto in the first two minutes after a welcome-back
     this.lastCheck = now;
     const s = app.state;
     if (this.card || now - this.lastTipAt < GAP_MS) return;

@@ -6,6 +6,8 @@
  *   4. upgrade  - idle research, then an upgrade the stores can pay for now
  * A crisis that the active goal (or, during the first steps, an upcoming tutorial step) fixes is not a separate line: the goal takes the
  * crisis slot with its countdown, so the tutorial and the alarm never pull the player two ways.
+ * [phase1] Early game (the tutorial, or Act I): crisis > goal, and nothing to collect on the strip at all (the bell's badge carries it),
+ * so the supply crate never detours the player off the tutorial goal.
  * Pure: plain numbers in, an ordered list out (no DOM, no i18n, no game state). Tested by tools/sim/advisor-test.mjs.
  */
 
@@ -49,6 +51,8 @@ export interface AdvisorInput {
   goal: { id: string; fixes: string[] } | null;
   idleResearch: boolean;
   upgrade: boolean;
+  /** [phase1] The tutorial or Act I is running: collect items stay off the strip (bell badge only). */
+  early?: boolean;
 }
 
 export interface AdvisorPick {
@@ -97,9 +101,11 @@ export function adviseOrder(input: AdvisorInput): AdvisorPick[] {
     }
     out.push(c);
   }
-  if (input.collect.inbox > 0) out.push({ kind: 'collect', key: 'inbox' });
-  if (input.collect.supply) out.push({ kind: 'collect', key: 'supply' });
-  if (input.collect.daily > 0) out.push({ kind: 'collect', key: 'daily' });
+  if (!input.early) {
+    if (input.collect.inbox > 0) out.push({ kind: 'collect', key: 'inbox' });
+    if (input.collect.supply) out.push({ kind: 'collect', key: 'supply' });
+    if (input.collect.daily > 0) out.push({ kind: 'collect', key: 'daily' });
+  }
   if (input.goal && !goalUsed) out.push({ kind: 'goal', key: goalKey });
   if (input.idleResearch) out.push({ kind: 'upgrade', key: 'research' });
   if (input.upgrade) out.push({ kind: 'upgrade', key: 'upgrade' });

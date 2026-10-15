@@ -79,6 +79,8 @@ export interface StripView {
   reward: string;
   /** A countdown ("[[clock]] 2:10", icons allowed) when the line stands for a crisis. */
   urgent?: string;
+  /** [phase1] The resource the line is about (a store crisis, the power shortage, a goal standing in for one). */
+  resource?: string;
 }
 
 /** [ux-redesign W3a] One goal in the strip's unfolded list. */
@@ -128,6 +130,8 @@ export class HUD {
   private jobsAt = 0;
   private jobsText = '';
   private powerBanner!: HTMLButtonElement;
+  /** [phase1] The resource whose crisis the advisor strip shows now (null: none). */
+  private stripRes: string | null = null;
   private placementBanner!: HTMLElement;
   private placementText!: HTMLElement;
   /** #44: the last text / class / style written to each node, so a frame writes only what changed. */
@@ -596,7 +600,10 @@ export class HUD {
    */
   setObjective(): void {
     const v = this.advisor?.();
-    if (!v) return;
+    if (!v) { this.stripRes = null; return; }
+    // [phase1] One problem, one place: while the strip carries a store's crisis, its tile shows only its state colour (no countdown)
+    // and the power banner stays down.
+    this.stripRes = v.urgent && v.resource ? v.resource : null;
     const kind = v.urgent ? 'crisis' : v.kind;
     if (this.objectiveEl.dataset.kind !== kind) this.objectiveEl.dataset.kind = kind;
     this.setText(this.objectiveIcon, v.icon);
@@ -968,7 +975,7 @@ export class HUD {
     const ratio = state.powerRatio ?? 1;
     // No alarm before there is any power plant to blame: the dead bunker is simply dark.
     const hasPlant = state.buildings.some(b => isPowerPlant(b.type) && !(b.isConstructing && b.level === 1));
-    if (ratio < 0.99 && hasPlant) {
+    if (ratio < 0.99 && hasPlant && this.stripRes !== 'power') {
       this.setText(this.powerBanner, `${i18n.t('hud.powerLow', { pct: Math.round(ratio * 100) })} [[question]]`);
       this.setStyle(this.powerBanner, 'display', '');
     } else {
@@ -1007,7 +1014,9 @@ export class HUD {
     const draining = net < -STEADY;
     const danger = empty || tte < DANGER_S || (draining && hasCap && pct < DANGER_PCT);
     const low = !danger && (tte < COUNTDOWN_S || (draining && hasCap && pct < LOW_PCT));
-    const countdown = !empty && tte < COUNTDOWN_S;
+    const timer = !empty && tte < COUNTDOWN_S;
+    // [phase1] The strip already counts this one down: the tile keeps its colour (danger / low) but not a second clock.
+    const countdown = timer && this.stripRes !== rt;
 
     this.setText(els.value, fmtNum(shownAmount));
     let line: string;
@@ -1031,7 +1040,7 @@ export class HUD {
       const name = i18n.t(`resources.${rt}`);
       let label = i18n.t(hasCap ? 'a11y.resLabel' : 'a11y.resLabelNoCap', { name, amount: fmtNum(res.amount), cap: hasCap ? fmtNum(res.cap) : '', rate: i18n.formatRate(net) });
       if (full) label += `. ${i18n.t('ux2b.fullLabel')}`;
-      else if (countdown) label += `. ${i18n.t('ux2b.runsOut', { t: fmtDuration(tte) })}`;
+      else if (timer) label += `. ${i18n.t('ux2b.runsOut', { t: fmtDuration(tte) })}`;
       this.setAttr(els.root, 'aria-label', label);
     }
   }

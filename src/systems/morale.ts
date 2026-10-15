@@ -2,6 +2,31 @@ import type { GameState } from '../core/GameState';
 import { LAWS, activeLaws } from '../data/laws';
 import { moraleTargets } from './PopulationSystem';
 
+/** [phase1] The clock the darkness ramp runs on: world time (online and away), or play seconds in a bunker without a long game. */
+export function worldClock(state: GameState): number {
+  return state.longGame?.meta.worldT ?? state.stats.totalPlayTime;
+}
+
+/** [phase1] Seconds over which the darkness penalty grows to full: a blackout is felt, not a cliff. */
+export const DARKNESS_RAMP_S = 60;
+/** [phase1] A new bunker's first minutes of play: nobody minds having no job yet (there is hardly a job to have). */
+export const NO_JOB_GRACE_S = 600;
+
+/** [phase1] Darkness morale penalty (a positive number to subtract): -(15 x missing power + 5), ramped in over DARKNESS_RAMP_S. */
+export function darknessPenalty(state: GameState): number {
+  const ratio = state.powerRatio ?? 1;
+  if (ratio >= 0.99) return 0;
+  const full = Math.round(15 * (1 - ratio)) + 5;
+  if (state.darkSince === undefined) return full;
+  const ramp = Math.min(1, Math.max(0, (worldClock(state) - state.darkSince) / DARKNESS_RAMP_S));
+  return Math.round(full * ramp);
+}
+
+/** [phase1] The no-job morale penalty: 0 during a new bunker's first NO_JOB_GRACE_S of play, -10 after. */
+export function noJobPenalty(state: GameState): number {
+  return state.stats.totalPlayTime < NO_JOB_GRACE_S ? 0 : 10;
+}
+
 /**
  * [ux-wp2 S4] Morale and output. People's morale stays 0..100, but the bunker's mood can run above that (a well-kept bunker
  * sits at 105-115 "raw"); that surplus is worth half, up to SURPLUS_MAX points. Below LOW_MORALE every point costs twice as

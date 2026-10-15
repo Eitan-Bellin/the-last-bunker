@@ -201,6 +201,7 @@ export class ResearchPanel {
       list.appendChild(el('div', 'bp-hint', `[[up]] ${i18n.t('research.refineHint')}`));
       for (const ref of REFINEMENTS) {
         if (rs.status(state, ref.id) === 'locked' && refinementLevel(state, ref.id) === 0) continue;
+        if (rs.surplusHidden(state, ref.id)) continue; // [phase1] a surplus resource needs no refinement
         list.appendChild(this.renderCard(state, rs.defOf(state, ref.id)!, refinementLevel(state, ref.id)));
       }
     } else {

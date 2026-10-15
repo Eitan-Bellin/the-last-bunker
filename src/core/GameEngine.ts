@@ -347,9 +347,11 @@ export class GameEngine {
       { name: 'family', online: dt => this.familySystem.update(dt), offline: dt => this.familySystem.update(dt) },
       { name: 'project', online: dt => this.projectSystem.update(dt), offline: dt => this.projectSystem.update(dt) }, // [LateGame B1]
       // [Danger C3] Rooms wear while away too (at the away efficiency).
-      // [Long game] The dig crew works away too; Acts advance only while the game is open (the player sees it happen).
+      // [Long game] The dig crew works away too.
       { name: 'dig', online: dt => this.digSystem.update(dt), offline: dt => this.digSystem.update(dt) },
-      { name: 'act', slow: true, online: () => this.actSystem.update() },
+      // [phase1] Acts advance away too (they used to wait for the game to open, up to 8 h after the seal): the night log lists it and
+      // the act:advance card shows on return. One step per away-step at most, as online.
+      { name: 'act', slow: true, online: () => this.actSystem.update(), offline: () => this.actSystem.update() },
       // The Foreman's standing orders run away too (that is the point of them).
       // [P2] The threat meter, breathers and the turn of the seasons run on world time, online and away.
       { name: 'threat', online: dt => this.threatSystem.update(dt), offline: dt => this.threatSystem.update(dt) },
@@ -948,7 +950,8 @@ export class GameEngine {
 
     const elapsed = Math.min(timestamp - this.lastTickTime, 1000);
     this.lastTickTime = timestamp;
-    this.tickAccumulator += elapsed;
+    // [phase1 cheat] Dev-only fast forward for playthrough checks: `__speed = 10` in the console (src/dev/playthrough.ts).
+    this.tickAccumulator += import.meta.env.DEV ? elapsed * Math.max(1, Math.min(50, (window as unknown as { __speed?: number }).__speed ?? 1)) : elapsed;
 
     this.idleSeconds = (Date.now() - this.lastInteraction) / 1000;
 

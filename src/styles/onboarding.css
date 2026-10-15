@@ -67,18 +67,11 @@
   line-height: var(--lh-tight);
   text-align: start;
 }
-.ob-bubble__actions { display: flex; justify-content: flex-end; }
+.ob-bubble__actions { display: flex; justify-content: space-between; align-items: center; gap: var(--sp-2); }
 .ob-bubble__actions:empty { display: none; }
 
-/* [w3fix B5] Under the HUD's status rows (--hud-top-h, measured by HUD.ts, includes the top safe area), not over the resource tiles the
-   step may be about; the inline end in either direction, clear of both side safe areas. */
-.ob-skip {
-  position: absolute;
-  inset-block-start: calc(var(--hud-top-h, var(--sp-8)) + var(--sp-2));
-  inset-inline-end: max(var(--sp-2), env(safe-area-inset-left), env(safe-area-inset-right));
-  pointer-events: auto;
-}
-.ob-skip .ob-skip__btn {
+/* [phase1] "Skip tutorial" sits in the bubble (start side), a quiet pill; a walk step's "Next" stays at the end. */
+.ob-bubble__actions .ob-skip__btn {
   min-height: var(--hit-min);
   padding-inline: var(--sp-3);
   font-size: calc(var(--type-caption) * var(--fs, 1));

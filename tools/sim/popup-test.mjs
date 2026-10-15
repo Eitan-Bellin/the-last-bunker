@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // [ux-redesign w2a] Interruption rules test: src/ui/popupRules.ts (the dialog queue's order and offer cap, the dialog gate, the tap
-// guard of a fresh dialog, what back closes, store warnings, the one-toast lane, folding, the stale-save note, welcome back).
+// guard of a fresh dialog ([phase1] pre-open presses only), the quiet after a welcome-back, what back closes, store warnings, the one-toast lane, folding, the stale-save note, welcome back).
 // Exit 1 on any problem. Usage: node tools/sim/popup-test.mjs
 import { rmSync } from 'node:fs';
 import { join, resolve, dirname } from 'node:path';
@@ -93,10 +93,22 @@ eq(P.gateBlock({ ...base, spotlightShowing: true, waitedMs: 60_000, lastGestureA
 eq(P.gateBlock({ ...base, spotlightShowing: false, waitedMs: 0 }), '', 'no spotlight: open');
 
 // ---- tap guard of a fresh dialog ----------------------------------------------------------------------------------------------------
+// [phase1] only a press that began before the dialog appeared (or a reflex tap in the first 250 ms) is swallowed
+eq(P.MODAL_TAP_GUARD_MS, 250, 'guard is 250 ms');
 ok(P.tapBlocked(1000, 1000 + 100, 1), 'tap 100 ms after open is swallowed');
-ok(P.tapBlocked(1000, 1000 + 599, 1), 'tap 599 ms after open is swallowed');
-ok(!P.tapBlocked(1000, 1000 + P.MODAL_TAP_GUARD_MS, 1), 'tap 600 ms after open passes');
+ok(!P.tapBlocked(1000, 1000 + 300, 1, 1000 + 260), 'a press that started on the open dialog passes at 300 ms');
+ok(P.tapBlocked(1000, 1000 + 2000, 1, 990), 'a press that started before the dialog opened is swallowed, however late it lifts');
+ok(P.tapBlocked(1000, 1000 + 400, 1, -Infinity), 'a click with no pointerdown on the dialog is swallowed');
+ok(!P.tapBlocked(1000, 1000 + P.MODAL_TAP_GUARD_MS, 1), 'tap at the guard edge passes');
 ok(!P.tapBlocked(1000, 1000 + 10, 0), 'keyboard click passes at once');
+ok(P.pressGuarded(1000, 1100) && !P.pressGuarded(1000, 1000 + P.MODAL_TAP_GUARD_MS), 'no pressed look inside the guard only');
+
+// ---- [phase1] returning player: two quiet minutes after the welcome; offers by session time -----------------------------------------
+ok(P.returningQuiet(10_000, 5_000, false), 'ordinary dialog held right after the welcome');
+ok(!P.returningQuiet(10_000, 5_000, true), 'an emergency still comes');
+ok(!P.returningQuiet(5_000 + P.RETURNING_QUIET_MS, 5_000, false), 'two minutes later dialogs flow again');
+ok(!P.returningQuiet(10_000, -Infinity, false), 'no welcome this session: no hold');
+ok(!P.offerSessionReady(599) && P.offerSessionReady(600), 'offers wait for ten minutes of this session');
 
 // ---- back closes the top layer only -------------------------------------------------------------------------------------------------
 const b0 = { touring: false, modalOpen: false, modalDismiss: null, placing: false, readerOpen: false, surfaceOpen: false, sheetOpen: false };

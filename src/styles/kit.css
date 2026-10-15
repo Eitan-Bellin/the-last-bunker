@@ -50,6 +50,20 @@
   transform: translateY(var(--elev-btn-lift)) scale(var(--press-scale));
   box-shadow: var(--elev-btn-pressed);
 }
+/* [phase1] The hit area never shrinks under the finger: while the face sinks and scales, the .k-hit child takes the exact inverse
+   transform (same timing), so a press that landed near the edge is still on the button when it lifts (ui-architecture.md 5.1). */
+.btn.k-btn > .k-hit {
+  transition: transform var(--dur-release) var(--ease-out-back);
+}
+.btn.k-btn.is-pressed > .k-hit {
+  transform: scale(calc(1 / var(--press-scale)));
+  transition-duration: var(--dur-press);
+  transition-timing-function: var(--ease-out);
+}
+.btn.k-btn:not(.k-btn--tertiary):not(.k-btn--icon):not(.k-btn--close).is-pressed > .k-hit {
+  transform: translateY(calc(-1 * var(--elev-btn-lift) / var(--press-scale))) scale(calc(1 / var(--press-scale)));
+}
+.btn.k-btn.is-disabled.is-pressed > .k-hit { transform: none; }
 
 /* Disabled: a grey plate with a dashed edge (the non-colour cue) and readable text. Still focusable (aria-disabled). */
 .btn.k-btn.is-disabled {

@@ -946,7 +946,8 @@ export class GameApp {
         this.lowWarnedAt.set(r, now);
         this.audio.play('warn');
         // [plan4:AC-9] The sound has a visual twin: a toast and a blink of the resource plate.
-        this.toasts.show(`[[warning]] ${i18n.t('shortage.low', { name: i18n.t(`resources.${r}`) })}`, 'bad');
+        // [phase1] One problem, one place: no toast when the strip already shows this store.
+        if (!this.onboarding.advisor.showsStore(r)) this.toasts.show(`[[warning]] ${i18n.t('shortage.low', { name: i18n.t(`resources.${r}`) })}`, 'bad');
         this.hud.alertResource(r);
       } else if (step === 'clear') this.lowWarned.delete(r);
     }

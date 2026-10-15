@@ -3,7 +3,15 @@ import { uiSound } from '../../audio/uiSound';
 import { trapTab } from '../a11yDom';
 import { dropInert, forceLive, holdInert, shouldInert } from '../inertOwners';
 import { kButton } from '../kit';
-import { dismissIndex, tapBlocked } from '../popupRules';
+import { dismissIndex, MODAL_OPEN_EVENT, pressGuarded, tapBlocked } from '../popupRules';
+
+/**
+ * [phase1] Tells whoever draws over dialogs (the tutorial spotlight, z 90) that a dialog layer is opening, synchronously, so its
+ * blockers never eat the dialog's first taps while they wait for the onboarding tick (ui-architecture.md 5.3).
+ */
+export function announceDialogOpen(): void {
+  window.dispatchEvent(new Event(MODAL_OPEN_EVENT));
+}
 
 export interface ModalAction {
   label: string;
@@ -44,6 +52,8 @@ export class Modal {
   private opener: HTMLElement | null = null;
   /** [ux-redesign w2a] When the current content appeared, and the button back / Escape presses (null: a decision). */
   private openedAt = 0;
+  /** [phase1] When the last pointerdown on this dialog's layer happened (-Infinity: none yet). */
+  private downAt = -Infinity;
   private dismissBtn: HTMLButtonElement | null = null;
   /** [ux-redesign w2fix B2] Watches the story scene this dialog waits behind (null: not waiting). */
   private storyWatch: MutationObserver | null = null;
@@ -66,8 +76,17 @@ export class Modal {
       this.back();
     }, { capture: true });
     // [ux-redesign w2a #4] A tap that lands right after the dialog appeared was meant for what was there before: swallow it.
+    // [phase1] Only a press that started before this content appeared (or a reflex tap in the first 250 ms) is swallowed, and such a
+    // press never gets the pressed look: a button that visibly presses always does something.
+    this.overlay.addEventListener('pointerdown', (e) => {
+      this.downAt = performance.now();
+      if (pressGuarded(this.openedAt, this.downAt)) e.stopPropagation();
+    }, { capture: true });
+    this.overlay.addEventListener('pointerenter', (e) => {
+      if (e.buttons !== 0 && this.downAt < this.openedAt) e.stopPropagation(); // a finger / mouse already down from before
+    }, { capture: true });
     this.overlay.addEventListener('click', (e) => {
-      if (tapBlocked(this.openedAt, performance.now(), e.detail)) { e.preventDefault(); e.stopPropagation(); }
+      if (tapBlocked(this.openedAt, performance.now(), e.detail, this.downAt)) { e.preventDefault(); e.stopPropagation(); }
     }, { capture: true });
   }
 
@@ -85,6 +104,7 @@ export class Modal {
   }
 
   show(opts: ModalOptions): void {
+    announceDialogOpen(); // [phase1] the spotlight steps aside now, not on its next tick
     // A dialog that is replaced counts as dismissed, so whoever opened it can clear its own "I am open" flag.
     const previous = this.dismiss;
     this.dismiss = opts.onDismiss ?? null;

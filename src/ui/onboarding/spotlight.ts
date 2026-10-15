@@ -47,7 +47,7 @@ const scrollParent = (n: HTMLElement): HTMLElement | null => {
 
 /**
  * [ux-redesign W3a] The tutorial spotlight: a dark layer (--overlay) with a cut-out around one element, a bubble that says what to do,
- * and "Skip tutorial" always in reach. Input: four transparent blockers around the hole catch every touch except on the element itself
+ * and "Skip tutorial" always in reach ([phase1] inside the bubble, no separate chip over the banners). Input: four transparent blockers around the hole catch every touch except on the element itself
  * (in 'next' mode a fifth one covers the hole too). The hole follows the element every frame (sheets slide, the strip changes width).
  *
  * [ux-redesign w3fix] The frame loop only reads: it writes the layout when the target's rectangle or the viewport changed, and measures
@@ -61,7 +61,6 @@ export class Spotlight {
   private bubble: HTMLElement;
   private bubbleText: HTMLElement;
   private nextBox: HTMLElement;
-  private skipBox: HTMLElement;
   private step: SpotStep | null = null;
   private handlers: SpotHandlers | null = null;
   private raf = 0;
@@ -70,7 +69,6 @@ export class Spotlight {
   private sig = '';
   /** The bubble's size, measured when its text (or the viewport) changes. */
   private bubbleSize: { w: number; h: number } | null = null;
-  private skipRect: DOMRect | null = null;
   private side = '';
   private lost: boolean | null = null;
   /** [final F3] The target was scrolled clear of the bottom nav once for this step. */
@@ -97,8 +95,7 @@ export class Spotlight {
     this.bubbleText = el('p', 'ob-bubble__text');
     this.nextBox = el('div', 'ob-bubble__actions');
     this.bubble.append(this.bubbleText, this.nextBox);
-    this.skipBox = el('div', 'ob-skip');
-    this.root.append(this.hole, ...this.blockers, this.bubble, this.skipBox);
+    this.root.append(this.hole, ...this.blockers, this.bubble);
     document.body.appendChild(this.root);
   }
 
@@ -115,13 +112,13 @@ export class Spotlight {
     this.step = step;
     this.handlers = handlers;
     if (this.bubbleText.textContent !== step.text) this.bubbleText.textContent = step.text;
-    this.nextBox.replaceChildren();
+    // [phase1] "Skip tutorial" lives in the bubble, before the "Next" button of a walk step.
+    this.nextBox.replaceChildren(kButton({
+      variant: 'tertiary', className: 'btn-ghost ob-skip__btn', label: i18n.t('ux3a.skip'), onPress: () => this.handlers?.onSkip(),
+    }));
     if (step.mode === 'next') {
       this.nextBox.appendChild(kButton({ variant: 'primary', label: step.nextLabel ?? i18n.t('ux3a.next'), onPress: () => this.handlers?.onNext?.() }));
     }
-    this.skipBox.replaceChildren(kButton({
-      variant: 'tertiary', className: 'btn-ghost ob-skip__btn', label: i18n.t('ux3a.skip'), onPress: () => this.handlers?.onSkip(),
-    }));
     this.blockers[4].hidden = step.mode !== 'next';
     this.root.dataset.mode = step.mode;
     // Reduced motion: the ring around the cut-out stays still (onboarding.css stops its breathing).
@@ -260,17 +257,12 @@ export class Spotlight {
     // viewport changed (a read of offsetWidth after the writes above would force a layout every frame).
     if (!this.bubbleSize || resized) {
       this.bubbleSize = { w: this.bubble.offsetWidth, h: this.bubble.offsetHeight };
-      this.skipRect = this.skipBox.getBoundingClientRect();
     }
     const { w: bw, h: bh } = this.bubbleSize;
     const above = y0 > vh - y1;
     const gap = PAD * 2;
     const bx = Math.min(Math.max(PAD * 2, (x0 + x1) / 2 - bw / 2), vw - bw - PAD * 2);
-    let by = above ? Math.max(PAD, y0 - gap - bh) : Math.min(vh - bh - PAD, y1 + gap);
-    // Below a target at the top (the bell), the bubble must not sit on "Skip tutorial": it goes under it.
-    if (!above && this.skipRect && by < this.skipRect.bottom && by + bh > this.skipRect.top && bx < this.skipRect.right && bx + bw > this.skipRect.left) {
-      by = Math.min(vh - bh - PAD, this.skipRect.bottom + PAD);
-    }
+    const by = above ? Math.max(PAD, y0 - gap - bh) : Math.min(vh - bh - PAD, y1 + gap);
     this.bubble.style.transform = `translate(${Math.round(bx)}px, ${Math.round(by)}px)`;
     const side = above ? 'above' : 'below';
     if (this.side !== side) { this.side = side; this.bubble.dataset.side = side; }

@@ -5,6 +5,7 @@ import { LORE, getLore, type LoreEntry, type LoreKind } from '../../data/lore';
 import { getDef } from '../../data/buildingDefs';
 import { Sheet } from './Sheet';
 import { el } from '../dom';
+import { MODAL_OPEN_EVENT } from '../popupRules';
 import { flowArrow } from '../rtl';
 import { kEmpty, kTabs } from '../kit';
 import { CHAPTERS, CHARACTERS, INTERLUDES, type CharacterId } from '../../data/story';
@@ -208,6 +209,7 @@ export class LoreReader {
     card.appendChild(close);
     this.overlay.replaceChildren(card);
     this.overlay.classList.add('open');
+    window.dispatchEvent(new Event(MODAL_OPEN_EVENT)); // [phase1] the tutorial spotlight steps aside at once
 
     const text = entry.body[locale];
     if (entry.kind === 'tape') {

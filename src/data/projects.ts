@@ -81,10 +81,12 @@ export const PROJECTS: ProjectDef[] = [
     name: { he: 'איטום דלת הכספת', en: 'Seal the Vault Door' },
     desc: { he: 'הדלת הגדולה של בונקר 17 לא נסגרת עד הסוף מאז האפר. בלי אטימה, אף אחד לא יישאר כאן לאורך זמן.', en: 'The great door of Bunker 17 has not closed all the way since the ashes. Without a seal, nobody will stay here for long.' },
     finale: { he: 'הבונקר אטום: מערכה II נפתחת', en: 'The bunker is sealed: Act II opens' },
+    // [phase1] Crew hours 8/14/20 -> 1/2/3: Act I's goals are met in about 2 h of play, and 42 crew-hours left a day and a half of waiting.
+    // A save mid-seal with more work done than the new stage needs finishes that stage on the next tick (ProjectSystem.update; work is clamped).
     stages: [
-      { cost: charter(1, { scrap: 40 }, 0.5)(0), hours: 8, crew: 2 },
-      { cost: charter(1, { scrap: 60 }, 0.5)(1), hours: 14, crew: 2 },
-      { cost: charter(1, { scrap: 90, knowledge: 300 }, 0.5)(2), hours: 20, crew: 3 },
+      { cost: charter(1, { scrap: 40 }, 0.5)(0), hours: 1, crew: 2 },
+      { cost: charter(1, { scrap: 60 }, 0.5)(1), hours: 2, crew: 2 },
+      { cost: charter(1, { scrap: 90, knowledge: 300 }, 0.5)(2), hours: 3, crew: 3 },
     ],
     effects: { defense: 10 },
   },

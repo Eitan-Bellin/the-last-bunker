@@ -18,9 +18,26 @@ import { isIOS, isIOSBrowserTab, isIOSSafari, isNative, isStandalone } from '../
 import { getPersistStatus } from '../core/SaveManager';
 import { isTouchDevice } from '../utils/device';
 import { lowPowerSuspected, startPowerWatch } from '../utils/powerWatch';
-import { promptAllowed } from './onboarding/advisorRules'; // [ux-redesign W3a]
+import { offerSessionReady } from './popupRules'; // [phase1]
 
 const DAY_MS = 86_400_000;
+
+/**
+ * [phase1] Seconds this page has been on screen (this session; time in the background does not count). Offers are gated on it, not on
+ * the save's total play time: a 30-day save used to be "ten minutes in" on the first second of a new session.
+ */
+const sessionClock = { since: performance.now(), shown: 0 };
+if (typeof document !== 'undefined') {
+  document.addEventListener('visibilitychange', () => {
+    const now = performance.now();
+    if (document.visibilityState === 'hidden') { sessionClock.shown += now - sessionClock.since; sessionClock.since = Infinity; }
+    else if (sessionClock.since === Infinity) sessionClock.since = now;
+  });
+}
+export function sessionSeconds(): number {
+  const live = sessionClock.since === Infinity ? 0 : performance.now() - sessionClock.since;
+  return (sessionClock.shown + live) / 1000;
+}
 const KEY_INSTALL = 'lastbunker_hint_install'; // JSON { seen: boolean, next: epoch ms, n: times shown }
 const KEY_BACKUP_ASKED = 'lastbunker_hint_backup'; // epoch ms of the last reminder
 export const KEY_LAST_EXPORT = 'lastbunker_last_export'; // epoch ms of the last backup the player made
@@ -158,16 +175,17 @@ function installMemory(): InstallMemory {
   }
 }
 
-/** Safari in a tab, ten minutes in, not yet told (or asked to be reminded in 3 days, at most 3 times). */
-export function installHintDue(playSeconds: number): boolean {
-  if (!isIOSSafari() || !isIOSBrowserTab() || playSeconds < 600) return false;
+/** Safari in a tab, ten minutes into this session, not yet told (or asked to be reminded in 3 days, at most 3 times). */
+export function installHintDue(_playSeconds: number): boolean {
+  if (!isIOSSafari() || !isIOSBrowserTab() || !offerSessionReady(sessionSeconds())) return false; // [phase1] session, not save
   const m = installMemory();
   return !m.seen && m.n < 3 && Date.now() >= m.next;
 }
 
 /** Where the browser may throw the save away: Safari (tab or home-screen app) or any browser that did not promise to keep it. */
 export function backupReminderDue(playSeconds: number): boolean {
-  if (isNative() || playSeconds < 1200) return false;
+  // [phase1] A save worth keeping (20 min of play) AND ten minutes into this session.
+  if (isNative() || playSeconds < 1200 || !offerSessionReady(sessionSeconds())) return false;
   const risky = isIOS() || getPersistStatus() === 'denied';
   if (!risky) return false;
   const last = Math.max(lastExportAt(), Number(read(KEY_BACKUP_ASKED)) || 0);
@@ -215,16 +233,16 @@ const KEY_POWER_ASKED = 'lastbunker_hint_power'; // epoch ms of the last battery
 /** Touch device, saver off, and either the phone's rhythm looks like Low Power Mode or the player has been at it for a quarter of an hour. */
 export function powerHintDue(ctx: PwaContext): boolean {
   if (!isTouchDevice() || ctx.powerSaverOn()) return false;
-  const seconds = ctx.playSeconds();
-  // [ux-redesign W3a] Nothing asks for anything in the first five minutes of a game (it used to come at two minutes on a slow phone).
-  if (!promptAllowed(seconds) || (!lowPowerSuspected() && seconds < 900)) return false;
+  // [phase1] This session's seconds, not the save's: at least ten minutes in (fifteen unless the phone looks like it is struggling).
+  const seconds = sessionSeconds();
+  if (!offerSessionReady(seconds) || (!lowPowerSuspected() && seconds < 900)) return false;
   return Date.now() - (Number(read(KEY_POWER_ASKED)) || 0) > 7 * DAY_MS;
 }
 
 function openPowerCard(ctx: PwaContext): void {
   write(KEY_POWER_ASKED, String(Date.now()));
   ctx.modal.show({
-    icon: '[[battery]]',
+    icon: '[[battery]]', // [phase1] the words say "phone battery" now, so the battery glyph is not read as the Power resource
     title: i18n.t('power.title'),
     body: i18n.t(lowPowerSuspected() ? 'power.bodyLow' : 'power.body'),
     actions: [

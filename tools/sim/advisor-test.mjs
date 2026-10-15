@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// [ux-redesign W3a] "What now?" advisor test: src/ui/onboarding/advisorRules.ts (crisis > collect > goal > upgrade, a goal that fixes a
+// [ux-redesign W3a] "What now?" advisor test: src/ui/onboarding/advisorRules.ts (crisis > collect > goal > upgrade; [phase1] early game: crisis > goal, no collect; a goal that fixes a
 // crisis takes its slot, time to empty, the first-session window, the idle hint, the quiet first minutes). Exit 1 on any problem.
 // Usage: node tools/sim/advisor-test.mjs
 import { rmSync } from 'node:fs';
@@ -50,6 +50,15 @@ eq(keys(calm({ powerRatio: 0.5, stores: [{ id: 'power', amount: 6, net: -1 }] })
 eq(keys(calm({ powerRatio: 0.5, stores: [{ id: 'power', amount: 6, net: -1 }], collect: { inbox: 0, supply: true, daily: 0 }, goal: { id: 'restoreGenerator', fixes: ['power'] } })),
   ['goal:restoreGenerator', 'supply'], 'opening: the generator step leads over the supply crate');
 eq(A.advise(calm({ stores: [{ id: 'food', amount: 10, net: -1 }] })).seconds, 10, 'the crisis carries its countdown');
+
+// ---- [phase1] early game (tutorial / Act I): crisis > goal, collect is a bell badge only ------------------------------------------
+eq(keys(calm({ early: true, collect: { inbox: 2, supply: true, daily: 1 } })), ['goal:farm'], 'early: collect never leads the strip');
+eq(keys(calm({ early: true, collect: { inbox: 0, supply: true, daily: 0 }, upgrade: true })), ['goal:farm', 'upgrade'], 'early: the crate is not a line at all');
+eq(keys(calm({ early: true, stores: [{ id: 'food', amount: 100, net: -1 }], collect: { inbox: 0, supply: true, daily: 0 } })),
+  ['store:food', 'goal:farm'], 'early: crisis > goal');
+eq(keys(calm({ early: true, powerRatio: 0.2, goal: { id: 'restoreGenerator', fixes: ['power'] }, collect: { inbox: 0, supply: true, daily: 0 } })),
+  ['goal:restoreGenerator'], 'early: the generator step stands in for the power alarm, no crate');
+eq(keys(calm({ early: false, collect: { inbox: 0, supply: true, daily: 0 } })), ['supply', 'goal:farm'], 'later: collect before the goal as before');
 
 // ---- a goal that fixes the crisis takes its slot ------------------------------------------------------------------------------
 {

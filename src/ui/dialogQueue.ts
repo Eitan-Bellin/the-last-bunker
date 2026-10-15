@@ -2,7 +2,7 @@ import { i18n } from '../i18n/I18nManager';
 import { plural } from './format';
 import { el } from './dom';
 import type { Modal } from './components/Modal';
-import { allowedNow, orderSources, type PopupTier } from './popupRules';
+import { allowedNow, orderSources, returningQuiet, type PopupTier } from './popupRules';
 
 /**
  * [plan4:UX-10] Every dialog that opens by itself (welcome, memorial, raid result, danger prompt, events, expedition questions and
@@ -52,6 +52,11 @@ export class DialogQueue {
   private heldId = '';
   private heldSince = 0;
   private readonly playSeconds: () => number;
+  /**
+   * [phase1] When the last welcome-back closed (-Infinity: none this session; Infinity: one is open, stamped by the first look after it
+   * closes, since update() only runs while no dialog is up).
+   */
+  private welcomeClosedAt = -Infinity;
 
   constructor(sources: DialogSource[], modal: Modal, gate: (critical: boolean, waitedMs: number, tier?: PopupTier) => boolean, playSeconds: () => number) {
     this.sources = orderSources(sources);
@@ -67,6 +72,7 @@ export class DialogQueue {
 
   /** Called every frame while no dialog is on screen. Opens at most one. */
   update(now = performance.now()): void {
+    if (this.welcomeClosedAt === Infinity) this.welcomeClosedAt = now; // [phase1] the welcome just closed
     const list = this.pending(now);
     this.waiting = list.length;
     if (list.length === 0) {
@@ -75,6 +81,11 @@ export class DialogQueue {
       return;
     }
     const top = list[0];
+    // [phase1] The returning player's first two minutes after the welcome: only emergencies (and another welcome) come by themselves.
+    if (this.quietAfterWelcome(now, !!top.critical)) {
+      this.lastDecision = 'returning';
+      return;
+    }
     if (this.heldId !== top.id) { this.heldId = top.id; this.heldSince = now; }
     if (!this.gate(!!top.critical, now - this.heldSince, top.tier)) {
       this.lastDecision = 'blocked';
@@ -92,8 +103,14 @@ export class DialogQueue {
     this.openOne(top);
   }
 
+  /** [phase1] A welcome-back closed less than RETURNING_QUIET_MS ago (tip cards ask too). */
+  quietAfterWelcome(now = performance.now(), critical = false): boolean {
+    return returningQuiet(now, this.welcomeClosedAt, critical);
+  }
+
   private openOne(s: DialogSource): void {
     if (s.tier === 'offer') this.offersShown++;
+    if (s.tier === 'offline') this.welcomeClosedAt = Infinity; // [phase1] the quiet starts when it closes
     s.open();
   }
 
