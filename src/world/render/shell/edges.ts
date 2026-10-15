@@ -7,15 +7,18 @@
  *   district   a district's tunnel is being dug here: tape and spoil heaps
  *   ready      a marked dig site: spray-painted X on the face, tools, a caged lamp
  *   digging    a work lamp and a rubble face that clears with the dig's progress
+ * [world:M1] The tunnel mouth follows the stratum's kit (CITY.kits frame): timber sets in the shelter and the mines, a concrete portal in
+ * the service network, a tiled portal in the old metro, a bare natural mouth with dripstone in the caves, a steel frame in the core. The
+ * rubble takes the stratum's rock, and a sealed end's cold tease takes the stratum's own tease colour (never the core's red).
  */
 import { Container, Graphics } from 'pixi.js';
-import { CITY, PROPS, SIGNS, type StratumId } from '../../tokens';
+import { CITY, PROPS, SIGNS, STRATA, type StratumId } from '../../tokens';
 import { floorTop } from '../../../rendering/geom';
 import { laneY } from '../../model/cityLayout';
 import { seedOf } from '../../model/outline';
 import type { Cavity, EdgeSite } from '../layoutTypes';
 import type { LightDef, ShellPiece } from './types';
-import { OUTLINE, lamp, palette, rod, shade, sprite } from './kit';
+import { OUTLINE, lamp, mix, palette, rod, shade, sprite, vfill } from './kit';
 import { cracks, groundLantern, pick, post, rubbleWall, shovel, sprayX, tape, tunnelFloor } from './props';
 
 const L = CITY.layout;
@@ -47,12 +50,11 @@ export function buildEdges(edges: readonly EdgeSite[], cavs: readonly Cavity[]):
     const seed = seedOf(e.id);
     const area = e.id;
     tunnelFloor(floorG, mouth - dir * 4, far, lane, L.edgeFloorDepth, s, seed);
-    // Timber sets hold the tunnel: one at the mouth, one by the choke.
-    for (const t of [0.12, 0.46]) {
-      const ts = sprite('timber-set', mouth + dir * L.edgeLen * t, lane + 1);
-      ts.scale.set(ts.scale.x * 0.92, ts.scale.y * ((lane - ceil + 6) / 72));
-      front.addChild(ts);
-    }
+    // The tunnel's mouth and its support, in the stratum's kit.
+    edgeFrame(front, dress, CITY.kits[s]?.frame ?? 'timber', s, mouth, dir, lane, ceil, seed);
+    const rubbleTint = mix(P.rock, 0xffffff, 0.55);
+    const tint = (c: Container) => { for (const k of c.children) for (const sp of (k as Container).children) (sp as unknown as { tint: number }).tint = rubbleTint; };
+    const teaseColor = STRATA[s].tease === PROPS.pocketRedTease || s <= 1 ? PROPS.coldLeak : STRATA[s].tease;
     const choke = e.x;
     if (e.block === 'act') {
       // Three looks so a column of sealed ends never repeats: the east ends are "sealed by order" (tape, plate, the lantern by the pick),
@@ -84,10 +86,11 @@ export function buildEdges(edges: readonly EdgeSite[], cavs: readonly Cavity[]):
       } else {
         const wall = new Container();
         rubbleWall(wall, choke - dir * 10, far, lane, lane - ceil + 8, seed)(1);
+        if (s > 1) tint(wall);
         front.addChild(wall);
         const beam = sprite('timber-beam', choke - dir * 16, lane - (look === 1 ? 30 : 18), { rotation: dir * (look === 1 ? -0.75 : -0.42), flip: dir < 0 });
         front.addChild(beam);
-        cracks(new Graphics(), lit, choke + dir * 14, lane - 22, 2, 16, seed + 3, PROPS.coldLeak);
+        cracks(new Graphics(), lit, choke + dir * 14, lane - 22, 2, 16, seed + 3, teaseColor);
         lit.alpha = 0.55;
       }
       if (look === 0) {
@@ -111,11 +114,12 @@ export function buildEdges(edges: readonly EdgeSite[], cavs: readonly Cavity[]):
         for (let i = 0; i < 3; i++) dress.rect(choke - dir * (20 + i * 7), ceil + 4 + i * 4, 1, 9 + i * 3).fill({ color: E.drip, alpha: 0.3 });
       }
       // The cold beyond (every sealed end has one: the invitation to the next Act).
-      lights.push({ x: far - dir * 14, y: (ceil + lane) / 2, preset: 'teaseBeyond', kind: 'tease', area });
+      lights.push({ x: far - dir * 14, y: (ceil + lane) / 2, preset: 'teaseBeyond', kind: 'tease', area, ...(teaseColor !== PROPS.coldLeak ? { color: teaseColor } : {}) });
     } else if (e.block === 'stability') {
       cracks(backG, null, choke, (ceil + lane) / 2, 7, 70, seed);
       const wall = new Container();
       rubbleWall(wall, choke, far, lane, (lane - ceil) * 0.75, seed)(1);
+      if (s > 1) tint(wall);
       front.addChild(wall);
       const ts = sprite('timber-set', choke - dir * 18, lane + 1);
       ts.scale.set(ts.scale.x * 0.8, ts.scale.y * ((lane - ceil + 4) / 72));
@@ -159,4 +163,41 @@ export function buildEdges(edges: readonly EdgeSite[], cavs: readonly Cavity[]):
   }
   front.addChild(dress, glow);
   return { back, front, lights, progress };
+}
+
+/** [world:M1] A tunnel mouth in the stratum's kit: what holds the edge stub open at its mouth and by the choke. */
+function edgeFrame(front: Container, g: Graphics, frame: string, s: StratumId, mouth: number, dir: number, lane: number, ceil: number, seed: number): void {
+  const P = palette(s);
+  const K = PROPS.kit;
+  const at = [mouth + dir * L.edgeLen * 0.12, mouth + dir * L.edgeLen * 0.46];
+  if (frame === 'timber') {
+    for (const x of at) {
+      const ts = sprite('timber-set', x, lane + 1);
+      ts.scale.set(ts.scale.x * 0.92, ts.scale.y * ((lane - ceil + 6) / 72));
+      front.addChild(ts);
+    }
+    return;
+  }
+  const x = at[0];
+  const h = lane - ceil + 6, y0 = lane - h;
+  if (frame === 'concrete' || frame === 'tile' || frame === 'steel') {
+    const jamb = frame === 'concrete' ? P.builtDark : frame === 'tile' ? K.station.tile : K.forge.shield;
+    const lintel = frame === 'tile' ? K.station.trim : frame === 'steel' ? K.forge.shieldEdge : shade(P.builtDark, 1.2);
+    for (const jx of [x - 24, x + 18]) g.rect(jx, y0 + 6, 6, h - 6).fill(vfill(jamb, y0, lane, 1.1, 0.75)).stroke({ ...OUTLINE, width: 1 });
+    g.rect(x - 28, y0, 56, 8).fill(vfill(lintel, y0, y0 + 8)).stroke({ ...OUTLINE, width: 1 });
+    if (frame === 'concrete') for (let k = 0; k < 6; k++) g.rect(x - 26 + k * 9, y0 + 2.5, 4.5, 3).fill(P.hazard);
+    if (frame === 'steel') for (let k = 0; k < 5; k++) g.circle(x - 24 + k * 12, y0 + 4, 1).fill(shade(K.forge.shieldEdge, 1.3));
+    // A second, lighter set of props by the choke.
+    const x2 = at[1];
+    for (const jx of [x2 - 20, x2 + 16]) rod(g, jx, y0 + 8, jx, lane, 2.6, frame === 'tile' ? K.station.iron : P.metal);
+    rod(g, x2 - 22, y0 + 8, x2 + 18, y0 + 8, 2.6, frame === 'tile' ? K.station.iron : P.metal);
+    return;
+  }
+  // 'none': a natural mouth; dripstone hangs from its roof.
+  let r = seed >>> 0;
+  const rnd = () => ((r = (Math.imul(r, 1664525) + 1013904223) >>> 0) / 4294967296);
+  for (let k = 0; k < 5; k++) {
+    const sx = x + dir * k * 14 + (rnd() - 0.5) * 6, len = 8 + rnd() * 16, w = 2.5 + rnd() * 3;
+    g.poly([sx - w, ceil - 4, sx + w, ceil - 4, sx, ceil + len]).fill(vfill(shade(P.rock, 1.3), ceil, ceil + len, 1.2, 0.7)).stroke({ ...OUTLINE, width: 0.8 });
+  }
 }

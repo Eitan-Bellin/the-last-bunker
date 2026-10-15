@@ -5,6 +5,7 @@ import { i18n } from '../i18n/I18nManager';
 import { GFX, gfxLevel } from './gfxFeatures';
 import { BASE_EAST, ROOM_H, SLAB, SLAB_CLASSIC, SLOT_W, floorTop, type Ext } from './geom';
 import { roomsEastX, roomsWestX, slotX } from '../world/project';
+import { CITY } from '../world/flag';
 import { VIEW } from './perfFx';
 import { hashString } from './draw';
 import { occupancy } from './occupancy';
@@ -332,9 +333,10 @@ export class InfraLayer implements Animated {
     if (closedish) {
       // Red, breathing slowly (never a hard flash).
       const breathe = instant || gfxLevel() === 'low' || reducedMotion() ? 0.6 /* plan4:AC-2 steady */ : 0.5 + 0.5 * Math.sin(t * 1.6 + d.x * 0.01);
-      d.lamp.tint = statusTint('bad'); // plan4:AC-6 (the leaf pose and the SEALED sign carry the state too)
+      const kind = CITY && d.state === 'closed' ? 'warn' : 'bad'; // [world:M1] the city: a shut bulkhead burns amber, a sealed one red
+      d.lamp.tint = statusTint(kind); // plan4:AC-6 (the leaf pose and the SEALED sign carry the state too)
       d.lamp.alpha = 0.7 + 0.3 * breathe;
-      d.glow.tint = statusTint('bad');
+      d.glow.tint = statusTint(kind);
       d.glow.alpha = d.state === 'sealed' ? 0.5 : 0.22 + 0.2 * breathe;
     } else {
       d.lamp.tint = statusTint('ok');

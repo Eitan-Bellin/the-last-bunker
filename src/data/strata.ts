@@ -58,7 +58,7 @@ export const STRATA: readonly StratumDef[] = [
     id: 1, key: 'shelter', floors: [0, 3], name: { he: 'המקלט העליון', en: 'Upper Shelter' },
     pockets: [
       p(1, 'wellRoom', 1, 'w', -18, 3, 'חדר הבאר', 'The Well Room'),
-      p(1, 'oldChapel', 2, 'e', 30, 3, 'בית התפילה הנטוש', 'The Abandoned Chapel'),
+      p(1, 'oldChapel', 2, 'e', 34, 3, 'בית התפילה הנטוש', 'The Abandoned Chapel'),
     ],
   },
   {
@@ -66,7 +66,7 @@ export const STRATA: readonly StratumDef[] = [
     pockets: [
       p(2, 'pumpGallery', 5, 'e', 31, 4, 'גלריית המשאבות', 'The Pump Gallery'),
       p(2, 'valveVault', 6, 'w', -19, 3, 'כספת המגופים', 'The Valve Vault'),
-      p(2, 'crawlway', 7, 'below', 4, 5, 'מעבר הזחילה', 'The Crawlway', 4, 26),
+      p(2, 'crawlway', 7, 'below', 4, 5, 'מעבר הזחילה', 'The Crawlway', 3, 13),
     ],
   },
   {

@@ -2,6 +2,9 @@
  * [world:C1] Pockets (architecture 1.4, 4 "Pocket"): cosmetic secrets in the rock beyond any floor's reach. Before they are found they show
  * only as cracks in the cut face with the stratum's tease colour glowing through them (a tease light the fog lets through at
  * FOG.teaseAlpha); once found the hollow is lit by its own light: crystals in the caves and below, a dusty chamber above.
+ * [world:M1] Each found pocket shows what it is named for (pocketInside.ts): the well room's stone well, the chapel's candles in an arched
+ * niche, pipes and valve wheels in the service pockets, the ghost platform's tile and edge, the token booth, the flooded drift's water,
+ * the canary's cage, the echo lake's still water, the heart vent's magma, the sealed lab's door and its screens.
  */
 import { Container, Graphics } from 'pixi.js';
 import { PROPS, STRATA, type StratumId } from '../../tokens';
@@ -10,6 +13,7 @@ import type { CityArea, Cavity } from '../layoutTypes';
 import type { LightDef, ShellPiece } from './types';
 import { OUTLINE, mix, palette, rng, shade, sprite, vfill } from './kit';
 import { cracks } from './props';
+import { pocketInside } from './pocketInside';
 
 export function buildPockets(areas: readonly CityArea[], cavs: readonly Cavity[]): ShellPiece {
   const back = new Container();
@@ -44,7 +48,7 @@ export function buildPockets(areas: readonly CityArea[], cavs: readonly Cavity[]
       }
     }
     // Inside (once found and cut open): crystals (caves, core) or a dusty chamber with rubble.
-    if (!cav) { /* still sealed in the rock */ } else if (s >= 5 || a.id.includes('crystal') || a.id.includes('Grotto')) {
+    if (!cav) { /* still sealed in the rock */ } else if (pocketInside(a.id, inner, lit, b, P, lights)) { /* dressed */ } else if (s >= 5 || a.id.includes('crystal') || a.id.includes('Grotto')) {
       for (let i = 0; i < 7; i++) {
         const x = b.x0 + 14 + r() * (b.x1 - b.x0 - 28), y = b.y1 - 4;
         const h = 14 + r() * 26, w = 4 + r() * 5;

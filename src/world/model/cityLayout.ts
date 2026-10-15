@@ -20,11 +20,11 @@ import { allPockets, pocketStratum, stratumOf, strataReached, STRATA as STRATA_D
 import { digAt, wingBlock } from '../../data/wings';
 import { GALLERY_ABOVE_FLOORS, MAX_FLOORS } from '../../data/zones';
 import { GFX } from '../../rendering/gfxFeatures';
-import { CORR_LANE, GALLERY_H, ROOM_H, SHAFT_W, SLAB, SLOT_W, floorTop, galleryTop } from '../../rendering/geom';
-import { PROJECTION, frameOfStratum, roomsEastX, roomsWestX, slotX } from '../project';
+import { CORR_LANE, FLIGHT_RISE, GALLERY_H, ROOM_H, SHAFT_W, SLAB, SLOT_W, floorTop, galleryTop } from '../../rendering/geom';
+import { PROJECTION, buildingRect, frameOfStratum, roomsEastX, roomsWestX, slotX } from '../project';
 import { CITY } from '../tokens';
 import type { AreaState, CityArea, CityLayout, Cavity, EdgeSite, HubGeom } from '../render/layoutTypes';
-import { archPoints, blobPoly, polyBounds, q8, raggedPoly, rectPoly, seedOf } from './outline';
+import { archPoints, blobPoly, noise1, polyBounds, q8, raggedPoly, rectPoly, seedOf } from './outline';
 
 export type { CityLayout, CityArea, Cavity, EdgeSite, HubGeom, AreaState };
 
@@ -62,10 +62,39 @@ function stratumFloors(s: StratumId): [number, number] {
   return [d[0], d[1]];
 }
 
+/**
+ * [world:M1] Rooms that hang into a floor's band from another floor (a two-storey room anchored on the floor above or below reaches past
+ * this floor's own extent): the floor's strip and its dark edges keep clear of them. Set for the length of one buildCityLayout.
+ */
+let OVERHANG: Map<number, { x0: number; x1: number }> | null = null;
+
+function overhangs(state: GameState): Map<number, { x0: number; x1: number }> {
+  const out = new Map<number, { x0: number; x1: number }>();
+  const n = Math.max(0, state.currentFloors | 0);
+  for (const b of state.buildings) {
+    const bf = b.position.floor;
+    if (bf < 0 || isDistrict(b.type)) continue;
+    const r = buildingRect(b);
+    if (r.h <= ROOM_H + 1) continue;
+    for (let f = Math.max(0, bf - 2); f < Math.min(n, bf + 3); f++) {
+      if (f === bf) continue;
+      const t = floorTop(f);
+      if (r.y + r.h <= t + 2 || r.y >= t + ROOM_H - 2) continue;
+      const o = out.get(f) ?? { x0: Infinity, x1: -Infinity };
+      o.x0 = Math.min(o.x0, r.x);
+      o.x1 = Math.max(o.x1, r.x + r.w);
+      out.set(f, o);
+    }
+  }
+  return out;
+}
+
 /** Where a floor's strip reaches on the west (the west wing's outer edge, or the end of the west vestibule) and on the east. */
 function stripEnds(floor: number, ext: { w: number; e: number }): { xw: number; xe: number } {
   const F = frameOfStratum(stratumOf(floor));
-  return { xw: ext.w > 0 ? slotX(floor, -ext.w) : F.hubL - F.vestW, xe: slotX(floor, ext.e) };
+  const xw = ext.w > 0 ? slotX(floor, -ext.w) : F.hubL - F.vestW, xe = slotX(floor, ext.e);
+  const o = OVERHANG?.get(floor);
+  return o ? { xw: Math.min(xw, o.x0), xe: Math.max(xe, o.x1) } : { xw, xe };
 }
 
 interface DistrictSite { kind: string; floor: number; x: number; state: AreaState; progress: number }
@@ -95,7 +124,15 @@ function districtRect(site: DistrictSite): { x0: number; y0: number; x1: number;
 /** The x where a floor's east dark edge opens: the end of the strip, or past the district cavern on that floor. */
 function eastMouth(floor: number, xe: number, district: DistrictSite | undefined): number {
   if (!district) return xe;
-  return districtRect(district).x1 + L.cavernPad;
+  return districtRect(district).x1 + L.cavernPad + districtReach(district.kind);
+}
+
+/** [world:M1] How much further east a district's cavern reaches (lake water, metro track), and its extra roof rise. */
+export function districtReach(kind: string): number {
+  return L.districtReach[kind] ?? 0;
+}
+export function districtRise(kind: string): number {
+  return L.districtRise[kind] ?? 0;
 }
 
 /** A running dig on an edge or the floor below, if any. */
@@ -132,6 +169,10 @@ export function cityLayoutSig(state: GameState): string {
   for (const d of districtSites(state)) s += `|${d.kind}@${d.floor}.${d.x}${d.state[0]}`;
   s += `|dig${digOf(state, d => d.kind !== 'wing') ? 1 : 0}`;
   for (const id of state.city?.found ?? []) s += `|${id}`;
+  for (const [f, o] of overhangs(state)) s += `|o${f}:${o.x0},${o.x1}`;
+  // [world:M1] Shut and sealed bulkheads carry a lamp in the city's lightmap (shell/doors.ts).
+  const doors = state.layout?.doors;
+  if (doors) for (const k of Object.keys(doors).sort()) if (doors[k] !== 'open') s += `|${k}${doors[k][0]}`;
   return s;
 }
 
@@ -159,11 +200,66 @@ export function pocketBox(p: PocketDef): { x0: number; y0: number; x1: number; y
 }
 
 /** The vault (ceiling) polyline of a hub: a segmental arch from the west wall to the east wall over the stratum's top floor. */
-function vaultLine(hubL: number, hubR: number, y: number): number[] {
-  return archPoints(hubL, hubR, y, H.vaultRise, 16);
+function vaultLine(hubL: number, hubR: number, y: number, s: StratumId = 1): number[] {
+  const pts = archPoints(hubL, hubR, y, H.vaultRise, s >= 4 ? 28 : 16);
+  const rag = CITY.kits[s]?.vaultRag ?? 0;
+  if (rag <= 0) return pts;
+  // [world:M1] The mines' hewn roof and the caves' natural one: the cut is pushed UP (outward) by noise, never into the storeys; the springers
+  // stay on the walls so the balconies and the vestibule doorways keep their geometry.
+  const seed = seedOf(`vault:${s}`);
+  for (let i = 2; i < pts.length - 2; i += 2) {
+    const t = (pts[i] - hubL) / Math.max(1, hubR - hubL);
+    const edgeFade = Math.min(1, Math.min(t, 1 - t) * 5);
+    pts[i + 1] -= rag * edgeFade * (0.55 + 0.45 * noise1(seed, pts[i] / 22));
+  }
+  return pts;
+}
+
+/**
+ * [world:M1] The entrance beat (style guide 12 beat 2): the hatch shaft through the soil and the stratum-1 vault crown east of the spine,
+ * and the companionway flights from the hatch landing down to floor 0's east balcony, in the east hub stair column (its flights carry on
+ * the column's zig-zag: the lowest one ends where the column's first flight starts). Pure: the shell draws it, the layout cuts the shaft,
+ * and routes can walk it (a future surface -> hub route: down `flights` top to bottom, then the balcony; see M1-L-notes.md).
+ */
+export interface EntranceGeom {
+  hatch: { x0: number; x1: number; y0: number; y1: number };
+  /** The east stair column centre and the landing under the hatch (the top of the first flight). */
+  stair: { x: number; top: number; bottom: number };
+  /** Each flight: its top y, and whether it runs down to the right (odd) or to the left (even), as hub stairs do. */
+  flights: { y: number; odd: boolean }[];
+}
+
+export function entranceGeom(): EntranceGeom {
+  const E = CITY.entrance, F = frameOfStratum(1);
+  const x = F.hubR - H.wallW - H.stairInset - H.stairW / 2;
+  const bottom = laneY(0);
+  const n = E.flights;
+  const top = bottom - n * FLIGHT_RISE;
+  const flights: EntranceGeom['flights'] = [];
+  // Counting up from the balcony: the flight just above it is odd (it ends at the column's right side, where the first column flight starts).
+  for (let k = 0; k < n; k++) flights.push({ y: bottom - (k + 1) * FLIGHT_RISE, odd: k % 2 === 0 });
+  flights.reverse();
+  const vy = vaultYAt(F.hubL, F.hubR, floorTop(0), (E.hatchX0 + E.hatchX1) / 2);
+  return { hatch: { x0: E.hatchX0, x1: E.hatchX1, y0: E.hatchTop, y1: Math.max(vy + E.hatchDip, top - 8) }, stair: { x, top, bottom }, flights };
+}
+
+/** The (unragged) vault line's y at x. */
+function vaultYAt(hubL: number, hubR: number, y: number, x: number): number {
+  const p = archPoints(hubL, hubR, y, H.vaultRise, 64);
+  for (let i = 0; i < p.length - 2; i += 2) if (x >= p[i] && x <= p[i + 2]) return p[i + 1] + ((p[i + 3] - p[i + 1]) * (x - p[i])) / Math.max(1e-6, p[i + 2] - p[i]);
+  return y;
 }
 
 export function buildCityLayout(state: GameState): CityLayout {
+  OVERHANG = overhangs(state);
+  try {
+    return buildLayout(state);
+  } finally {
+    OVERHANG = null;
+  }
+}
+
+function buildLayout(state: GameState): CityLayout {
   const n = Math.max(0, state.currentFloors | 0);
   const exts = Array.from({ length: n }, (_, f) => floorExtent(state, f));
   const extOf = (f: number) => (f < n ? exts[f] : { w: 0, e: BASE_EAST });
@@ -187,7 +283,7 @@ export function buildCityLayout(state: GameState): CityLayout {
     if (!floors.length) continue;
     const F = frameOfStratum(s);
     const top = floorTop(fa), bottom = storeyBottom(floors[floors.length - 1]);
-    const vault = q8(vaultLine(F.hubL, F.hubR, top));
+    const vault = q8(vaultLine(F.hubL, F.hubR, top, s));
     const balconies: HubGeom['balconies'] = [];
     for (const f of floors) {
       balconies.push({ floor: f, side: 'w', x0: F.hubL + H.wallW, x1: 0, y: laneY(f) });
@@ -205,6 +301,11 @@ export function buildCityLayout(state: GameState): CityLayout {
     hubs.push(hub);
     // The hub cavity: up the west wall, along the vault, down the east wall, back along the plaza floor (clockwise, y down).
     cavities.push({ id: `c:hub:${s}`, s, back: 'hub', poly: q8([F.hubL, bottom, ...vault, F.hubR, bottom]) });
+    // [world:M1] The entrance: the hatch shaft from the ground into the vault crown (stratum 1 only), lined with board-formed concrete.
+    if (s === 1) {
+      const e = entranceGeom().hatch;
+      cavities.push({ id: 'c:hatch', s, back: 'concrete', poly: rectPoly(e.x0, e.y0, e.x1, e.y1) });
+    }
     // The vestibules of every dug floor of the stratum: tiled corridors between the hub and the rooms.
     for (const f of floors) {
       cavities.push({ id: `c:vest:${f}:w`, s, back: 'tile', poly: rectPoly(F.hubL - F.vestW, floorTop(f), F.hubL, storeyBottom(f)) });
@@ -218,8 +319,9 @@ export function buildCityLayout(state: GameState): CityLayout {
     const y0 = floorTop(f) - L.stripHead, y1 = storeyBottom(f);
     const seed = seedOf(`strip:${f}`);
     // East strip: ragged top and ragged far end (corners: TL, TR, BR, BL -> sides top, east, bottom, west).
-    cavities.push({ id: `c:strip:${f}:e`, s, back: 'concrete', poly: q8(raggedPoly(rectPoly(roomsEastX(f), y0, slotX(f, ext.e), y1), [L.stripRag, L.stripRag, 0, 0], seed, L.stripWave)) });
-    if (ext.w > 0) cavities.push({ id: `c:strip:${f}:w`, s, back: 'concrete', poly: q8(raggedPoly(rectPoly(slotX(f, -ext.w), y0, roomsWestX(f), y1), [L.stripRag, 0, 0, L.stripRag], seed + 1, L.stripWave)) });
+    const se = stripEnds(f, ext);
+    cavities.push({ id: `c:strip:${f}:e`, s, back: 'concrete', poly: q8(raggedPoly(rectPoly(roomsEastX(f), y0, se.xe, y1), [L.stripRag, L.stripRag, 0, 0], seed, L.stripWave)) });
+    if (ext.w > 0 || se.xw < roomsWestX(f) - 1) cavities.push({ id: `c:strip:${f}:w`, s, back: 'concrete', poly: q8(raggedPoly(rectPoly(Math.min(se.xw, slotX(f, -ext.w)), y0, roomsWestX(f), y1), [L.stripRag, 0, 0, L.stripRag], seed + 1, L.stripWave)) });
   }
 
   // The world's reach sideways: every strip, edge stub, district and pocket that can show. Undug storeys and unknown galleries span all of
@@ -230,7 +332,7 @@ export function buildCityLayout(state: GameState): CityLayout {
     wx0 = Math.min(wx0, e.xw - L.edgeLen);
     wx1 = Math.max(wx1, e.xe + L.edgeLen);
   }
-  for (const d of districts) wx1 = Math.max(wx1, districtRect(d).x1 + L.cavernPad + L.edgeLen);
+  for (const d of districts) wx1 = Math.max(wx1, districtRect(d).x1 + L.cavernPad + districtReach(d.kind) + L.edgeLen);
   for (const p of allPockets()) {
     const b = pocketBox(p);
     wx0 = Math.min(wx0, b.x0);
@@ -272,7 +374,7 @@ export function buildCityLayout(state: GameState): CityLayout {
     }
     const topOfHub = f < n && f === stratumFloors(s)[0] && hubs.some(h => h.s === s);
     const poly = topOfHub
-      ? [xw, y0, ...vaultLine(F.hubL, F.hubR, y0), xe, y0, xe, y1, xw, y1]
+      ? [xw, y0, ...vaultLine(F.hubL, F.hubR, y0, s), xe, y0, xe, y1, xw, y1]
       : f >= n ? rectPoly(fullX0, y0, fullX1, y1) : rectPoly(xw, y0, xe, y1);
     areas.push({ id: `f:${f}`, kind: 'storey', s, state: st, ...(progress !== undefined ? { progress } : {}), poly: q8(poly), label: { x: (xw + xe) / 2, y: y0 + ROOM_H / 2, key: `f:${f}` } });
   }
@@ -292,7 +394,16 @@ export function buildCityLayout(state: GameState): CityLayout {
     const r = districtRect(d);
     const xe = slotX(d.floor, extOf(d.floor).e);
     const seed = seedOf(`d:${d.kind}`);
-    const cave = blobPoly(r.x0 - L.cavernPad, r.y0 - L.cavernRise, r.x1 + L.cavernPad, storeyBottom(d.floor), seed, L.cavernLumps, 26, true);
+    // [world:M1] The roof rises into the band above only where the floor above does not reach (a longer floor above keeps its rooms clear).
+    const upper = districtOn(d.floor - 1);
+    const above = d.floor > 0 ? Math.max(stripEnds(d.floor - 1, extOf(d.floor - 1)).xe, upper ? districtRect(upper).x1 + L.cavernPad : -Infinity) : -Infinity;
+    const capped = above > r.x0 - 4;
+    const cx1 = r.x1 + L.cavernPad + districtReach(d.kind);
+    // Capped (a floor or a district above reaches over it): a low hall, its roof a ragged line just over the room, a rock shelf between
+    // it and the cavern above; free: the tall lumpy cavern.
+    const cave = capped
+      ? raggedPoly(rectPoly(r.x0 - L.cavernPad, r.y0 - L.stripHead - 2, cx1, storeyBottom(d.floor)), [L.stripRag, L.stripRag, 0, 0], seed, L.stripWave)
+      : blobPoly(r.x0 - L.cavernPad, r.y0 - L.cavernRise - districtRise(d.kind), cx1, storeyBottom(d.floor), seed, L.cavernLumps, 26, true);
     const tunnel = rectPoly(xe - 4, floorTop(d.floor) + 30, r.x0 - L.cavernPad + 20, storeyBottom(d.floor) - SLAB * 0.3);
     if (d.state !== 'hidden') {
       cavities.push({ id: `c:tun:${d.kind}`, s, back: 'rock', poly: q8(tunnel) });

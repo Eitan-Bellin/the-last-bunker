@@ -1058,7 +1058,56 @@ export const CITY = {
     strataAhead: 1,
     /** Layout bounds margin: sideways, above ground (the sky) and below the deepest area. */
     boundsPad: { x: 420, top: 700, bottom: 520 },
+    /**
+     * [world:M1] How much further east than the room (past `cavernPad`) a district's cavern reaches, per kind: room for the lake's open
+     * water and jetty, the metro's track and dead car. The floor's east dark edge opens past it.
+     */
+    districtReach: { cave: 24, lake: 64, metro: 92, geothermal: 0, oldVault: 0 } as Record<string, number>,
+    /** [world:M1] Extra rise of a district cavern's roof above `cavernRise`, per kind (the cave's dripstone hall is the tallest). */
+    districtRise: { cave: 10, lake: 0, metro: -18, geothermal: 0, oldVault: 0 } as Record<string, number>,
   },
+  /**
+   * [world:M1] The entrance beat (style guide 12 beat 2): a hatch through the soil over the stratum-1 vault, east of the spine, and a
+   * companionway of stair flights from the hatch landing down to the top storey's east balcony (the east hub stair column carries on up).
+   * Survivors arriving from the surface come down it. World units.
+   */
+  entrance: {
+    /** The hatch shaft through the soil and the vault crown (x span, top just above the ground line). */
+    hatchX0: 68,
+    hatchX1: 106,
+    hatchTop: -3,
+    /** How far below the vault line the hatch shaft cuts (so its mouth reads as a hole in the vault). */
+    hatchDip: 10,
+    /** Flights above the top storey's balcony (each FLIGHT_RISE tall), zig-zagging in the east stair column. */
+    flights: 4,
+    /** The propped hatch leaf: its length and the angle it stands open at (radians from the ground, leaning east). */
+    leafLen: 34,
+    leafAngle: 1.05,
+    /** The sandbag wall and the barrel fire on the ground beside the hatch (offsets east of hatchX1). */
+    sandbagsDx: 4,
+    barrelDx: 44,
+  },
+  /**
+   * [world:M1] The kit of each stratum's hub, vestibules and edges (style guide 2): the strata 2-6 hubs each get their own vault
+   * language instead of a tinted copy of Bell Square. `vault` = the back wall; `deck` = balcony / gantry look; `vaultRag` = how rough
+   * the vault cut is (0 = the cast arch); `frame` = how tunnel mouths are held (concrete lintel, tile portal, timber set, none, steel).
+   */
+  kits: [
+    { vault: 'none', deck: 'balcony', vaultRag: 0, frame: 'timber' },
+    { vault: 'hub', deck: 'balcony', vaultRag: 0, frame: 'timber' },
+    { vault: 'service', deck: 'gantry', vaultRag: 0, frame: 'concrete' },
+    { vault: 'station', deck: 'balcony', vaultRag: 0, frame: 'tile' },
+    { vault: 'mine', deck: 'timber', vaultRag: 14, frame: 'timber' },
+    { vault: 'cavern', deck: 'stilts', vaultRag: 30, frame: 'none' },
+    { vault: 'forge', deck: 'gantry', vaultRag: 10, frame: 'steel' },
+  ] as readonly { vault: 'none' | 'hub' | 'service' | 'station' | 'mine' | 'cavern' | 'forge'; deck: 'balcony' | 'gantry' | 'timber' | 'stilts'; vaultRag: number; frame: 'concrete' | 'tile' | 'timber' | 'none' | 'steel' }[],
+  /** [world:M1] The transfer at each service gallery (the strata seams): the landing across the hub, its signal lamps per metre. */
+  transfer: { lampEvery: 70, deckH: 8, plateW: 34, plateH: 12 },
+  /**
+   * [world:M1] The foreground plane (layer `fore`, p 1.32): silhouettes stand only in the rock between strata and past the edges, and fade
+   * out whenever their projected box would cross a storey, a sign or the dig face. `keepClear` pads those boxes (world units).
+   */
+  fore: { keepClear: 18, fade: 6, maxItems: 22, sideRun: 320, tint: 0x24262c },
 } as const;
 
 /**
@@ -1130,4 +1179,49 @@ export const PROPS = {
     /** Recessed rock at the back of a tunnel or pit: the same tile in shadow. */
     recessTint: 0x5a5450 as Hex,
   },
+  /** [world:M1] The entrance beat: hatch coaming and leaf, sandbags, the companionway's hazard-yellow handrail and stringers. */
+  entrance: {
+    coaming: 0x4a4440 as Hex,
+    leaf: 0x5d6b58 as Hex,
+    leafRust: 0x7a4a2c as Hex,
+    sandbag: 0x8a7d5e as Hex,
+    rail: 0xc89a2a as Hex,
+    stringer: 0x3a3632 as Hex,
+    /** The sky that spills down the hatch (warm by day; the light is `civic`, so it follows the night). */
+    sky: 0xffb070 as Hex,
+  },
+  /** [world:M1] Hub, vestibule and edge dressing of the strata 2-6 kits (painted colour before the lightmap). */
+  kit: {
+    /** Service Network: insulated pipe racks, red valve wheels, the big wall fan, gantry grating. */
+    service: { pipe: 0x7a8288, pipeLag: 0x8a7a5e, valve: 0x8a3a2a, fan: 0x3a4046, fanBlade: 0x5b636b, grate: 0x4a5056, gauge: 0xd8d0b8 },
+    /** Old Metro: dirty glazed tile, teal enamel trim, cast iron, the enamel station plate, the platform clock face. */
+    station: { tile: 0xbcb59c, trim: 0x2f6b5c, iron: 0x3a3e44, plate: 0x1f4a40, plateRim: 0xd8d0b8, clockFace: 0xe8e0c8 },
+    /** Mines: rough timber, rope, ore carts, copper veins and gold flecks in the rock. */
+    mine: { timber: 0x6b4c2e, timberDark: 0x3e2c1a, rope: 0x9a8058, cart: 0x5a4a3e, ore: 0x3fa58a, gold: 0xd8b04a, iron: 0x4a4440 },
+    /** Deep Caves: flowstone, crystal and violet crystal, fungus, still water, tarp and rope. */
+    cavern: { flowstone: 0x6a5a88, crystal: 0x7af2ff, violet: 0xb07aff, fungus: 0x4affc8, water: 0x0a1822, tarp: 0x5a4a3a, rope: 0x8a7a5e },
+    /** Core: basalt, heat-blued steel shields, vault brass, the magma seam. */
+    forge: { shield: 0x222a34, shieldEdge: 0x4e5c6e, brass: 0xc8a060, magma: 0xff5a1e, magmaCore: 0xffc060, basalt: 0x221a18 },
+  },
+  /** [world:M1] The stratum-1 districts' caverns. */
+  district: {
+    /** Cave: moss on the ledges and the dripstone. */
+    moss: 0x4a6a3a,
+    mossLit: 0x7a9a4a,
+    dripstone: 0x8a7a64,
+    /** Lake: the water body, its lit surface line, the jetty boards and posts. */
+    water: 0x0c1e26,
+    waterLine: 0x7ab8c8,
+    jetty: 0x6b5236,
+    jettyPost: 0x3a2a1a,
+    /** Metro: the platform edge paint, rails, sleepers, the dead car's body and window glow. */
+    platformEdge: 0xd1a62b,
+    rail: 0x8a8e94,
+    sleeper: 0x3a2e24,
+    carBody: 0x3f5a52,
+    carRoof: 0x2a3634,
+    carWindow: 0xffb060,
+  },
+  /** [world:M1] Doors in the city: a shut bulkhead's amber lamp, a sealed one's red emergency lamp. */
+  doors: { shut: 0xffa040 as Hex, sealed: 0xff3a2a as Hex },
 } as const;
