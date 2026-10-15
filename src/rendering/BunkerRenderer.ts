@@ -576,6 +576,7 @@ export class BunkerRenderer {
     });
     this.setupRenderGroups(); // [perf]
     this.cam.setup();
+    this.cam.setFollowSource(this.walkers.followSource(this.people, this.worldContainer)); // [world:M2] follow-survivor
     setPopupBlocker((x, y) => this.inIncident(x, y)); // [camera]
     this.cam.fitToScreen();
     // gfx-p0 light: the composite takes over the era grade and reads the era/night for vignette and night lighting.

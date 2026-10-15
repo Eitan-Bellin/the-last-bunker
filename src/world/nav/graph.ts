@@ -37,6 +37,7 @@ import { PROJECTION, frameOfStratum, slotX } from '../project';
 import { cityLayoutProvider } from '../render/citySeams';
 import type { CityLayout } from '../render/layoutTypes';
 import { HUB_FLIGHTS_PER_FLOOR, HUB_STAIR_AMP, hubStairX } from './hubStairs';
+import type { GalleryTransfer } from '../model/transfers';
 
 /**
  * A gallery transfer (the level-builder's contract, M2-L-notes.md): the walk between the bottom floor of one stratum and the top floor of the
@@ -152,6 +153,18 @@ export function standInTransfers(floors: number): NavTransfer[] {
     const top = { x: xa, y: laneY(above) }, bottom = { x: xb, y: laneY(above + 1) };
     out.push({ gallery: g, fromFloor: above, toFloor: above + 1, side: 'e', top, bottom, run: [top, { x: xa, y: gy }, { x: xb, y: gy }, bottom] });
   });
+  return out;
+}
+
+/** The level-builder's gallery transfers (src/world/model/transfers.ts) as walk links: one per run, entry on the upper stratum's last lane,
+ * exit on the lower stratum's first lane, the drawn path (flight ends and the catwalk jog) in between. */
+export function navTransfers(list: readonly GalleryTransfer[]): NavTransfer[] {
+  const out: NavTransfer[] = [];
+  for (const gt of list) for (const r of gt.runs) {
+    const run: { x: number; y: number }[] = [];
+    for (let i = 0; i + 1 < r.path.length; i += 2) run.push({ x: r.path[i], y: r.path[i + 1] });
+    out.push({ gallery: r.g, fromFloor: r.upper.floor, toFloor: r.lower.floor, side: r.side, top: { x: r.upper.x, y: r.upper.y }, bottom: { x: r.lower.x, y: r.lower.y }, run });
+  }
   return out;
 }
 
@@ -302,8 +315,8 @@ function build(state: GameState, key: number): Graph {
   }
 
   // Gallery transfers (and any ramps given the same way).
-  const given = (layout as (CityLayout & { transfers?: NavTransfer[] }) | null)?.transfers;
-  const transfers = given ?? standInTransfers(n);
+  const given = (layout as (CityLayout & { transfers?: GalleryTransfer[] }) | null)?.transfers;
+  const transfers = given ? navTransfers(given) : standInTransfers(n);
   for (const t of transfers) {
     if (t.fromFloor < 0 || t.toFloor < 0 || t.fromFloor >= n || t.toFloor >= n || t.fromFloor === t.toFloor) continue;
     const raw = [t.top, ...t.run, t.bottom];
