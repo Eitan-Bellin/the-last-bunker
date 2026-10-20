@@ -86,6 +86,8 @@ import './styles/a11y.css'; // [plan4:AC-2] the accessibility layer, last of all
 import './styles/edge.css';
 import { EdgeArrows, installResourceLongPress } from './ui/edgeArrows';
 import { BackToBunker } from './ui/backToBunker';
+import { FloorTagOverlay } from './ui/floorTagOverlay'; // [clean:2]
+import './styles/floor-tag.css'; // [clean:2]
 import { installNativeBack } from './ui/nativeBack';
 import { FeedbackController } from './ui/controllers/feedback';
 import { InboxController } from './ui/controllers/inbox';
@@ -386,6 +388,7 @@ export class GameApp {
       const click = () => this.audio.play('click');
       new EdgeArrows({ renderer: this.renderer, getState: () => this.state, blocked: covered, click }).start();
       new BackToBunker({ renderer: this.renderer, getState: () => this.state, blocked: covered, click }).start();
+      new FloorTagOverlay({ renderer: this.renderer, getState: () => this.state, blocked: covered, click }).start(); // [clean:2] the sticky floor tag + floor list
       installResourceLongPress(r => this.hud.onResourceTap?.(r as ResourceType));
       installNativeBack({
         input: () => this.backInput(),

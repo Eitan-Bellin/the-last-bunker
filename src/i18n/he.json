@@ -2127,5 +2127,13 @@
   "cf1.status.disaster": "סכנה: {name}",
   "cf1.main.fill.one": "איוש מקום אחד",
   "cf1.main.fill.two": "איוש שני מקומות",
-  "cf1.main.fill.other": "איוש {n} מקומות"
+  "cf1.main.fill.other": "איוש {n} מקומות",
+  "cf2.tag.aria": "הקומה שבמבט: {floor}. הקישו לרשימת הקומות",
+  "cf2.jump.title": "קומות",
+  "cf2.jump.trouble": "חדר כאן צריך תשומת לב",
+  "cf2.kind.living": "מגורים",
+  "cf2.kind.agri": "חקלאות ומים",
+  "cf2.kind.engineering": "הנדסה",
+  "cf2.kind.industrial": "תעשייה",
+  "cf2.kind.research": "מחקר ורפואה"
 }

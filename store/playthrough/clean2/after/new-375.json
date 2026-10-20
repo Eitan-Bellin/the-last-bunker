@@ -1,0 +1,45 @@
+{
+ "wallSeconds": 28,
+ "gameMinutes": 2,
+ "dialogs": 0,
+ "story": 0,
+ "cards": 0,
+ "spotlights": 0,
+ "toasts": 0,
+ "sheets": 0,
+ "blocking": [],
+ "state": {
+  "paused": false,
+  "morale": 44,
+  "people": 3,
+  "power": 0,
+  "food": 117,
+  "playSeconds": 138,
+  "strip": "שקמו את הגנרטור ב⁨קומה 3⁩",
+  "sheet": "",
+  "rooms": 1,
+  "probe": null
+ },
+ "samples": [
+  {
+   "paused": false,
+   "morale": 44,
+   "people": 3,
+   "power": 0,
+   "food": 117,
+   "playSeconds": 138,
+   "strip": "שקמו את הגנרטור ב⁨קומה 3⁩",
+   "sheet": "",
+   "rooms": 1,
+   "probe": null
+  }
+ ],
+ "config": {
+  "base": "http://localhost:5173",
+  "minutes": 2,
+  "speed": 5,
+  "stage": "",
+  "away": 0,
+  "lang": "he"
+ }
+}

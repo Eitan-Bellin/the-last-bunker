@@ -1,0 +1,54 @@
+{
+ "main": {
+  "zoom": 1.919,
+  "base": 1.919,
+  "camY": 372,
+  "y0": 192,
+  "y1": 552,
+  "floorsVisible": 2.5,
+  "slot2px": 177,
+  "tag": "קומה 2 · חקלאות ומים"
+ },
+ "scroll1": {
+  "zoom": 1.919,
+  "base": 1.919,
+  "camY": 516,
+  "y0": 336,
+  "y1": 696,
+  "floorsVisible": 2.5,
+  "slot2px": 177,
+  "tag": "קומה 3 · הנדסה"
+ },
+ "settleMs": 523,
+ "dragTotalMs": 4454,
+ "scroll": {
+  "zoom": 1.919,
+  "base": 1.919,
+  "camY": 660,
+  "y0": 480,
+  "y1": 840,
+  "floorsVisible": 2.5,
+  "slot2px": 177,
+  "tag": "קומה 4 · חקלאות ומים"
+ },
+ "jumped": {
+  "zoom": 1.919,
+  "base": 1.919,
+  "camY": 660,
+  "y0": 480,
+  "y1": 840,
+  "floorsVisible": 2.5,
+  "slot2px": 177,
+  "tag": "קומה 4 · חקלאות ומים"
+ },
+ "home": {
+  "zoom": 1.919,
+  "base": 1.919,
+  "camY": 372,
+  "y0": 192,
+  "y1": 552,
+  "floorsVisible": 2.5,
+  "slot2px": 177,
+  "tag": "עילי · עילי"
+ }
+}

@@ -1,0 +1,44 @@
+{
+ "main": {
+  "zoom": 0.664,
+  "base": 0.664,
+  "camY": 1754,
+  "y0": 1233,
+  "y1": 2274,
+  "floorsVisible": 7.23,
+  "slot2px": 61,
+  "tag": null
+ },
+ "scroll1": {
+  "zoom": 0.664,
+  "base": 0.664,
+  "camY": 2326,
+  "y0": 1806,
+  "y1": 2846,
+  "floorsVisible": 7.23,
+  "slot2px": 61,
+  "tag": null
+ },
+ "settleMs": 940,
+ "dragTotalMs": 5195,
+ "scroll": {
+  "zoom": 0.664,
+  "base": 0.664,
+  "camY": 2880,
+  "y0": 2359,
+  "y1": 3400,
+  "floorsVisible": 7.23,
+  "slot2px": 61,
+  "tag": null
+ },
+ "home": {
+  "zoom": 0.664,
+  "base": 0.664,
+  "camY": 1754,
+  "y0": 1233,
+  "y1": 2274,
+  "floorsVisible": 7.23,
+  "slot2px": 61,
+  "tag": null
+ }
+}

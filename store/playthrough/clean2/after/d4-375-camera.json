@@ -1,0 +1,54 @@
+{
+ "main": {
+  "zoom": 1.919,
+  "base": 1.919,
+  "camY": 372,
+  "y0": 192,
+  "y1": 552,
+  "floorsVisible": 2.5,
+  "slot2px": 177,
+  "tag": "קומה 2 · חקלאות ומים"
+ },
+ "scroll1": {
+  "zoom": 1.919,
+  "base": 1.919,
+  "camY": 516,
+  "y0": 336,
+  "y1": 696,
+  "floorsVisible": 2.5,
+  "slot2px": 177,
+  "tag": "קומה 3 · הנדסה"
+ },
+ "settleMs": 406,
+ "dragTotalMs": 4224,
+ "scroll": {
+  "zoom": 1.919,
+  "base": 1.919,
+  "camY": 660,
+  "y0": 480,
+  "y1": 840,
+  "floorsVisible": 2.5,
+  "slot2px": 177,
+  "tag": "קומה 4 · חקלאות ומים"
+ },
+ "jumped": {
+  "zoom": 1.919,
+  "base": 1.919,
+  "camY": 838,
+  "y0": 658,
+  "y1": 1018,
+  "floorsVisible": 2.5,
+  "slot2px": 177,
+  "tag": "קומה 5 · מחקר ורפואה"
+ },
+ "home": {
+  "zoom": 1.919,
+  "base": 1.919,
+  "camY": 372,
+  "y0": 192,
+  "y1": 552,
+  "floorsVisible": 2.5,
+  "slot2px": 177,
+  "tag": "קומה 2 · חקלאות ומים"
+ }
+}

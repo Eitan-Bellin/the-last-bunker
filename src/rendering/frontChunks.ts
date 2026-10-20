@@ -22,6 +22,7 @@ import { PIER_AO, PIER_W, clusterSpan, pierKey, piersOfFloor } from './airyArt';
 import { beamTexture, deckTexture, railTexture, seamBack, slotSlice, towerStubTexture, towerTexture } from './circulation'; // [airy2:D1]
 import { BASE_EAST, CORR_BEAM, CORR_DECK, CORR_LANE, CORR_RAIL, FLOOR_H, ROOM_H, SLAB, SLOT_W, TOPSOIL, floorAtY, floorH, floorTop, type Ext } from './layout';
 import { roomsEastX, roomsWestX, slotX, stripX } from '../world/project';
+import { roomSlots } from '../data/buildingDefs';
 import { CITY } from '../world/flag';
 import {
   AO_CONTACT, AO_SIDE, COLUMN_SPILL_W, COLUMN_W, KIT_LIFT, LIP, PIPES_H, PIPES_Y, SLAB_DRAW,
@@ -944,6 +945,7 @@ export class FrontChunks implements Animated {
         if (airy && f >= 1) for (const sl of voidBoundaries(grid)) {
           const vx = slotX(f, sl);
           if (sl >= Math.min(ee, grid.ext[f - 1].e) || !mineCol({ x: vx, l: true, r: true }, f)) continue;
+          if (GFX.clean && (roomCovers(buildings, f, vx) || roomCovers(buildings, f - 1, vx))) continue; // [clean:2] no stair tower drawn over a room in the clean look (a storey crosses floor f)
           towerStorey(vx, f - 1);
         }
       }
@@ -1016,4 +1018,9 @@ export class FrontChunks implements Animated {
     this.chunks.clear();
     this.list = [];
   }
+}
+
+/** [clean:2] A room on floor f stands across x (its painted front would sit behind a stair tower there). */
+function roomCovers(buildings: BuildingInstance[], f: number, x: number): boolean {
+  return buildings.some(b => b.position.floor === f && x > slotX(f, b.position.x) + 2 && x < slotX(f, b.position.x) + roomSlots(b.type) * SLOT_W - 2);
 }

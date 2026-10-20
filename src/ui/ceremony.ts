@@ -346,7 +346,7 @@ export class Ceremonies {
   private visit(x: number, y: number, zoomBoost: number, holdMs: number, later: (fn: () => void, at: number) => void): void {
     const cam = this.app.renderer.camera;
     const back = { x: cam.camX, y: cam.camY, z: cam.zoom };
-    cam.focusTo(x, y, Math.max(cam.zoom, cam.baseZoom * zoomBoost));
+    cam.focusTo(x, y, cam.boostZoom(zoomBoost)); // [clean:2] capped: the phone home zoom is already close
     later(() => { if (this.cameraFree()) cam.focusTo(back.x, back.y, back.z); }, holdMs);
   }
 
