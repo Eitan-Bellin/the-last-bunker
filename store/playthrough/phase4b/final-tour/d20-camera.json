@@ -1,0 +1,54 @@
+{
+ "main": {
+  "zoom": 1.5,
+  "base": 1.5,
+  "camY": 422,
+  "y0": 192,
+  "y1": 653,
+  "floorsVisible": 3.2,
+  "slot2px": 138,
+  "tag": "קומה 2 · חקלאות ומים"
+ },
+ "scroll1": {
+  "zoom": 1.5,
+  "base": 1.5,
+  "camY": 710,
+  "y0": 480,
+  "y1": 941,
+  "floorsVisible": 3.2,
+  "slot2px": 138,
+  "tag": "קומה 4 · תעשייה"
+ },
+ "settleMs": 596,
+ "dragTotalMs": 4216,
+ "scroll": {
+  "zoom": 1.5,
+  "base": 1.5,
+  "camY": 888,
+  "y0": 658,
+  "y1": 1119,
+  "floorsVisible": 3.2,
+  "slot2px": 138,
+  "tag": "קומה 5 · תעשייה"
+ },
+ "jumped": {
+  "zoom": 1.5,
+  "base": 1.5,
+  "camY": 1032,
+  "y0": 802,
+  "y1": 1263,
+  "floorsVisible": 3.2,
+  "slot2px": 138,
+  "tag": "קומה 6 · מגורים"
+ },
+ "home": {
+  "zoom": 1.5,
+  "base": 1.5,
+  "camY": 422,
+  "y0": 192,
+  "y1": 653,
+  "floorsVisible": 3.2,
+  "slot2px": 138,
+  "tag": "קומה 3 · הנדסה"
+ }
+}

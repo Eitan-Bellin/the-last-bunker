@@ -4,8 +4,10 @@ import type { DisasterKind, GameState } from '../core/GameState';
 import type { StateManager } from '../core/StateManager';
 import type { SeededRandom } from '../core/Random';
 import { DAY_MS, isQuiet } from './DeathSystem';
-import { raidProfile, raidStrength, type EventSystem } from './EventSystem';
+import { AWAY_FREQUENCY, raidOdds, raidProfile, raidStrength, type EventSystem } from './EventSystem';
 import { doctrineAwayTruce } from './ResearchSystem'; // [phase4] Diplomacy
+import { foremanPolicy } from './ForemanSystem'; // [phase4b] the away raid policy
+import type { RaidKind, RaidStance } from '../core/GameState';
 import type { IncidentSystem } from './IncidentSystem';
 import type { DeathSystem } from './DeathSystem';
 
@@ -15,13 +17,15 @@ import type { DeathSystem } from './DeathSystem';
  * 24 hours (and then at most one death per return). The safety net: a player who sleeps through a raid
  * comes back to a hurt bunker, not a graveyard.
  */
-const AWAY_FREQUENCY = 0.5;
 /** Raids a day for an engaged player come from raidProfile (per Act); disasters stay flat. */
 const DISASTERS_PER_DAY = 1 / 2.5;
 
 export interface AwayDangerReport {
   raids: number;
   raidsLost: number;
+  /** [phase4b] How the away raid policy met them (optional for older listeners). */
+  raidsPaid?: number;
+  raidsHidden?: number;
   disasters: DisasterKind[];
   hurt: number;
   died: string[];
@@ -53,7 +57,7 @@ export class AwayDanger {
 
   /** Plays out `seconds` of absence. Returns what happened (for the welcome-back screen). */
   run(seconds: number): AwayDangerReport {
-    const report: AwayDangerReport = { raids: 0, raidsLost: 0, disasters: [], hurt: 0, died: [] };
+    const report: AwayDangerReport = { raids: 0, raidsLost: 0, raidsPaid: 0, raidsHidden: 0, disasters: [], hurt: 0, died: [] };
     const state0 = this.sm.state;
     if (seconds < 60 || (state0.era ?? 0) < 2 && !state0.danger.raid && state0.danger.disasters.length === 0) return report;
     const end = Date.now();
@@ -90,7 +94,11 @@ export class AwayDanger {
     list.sort((a, b) => a.t - b.t);
 
     let deathBudget = 1;
+    // [phase4b] A raid the scouts moved into a session is not rolled again while away.
+    let owed = state0.longGame?.threat.scoutOwed ?? 0;
+    if (owed > 0) this.sm.applyDelta({ path: 'longGame.threat.scoutOwed', value: 0 });
     for (const ev of list) {
+      if (owed > 0 && ev.type === 'raid' && !ev.pending) { owed--; continue; }
       const state = this.sm.state;
       const when = start + ev.t * 1000;
       // The breather after a death holds for new rolls too.
@@ -102,14 +110,20 @@ export class AwayDanger {
       if (ignored === null) this.sm.applyDelta({ path: 'danger', value: { ...this.sm.state.danger, ignoredSince: when } });
       if (ev.type === 'raid') {
         if (!this.sm.state.danger.raid) {
-          const raid = { hitAt: play, strength: raidStrength(this.sm.state, this.rng.next()) };
+          // [phase4b] Away raids know their kind too, so the policy weighs the same odds the player would have seen.
+          const kind: RaidKind = this.rng.chance(0.5) ? 'scavengers' : 'marauders';
+          const raid = { hitAt: play, strength: raidStrength(this.sm.state, this.rng.next()), kind, stance: 'hold' as RaidStance };
           this.sm.applyDelta({ path: 'danger', value: { ...this.sm.state.danger, raid } });
         }
-        // [phase4] Diplomacy: the raid is met with the toll while the player is away, and nobody dies of it.
+        // [phase4] Diplomacy: the raid is met with the toll while the player is away, and nobody dies of it (it overrides the policy).
         const truce = doctrineAwayTruce(this.sm.state);
-        const res = this.events.resolveRaid(truce && this.events.canPayTribute() ? 'tribute' : 'fight', { soft: true, allowDeath: allowDeath && !truce });
+        const plan = truce && this.events.canPayTribute() ? 'tribute' : this.plan(); // [phase4b] the Foreman's away raid policy
+        const res = plan === 'tribute' ? this.events.resolveRaid('tribute', { soft: true })
+          : this.events.resolveRaid('fight', { soft: true, allowDeath: allowDeath && !truce, stance: plan, at: when });
         if (!res) continue;
         report.raids++;
+        if (res.key === 'tribute') report.raidsPaid = (report.raidsPaid ?? 0) + 1;
+        if (res.key === 'hidden') report.raidsHidden = (report.raidsHidden ?? 0) + 1;
         if (res.key === 'loseSmall' || res.key === 'loseBig') report.raidsLost++;
         report.hurt += res.injured.length;
         if (res.died) { report.died.push(res.died); deathBudget--; }
@@ -125,6 +139,23 @@ export class AwayDanger {
       }
     }
     return report;
+  }
+
+  /**
+   * [phase4b] (C3) The away raid policy (the Foreman card): a stance the player already chose for this raid stands; otherwise fight (with
+   * the better of hold and sally) when the odds reach the policy's line, else pay the toll (if the store has it) or hide everyone below.
+   */
+  private plan(): RaidStance | 'tribute' {
+    const state = this.sm.state;
+    const set = state.danger.raid?.stance;
+    if (set === 'sally' || set === 'hide') return set;
+    const p = foremanPolicy(state);
+    const hold = raidOdds(state, 'hold') ?? 0;
+    const sally = state.danger.raid?.kind ? raidOdds(state, 'sally') ?? 0 : 0;
+    const best: RaidStance = sally > hold + 0.05 ? 'sally' : 'hold';
+    if (Math.max(hold, sally) >= p.fightAt) return best;
+    if (p.otherwise === 'pay' && this.events.canPayTribute()) return 'tribute';
+    return 'hide';
   }
 
   /** After more than a day of ignored danger, an injury sometimes turns fatal (by difficulty). */

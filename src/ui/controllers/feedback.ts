@@ -231,7 +231,7 @@ export class FeedbackController {
       if (!a) return;
       // [ux-wp3 F15] A badge card with the count; the ceremony brings the sound and the buzz (a hidden page gets the toast only).
       const got = this.app.state.achievements?.length ?? 0;
-      void this.app.ceremony.fire({ kind: 'achievement', icon: '[[trophy]]', title: a.name[i18n.currentLocale] ?? a.name.en, sub: i18n.t('wp3.cer.achievement', { n: got, all: ACHIEVEMENTS.length }) });
+      void got; // [phase4b] badges are quiet now: a toast here, the Badges page in the Journal (no ceremony)
       this.app.toasts.show(`[[trophy]] ${i18n.t('toast.achievement', { name: a.name[i18n.currentLocale] ?? a.name.en })}`, 'good');
       this.app.engine.requestSave();
     });

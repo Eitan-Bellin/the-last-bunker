@@ -39,7 +39,7 @@ import { InboxSystem } from '../systems/InboxSystem';
 import { DigSystem } from '../systems/DigSystem';
 import { ActSystem, noteRepeal } from '../systems/ActSystem';
 import { ForemanSystem } from '../systems/ForemanSystem';
-import { ThreatSystem } from '../systems/ThreatSystem';
+import { ThreatSystem, radioSilent } from '../systems/ThreatSystem'; // [phase4b] radioSilent
 import { ContractSystem } from '../systems/ContractSystem';
 import { OutpostSystem } from '../systems/OutpostSystem';
 import { difficultyOf, easier } from '../data/difficulty';
@@ -286,6 +286,7 @@ export class GameEngine {
     this.outpostSystem = new OutpostSystem(this.stateManager, this.resourceSystem, this.explorationSystem);
     this.contractSystem = new ContractSystem(this.stateManager, this.inboxSystem, this.resourceSystem, this.populationSystem);
     this.foremanSystem = new ForemanSystem(this.stateManager, this.maintenanceSystem, this.projectSystem, this.populationSystem, this.digSystem, this.contractSystem, this.resourceSystem);
+    this.foremanSystem.setIncidents(this.incidentSystem); // [phase4b] the incident auto-pay ceiling
     this.awayDanger = new AwayDanger(this.stateManager, this.rng, this.eventSystem, this.incidentSystem, this.deathSystem);
     bus.on('survivor:died', (s: unknown, cause: unknown) => this.deathSystem.onDeath(s as import('./GameState').SurvivorState, Date.now(), cause as string | undefined)); // ux-wp3 W1: the cause is kept
     bus.on('survivor:died', (s: unknown) => this.familySystem.forget((s as { id: string }).id));
@@ -746,7 +747,10 @@ export class GameEngine {
     // [P2] The player is back: the "danger ignored" streak ends (a day of neglect is a day away, not any day since).
     if (difficultyOf(sm.state).id !== 'last' && sm.state.danger.ignoredSince !== null) sm.applyDelta({ path: 'danger', value: { ...sm.state.danger, ignoredSince: null } });
     // A real absence (not a short tab switch): the return grace starts now.
-    if (seconds > 300) this.graceUntil = sm.state.stats.totalPlayTime + RETURN_GRACE;
+    if (seconds > 300) {
+      this.graceUntil = sm.state.stats.totalPlayTime + RETURN_GRACE;
+      this.eventSystem.sessionStart(); // [phase4b] the scouts: a raid warning lands online at least every few sessions
+    }
     if (danger.raids + danger.disasters.length > 0) bus.emit('danger:away', danger);
     return { seconds, gained, wasted, converted, credits, absorbed, arrivals, missions, research, danger, log: run.log, nightDanger };
   }
@@ -758,7 +762,7 @@ export class GameEngine {
   private gatherAtDoor(seconds: number): number {
     const sm = this.stateManager;
     const state = sm.state;
-    if (state.survivors.length === 0 || !state.storyFlags.includes('intro:done')) return 0;
+    if (state.survivors.length === 0 || !state.storyFlags.includes('intro:done') || radioSilent(state)) return 0; // [phase4b] radio silence
     const knocking = state.activeEvent?.data?.knock ? (state.activeEvent.id === 'group' ? 2 : 1) : 0;
     const waiting = [...(state.doorWaiting ?? [])];
     const room = () => Math.min(AWAY_DOOR_MAX, state.maxPopulation - state.survivors.length - knocking) - waiting.length;

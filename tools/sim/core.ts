@@ -978,7 +978,9 @@ export async function runSim(o: SimOptions): Promise<SimResult> {
     const s = state();
     const hexes = s.explorationMap.filter(h => h.explored && h.biome !== 'bunker' && !fn(os, 'block')?.(s, h.x, h.y))
       .sort((a, b) => surfaceData.hexDistance(a.x, a.y) - surfaceData.hexDistance(b.x, b.y));
-    const h = hexes[0];
+    // [phase4b] Hold where it pays back soonest (yield by ground and distance), else the nearest area.
+    const best = fn(os, 'bestSite')?.(s) as { x: number; y: number } | null | undefined;
+    const h = best ?? hexes[0];
     if (h && e.resourceSystem.canAfford(s, fn(os, 'cost')?.(s) as Record<string, number>) && fn(os, 'build')?.(h.x, h.y)) { acted('outpost'); mark('first outpost'); }
     for (const o of (fn(os, 'list')?.(state()) as { id: number; damaged: boolean }[] ?? [])) if (o.damaged && fn(os, 'repair')?.(o.id)) acted('outpostRepair');
   };

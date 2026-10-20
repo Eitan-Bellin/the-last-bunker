@@ -246,7 +246,7 @@ export class RoomScreen implements PanelHost {
     const dz = (state.danger?.disasters ?? []).find(d => d.buildingId === b.id);
     if (dz) return { kind: 'disaster', id: dz.id };
     if (this.engine.maintenanceSystem.isDown(state, b)) return { kind: 'repair' };
-    if (b.isConstructing) return { kind: 'build', rush: this.engine.rushSystem.count(state) > 0 };
+    if (b.isConstructing) return { kind: 'build', rush: this.engine.rushSystem.canPay(state) }; // [phase4b] a charge, or a favour bought with credits
     const def = getDef(b.type);
     if (def && def.maxWorkers > 0) {
       const adults = this.adults(state, b);
@@ -317,7 +317,7 @@ export class RoomScreen implements PanelHost {
         if (act.rush) {
           const rs = this.engine.rushSystem;
           parts.push(kButton({
-            variant: 'primary', className: 'btn-primary rs-main-btn', icon: 'hourglass', label: i18n.t('rush.button', { n: rs.count(state) }),
+            variant: 'primary', className: 'btn-primary rs-main-btn', icon: 'hourglass', label: rs.count(state) > 0 ? i18n.t('rush.button', { n: rs.count(state) }) : i18n.t('p4bO.favours.rushFor', { n: rs.favourPrice(state) ?? 0 }), // [phase4b]
             disabledReason: rs.canRushBuilding(state, b.id) ? null : '',
             onPress: () => { if (rs.rushBuilding(b.id)) { uiSound('confirm'); this.engine.requestSave(); } redraw(); },
           }));

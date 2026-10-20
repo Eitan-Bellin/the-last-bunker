@@ -9,7 +9,10 @@ import { INCIDENTS, DISASTERS, disasterCost, quickFixCost } from '../../data/inc
 import { missingOr } from '../missing'; // [ux-wp3 A1]
 import { causeText } from './feedback'; // [ux-wp3 W1]
 import { CEREMONY_COST } from '../../systems/DeathSystem';
-import { bunkerDefense, defenseParts, raidTribute, type RaidResult } from '../../systems/EventSystem';
+import { TRIBUTE_SHARE, bunkerDefense, defenseParts, raidOdds, raidTribute, type RaidResult } from '../../systems/EventSystem';
+import { actCurrency } from '../../systems/ThreatSystem'; // [phase4b]
+import { hasFeature } from '../../systems/ResearchSystem'; // [phase4b] Diplomacy halves the toll
+import '../../styles/p4b-d.css'; // [phase4b]
 import { announce } from '../a11yDom';
 import type { GameApp } from '../../app';
 
@@ -113,7 +116,11 @@ export class DangerController {
     const stance = raid.stance ?? 'hold';
     const defHold = bunkerDefense(state, kind, 'hold');
     const defSally = bunkerDefense(state, kind, 'sally');
-    const weak = defHold < raid.strength;
+    // [phase4b] (C3) Continuous odds: the fight is a roll, the dialog says the chance ("72% to win").
+    const pHold = raidOdds(state, 'hold') ?? 0;
+    const pSally = kind ? raidOdds(state, 'sally') ?? 0 : 0;
+    const best = Math.max(pHold, pSally);
+    const weak = best < 0.5;
     body.append(el('p', 'modal-body', i18n.t('danger.raid.body', { strength: raid.strength, defense: defHold, time: i18n.formatDuration(raidLeft) })));
     // [P2] The scout report: who is coming and what stops them.
     if (kind) {
@@ -132,17 +139,27 @@ export class DangerController {
       this.app.modal.hide();
       this.app.toasts.show(`[[armory]] ${i18n.t(`raid.stance.${s}.set`)}`, 'info');
     };
-    const odds = (v: number) => i18n.t(v >= raid.strength ? 'raid.odds.win' : 'raid.odds.lose', { def: v, str: raid.strength });
+    const odds = (v: number, p: number) => {
+      const pct = Math.round(p * 100);
+      return el('span', `difficulty-desc p4bd-odds ${p >= 0.65 ? 'is-high' : p < 0.4 ? 'is-low' : ''}`, i18n.t('p4bD.raid.odds', { pct, def: v, str: raid.strength }));
+    };
+    const canPay = this.app.engine.eventSystem.canPayTribute();
+    // The recommended answer: the better fight when it is likelier won than lost, else the toll, else hiding.
+    const pick: RaidStance | 'pay' = !weak ? (pSally > pHold + 0.05 ? 'sally' : 'hold') : canPay ? 'pay' : 'hide';
+    const cur = actCurrency(state);
+    const tollShare = Math.round((hasFeature(state, 'diplomacy') ? TRIBUTE_SHARE / 2 : TRIBUTE_SHARE) * 100);
+    const tollDetail = el('span', 'difficulty-desc');
+    tollDetail.append(costRow(state, tribute), el('span', 'bp-hint', ` ${i18n.t('p4bD.raid.tollHint', { pct: tollShare, cur: i18n.t(`resources.${cur}`) })}`));
     this.app.modal.show({
       icon: '[[armory]]',
       title: i18n.t('danger.raid.title'),
       body,
       actions: [
-        { label: `${stance === 'hold' ? '✓ ' : ''}${i18n.t('raid.stance.hold')}`, className: !weak ? 'btn-primary' : 'btn-secondary', detail: el('span', 'difficulty-desc', odds(defHold)), onClick: choose('hold') },
-        ...(kind ? [{ label: `${stance === 'sally' ? '✓ ' : ''}${i18n.t('raid.stance.sally')}`, className: weak && defSally >= raid.strength ? 'btn-primary' : 'btn-secondary', detail: el('span', 'difficulty-desc', odds(defSally)), onClick: choose('sally') }] : []),
+        { label: `${stance === 'hold' ? '✓ ' : ''}${i18n.t('raid.stance.hold')}`, className: pick === 'hold' ? 'btn-primary' : 'btn-secondary', detail: odds(defHold, pHold), onClick: choose('hold') },
+        ...(kind ? [{ label: `${stance === 'sally' ? '✓ ' : ''}${i18n.t('raid.stance.sally')}`, className: pick === 'sally' ? 'btn-primary' : 'btn-secondary', detail: odds(defSally, pSally), onClick: choose('sally') }] : []),
         {
-          label: i18n.t('danger.raid.pay'), className: weak && defSally < raid.strength ? 'btn-primary' : 'btn-secondary', disabled: !this.app.engine.eventSystem.canPayTribute(),
-          detail: costRow(state, tribute),
+          label: i18n.t('danger.raid.pay'), className: pick === 'pay' ? 'btn-primary' : 'btn-secondary', disabled: !canPay,
+          detail: tollDetail,
           onClick: () => {
             this.app.engine.eventSystem.payTribute();
             this.app.engine.notifyInteraction();
@@ -150,7 +167,7 @@ export class DangerController {
             this.app.modal.hide();
           },
         },
-        ...(kind ? [{ label: `${stance === 'hide' ? '✓ ' : ''}${i18n.t('raid.stance.hide')}`, className: 'btn-secondary', detail: el('span', 'difficulty-desc', i18n.t('raid.stance.hide.desc')), onClick: choose('hide') }] : []),
+        ...(kind ? [{ label: `${stance === 'hide' ? '✓ ' : ''}${i18n.t('raid.stance.hide')}`, className: pick === 'hide' ? 'btn-primary' : 'btn-secondary', detail: el('span', 'difficulty-desc', i18n.t('p4bD.raid.hideHint')), onClick: choose('hide') }] : []),
       ],
     });
   }
@@ -164,6 +181,10 @@ export class DangerController {
       body.appendChild(el('p', 'modal-sub negative-text', `[[bandage]] ${i18n.t('mission.injury', { name: this.app.localName(inj.name), n: inj.damage, ...this.app.gByName(inj.name, (inj as { id?: string }).id) })}`));
     }
     if (r.died) body.appendChild(el('p', 'modal-sub negative-text', `[[skull]] ${i18n.t('raid.result.died', { name: this.app.localName(r.died), ...this.app.gByName(r.died) })}`));
+    // [phase4b] A second defender in a rout; the odds the fight was rolled against; how long hiding stops the work rooms.
+    if (r.diedAlso) body.appendChild(el('p', 'modal-sub negative-text', `[[skull]] ${i18n.t('p4bD.raid.diedAlso', { name: this.app.localName(r.diedAlso), ...this.app.gByName(r.diedAlso) })}`));
+    if (r.odds !== undefined) body.appendChild(el('p', 'bp-hint', i18n.t('p4bD.raid.rolled', { pct: Math.round(r.odds * 100) })));
+    if (r.stopMs) body.appendChild(el('p', 'bp-hint', `[[clock]] ${i18n.t('p4bD.raid.stopped', { t: i18n.formatDuration(r.stopMs / 1000) })}`));
     // [P2] A room wrecked in the rout: it waits as a ruin, and comes back as it was once restored.
     if (r.wrecked) body.appendChild(el('p', 'modal-sub negative-text', `[[pick]] ${i18n.t('raid.result.wrecked', { room: getDef(r.wrecked as BuildingType)?.name[i18n.currentLocale] ?? r.wrecked })}`));
     this.app.audio.play(r.key === 'win' || r.key === 'winCaptive' ? 'achievement' : 'error');

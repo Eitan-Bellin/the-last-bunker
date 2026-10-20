@@ -9,6 +9,7 @@ import type { GameState } from '../../core/GameState';
 import type { InboxItem } from '../../core/state/longGame';
 import type { GameApp } from '../../app';
 import { EVENT_ICONS } from './events';
+import { openSurfaceTrade } from '../components/SurfacePanel'; // [phase4b]
 
 /** One card in the inbox: something waiting for the player's answer or attention. */
 interface Entry {
@@ -118,13 +119,22 @@ export class InboxController {
     const worldT = state.longGame?.meta.worldT ?? 0;
     for (const item of state.longGame?.inbox.items ?? []) {
       const def = inboxKind(item.kind);
-      if (!def) continue;
+      if (!def || item.kind === 'contract') continue; // [phase4b] partner requests live on the Trade tab and the partner's map marker
       out.push({
         key: `item:${item.id}`, icon: def.icon, title: i18n.t(def.title, this.params(item)),
         detail: def.preview?.(item, i18n.currentLocale), value: def.value?.(item),
         safe: item.kind === 'contract' && this.app.engine.contractSystem.isSafe(state, item),
         left: item.deadline === null ? null : Math.max(0, item.deadline - worldT), urgent: item.urgent,
         open: () => this.openItem(item.id),
+      });
+    }
+    // [phase4b] Partner requests: one line that opens Surface > Trade (no card per request, no answering from here).
+    const requests = this.app.engine.contractSystem.requests(state);
+    if (requests.length) {
+      const soonest = Math.min(...requests.map(i => (i.deadline === null ? Infinity : i.deadline - worldT)));
+      out.push({
+        key: 'requests', icon: '[[cart]]', title: plural('p4bO.req.bell', requests.length), left: Number.isFinite(soonest) ? Math.max(0, soonest) : null, urgent: false,
+        tag: undefined, open: () => { this.app.closeSheets(); openSurfaceTrade(); },
       });
     }
     // [phase2] Finds told this session and not read yet (one line), and news cards that hid unanswered.
@@ -139,7 +149,7 @@ export class InboxController {
     const daily = this.app.daily.inboxEntry(state);
     if (daily) {
       const s = this.app.engine.dailySystem.summary(state);
-      out.push({ key: 'daily', icon: '[[target]]', title: i18n.t('daily.title'), detail: `${daily.title} · ${daily.detail}`, tag: `${s.done}/${s.n}`, value: Infinity, left: null, urgent: false, open: () => this.app.daily.show() });
+      out.push({ key: 'daily', icon: '[[target]]', title: i18n.t('p4bO.today.title'), detail: `${daily.title} · ${daily.detail}`, tag: `${s.done}/${s.n}`, value: Infinity, left: null, urgent: false, open: () => this.app.daily.show() });
     }
     // [Q4] Most pressing first: urgent, then whatever lapses within the hour, then the richest, then the nearest deadline.
     const soon = (e: Entry) => e.left !== null && e.left < 3600;
@@ -158,7 +168,7 @@ export class InboxController {
     // budget never loses anything. The line shows only while something waits; from Act II it is always there, as before.
     const list = this.entries(state);
     // [plan4:GP-1] The daily orders card is a standing card: it counts on the badge only while a reward waits, and is never announced.
-    const waiting = list.filter(e => e.key !== 'daily' || this.app.engine.dailySystem.summary(state).claimable > 0).length;
+    const waiting = list.filter(e => e.key !== 'daily' || this.app.daily.today.claimable(state) > 0).length; // [phase4b] the crate counts too
     const visible = deferring || waiting > 0;
     if (waiting !== this.lastCount || visible !== this.lastVisible) {
       this.lastCount = waiting;
@@ -166,13 +176,22 @@ export class InboxController {
       this.app.hud.setInbox(visible, waiting);
     }
     for (const e of list) {
-      if (e.key === 'daily') continue;
+      if (e.key === 'daily' || e.key === 'requests') continue; // [phase4b] requests are announced one by one below
       // [phase2] Announced with a toast only where the inbox replaces dialogs (Act II on); a knock has its own card, finds and news theirs.
       if (!deferring || e.key === 'finds' || e.key.startsWith('news:') || (e.key.startsWith('event:') && this.app.events.isKnock(state.activeEvent))) continue;
       if (this.seen.has(e.key)) continue;
       this.seen.add(e.key);
       this.app.audio.play('paper');
       this.app.toasts.show(`[[inbox]] ${i18n.t('inbox.new', { name: e.title })}`, 'info');
+    }
+    // [phase4b] A new partner request: one toast naming who asks and where to answer (Surface > Trade).
+    for (const item of this.app.engine.contractSystem.requests(state)) {
+      const k = `req:${item.id}`;
+      if (this.seen.has(k)) continue;
+      this.seen.add(k);
+      if (!deferring) continue;
+      this.app.audio.play('paper');
+      this.app.toasts.show(`[[cart]] ${i18n.t('p4bO.req.new', { name: this.app.engine.contractSystem.describe(item, i18n.currentLocale).issuer })}`, 'info');
     }
     if (this.sheet?.isVisible) this.render(list);
     if (this.resume) this.checkResume(waiting);
@@ -212,7 +231,7 @@ export class InboxController {
   private render(list: Entry[]): void {
     if (!this.sheet) return;
     // Rebuild only when the cards change; the time left is updated in place.
-    const key = list.map(e => `${e.key}${e.safe ? '+' : ''}${e.tag ?? ''}`).join('|');
+    const key = list.map(e => `${e.key}${e.safe ? '+' : ''}${e.tag ?? ''}${e.key === 'requests' ? e.title : ''}`).join('|');
     if (key !== this.renderedKey) {
       this.renderedKey = key;
       const body = this.sheet.body;
@@ -221,18 +240,7 @@ export class InboxController {
         body.appendChild(el('p', 'inbox-empty', i18n.t('inbox.empty')));
         return;
       }
-      // [Q4] One tap for every contract that costs nothing the bunker would miss.
-      const safeCount = list.filter(e => e.safe).length;
-      if (safeCount >= 2) {
-        body.appendChild(button(i18n.t('contract.acceptSafe', { n: safeCount }), 'btn-primary btn-small inbox-all', () => {
-          const n = this.app.engine.contractSystem.acceptSafe();
-          if (n > 0) {
-            this.app.engine.requestSave();
-            this.app.audio.play('click');
-            this.app.toasts.show(`[[cart]] ${plural('contract.safeTaken', n)}`, 'good');
-          }
-        }));
-      }
+      // [phase4b] "Take every safe request" moved to Surface > Trade with the requests themselves.
       for (const e of list) {
         const card = el('button', `inbox-card${e.urgent ? ' urgent' : ''}`);
         card.dataset.key = e.key;

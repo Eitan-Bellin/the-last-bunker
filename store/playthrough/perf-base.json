@@ -1,0 +1,1487 @@
+{
+ "dist": "C:\\Users\\eitan\\Desktop\\משחק לשרוד\\.claude\\worktrees\\perfbase\\dist",
+ "throttle": 1,
+ "dpr": 2.75,
+ "bundle": {
+  "jsGzKB": 877,
+  "initialJsGzKB": 722,
+  "cssGzKB": 36,
+  "chunks": {
+   "index.js": {
+    "gzKB": 502.5,
+    "initial": true
+   },
+   "pixi.js": {
+    "gzKB": 158.5,
+    "initial": true
+   },
+   "he.js": {
+    "gzKB": 39.4,
+    "initial": false
+   },
+   "en.js": {
+    "gzKB": 35.7,
+    "initial": false
+   },
+   "ArtLibrary.js": {
+    "gzKB": 34.3,
+    "initial": true
+   },
+   "cityWiring.js": {
+    "gzKB": 31.9,
+    "initial": false
+   },
+   "cityHost.js": {
+    "gzKB": 18.4,
+    "initial": false
+   },
+   "book.js": {
+    "gzKB": 11.7,
+    "initial": false
+   },
+   "defineProperty.js": {
+    "gzKB": 11.2,
+    "initial": true
+   },
+   "tokens.js": {
+    "gzKB": 9.1,
+    "initial": true
+   },
+   "synth.js": {
+    "gzKB": 7.9,
+    "initial": false
+   },
+   "project.js": {
+    "gzKB": 5.8,
+    "initial": true
+   },
+   "perf.js": {
+    "gzKB": 3.4,
+    "initial": false
+   },
+   "share.js": {
+    "gzKB": 2,
+    "initial": false
+   },
+   "tour.js": {
+    "gzKB": 1.6,
+    "initial": false
+   },
+   "saveWorker.js": {
+    "gzKB": 1.5,
+    "initial": false
+   },
+   "chunks.js": {
+    "gzKB": 1.2,
+    "initial": false
+   },
+   "rolldown-runtime.js": {
+    "gzKB": 0.4,
+    "initial": true
+   },
+   "_pixi-renderer-stub_CanvasRenderer.js": {
+    "gzKB": 0.1,
+    "initial": false
+   },
+   "_pixi-renderer-stub_WebGPURenderer.js": {
+    "gzKB": 0.1,
+    "initial": false
+   }
+  }
+ },
+ "scenarios": {
+  "f8-overview-medium": {
+   "v": 1,
+   "quality": "medium",
+   "res": 2,
+   "target": 30,
+   "seconds": 6,
+   "frames": 180,
+   "fps": 29.9,
+   "updateMsMed": 2.8,
+   "updateMsP95": 4.5,
+   "drawMsMed": 5.6,
+   "drawMsP95": 12.1,
+   "frameMsMed": 8.7,
+   "frameMsP95": 15.2,
+   "intervalMed": 33.3,
+   "intervalP95": 36.3,
+   "busyPct": 29.5,
+   "tickMsAvg": 1.75,
+   "drawCalls": 248,
+   "renderablesDrawn": 2706,
+   "renderablesTotal": 6514,
+   "renderGroups": 66,
+   "structureChangedPct": 0,
+   "groups": [
+    {
+     "label": "walkers",
+     "objects": 95,
+     "changedPct": 100
+    },
+    {
+     "label": "atmosphere",
+     "objects": 33,
+     "changedPct": 46.1
+    },
+    {
+     "label": "room",
+     "objects": 66,
+     "changedPct": 26.9
+    },
+    {
+     "label": "city:glow",
+     "objects": 125,
+     "changedPct": 10.6
+    },
+    {
+     "label": "stage",
+     "objects": 0,
+     "changedPct": 0
+    },
+    {
+     "label": "world",
+     "objects": 1,
+     "changedPct": 0
+    },
+    {
+     "label": "plane:far",
+     "objects": 0,
+     "changedPct": 0
+    },
+    {
+     "label": "plane:back",
+     "objects": 5,
+     "changedPct": 0
+    },
+    {
+     "label": "surface",
+     "objects": 0,
+     "changedPct": 0
+    },
+    {
+     "label": "sites",
+     "objects": 0,
+     "changedPct": 0
+    },
+    {
+     "label": "siteSmoke",
+     "objects": 0,
+     "changedPct": 0
+    },
+    {
+     "label": "siteGlow",
+     "objects": 0,
+     "changedPct": 0
+    },
+    {
+     "label": "siteCrew",
+     "objects": 0,
+     "changedPct": 0
+    },
+    {
+     "label": "siteSigns",
+     "objects": 0,
+     "changedPct": 0
+    }
+   ],
+   "biggest": [
+    "frontRow:706",
+    "shellFront:172",
+    "city:glow:125",
+    "walkers:95",
+    "shaft:93",
+    "room:66",
+    "labels:54",
+    "atmosphere:33",
+    "city:pins:30",
+    "signage:24"
+   ],
+   "gpuTextureMB": 276,
+   "gpuTextures": 494,
+   "jsHeapMB": 124,
+   "longTasks": 1,
+   "longTaskMs": 50,
+   "longTaskMax": 50,
+   "calMs": 60,
+   "overdraw": 20.21,
+   "overdrawBy": [
+    "shellFront:4.6",
+    "frontRow:4.58",
+    "room:3.12",
+    "city:lit:2",
+    "city:fog:2",
+    "plane:back:1.12",
+    "shellBack:1",
+    "atmosphere:0.96"
+   ],
+   "allocKBPerFrame": 278,
+   "mem": {
+    "renderer": 580,
+    "gpu": 761
+   },
+   "consoleErrors": 0
+  },
+  "f24-overview-medium": {
+   "v": 1,
+   "quality": "medium",
+   "res": 2,
+   "target": 30,
+   "seconds": 6.1,
+   "frames": 181,
+   "fps": 29.9,
+   "updateMsMed": 3,
+   "updateMsP95": 3.6,
+   "drawMsMed": 7.1,
+   "drawMsP95": 10.7,
+   "frameMsMed": 10.2,
+   "frameMsP95": 13.6,
+   "intervalMed": 33.2,
+   "intervalP95": 37.6,
+   "busyPct": 34.5,
+   "tickMsAvg": 4.02,
+   "drawCalls": 389,
+   "renderablesDrawn": 2430,
+   "renderablesTotal": 11615,
+   "renderGroups": 67,
+   "structureChangedPct": 0,
+   "groups": [
+    {
+     "label": "atmosphere",
+     "objects": 36,
+     "changedPct": 36.5
+    },
+    {
+     "label": "room",
+     "objects": 87,
+     "changedPct": 33.2
+    },
+    {
+     "label": "city:glow",
+     "objects": 119,
+     "changedPct": 6.1
+    },
+    {
+     "label": "stage",
+     "objects": 0,
+     "changedPct": 0
+    },
+    {
+     "label": "world",
+     "objects": 1,
+     "changedPct": 0
+    },
+    {
+     "label": "plane:far",
+     "objects": 0,
+     "changedPct": 0
+    },
+    {
+     "label": "plane:back",
+     "objects": 5,
+     "changedPct": 0
+    },
+    {
+     "label": "surface",
+     "objects": 0,
+     "changedPct": 0
+    },
+    {
+     "label": "sites",
+     "objects": 0,
+     "changedPct": 0
+    },
+    {
+     "label": "siteSmoke",
+     "objects": 0,
+     "changedPct": 0
+    },
+    {
+     "label": "siteGlow",
+     "objects": 0,
+     "changedPct": 0
+    },
+    {
+     "label": "siteCrew",
+     "objects": 0,
+     "changedPct": 0
+    },
+    {
+     "label": "siteSigns",
+     "objects": 0,
+     "changedPct": 0
+    },
+    {
+     "label": "city:lit",
+     "objects": 24,
+     "changedPct": 0
+    }
+   ],
+   "biggest": [
+    "frontRow:460",
+    "shellFront:242",
+    "shaft:211",
+    "city:glow:119",
+    "city:pins:99",
+    "walkers:92",
+    "room:87",
+    "signage:72",
+    "labels:42",
+    "atmosphere:36"
+   ],
+   "gpuTextureMB": 294,
+   "gpuTextures": 662,
+   "jsHeapMB": 170,
+   "longTasks": 0,
+   "longTaskMs": 0,
+   "longTaskMax": 0,
+   "calMs": 52,
+   "overdraw": 20.06,
+   "overdrawBy": [
+    "shellFront:6.73",
+    "frontRow:3.4",
+    "room:2.21",
+    "city:lit:2",
+    "city:fog:2",
+    "plane:back:1.08",
+    "shellBack:1",
+    "atmosphere:0.98"
+   ],
+   "allocKBPerFrame": 366.8,
+   "mem": {
+    "renderer": 701,
+    "gpu": 846
+   },
+   "consoleErrors": 0
+  },
+  "f24-close-medium": {
+   "v": 1,
+   "quality": "medium",
+   "res": 2,
+   "target": 30,
+   "seconds": 6.2,
+   "frames": 187,
+   "fps": 30,
+   "updateMsMed": 2.7,
+   "updateMsP95": 4.4,
+   "drawMsMed": 5.9,
+   "drawMsP95": 8.5,
+   "frameMsMed": 8.7,
+   "frameMsP95": 11.7,
+   "intervalMed": 33.3,
+   "intervalP95": 38.2,
+   "busyPct": 30.3,
+   "tickMsAvg": 4.04,
+   "drawCalls": 340,
+   "renderablesDrawn": 2002,
+   "renderablesTotal": 9184,
+   "renderGroups": 52,
+   "structureChangedPct": 0,
+   "groups": [
+    {
+     "label": "room",
+     "objects": 70,
+     "changedPct": 32.9
+    },
+    {
+     "label": "atmosphere",
+     "objects": 17,
+     "changedPct": 18.7
+    },
+    {
+     "label": "walkers",
+     "objects": 119,
+     "changedPct": 1.1
+    },
+    {
+     "label": "frontRow",
+     "objects": 460,
+     "changedPct": 0.1
+    },
+    {
+     "label": "stage",
+     "objects": 0,
+     "changedPct": 0
+    },
+    {
+     "label": "world",
+     "objects": 1,
+     "changedPct": 0
+    },
+    {
+     "label": "plane:far",
+     "objects": 0,
+     "changedPct": 0
+    },
+    {
+     "label": "plane:back",
+     "objects": 5,
+     "changedPct": 0
+    },
+    {
+     "label": "surface",
+     "objects": 0,
+     "changedPct": 0
+    },
+    {
+     "label": "sites",
+     "objects": 0,
+     "changedPct": 0
+    },
+    {
+     "label": "siteSmoke",
+     "objects": 0,
+     "changedPct": 0
+    },
+    {
+     "label": "siteGlow",
+     "objects": 0,
+     "changedPct": 0
+    },
+    {
+     "label": "siteCrew",
+     "objects": 0,
+     "changedPct": 0
+    },
+    {
+     "label": "siteSigns",
+     "objects": 0,
+     "changedPct": 0
+    }
+   ],
+   "biggest": [
+    "frontRow:460",
+    "shaft:211",
+    "shellFront:189",
+    "walkers:119",
+    "city:pins:108",
+    "city:glow:85",
+    "signage:72",
+    "room:70",
+    "city:lit:25",
+    "galleries:19"
+   ],
+   "gpuTextureMB": 285,
+   "gpuTextures": 625,
+   "jsHeapMB": 158,
+   "longTasks": 0,
+   "longTaskMs": 0,
+   "longTaskMax": 0,
+   "calMs": 55,
+   "overdraw": 20.48,
+   "overdrawBy": [
+    "shellFront:6.04",
+    "frontRow:4.15",
+    "room:2.71",
+    "city:lit:2",
+    "city:fog:2",
+    "plane:back:1",
+    "shellBack:1",
+    "atmosphere:1"
+   ],
+   "allocKBPerFrame": 322.1,
+   "mem": {
+    "renderer": 686,
+    "gpu": 859
+   },
+   "consoleErrors": 0
+  },
+  "f24-far-medium": {
+   "v": 1,
+   "quality": "medium",
+   "res": 2,
+   "target": 30,
+   "seconds": 6,
+   "frames": 149,
+   "fps": 24.7,
+   "updateMsMed": 4.5,
+   "updateMsP95": 12,
+   "drawMsMed": 14.4,
+   "drawMsP95": 37.6,
+   "frameMsMed": 19.4,
+   "frameMsP95": 44.5,
+   "intervalMed": 34,
+   "intervalP95": 70.3,
+   "busyPct": 64,
+   "tickMsAvg": 6.09,
+   "drawCalls": 554,
+   "renderablesDrawn": 5138,
+   "renderablesTotal": 14292,
+   "renderGroups": 92,
+   "structureChangedPct": 0,
+   "groups": [
+    {
+     "label": "atmosphere",
+     "objects": 41,
+     "changedPct": 49.7
+    },
+    {
+     "label": "city:glow",
+     "objects": 94,
+     "changedPct": 46.3
+    },
+    {
+     "label": "room",
+     "objects": 78,
+     "changedPct": 36.8
+    },
+    {
+     "label": "walkers",
+     "objects": 127,
+     "changedPct": 4
+    },
+    {
+     "label": "stage",
+     "objects": 0,
+     "changedPct": 0
+    },
+    {
+     "label": "world",
+     "objects": 1,
+     "changedPct": 0
+    },
+    {
+     "label": "plane:far",
+     "objects": 0,
+     "changedPct": 0
+    },
+    {
+     "label": "plane:back",
+     "objects": 5,
+     "changedPct": 0
+    },
+    {
+     "label": "surface",
+     "objects": 0,
+     "changedPct": 0
+    },
+    {
+     "label": "sites",
+     "objects": 0,
+     "changedPct": 0
+    },
+    {
+     "label": "siteSmoke",
+     "objects": 0,
+     "changedPct": 0
+    },
+    {
+     "label": "siteGlow",
+     "objects": 0,
+     "changedPct": 0
+    },
+    {
+     "label": "siteCrew",
+     "objects": 0,
+     "changedPct": 0
+    },
+    {
+     "label": "siteSigns",
+     "objects": 0,
+     "changedPct": 0
+    }
+   ],
+   "biggest": [
+    "frontRow:713",
+    "shellFront:302",
+    "shaft:211",
+    "walkers:127",
+    "city:glow:94",
+    "city:pins:93",
+    "labels:93",
+    "room:78",
+    "signage:72",
+    "atmosphere:41"
+   ],
+   "gpuTextureMB": 334,
+   "gpuTextures": 644,
+   "jsHeapMB": 210,
+   "longTasks": 15,
+   "longTaskMs": 1006,
+   "longTaskMax": 109,
+   "calMs": 69,
+   "overdraw": 19.42,
+   "overdrawBy": [
+    "shellFront:7.38",
+    "frontRow:2.63",
+    "city:lit:2",
+    "city:fog:2",
+    "room:1.98",
+    "plane:back:1.03",
+    "shellBack:1",
+    "atmosphere:0.77"
+   ],
+   "allocKBPerFrame": 502.7,
+   "mem": {
+    "renderer": 688,
+    "gpu": 923
+   },
+   "consoleErrors": 0
+  },
+  "f24-close-low": {
+   "v": 1,
+   "quality": "low",
+   "res": 1.5,
+   "target": 24,
+   "seconds": 6,
+   "frames": 121,
+   "fps": 20,
+   "updateMsMed": 1.9,
+   "updateMsP95": 3.2,
+   "drawMsMed": 3.8,
+   "drawMsP95": 6.2,
+   "frameMsMed": 5.8,
+   "frameMsP95": 8.5,
+   "intervalMed": 50,
+   "intervalP95": 50.9,
+   "busyPct": 16.3,
+   "tickMsAvg": 4.14,
+   "drawCalls": 321,
+   "renderablesDrawn": 1769,
+   "renderablesTotal": 8567,
+   "renderGroups": 52,
+   "structureChangedPct": 0,
+   "groups": [
+    {
+     "label": "room",
+     "objects": 49,
+     "changedPct": 18.2
+    },
+    {
+     "label": "frontRow",
+     "objects": 435,
+     "changedPct": 0.2
+    },
+    {
+     "label": "stage",
+     "objects": 0,
+     "changedPct": 0
+    },
+    {
+     "label": "world",
+     "objects": 1,
+     "changedPct": 0
+    },
+    {
+     "label": "plane:far",
+     "objects": 0,
+     "changedPct": 0
+    },
+    {
+     "label": "plane:back",
+     "objects": 1,
+     "changedPct": 0
+    },
+    {
+     "label": "surface",
+     "objects": 0,
+     "changedPct": 0
+    },
+    {
+     "label": "sites",
+     "objects": 0,
+     "changedPct": 0
+    },
+    {
+     "label": "siteSmoke",
+     "objects": 0,
+     "changedPct": 0
+    },
+    {
+     "label": "siteGlow",
+     "objects": 0,
+     "changedPct": 0
+    },
+    {
+     "label": "siteCrew",
+     "objects": 0,
+     "changedPct": 0
+    },
+    {
+     "label": "siteSigns",
+     "objects": 0,
+     "changedPct": 0
+    },
+    {
+     "label": "city:lit",
+     "objects": 15,
+     "changedPct": 0
+    },
+    {
+     "label": "underground",
+     "objects": 0,
+     "changedPct": 0
+    }
+   ],
+   "biggest": [
+    "frontRow:435",
+    "shaft:211",
+    "shellFront:189",
+    "city:pins:108",
+    "signage:72",
+    "walkers:65",
+    "room:49",
+    "galleries:19",
+    "labels:18",
+    "city:lit:15"
+   ],
+   "gpuTextureMB": 155,
+   "gpuTextures": 608,
+   "jsHeapMB": 157,
+   "longTasks": 0,
+   "longTaskMs": 0,
+   "longTaskMax": 0,
+   "calMs": 60,
+   "overdraw": 17.94,
+   "overdrawBy": [
+    "shellFront:6.04",
+    "frontRow:3.98",
+    "room:2.39",
+    "city:fog:2",
+    "plane:back:1",
+    "city:lit:1",
+    "shellBack:1",
+    "labels:0.29"
+   ],
+   "allocKBPerFrame": 367.9,
+   "mem": {
+    "renderer": 658,
+    "gpu": 630
+   },
+   "consoleErrors": 0
+  },
+  "f24-close-high": {
+   "v": 1,
+   "quality": "high",
+   "res": 2.25,
+   "target": 45,
+   "seconds": 6,
+   "frames": 0,
+   "fps": 0,
+   "updateMsMed": 0,
+   "updateMsP95": 0,
+   "drawMsMed": 0,
+   "drawMsP95": 0,
+   "frameMsMed": 0,
+   "frameMsP95": 0,
+   "intervalMed": 0,
+   "intervalP95": 0,
+   "busyPct": 0,
+   "tickMsAvg": 0,
+   "drawCalls": 0,
+   "renderablesDrawn": 2135,
+   "renderablesTotal": 10476,
+   "renderGroups": 54,
+   "structureChangedPct": 0,
+   "groups": [],
+   "biggest": [],
+   "gpuTextureMB": 284,
+   "gpuTextures": 587,
+   "jsHeapMB": 134,
+   "longTasks": 0,
+   "longTaskMs": 0,
+   "longTaskMax": 0,
+   "calMs": 51,
+   "overdraw": 28.06,
+   "overdrawBy": [
+    "shellFront:6.04",
+    "frontRow:4.15",
+    "plane:back:3.82",
+    "plane:far:3.72",
+    "city:fog:3",
+    "room:2.71",
+    "city:lit:2",
+    "shellBack:1"
+   ],
+   "allocKBPerFrame": 423.7,
+   "mem": {
+    "renderer": 541,
+    "gpu": 818
+   },
+   "consoleErrors": 0
+  },
+  "f24-idle-medium": {
+   "v": 1,
+   "quality": "medium",
+   "res": 2,
+   "target": 5,
+   "seconds": 6,
+   "frames": 30,
+   "fps": 5,
+   "updateMsMed": 4.7,
+   "updateMsP95": 43.5,
+   "drawMsMed": 9.7,
+   "drawMsP95": 37.3,
+   "frameMsMed": 15.1,
+   "frameMsP95": 77.3,
+   "intervalMed": 200,
+   "intervalP95": 203.2,
+   "busyPct": 20.6,
+   "tickMsAvg": 5.91,
+   "drawCalls": 386,
+   "renderablesDrawn": 2401,
+   "renderablesTotal": 11587,
+   "renderGroups": 67,
+   "structureChangedPct": 0,
+   "groups": [
+    {
+     "label": "room",
+     "objects": 87,
+     "changedPct": 45.2
+    },
+    {
+     "label": "city:glow",
+     "objects": 118,
+     "changedPct": 20
+    },
+    {
+     "label": "atmosphere",
+     "objects": 13,
+     "changedPct": 13.3
+    },
+    {
+     "label": "surface",
+     "objects": 0,
+     "changedPct": 6.7
+    },
+    {
+     "label": "city:lit",
+     "objects": 16,
+     "changedPct": 6.7
+    },
+    {
+     "label": "underground",
+     "objects": 0,
+     "changedPct": 6.7
+    },
+    {
+     "label": "bays",
+     "objects": 0,
+     "changedPct": 6.7
+    },
+    {
+     "label": "slots",
+     "objects": 0,
+     "changedPct": 6.7
+    },
+    {
+     "label": "shaft",
+     "objects": 211,
+     "changedPct": 6.7
+    },
+    {
+     "label": "utilities",
+     "objects": 0,
+     "changedPct": 6.7
+    },
+    {
+     "label": "stage",
+     "objects": 0,
+     "changedPct": 0
+    },
+    {
+     "label": "world",
+     "objects": 1,
+     "changedPct": 0
+    },
+    {
+     "label": "plane:far",
+     "objects": 0,
+     "changedPct": 0
+    },
+    {
+     "label": "plane:back",
+     "objects": 5,
+     "changedPct": 0
+    }
+   ],
+   "biggest": [
+    "frontRow:460",
+    "shellFront:242",
+    "shaft:211",
+    "city:glow:118",
+    "city:pins:99",
+    "walkers:97",
+    "room:87",
+    "signage:72",
+    "labels:42",
+    "galleries:19"
+   ],
+   "gpuTextureMB": 282,
+   "gpuTextures": 557,
+   "jsHeapMB": 169,
+   "longTasks": 5,
+   "longTaskMs": 662,
+   "longTaskMax": 351,
+   "calMs": 97,
+   "overdraw": 19.94,
+   "overdrawBy": [
+    "shellFront:6.73",
+    "frontRow:3.4",
+    "room:2.17",
+    "city:lit:2",
+    "city:fog:2",
+    "plane:back:1",
+    "shellBack:1",
+    "atmosphere:0.97"
+   ],
+   "allocKBPerFrame": 1006.3,
+   "mem": {
+    "renderer": 686,
+    "gpu": 820
+   },
+   "consoleErrors": 0
+  },
+  "f24w-overview-medium": {
+   "v": 1,
+   "quality": "medium",
+   "res": 2,
+   "target": 30,
+   "seconds": 6,
+   "frames": 181,
+   "fps": 30.1,
+   "updateMsMed": 3.4,
+   "updateMsP95": 4.4,
+   "drawMsMed": 8.5,
+   "drawMsP95": 12.6,
+   "frameMsMed": 12,
+   "frameMsP95": 16.5,
+   "intervalMed": 33.3,
+   "intervalP95": 34.3,
+   "busyPct": 41.9,
+   "tickMsAvg": 5.2,
+   "drawCalls": 448,
+   "renderablesDrawn": 2632,
+   "renderablesTotal": 14595,
+   "renderGroups": 68,
+   "structureChangedPct": 0,
+   "groups": [
+    {
+     "label": "room",
+     "objects": 93,
+     "changedPct": 36.6
+    },
+    {
+     "label": "atmosphere",
+     "objects": 37,
+     "changedPct": 29.3
+    },
+    {
+     "label": "city:glow",
+     "objects": 115,
+     "changedPct": 16.6
+    },
+    {
+     "label": "walkers",
+     "objects": 134,
+     "changedPct": 2.8
+    },
+    {
+     "label": "stage",
+     "objects": 0,
+     "changedPct": 0
+    },
+    {
+     "label": "world",
+     "objects": 1,
+     "changedPct": 0
+    },
+    {
+     "label": "plane:far",
+     "objects": 0,
+     "changedPct": 0
+    },
+    {
+     "label": "plane:back",
+     "objects": 5,
+     "changedPct": 0
+    },
+    {
+     "label": "surface",
+     "objects": 0,
+     "changedPct": 0
+    },
+    {
+     "label": "sites",
+     "objects": 0,
+     "changedPct": 0
+    },
+    {
+     "label": "siteSmoke",
+     "objects": 0,
+     "changedPct": 0
+    },
+    {
+     "label": "siteGlow",
+     "objects": 0,
+     "changedPct": 0
+    },
+    {
+     "label": "siteCrew",
+     "objects": 0,
+     "changedPct": 0
+    },
+    {
+     "label": "siteSigns",
+     "objects": 0,
+     "changedPct": 0
+    }
+   ],
+   "biggest": [
+    "frontRow:464",
+    "shellFront:242",
+    "shaft:235",
+    "walkers:134",
+    "city:glow:115",
+    "city:pins:99",
+    "room:93",
+    "signage:72",
+    "bays:60",
+    "labels:45"
+   ],
+   "gpuTextureMB": 283,
+   "gpuTextures": 582,
+   "jsHeapMB": 157,
+   "longTasks": 0,
+   "longTaskMs": 0,
+   "longTaskMax": 0,
+   "calMs": 57,
+   "overdraw": 20.28,
+   "overdrawBy": [
+    "shellFront:6.73",
+    "frontRow:3.54",
+    "room:2.16",
+    "city:lit:2",
+    "city:fog:2",
+    "plane:back:1.11",
+    "atmosphere:1.01",
+    "shellBack:1"
+   ],
+   "allocKBPerFrame": 424.7,
+   "mem": {
+    "renderer": 698,
+    "gpu": 849
+   },
+   "consoleErrors": 0
+  },
+  "f24w-close-medium": {
+   "v": 1,
+   "quality": "medium",
+   "res": 2,
+   "target": 30,
+   "seconds": 6,
+   "frames": 182,
+   "fps": 30.2,
+   "updateMsMed": 2.8,
+   "updateMsP95": 4.2,
+   "drawMsMed": 6.4,
+   "drawMsP95": 10.2,
+   "frameMsMed": 9.3,
+   "frameMsP95": 13.2,
+   "intervalMed": 33.2,
+   "intervalP95": 39.2,
+   "busyPct": 34.4,
+   "tickMsAvg": 5.22,
+   "drawCalls": 387,
+   "renderablesDrawn": 2121,
+   "renderablesTotal": 9804,
+   "renderGroups": 52,
+   "structureChangedPct": 0,
+   "groups": [
+    {
+     "label": "room",
+     "objects": 53,
+     "changedPct": 20.7
+    },
+    {
+     "label": "atmosphere",
+     "objects": 22,
+     "changedPct": 20.3
+    },
+    {
+     "label": "walkers",
+     "objects": 165,
+     "changedPct": 4.4
+    },
+    {
+     "label": "frontRow",
+     "objects": 464,
+     "changedPct": 0.2
+    },
+    {
+     "label": "stage",
+     "objects": 0,
+     "changedPct": 0
+    },
+    {
+     "label": "world",
+     "objects": 1,
+     "changedPct": 0
+    },
+    {
+     "label": "plane:far",
+     "objects": 0,
+     "changedPct": 0
+    },
+    {
+     "label": "plane:back",
+     "objects": 5,
+     "changedPct": 0
+    },
+    {
+     "label": "surface",
+     "objects": 0,
+     "changedPct": 0
+    },
+    {
+     "label": "sites",
+     "objects": 0,
+     "changedPct": 0
+    },
+    {
+     "label": "siteSmoke",
+     "objects": 0,
+     "changedPct": 0
+    },
+    {
+     "label": "siteGlow",
+     "objects": 0,
+     "changedPct": 0
+    },
+    {
+     "label": "siteCrew",
+     "objects": 0,
+     "changedPct": 0
+    },
+    {
+     "label": "siteSigns",
+     "objects": 0,
+     "changedPct": 0
+    }
+   ],
+   "biggest": [
+    "frontRow:464",
+    "shaft:235",
+    "shellFront:189",
+    "walkers:165",
+    "city:pins:111",
+    "city:glow:89",
+    "signage:72",
+    "bays:60",
+    "room:53",
+    "galleries:42"
+   ],
+   "gpuTextureMB": 262,
+   "gpuTextures": 605,
+   "jsHeapMB": 167,
+   "longTasks": 0,
+   "longTaskMs": 0,
+   "longTaskMax": 0,
+   "calMs": 58,
+   "overdraw": 20.48,
+   "overdrawBy": [
+    "shellFront:6.04",
+    "frontRow:3.64",
+    "room:3.02",
+    "city:lit:2",
+    "city:fog:2",
+    "atmosphere:1.06",
+    "plane:back:1",
+    "shellBack:1"
+   ],
+   "allocKBPerFrame": 361.5,
+   "mem": {
+    "renderer": 723,
+    "gpu": 821
+   },
+   "consoleErrors": 0
+  },
+  "f24w-walk-close-medium": {
+   "v": 1,
+   "quality": "medium",
+   "res": 2,
+   "target": 30,
+   "seconds": 6,
+   "frames": 182,
+   "fps": 30.1,
+   "updateMsMed": 2.6,
+   "updateMsP95": 3.8,
+   "drawMsMed": 6.4,
+   "drawMsP95": 7.9,
+   "frameMsMed": 8.9,
+   "frameMsP95": 11.4,
+   "intervalMed": 33.3,
+   "intervalP95": 34,
+   "busyPct": 31.6,
+   "tickMsAvg": 4.64,
+   "drawCalls": 377,
+   "renderablesDrawn": 2039,
+   "renderablesTotal": 9888,
+   "renderGroups": 52,
+   "structureChangedPct": 0,
+   "groups": [
+    {
+     "label": "atmosphere",
+     "objects": 22,
+     "changedPct": 24.7
+    },
+    {
+     "label": "room",
+     "objects": 49,
+     "changedPct": 20.4
+    },
+    {
+     "label": "walkers",
+     "objects": 90,
+     "changedPct": 1.6
+    },
+    {
+     "label": "frontRow",
+     "objects": 464,
+     "changedPct": 0.2
+    },
+    {
+     "label": "stage",
+     "objects": 0,
+     "changedPct": 0
+    },
+    {
+     "label": "world",
+     "objects": 1,
+     "changedPct": 0
+    },
+    {
+     "label": "plane:far",
+     "objects": 0,
+     "changedPct": 0
+    },
+    {
+     "label": "plane:back",
+     "objects": 5,
+     "changedPct": 0
+    },
+    {
+     "label": "surface",
+     "objects": 0,
+     "changedPct": 0
+    },
+    {
+     "label": "sites",
+     "objects": 0,
+     "changedPct": 0
+    },
+    {
+     "label": "siteSmoke",
+     "objects": 0,
+     "changedPct": 0
+    },
+    {
+     "label": "siteGlow",
+     "objects": 0,
+     "changedPct": 0
+    },
+    {
+     "label": "siteCrew",
+     "objects": 0,
+     "changedPct": 0
+    },
+    {
+     "label": "siteSigns",
+     "objects": 0,
+     "changedPct": 0
+    }
+   ],
+   "biggest": [
+    "frontRow:464",
+    "shaft:235",
+    "shellFront:189",
+    "city:pins:111",
+    "walkers:90",
+    "city:glow:89",
+    "signage:72",
+    "bays:60",
+    "room:49",
+    "galleries:42"
+   ],
+   "gpuTextureMB": 300,
+   "gpuTextures": 615,
+   "jsHeapMB": 175,
+   "longTasks": 0,
+   "longTaskMs": 0,
+   "longTaskMax": 0,
+   "calMs": 69,
+   "overdraw": 20.39,
+   "overdrawBy": [
+    "shellFront:6.04",
+    "frontRow:3.64",
+    "room:2.98",
+    "city:lit:2",
+    "city:fog:2",
+    "plane:back:1",
+    "shellBack:1",
+    "atmosphere:1"
+   ],
+   "allocKBPerFrame": 401.1,
+   "mem": {
+    "renderer": 693,
+    "gpu": 871
+   },
+   "consoleErrors": 0
+  },
+  "f24w-far-medium": {
+   "v": 1,
+   "quality": "medium",
+   "res": 2,
+   "target": 30,
+   "seconds": 6,
+   "frames": 152,
+   "fps": 25.2,
+   "updateMsMed": 4.4,
+   "updateMsP95": 8.1,
+   "drawMsMed": 27.6,
+   "drawMsP95": 38.3,
+   "frameMsMed": 32.9,
+   "frameMsP95": 43.7,
+   "intervalMed": 39.2,
+   "intervalP95": 53.9,
+   "busyPct": 87.5,
+   "tickMsAvg": 4.97,
+   "drawCalls": 625,
+   "renderablesDrawn": 5064,
+   "renderablesTotal": 19448,
+   "renderGroups": 93,
+   "structureChangedPct": 0,
+   "groups": [
+    {
+     "label": "atmosphere",
+     "objects": 39,
+     "changedPct": 57.2
+    },
+    {
+     "label": "walkers",
+     "objects": 127,
+     "changedPct": 43.4
+    },
+    {
+     "label": "room",
+     "objects": 91,
+     "changedPct": 32.2
+    },
+    {
+     "label": "city:glow",
+     "objects": 97,
+     "changedPct": 26.3
+    },
+    {
+     "label": "stage",
+     "objects": 0,
+     "changedPct": 0
+    },
+    {
+     "label": "world",
+     "objects": 1,
+     "changedPct": 0
+    },
+    {
+     "label": "plane:far",
+     "objects": 0,
+     "changedPct": 0
+    },
+    {
+     "label": "plane:back",
+     "objects": 5,
+     "changedPct": 0
+    },
+    {
+     "label": "surface",
+     "objects": 0,
+     "changedPct": 0
+    },
+    {
+     "label": "sites",
+     "objects": 0,
+     "changedPct": 0
+    },
+    {
+     "label": "siteSmoke",
+     "objects": 0,
+     "changedPct": 0
+    },
+    {
+     "label": "siteGlow",
+     "objects": 0,
+     "changedPct": 0
+    },
+    {
+     "label": "siteCrew",
+     "objects": 0,
+     "changedPct": 0
+    },
+    {
+     "label": "siteSigns",
+     "objects": 0,
+     "changedPct": 0
+    }
+   ],
+   "biggest": [
+    "frontRow:703",
+    "shellFront:302",
+    "shaft:235",
+    "walkers:127",
+    "city:glow:97",
+    "labels:96",
+    "city:pins:93",
+    "room:91",
+    "galleries:84",
+    "signage:72"
+   ],
+   "gpuTextureMB": 303,
+   "gpuTextures": 621,
+   "jsHeapMB": 206,
+   "longTasks": 8,
+   "longTaskMs": 437,
+   "longTaskMax": 59,
+   "calMs": 70,
+   "overdraw": 19.74,
+   "overdrawBy": [
+    "shellFront:7.38",
+    "frontRow:2.59",
+    "room:2.08",
+    "city:lit:2",
+    "city:fog:2",
+    "plane:back:1.04",
+    "atmosphere:1.01",
+    "shellBack:1"
+   ],
+   "allocKBPerFrame": 508.5,
+   "mem": {
+    "renderer": 717,
+    "gpu": 900
+   },
+   "consoleErrors": 0
+  },
+  "audio-start": {
+   "throttle": 1,
+   "readyMs": null,
+   "doneMs": null,
+   "longTasks60": 1,
+   "longTaskMs60": 281,
+   "longTaskMax": 281,
+   "rendererMB": {
+    "before": 378,
+    "peak": 435,
+    "after": 310
+   },
+   "peakGainMB": 57
+  },
+  "offline-24h": {
+   "throttle": 1,
+   "sliced": true,
+   "totalMs": 7031,
+   "longTasks": 1,
+   "longestMs": 90,
+   "sumLongMs": 90,
+   "frames": 290
+  }
+ }
+}

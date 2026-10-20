@@ -380,6 +380,8 @@ export interface DangerState {
   /** Wall-clock ms of the first danger that struck while away and was never answered (the offline safety net). */
   ignoredSince: number | null;
   nextId: number;
+  /** [phase4b] Wall-clock ms until which everyone hid below after a raid: the work rooms stand still (optional: absent = 0). */
+  hiddenUntil?: number;
 }
 
 export function createDanger(): DangerState {

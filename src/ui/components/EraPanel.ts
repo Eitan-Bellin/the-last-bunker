@@ -26,6 +26,7 @@ import { PROJECTS } from '../../data/projects'; // [phase2]
 import { RESEARCH } from '../../data/research'; // [phase2]
 import { ProjectsView } from './ProjectsPanel'; // [phase2]
 import '../../styles/screens-p2.css'; // [phase2]
+import { renderForemanPolicies, foremanPoliciesSig, refreshForemanPolicies } from './ExposureForeman'; // [phase4b]
 
 /** [phase3] Laws show once their slot exists AND the Act's schedule has opened them (Act III + 2 days). */
 const lawsShown = (state: GameState) => lawSlots(state) > 0 && systemOpen(state, 'laws');
@@ -187,7 +188,7 @@ export class EraPanel {
     // [phase4] The Endings tab redraws when a doctrine or law that pushes an ending changes; Policies when a cooldown ends or a price can be paid.
     const pushes = this.tab === 'endings' ? ENDINGS.map(e => e.pushes.map(p => (pushActive(state, p) ? 1 : 0)).join('')).join(',') : '';
     const policy = this.tab === 'policies' ? `${lawSlots(state)}${lawsShown(state)}|${LAWS.map(l => (lawCooldown(state, l.id) > 0 ? 1 : 0)).join('')}|${this.engine?.resourceSystem.canAfford(state, lawCost(state)) ? 1 : 0}|${Math.floor((state.longGame?.meta.worldT ?? 0) / 600)}` : '';
-    const sig = `${era.id}|${act?.id ?? 0}|${orders}|${state.tutorialStep}|${i18n.currentLocale}|${this.tab}|${this.actOpen}|${goals}|${tabs}|${doctrines}|${policy}|${pushes}`;
+    const sig = `${era.id}|${act?.id ?? 0}|${orders}|${state.tutorialStep}|${i18n.currentLocale}|${this.tab}|${this.actOpen}|${goals}|${tabs}|${doctrines}|${policy}|${pushes}|${foremanPoliciesSig(state)}`; // [phase4b] Foreman policies
     if (sig !== this.signature) {
       this.signature = sig;
       this.projectsSig = '';
@@ -488,6 +489,8 @@ export class EraPanel {
 
   /** [Long game] The Foreman's standing orders: routine handed over, each a clear on/off switch with what it last did. */
   private renderForeman(state: GameState): HTMLElement {
+    // [phase4b] (C5) the Foreman shows only the real policies; chores stay automatic and out of view.
+    if (this.engine) return renderForemanPolicies(this.engine, () => { this.signature = ''; this.refresh(this.engine!.stateManager.state); });
     const box = el('div', 'foreman');
     box.appendChild(el('div', 'bp-section-title', `[[worker]] ${i18n.t('foreman.title')}`));
     box.appendChild(el('div', 'bp-hint', i18n.t('foreman.hint')));
@@ -519,6 +522,7 @@ export class EraPanel {
 
   /** The live part of the Foreman box: what each order did on its last round and when the next one comes. */
   private refreshForeman(state: GameState): void {
+    if (this.engine) { refreshForemanPolicies(state, this.engine); return; } // [phase4b]
     const f = this.foreman;
     if (!f || !this.foremanNext?.isConnected) return;
     const anyOn = FOREMAN_ORDERS.some(o => f.isOn(state, o));

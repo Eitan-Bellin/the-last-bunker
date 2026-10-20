@@ -10,13 +10,14 @@ import { flowArrow } from '../rtl';
 import { describeMissing } from '../missing';
 import { kButton, kEmpty, kRow, kTabs } from '../kit'; // [phase2] kTabs
 import { uiSound } from '../../audio/uiSound';
-import { renderTrade } from './TradePanel'; // [LateGame B2]
-import { getPartner, openPartners } from '../../data/trade'; // [phase2] openPartners
+import { renderRequests, renderTrade } from './TradePanel'; // [LateGame B2] [phase4b] renderRequests
+import { getPartner, openPartners, partnerAtHex } from '../../data/trade'; // [phase2] openPartners [phase4b] partnerAtHex
 import { ICON_SVG, isIcon } from '../icons';
 import { ensureBiomeTiles, paintWorldMap } from './worldMap'; // plan 2026-10 M6
 import { ResearchPanel } from './ResearchPanel';
 import '../../styles/surface.css';
 import '../../styles/screens-p2.css'; // [phase2]
+import '../../styles/p4b-o.css'; // [phase4b]
 
 /** [phase2] The Surface panel's tabs: three picked areas (the panel opens here), every area with the map, and trade. */
 type SurfaceView = 'home' | 'all' | 'trade';
@@ -39,6 +40,12 @@ function hexPoints(cx: number, cy: number, size = S - 1): string {
     pts.push(`${(cx + size * Math.cos(a)).toFixed(1)},${(cy + size * Math.sin(a)).toFixed(1)}`);
   }
   return pts.join(' ');
+}
+
+/** [phase4b] The one Surface panel (the app makes it once); `openSurfaceTrade` opens it on the Trade tab from anywhere (the bell). */
+let current: SurfacePanel | null = null;
+export function openSurfaceTrade(partner?: string): void {
+  current?.showTrade(partner);
 }
 
 /** The research that opens the surface (Hazmat Suits): the node its locked state points at. */
@@ -94,6 +101,17 @@ export class SurfacePanel {
     });
     this.overlay.append(header, this.missionsBox, this.mapBox, this.card);
     document.body.appendChild(this.overlay);
+    current = this; // [phase4b]
+  }
+
+  /** [phase4b] Opens on the Trade tab (partner requests and caravans), scrolled to one partner's card when given. */
+  showTrade(partner?: string): void {
+    this.show();
+    if (!this.engine.explorationSystem.isUnlocked(this.engine.stateManager.state)) return;
+    this.selected = null;
+    this.view = 'trade';
+    this.redraw();
+    if (partner) requestAnimationFrame(() => this.card.querySelector(`[data-partner="${partner}"]`)?.scrollIntoView({ block: 'start' }));
   }
 
   show(): void {
@@ -192,6 +210,7 @@ export class SurfacePanel {
       state.activeMissions.map(m => `${m.hexX},${m.hexY}`).join(';'),
       this.selected ? `${this.selected.q},${this.selected.r}` : '',
       JSON.stringify(state.longGame?.world.outposts ?? []), // [P4]
+      openPartners(state).map(p => `${p.id}:${this.engine.contractSystem.requests(state, p.id).length}`).join(','), // [phase4b] partner markers
     ].join('|');
     if (sig === this.mapSig) return;
     this.mapSig = sig;
@@ -231,6 +250,14 @@ export class SurfacePanel {
         const ocls = op.damaged ? 'outpost-flag damaged' : op.readyAt > (state.longGame?.meta.worldT ?? 0) ? 'outpost-flag building' : 'outpost-flag';
         parts.push(`<g class="${ocls}" transform="translate(${(x + 2).toFixed(1)} ${(y - S * 0.85).toFixed(1)}) scale(0.45)">${ICON_SVG.flag}</g>`);
       }
+      // [phase4b] A partner's settlement: its marker, with a dot when it has requests waiting (the card lists them).
+      const partner = hex.revealed ? partnerAtHex(state, hex.x, hex.y) : null;
+      const pIcon = partner ? /^\[\[([a-zA-Z0-9]+)\]\]$/.exec(partner.icon)?.[1] : undefined;
+      if (partner && pIcon && isIcon(pIcon)) {
+        parts.push(`<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${(S * 0.62).toFixed(1)}" class="p4bo-partner"/>`);
+        parts.push(`<g class="hex-icon p4bo-partner__icon" transform="translate(${(x - 12 * 0.62).toFixed(1)} ${(y - 12 * 0.62).toFixed(1)}) scale(0.62)">${ICON_SVG[pIcon]}</g>`);
+        if (this.engine.contractSystem.requests(state, partner.id).length > 0) parts.push(`<circle cx="${(x + S * 0.5).toFixed(1)}" cy="${(y - S * 0.5).toFixed(1)}" r="${(S * 0.22).toFixed(1)}" class="p4bo-partner__dot"/>`);
+      }
       if (targets.has(`${hex.x},${hex.y}`)) {
         parts.push(`<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${S * 0.7}" class="mission-ring"/>`);
       }
@@ -264,7 +291,8 @@ export class SurfacePanel {
   }
 
   private renderMissions(state: GameState): void {
-    const sig = state.activeMissions.map(m => `${m.id}:${m.waiting ? 1 : 0}`).join(',') + i18n.currentLocale + maxTeams(state) + '|' + (state.rush ?? 0);
+    const sig = state.activeMissions.map(m => `${m.id}:${m.waiting ? 1 : 0}`).join(',') + i18n.currentLocale + maxTeams(state) + '|' + (state.rush ?? 0)
+      + '|' + (this.engine.rushSystem.creditPrice(state) ?? '-'); // [phase4b] the favour price on the rush button
     if (sig !== this.missionSig) {
       this.missionSig = sig;
       this.missionBars.clear();
@@ -286,11 +314,14 @@ export class SurfacePanel {
         const b = bar(0, 'accent');
         row.append(head, b);
         // Rush: spend a gift charge to skip 15 minutes of the trip (never past a pending radio call).
+        // [phase4b] Favours: with no charge left the rush is paid in credits (its price on the button).
+        const rs = this.engine.rushSystem;
+        const fav = rs.count(state) > 0 ? null : rs.favourPrice(state);
         row.appendChild(kButton({
           variant: 'secondary',
           className: 'btn-secondary btn-small',
-          label: `[[hourglass]] ${i18n.t('rush.button', { n: this.engine.rushSystem.count(state) })}`,
-          disabledReason: this.engine.rushSystem.canRushMission(state, m.id) ? null : i18n.t(this.engine.rushSystem.count(state) > 0 ? 'ux2d.rush.waiting' : 'ux2d.rush.none'),
+          label: fav === null ? `[[hourglass]] ${i18n.t('rush.button', { n: rs.count(state) })}` : `[[hourglass]] ${i18n.t('p4bO.favours.rushFor', { n: fmtNum(fav) })}`,
+          disabledReason: rs.canRushMission(state, m.id) ? null : i18n.t(rs.count(state) > 0 || fav !== null ? 'ux2d.rush.waiting' : 'ux2d.rush.none'),
           onPress: () => {
             if (this.engine.rushSystem.rushMission(m.id)) {
               uiSound('confirm');
@@ -318,7 +349,7 @@ export class SurfacePanel {
     const o = os.at(state, x, y);
     const now = state.longGame?.meta.worldT ?? 0;
     if (o) {
-      box.appendChild(el('div', 'bp-section-title', `[[flag]] ${i18n.t('outpost.title')}`));
+      box.appendChild(el('div', 'bp-section-title', `[[flag]] ${i18n.t('p4bO.verb.holding')}`)); // [phase4b] the "Hold" verb
       if (o.readyAt > now) box.appendChild(el('div', 'bp-hint', i18n.t('outpost.building', { t: i18n.formatDuration(o.readyAt - now) })));
       else if (o.damaged) {
         box.appendChild(el('div', 'bp-hint negative-text', i18n.t('outpost.damaged')));
@@ -338,7 +369,17 @@ export class SurfacePanel {
     }
     const block = os.block(state, x, y);
     if (block === 'act' || block === 'home') return el('div');
-    box.appendChild(el('div', 'bp-section-title', `[[flag]] ${i18n.t('outpost.claim')}`));
+    box.appendChild(el('div', 'bp-section-title', `[[flag]] ${i18n.t('p4bO.verb.hold')}`)); // [phase4b] the "Hold" verb
+    // [phase4b] What this ground would send home and when it pays back its price: the numbers that make "where" a choice.
+    const pv = os.preview(state, x, y);
+    if (pv && block !== 'explore') {
+      const pos = Object.entries(pv.yield).filter(([, v]) => (v ?? 0) > 0).map(([r, v]) => `${RESOURCE_ICONS[r] ?? ''} +${fmtNum(v ?? 0)}`).join('  ');
+      box.appendChild(el('div', 'bp-hint', i18n.t('outpost.yield', { list: pos })));
+      const pct = Math.round((pv.mult - 1) * 100);
+      box.appendChild(el('div', `bp-hint p4bo-site${pct >= 20 ? ' is-rich' : ''}`, pct >= 5 ? i18n.t('p4bO.outpost.siteRich', { n: pct }) : i18n.t('p4bO.outpost.siteAvg')));
+      if (pv.exposure > 1.01) box.appendChild(el('div', 'bp-hint p4bo-site is-exposed', `[[skull]] ${i18n.t('p4bO.outpost.exposed', { n: fmtNum(Math.round(pv.exposure * 10) / 10) })}`));
+      if (Number.isFinite(pv.paybackHours)) box.appendChild(el('div', 'bp-hint p4bo-payback', `[[clock]] ${i18n.t('p4bO.outpost.payback', { t: i18n.formatDuration(pv.paybackHours * 3600) })}`));
+    }
     if (block) {
       box.appendChild(el('div', 'bp-hint', i18n.t(`outpost.block.${block}`, { n: os.max(state) })));
       return box;
@@ -359,14 +400,14 @@ export class SurfacePanel {
 
   /** [phase2] The tab row and the tab's content: three picks, every area (with the map above), or trade. */
   private renderTabs(state: GameState): HTMLElement[] {
-    const tradeOpen = openPartners(state).length > 0 || state.activeMissions.some(m => m.type === 'caravan');
+    const tradeOpen = openPartners(state).length > 0 || state.activeMissions.some(m => m.type === 'caravan') || this.engine.contractSystem.requests(state).length > 0; // [phase4b] requests
     if (this.view === 'trade' && !tradeOpen) this.view = 'home';
     const panel = el('div', 'p2s-surface-panel');
     panel.id = 'surface-tabpanel';
     const tabs = kTabs([
       { id: 'home', label: `[[star]] ${i18n.t('p2s.surface.tabRec')}` },
       { id: 'all', label: `[[map]] ${i18n.t('p2s.surface.tabAll')}` },
-      ...(tradeOpen ? [{ id: 'trade', label: `[[cart]] ${i18n.t('p2s.surface.tabTrade')}` }] : []),
+      ...(tradeOpen ? [{ id: 'trade', label: `[[cart]] ${i18n.t('p2s.surface.tabTrade')}${this.engine.contractSystem.requests(state).length ? ` · ${this.engine.contractSystem.requests(state).length}` : ''}` }] : []), // [phase4b] requests waiting
     ], this.view, (id) => {
       this.view = id as SurfaceView;
       uiSound('switch');
@@ -428,6 +469,23 @@ export class SurfacePanel {
       });
       row.classList.add('surface-region', 'p2s-rec');
       box.appendChild(row);
+    }
+    // [phase4b] Hold: the claimable area whose outpost pays back soonest (from Act III, while a slot is free).
+    const hold = this.engine.outpostSystem.bestSite(state);
+    if (hold) {
+      const h = this.engine.explorationSystem.getHex(state, hold.x, hold.y);
+      if (h) {
+        const biome = BIOMES[h.biome as BiomeId];
+        const row = kRow({
+          icon: 'flag',
+          label: `${i18n.t('p4bO.surface.recHold')} · ${biome.name[locale]}`,
+          value: `[[clock]] ${i18n.formatDuration(hold.paybackHours * 3600)}`,
+          trailing: el('span', 'surface-region__go', `${i18n.t('p4bO.verb.holdGo')} ${flowArrow()}`),
+          onPress: () => this.select(h.x, h.y),
+        });
+        row.classList.add('surface-region', 'p2s-rec', 'p4bo-rec-hold');
+        box.appendChild(row);
+      }
     }
     box.appendChild(kButton({
       variant: 'tertiary',
@@ -496,6 +554,7 @@ export class SurfacePanel {
       i18n.currentLocale,
       this.view, // [phase2]
       hex?.biome === 'bunker' || (!hex && this.view === 'trade') ? `${JSON.stringify(state.lateGame.trade)}|${state.storyFlags.length}|${Math.floor(state.stats.totalPlayTime / 20)}` : '', // [LateGame B2]
+      this.engine.contractSystem.requests(state).map(i => i.id).join(','), Math.floor((state.resources.credits?.amount ?? 0) / 10), // [phase4b] requests, favours
     ].join('|');
     if (sig === this.cardSig) return;
     this.cardSig = sig;
@@ -528,6 +587,21 @@ export class SurfacePanel {
       return;
     }
 
+    // [phase4b] A partner's settlement on this area: its requests right here, and the way to its trade card.
+    const partner = partnerAtHex(state, hex.x, hex.y);
+    if (partner) {
+      const pc = el('div', 'bp-card p4bo-partner-card');
+      pc.appendChild(el('div', 'research-name', `${partner.icon} ${partner.name[locale]}`));
+      const reqs = renderRequests(this.engine, state, partner.id, () => { this.cardSig = this.mapSig = ''; this.refresh(this.engine.stateManager.state); });
+      pc.appendChild(reqs ?? el('div', 'bp-hint', i18n.t('p4bO.req.none')));
+      pc.appendChild(kButton({
+        variant: 'tertiary',
+        className: 'btn-ghost p2s-link',
+        label: `[[cart]] ${i18n.t('p4bO.req.toTrade')} ${flowArrow()}`,
+        onPress: () => { this.selected = null; this.view = 'trade'; this.redraw(); this.card.scrollTop = 0; requestAnimationFrame(() => this.card.querySelector(`[data-partner="${partner.id}"]`)?.scrollIntoView({ block: 'start' })); },
+      }));
+      box.appendChild(pc);
+    }
     const info = el('div', 'surface-info');
     info.append(
       el('span', '', `[[ruler]] ${hexDistance(hex.x, hex.y)}`),
@@ -556,7 +630,8 @@ export class SurfacePanel {
       return;
     }
 
-    box.appendChild(el('div', 'bp-section-title', i18n.t('surface.chooseTeam', { n: MAX_TEAM })));
+    box.appendChild(el('div', 'bp-section-title', `[[walker]] ${i18n.t('p4bO.verb.send')}`)); // [phase4b] the "Send" verb
+    box.appendChild(el('div', 'bp-hint', i18n.t('surface.chooseTeam', { n: MAX_TEAM })));
     const chips = el('div', 'team-chips');
     if (eligible.length === 0) chips.appendChild(kEmpty('people', i18n.t('surface.noTeam')));
     for (const s of eligible) {

@@ -2,7 +2,10 @@
 // leaves a door the player changed alone, freezes in a blackout, and forgets its list when switched off. Run by foreman-test.mjs.
 import { StateManager } from '../../src/core/StateManager';
 import { createInitialState, type BuildingInstance, type GameState } from '../../src/core/GameState';
-import { ForemanSystem } from '../../src/systems/ForemanSystem';
+import { ForemanSystem, costShare, foremanPolicy, RAID_FIGHT_DEFAULT } from '../../src/systems/ForemanSystem';
+import { RAID_BAND, TRIBUTE_SHARE, bunkerDefense, raidStrength, raidTribute, winChance } from '../../src/systems/EventSystem'; // [phase4b]
+import { exposureDrivers, hideStoresTrim } from '../../src/systems/ThreatSystem'; // [phase4b]
+import { hideStops, incidentBlocks } from '../../src/data/incidents'; // [phase4b]
 import { getDoor, setDoor } from '../../src/systems/doors';
 
 const room = (id: string, x: number, floor: number): BuildingInstance => ({
@@ -88,6 +91,61 @@ export function foremanChecks(): { problems: string[] } {
     f.set('sealOnAlarm', true);
     f.update(5);
     eq('Act I: the Foreman takes no orders', getDoor(st(), 2, 4), 'open');
+  }
+  // ---- [phase4b] the policies, the raid odds, the toll, the Exposure levers and hiding ----
+  {
+    const { sm, f } = make();
+    const st = (): GameState => sm.state as GameState;
+    const p0 = foremanPolicy(st());
+    eq('policy default: fight at', p0.fightAt, RAID_FIGHT_DEFAULT);
+    eq('policy default: otherwise', p0.otherwise, 'pay');
+    eq('policy default: priority', p0.priority, 'even');
+    eq('policy default: auto-pay off', p0.autoPay, 0);
+    st().longGame!.meta.act = 1; // (the test has no crew systems: "act first" would staff at once from Act II)
+    f.setPolicy({ fightAt: 0.65, otherwise: 'hide', priority: 'act', autoPay: 0.05 });
+    st().longGame!.meta.act = 2;
+    const p1 = foremanPolicy(st());
+    eq('policy set: all four kept', `${p1.fightAt}|${p1.otherwise}|${p1.priority}|${p1.autoPay}`, '0.65|hide|act|0.05');
+    f.setPolicy({ fightAt: 7 });
+    eq('policy: odds line clamped to 1', foremanPolicy(st()).fightAt, 1);
+    eq('the chores run without a switch', f.isOn(st(), 'staff') && f.isOn(st(), 'deposit') && f.isOn(st(), 'train'), true);
+    eq('cost share: the worst store', costShare(st(), { food: 50, water: 100 }), 0.2);
+  }
+  {
+    eq('odds: an even fight is 50%', Math.round(winChance(100, 100) * 100), 50);
+    eq('odds: never certain', winChance(1000, 1) <= 0.97 && winChance(1, 1000) >= 0.03, true);
+    eq('odds: more defense, better odds', winChance(120, 100) > winChance(110, 100), true);
+    const { sm } = make();
+    const st = (): GameState => sm.state as GameState;
+    st().era = 2;
+    const def = bunkerDefense(st());
+    for (const roll of [0, 0.5, 1]) {
+      const s = raidStrength(st(), roll);
+      const lo = Math.floor(def * RAID_BAND[0]) - 1, hi = Math.ceil(def * RAID_BAND[1]) + 1;
+      if (def >= 30 && (s < lo || s > hi)) problems.push(`raid strength ${s} outside ${lo}-${hi} of defense ${def} (roll ${roll})`);
+    }
+    st().resources.materials.amount = 1000;
+    eq('toll: a share of the Act currency', raidTribute(st()).materials, Math.round(1000 * TRIBUTE_SHARE));
+  }
+  {
+    const { sm } = make();
+    const st = (): GameState => sm.state as GameState;
+    for (const r of Object.values(st().resources)) { r.cap = 1000; r.amount = 1000; }
+    const before = exposureDrivers(st()).total;
+    eq('hide the stores lowers exposure', exposureDrivers(st(), { hideStores: true }).total < before, true);
+    eq('radio silence never raises it', exposureDrivers(st(), { radioSilence: true }).total <= before, true);
+    const trim = hideStoresTrim(st());
+    eq('hide the stores: food above 60% moves', trim.from.food, 400);
+    eq('hide the stores: the Act currency stays', trim.from.materials, undefined);
+    const shop: BuildingInstance = { ...room('b_2', 1, 1), type: 'workshop' };
+    const farm: BuildingInstance = { ...room('b_3', 6, 1), type: 'farm' };
+    eq('hiding stops a workshop', hideStops(shop), true);
+    eq('hiding never stops a farm', hideStops(farm), false);
+    st().buildings.push(shop);
+    st().danger.hiddenUntil = Date.now() + 60_000;
+    eq('while hidden the workshop stands still', incidentBlocks(st(), shop), true);
+    st().danger.hiddenUntil = Date.now() - 1;
+    eq('after the hour it works again', incidentBlocks(st(), shop), false);
   }
   return { problems };
 }
