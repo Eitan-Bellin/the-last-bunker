@@ -114,40 +114,9 @@ export class ContractSystem {
     return n;
   }
 
-  /**
-   * [phase4] Contracts are partner requests now: shown on the partner's card in Surface > Trade (no Inbox card). The requests of one
-   * issuer ('drifters' for the roads), richest first.
-   */
-  requestsOf(state: GameState, issuer: string): InboxItem[] {
-    const worth = (i: InboxItem) => Object.values((i.data as unknown as ContractData).reward).reduce((n, v) => n + (v ?? 0), 0);
-    return this.open(state).filter(i => (i.data as unknown as ContractData).issuer === issuer).sort((a, b) => worth(b) - worth(a));
-  }
-
-  /** [phase4] The request's own data (what it asks and pays). */
-  data(item: InboxItem): ContractData {
-    return item.data as unknown as ContractData;
-  }
-
-  /** [phase4] Whether "accept" can be taken now (goods in store, or enough free hands). */
-  canAccept(state: GameState, item: InboxItem): boolean {
-    const d = this.data(item);
-    if (d.type === 'crew') return this.freeHands(state).length >= d.crew;
-    return Object.entries(d.give).every(([r, v]) => (state.resources[r as ResourceType]?.amount ?? 0) >= (v ?? 0));
-  }
-
-  /** [phase4] The player's answer from the Trade tab: 'accept' or 'decline' (the same path the Inbox card took). */
-  answer(id: number, key: 'accept' | 'decline'): boolean {
-    return this.inbox.resolve(id, key);
-  }
-
-  /** [phase4] The texts of a request card: who, what it asks, what it pays (icons and compact numbers). */
-  describe(item: InboxItem, locale: string): Record<string, string> {
-    return this.cardParams(item, locale);
-  }
-
   /** Contracts start with the second Act (the first is learned without them). */
   active(state: GameState): boolean {
-    return lateActTwoSystems(state) && !doctrineClosedGates(state); // [Q7] from day ~4, not the moment Act II begins; [phase4] Isolationism: no contracts
+    return lateActTwoSystems(state) && !doctrineClosedGates(state); // [Q7] from day ~4; [phase4] Isolationism closes the gates
   }
 
   open(state: GameState): InboxItem[] {

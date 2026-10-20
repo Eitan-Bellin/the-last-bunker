@@ -314,29 +314,6 @@
 #hud .hx-alerts.has-action { border-color: var(--primary); }
 #hud .hx-alerts[aria-expanded='true'] { border-color: var(--primary); color: var(--primary); }
 
-/*
- * [phase4] Exposure (C4). On every width a slim gauge along the status chip's top edge (no extra width at 320 px): its length is the meter,
- * green / amber / red by level, and dashed when hunted (a shape, not colour alone). From 600 px a chip of its own ("eye 47") opens the sheet;
- * on a phone the bell's Exposure row does.
- */
-#hud .hx-exp-edge {
-  position: absolute;
-  top: 0;
-  inset-inline-start: 0;
-  width: var(--exp, 0%);
-  height: calc(var(--sp-1) - var(--border-w));
-  border-radius: var(--r-panel) var(--r-panel) 0 0;
-  background: var(--success);
-  pointer-events: none;
-}
-#hud .hx-exp-edge.is-mid { background: var(--warning); }
-#hud .hx-exp-edge.is-high { background: repeating-linear-gradient(90deg, var(--danger) 0 var(--sp-2), transparent var(--sp-2) var(--sp-3)); }
-#hud .hx-exp { display: none; flex: 0 0 auto; min-width: var(--hx-hit); justify-content: center; padding-inline: var(--sp-1) var(--sp-2); }
-#hud .hx-exp .hx-stat__icon .ic { width: var(--icon-s); height: var(--icon-s); }
-#hud .hx-exp.is-mid { border-color: var(--warning); }
-#hud .hx-exp.is-high { border-color: var(--danger); border-style: dashed; color: var(--danger-text); }
-@media (min-width: 600px) { #hud .hx-exp { display: inline-flex; } }
-
 /* Every chip reaches the full hit area, also when the visual is slimmer (short screens). */
 #hud .hx-chip::after { content: ''; position: absolute; inset: calc((var(--hx-h) - var(--hx-hit)) / 2 - var(--border-w)) calc(-1 * var(--border-w)); }
 

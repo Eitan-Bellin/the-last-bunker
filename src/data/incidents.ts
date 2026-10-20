@@ -1,7 +1,6 @@
 import type { BuildingInstance, BuildingType, DisasterKind, GameState, IncidentKind, ResourceType, SurvivorStats } from '../core/GameState';
 import type { IconName } from '../ui/icons';
-import { BUILDING_DEFS, effectiveLevel, getDef, isPowerPlant } from './buildingDefs';
-import { ACT_CURRENCY, refIncome } from './pricing';
+import { BUILDING_DEFS, effectiveLevel, isPowerPlant } from './buildingDefs';
 
 /** In-room crises (Sprint 6). Each kind has the rooms it strikes, the skill that fights it and what it costs while it burns. */
 export interface IncidentDef {
@@ -103,33 +102,12 @@ export function breachGuardMult(state: GameState): number {
 
 export const INCIDENT_KINDS = Object.keys(INCIDENTS) as IncidentKind[];
 
-/**
- * [phase4] (C3 note) From Act II a crisis is also priced in the Act's currency: this many hours of its reference income, but never more
- * than a share of what is in store (the reference income runs well ahead of a young Act's real one: an early-Act fix must not eat the
- * materials the bunker needs for farms). A quick fix, and handling a disaster.
- */
-export const QUICK_FIX_ACT_HOURS = 0.03;
-export const DISASTER_ACT_HOURS = 0.1;
-const QUICK_FIX_STOCK_MAX = 0.08;
-const DISASTER_STOCK_MAX = 0.2;
-
-/** [phase4] Adds the Act's currency to a cost (from Act II; a price keeps at most two goods: its own one and the Act's). */
-function withActPrice(state: GameState, out: Record<string, number>, hours: number, stockMax: number): Record<string, number> {
-  const act = state.longGame?.meta.act ?? 1;
-  if (act < 2 || !state.longGame) return out;
-  const c = ACT_CURRENCY[Math.min(ACT_CURRENCY.length - 1, act)];
-  const have = state.resources[c]?.amount ?? 0;
-  const v = Math.round(Math.min(hours * refIncome(act), Math.max(10, have * stockMax)));
-  if (v >= 1) out[c] = (out[c] ?? 0) + v;
-  return out;
-}
-
-/** Buying a crisis away costs more in a bigger bunker: the base price ×(1 + era) (S7). [phase4] Plus the Act's currency from Act II. */
+/** Buying a crisis away costs more in a bigger bunker: the base price ×(1 + era) (S7). */
 export function quickFixCost(state: GameState, kind: IncidentKind): Record<string, number> {
   const mult = 1 + Math.max(0, state.era ?? 0);
   const out: Record<string, number> = {};
   for (const [r, v] of Object.entries(INCIDENTS[kind].quickFix)) out[r] = Math.round((v ?? 0) * mult);
-  return withActPrice(state, out, QUICK_FIX_ACT_HOURS, QUICK_FIX_STOCK_MAX);
+  return out;
 }
 
 /** [Danger C2] Disasters: a countdown, a "handle it" action with a price and a crew, and a real price if ignored. */
@@ -198,10 +176,6 @@ export const DISASTER_KINDS = Object.keys(DISASTERS) as DisasterKind[];
 
 /** What it costs to handle a disaster; grows with the era like a quick fix (and the epidemic with the crowd). */
 export function disasterCost(state: GameState, kind: DisasterKind): Record<string, number> {
-  return withActPrice(state, disasterBase(state, kind), DISASTER_ACT_HOURS, DISASTER_STOCK_MAX); // [phase4]
-}
-
-function disasterBase(state: GameState, kind: DisasterKind): Record<string, number> {
   const mult = 1 + Math.max(0, state.era ?? 0);
   switch (kind) {
     case 'collapse': return { materials: 40 * mult };
@@ -215,25 +189,11 @@ function disasterBase(state: GameState, kind: DisasterKind): Record<string, numb
   }
 }
 
-/**
- * [phase4] The rooms that stop while everyone hides: those that make goods, except life support (food, water, power: nobody may starve
- * from hiding) and the beds.
- */
-function hideStops(b: BuildingInstance): boolean {
-  const def = getDef(b.type);
-  const prod = def?.production;
-  if (!prod || Object.keys(prod).length === 0 || isPowerPlant(b.type) || def.effects?.maxPopulation) return false;
-  return !('food' in prod || 'water' in prod || 'power' in prod);
-}
-
 /** Whether a room is stopped by an incident in it, a blackout on its floor or a meltdown shutdown. */
 export function incidentBlocks(state: GameState, b: BuildingInstance): boolean {
   // [Danger] a reactor shut down by a meltdown stays off until its time is up.
   const off = state.danger?.disabled?.[b.id];
   if (off && off > Date.now()) return true;
-  // [phase4] Everyone hid below from a raid: the work rooms (not power, not beds) stand still for the hour.
-  const hid = state.danger?.hiddenUntil;
-  if (hid && hid > Date.now() && hideStops(b)) return true;
   const list = state.incidents;
   if (!list || list.length === 0) return false;
   for (const inc of list) {

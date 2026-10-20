@@ -1,6 +1,6 @@
 import type { GameState } from '../../core/GameState';
 import type { ShopSystem, ShopOffer } from '../../systems/ShopSystem';
-import { ACT_GOODS_HOURS, SCRAP_BUNDLE, SHOP_PRICE_RAMP, type ShopItemId } from '../../data/shop';
+import { ACT_GOODS_HOURS, SCRAP_BUNDLE, type ShopItemId } from '../../data/shop';
 import { actGoods } from '../../data/pricing';
 import { i18n } from '../../i18n/I18nManager';
 import { fmtCost, fmtNum } from '../format';
@@ -8,10 +8,6 @@ import { RESOURCE_ICONS, el } from '../dom';
 import { kButton, kEmpty } from '../kit';
 import { Sheet } from './Sheet';
 import '../../styles/shop.css';
-import '../../styles/p4-o.css'; // [phase4]
-
-/** [phase4] The i18n key of an item's name (the rush favour is new in phase 4; its texts live under p4o.). */
-const itemKey = (id: ShopItemId): string => (id === 'rush' ? 'p4o.favours.rushName' : `shop.item.${id}`);
 
 /** The one shop sheet (the Journal owns it and hands it the shop system); `openShop` opens it from anywhere. */
 let current: ShopPanel | null = null;
@@ -58,14 +54,14 @@ export class ShopPanel {
     const sig = this.signature(state);
     if (sig === this.sig) return;
     this.sig = sig;
-    this.sheet.setTitle(`[[credits]] ${i18n.t('p4o.favours.title')}`); // [phase4] Favours: the shop and the rush charges in one
+    this.sheet.setTitle(`[[credits]] ${i18n.t('shop.tab')}`);
     this.sheet.body.replaceChildren(this.render(state, this.shop));
   }
 
   /** Changes whenever what the sheet shows would change (balance, today's purchases, language). */
   signature(state: GameState): string {
     const s = state.shop;
-    return `${Math.floor(state.resources.credits?.amount ?? 0)}|${state.rush ?? 0}|${JSON.stringify(s?.bought ?? {})}|${JSON.stringify(s?.weekBought ?? {})}|${state.activeProjectId ?? ''}|${state.longGame?.meta.act ?? 1}|${i18n.currentLocale}`;
+    return `${Math.floor(state.resources.credits?.amount ?? 0)}|${JSON.stringify(s?.bought ?? {})}|${JSON.stringify(s?.weekBought ?? {})}|${state.activeProjectId ?? ''}|${state.longGame?.meta.act ?? 1}|${i18n.currentLocale}`;
   }
 
   /**
@@ -89,7 +85,6 @@ export class ShopPanel {
       case 'blueprint': return one('blueprints', 1);
       case 'isotope': return one('isotope7', 1);
       case 'scrap20': return one('scrap', SCRAP_BUNDLE);
-      case 'rush': return `+1 [[hourglass]] ${i18n.t('p4o.favours.rushUnit')}`; // [phase4]
       case 'actGoods': return Object.entries(actGoods(state, ACT_GOODS_HOURS)).map(([r, n]) => one(r, Math.floor(n ?? 0))).join(' · ');
       default: return '';
     }
@@ -99,23 +94,20 @@ export class ShopPanel {
     const root = el('div', 'shop');
     const credits = Math.floor(state.resources.credits?.amount ?? 0);
     root.appendChild(el('p', 'shop-balance', `[[credits]] ${i18n.t('shop.balance', { n: fmtNum(credits) })}`));
-    root.appendChild(el('p', 'p4o-favours-rush', `[[hourglass]] ${i18n.t('p4o.favours.charges', { n: state.rush ?? 0 })}`)); // [phase4]
-    root.appendChild(el('p', 'bp-hint', i18n.t('p4o.favours.intro')));
+    root.appendChild(el('p', 'bp-hint', i18n.t('shop.intro')));
     const offers = shop.offers(state).filter(o => this.open(state, o));
     if (offers.length === 0) root.appendChild(kEmpty('credits', i18n.t('ux2d.shop.empty')));
     for (const o of offers) {
       const row = el('div', 'shop-item');
       const text = el('div', 'shop-text');
       text.append(
-        el('div', 'shop-name', `${o.item.icon} ${i18n.t(itemKey(o.item.id))}`),
-        el('div', 'bp-hint', i18n.t(`${itemKey(o.item.id)}.desc`)),
+        el('div', 'shop-name', `${o.item.icon} ${i18n.t(`shop.item.${o.item.id}`)}`),
+        el('div', 'bp-hint', i18n.t(`shop.item.${o.item.id}.desc`)),
       );
       const gets = this.gets(state, o.item.id);
       if (gets) text.appendChild(el('div', 'shop-gets', i18n.t('ux2d.shop.gets', { list: gets })));
-      // [phase4] No caps: how many this week and how much dearer the next one gets.
-      const n = shop.boughtThisWeek(state, o.item.id);
-      const pct = Math.round(((o.item.weeklyRamp ?? SHOP_PRICE_RAMP) - 1) * 100);
-      text.appendChild(el('div', 'bp-hint', n > 0 ? i18n.t('p4o.favours.bought', { n, pct }) : i18n.t('p4o.favours.ramp', { pct })));
+      if (o.item.weeklyLimit) text.appendChild(el('div', 'bp-hint', i18n.t('shop.weekLeft', { n: Math.max(0, o.left ?? 0) })));
+      if (o.item.dailyLimit) text.appendChild(el('div', 'bp-hint', i18n.t('shop.dayLeft', { n: Math.max(0, o.left ?? 0) })));
       const why = !o.block ? null
         : o.block === 'credits' ? i18n.t('ux2d.shop.needCredits', { n: fmtCost(o.price - credits) })
         : i18n.t(`shop.block.${o.block}`);
@@ -124,14 +116,14 @@ export class ShopPanel {
         variant: 'purchase',
         className: 'btn-primary shop-buy',
         label: `[[credits]] ${fmtCost(o.price)}`,
-        ariaLabel: i18n.t('ux2d.shop.buyAria', { name: i18n.t(itemKey(o.item.id)), n: fmtCost(o.price) }),
+        ariaLabel: i18n.t('ux2d.shop.buyAria', { name: i18n.t(`shop.item.${o.item.id}`), n: fmtCost(o.price) }),
         disabledReason: why,
         onPress: () => this.onBuy?.(o.item.id),
       });
       row.append(text, buy);
       root.appendChild(row);
     }
-    root.appendChild(el('p', 'bp-hint', i18n.t('p4o.favours.week')));
+    root.appendChild(el('p', 'bp-hint', i18n.t('shop.ramp')));
     return root;
   }
 }

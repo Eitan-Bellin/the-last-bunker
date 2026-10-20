@@ -264,7 +264,7 @@ export class SurfacePanel {
   }
 
   private renderMissions(state: GameState): void {
-    const sig = state.activeMissions.map(m => `${m.id}:${m.waiting ? 1 : 0}`).join(',') + i18n.currentLocale + maxTeams(state) + '|' + (state.rush ?? 0) + '|' + (this.engine.rushSystem.creditPrice(state) ?? -1); // [phase4]
+    const sig = state.activeMissions.map(m => `${m.id}:${m.waiting ? 1 : 0}`).join(',') + i18n.currentLocale + maxTeams(state) + '|' + (state.rush ?? 0);
     if (sig !== this.missionSig) {
       this.missionSig = sig;
       this.missionBars.clear();
@@ -289,11 +289,8 @@ export class SurfacePanel {
         row.appendChild(kButton({
           variant: 'secondary',
           className: 'btn-secondary btn-small',
-          // [phase4] Favours: with no charge left, the rush is paid in credits (the price shows on the button).
-          label: this.engine.rushSystem.count(state) > 0 || this.engine.rushSystem.creditPrice(state) === null
-            ? `[[hourglass]] ${i18n.t('rush.button', { n: this.engine.rushSystem.count(state) })}`
-            : `[[hourglass]] ${i18n.t('p4o.rush.credits', { n: fmtNum(this.engine.rushSystem.creditPrice(state) ?? 0) })}`,
-          disabledReason: this.engine.rushSystem.canRushMission(state, m.id) ? null : i18n.t(this.engine.rushSystem.canPay(state) ? 'ux2d.rush.waiting' : 'ux2d.rush.none'),
+          label: `[[hourglass]] ${i18n.t('rush.button', { n: this.engine.rushSystem.count(state) })}`,
+          disabledReason: this.engine.rushSystem.canRushMission(state, m.id) ? null : i18n.t(this.engine.rushSystem.count(state) > 0 ? 'ux2d.rush.waiting' : 'ux2d.rush.none'),
           onPress: () => {
             if (this.engine.rushSystem.rushMission(m.id)) {
               uiSound('confirm');
@@ -321,7 +318,7 @@ export class SurfacePanel {
     const o = os.at(state, x, y);
     const now = state.longGame?.meta.worldT ?? 0;
     if (o) {
-      box.appendChild(el('div', 'bp-section-title', `[[flag]] ${i18n.t('p4o.verb.hold')} · ${i18n.t('outpost.title')}`)); // [phase4] the Hold verb
+      box.appendChild(el('div', 'bp-section-title', `[[flag]] ${i18n.t('outpost.title')}`));
       if (o.readyAt > now) box.appendChild(el('div', 'bp-hint', i18n.t('outpost.building', { t: i18n.formatDuration(o.readyAt - now) })));
       else if (o.damaged) {
         box.appendChild(el('div', 'bp-hint negative-text', i18n.t('outpost.damaged')));
@@ -341,7 +338,7 @@ export class SurfacePanel {
     }
     const block = os.block(state, x, y);
     if (block === 'act' || block === 'home') return el('div');
-    box.appendChild(el('div', 'bp-section-title', `[[flag]] ${i18n.t('p4o.verb.hold')} · ${i18n.t('outpost.claim')}`)); // [phase4] the Hold verb
+    box.appendChild(el('div', 'bp-section-title', `[[flag]] ${i18n.t('outpost.claim')}`));
     if (block) {
       box.appendChild(el('div', 'bp-hint', i18n.t(`outpost.block.${block}`, { n: os.max(state) })));
       return box;
@@ -350,7 +347,6 @@ export class SurfacePanel {
     const can = this.engine.resourceSystem.canAfford(state, cost);
     box.append(
       el('div', 'bp-hint', i18n.t('outpost.claimHint', { t: i18n.formatDuration(os.buildSeconds(state)), n: os.list(state).length, max: os.max(state) })),
-      ...this.outpostPreview(state, x, y), // [phase4] what it sends home here, and when it has paid for itself
       costRow(state, cost),
       kButton({
         label: `[[flag]] ${i18n.t('outpost.build')}`,
@@ -361,34 +357,16 @@ export class SurfacePanel {
     return box;
   }
 
-  /**
-   * [phase4] The claim card's numbers "in your bunker": the yield of an outpost on this ground (rough and far pays more, and is hit
-   * more), and the hours until its Act currency has paid back the price.
-   */
-  private outpostPreview(state: GameState, x: number, y: number): HTMLElement[] {
-    const p = this.engine.outpostSystem.preview(state, x, y);
-    if (!p) return [];
-    const pos = Object.entries(p.yield).filter(([, v]) => (v ?? 0) > 0).map(([r, v]) => `${RESOURCE_ICONS[r] ?? ''} +${fmtNum(v ?? 0)}`).join('  ');
-    const out = [el('div', 'bp-hint', i18n.t('outpost.yield', { list: pos }))];
-    const pct = Math.round((p.mult - 1) * 100);
-    const site = pct === 0 ? i18n.t('p4o.outpost.siteAvg') : i18n.t(pct > 0 ? 'p4o.outpost.siteRich' : 'p4o.outpost.sitePoor', { n: Math.abs(pct) });
-    out.push(el('div', `bp-hint p4o-payback${pct > 0 ? ' is-rich' : ''}`, isFinite(p.paybackHours)
-      ? `[[hourglass]] ${i18n.t('p4o.outpost.payback', { t: i18n.formatDuration(p.paybackHours * 3600) })} · ${site}`
-      : site));
-    return out;
-  }
-
   /** [phase2] The tab row and the tab's content: three picks, every area (with the map above), or trade. */
   private renderTabs(state: GameState): HTMLElement[] {
-    const requests = this.engine.contractSystem.open(state).length; // [phase4] partner requests live on the Trade tab (no Inbox card)
-    const tradeOpen = openPartners(state).length > 0 || state.activeMissions.some(m => m.type === 'caravan') || requests > 0;
+    const tradeOpen = openPartners(state).length > 0 || state.activeMissions.some(m => m.type === 'caravan');
     if (this.view === 'trade' && !tradeOpen) this.view = 'home';
     const panel = el('div', 'p2s-surface-panel');
     panel.id = 'surface-tabpanel';
     const tabs = kTabs([
       { id: 'home', label: `[[star]] ${i18n.t('p2s.surface.tabRec')}` },
       { id: 'all', label: `[[map]] ${i18n.t('p2s.surface.tabAll')}` },
-      ...(tradeOpen ? [{ id: 'trade', label: `[[cart]] ${i18n.t('p2s.surface.tabTrade')}${requests > 0 ? ` · ${requests}` : ''}` }] : []),
+      ...(tradeOpen ? [{ id: 'trade', label: `[[cart]] ${i18n.t('p2s.surface.tabTrade')}` }] : []),
     ], this.view, (id) => {
       this.view = id as SurfaceView;
       uiSound('switch');
@@ -517,7 +495,6 @@ export class SurfacePanel {
       state.activeMissions.map(m => `${m.hexX},${m.hexY}`).join(';'),
       i18n.currentLocale,
       this.view, // [phase2]
-      this.engine.contractSystem.open(state).map(c => c.id).join(','), // [phase4] partner requests on the Trade tab and its label
       hex?.biome === 'bunker' || (!hex && this.view === 'trade') ? `${JSON.stringify(state.lateGame.trade)}|${state.storyFlags.length}|${Math.floor(state.stats.totalPlayTime / 20)}` : '', // [LateGame B2]
     ].join('|');
     if (sig === this.cardSig) return;
@@ -560,7 +537,6 @@ export class SurfacePanel {
     box.appendChild(info);
 
     box.appendChild(this.renderOutpost(state, hex.x, hex.y)); // [P4]
-    box.appendChild(el('div', 'bp-section-title', `[[walker]] ${i18n.t('p4o.verb.send')}`)); // [phase4] the Send verb
     const loot = el('div', 'cost-row');
     const lootTypes = new Set<string>(Object.keys(biome.loot));
     if (poi) Object.keys(poi.loot).forEach(k => lootTypes.add(k));

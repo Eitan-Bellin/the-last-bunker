@@ -90,15 +90,15 @@ export const ORDERS: OrderDef[] = [
     on: { 'inbox:resolved': () => 1 },
   },
   {
-    id: 'train1', tier: 'easy', icon: '[[books]]', fromAct: 1, need: () => 1,
-    // [phase4] Retired: training is automatic now (Agent R). Kept defined so a saved day that holds it still reads.
-    avail: () => false,
+    id: 'train1', tier: 'easy', icon: '[[books]]', fromAct: 1,
+    need: () => 1,
+    avail: () => false, // [phase4] retired: training is automatic now
     counter: s => s.lateGame?.trained ?? 0,
   },
   {
-    id: 'maintain1', tier: 'easy', icon: '[[workshop]]', fromAct: 2, need: () => 1,
-    // [phase4] Retired: the crew services rooms by itself now ('maintenance:crew'). Kept defined so a saved day that holds it still reads.
-    avail: () => false,
+    id: 'maintain1', tier: 'easy', icon: '[[workshop]]', fromAct: 2,
+    need: () => 1,
+    avail: () => false, // [phase4] retired: the crew maintains the rooms
     on: { 'maintenance:done': () => 1 },
   },
   {
@@ -140,7 +140,8 @@ export const ORDERS: OrderDef[] = [
     on: { 'caravan:start': () => 1 },
   },
   {
-    id: 'specialize1', tier: 'medium', icon: '[[crown]]', fromAct: 3, need: () => 1, // [phase4] specialties open in Act III
+    id: 'specialize1', tier: 'medium', icon: '[[crown]]', fromAct: 3, // [phase4] specialties open in Act III
+    need: () => 1,
     avail: s => s.buildings.some(b => !b.isConstructing && !b.specialization && getDef(b.type) && b.level >= specLevel(getDef(b.type)!) && specsFor(b.type, s).length > 0),
     on: { 'building:specialized': () => 1 },
   },

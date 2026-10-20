@@ -1,11 +1,11 @@
 import type { StateManager } from '../core/StateManager';
 import type { GameState, ResourceType } from '../core/GameState';
 import { bus } from '../core/EventBus';
-import { BIOMES, hexDistance, type BiomeId } from '../data/surface';
+import { BIOMES, type BiomeId } from '../data/surface';
 import { ACT_CURRENCY, actPrice, refIncome } from '../data/pricing';
 import { TUNING } from '../data/tuning';
 import { systemOpen } from '../data/acts';
-import { ISOLATION_OUTPOSTS, doctrineClosedGates, hasFeature } from './ResearchSystem';
+import { doctrineClosedGates, hasFeature, ISOLATION_OUTPOSTS } from './ResearchSystem';
 import type { ResourceSystem } from './ResourceSystem';
 import type { ExplorationSystem } from './ExplorationSystem';
 
@@ -19,21 +19,6 @@ export interface Outpost {
   readyAt: number;
   /** Raided: it yields nothing until repaired. */
   damaged: boolean;
-}
-
-/**
- * [phase4] How much an area's outpost sends home, against an average one (1.0): rougher ground and the far rings pay more (up to about
- * x1.8 on a military zone at the edge, x0.9 on ruins next door). Raiders hit the rough ones more often (`damageWeight`), so where to
- * hold is a choice between a safe trickle and a rich, exposed claim.
- */
-export function outpostSiteMult(biome: string, distance: number): number {
-  const danger = BIOMES[biome as BiomeId]?.danger ?? 1;
-  return (0.75 + 0.15 * danger) * (0.95 + 0.05 * Math.max(0, distance));
-}
-
-/** [phase4] Relative chance that a raid wrecks this outpost rather than another (danger 1 = 1, danger 4 = 2.5). */
-function damageWeight(o: { biome: string }): number {
-  return 0.5 + 0.5 * (BIOMES[o.biome as BiomeId]?.danger ?? 1);
 }
 
 /** Outposts the Act allows (index = Act). */
@@ -71,8 +56,8 @@ export class OutpostSystem {
 
   max(state: GameState): number {
     if (!systemOpen(state, 'outposts')) return 0; // [phase3] the unlock schedule
-    const n = MAX_OUTPOSTS[Math.min(MAX_OUTPOSTS.length - 1, state.longGame?.meta.act ?? 0)] + (hasFeature(state, 'expansionism') ? 2 : 0); // [P2-1]
-    return Math.min(n, doctrineClosedGates(state) ? ISOLATION_OUTPOSTS : Infinity); // [phase4] Isolationism holds at most a few
+    const max = MAX_OUTPOSTS[Math.min(MAX_OUTPOSTS.length - 1, state.longGame?.meta.act ?? 0)] + (hasFeature(state, 'expansionism') ? 2 : 0); // [P2-1]
+    return doctrineClosedGates(state) ? Math.min(max, ISOLATION_OUTPOSTS) : max; // [phase4] Isolationism
   }
 
   cost(state: GameState): Record<string, number> {
@@ -124,10 +109,10 @@ export class OutpostSystem {
   }
 
   /** Per hour: what one working outpost sends home, and what its people eat and drink. */
-  yieldPerHour(state: GameState, o: Pick<Outpost, 'biome' | 'x' | 'y'>): Partial<Record<ResourceType, number>> {
+  yieldPerHour(state: GameState, o: Outpost): Partial<Record<ResourceType, number>> {
     const act = state.longGame?.meta.act ?? 3;
     const out: Partial<Record<ResourceType, number>> = {};
-    out[ACT_CURRENCY[act]] = refIncome(act) * TUNING.outpostYieldHours * outpostSiteMult(o.biome, hexDistance(o.x, o.y)); // [phase4] by biome and distance
+    out[ACT_CURRENCY[act]] = refIncome(act) * TUNING.outpostYieldHours;
     const biome = BIOMES[o.biome as BiomeId];
     for (const [r, range] of Object.entries(biome?.loot ?? {}) as [ResourceType, [number, number]][]) {
       out[r] = (out[r] ?? 0) + ((range[0] + range[1]) / 2) * 6;
@@ -137,22 +122,6 @@ export class OutpostSystem {
     out.food = (out.food ?? 0) - 6;
     out.water = (out.water ?? 0) - 6;
     return out;
-  }
-
-  /**
-   * [phase4] The claim card's numbers for an area: what an outpost there would send home per hour, and how many hours after the claim
-   * (build time included) its Act currency pays back the price. null when the area has no ground (home, unknown hex).
-   */
-  preview(state: GameState, x: number, y: number): { yield: Partial<Record<ResourceType, number>>; paybackHours: number; mult: number } | null {
-    const hex = this.exploration.getHex(state, x, y);
-    if (!hex || hex.biome === 'bunker') return null;
-    const site = { biome: hex.biome, x, y };
-    const y1 = this.yieldPerHour(state, site);
-    const cur = ACT_CURRENCY[state.longGame?.meta.act ?? 3];
-    const perHour = y1[cur] ?? 0;
-    const price = this.cost(state)[cur] ?? 0;
-    const paybackHours = this.buildSeconds(state) / 3600 + (perHour > 0 ? price / perHour : Infinity);
-    return { yield: y1, paybackHours, mult: outpostSiteMult(hex.biome, hexDistance(x, y)) };
   }
 
   private roll(): number {
@@ -165,10 +134,7 @@ export class OutpostSystem {
     const state = this.sm.state;
     const working = this.list(state).filter(o => !o.damaged && o.readyAt <= (state.longGame?.meta.worldT ?? 0));
     if (!working.length) return;
-    // [phase4] Weighted by the ground: an outpost on rough ground is the one raiders find.
-    const total = working.reduce((n, o) => n + damageWeight(o), 0);
-    let r = this.roll() * total;
-    const hit = working.find(o => (r -= damageWeight(o)) < 0) ?? working[working.length - 1];
+    const hit = working[Math.floor(this.roll() * working.length)];
     this.sm.applyDelta({ path: 'longGame.world.outposts', value: this.list(state).map(x => (x.id === hit.id ? { ...x, damaged: true } : x)) });
     bus.emit('outpost:damaged', hit);
   }

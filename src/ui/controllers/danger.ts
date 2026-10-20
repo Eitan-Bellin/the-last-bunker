@@ -9,12 +9,7 @@ import { INCIDENTS, DISASTERS, disasterCost, quickFixCost } from '../../data/inc
 import { missingOr } from '../missing'; // [ux-wp3 A1]
 import { causeText } from './feedback'; // [ux-wp3 W1]
 import { CEREMONY_COST } from '../../systems/DeathSystem';
-import { bunkerDefense, defenseParts, raidOdds, raidStrength, raidTribute, winChance, type RaidResult } from '../../systems/EventSystem';
-import { actCurrency, exposureDrivers, hideStoresTrim, inBreather, type ExposureDrivers } from '../../systems/ThreatSystem'; // [phase4]
-import { AUTO_PAY_STEPS, RAID_FIGHT_STEPS, actShareOf, foremanPolicy, type ForemanPolicy } from '../../systems/ForemanSystem'; // [phase4]
-import { kProgress, kRow, kTabs } from '../kit'; // [phase4]
-import { fmtNum } from '../format'; // [phase4]
-import '../../styles/p4-d.css'; // [phase4]
+import { bunkerDefense, defenseParts, raidTribute, type RaidResult } from '../../systems/EventSystem';
 import { announce } from '../a11yDom';
 import type { GameApp } from '../../app';
 
@@ -116,9 +111,6 @@ export class DangerController {
     const defSally = bunkerDefense(state, kind, 'sally');
     const weak = defHold < raid.strength;
     body.append(el('p', 'modal-body', i18n.t('danger.raid.body', { strength: raid.strength, defense: defHold, time: i18n.formatDuration(raidLeft) })));
-    // [phase4] The odds as a number for each way to meet them (raidOdds: a roll, not a sure thing).
-    const pHold = raidOdds(state, 'hold') ?? 0;
-    const pSally = raidOdds(state, 'sally') ?? 0;
     // [P2] The scout report: who is coming and what stops them.
     if (kind) {
       const p = defenseParts(state);
@@ -128,8 +120,6 @@ export class DangerController {
       );
     }
     body.appendChild(el('p', `bp-hint ${weak ? 'negative-text' : ''}`, i18n.t(weak ? 'danger.raid.hintWeak' : 'danger.raid.hintOk')));
-    // [phase4] What happens if the player leaves now: the Foreman's away policy decides.
-    body.appendChild(el('p', 'bp-hint', `[[worker]] ${this.policyLine(foremanPolicy(state))}`));
     if (note) body.appendChild(note);
     const choose = (s: RaidStance) => () => {
       this.app.engine.eventSystem.setStance(s);
@@ -138,17 +128,16 @@ export class DangerController {
       this.app.modal.hide();
       this.app.toasts.show(`[[armory]] ${i18n.t(`raid.stance.${s}.set`)}`, 'info');
     };
-    const odds = (v: number, p: number) => i18n.t('p4d.raid.odds', { pct: Math.round(p * 100), def: v, str: raid.strength }); // [phase4]
-    const best = Math.max(pHold, kind ? pSally : 0);
+    const odds = (v: number) => i18n.t(v >= raid.strength ? 'raid.odds.win' : 'raid.odds.lose', { def: v, str: raid.strength });
     this.app.modal.show({
       icon: '[[armory]]',
       title: i18n.t('danger.raid.title'),
       body,
       actions: [
-        { label: `${stance === 'hold' ? '✓ ' : ''}${i18n.t('raid.stance.hold')}`, className: best >= 0.5 && pHold >= pSally ? 'btn-primary' : 'btn-secondary', detail: el('span', 'difficulty-desc', odds(defHold, pHold)), onClick: choose('hold') },
-        ...(kind ? [{ label: `${stance === 'sally' ? '✓ ' : ''}${i18n.t('raid.stance.sally')}`, className: best >= 0.5 && pSally > pHold ? 'btn-primary' : 'btn-secondary', detail: el('span', 'difficulty-desc', odds(defSally, pSally)), onClick: choose('sally') }] : []),
+        { label: `${stance === 'hold' ? '✓ ' : ''}${i18n.t('raid.stance.hold')}`, className: !weak ? 'btn-primary' : 'btn-secondary', detail: el('span', 'difficulty-desc', odds(defHold)), onClick: choose('hold') },
+        ...(kind ? [{ label: `${stance === 'sally' ? '✓ ' : ''}${i18n.t('raid.stance.sally')}`, className: weak && defSally >= raid.strength ? 'btn-primary' : 'btn-secondary', detail: el('span', 'difficulty-desc', odds(defSally)), onClick: choose('sally') }] : []),
         {
-          label: i18n.t('danger.raid.pay'), className: best < 0.5 ? 'btn-primary' : 'btn-secondary', disabled: !this.app.engine.eventSystem.canPayTribute(),
+          label: i18n.t('danger.raid.pay'), className: weak && defSally < raid.strength ? 'btn-primary' : 'btn-secondary', disabled: !this.app.engine.eventSystem.canPayTribute(),
           detail: costRow(state, tribute),
           onClick: () => {
             this.app.engine.eventSystem.payTribute();
@@ -171,8 +160,6 @@ export class DangerController {
       body.appendChild(el('p', 'modal-sub negative-text', `[[bandage]] ${i18n.t('mission.injury', { name: this.app.localName(inj.name), n: inj.damage, ...this.app.gByName(inj.name, (inj as { id?: string }).id) })}`));
     }
     if (r.died) body.appendChild(el('p', 'modal-sub negative-text', `[[skull]] ${i18n.t('raid.result.died', { name: this.app.localName(r.died), ...this.app.gByName(r.died) })}`));
-    if (r.diedAlso) body.appendChild(el('p', 'modal-sub negative-text', `[[skull]] ${i18n.t('raid.result.died', { name: this.app.localName(r.diedAlso), ...this.app.gByName(r.diedAlso) })}`)); // [phase4]
-    if (typeof r.odds === 'number') body.appendChild(el('p', 'bp-hint', i18n.t('p4d.raid.rolled', { pct: Math.round(r.odds * 100) }))); // [phase4]
     // [P2] A room wrecked in the rout: it waits as a ruin, and comes back as it was once restored.
     if (r.wrecked) body.appendChild(el('p', 'modal-sub negative-text', `[[pick]] ${i18n.t('raid.result.wrecked', { room: getDef(r.wrecked as BuildingType)?.name[i18n.currentLocale] ?? r.wrecked })}`));
     this.app.audio.play(r.key === 'win' || r.key === 'winCaptive' ? 'achievement' : 'error');
@@ -182,168 +169,6 @@ export class DangerController {
       body,
       actions: [{ label: i18n.t('event.ok'), onClick: () => this.app.modal.hide() }],
     });
-  }
-
-  // ───────────────────────────── [phase4] Exposure (C4) and the Foreman's policies (C5) ─────────────────────────────
-
-  /** [phase4] The Exposure level word: low / watched / hunted. */
-  private exposureLevel(n: number): 'low' | 'mid' | 'high' {
-    return n < 35 ? 'low' : n < 65 ? 'mid' : 'high';
-  }
-
-  /** [phase4] Seconds of play until the next raid is due (null: none scheduled or raids not open yet). */
-  private nextRaidIn(): number | null {
-    const s = this.app.state;
-    if ((s.era ?? 0) < 2) return null;
-    if (s.danger.raid) return Math.max(0, s.danger.raid.hitAt - s.stats.totalPlayTime);
-    return s.danger.nextRaidAt > 0 ? Math.max(0, s.danger.nextRaidAt - s.stats.totalPlayTime) : null;
-  }
-
-  /** [phase4] One line for the away raid policy, in this bunker's words. */
-  private policyLine(p: ForemanPolicy): string {
-    const otherwise = i18n.t(`p4d.policy.else.${p.otherwise}`);
-    return p.fightAt <= 0 ? i18n.t('p4d.policy.lineAlways') : i18n.t('p4d.policy.line', { pct: Math.round(p.fightAt * 100), otherwise });
-  }
-
-  /**
-   * [phase4] The Exposure sheet (HUD gauge, the bell's row, the raid dialog): the meter, its four drivers, the next raid, and the two levers
-   * with what each does in this bunker before the tap.
-   */
-  showExposure(): void {
-    const state = this.app.state;
-    const lg = state.longGame;
-    if (!lg) return;
-    const threat = this.app.engine.threatSystem;
-    const d = exposureDrivers(state);
-    const meter = Math.round(lg.threat.meter);
-    const target = Math.round(d.total);
-    const body = el('div', 'modal-result p4d-exposure');
-    const level = this.exposureLevel(meter);
-    const head = el('p', `modal-sub p4d-exp-head is-${level}`, i18n.t('p4d.exp.now', { n: meter, level: i18n.t(`p4d.exp.level.${level}`) }));
-    const bar = kProgress(meter, 100, i18n.t('p4d.exp.title'));
-    bar.classList.add('p4d-exp-bar', `is-${level}`);
-    body.append(head, bar);
-    if (Math.abs(target - meter) >= 1) body.appendChild(el('p', 'bp-hint', i18n.t(target > meter ? 'p4d.exp.rising' : 'p4d.exp.falling', { n: target })));
-    // The next raid.
-    const eta = this.nextRaidIn();
-    const calm = inBreather(state);
-    const when = state.danger.raid ? i18n.t('p4d.exp.raidNow', { t: i18n.formatDuration(eta ?? 0) })
-      : calm ? i18n.t('threat.breather', { t: i18n.formatDuration(lg.threat.breatherUntil - lg.meta.worldT) })
-        : eta === null ? i18n.t('p4d.exp.noRaids') : i18n.t('p4d.exp.nextRaid', { t: i18n.formatDuration(eta) });
-    body.appendChild(el('p', 'bp-hint', `[[armory]] ${when}`));
-    // The four drivers (and the rest), each with its share of the meter's target.
-    body.appendChild(el('div', 'bp-section-title', i18n.t('p4d.exp.drivers')));
-    const list = el('div', 'p4d-drivers');
-    const row = (icon: string, key: keyof ExposureDrivers, label: string): void => {
-      const v = Math.round(d[key]);
-      list.appendChild(kRow({ icon, label, value: v > 0 ? `+${v}` : v < 0 ? `−${Math.abs(v)}` : '0' }));
-    };
-    row('storage', 'stores', i18n.t('p4d.exp.stores'));
-    row('radioTower', 'radio', i18n.t('p4d.exp.radio'));
-    row('people', 'people', i18n.t('p4d.exp.people', { n: state.survivors.length }));
-    row('flag', 'outposts', i18n.t('p4d.exp.outposts'));
-    row('target', 'rest', i18n.t('p4d.exp.rest'));
-    if (d.levers < 0) row('eye', 'levers', i18n.t('p4d.exp.levers'));
-    body.appendChild(list);
-    body.appendChild(el('p', 'bp-hint', i18n.t('p4d.exp.why')));
-    // The two levers: what each does here, before the tap.
-    const hideOn = !!lg.threat.hideStores;
-    const silentOn = !!lg.threat.radioSilence;
-    const cur = i18n.t(`resources.${actCurrency(state)}`);
-    const withHide = Math.round(exposureDrivers(state, { hideStores: !hideOn }).total);
-    const withSilence = Math.round(exposureDrivers(state, { radioSilence: !silentOn }).total);
-    const trim = hideStoresTrim(state);
-    const hideDetail = hideOn ? i18n.t('p4d.lever.hide.on', { cur })
-      : i18n.t('p4d.lever.hide.off', { from: target, to: withHide, n: fmtNum(trim.gained), cur });
-    const freeBeds = Math.max(0, state.maxPopulation - state.survivors.length);
-    const silentDetail = silentOn ? i18n.t('p4d.lever.silence.on')
-      : plural('p4d.lever.silence.off', freeBeds, { from: target, to: withSilence });
-    const toggle = (fn: () => void) => (): void => {
-      fn();
-      this.app.engine.notifyInteraction();
-      this.app.engine.requestSave();
-      this.showExposure(); // the same title: the sheet keeps its scroll
-    };
-    this.app.modal.show({
-      icon: '[[eye]]',
-      title: i18n.t('p4d.exp.title'),
-      body,
-      actions: [
-        { label: `${hideOn ? '✓ ' : ''}${i18n.t('p4d.lever.hide')}`, className: hideOn ? 'btn-primary' : 'btn-secondary', detail: el('span', 'difficulty-desc', hideDetail), onClick: toggle(() => threat.setHideStores(!hideOn)) },
-        { label: `${silentOn ? '✓ ' : ''}${i18n.t('p4d.lever.silence')}`, className: silentOn ? 'btn-primary' : 'btn-secondary', detail: el('span', 'difficulty-desc', silentDetail), onClick: toggle(() => threat.setRadioSilence(!silentOn)) },
-        { label: i18n.t('event.ok'), className: 'btn-secondary', onClick: () => this.app.modal.hide() },
-      ],
-    });
-  }
-
-  /** [phase4] The last exposure state pushed to the HUD and the bell (it changes slowly: written only when it moves). */
-  private exposureSig = '';
-
-  /** [phase4] Keeps the HUD gauge and the bell's Exposure row up to date (called with the danger banner, every HUD refresh). */
-  private updateExposure(): void {
-    const state = this.app.state;
-    const lg = state.longGame;
-    const hud = this.app.hud;
-    if (!hud.onExposure) hud.onExposure = () => this.showExposure();
-    const open = !!lg && (state.era ?? 0) >= 2;
-    const meter = open ? Math.round(lg!.threat.meter) : 0;
-    const level = this.exposureLevel(meter);
-    const levers = open && (lg!.threat.hideStores || lg!.threat.radioSilence);
-    const sig = `${open}|${meter}|${levers}|${i18n.currentLocale}`;
-    if (sig === this.exposureSig) return;
-    this.exposureSig = sig;
-    hud.setExposure(open ? { n: meter, level, label: i18n.t('p4d.exp.chip', { n: meter, level: i18n.t(`p4d.exp.level.${level}`) }) } : null);
-    // The bell carries a quiet row (no count) so a phone reaches the sheet; a hunted bunker with no lever pulled asks for a look.
-    const hunted = level === 'high' && !levers;
-    hud.setBellRows('exposure', open ? [{
-      key: 'exposure', icon: 'eye', label: i18n.t('p4d.exp.title'), value: `${meter}`, count: hunted ? 1 : 0, action: hunted,
-      open: () => this.showExposure(),
-    }] : []);
-  }
-
-  /**
-   * [phase4] The Foreman's policies (C5) as one block for the Foreman screen (EraPanel.renderForeman puts it in): the away raid policy,
-   * the resource priority and the incident auto-pay ceiling, each with what it means in this bunker now.
-   */
-  foremanPolicies(): HTMLElement {
-    const box = el('div', 'p4d-policies');
-    const draw = (): void => {
-      const state = this.app.state;
-      const f = this.app.engine.foremanSystem;
-      const p = foremanPolicy(state);
-      const set = (patch: Partial<ForemanPolicy>) => { f.setPolicy(patch); this.app.engine.requestSave(); draw(); };
-      const cur = i18n.t(`resources.${actCurrency(state)}`);
-      box.replaceChildren();
-      box.appendChild(el('div', 'bp-section-title', `[[worker]] ${i18n.t('p4d.policy.title')}`));
-      box.appendChild(el('div', 'bp-hint', i18n.t('p4d.policy.chores')));
-      // 1. Away raids.
-      box.appendChild(el('div', 'p4d-policy-name', `[[armory]] ${i18n.t('p4d.policy.raid')}`));
-      const fightTabs = RAID_FIGHT_STEPS.map(v => ({ id: String(v), label: v <= 0 ? i18n.t('p4d.policy.always') : i18n.t('p4d.policy.atLeast', { pct: Math.round(v * 100) }) }));
-      const pick = RAID_FIGHT_STEPS.reduce((a, b) => (Math.abs(b - p.fightAt) < Math.abs(a - p.fightAt) ? b : a));
-      box.appendChild(kTabs(fightTabs, String(pick), id => set({ fightAt: Number(id) }), i18n.t('p4d.policy.raid')));
-      if (p.fightAt > 0) {
-        box.appendChild(kTabs([{ id: 'pay', label: i18n.t('p4d.policy.else.pay') }, { id: 'hide', label: i18n.t('p4d.policy.else.hide') }], p.otherwise, id => set({ otherwise: id as ForemanPolicy['otherwise'] }), i18n.t('p4d.policy.elseLabel')));
-      }
-      // In this bunker: the odds against a gang sized up now, and the toll.
-      if ((state.era ?? 0) >= 2) {
-        const odds = Math.round(winChance(bunkerDefense(state), raidStrength(state)) * 100);
-        const toll = Object.values(raidTribute(state))[0] ?? 0;
-        box.appendChild(el('div', 'bp-hint', i18n.t('p4d.policy.raidNow', { pct: odds, toll: fmtNum(toll), cur, verdict: i18n.t(odds >= Math.round(p.fightAt * 100) ? 'p4d.policy.wouldFight' : `p4d.policy.would.${p.otherwise}`) })));
-      }
-      // 2. Resource priority.
-      box.appendChild(el('div', 'p4d-policy-name', `[[target]] ${i18n.t('p4d.policy.priority')}`));
-      box.appendChild(kTabs((['even', 'act', 'basics'] as const).map(id => ({ id, label: i18n.t(`p4d.policy.prio.${id}`, { cur }) })), p.priority, id => set({ priority: id as ForemanPolicy['priority'] }), i18n.t('p4d.policy.priority')));
-      box.appendChild(el('div', 'bp-hint', i18n.t(`p4d.policy.prio.${p.priority}.hint`, { cur })));
-      // 3. Incident auto-pay ceiling.
-      box.appendChild(el('div', 'p4d-policy-name', `[[fire]] ${i18n.t('p4d.policy.autoPay')}`));
-      box.appendChild(kTabs(AUTO_PAY_STEPS.map(v => ({ id: String(v), label: v <= 0 ? i18n.t('p4d.policy.never') : i18n.t('p4d.policy.upTo', { pct: Math.round(v * 100) }) })), String(p.autoPay), id => set({ autoPay: Number(id) }), i18n.t('p4d.policy.autoPay')));
-      const fix = Math.round(actShareOf(state, quickFixCost(state, 'fire')) * 100);
-      const dz = Math.round(actShareOf(state, disasterCost(state, 'collapse')) * 100);
-      box.appendChild(el('div', 'bp-hint', (state.longGame?.meta.act ?? 1) >= 2 && isFinite(fix) && isFinite(dz)
-        ? i18n.t('p4d.policy.autoPayNow', { fix, dz, cur, paid: f.paid }) : i18n.t('p4d.policy.autoPayLater')));
-    };
-    draw();
-    return box;
   }
 
   /** Meaningful death: the portrait, the name, one line about who they were, and the choice of how to say goodbye. */
@@ -395,7 +220,6 @@ export class DangerController {
   private announcedDanger = '';
 
   updateIncidentBanner(): void {
-    this.updateExposure(); // [phase4]
     // [Danger] a raid warning or disaster countdown takes the banner (and its alarm) over a room crisis.
     const danger = this.dangerBanner();
     if (!danger) this.announcedDanger = '';
