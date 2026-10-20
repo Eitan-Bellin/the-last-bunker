@@ -264,7 +264,10 @@ export class CityRenderer {
     this.lighting.glowLayer.visible = T.glow;
     this.lighting.teaseLayer.visible = T.glow && this.fogEnabled;
     if (T.lightmap || T.glow) this.lighting.update(v, t, dt);
-    if (this.uvMode === 'area') {
+    // [perf] The filter's quad is pinned to the screen rectangle in both UV modes. Without a filterArea Pixi measured the bounds of every
+    // object in the lit group each picture (getFastGlobalBounds over ~5,000 objects zoomed out: a tenth of the main thread). The pixels are
+    // the same: the bounds were clipped to the screen anyway, and 'global' UVs come from the output frame, whatever it is.
+    {
       this.area.x = v.x0;
       this.area.y = v.y0;
       this.area.width = v.x1 - v.x0;

@@ -401,6 +401,43 @@ function eastFadeTexture(fade: number): Texture {
   return Texture.from(c);
 }
 
+/**
+ * [perf] The panorama's east copies cross-fade into the one before. That used to be a sprite mask (eastFadeTexture), and Pixi draws a
+ * sprite-masked sprite through an off-screen pass the size of the whole copy: an 8192x4096 texture (128 MB, never given back by the pool)
+ * redrawn every picture the surface was on screen. The same ramp is now baked into the copy's own texture once (same stops as
+ * eastFadeTexture, multiplied into the alpha). Null when the picture can no longer be read (a painting whose decoded copy was given back):
+ * the caller keeps the mask then.
+ */
+const fadedCache = new WeakMap<Texture, Map<number, Texture>>();
+function fadedTexture(tex: Texture, fade: number): Texture | null {
+  let byFade = fadedCache.get(tex);
+  const hit = byFade?.get(fade);
+  if (hit && !hit.destroyed) return hit;
+  const res = tex.source?.resource as (CanvasImageSource & { width?: number }) | undefined;
+  const TW = tex.source?.pixelWidth ?? 0, TH = tex.source?.pixelHeight ?? 0;
+  if (!res || !(res as { width?: number }).width || TW <= 0 || TH <= 0 || tex.source.destroyed || tex.width !== TW || tex.height !== TH) return null;
+  try {
+    const c = document.createElement('canvas');
+    c.width = TW;
+    c.height = TH;
+    const ctx = c.getContext('2d')!;
+    ctx.drawImage(res, 0, 0, TW, TH);
+    ctx.globalCompositeOperation = 'destination-in';
+    const g = ctx.createLinearGradient(0, 0, TW, 0);
+    g.addColorStop(0, 'rgba(255,255,255,0)');
+    g.addColorStop(Math.min(0.95, fade), 'rgba(255,255,255,1)');
+    g.addColorStop(1, 'rgba(255,255,255,1)');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, TW, TH);
+    const out = canvasTexture(c);
+    if (!byFade) fadedCache.set(tex, byFade = new Map());
+    byFade.set(fade, out);
+    return out;
+  } catch {
+    return null;
+  }
+}
+
 function contactShadow(x: number, y: number, w: number): Sprite {
   const s = new Sprite(glowTexture());
   s.anchor.set(0.5);
@@ -462,6 +499,8 @@ export function buildSurface2(
   let painted: Sprite | null = null;
   // Plan 2026-10 Q7: the painting's copies; with GFX.skyLayers they show the sky-only texture and drift on their own layer.
   const skySprites: Sprite[] = [];
+  /** [perf] The east copies set their texture through these (the cross-fade is baked into it, see fadedTexture). */
+  const fadeSetters = new Map<Sprite, (tex: Texture) => void>();
   let skyLayered = false;
   const info = backdrop ? analyseSky(backdrop, era) : null;
   // The painting spans [px0, px0 + pw] × [py0, 0.16 × its height below ground].
@@ -501,12 +540,23 @@ export function buildSurface2(
       if (fade) {
         for (const [target, layer] of [[s, farBack], [l, farLand]] as [Sprite | null, Container][]) {
           if (!target) continue;
-          const m = new Sprite(fadeTex);
-          m.position.set(x, py0);
-          m.width = pw;
-          m.height = ph;
-          layer.addChild(m);
-          target.mask = m;
+          // [perf] The ramp baked into the texture (fadedTexture); the sprite mask only when the picture cannot be read any more.
+          const setTex = (tex: Texture): void => {
+            const baked = fadedTexture(tex, EAST_FADE / pw);
+            target.texture = baked ?? tex;
+            const m = target.mask as Sprite | null;
+            if (baked && m) { target.mask = null; m.destroy(); }
+            else if (!baked && !m) {
+              const mk = new Sprite(fadeTex);
+              mk.position.set(x, py0);
+              mk.width = pw;
+              mk.height = ph;
+              layer.addChild(mk);
+              target.mask = mk;
+            }
+          };
+          setTex(target.texture);
+          if (target === s) fadeSetters.set(s, setTex);
         }
       }
     });
@@ -923,7 +973,7 @@ export function buildSurface2(
       if (layered !== skyLayered) {
         const tex = layered ? info!.skyOnly() : backdrop;
         if (tex) {
-          for (const s of skySprites) s.texture = tex;
+          for (const s of skySprites) { const set = fadeSetters.get(s); if (set) set(tex); else s.texture = tex; }
           skyLayered = layered;
         } else layered = false;
       }
