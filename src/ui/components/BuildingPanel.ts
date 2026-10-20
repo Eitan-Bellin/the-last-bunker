@@ -199,7 +199,8 @@ export class BuildingPanel {
     status.append(this.statusText, this.statusBar);
     // Rush: spend a gift charge to skip 15 minutes of this build or upgrade.
     if (b.isConstructing) {
-      status.appendChild(button(`[[hourglass]] ${i18n.t('rush.button', { n: this.engine.rushSystem.count(state) })}`, 'btn-secondary btn-small', () => {
+      status.appendChild(button(`[[hourglass]] ${(this.engine.rushSystem.count(state) > 0 ? i18n.t('rush.button', { n: this.engine.rushSystem.count(state) }) : i18n.t('p4bO.favours.rushFor', { n: this.engine.rushSystem.favourPrice(state) ?? 0 }))}`, // [phase4b] favours when no charge is left
+        'btn-secondary btn-small', () => {
         if (this.engine.rushSystem.rushBuilding(b.id)) {
           uiSound('confirm');
           this.engine.requestSave();

@@ -53,6 +53,17 @@ export interface ThreatState {
   /** No new threat before this worldT (a breather after a hard hit, or after the long-game update). */
   breatherUntil: number;
   scars: string[];
+  // [phase4b] Exposure (C4) and the scouts (C3). All optional: an older save reads them as off / zero.
+  /** Lever: stores held at 60% of their caps, what is above it handed to the Act's work (ThreatSystem.hideStoresTrim). */
+  hideStores?: boolean;
+  /** Lever: the radio is silent, no newcomers find the door. */
+  radioSilence?: boolean;
+  /** Sessions (returns after more than 5 minutes away) since a raid warning last came while the player was online. */
+  sessions?: number;
+  /** World time of the last raid warning that came while the player was online. */
+  warnAt?: number;
+  /** A raid the scouts moved into a session: the next raid rolled while away is skipped (the scouts move a raid, they do not add one). */
+  scoutOwed?: number;
 }
 
 /** [Danger lane] Seasons (about four real days each). */
@@ -112,6 +123,15 @@ export interface ForemanState {
   orders: Record<string, unknown>;
   /** [plan4:GP-8] Door keys ("floor:x") the 'sealOnAlarm' order shut and has not yet opened again (optional: absent in older saves). */
   sealed?: string[];
+  // [phase4b] (C5) The Foreman's policies. All optional: absent = the defaults in ForemanSystem.foremanPolicy.
+  /** Away raid policy: fight when the odds are at least this (0..1). */
+  raidFightAt?: number;
+  /** Away raid policy below that line: pay the toll or hide everyone below. */
+  raidElse?: 'pay' | 'hide';
+  /** Which rooms the Foreman staffs first: as before ('even') or the rooms that make the Act's currency ('act'). */
+  priority?: 'even' | 'act';
+  /** The Foreman pays a quick fix or a disaster's handling by himself when it asks at most this share of each store (0 = never). */
+  autoPay?: number;
 }
 
 /** [Q14] One line of the Chronicle (src/systems/ChronicleSystem.ts). */

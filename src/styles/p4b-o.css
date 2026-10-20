@@ -1,0 +1,57 @@
+/* [phase4b] Agent O: partner requests (Surface > Trade and the partner's map marker), the outpost "Hold" card's ground and payback
+   lines, the one Today card and the Favours sheet. Tokens only (no hex, no raw z-index); phones first: every row wraps at 320 px
+   and every button keeps the 48 px hit area (--hit-min). Logical properties only, so RTL and LTR share one rule. */
+
+/* ---------- partner requests ---------- */
+.p4bo-requests { display: flex; flex-direction: column; gap: var(--sp-2); margin-block: var(--sp-2); }
+.p4bo-requests__title { font-size: calc(var(--type-caption) * var(--fs, 1)); color: var(--text-secondary); font-weight: var(--weight-bold); }
+.p4bo-requests__all { width: 100%; min-height: var(--hit-min); margin-block-end: var(--sp-2); }
+.p4bo-request {
+  display: flex; flex-direction: column; gap: var(--sp-1);
+  padding: var(--sp-2) var(--sp-3); border-radius: var(--r-panel);
+  background: var(--surface-2); border: var(--border-w) solid var(--border);
+  border-inline-start: var(--ring-w) solid var(--primary);
+  min-width: 0;
+}
+.p4bo-request.is-safe { border-inline-start-color: var(--success); }
+.p4bo-request__deal { display: flex; flex-direction: column; gap: 2px; }
+.p4bo-request__line { font-size: calc(var(--type-body) * var(--fs, 1)); color: var(--text-primary); overflow-wrap: anywhere; line-height: var(--lh-body); font-variant-numeric: tabular-nums; }
+.p4bo-request__safe { font-size: calc(var(--type-caption) * var(--fs, 1)); color: var(--success); }
+.p4bo-request__row { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
+.p4bo-request__row .btn { flex: 1 1 120px; min-height: var(--hit-min); }
+
+/* the partner's marker on the map (SVG) */
+.surface-map .p4bo-partner { fill: var(--surface-1); stroke: var(--primary); stroke-width: 1.5; pointer-events: none; }
+.surface-map .p4bo-partner__icon { color: var(--primary); pointer-events: none; }
+.surface-map .p4bo-partner__dot { fill: var(--danger); stroke: var(--surface-0); stroke-width: 1; pointer-events: none; }
+.p4bo-partner-card { display: flex; flex-direction: column; gap: var(--sp-1); }
+
+/* ---------- the outpost "Hold" card ---------- */
+.p4bo-site.is-rich { color: var(--primary); }
+.p4bo-site.is-exposed { color: var(--danger-text); }
+.p4bo-payback { font-variant-numeric: tabular-nums; color: var(--text-primary); }
+
+/* ---------- the Today card ---------- */
+.p4bo-today { display: flex; flex-direction: column; gap: var(--sp-2); }
+.p4bo-today__row, .p4bo-today__week {
+  display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap;
+  padding: var(--sp-2) var(--sp-3); border-radius: var(--r-panel);
+  background: var(--surface-1); border: var(--border-w) solid var(--border);
+  min-height: var(--hit-min); min-width: 0;
+}
+.p4bo-today__week { flex-direction: column; align-items: stretch; }
+.p4bo-today__row-in { display: flex; align-items: center; gap: var(--sp-2); min-width: 0; }
+.p4bo-today__row.is-ready { border-color: var(--primary); box-shadow: 0 0 0 var(--border-w) var(--primary-glow); }
+.p4bo-today__row.is-taken, .p4bo-today__week.is-taken { opacity: 0.7; }
+.p4bo-today__icon { flex: 0 0 auto; }
+.p4bo-today__text { flex: 1 1 160px; min-width: 0; font-size: calc(var(--type-body) * var(--fs, 1)); color: var(--text-primary); overflow-wrap: anywhere; line-height: var(--lh-body); }
+.p4bo-today__pick { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
+.p4bo-today__pick .btn { flex: 1 1 110px; min-height: var(--hit-min); }
+.p4bo-today__opt.is-on { border-color: var(--primary); color: var(--primary); }
+.p4bo-today__claim { width: 100%; min-height: var(--hit-min); }
+
+/* ---------- Favours ---------- */
+.p4bo-favours-rush { margin: 0; font-size: calc(var(--type-body) * var(--fs, 1)); color: var(--text-primary); font-variant-numeric: tabular-nums; }
+
+/* ---------- the Book's Badges page ---------- */
+.p4bo-badges { display: flex; flex-direction: column; gap: var(--sp-2); }

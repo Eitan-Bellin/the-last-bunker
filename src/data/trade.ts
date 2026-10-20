@@ -31,6 +31,8 @@ export interface PartnerDef {
   recruit?: number;
   /** One special deal for each relation level 1-5. */
   specials: SpecialDeal[];
+  /** [phase4b] Where the partner's marker sits on the surface map (axial q, r): its requests show there and on the Trade tab. */
+  at: [number, number];
 }
 
 /** What one unit of each resource is worth when trading. */
@@ -59,6 +61,7 @@ export const PARTNERS: PartnerDef[] = [
     accepts: ['food', 'water', 'materials'],
     goods: { knowledge: 0.8, blueprints: 0.2 },
     seconds: 7200,
+    at: [5, -3], // [phase4b] east, along the old rail line
     specials: [
       { cost: { materials: 400 }, gain: { knowledge: 200 } },
       { cost: { food: 800, water: 800 }, gain: { blueprints: 1 } },
@@ -75,6 +78,7 @@ export const PARTNERS: PartnerDef[] = [
     accepts: ['food', 'water', 'medicine'],
     goods: { scrap: 0.7, materials: 0.3 },
     seconds: 3600,
+    at: [-3, 3], // [phase4b] the scrap yards to the south-west, closest of the three
     specials: [
       { cost: { food: 500 }, gain: { scrap: 150 } },
       { cost: { food: 800 }, gain: { materials: 600 } },
@@ -92,6 +96,7 @@ export const PARTNERS: PartnerDef[] = [
     goods: { medicine: 1 },
     seconds: 10800,
     recruit: 0.25,
+    at: [1, -7], // [phase4b] far north, the Genesis lab
     specials: [
       { cost: { materials: 300 }, gain: { medicine: 60 } },
       { cost: { food: 800 }, gain: { medicine: 120 } },
@@ -112,6 +117,11 @@ export function partnerOpen(state: GameState, p: PartnerDef): boolean {
 
 export function openPartners(state: GameState): PartnerDef[] {
   return PARTNERS.filter(p => partnerOpen(state, p));
+}
+
+/** [phase4b] The open partner whose map marker sits on this area (null when none does). */
+export function partnerAtHex(state: GameState, q: number, r: number): PartnerDef | null {
+  return openPartners(state).find(p => p.at[0] === q && p.at[1] === r) ?? null;
 }
 
 export function dealsWith(state: GameState, id: string): number {

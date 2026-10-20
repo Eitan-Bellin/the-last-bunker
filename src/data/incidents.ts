@@ -1,6 +1,6 @@
 import type { BuildingInstance, BuildingType, DisasterKind, GameState, IncidentKind, ResourceType, SurvivorStats } from '../core/GameState';
 import type { IconName } from '../ui/icons';
-import { BUILDING_DEFS, effectiveLevel, isPowerPlant } from './buildingDefs';
+import { BUILDING_DEFS, effectiveLevel, getDef, isPowerPlant } from './buildingDefs';
 
 /** In-room crises (Sprint 6). Each kind has the rooms it strikes, the skill that fights it and what it costs while it burns. */
 export interface IncidentDef {
@@ -189,11 +189,25 @@ export function disasterCost(state: GameState, kind: DisasterKind): Record<strin
   }
 }
 
+/**
+ * [phase4b] The rooms that stop while everyone hides from a raid: those that make goods, except life support (food, water, power: nobody
+ * may starve or sit in the dark from hiding) and the beds.
+ */
+export function hideStops(b: BuildingInstance): boolean {
+  const def = getDef(b.type);
+  const prod = def?.production;
+  if (!prod || Object.keys(prod).length === 0 || isPowerPlant(b.type) || def.effects?.maxPopulation) return false;
+  return !('food' in prod || 'water' in prod || 'power' in prod);
+}
+
 /** Whether a room is stopped by an incident in it, a blackout on its floor or a meltdown shutdown. */
 export function incidentBlocks(state: GameState, b: BuildingInstance): boolean {
   // [Danger] a reactor shut down by a meltdown stays off until its time is up.
   const off = state.danger?.disabled?.[b.id];
   if (off && off > Date.now()) return true;
+  // [phase4b] Everyone hid below from a raid: the work rooms stand still for the hour.
+  const hid = state.danger?.hiddenUntil;
+  if (hid && hid > Date.now() && hideStops(b)) return true;
   const list = state.incidents;
   if (!list || list.length === 0) return false;
   for (const inc of list) {

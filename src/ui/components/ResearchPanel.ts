@@ -147,7 +147,7 @@ export class ResearchPanel {
       head.appendChild(kButton({
         variant: 'secondary',
         className: 'btn-secondary btn-small',
-        label: `[[hourglass]] ${i18n.t('rush.button', { n: this.engine.rushSystem.count(state) })}`,
+        label: `[[hourglass]] ${(this.engine.rushSystem.count(state) > 0 ? i18n.t('rush.button', { n: this.engine.rushSystem.count(state) }) : i18n.t('p4bO.favours.rushFor', { n: this.engine.rushSystem.favourPrice(state) ?? 0 }))}`, // [phase4b] favours when no charge is left
         disabledReason: this.engine.rushSystem.canRushResearch(state) ? null : i18n.t('ux2d.rush.none'),
         onPress: () => {
           if (this.engine.rushSystem.rushResearch()) {

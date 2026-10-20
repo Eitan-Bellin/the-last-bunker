@@ -18,6 +18,7 @@ import { TIMER_ENDING_S } from './kit/tokens';
 import { fmtDuration, fmtNum, fmtTile, plural } from './format';
 import '../styles/hud.css';
 import { CountUp } from './fx/countUp'; // [ux-redesign W4]
+import { ExposureGauge } from './components/ExposureGauge'; // [phase4b]
 import { baseStands, tutorialOver } from '../systems/ObjectiveSystem'; // [phase3]
 
 /** [Long game] Every resource the top bar can show; the Act decides which are in play (components, alloys... join from their Act on). */
@@ -301,6 +302,9 @@ export class HUD {
   private statusMorale = '';
   private creditsBtn!: HTMLButtonElement;
   private creditsValue!: HTMLElement;
+  /** [phase4b] (C4) The Exposure gauge beside the status chip; a tap calls onExposure (the app opens the Exposure sheet). */
+  readonly exposure = new ExposureGauge();
+  set onExposure(fn: (() => void) | null) { this.exposure.onPress = fn; }
   private alertsBtn!: HTMLButtonElement;
   private alertsBadge!: HTMLElement;
   private clockValue!: HTMLElement;
@@ -419,7 +423,7 @@ export class HUD {
     this.alertsBtn.setAttribute('aria-expanded', 'false');
     this.alertsBtn.addEventListener('click', () => { haptic('tap'); this.togglePop('alerts'); });
 
-    row.append(resourceRow, this.moreBtn, this.actBtn, this.creditsBtn, clock, this.alertsBtn);
+    row.append(resourceRow, this.moreBtn, this.actBtn, this.exposure.root, this.creditsBtn, clock, this.alertsBtn); // [phase4b] the Exposure gauge
     topBar.append(row);
     this.topBar = topBar;
     this.container.appendChild(topBar);
@@ -1035,6 +1039,7 @@ export class HUD {
     if (ariaDue) this.lastAria = nowMs;
 
     this.counts.instant = reducedMotion(); // [ux-redesign W4]
+    this.exposure.update(state); // [phase4b]
     this.updateLife(state);
     const tiles = this.pickTiles(act);
     const life = this.lifeIn.size > 0;

@@ -13,6 +13,7 @@ import { CHAPTERS, CHARACTERS, INTERLUDES, type CharacterId } from '../../data/s
 import { ShopPanel } from './ShopPanel';
 import type { ShopSystem } from '../../systems/ShopSystem';
 import type { ShopItemId } from '../../data/shop';
+import { ACHIEVEMENTS } from '../../data/achievements'; // [phase4b] the Badges page
 
 const KIND_ICON: Record<LoreKind, string> = {
   note: '[[note]]', log: '[[journal]]', tape: '[[tape]]', photo: '[[eye]]', letter: '[[note]]',
@@ -25,7 +26,7 @@ export class JournalPanel {
 
   onRead: ((id: string) => void) | null = null;
   onReplay: ((chapterId: string) => void) | null = null;
-  private tab: 'finds' | 'story' = 'finds';
+  private tab: 'finds' | 'story' | 'badges' = 'finds'; // [phase4b] badges: the achievements' page in the book
   /** [ux-redesign W2d #23] The shop is its own sheet; the Journal keeps a "Shop" tab that opens it. */
   private shopPanel = new ShopPanel();
   onBuy: ((id: ShopItemId) => void) | null = null;
@@ -64,7 +65,7 @@ export class JournalPanel {
 
   refresh(state: GameState): void {
     if (this.shopPanel.isVisible) this.shopPanel.refresh(state);
-    const sig = `${state.lore.join(',')}|${(state.loreUnread ?? []).join(',')}|${i18n.currentLocale}|${this.tab}|${state.storyFlags.length}`;
+    const sig = `${state.lore.join(',')}|${(state.loreUnread ?? []).join(',')}|${i18n.currentLocale}|${this.tab}|${state.storyFlags.length}|${state.achievements?.length ?? 0}`;
     if (sig === this.signature) return;
     this.signature = sig;
     const locale = i18n.currentLocale;
@@ -74,7 +75,8 @@ export class JournalPanel {
     const tabs = kTabs([
       { id: 'finds', label: `[[note]] ${i18n.t('journal.finds')}` },
       { id: 'story', label: `[[flag]] ${i18n.t('story.tab')} ${told}/${CHAPTERS.length}` },
-      { id: 'shop', label: `[[credits]] ${i18n.t('shop.tab')} ${flowArrow()}` },
+      { id: 'badges', label: `[[trophy]] ${i18n.t('p4bO.book.badges')} ${state.achievements?.length ?? 0}/${ACHIEVEMENTS.length}` }, // [phase4b]
+      { id: 'shop', label: `[[credits]] ${i18n.t('p4bO.favours.title')} ${flowArrow()}` }, // [phase4b] the shop is "Favours"
     ], this.tab, (id) => {
       if (id === 'shop') {
         // A link, not a page: the shop opens over the Journal, which stays on the tab it was on.
@@ -83,7 +85,7 @@ export class JournalPanel {
         this.showShop(state);
         return;
       }
-      this.tab = id as 'finds' | 'story';
+      this.tab = id as 'finds' | 'story' | 'badges';
       this.signature = '';
       this.refresh(state);
     }, i18n.t('journal.title'));
@@ -91,6 +93,11 @@ export class JournalPanel {
     root.appendChild(tabs);
     if (this.tab === 'story') {
       root.appendChild(this.renderStory(state));
+      this.sheet.body.replaceChildren(root);
+      return;
+    }
+    if (this.tab === 'badges') {
+      root.appendChild(this.renderBadges(state));
       this.sheet.body.replaceChildren(root);
       return;
     }
@@ -113,6 +120,26 @@ export class JournalPanel {
     const missing = LORE.length - state.lore.length;
     if (missing > 0) root.appendChild(el('div', 'journal-missing', `[[question]] ${plural('journal.missing', missing)}`));
     this.sheet.body.replaceChildren(root);
+  }
+
+  /**
+   * [phase4b] Badges: the achievements as a page of the book. They are no longer goals with a reward screen: each one arrives as a quiet
+   * toast and is kept here (what each one was for; the locked ones say what earns them).
+   */
+  private renderBadges(state: GameState): HTMLElement {
+    const locale = i18n.currentLocale;
+    const box = el('div', 'p4bo-badges');
+    box.appendChild(el('p', 'bp-hint', i18n.t('p4bO.book.badgesIntro')));
+    const grid = el('div', 'ach-grid');
+    const got = new Set(state.achievements ?? []);
+    for (const a of [...ACHIEVEMENTS].sort((x, y) => Number(got.has(y.id)) - Number(got.has(x.id)))) {
+      const done = got.has(a.id);
+      const card = el('div', `ach-card ${done ? 'done' : ''}`);
+      card.append(el('div', 'ach-icon', done ? a.icon : '[[lock]]'), el('div', 'ach-name', a.name[locale] ?? a.name.en), el('div', 'bp-hint', a.desc[locale] ?? a.desc.en));
+      grid.appendChild(card);
+    }
+    box.appendChild(grid);
+    return box;
   }
 
   /** Chapters told so far (tap to replay) and the people met along the way. */

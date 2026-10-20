@@ -38,6 +38,7 @@ import { buildingArtKey, roomTier } from './art/registry';
 import type { IconName } from './ui/icons';
 import { RuinPanel } from './ui/components/RuinPanel';
 import { ResourceSheet } from './ui/components/ResourceSheet';
+import { ExposureSheet } from './ui/components/ExposureSheet'; // [phase4b]
 import { JournalPanel, LoreReader } from './ui/components/JournalPanel';
 import { EraPanel } from './ui/components/EraPanel';
 import { HelpPanel } from './ui/components/HelpPanel';
@@ -124,6 +125,7 @@ export class GameApp {
   readonly inbox = new InboxController(this);
   /** [Long game UX] Opened by tapping a resource in the HUD. */
   resourceSheet!: ResourceSheet;
+  exposureSheet!: ExposureSheet; // [phase4b]
   readonly saves = new SaveController(this);
   readonly lore = new LoreController(this);
   readonly dig = new DigController(this);
@@ -306,6 +308,7 @@ export class GameApp {
     });
     this.ruinPanel = new RuinPanel(this.engine);
     this.resourceSheet = new ResourceSheet(this.engine);
+    this.exposureSheet = new ExposureSheet(this.engine); // [phase4b]
     this.modal = new Modal();
     this.toasts = new Toasts();
     this.dialogs = new DialogQueue(this.dialogSources(), this.modal, (c, w, t) => this.dialogGate(c, w, t), () => this.engine.stateManager.state?.stats.totalPlayTime ?? 0,
@@ -817,7 +820,7 @@ export class GameApp {
       this.gradedEra = era.id;
     }
     this.hud.setJournalUnread(state.loreUnread?.length ?? 0);
-    this.hud.setSupply(this.engine.supplySystem.isReady(state), i18n.t('supply.title'));
+    this.hud.setSupply(false, i18n.t('supply.title')); // [phase4b] the crate is part of the Today card (its chip counts it)
     this.daily.refresh(state); // [plan4:GP-1]
     this.danger.updateIncidentBanner();
     // [plan4:UX-11] The gesture tips (pinch, double tap, hold a survivor, wings), once each; the old drag toast is the "hold" tip now.
@@ -1045,6 +1048,7 @@ export class GameApp {
     };
 
     // [Long game UX] The resource drawer: sources, sinks, time to full or empty, and why.
+    this.hud.onExposure = () => { this.audio.play('click'); this.closeSheets(); this.exposureSheet.show(this.state); }; // [phase4b] the Exposure gauge opens its sheet
     this.hud.onResourceTap = (r: ResourceType) => {
       this.audio.play('click');
       this.closeSheets();
@@ -1080,7 +1084,7 @@ export class GameApp {
       this.closeSheets();
       if (!wasOpen) this.eraPanel.show(this.state);
     };
-    this.hud.onSupply = () => this.welcome.openSupplyDrop();
+    this.hud.onSupply = () => { this.closeSheets(); this.daily.show(); }; // [phase4b] the crate lives on the Today card
     this.journal.onRead = (id: string) => this.lore.readLore(id);
     this.journal.onReplay = (id: string) => this.story.replayChapter(id);
     // [Economy A2] credits shop tab in the journal
@@ -1285,7 +1289,7 @@ export class GameApp {
   anyPanelOpen(): boolean {
     return this.buildMenu.isVisible || this.buildingPanel.isVisible || this.peoplePanel.isVisible || this.researchPanel.isVisible
       || this.surfacePanel.isVisible || this.menuPanel.isVisible || this.ruinPanel.isVisible || this.journal.isVisible
-      || this.eraPanel.isVisible || this.projectsPanel.isVisible || this.helpPanel.isVisible || this.chroniclePanel.isVisible || this.loreReader.isVisible || this.inbox.isVisible || this.resourceSheet.isVisible || this.daily.isVisible;
+      || this.eraPanel.isVisible || this.projectsPanel.isVisible || this.helpPanel.isVisible || this.chroniclePanel.isVisible || this.loreReader.isVisible || this.inbox.isVisible || this.resourceSheet.isVisible || this.daily.isVisible || this.exposureSheet.isVisible;
   }
 
   /**
@@ -1375,6 +1379,7 @@ export class GameApp {
     this.couponPanel.hide();
     this.inbox.hide();
     this.resourceSheet.hide();
+    this.exposureSheet.hide(); // [phase4b]
     this.daily.hide(); // [plan4:GP-1]
   }
 

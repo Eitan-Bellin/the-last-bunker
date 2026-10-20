@@ -2,8 +2,8 @@ import { lawArrivals, lawDefense } from '../data/laws';
 import { roomSlots } from '../data/buildingDefs';
 import { earlyWarningLead } from '../data/roomEffects'; // [plan4:BL-8]
 import { doorDefense } from './InfraSystem'; // plan4:ST-14
-import { seasonEffects } from '../data/seasons';
-import { inBreather, threatPace, threatStrength } from './ThreatSystem';
+import { seasonAt, seasonEffects, seasonsActive } from '../data/seasons';
+import { actCurrency, inBreather, radioSilent, threatPace, threatStrength } from './ThreatSystem'; // [phase4b] actCurrency, radioSilent
 import type { RaidKind, RaidStance, Ruin } from '../core/GameState';
 import { difficultyOf } from '../data/difficulty';
 import type { GameState, ResourceType, SurvivorState } from '../core/GameState';
@@ -546,6 +546,21 @@ const RAID_CROWD = 15;
 /** A defeat by this factor or more is a rout: a guard may die. */
 const ROUT_RATIO = 1.5;
 const GUARD_DEATH_CHANCE = 0.25;
+/** [phase4b] Online, a lost fight: the chance the first defender dies (small loss / rout), and a second one in a rout. */
+const LOSS_DEATH_CHANCE = 0.06;
+const ROUT_DEATH_CHANCE = 0.22;
+const SECOND_DEATH_CHANCE = 0.1;
+/** [phase4b] The worst share of the losing rolls is a rout. */
+const ROUT_SHARE = 0.4;
+/** [phase4b] Sessions without an online raid warning before the scouts are seen, and seconds into the session they are seen. */
+const SCOUT_SESSIONS = 3;
+const SCOUT_DELAY = 60;
+/**
+ * [phase4b] The scouts move a raid into the session at most once per this share of the usual time between raids away (the Act's raids a
+ * day at today's pace, AWAY_FREQUENCY), and never more often than SCOUT_MIN_GAP. The away roll they replace is skipped (scoutOwed).
+ */
+const SCOUT_SHARE = 0.6;
+const SCOUT_MIN_GAP = 8 * 3600;
 
 export interface RaidResult {
   key: 'win' | 'winCaptive' | 'loseSmall' | 'loseBig' | 'tribute' | 'hidden';
@@ -560,11 +575,21 @@ export interface RaidResult {
   injured: { name: string; damage: number }[];
   /** The guard who fell in a rout (the memorial follows). */
   died?: string;
+  /** [phase4b] A second defender who fell in a rout. */
+  diedAlso?: string;
+  /** [phase4b] The odds the fight was rolled against (0..1). */
+  odds?: number;
+  /** [phase4b] Hidden: how long the work rooms stand still (ms). */
+  stopMs?: number;
   captive?: string;
 }
 
-/** What the lookout sees coming: 10 + 8 per Act, then 6 more per Act after the third (8 per era in an older bunker) + 0.15 per resident, ±25%, scaled to the bunker, the threat and the season. */
-export function raidStrength(state: GameState, roll = 0.5): number {
+/**
+ * The gang the area can field: 10 + 8 per Act, then 6 more per Act after the third (8 per era in an older bunker) + 0.15 per resident,
+ * ±25%, scaled to the crowd, the difficulty, the threat and the season. [phase4b] A reference now: the raid itself tracks the bunker's
+ * defense (raidStrength); this says whether the bunker is under- or over-built for its Act (and where in the band the gang falls).
+ */
+export function areaStrength(state: GameState, roll = 0.5): number {
   const lg = state.longGame;
   // [Q11] In a long game the level follows the Act: 8 per Act up to Act III (as the old 8 per era), then 6 more per Act
   // (was flat from day 7, when the era stopped at 3). Older bunkers keep 8 per era.
@@ -572,25 +597,73 @@ export function raidStrength(state: GameState, roll = 0.5): number {
   const level = lg && !lg.meta.legacy ? (act <= 3 ? 8 * act : 24 + 6 * (act - 3)) : 8 * Math.max(0, state.era ?? 0);
   const base = 10 + level + 0.15 * state.survivors.length;
   return Math.max(10, Math.round(base * RAID_SCALE * (1 + state.survivors.length / RAID_CROWD) * (0.75 + roll * 0.5)
-    * difficultyOf(state).raidStrength * threatStrength(state) * doctrineRaidStrength(state))); // [phase4] Fortress: stronger
+    * difficultyOf(state).raidStrength * threatStrength(state)));
 }
 
-/** [P2] Chance the raid is won against the stated strength (the scout's estimate shown to the player): 0 or 1, it is decided by the numbers. */
+/** [phase4b] Raid strength stays within this band of the bunker's own defense (C3), before the difficulty and the doctrine. */
+export const RAID_BAND: readonly [number, number] = [0.8, 1.2];
+/** [phase4b] Where in the band a calm (Exposure 50), fairly built bunker's gang falls: a little under its defense (about 55% to hold the door). */
+const RAID_CENTER = 0.97;
+/** [phase4b] A bunker far below its Act's level still meets at least this share of the area's gang (a tiny defense is no hiding place). */
+const AREA_FLOOR = 0.35;
+
+/**
+ * What the lookout sees coming. [phase4b] (C3) The raiders size the bunker up: the gang tracks its defense, 0.8-1.2x. Where in the band
+ * comes from Exposure (a loud, rich bunker draws a gang that came to win), from the defense against the Act's level (an under-built
+ * bunker draws the strong end, an over-built one the weak end), the season and the roll. The difficulty and Fortress scale the result.
+ * The siege (ActSystem) reads it as "a usual raid's strength now".
+ */
+export function raidStrength(state: GameState, roll = 0.5): number {
+  const defense = Math.max(1, bunkerDefense(state));
+  const diff = difficultyOf(state).raidStrength;
+  const area = areaStrength(state, 0.5) / diff; // without the difficulty (it scales the result below)
+  const meter = state.longGame?.threat.meter ?? 50;
+  const pressure = Math.max(-1, Math.min(1, Math.log2(area / defense)));
+  const season = seasonsActive(state) ? seasonAt(state).def.raid : 1;
+  const f = Math.max(RAID_BAND[0], Math.min(RAID_BAND[1], RAID_CENTER + 0.06 * (meter - 50) / 50 + 0.06 * pressure + 0.12 * (roll - 0.5) + 0.5 * (season - 1)));
+  return Math.max(8, Math.round(Math.max(defense * f, area * AREA_FLOOR) * diff * doctrineRaidStrength(state))); // [phase4] Fortress: stronger
+}
+
+/** [phase4b] How sharply the odds turn around an even fight: a defense a quarter above the gang wins about 4 times in 5. */
+const ODDS_STEEPNESS = 6;
+/** [phase4b] Chance to beat a gang of `strength` with `defense`: a logistic curve around an even fight, never quite 0 or 1. */
+export function winChance(defense: number, strength: number): number {
+  if (!(strength > 0)) return 0.97;
+  const p = 1 / (1 + Math.exp(-ODDS_STEEPNESS * (defense / strength - 1)));
+  return Math.max(0.03, Math.min(0.97, p));
+}
+
+/** [P2] Chance the raid is won against the stated strength (the scout's estimate shown to the player). [phase4b] Continuous ("72%"). */
 export function raidOdds(state: GameState, stance: RaidStance = 'hold'): number | null {
   const raid = state.danger.raid;
   if (!raid) return null;
   if (stance === 'hide') return 0;
-  return bunkerDefense(state, raid.kind, stance) >= raid.strength ? 1 : 0;
+  return winChance(bunkerDefense(state, raid.kind, stance), raid.strength);
 }
 
-/** The toll that sends the raiders away: a fifth of the food and scrap. */
+/** [phase4b] The toll that sends the raiders away: a share of the Act's currency (C3), half with the Diplomacy doctrine. */
+export const TRIBUTE_SHARE = 0.12;
 export function raidTribute(state: GameState): Resources {
-  // [P3] The Diplomacy doctrine halves the toll.
-  const k = hasFeature(state, 'diplomacy') ? 0.1 : 0.2;
-  return nonZero({
-    food: Math.max(10, Math.round(state.resources.food.amount * k)),
-    scrap: Math.round(state.resources.scrap.amount * k),
-  });
+  const k = hasFeature(state, 'diplomacy') ? TRIBUTE_SHARE / 2 : TRIBUTE_SHARE; // [P3] Diplomacy halves the toll
+  const c = actCurrency(state);
+  return { [c]: Math.max(10, Math.round((state.resources[c]?.amount ?? 0) * k)) };
+}
+
+/** [phase4b] Hiding everyone below keeps people and rooms safe, but the work rooms stand still this long (wall-clock ms). */
+export const HIDE_STOP_MS = 3_600_000;
+/** [phase4b] Raids while away come at this share of the engaged pace (AwayDanger; here for the Exposure sheet's forecast). */
+export const AWAY_FREQUENCY = 0.5;
+
+/** [phase4b] The Exposure sheet's raid line: seconds of play to the next raid (null = none counting), raids a day while away, breather left. */
+export function raidForecast(state: GameState): { eta: number | null; warned: boolean; awayPerDay: number; breather: number } {
+  const d = state.danger;
+  const now = state.stats.totalPlayTime;
+  const lg = state.longGame;
+  const breather = lg ? Math.max(0, lg.threat.breatherUntil - lg.meta.worldT) : 0;
+  const open = (state.era ?? 0) >= 2;
+  const eta = d.raid ? Math.max(0, d.raid.hitAt - now) : open && d.nextRaidAt > 0 ? Math.max(0, d.nextRaidAt - now) : null;
+  const awayPerDay = open && breather <= 0 ? raidProfile(state).perDay * AWAY_FREQUENCY * threatPace(state) : 0;
+  return { eta, warned: !!d.raid, awayPerDay, breather };
 }
 
 function radioLevels(state: GameState): number {
@@ -670,8 +743,39 @@ export class EventSystem {
     const warning = RAID_WARNING + (hasFeature(state, 'watchtower') ? 180 : 0) + (hasFeature(state, 'rapidResponse') ? 120 : 0) + earlyWarningLead(state) + doctrineWarningBonus(state); // [phase4] Rangers: sooner; [P3] the watchtower sees them sooner; [plan4:BL-8] lookouts add their seconds
     const raid = { hitAt: state.stats.totalPlayTime + warning, strength: raidStrength(state, this.ctx.rng.next()), kind, stance: 'hold' as RaidStance };
     this.setDanger({ raid });
+    // [phase4b] A warning that lands while the player is here: the count of sessions without one starts again.
+    if (state.longGame) {
+      const deltas: { path: string; value: number }[] = [{ path: 'longGame.threat.sessions', value: 0 }, { path: 'longGame.threat.warnAt', value: state.longGame.meta.worldT }];
+      if (this.scoutNext) deltas.push({ path: 'longGame.threat.scoutOwed', value: Math.min(2, (state.longGame.threat.scoutOwed ?? 0) + 1) });
+      this.ctx.sm.applyDeltas(deltas);
+    }
+    this.scoutNext = false;
     bus.emit('raid:warning', raid);
     return raid;
+  }
+
+  /** [phase4b] The next online raid is the scouts' (moved into this session). Not saved: a reload simply forgets it. */
+  private scoutNext = false;
+
+  /**
+   * [phase4b] (C3) A new session (back after more than 5 minutes away; GameEngine.simFinish). After SCOUT_SESSIONS sessions without an
+   * online raid warning, the scouts are seen early in this one, so a raid warning lands while the player is here at least every few
+   * sessions. The raid is moved, not added: AwayDanger skips the next raid it would roll (threat.scoutOwed).
+   */
+  sessionStart(): void {
+    const state = this.ctx.sm.state;
+    const lg = state.longGame;
+    if (!lg || (state.era ?? 0) < 2) return;
+    const n = (lg.threat.sessions ?? 0) + 1;
+    this.ctx.sm.applyDelta({ path: 'longGame.threat.sessions', value: n });
+    const d = state.danger;
+    const due = Math.max(SCOUT_MIN_GAP, SCOUT_SHARE * 86400 / Math.max(0.05, raidProfile(state).perDay * AWAY_FREQUENCY * threatPace(state)));
+    if (n < SCOUT_SESSIONS || lg.meta.worldT - (lg.threat.warnAt ?? -Infinity) < due) return;
+    if (d.raid || inBreather(state) || isQuiet(state) || state.survivors.length < 3) return;
+    const now = state.stats.totalPlayTime;
+    if (d.nextRaidAt > 0 && d.nextRaidAt <= now + SCOUT_DELAY + RAID_WARNING) return; // one is due this session anyway
+    this.scoutNext = true;
+    this.setDanger({ nextRaidAt: now + SCOUT_DELAY });
   }
 
   private raidTick(): void {
@@ -752,65 +856,87 @@ export class EventSystem {
   }
 
   /**
-   * The raiders arrive. Outcome by the gap between their strength and the defense:
-   * a win (loot, sometimes a captive who joins), a small loss (1-2 hurt and a breach), or a rout
-   * (as a small loss, plus a 25% chance a guard dies). `soft` is the away version: nobody dies unless
-   * allowed, and no raiders stay inside.
+   * The raiders arrive. [phase4b] (C3) The fight is a roll against the odds the scout showed (raidOdds): a win (loot, sometimes a captive
+   * who joins), a small loss (1-2 hurt and a breach), or a rout (the worst losses, or a gang half again as strong: a room may be wrecked).
+   * Online a lost fight can cost one or two named people (never on Settler, DeathSystem.kill checks it; never in a quiet spell). Hiding
+   * keeps everyone and every room safe, but the work rooms stand still for an hour (incidentBlocks). `soft` is the away version: nobody
+   * dies unless allowed, no raiders stay inside; `stance` there is the one the away policy chose, `at` when it happened (wall ms).
    */
-  resolveRaid(choice: 'fight' | 'tribute', opts: { soft?: boolean; allowDeath?: boolean } = {}): RaidResult | null {
+  resolveRaid(choice: 'fight' | 'tribute', opts: { soft?: boolean; allowDeath?: boolean; stance?: RaidStance; at?: number } = {}): RaidResult | null {
     const sm = this.ctx.sm;
     const state = sm.state;
     const raid = state.danger.raid;
     if (!raid) return null;
     const strength = raid.strength;
-    const stance: RaidStance = opts.soft ? 'hold' : raid.stance ?? 'hold';
+    const stance: RaidStance = opts.soft ? opts.stance ?? 'hold' : raid.stance ?? 'hold';
     const defense = bunkerDefense(state, raid.kind, stance);
     const result: RaidResult = { key: 'tribute', strength, defense, injured: [], kind: raid.kind, stance };
+    const diff = difficultyOf(state);
     if (choice === 'fight' && stance === 'hide') {
-      // Everyone below: nobody is hurt, but the raiders take their pick of the stores.
+      // [phase4b] Everyone below: nobody is hurt and no room is wrecked, but the work rooms stand still for an hour.
       result.key = 'hidden';
-      const lost = { scrap: -Math.floor(state.resources.scrap.amount * 0.3), food: -Math.floor(state.resources.food.amount * 0.15), materials: -Math.floor(state.resources.materials.amount * 0.1) };
-      this.ctx.resources.gain(sm, lost);
-      result.gains = nonZero(lost);
+      const at = opts.at ?? Date.now();
+      this.setDanger({ hiddenUntil: Math.max(state.danger.hiddenUntil ?? 0, at + HIDE_STOP_MS) });
+      result.stopMs = HIDE_STOP_MS;
+      if (opts.soft) {
+        // Away, the hour has passed by the time the player looks: what it cost is an hour of the Act's work.
+        const c = actCurrency(state);
+        const res = state.resources[c];
+        const lost = Math.floor(Math.min((res?.amount ?? 0) * 0.15, Math.max(0, res?.productionRate ?? 0) * 3600));
+        if (lost >= 1) {
+          this.ctx.resources.gain(sm, { [c]: -lost });
+          result.gains = { [c]: -lost };
+        }
+      }
     } else if (choice === 'tribute') {
       this.ctx.resources.spend(sm, raidTribute(state) as Record<string, number>);
-      this.setDanger({ ignoredSince: null });
-    } else if (defense >= strength) {
-      const gains = { scrap: capShare(state, 'scrap', 0.08 + this.ctx.rng.next() * 0.08, 10) };
-      this.ctx.resources.gain(sm, gains);
-      result.key = 'win';
-      result.gains = gains;
-      if (!opts.soft && state.survivors.length < state.maxPopulation && this.ctx.rng.chance(0.15)) {
-        const captive = this.ctx.population.createSurvivor(this.ctx.rng);
-        this.ctx.population.addSurvivor(sm, captive);
-        result.key = 'winCaptive';
-        result.captive = captive.name;
-      }
+      if (!opts.soft) this.setDanger({ ignoredSince: null }); // [phase4b] a toll the away policy paid is not the player answering
     } else {
-      const rout = strength >= defense * ROUT_RATIO;
-      result.key = rout ? 'loseBig' : 'loseSmall';
-      const lostScrap = Math.floor(state.resources.scrap.amount * (opts.soft ? 0.12 : 0.25));
-      if (lostScrap > 0) {
-        this.ctx.resources.gain(sm, { scrap: -lostScrap });
-        result.gains = { scrap: -lostScrap };
+      const odds = winChance(defense, strength);
+      const roll = this.ctx.rng.next();
+      result.odds = odds;
+      if (roll < odds) {
+        const gains = { scrap: capShare(state, 'scrap', 0.08 + this.ctx.rng.next() * 0.08, 10) };
+        this.ctx.resources.gain(sm, gains);
+        result.key = 'win';
+        result.gains = gains;
+        if (!opts.soft && state.survivors.length < state.maxPopulation && this.ctx.rng.chance(0.15)) {
+          const captive = this.ctx.population.createSurvivor(this.ctx.rng);
+          this.ctx.population.addSurvivor(sm, captive);
+          result.key = 'winCaptive';
+          result.captive = captive.name;
+        }
+      } else {
+        // The worst losing rolls, or a gang far stronger than the defense, are a rout.
+        const rout = strength >= defense * ROUT_RATIO || roll >= odds + (1 - odds) * (1 - ROUT_SHARE);
+        result.key = rout ? 'loseBig' : 'loseSmall';
+        const lostScrap = Math.floor(state.resources.scrap.amount * (opts.soft ? 0.12 : 0.25));
+        if (lostScrap > 0) {
+          this.ctx.resources.gain(sm, { scrap: -lostScrap });
+          result.gains = { scrap: -lostScrap };
+        }
+        const guards = new Set(state.buildings.filter(b => b.type === 'armory').flatMap(b => b.assignedSurvivorIds));
+        const defenders = this.ctx.rng.shuffle(state.survivors.filter(s => !s.isOnMission && !s.child))
+          .sort((a, b) => Number(guards.has(b.id)) - Number(guards.has(a.id)));
+        const floor = Math.max(opts.soft ? Math.max(15, diff.awayHealthFloor) : 5, diff.onlineHealthFloor);
+        for (const v of defenders.slice(0, (this.ctx.rng.chance(0.5) ? 2 : 1) + (stance === 'sally' ? 1 : 0))) {
+          const health = Math.max(floor, v.health - (opts.soft ? 25 : 35));
+          updateSurvivor(this.ctx, v.id, { health });
+          result.injured.push({ name: v.name, damage: Math.round(v.health - health) });
+        }
+        const mayDie = (opts.allowDeath ?? !opts.soft) && !isQuiet(sm.state) && !!this.ctx.death && diff.canDie;
+        if (mayDie && defenders.length) {
+          // Online a lost fight can cost one or two named people (the guards fall first); away only a rout, as before.
+          const first = opts.soft ? (rout ? GUARD_DEATH_CHANCE : 0) : rout ? ROUT_DEATH_CHANCE : LOSS_DEATH_CHANCE;
+          if (this.ctx.rng.chance(first) && this.ctx.death!.kill(defenders[0].id, 'raid')) {
+            result.died = defenders[0].name;
+            if (!opts.soft && rout && defenders[1] && this.ctx.rng.chance(SECOND_DEATH_CHANCE) && this.ctx.death!.kill(defenders[1].id, 'raid')) result.diedAlso = defenders[1].name;
+          }
+        }
+        if (!opts.soft) this.ctx.incidents?.startBreach();
+        // [P2] A rout wrecks a room by the door (it comes back at its old level once restored).
+        if (rout && !opts.soft && diff.roomDamage && !hasFeature(state, 'bunkerDoctrine')) result.wrecked = this.wreckRoom() ?? undefined;
       }
-      const guards = new Set(state.buildings.filter(b => b.type === 'armory').flatMap(b => b.assignedSurvivorIds));
-      const defenders = this.ctx.rng.shuffle(state.survivors.filter(s => !s.isOnMission && !s.child))
-        .sort((a, b) => Number(guards.has(b.id)) - Number(guards.has(a.id)));
-      const floor = opts.soft ? 15 : 5;
-      for (const v of defenders.slice(0, (this.ctx.rng.chance(0.5) ? 2 : 1) + (stance === 'sally' ? 1 : 0))) {
-        const health = Math.max(floor, v.health - (opts.soft ? 25 : 35));
-        updateSurvivor(this.ctx, v.id, { health });
-        result.injured.push({ name: v.name, damage: Math.round(v.health - health) });
-      }
-      const mayDie = (opts.allowDeath ?? !opts.soft) && !isQuiet(sm.state) && !!this.ctx.death;
-      if (rout && mayDie && defenders.length && this.ctx.rng.chance(GUARD_DEATH_CHANCE)) {
-        const fallen = defenders[0];
-        if (this.ctx.death!.kill(fallen.id, 'raid')) result.died = fallen.name;
-      }
-      if (!opts.soft) this.ctx.incidents?.startBreach();
-      // [P2] A rout wrecks a room by the door (it comes back at its old level once restored).
-      if (rout && !opts.soft && difficultyOf(state).roomDamage && !hasFeature(state, 'bunkerDoctrine')) result.wrecked = this.wreckRoom() ?? undefined;
     }
     this.setDanger({ raid: null });
     this.scheduleRaid();
@@ -828,7 +954,7 @@ export class EventSystem {
     }
     // Newcomers keep coming on their own clock while there are free beds; a full bunker makes them wait.
     const now = state.stats.totalPlayTime;
-    if (state.survivors.length >= state.maxPopulation) {
+    if (state.survivors.length >= state.maxPopulation || radioSilent(state)) { // [phase4b] radio silence: nobody new finds the door
       if (state.nextArrivalAt < now + 20) this.ctx.sm.applyDelta({ path: 'nextArrivalAt', value: now + 20 });
     } else if (!state.activeEvent && state.survivors.length > 0 && now >= state.nextArrivalAt) {
       // Now and then a pair travels together, once there are beds for both.
@@ -846,7 +972,8 @@ export class EventSystem {
     const recent = this.recent.slice(-RECENT_BLOCK);
     const rested = (e: EventDef) => e.id === 'refugees'
       || (!recent.includes(e.id) && now - (this.lastAt[e.id] ?? -Infinity) >= (EVENT_COOLDOWN[e.id] ?? 0));
-    const candidates = EVENTS.filter(e =>
+    const silent = radioSilent(state); // [phase4b] nobody hears a silent radio: no wanderers, nobody comes back
+    const candidates = EVENTS.filter(e => !(silent && (e.id === 'wanderer' || e.id === 'returning')) &&
       (!e.once || !state.storyFlags.includes(`event:${e.id}`)) && rested(e) && (!e.condition || e.condition(state)),
     );
     if (candidates.length === 0) {

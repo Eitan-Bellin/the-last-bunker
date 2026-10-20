@@ -48,6 +48,8 @@ const FALLBACK_ASK: ResourceType[] = ['materials', 'food', 'water'];
  * posts an offer to the Decision Inbox; it waits a few hours (TUNING.contractDeadline) and then lapses (nothing is lost).
  * Taking it costs about an hour of a scarce good or people's time and pays hours of the Act's currency, and counts as a
  * deal with the partner (their relation grows). [Q5] The ask is measured against the bunker's own production.
+ * [phase4b] Shown to the player as the partner's *requests* (Surface > Trade, and a badge on the partner's map marker); the items stay in
+ * the inbox store (deadline, lapse, Foreman's auto-take all unchanged) but the Messages bell no longer lists them one by one.
  */
 export class ContractSystem {
   private sm: StateManager;
@@ -112,6 +114,50 @@ export class ContractSystem {
       if (this.isSafe(this.sm.state, item) && this.inbox.resolve(item.id, 'accept')) n++;
     }
     return n;
+  }
+
+  // ---- [phase4b] partner requests: contracts are shown on the partner's card (Surface > Trade) and its map marker, not in the bell ----
+
+  /** [phase4b] The open requests of one issuer ('drifters' for the roads; all when omitted), richest first. */
+  requests(state: GameState, issuer?: string): InboxItem[] {
+    const worth = (i: InboxItem) => Object.values(this.data(i).reward).reduce((n, v) => n + (v ?? 0), 0);
+    return this.open(state).filter(i => issuer === undefined || this.data(i).issuer === issuer).sort((a, b) => worth(b) - worth(a));
+  }
+
+  /** [phase4b] What a request asks and pays. */
+  data(item: InboxItem): ContractData {
+    return item.data as unknown as ContractData;
+  }
+
+  /** [phase4b] Whether "accept" can be taken now: the goods are in store, or enough free hands are home. */
+  canAccept(state: GameState, item: InboxItem): boolean {
+    const d = this.data(item);
+    if (d.type === 'crew') return this.freeHands(state).length >= d.crew;
+    return Object.entries(d.give).every(([r, v]) => (state.resources[r as ResourceType]?.amount ?? 0) >= (v ?? 0));
+  }
+
+  /** [phase4b] The player's answer from the Trade tab or the map marker (the same path the old Inbox card took). */
+  answer(id: number, key: 'accept' | 'decline'): boolean {
+    return this.inbox.resolve(id, key);
+  }
+
+  /** [phase4b] The texts of a request: who, what it asks, what it pays (icons and compact numbers). */
+  describe(item: InboxItem, locale: string): Record<string, string> {
+    return this.cardParams(item, locale);
+  }
+
+  /**
+   * [phase4b] "In your bunker": for a supply request, what stays in store after it and how many hours of the bunker's own production it
+   * is; for a crew job, the free hands home now. Numbers only (the panel words them).
+   */
+  inBunker(state: GameState, item: InboxItem): { left?: number; hours?: number; free?: number } {
+    const d = this.data(item);
+    if (d.type === 'crew') return { free: this.freeHands(state).length };
+    const [r, v] = (Object.entries(d.give)[0] ?? []) as [ResourceType, number];
+    if (!r) return {};
+    const res = state.resources[r];
+    const perHour = (res?.productionRate ?? 0) * 3600;
+    return { left: Math.max(0, (res?.amount ?? 0) - (v ?? 0)), hours: perHour > 0 ? (v ?? 0) / perHour : undefined };
   }
 
   /** Contracts start with the second Act (the first is learned without them). */
