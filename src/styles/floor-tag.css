@@ -1,0 +1,69 @@
+/* [clean:2] The sticky floor tag and its quick floor list (src/ui/floorTagOverlay.ts). Every value is a token.
+   Layer: the HUD's (over the world, under the sheets, the nav and the dialogs). The tag sits at the start edge (right in Hebrew) under
+   the status row; its hit area reaches --hit-min while the pill itself stays small. */
+
+.cf2-floortag {
+  position: fixed;
+  z-index: var(--z-hud);
+  inset-block-start: calc(var(--hud-top-h, 0px) + var(--sp-2));
+  inset-inline-start: var(--sp-2);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  max-inline-size: calc(100vw - 2 * var(--sp-7));
+  padding: var(--sp-1) var(--sp-3);
+  border: var(--border-w) solid var(--border);
+  border-radius: var(--r-full);
+  background: color-mix(in srgb, var(--surface-0) 82%, transparent);
+  color: var(--text-primary);
+  font-family: var(--font-body);
+  font-size: calc(var(--type-caption) * min(var(--fs, 1), 1.3));
+  font-weight: var(--weight-bold);
+  line-height: var(--lh-tight);
+  box-shadow: var(--elev-1);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.cf2-floortag[hidden] { display: none; }
+/* The finger's target is the full --hit-min tall, the pill is not. */
+.cf2-floortag::after {
+  content: '';
+  position: absolute;
+  inset-inline: calc(var(--sp-2) * -1);
+  inset-block: calc(var(--sp-3) * -1);
+}
+.cf2-floortag:active { scale: var(--press-scale); filter: brightness(var(--press-darken)); }
+.cf2-floortag:focus-visible { outline: var(--ring-w) solid var(--primary); outline-offset: var(--sp-1); }
+.cf2-floortag[aria-expanded="true"] { border-color: var(--primary); }
+.cf2-floortag__label { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; unicode-bidi: plaintext; }
+/* A room on this floor is in trouble: the same red as a room's status dot. */
+.cf2-floortag__dot, .cf2-jump__dot {
+  flex: none;
+  inline-size: var(--sp-2);
+  block-size: var(--sp-2);
+  border-radius: var(--r-full);
+  background: var(--danger);
+}
+.cf2-floortag__dot[hidden], .cf2-jump__dot[hidden] { display: none; }
+
+/* The quick floor list: a compact scrolling column under the tag. */
+.cf2-jump {
+  position: fixed;
+  z-index: var(--z-hud);
+  inset-block-start: calc(var(--hud-top-h, 0px) + var(--sp-7));
+  inset-inline-start: var(--sp-2);
+  inline-size: min(calc(var(--sp-8) * 4), calc(100vw - 2 * var(--sp-4)));
+  max-block-size: 50vh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: var(--sp-1);
+  border: var(--border-w) solid var(--border);
+  border-radius: var(--r-card);
+  background: var(--surface-0);
+  box-shadow: var(--elev-2);
+}
+.cf2-jump[hidden] { display: none; }
+.cf2-jump .k-row { border-radius: var(--r-s); font-size: calc(var(--type-body) * min(var(--fs, 1), 1.3)); }
+.cf2-jump .k-row[aria-selected="true"] { background: var(--surface-2); box-shadow: inset calc(var(--sp-1) * -1) 0 0 var(--primary); }
+[dir="ltr"] .cf2-jump .k-row[aria-selected="true"] { box-shadow: inset var(--sp-1) 0 0 var(--primary); }
+.cf2-jump .k-row__value { font-size: calc(var(--type-caption) * min(var(--fs, 1), 1.3)); }

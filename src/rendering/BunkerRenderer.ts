@@ -290,6 +290,7 @@ export class BunkerRenderer {
       cancelPress: () => window.clearTimeout(r.pressTimer),
       canvasTap: (sx, sy) => r.onCanvasTap(sx, sy), // [plan4:ST-19]
       homeFocus: (vw, vh) => r.homeFocus(vw, vh), // [phase2]
+      floorCount: () => r.floors, // [clean:2] floor snap and the floor tag
     });
     this.placement = new PlacementController({
       isDragging: () => r.cam.isDragging,
@@ -1145,7 +1146,8 @@ export class BunkerRenderer {
         person.setAmbient((ch(255, 16, dg[0]) << 16) | (ch(247, 8, dg[1]) << 8) | ch(228, 0, dg[2]));
       }
       // [airy:B5] Name tags over every head stacked up on the painting: with `airy` only the selected room's people and a really close camera show them.
-      const tagged = this.lod === 'close' && (!GFX.airy || this.cam.zoom > 1.9 || (roomId !== null && roomId === this.selectedId));
+      // [clean:2] "Really close" is past the phone home zoom (now ~1.9, where 1.9 used to be a deliberate zoom-in), not a fixed 1.9.
+      const tagged = this.lod === 'close' && (!GFX.airy || this.cam.zoom > Math.max(1.9, this.cam.baseZoom * 1.3) || (roomId !== null && roomId === this.selectedId));
       person.setTag(tagged ? this.nameOf?.(s) ?? s.name : null);
       person.setCondition(s.happiness, s.health);
       const activity: Activity = siteView ? 'hammer' : ruinView ? 'dig' : usable ? ROOM_ACTIVITY[job!.type] ?? 'idle' : 'idle';

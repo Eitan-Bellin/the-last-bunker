@@ -78,7 +78,44 @@ try {
     await evaluate('__pt.autoplay(true)'); await sleep(6000); await evaluate('__pt.autoplay(false)'); // through intro, difficulty, welcome-back
     for (let i = 0; i < 4; i++) { await evaluate(close); await sleep(400); }
     await sleep(1500); await snap('main');
-    const stops = [['bell', '.hx-alerts'], ['status', '.hx-act'], ['build', '.hx-tab[data-key=build]'], ['people', '.hx-tab[data-key=people]'],
+    // [clean:2] Camera numbers at the home view: zoom, world floors in the band between the HUD bars, screen px of a 2-slot room.
+    // floorsVisible: the band's height over one floor pitch (FLOOR_H 144 with the airy slabs).
+    const camInfo = `(() => { const c = __app.renderer.camera, v = c.view, vy = c.visibleY();
+      return { zoom: +v.z.toFixed(3), base: +c.baseZoom.toFixed(3), camY: Math.round(v.y), y0: Math.round(vy.y0), y1: Math.round(vy.y1), floorsVisible: +((vy.y1 - vy.y0) / 144).toFixed(2), slot2px: Math.round(92 * v.z),
+        tag: document.querySelector('.cf2-floortag')?.textContent ?? null }; })()`;
+    const info = { main: await evaluate(camInfo).catch(e => String(e)) };
+    // [clean:2] Scroll: two finger drags down the bunker (~1.3 screens in all; the second one released while moving, a fling), shot after the snap settled.
+    const drag = async (x, y0, y1, ms, fling) => {
+      const steps = Math.max(6, Math.round(ms / 16));
+      await send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y: y0, id: 1 }] });
+      for (let i = 1; i <= steps; i++) { await send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x, y: Math.round(y0 + (y1 - y0) * (i / steps)), id: 1 }] }); await sleep(16); }
+      if (!fling) await sleep(160);
+      await send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    };
+    const flingT0 = Date.now();
+    await drag(Math.round(width * 0.5), 640, 260, 500, false); await sleep(900);
+    info.scroll1 = await evaluate(camInfo).catch(e => String(e));
+    await drag(Math.round(width * 0.5), 600, 320, 260, true);
+    // Settle timing: poll the camera until it stops moving.
+    const tFling = Date.now();
+    for (let i = 0; i < 60; i++) { await sleep(50); if (!(await evaluate('__app.renderer.cameraMoving').catch(() => false))) break; }
+    info.settleMs = Date.now() - tFling; info.dragTotalMs = Date.now() - flingT0;
+    await sleep(400); await snap('scroll');
+    info.scroll = await evaluate(camInfo).catch(e => String(e));
+    // The floor tag's quick jump list (step 2), when there is one.
+    if (await evaluate("!!document.querySelector('.cf2-floortag')")) {
+      await evaluate("document.querySelector('.cf2-floortag').click()"); await sleep(700); await snap('jump');
+      await evaluate("(() => { const b = [...document.querySelectorAll('.cf2-jump-item')]; b[Math.floor(b.length / 2)]?.click(); })()"); await sleep(2200); await snap('jumped');
+      info.jumped = await evaluate(camInfo).catch(e => String(e));
+    }
+    // Far: zoomed out to the overview band (strata and shell come back), then the city map.
+    await evaluate('(() => { const c = __app.renderer.camera, v = c.view; c.setView(v.x, v.y, 0.52); })()'); await sleep(1500); await snap('far');
+    await evaluate('(() => { const c = __app.renderer.camera, v = c.view; c.setView(v.x, v.y, 0.36); })()'); await sleep(1500); await snap('map');
+    await evaluate('__app.renderer.camera.goHome()'); await sleep(2500); await snap('home');
+    info.home = await evaluate(camInfo).catch(e => String(e));
+    console.log('camera ' + JSON.stringify(info));
+    if (out) writeFileSync(out.replace(/\.json$/, '') + '-camera.json', JSON.stringify(info, null, 1));
+    const stops =[['bell', '.hx-alerts'], ['status', '.hx-act'], ['build', '.hx-tab[data-key=build]'], ['people', '.hx-tab[data-key=people]'],
       ['research', '.hx-tab[data-key=research]'], ['menu', '.hx-tab[data-key=menu]'], ['surface', '.hx-tab[data-key=surface]']];
     for (const [name, sel] of roomsOnly ? [] : stops) {
       await evaluate('document.querySelector(' + JSON.stringify(sel) + ')?.click()'); await sleep(1600); await snap(name);

@@ -2127,5 +2127,13 @@
   "cf1.status.disaster": "Danger: {name}",
   "cf1.main.fill.one": "Fill 1 place",
   "cf1.main.fill.two": "Fill 2 places",
-  "cf1.main.fill.other": "Fill {n} places"
+  "cf1.main.fill.other": "Fill {n} places",
+  "cf2.tag.aria": "Floor in view: {floor}. Tap for the floor list",
+  "cf2.jump.title": "Floors",
+  "cf2.jump.trouble": "A room here needs attention",
+  "cf2.kind.living": "Living",
+  "cf2.kind.agri": "Farming & Water",
+  "cf2.kind.engineering": "Engineering",
+  "cf2.kind.industrial": "Industry",
+  "cf2.kind.research": "Research & Care"
 }

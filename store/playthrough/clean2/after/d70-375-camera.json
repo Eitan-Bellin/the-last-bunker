@@ -1,0 +1,54 @@
+{
+ "main": {
+  "zoom": 1.919,
+  "base": 1.919,
+  "camY": 1880,
+  "y0": 1700,
+  "y1": 2060,
+  "floorsVisible": 2.5,
+  "slot2px": 177,
+  "tag": "קומה 12 · תעשייה"
+ },
+ "scroll1": {
+  "zoom": 1.919,
+  "base": 1.919,
+  "camY": 2058,
+  "y0": 1878,
+  "y1": 2238,
+  "floorsVisible": 2.5,
+  "slot2px": 177,
+  "tag": "קומה 13 · תעשייה"
+ },
+ "settleMs": 516,
+ "dragTotalMs": 4260,
+ "scroll": {
+  "zoom": 1.919,
+  "base": 1.919,
+  "camY": 2202,
+  "y0": 2022,
+  "y1": 2382,
+  "floorsVisible": 2.5,
+  "slot2px": 177,
+  "tag": "קומה 14 · מפלס עמוק"
+ },
+ "jumped": {
+  "zoom": 1.919,
+  "base": 1.919,
+  "camY": 2058,
+  "y0": 1878,
+  "y1": 2238,
+  "floorsVisible": 2.5,
+  "slot2px": 177,
+  "tag": "קומה 13 · תעשייה"
+ },
+ "home": {
+  "zoom": 1.919,
+  "base": 1.919,
+  "camY": 1880,
+  "y0": 1700,
+  "y1": 2060,
+  "floorsVisible": 2.5,
+  "slot2px": 177,
+  "tag": "קומה 10 · מגורים"
+ }
+}

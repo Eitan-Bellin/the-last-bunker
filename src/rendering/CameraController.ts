@@ -1,5 +1,6 @@
 import type { Application, Container } from 'pixi.js';
-import { BUILDING_W, ROOM_H, SHAFT_W, SIDE_MARGIN, SLOT_W, floorTop } from './layout';
+import { BUILDING_W, FLOOR_H, ROOM_H, SHAFT_W, SIDE_MARGIN, SLOT_W, floorIndexAt, floorTop } from './layout';
+import { LABEL_ICON_ZOOM } from './LabelScale'; // [clean:2]
 import { reducedMotion, relaxedMs } from '../utils/a11y';
 import { ROW_X0, ROW_X1 } from './surfaceRow'; // plan4:ST-16
 import { GFX } from './gfxFeatures'; // [airy:A5]
@@ -58,6 +59,22 @@ const Z_MIN = (): number => (CITY ? CAMERA.zoom.min : MIN_ZOOM);
 const Z_MAX = (): number => (CITY ? CAMERA.zoom.max : MAX_ZOOM);
 /** City: the home and overview zooms never fall into the far map (CAMERA.zoom.far with its hysteresis, plus a little). */
 const CITY_Z_FLOOR = CAMERA.zoom.far * CAMERA.zoom.farHysteresis * 1.04;
+/**
+ * [clean:2] Phone home zoom (city): the band between the HUD bars holds PHONE_FLOORS floor pitches, so the rooms are big (a 2-slot room is about half
+ * the screen width, the names a full 13 css px) and the view reads floor by floor. The same rule on every save size (it depends on the screen only).
+ * Clamped for odd screens (a landscape phone, a very tall one).
+ */
+export const PHONE_FLOORS = 3.2; // [clean:2 lead] 2.5 made the stairs and pillars between rooms loom; the prototype held ~3.3
+const PHONE_ZOOM_MIN = 1.3;
+const PHONE_ZOOM_MAX = 2.4;
+/**
+ * [clean:2] Floor snap: world units of the slab above a floor left showing under the HUD's status row when a floor's ceiling lines up with the top
+ * (about 42 css px at the phone zoom: the floor tag rides on that strip of slab, not over the rooms' top corners).
+ */
+export const SNAP_PAD = 22;
+/** [clean:2] A coasting camera hands over to the snap ease below this speed (screen px/s); the ease's spring rate (1/s, critically damped, ~0.45 s). */
+const SNAP_HANDOFF_PX = 420;
+const SNAP_RATE = 11;
 
 /** What the camera needs to know about the scene it looks at (implemented by BunkerRenderer). */
 export interface CameraHost {
@@ -96,6 +113,8 @@ export interface CameraHost {
    * units; null when there are none yet. Optional.
    */
   homeFocus?(viewW: number, viewH: number): { x: number; y: number } | null;
+  /** [clean:2] How many floors are dug (the floor snap and the floor tag stop at the deepest). Optional: no snap without it. */
+  floorCount?(): number;
 }
 
 export class CameraController {
@@ -147,6 +166,12 @@ export class CameraController {
   private lastY = NaN;
   private lastZ = NaN;
   private framedId: string | null = null;
+  /** [clean:2] Floor snap: the camera y the snap ease is heading for (null = none), and whether the last finger release asks for one. */
+  private snapY: number | null = null;
+  private snapArmed = false;
+  /** [clean:2] The floor in view (floorInView) at the last transform, and who wants to hear when it changes (the floor tag). */
+  private viewFloor = NaN;
+  private readonly floorListeners = new Set<(floor: number) => void>();
   private insetCheck = 0;
   private bnd = { x0: 0, x1: 0, y0: 0, y1: 0 };
   /** [world:C1 camera-nav] City mode: bounds, the whole dug city and the hub, from the layout (null in classic and until the first layout). */
@@ -291,6 +316,7 @@ export class CameraController {
     let x: number, y: number;
     if (this.cityFrame) {
       // [world:C1 camera-nav] City home view. Phone: spine-centred on the hub, the surface strip on top when the hub fits under it.
+      // [clean:2] At the 2.5-floor phone zoom the hub never fits: the busy rooms (homeFocus below) set the view, snapped to a floor.
       // Wider screens: the whole dug city, centred.
       const fr = this.cityFrame, viewH = usable / z;
       if (width < PHONE_W) {
@@ -312,8 +338,71 @@ export class CameraController {
     if (width < PHONE_W) {
       const f = this.host.homeFocus?.(width / z, usable / z);
       if (f) { x = f.x; y = f.y; }
+      // [clean:2] The home view opens lined up on a floor (the same rule as the snap after a scroll): the busy rooms' floor at the top.
+      if (this.cityFrame && f) y = this.snapCamY(this.floorCamY(Math.max(0, floorIndexAt(f.y)), z), z, 0);
     }
     return { x, y };
+  }
+
+  // ───────────────────────────── [clean:2] floor snap & floor in view ─────────────────────────────
+
+  /** Half the view band's height in world units at zoom z. */
+  private halfBand(z: number): number {
+    return (this.host.app.screen.height - hudTop() - hudBottom()) / 2 / z;
+  }
+
+  /** Camera y that puts floor f's ceiling just under the status row (SNAP_PAD of the slab above showing), at zoom z; not clamped. */
+  floorCamY(f: number, z: number = this.zoom): number {
+    return floorTop(f) - SNAP_PAD + this.halfBand(z);
+  }
+
+  /**
+   * The snapped camera y nearest to `y + lead` (lead: how far a coasting camera would still travel): a floor's ceiling at the top of the band,
+   * or one of the bounds (the surface above, the dig face below). Returns y unchanged when nothing is dug or the content fits the band.
+   */
+  private snapCamY(y: number, z: number, lead: number): number {
+    const n = this.host.floorCount?.() ?? 0;
+    if (n <= 0) return y;
+    this.camBounds(z);
+    const b = this.bnd;
+    if (b.y1 - b.y0 < 1) return y;
+    const want = y + lead;
+    let best = Math.max(b.y0, Math.min(b.y1, y)), bd = Infinity;
+    const consider = (cy: number) => {
+      const c = Math.max(b.y0, Math.min(b.y1, cy)), d = Math.abs(c - want);
+      if (d < bd) { bd = d; best = c; }
+    };
+    consider(b.y0);
+    consider(b.y1);
+    for (let f = 0; f < n; f++) consider(this.floorCamY(f, z));
+    return best;
+  }
+
+  /**
+   * The floor the view looks at: the one whose rooms fill the top of the band (after a snap, the floor lined up there); -1 above ground (the
+   * surface), never deeper than the deepest dug floor.
+   */
+  floorInView(): number {
+    const n = this.host.floorCount?.() ?? 0;
+    const y0 = this.camY - this.halfBand(this.zoom);
+    const f = floorIndexAt(y0 + SNAP_PAD + ROOM_H * 0.45);
+    return Math.min(Math.max(-1, f), Math.max(-1, n - 1));
+  }
+
+  /** Hear when floorInView() changes (the floor tag); returns the unsubscribe. */
+  addFloorListener(fn: (floor: number) => void): () => void {
+    this.floorListeners.add(fn);
+    return () => { this.floorListeners.delete(fn); };
+  }
+
+  /**
+   * The floor list's jump: glide (cut under reduced motion) so floor f lines up at the top of the band, keeping x. A camera zoomed out past the
+   * names comes back to the home zoom on the way.
+   */
+  glideToFloor(f: number): void {
+    const z = this.zoom < LABEL_ICON_ZOOM || this.zoom < this.baseZoom * 0.75 ? this.baseZoom : this.zoom;
+    this.cancelTour();
+    this.glideTo(this.focusTarget?.x ?? this.camX, this.floorCamY(f, z), z, FOCUS_RATE());
   }
 
   /**
@@ -425,12 +514,12 @@ export class CameraController {
   private cityHomeZoom(): number {
     const { width, height } = this.host.app.screen;
     const C = CAMERA.city, fr = this.cityFrame!;
-    if (width < PHONE_W) {
-      const hubW = fr.hub ? fr.hub.w : SHAFT_W + 2 * SIDE_MARGIN;
-      const z = width / (hubW + C.phoneSlots * SLOT_W);
-      return Math.max(CITY_Z_FLOOR, CAMERA.minPersonPx / C.personH, Math.min(C.phoneMaxZoom, z));
-    }
     const usable = height - hudTop() - hudBottom();
+    if (width < PHONE_W) {
+      // [clean:2] was: the hub plus C.phoneSlots slots across (0.78 on a 375 px phone: 6 floors in view, 2-slot rooms 72 px; 0.66 on 320:
+      // 7 floors). Now the band holds PHONE_FLOORS floors: 1.92 on 375 x 812 and on 320 x 812 (2-slot rooms 177 px).
+      return Math.max(PHONE_ZOOM_MIN, Math.min(PHONE_ZOOM_MAX, usable / (PHONE_FLOORS * FLOOR_H)));
+    }
     const k = 1 - 2 * C.desktopPad;
     const z = Math.min((width * k) / Math.max(1, fr.content.w), (usable * k) / Math.max(1, fr.content.h));
     return Math.max(CITY_Z_FLOOR, Math.min(C.desktopMaxZoom, z));
@@ -672,6 +761,8 @@ export class CameraController {
       if (this.pointerDown && this.isDragging) {
         // [plan4:ST-12] A pinch that ended near the sector / overview zoom settles on it (no fling then).
         if (this.pinched) { this.pinched = false; this.snapZoom(); }
+        // [clean:2] A one-finger scroll settles on a floor (stepCamera, once the glide slows); a pinch leaves the view where the fingers put it.
+        else this.snapArmed = this.zoom >= LABEL_ICON_ZOOM;
         if (!this.focusTarget) this.fling(e.timeStamp);
       } else if (this.pointerDown && e.type === 'pointerup' && e.timeStamp - this.downAt < 300) {
         const r = canvas.getBoundingClientRect();
@@ -701,6 +792,8 @@ export class CameraController {
       const from = this.wheelZoom ?? this.zoom;
       this.focusTarget = null;
       this.camVX = this.camVY = 0;
+      this.snapY = null; // [clean:2] the wheel zooms freely, like a pinch
+      this.snapArmed = false;
       this.wheelZoom = this.clampZoom(from * Math.exp(-Math.max(-300, Math.min(300, dy)) * 0.0016));
       this.zoomAnchorX = e.clientX;
       this.zoomAnchorY = e.clientY;
@@ -1012,6 +1105,8 @@ export class CameraController {
   // ───────────────────────────── [camera] physics ─────────────────────────────
 
   stopCamera(): void {
+    this.snapY = null; // [clean:2]
+    this.snapArmed = false;
     this.camVX = this.camVY = this.zoomV = 0;
     this.focusTarget = null;
     this.focusRate = 0;
@@ -1196,8 +1291,32 @@ export class CameraController {
       const b = this.bnd;
       this.camX = this.axisStep(this.camX, this.camVX, b.x0, b.x1, dt);
       this.camVX = SPRING_V;
-      this.camY = this.axisStep(this.camY, this.camVY, b.y0, b.y1, dt);
-      this.camVY = SPRING_V;
+      if (this.snapY !== null && this.pointers.size === 0) {
+        // [clean:2] The floor snap: a short critically damped ease onto the floor line (x keeps coasting on its own).
+        const t = this.snapY;
+        this.camY = crit(this.camY, this.camVY, t, SNAP_RATE, dt);
+        this.camVY = SPRING_V;
+        if (Math.abs(this.camY - t) * this.zoom < 0.3 && Math.abs(this.camVY) * this.zoom < 6) {
+          this.camY = t;
+          this.camVY = 0;
+          this.snapY = null;
+        }
+      } else {
+        this.camY = this.axisStep(this.camY, this.camVY, b.y0, b.y1, dt);
+        this.camVY = SPRING_V;
+        // [clean:2] A released scroll that has slowed down (and is back inside the bounds) picks the floor line nearest to where it would stop.
+        if (this.snapArmed && this.pointers.size === 0 && Math.abs(this.camVY) * this.zoom < SNAP_HANDOFF_PX && this.camY >= b.y0 - 0.5 && this.camY <= b.y1 + 0.5) {
+          this.snapArmed = false;
+          const t = this.snapCamY(this.camY, this.zoom, this.camVY / PAN_FRICTION());
+          if (Math.abs(t - this.camY) * this.zoom > 0.5 && this.calm) {
+            this.camY = t; // reduced motion: the view steps onto the floor line, no ease
+            this.camVY = 0;
+          } else if (Math.abs(t - this.camY) * this.zoom > 0.5) {
+            this.snapY = t;
+            if (this.camVY * (t - this.camY) < 0) this.camVY = 0; // heading the other way: start the ease from rest (no swing past)
+          }
+        }
+      }
     }
     const scrolled = this.host.carryPointer() !== null && this.edgeScroll(dt); // [plan4:ST-19/UX-20]
     this.updateTransform();
@@ -1208,7 +1327,8 @@ export class CameraController {
   get moving(): boolean {
     return this.host.carryPointer() !== null || (this.pointers.size > 0 && (this.isDragging || this.pinch !== null)) || this.focusTarget !== null
       || this.camVX !== 0 || this.camVY !== 0 || this.zoomV !== 0 || this.wheelZoom !== null || this.trauma > 0 || this.punchT < 1
-      || this.followGet !== null; // [world:C1 camera-nav]
+      || this.followGet !== null // [world:C1 camera-nav]
+      || this.snapY !== null || this.snapArmed; // [clean:2]
   }
 
   /** One axis of the free camera; the new velocity is left in SPRING_V. */
@@ -1255,11 +1375,19 @@ export class CameraController {
     wc.scale.set(z);
     wc.x = width / 2 - this.camX * z + ox;
     wc.y = cy - this.camY * z + oy;
-    if (this.onChange && (this.camX !== this.lastX || this.camY !== this.lastY || this.zoom !== this.lastZ)) {
+    if (this.camX !== this.lastX || this.camY !== this.lastY || this.zoom !== this.lastZ) {
       this.lastX = this.camX;
       this.lastY = this.camY;
       this.lastZ = this.zoom;
-      this.onChange();
+      this.onChange?.();
+      // [clean:2] The floor tag hears only when the floor in view changes.
+      if (this.floorListeners.size) {
+        const f = this.floorInView();
+        if (f !== this.viewFloor) {
+          this.viewFloor = f;
+          for (const fn of this.floorListeners) fn(f);
+        }
+      }
     }
   }
 
@@ -1301,7 +1429,16 @@ export class CameraController {
   /** Centers the camera on a world point and zooms in a little. */
   focusOn(x: number, y: number, zoomBoost = 1.5): void {
     // [camera] A glide (critically damped spring), not a jump.
-    this.focusTo(x, y, Math.max(this.zoom, this.baseZoom * zoomBoost));
+    this.focusTo(x, y, this.boostZoom(zoomBoost));
+  }
+
+  /**
+   * [clean:2] The zoom a "look at this" move goes to: `boost` times the home zoom, but never past CAMERA.framing.maxRoomZoom (2.2) unless the home
+   * zoom itself is closer. The phone home zoom is now ~1.9, so 1.6 x home would have been the 3x limit; on desktop (home ~1) nothing changes.
+   * Never zooms out (the current zoom is the floor).
+   */
+  boostZoom(boost: number): number {
+    return Math.max(this.zoom, Math.min(this.baseZoom * boost, Math.max(this.baseZoom, CAMERA.framing.maxRoomZoom)));
   }
 }
 
