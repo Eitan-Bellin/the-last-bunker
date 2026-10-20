@@ -57,14 +57,18 @@ export class DangerController {
     return null;
   }
 
-  /** The decision window for the most urgent danger: the raid (pay or fight) or a disaster (handle it). */
-  showDanger(): void {
+  /**
+   * The decision window for the most urgent danger: the raid (pay or fight) or a disaster (handle it).
+   * [clean:1] `disasterId`: that disaster's window (the room screen of the room it is aimed at), whatever else is on the clock.
+   */
+  showDanger(disasterId?: string): void {
     const state = this.app.state;
     const d = state.danger;
     const now = state.stats.totalPlayTime;
     const locale = i18n.currentLocale;
-    const dz = [...d.disasters].sort((a, b) => a.deadline - b.deadline)[0];
-    const raidLeft = d.raid ? Math.max(0, d.raid.hitAt - now) : Infinity;
+    const chosen = disasterId ? d.disasters.find(x => x.id === disasterId) : undefined;
+    const dz = chosen ?? [...d.disasters].sort((a, b) => a.deadline - b.deadline)[0];
+    const raidLeft = chosen ? Infinity : d.raid ? Math.max(0, d.raid.hitAt - now) : Infinity;
     const body = el('div', 'modal-result');
     const later = { label: i18n.t('danger.disaster.later'), className: 'btn-secondary', onClick: () => this.app.modal.hide() };
     const more = d.disasters.length + (d.raid ? 1 : 0) - 1;

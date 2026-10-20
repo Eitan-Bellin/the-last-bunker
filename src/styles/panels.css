@@ -2,19 +2,20 @@
  * [ux-redesign W2e] Room panel, People, Settings and Command (store/ux-redesign/02-audit.md #25 #28 #29 #32 #33 #45).
  * Tokens only (src/styles/tokens.css). Imported from the top of command.css, so it sits before touch.css / pwa.css / a11y.css:
  * rules that must beat their `.btn` sizes carry one class more (`.sheet .btn.x`), and large targets (--tap) still win through max().
+ * [clean:1] The room panel's rules also match inside the room screen (`.room-screen`), which hosts that panel under "More".
  */
 
 /* ---- Shared: 48 px targets ------------------------------------------------------------------------------------------------------- */
 
-.sheet .btn.ux2e-48 { min-height: max(var(--hit-min), var(--tap, 0px)); }
-.sheet .btn.k-btn--icon.ux2e-48 { min-width: max(var(--hit-min), var(--tap, 0px)); }
+.sheet .btn.ux2e-48, .room-screen .btn.ux2e-48 { min-height: max(var(--hit-min), var(--tap, 0px)); }
+.sheet .btn.k-btn--icon.ux2e-48, .room-screen .btn.k-btn--icon.ux2e-48 { min-width: max(var(--hit-min), var(--tap, 0px)); }
 .ux2e-danger.btn,
-.sheet .btn.ux2e-danger { color: var(--danger-text); border: var(--border-w) dashed var(--danger); }
+.sheet .btn.ux2e-danger, .room-screen .btn.ux2e-danger { color: var(--danger-text); border: var(--border-w) dashed var(--danger); }
 
 /* ---- Room panel (#28, #45) ------------------------------------------------------------------------------------------------------- */
 
 /* Efficiency is a button: a tap opens where the number comes from. */
-.sheet .ux2e-eff-row {
+.sheet .ux2e-eff-row, .room-screen .ux2e-eff-row {
   width: 100%;
   min-height: var(--hit-min);
   padding-block: var(--sp-1);
@@ -38,12 +39,12 @@
 .ux2e-why .bp-value { unicode-bidi: isolate; font-variant-numeric: var(--num-tabular); }
 .ux2e-why-bad .bp-value { color: var(--warning); }
 .ux2e-more[hidden] { display: none; }
-.sheet .btn.ux2e-more-btn { width: 100%; margin-top: var(--sp-1); min-height: var(--hit-min); color: var(--text-secondary); box-shadow: none; }
+.sheet .btn.ux2e-more-btn, .room-screen .btn.ux2e-more-btn { width: 100%; margin-top: var(--sp-1); min-height: var(--hit-min); color: var(--text-secondary); box-shadow: none; }
 
 /* Move + "…": side by side, 8 px apart, both 48 px. Demolish is only inside the menu. */
 .ux2e-action-row { display: flex; gap: var(--sp-2); align-items: stretch; }
 .ux2e-action-row .ux2e-grow { flex: 1 1 auto; }
-.sheet .btn.ux2e-more-menu {
+.sheet .btn.ux2e-more-menu, .room-screen .btn.ux2e-more-menu {
   flex: 0 0 auto;
   font-size: calc(var(--type-subtitle) * var(--fs, 1));
   letter-spacing: var(--sp-1);
@@ -58,7 +59,7 @@
   border-radius: var(--r-panel);
   background: var(--surface-2);
 }
-.sheet .btn.ux2e-menu-item { width: 100%; justify-content: flex-start; }
+.sheet .btn.ux2e-menu-item, .room-screen .btn.ux2e-menu-item { width: 100%; justify-content: flex-start; }
 
 /* The confirmation: says what demolishing costs; Cancel is the big amber button, Demolish a quiet dashed one 24 px below it. */
 .bp-card.ux2e-confirm { border: var(--border-w) solid var(--danger); }

@@ -1,0 +1,185 @@
+/*
+ * [clean:1] The room screen (src/ui/components/RoomScreen.ts; reference tools/viewproto.html focus mode). Tokens only.
+ * The top ~45 % is a transparent window onto the live room (the camera frames it there; the HUD's status row stays visible and live
+ * above it); the bottom ~55 % is the panel: name, status line, three facts, "More", and the one main button pinned at its foot.
+ * It sits one layer above the nav console (the panel covers it) and below toasts, dialogs and the tutorial spotlight.
+ */
+
+.room-screen {
+  --rs-split: 45%;
+  position: fixed;
+  inset: 0;
+  z-index: calc(var(--z-nav) + 1);
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+}
+.room-screen[hidden] { display: none; }
+
+/* ---- The window onto the world ---------------------------------------------------------------------------------------------------- */
+
+.rs-window {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  pointer-events: auto;
+  touch-action: none;
+  /* below the HUD's status row the picture is the player's; the row itself stays tappable (this box starts under it) */
+  margin-top: var(--hud-top, 0px);
+  background: linear-gradient(180deg, transparent 70%, var(--overlay-soft));
+}
+.rs-window .btn.rs-close {
+  position: absolute;
+  top: var(--sp-2);
+  inset-inline-start: var(--sp-3);
+  width: var(--hit-min);
+  height: var(--hit-min);
+  min-width: var(--hit-min);
+  border-radius: var(--r-card);
+  background: var(--overlay);
+  border-color: var(--border);
+  color: var(--text-primary);
+}
+.rs-window .btn.rs-arrow {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: var(--hit-min);
+  height: var(--hit-min);
+  min-width: var(--hit-min);
+  border-radius: var(--r-full);
+  background: var(--overlay-soft);
+  border-color: transparent;
+  color: var(--text-primary);
+}
+.rs-window .btn.rs-arrow.is-pressed { transform: translateY(-50%) scale(var(--press-scale)); }
+.rs-window .rs-arrow--left { left: var(--sp-2); }
+.rs-window .rs-arrow--right { right: var(--sp-2); }
+.rs-window .btn[hidden] { display: none; }
+
+/* ---- The panel ---------------------------------------------------------------------------------------------------------------------- */
+
+.rs-panel {
+  position: relative;
+  flex: 0 0 calc(100% - var(--rs-split));
+  min-height: 0;
+  pointer-events: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  padding: var(--sp-4) max(var(--sp-4), env(safe-area-inset-right)) 0 max(var(--sp-4), env(safe-area-inset-left));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  background: var(--surface-0);
+  border-top: var(--border-w) solid var(--border);
+  box-shadow: var(--elev-3);
+  color: var(--text-primary);
+  transform: translateY(100%);
+  transition: transform var(--dur-popup-out) var(--ease-in);
+}
+.room-screen.is-open .rs-panel { transform: translateY(0); transition: transform var(--dur-screen) var(--ease-out); }
+
+.rs-head { display: flex; flex-direction: column; gap: var(--sp-1); }
+.rs-name {
+  margin: 0;
+  font-family: var(--font-title);
+  font-weight: var(--weight-regular);
+  font-size: calc(var(--type-headline) * var(--fs, 1));
+  line-height: var(--lh-tight);
+  color: var(--text-primary);
+}
+.rs-name:focus { outline: none; }
+.rs-status {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  font-size: calc(var(--type-body) * var(--fs, 1));
+  color: var(--text-secondary);
+}
+.rs-dot {
+  flex: 0 0 auto;
+  width: var(--sp-3);
+  height: var(--sp-3);
+  border-radius: var(--r-full);
+  background: var(--success);
+}
+.rs-dot[data-status="warn"] { background: var(--warning); }
+.rs-dot[data-status="bad"] { background: var(--danger); }
+
+.rs-facts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--sp-2); }
+.rs-fact {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-1);
+  min-width: 0;
+  padding: var(--sp-3) var(--sp-1);
+  border: var(--border-w) solid var(--border);
+  border-radius: var(--r-card);
+  background: var(--surface-1);
+  text-align: center;
+}
+.rs-fact-value {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  /* 22 px, down to 18 on a 320 px phone so "+19.3K" stays inside its card */
+  font-size: clamp(calc(var(--type-subtitle) * var(--fs, 1)), 6vw, calc(var(--type-title) * var(--fs, 1)));
+  font-weight: var(--weight-bold);
+  font-variant-numeric: var(--num-tabular);
+  unicode-bidi: isolate;
+  white-space: nowrap;
+}
+.rs-fact-label .ic { width: var(--icon-s); height: var(--icon-s); vertical-align: middle; }
+.rs-fact-label {
+  font-size: calc(var(--type-caption) * var(--fs, 1));
+  line-height: var(--lh-tight);
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+}
+
+/* "More": a quiet full-width fold; everything the old room sheet had lives under it. */
+.rs-panel .btn.rs-more-toggle {
+  width: 100%;
+  min-height: var(--hit-min);
+  justify-content: center;
+  color: var(--text-secondary);
+  box-shadow: none;
+}
+.rs-more { display: flex; flex-direction: column; gap: var(--sp-3); }
+.rs-more[hidden] { display: none; }
+.rs-more .bp { display: flex; flex-direction: column; gap: var(--sp-3); }
+/* The old sheet pinned its upgrade bar under its ✕ plate; here it is a plain row ("Next" to the next room worth upgrading, the level note). */
+.rs-more .bp-upbar { position: static; margin: 0; padding: 0; background: none; }
+
+/* The main button: pinned to the foot of the panel, above the home bar. */
+.rs-main {
+  position: sticky;
+  bottom: 0;
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  padding-block: var(--sp-3) max(var(--sp-4), env(safe-area-inset-bottom));
+  background: linear-gradient(180deg, transparent, var(--surface-0) var(--sp-3));
+}
+.rs-main[hidden] { display: none; }
+.rs-panel .btn.rs-main-btn {
+  width: 100%;
+  min-height: calc(var(--hit-min) + var(--sp-2));
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--sp-1) var(--sp-2);
+  border-radius: var(--r-card);
+  background: var(--primary);
+  color: var(--text-on-primary);
+  font-size: calc(var(--type-body-l) * var(--fs, 1));
+}
+.rs-panel .btn.rs-main-btn .cost-row { margin: 0; gap: var(--sp-1); }
+.rs-panel .btn.rs-main-btn.rs-short { filter: grayscale(0.6) brightness(0.8); }
+.rs-panel .btn.rs-main-btn.is-disabled { filter: grayscale(0.7) brightness(0.75); }
+.rs-progress { height: var(--sp-3); }
+
+/* The world keeps its picture under the window: no tap reaches the canvas while the screen is open (the window takes them). */
+body.room-screen-on #game-canvas { touch-action: none; }

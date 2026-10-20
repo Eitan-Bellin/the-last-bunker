@@ -11,6 +11,7 @@ import { clearLiteMode, crashReport, installCrashGuard, isLiteMode, logCrash } f
 import { HUD, type NavKey } from './ui/HUD';
 import { BuildMenu } from './ui/components/BuildMenu';
 import { BuildingPanel } from './ui/components/BuildingPanel';
+import { RoomScreen } from './ui/components/RoomScreen'; // [clean:1]
 import { PeoplePanel } from './ui/components/PeoplePanel';
 import { ResearchPanel } from './ui/components/ResearchPanel';
 import { SurfacePanel } from './ui/components/SurfacePanel';
@@ -145,6 +146,8 @@ export class GameApp {
   renderer: BunkerRenderer;
   hud: HUD;
   private buildMenu: BuildMenu;
+  /** [clean:1] The room panel now lives in the room screen (it opens on a tap on a room); buildingPanel is its "More" fold. */
+  roomScreen: RoomScreen;
   buildingPanel: BuildingPanel;
   private peoplePanel: PeoplePanel;
   private researchPanel: ResearchPanel;
@@ -225,16 +228,15 @@ export class GameApp {
       if (this.engine.stateManager.state) this.state.settings.a11y = { ...a }; // mirrored into the save (device preference stays primary)
     });
     this.buildMenu = new BuildMenu(this.engine.resourceSystem, this.engine.buildingSystem);
-    this.buildingPanel = new BuildingPanel(this.engine);
+    this.roomScreen = new RoomScreen(this.engine, this.renderer); // [clean:1]
+    this.buildingPanel = this.roomScreen.panel;
     this.peoplePanel = new PeoplePanel(this.engine);
     this.researchPanel = new ResearchPanel(this.engine);
     this.structurePanel = new StructurePanel(() => this.state);
     this.structurePanel.onOpenRoom = id => {
-      const room = this.renderer.roomRect(id);
       this.closeSheets();
-      if (room) this.renderer.focusOn(room.x + room.w / 2, room.y + 50, 1.6);
       this.renderer.setSelected(id);
-      this.buildingPanel.show(id);
+      this.buildingPanel.show(id); // [clean:1] the room screen frames the room itself
     };
     this.surfacePanel = new SurfacePanel(this.engine);
     this.projectsPanel = new ProjectsPanel(this.engine); // [LateGame B1]
@@ -930,10 +932,8 @@ export class GameApp {
     this.focusRoom(pick.id);
   }
 
-  /** [ux-wp1] Centres the camera on a room and opens its panel. */
+  /** [ux-wp1] Opens a room's screen ([clean:1] which frames the room in the world itself). */
   private focusRoom(id: string): void {
-    const r = this.renderer.roomRect(id);
-    if (r) this.renderer.focusOn(r.x + r.w / 2, r.y + 50, 1.6);
     this.renderer.setSelected(id);
     this.buildingPanel.show(id);
   }
@@ -1094,6 +1094,7 @@ export class GameApp {
     this.buildingPanel.onQuickFix = (id: string) => this.danger.quickFixIncident(id);
     this.buildingPanel.onSpecialize = (bid: string, spec: string) => this.specialize(bid, spec);
     this.buildingPanel.onRetool = (bid: string, spec: string) => this.retool(bid, spec); // [Long game]
+    this.roomScreen.onDisaster = (id: string) => this.danger.showDanger(id); // [clean:1] the room screen's main action for a disaster aimed at it
     this.hud.onIncident = () => {
       if (this.danger.dangerBanner()) { this.audio.play('click'); this.danger.showDanger(); return; } // [Danger]
       const inc = this.state.incidents?.[0];

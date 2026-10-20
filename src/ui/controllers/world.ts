@@ -563,10 +563,8 @@ export class WorldController {
     app.buildingPanel.onOpenRoom = id => this.openRoom(id);
   }
 
-  /** [ux-wp4] B3: shows a room's panel in place (no close first) and brings the camera to it. */
+  /** [ux-wp4] B3: shows a room's panel in place (no close first); [clean:1] the room screen moves there and frames it. */
   openRoom(id: string): void {
-    const r = this.app.renderer.roomRect(id);
-    if (r) this.app.renderer.focusOn(r.x + r.w / 2, r.y + 50, 1.6);
     this.app.renderer.setSelected(id);
     this.app.buildingPanel.show(id);
   }
