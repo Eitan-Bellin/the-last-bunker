@@ -653,7 +653,8 @@ export function buildSignage(inp: SignageInput): Container {
         .sort((a, b) => b[0] - a[0]);
       let moved = false;
       for (const [c0, c1] of cols) if (sx1 > c0 - 3 && sx0 < c1 + 3) { sx1 = c0 - 6; sx0 = sx1 - sw; moved = true; }
-      if ((!moved || sx0 >= roomsEastX(f)) && !halls.some(([a, b]) => sx1 > a && sx0 < b)) {
+      // [clean:0] The clean front keeps the landing plate (the floor's one number tag) and the memorial, not the sprayed level names.
+      if (!GFX.clean && (!moved || sx0 >= roomsEastX(f)) && !halls.some(([a, b]) => sx1 > a && sx0 < b)) {
         const st = new Sprite(stex);
         st.anchor.set(1, 0.44);
         st.scale.set(1 / SS);
@@ -683,7 +684,7 @@ export function buildSignage(inp: SignageInput): Container {
       // Halls of the level above pass through this level's columns.
       const hallsAbove: [number, number][] = inp.buildings.filter(b => isHall(b.type) && b.position.floor === f - 1)
         .map(b => [slotX(b.position.floor, b.position.x), slotX(b.position.floor, b.position.x) + roomSlots(b.type) * SLOT_W]);
-      above = placeProps(props, f, grid, inp.era, inp.lamps, inp.ambient, hallsAbove, above);
+      if (!GFX.clean) above = placeProps(props, f, grid, inp.era, inp.lamps, inp.ambient, hallsAbove, above); // [clean:0] no wall props on the columns
     }
     root.addChild(stencils, props, plates);
   };

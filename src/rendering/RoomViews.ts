@@ -22,6 +22,8 @@ import { pressMs } from '../utils/a11y'; // plan4:AC-13
 import { buildSurfaceBlock } from './surfaceRow'; // plan4:ST-16
 import { GFX } from './gfxFeatures';
 import { applyClarity, buildClarity, categoryColor, stepShade, type RoomClarity } from './roomClarity'; // [airy:B1]
+import { buildRoomPlate, setPlateName, setPlateStatus, stylePlate, type RoomPlate } from './roomPlate'; // [clean:0]
+import { roomStatus } from './roomStatus'; // [clean:0]
 
 // [plan4 X-1] Split out of BunkerRenderer.ts with no change in behaviour: the room views (build queue, look rebuilds, name tags),
 // the "in zone" / parking logic and the per-picture culling of rooms, ruins and the structure.
@@ -48,6 +50,8 @@ export interface RoomView {
   label: Container;
   /** [airy:B1/B4] Category wash + ceiling band + icon under the people, focus shade over them (null with `?gx=-airy` and on the surface row). */
   clarity?: RoomClarity;
+  /** [clean:0] The card frame, the name at the bottom and the status dot (null with `?gx=-clean`). */
+  plate?: RoomPlate;
   /** [plan4:ST-12] The tag's two looks: name + stars + lamps (full), colour chip + lamps (icon-only); LabelScale picks one by zoom. */
   labelFull?: Container;
   labelMini?: Container;
@@ -160,6 +164,7 @@ export class RoomViews {
     this.roomsH = LAYOUT.rooms;
     const gen = ++this.roomGen;
     const now = performance.now();
+    const wall = Date.now(); // [clean:0] the status dot's clock (danger.disabled is wall-clock ms)
     const dtShade = Math.min(0.1, (now - this.lastShadeAt) / 1000); // [airy:B4]
     this.lastShadeAt = now;
     this.buildsLeft = 3; // looks built per picture for rooms nobody is looking at yet (the ones about to scroll in)
@@ -182,6 +187,7 @@ export class RoomViews {
         if (view.root.x !== bx || view.root.y !== by) {
           view.root.position.set(bx, by);
           view.label.position.set(bx + view.width / 2, by - SLAB / 2);
+          view.plate?.root.position.set(bx, by); // [clean:0]
           this.rowsDirty = true; // plan4:polish
           view.layoutH = undefined;
         }
@@ -265,6 +271,7 @@ export class RoomViews {
         view.labelSig = 'drawn';
         this.drawLabel(view, b);
       }
+      if (view.plate) setPlateStatus(view.plate, roomStatus(state, b, wall)); // [clean:0] a tint write only when the status moved
       // New look: a room keeps its sign to itself unless it needs you (no workers, building) or is selected.
       const staffed = (def.maxWorkers ?? 0) === 0 || b.assignedSurvivorIds.length > 0;
       if (host.gfx2) view.labelOn = b.id === host.selectedId() || b.isConstructing || !staffed;
@@ -294,6 +301,7 @@ export class RoomViews {
         for (const child of [...view.people.children]) view.people.removeChild(child);
         view.root.destroy({ children: true });
         view.label.destroy({ children: true });
+        view.plate?.root.destroy({ children: true }); // [clean:0]
         this.views.delete(id);
       }
     }
@@ -332,6 +340,15 @@ export class RoomViews {
       root.addChildAt(clarity.over, root.getChildIndex(people) + 1);
       applyClarity(clarity, labelState.clarity);
     }
+    // [clean:0] The room as a card: a thin dark frame under the people, the name + status dot over them.
+    let plate: RoomPlate | undefined;
+    if (GFX.clean) {
+      plate = buildRoomPlate(width, height);
+      root.addChildAt(plate.frame, root.getChildIndex(people));
+      plate.root.position.copyFrom(root.position);
+      plate.root.visible = false; // (cull shows it)
+      this.labelLayer.addChild(plate.root);
+    }
     root.hitArea = { contains: (x: number, y: number) => x >= 0 && x <= width && y >= 0 && y <= height };
     root.eventMode = 'static';
     root.cursor = 'pointer';
@@ -358,7 +375,7 @@ export class RoomViews {
     const label = new Container();
     label.position.set(buildingX(b) + width / 2, floorTop(b.position.floor) - SLAB / 2);
     return {
-      root, visualHolder, visual: null, oldVisual: null, fade: 0, scaffold: null, people, outline, label, progress: null, clarity,
+      root, visualHolder, visual: null, oldVisual: null, fade: 0, scaffold: null, people, outline, label, progress: null, clarity, plate,
       visualSig: '', labelSig: '', width, height, attached: true,
       lane: { x0: DEPTH_X + 10, x1: width - DEPTH_X - 10 },
     };
@@ -373,6 +390,7 @@ export class RoomViews {
       view.progress = null;
     }
     const name = def.name[i18n.currentLocale] ?? def.name.en;
+    if (view.plate) setPlateName(view.plate, name); // [clean:0]
     const stars = b.level > 1 ? ` ${'[[star]]'.repeat(b.level - 1)}` : '';
     // A specialized room wears its role's emblem instead of the row of stars.
     const spec = specOf(b);
@@ -451,7 +469,8 @@ export class RoomViews {
     this.styleLabel(view);
     if (b.isConstructing) {
       view.progress = new Graphics();
-      view.progress.position.set(15, view.height - 14);
+      // [clean:0] The name sits at the bottom now: the build bar goes up, under the status dot.
+      view.progress.position.set(15, view.plate ? 30 : view.height - 14);
       view.root.addChild(view.progress);
     }
   }
@@ -463,6 +482,7 @@ export class RoomViews {
    * keeps the whole name and layoutRows staggers it above its neighbours' tags instead.
    */
   private styleLabel(v: RoomView): void {
+    if (v.plate) stylePlate(v.plate, labelState, i18n.isRTL); // [clean:0]
     let k = labelState.k;
     const icon = labelState.mode !== 'full';
     let shortOn = false;
@@ -622,8 +642,10 @@ export class RoomViews {
       if (seen !== v.attached) { v.attached = seen; if (seen) this.roomLayer.addChild(r); else this.roomLayer.removeChild(r); } // [perf] a room out of view is not in the scene at all (155 render groups were walked every picture)
       const shown = seen && !mapCovers;
       if (v.visualHolder.visible !== shown) { v.visualHolder.visible = shown; v.people.visible = shown; }
+      if (v.plate) { const pv = shown && labelState.mode === 'full'; if (v.plate.root.visible !== pv) v.plate.root.visible = pv; } // [clean:0]
       // The name tag goes with its room (it used to be drawn for all 119 rooms: 43% of the draw calls).
-      const lv = !!v.labelOn && seen && labelState.mode !== 'hidden';
+      // [clean:0] While the names show inside the rooms (normal zoom) the tag over the room is not drawn; it comes back as the icon tag far out.
+      const lv = !!v.labelOn && seen && labelState.mode !== 'hidden' && !(v.plate && labelState.mode === 'full');
       if (GFX.airy && lv) { this.cand.push(v); continue; } // [airy:B5] the cap below decides
       if (v.label.visible !== lv) { v.label.visible = lv; this.rowsDirty = true; } // plan4:polish
     }

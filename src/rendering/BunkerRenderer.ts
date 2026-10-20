@@ -1234,11 +1234,12 @@ export class BunkerRenderer {
         infra: state.layout?.infra, // plan4:polish
       }), 'signage'));
       // [gfx2 wear] Wear decals in front of the structure (clear of the signage), then the atmosphere.
+      // [clean:0] The clean front has no decals (cracks, rust, stains, chalk): not built; the atmosphere then has no drips or sparks to follow.
       const wearEra = Math.max(0, this.surfaceEra);
-      this.decals = buildDecals(grid, state.buildings, this.floors, wearEra, lamps, structureAmbient(this.surfaceEra),
+      this.decals = GFX.clean ? null : buildDecals(grid, state.buildings, this.floors, wearEra, lamps, structureAmbient(this.surfaceEra),
         this.utilitiesHolder.children.filter(c => c !== this.front?.container));
-      this.utilitiesHolder.addChild(this.group(this.decals.container, 'decals'));
-      this.atmo = buildAtmosphere(state.buildings, this.floors, wearEra, lamps, this.decals.sources, exts);
+      if (this.decals) this.utilitiesHolder.addChild(this.group(this.decals.container, 'decals'));
+      this.atmo = buildAtmosphere(state.buildings, this.floors, wearEra, lamps, this.decals?.sources ?? { drips: [], sparks: [] }, exts);
       this.utilitiesHolder.addChild(this.group(this.atmo.container, 'atmosphere'));
       this.infra = new InfraLayer(); // plan4:ST-14
       this.infra.set(state, { floors: this.floors, exts, st: kitState(this.surfaceEra), ambient: structureAmbient(this.surfaceEra) }); // plan4:ST-14
@@ -1255,8 +1256,9 @@ export class BunkerRenderer {
         this.roomLight.set(l.room, (mix((c >> 16) & 255, (l.color >> 16) & 255, k) << 16) | (mix((c >> 8) & 255, (l.color >> 8) & 255, k) << 8) | mix(c & 255, l.color & 255, k));
       }
     }
-    this.utilities = buildUtilities(state.buildings, this.floors, painted, this.extsFor(state));
-    this.utilitiesHolder.addChild(this.group(this.utilities.container, 'pipes'));
+    // [clean:0] The clean front draws no mains along the ceilings (the red / blue lines over every room): not built at all.
+    this.utilities = GFX.clean ? null : buildUtilities(state.buildings, this.floors, painted, this.extsFor(state));
+    if (this.utilities) this.utilitiesHolder.addChild(this.group(this.utilities.container, 'pipes'));
   }
 
   /** [perf] Makes a container a render group of its own (and names it for the probe). */

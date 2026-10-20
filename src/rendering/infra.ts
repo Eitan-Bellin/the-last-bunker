@@ -198,7 +198,7 @@ export class InfraLayer implements Animated {
         if (p && p.floor >= 0 && p.floor < floors) this.addDoor(k, p.floor, p.slot, tintAt, glow);
       }
     }
-    if (GFX.branches) this.addLines();
+    if (GFX.branches && !GFX.clean) this.addLines(); // [clean:0] no red / blue feed lines across the ceilings of the clean front
     this.drawLines();
   }
 
