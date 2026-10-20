@@ -35,7 +35,7 @@ export const CATEGORY: Partial<Record<BuildingType, number>> = {
  * Far zoom level (Sprint 7): the bunker seen as a living city map at night. Every room is a lit window
  * in its trade's colour, residents are moving sparks, crises flash red, and each level is labelled.
  */
-export function buildCityMap(state: GameState, floors: number, locale: string): CityMap {
+export function buildCityMap(state: GameState, floors: number, locale: string, cover?: { x: number; y: number; w: number; h: number }): CityMap {
   const container = new Container();
   container.eventMode = 'none';
   container.alpha = 0;
@@ -47,7 +47,12 @@ export function buildCityMap(state: GameState, floors: number, locale: string): 
   const bottom = floorTop(floors) + 6;
 
   const base = new Graphics();
-  base.rect(left, top, right - left, bottom - top).fill({ color: 0x040712, alpha: 0.86 });
+  if (cover) {
+    // [perf] City mode: the map is the whole picture (the renderer stops drawing the rock, the shell and the shaft under it), so its night-blue
+    // ground covers the city's frame (the hub, the edges, the district caverns) below the surface. Opaque: the colour of the old 0.86 veil over the dark rock.
+    const x0 = Math.min(left, cover.x), x1 = Math.max(right, cover.x + cover.w), y1 = Math.max(bottom, cover.y + cover.h);
+    base.rect(x0, top, x1 - x0, y1 - top).fill({ color: 0x070b16 });
+  } else base.rect(left, top, right - left, bottom - top).fill({ color: 0x040712, alpha: 0.86 });
   // Blueprint grid.
   for (let x = left; x < right; x += 23) base.rect(x, top, 1, bottom - top).fill({ color: 0x3a8aff, alpha: 0.06 });
   for (let f = 0; f <= floors; f++) {

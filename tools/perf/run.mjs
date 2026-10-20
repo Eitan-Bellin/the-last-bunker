@@ -60,7 +60,11 @@ function bundleStats() {
 }
 
 const yMid = floors => Math.round(70 + Math.min(12, floors / 2) * 116);
-const CAMERAS = { overview: [308, f => yMid(f), 1], close: [300, f => yMid(f), 2.5], far: [308, f => yMid(f), 0.55] };
+// [x, y, zoom, absolute?]: zoom is relative to the screen's default zoom (CameraController.baseZoom) unless `absolute`.
+// Perf pass 2026-10-21: `far` is the city map view, an absolute zoom under CAMERA.zoom.far (0.42). It used to be 0.55 x the default zoom, which
+// was under 0.42 while the phone's default was about 0.75; since clean-front step 2 the city's phone default is ~1.34, so 0.55 x landed on
+// 0.74 (the zoomed-out room view, no map at all). That view is now its own camera, `zoomout` (scenario f24-zoomout-medium).
+const CAMERAS = { overview: [308, f => yMid(f), 1], close: [300, f => yMid(f), 2.5], far: [308, f => yMid(f), 0.38, true], zoomout: [308, f => yMid(f), 0.55] };
 
 async function runScenario(port, name, sc) {
   const c = await launch();
@@ -81,8 +85,8 @@ async function runScenario(port, name, sc) {
       : mode === 'watch' ? '__engine.lastInteraction = Date.now() - 6000' : '__engine.lastInteraction = 0';
     await c.evalJs(`window.__keep = setInterval(() => { ${touch} }, 100); true`, false);
     await sleep(9000);
-    const [cx, cy, cz] = CAMERAS[sc.camera || 'overview'];
-    await c.evalJs(`__renderer.devCamera(${cx}, ${typeof cy === 'function' ? cy(sc.floors) : cy}, ${cz}); true`, false);
+    const [cx, cy, cz, abs] = CAMERAS[sc.camera || 'overview'];
+    await c.evalJs(`__renderer.devCamera(${cx}, ${typeof cy === 'function' ? cy(sc.floors) : cy}, ${abs ? `${cz} / (__renderer.cam.baseZoom || 1)` : cz}); true`, false);
     await sleep(2500);
     if (throttle > 1) await c.send('Emulation.setCPUThrottlingRate', { rate: throttle });
     await sleep(1500);
@@ -90,7 +94,17 @@ async function runScenario(port, name, sc) {
     const cal = await c.evalJs('(() => { const t = performance.now(); let x = 0; for (let i = 0; i < 2e7; i++) x += Math.sqrt(i); return Math.round(performance.now() - t) + (x < 0 ? 1 : 0); })()');
     await c.evalJs('__perf2.reset(); true', false);
     await sleep(seconds * 1000);
-    const rep = await c.evalJs('__perf2()');
+    let rep = await c.evalJs('__perf2()');
+    // Perf pass 2026-10-21: the baseline's f24-close-high window had no picture at all (0 frames, 0 ticks, no long task, no console error)
+    // while the allocation window right after it did: requestAnimationFrame itself stopped for six seconds (headless Chrome on this laptop asks
+    // the high-performance GPU for High only). Three reruns drew 30 fps. A window with almost no pictures is measured once more, and flagged.
+    if (rep.frames < seconds * 2) {
+      await c.evalJs('__perf2.reset(); true', false);
+      await sleep(seconds * 1000);
+      const again = await c.evalJs('__perf2()');
+      again.stalledFrames = rep.frames;
+      rep = again;
+    }
     rep.calMs = cal;
     // Allocation per picture: sample the heap while the scene runs for a few more seconds.
     await c.evalJs('__perf2.reset(); true', false);
@@ -234,7 +248,8 @@ try {
     const rep = await runScenario(port, name, sc);
     results.scenarios[name] = rep;
     console.log(`calls ${rep.drawCalls}  objs ${rep.renderablesDrawn}/${rep.renderablesTotal}  rebuild ${rep.structureChangedPct}%  alloc ${rep.allocKBPerFrame} KB/frame  tex ${rep.gpuTextureMB} MB  `
-      + `${rep.fps} fps  frame ${rep.frameMsMed}/${rep.frameMsP95} ms  busy ${rep.busyPct}%  long ${rep.longTasks}  rss ${rep.mem ? `${rep.mem.renderer}/${rep.mem.gpu}` : '-'} MB  errors ${rep.consoleErrors}`);
+      + `${rep.fps} fps  frame ${rep.frameMsMed}/${rep.frameMsP95} ms  busy ${rep.busyPct}%  long ${rep.longTasks}  rss ${rep.mem ? `${rep.mem.renderer}/${rep.mem.gpu}` : '-'} MB  errors ${rep.consoleErrors}`
+      + (rep.stalledFrames !== undefined ? `  (re-measured: the first window drew ${rep.stalledFrames} pictures)` : ''));
     if (arg('verbose', false)) console.log('   biggest: ' + (rep.biggest || []).join('  ') + '\n   overdraw ' + rep.overdraw + 'x  by group: ' + rep.overdrawBy.join('  ') + '   cal ' + rep.calMs + ' ms');
     if (arg('verbose', false)) console.log('   groups: ' + (rep.groups || []).map(g => `${g.label}(${g.objects}) ${g.changedPct}%`).join('  ') + `   groupsTotal ${rep.renderGroups}`);
     // "pending": true = measured and reported, never gating (the f24w-* scenarios until wide layouts exist, plan 4 X-4).

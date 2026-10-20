@@ -88,6 +88,8 @@ export interface RoomView {
   lk?: number;
   lspec?: string | null;
   lloc?: string;
+  /** [perf] The root's pieces are switched off under the far map (see cull). */
+  mapHidden?: boolean;
 }
 
 export interface RuinView {
@@ -104,6 +106,8 @@ export interface RuinView {
   culled?: boolean;
   /** [perf] The root is in the scene (rooms out of view are taken out of it, see cull). */
   attached?: boolean;
+  /** [perf] The root's pieces are switched off under the far map (see cull). */
+  mapHidden?: boolean;
 }
 
 /** What the room views need from the renderer. */
@@ -642,6 +646,8 @@ export class RoomViews {
       if (seen !== v.attached) { v.attached = seen; if (seen) this.roomLayer.addChild(r); else this.roomLayer.removeChild(r); } // [perf] a room out of view is not in the scene at all (155 render groups were walked every picture)
       const shown = seen && !mapCovers;
       if (v.visualHolder.visible !== shown) { v.visualHolder.visible = shown; v.people.visible = shown; }
+      // [perf] Under the map the frame, outline and clarity pieces are not drawn either; the root stays visible so a tap still opens the room.
+      if (seen && v.mapHidden !== mapCovers) { v.mapHidden = mapCovers; for (const c of r.children) c.renderable = !mapCovers; }
       if (v.plate) { const pv = shown && labelState.mode === 'full'; if (v.plate.root.visible !== pv) v.plate.root.visible = pv; } // [clean:0]
       // The name tag goes with its room (it used to be drawn for all 119 rooms: 43% of the draw calls).
       // [clean:0] While the names show inside the rooms (normal zoom) the tag over the room is not drawn; it comes back as the icon tag far out.
@@ -657,6 +663,7 @@ export class RoomViews {
       v.culled = !seen || mapCovers;
       if (seen !== v.attached) { v.attached = seen; if (seen) this.roomLayer.addChild(r); else this.roomLayer.removeChild(r); }
       if (v.label.visible !== seen) v.label.visible = seen;
+      if (seen && v.mapHidden !== mapCovers) { v.mapHidden = mapCovers; for (const c of r.children) c.renderable = !mapCovers; } // [perf] as for the rooms
     }
     // [P6] The structure, by height only (it spans the whole width anyway).
     for (const c of this.structureCull) {

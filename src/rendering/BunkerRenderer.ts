@@ -696,7 +696,8 @@ export class BunkerRenderer {
 
   /** [perf] Short animations on the picture (bursts, floating icons, a crisis in a room) that would stutter at the idle rate. */
   get fxActive(): boolean {
-    return this.bursts.length > 0 || this.glows.length > 0 || this.floaters.length > 0 || this.blockN > 0; // [phase2] glows
+    // [perf] An incident keeps the watching rate only while it is on screen: one fire on a floor out of view held an idle phone at 20 pictures a second instead of 5.
+    return this.bursts.length > 0 || this.glows.length > 0 || this.floaters.length > 0 || this.blockSeen > 0; // [phase2] glows
   }
 
   /** Dev tools: put the camera at a world point with a zoom relative to the fit-to-screen zoom. */
@@ -1536,7 +1537,7 @@ export class BunkerRenderer {
     hitState.zoom = this.cam.zoom;
     if (updateLabelScale(this.cam.zoom, now)) this.roomViews.applyLabelScale(); // [plan4:ST-12] tags keep a readable screen size
     this.updateView(); // [perf]
-    this.front?.update(now); // [plan4:ST-7] chunks near the camera are built, the ones in view shown, the far ones given back
+    if (!(this.mapCovers && this.cityHost)) this.front?.update(now); // [plan4:ST-7] chunks near the camera are built, the ones in view shown, the far ones given back ([perf] not under the far map)
     this.updateLod(state, dt);
     this.roomViews.render(state);
     // [phase2] Once the rooms of a load exist, an untouched camera refits so the phone opens on the busy rooms.
@@ -1568,9 +1569,11 @@ export class BunkerRenderer {
     const lowQ = this.postfx?.quality === 'low';
     this.lowSkip = lowQ && (++this.frameNo & 1) === 1;
     if (this.decals && this.decals.container.visible === lowQ) this.decals.container.visible = !lowQ;
-    this.shaft?.animate(this.time, power);
-    this.utilities?.animate(this.time, power);
-    if (!this.lowSkip) {
+    // [perf] City: under the far map the shaft, the structure and its lamps are not drawn (updateLod): not animated either.
+    const underMap = this.mapCovers && !!this.cityHost;
+    if (!underMap) this.shaft?.animate(this.time, power);
+    if (!underMap) this.utilities?.animate(this.time, power);
+    if (!this.lowSkip && !underMap) {
       this.front?.animate(this.time, power);
       this.galleries?.animate(this.time, power);
       this.infra?.animate(this.time, power); // plan4:ST-14
@@ -1681,10 +1684,10 @@ export class BunkerRenderer {
     const lod = z < (this.lod === 'far' ? FAR_ZOOM * 1.07 : FAR_ZOOM) ? 'far' : z > (this.lod === 'close' ? 1.1 : 1.2) ? 'close' : 'mid';
     if (lod !== this.lod) this.onLodChange?.(lod);
     this.lod = lod;
-    const sig = lod === 'far' ? `${this.floors}|${LAYOUT.util}|${i18n.currentLocale}` : ''; // [perf] only needed while the map is up
+    const sig = lod === 'far' ? `${this.floors}|${LAYOUT.util}|${i18n.currentLocale}|${this.cityHost?.current?.sig ?? ''}` : ''; // [perf] only needed while the map is up
     if (lod === 'far' && (!this.cityMap || sig !== this.cityMapSig)) {
       this.cityMap?.container.destroy({ children: true });
-      this.cityMap = buildCityMap(state, this.floors, i18n.currentLocale);
+      this.cityMap = buildCityMap(state, this.floors, i18n.currentLocale, this.cityHost?.current?.bounds); // [perf] city: the map covers the whole frame
       this.cityMapSig = sig;
       this.group(this.cityMap.container, 'cityMap');
       this.worldContainer.addChildAt(this.cityMap.container, this.worldContainer.getChildIndex(this.labelLayer));
@@ -1709,6 +1712,10 @@ export class BunkerRenderer {
         this.mapCovers = covers;
         // (The rooms keep their roots so a tap on a lit window still opens the room, and the lift and empty slots stay tappable.)
         for (const l of [this.bayHolder, this.utilitiesHolder]) l.visible = !covers;
+        // [perf] City: the map covers the city's whole frame (buildCityMap's `cover`), so the rock, the shell, the shaft, the walkers and the mid
+        // plane under it are not drawn either (they were 360 draw calls and 1,800 objects under an opaque map). The room roots stay (taps).
+        const host = this.cityHost;
+        if (host) for (const l of [this.undergroundHolder, this.shaftHolder, this.walkers.layer, host.shellBack, host.shellFront, host.city.planes.mid.container]) l.visible = !covers;
       }
     }
   }
@@ -2004,7 +2011,7 @@ export class BunkerRenderer {
 
   /** [camera] Keeps the incident rectangles for the popup blocker (no allocation once warmed up). */
   private updateBlockers(state: GameState): void {
-    let n = 0;
+    let n = 0, seen = 0;
     for (const inc of state.incidents ?? []) {
       const v = this.views.get(inc.buildingId);
       if (!v) continue;
@@ -2017,9 +2024,13 @@ export class BunkerRenderer {
         r.x = v.root.x; r.y = v.root.y; r.w = v.width; r.h = v.height;
       }
       n++;
+      if (r.x < VIEW.x1 && r.x + r.w > VIEW.x0 && r.y < VIEW.y1 && r.y + r.h > VIEW.y0) seen++;
     }
     this.blockN = n;
+    this.blockSeen = seen;
   }
+  /** [perf] Incidents whose rectangle is on screen: only those keep the picture at the watching rate (fxActive). */
+  private blockSeen = 0;
 
   private inIncident(x: number, y: number): boolean {
     for (let i = 0; i < this.blockN; i++) {

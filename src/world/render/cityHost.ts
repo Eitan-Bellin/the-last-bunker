@@ -326,7 +326,7 @@ export class CityHost {
     v.y = -wc.y / z;
     v.w = sw / z;
     v.h = sh / z;
-    if (this.shell?.update) this.shell.update(t, dt, v);
+    if (this.shell?.update && !mapCovers) this.shell.update(t, dt, v); // [perf] under the far map the shell is not drawn (BunkerRenderer.updateLod)
     // [world:M1] Pins: hidden under the far map; an anchor in view for PINS.seenAfter s is marked seen.
     const seen = this.pins.update(v, z, t, dt, mapCovers || z < CAMERA_FAR);
     if (seen) activeCitySystem()?.markSeen(...seen);
