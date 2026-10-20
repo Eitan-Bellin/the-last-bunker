@@ -101,6 +101,20 @@ export function buildClarity(type: BuildingType, color: number, w: number, h: nu
 export function applyClarity(c: RoomClarity, k: number): void {
   if (Math.abs(k - c.k) < 0.004) return;
   c.k = k;
+  if (GFX.clean) {
+    // [clean:0] Nothing of the layer at normal zoom (k is 0 there, see LabelScale.clarityFor): no wash, band, pin or plate. Not drawn at all
+    // until the far zoom brings it in, then it fades in with k.
+    const on = k > 0.004;
+    if (c.under.visible !== on) c.under.visible = on;
+    if (!on) return;
+    c.wash.alpha = 0.05 + 0.13 * k;
+    c.band.alpha = 0.8 * k;
+    c.pin.alpha = 0.3 * k;
+    if (!c.plate.visible) c.plate.visible = true;
+    c.plate.alpha = Math.min(1, k * 1.6);
+    c.plate.scale.set(0.8 + 0.4 * k);
+    return;
+  }
   c.wash.alpha = GFX.airy ? 0.05 + 0.13 * k : 0.13 + 0.22 * k; // [airy2:C4] never above ~0.18
   c.band.alpha = GFX.airy ? 0.55 + 0.25 * k : 0.8 + 0.2 * k;
   const showPlate = k > 0.12;

@@ -406,7 +406,7 @@ export class FrontChunks implements Animated {
     };
 
     // Pipe bundle under every ceiling (none where a hall from the level above passes through).
-    if (pipeTex) {
+    if (pipeTex && !GFX.clean) { // [clean:0] no pipe bundle under the ceilings
       const panelTex = full ? ceilingPanelTexture() : null;
       for (let f = fa; f < fb; f++) {
         const spans = hallSpans(buildings, f - 1);
@@ -876,7 +876,7 @@ export class FrontChunks implements Animated {
             plates.rect(x - cw / 2 - 1.5, py, cw + 3, 1).fill({ color: 0x8a8f94, alpha: 0.35 });
           }
           // [plan4:ST-11] The kind's paint band just under the cap plate of every steel column.
-          if (idOn && !col.open && !col.door) {
+          if (idOn && !GFX.clean && !col.open && !col.door) { // [clean:0] no extra paint bands
             plates.rect(x - cw / 2, ceil + 3, cw, 3.2).fill(woodAt(sty.band, top + ROOM_H / 2));
             plates.rect(x - cw / 2, ceil + 3, cw, 0.7).fill({ color: 0xffffff, alpha: 0.22 });
           }

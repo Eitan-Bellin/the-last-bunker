@@ -1,4 +1,5 @@
 import { getA11y, subscribeA11y } from '../utils/a11y';
+import { GFX } from './gfxFeatures';
 
 // [plan4:ST-12 #3] Screen-space world text. The canvas text used to have a fixed world size (room names: 10 px), so at the old fit zoom (0.54 on a
 // phone) a name was ~5 px tall on the glass. The size is now chosen in screen px and converted back to world units for the current zoom:
@@ -47,9 +48,14 @@ export const labelState: LabelState = { size: LABEL_BASE_FONT, k: 1, mode: 'full
 /** [airy:B1] Mid-zoom simplification: none from this zoom up, full from CLARITY_FULL_ZOOM down (the far map takes over below 0.42). */
 export const CLARITY_NONE_ZOOM = 0.95;
 export const CLARITY_FULL_ZOOM = 0.6;
-/** The pure part: how simplified the rooms are drawn at a zoom (smoothstep, 0..1). */
-export function clarityFor(zoom: number): number {
-  const t = Math.max(0, Math.min(1, (CLARITY_NONE_ZOOM - zoom) / (CLARITY_NONE_ZOOM - CLARITY_FULL_ZOOM)));
+/**
+ * The pure part: how simplified the rooms are drawn at a zoom (smoothstep, 0..1).
+ * [clean:0] With the clean front (`clean`, default on) the simplification belongs to the far zoom only: none while the names show
+ * (LABEL_ICON_ZOOM and up), full at LABEL_HIDE_ZOOM, so at normal zoom the paintings keep their lamps and carry no wash or icon plate.
+ */
+export function clarityFor(zoom: number, clean = GFX.clean): number {
+  const none = clean ? LABEL_ICON_ZOOM : CLARITY_NONE_ZOOM, full = clean ? LABEL_HIDE_ZOOM : CLARITY_FULL_ZOOM;
+  const t = Math.max(0, Math.min(1, (none - zoom) / (none - full)));
   return t * t * (3 - 2 * t);
 }
 
