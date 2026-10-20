@@ -340,6 +340,34 @@ export class CameraController {
     this.keepRectInSight(r);
   }
 
+  /** [clean:1] Screen px at the bottom the room screen's panel covers (below the nav band); kept until releaseRoom. */
+  private heldInset = 0;
+
+  /**
+   * [clean:1] The room screen: glide (cut under reduced motion) so a room fills the band between screen y `topPx` and `bottomPx` (the HUD's
+   * status row above, the room screen's panel below): its width fits the screen width (a little margin), unless its height would not fit the
+   * band, and it sits in the middle of the band. The panel's band is held as an inset so the deepest rooms can rise above it.
+   */
+  frameRoom(r: { x: number; y: number; w: number; h: number }, topPx: number, bottomPx: number): void {
+    const { width, height } = this.host.app.screen;
+    const band = Math.max(40, bottomPx - topPx);
+    const z = this.clampZoom(Math.min((width * 0.94) / Math.max(1, r.w), (band * 0.9) / Math.max(1, r.h)));
+    this.heldInset = Math.max(0, height - hudBottom() - bottomPx);
+    this.bottomInset = Math.max(this.bottomInset, this.heldInset);
+    this.cancelTour();
+    this.stopFollow();
+    // The camera centre maps to viewCY: put the room's centre at the middle of the band instead.
+    const y = r.y + r.h / 2 + (this.viewCY() - (topPx + bottomPx) / 2) / z;
+    this.glideTo(r.x + r.w / 2, y, z, FOCUS_RATE());
+  }
+
+  /** [clean:1] The room screen closed: drop its inset and glide back to the view it opened from (null: stay). */
+  releaseRoom(back: { x: number; y: number; z: number } | null): void {
+    this.heldInset = 0;
+    this.bottomInset = 0;
+    if (back) this.glideTo(back.x, back.y, back.z, FOCUS_RATE());
+  }
+
   /**
    * [plan4:ST-12] The window changed size. A small change (Safari's address bar sliding, a keyboard) keeps zoom and centre; a big one
    * (rotating the phone) starts from the default view again.
@@ -1126,7 +1154,7 @@ export class CameraController {
     // While a sheet lets the camera rest lower, check now and then whether it closed (then glide back).
     if (this.bottomInset > 0 && (this.insetCheck += dt) > 0.25) {
       this.insetCheck = 0;
-      if (!document.querySelector('.sheet-overlay.open')) this.bottomInset = 0;
+      if (!document.querySelector('.sheet-overlay.open')) this.bottomInset = this.heldInset; // [clean:1] the room screen holds its own
     }
     if (this.pointers.size > 0 && (this.isDragging || this.pinch)) {
       // The fingers own the camera.

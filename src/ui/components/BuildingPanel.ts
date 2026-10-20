@@ -28,8 +28,27 @@ import { masteryMultiplier } from '../../data/mastery';
 /** [ux2e #45] How many number rows the stats card shows before "More numbers" (with the upgrade price and time: about 7 in view). */
 const PRIMARY_ROWS = 3;
 
+/**
+ * [clean:1] Where the panel lives when it is not its own bottom sheet: the room screen (RoomScreen.ts) hosts it under its "More" fold.
+ * The panel keeps all its logic (state, renderers, callbacks); only show / hide / visibility, the title and the body are the host's.
+ */
+export interface PanelHost {
+  /** The element the panel renders into. */
+  readonly body: HTMLElement;
+  readonly isOpen: boolean;
+  open(buildingId: string): void;
+  close(): void;
+  /** After every refresh (the host redraws its own part from the same state). */
+  refreshed(state: GameState, b: BuildingInstance): void;
+  /** What the host shows itself: the construction status (and rush) and, when it is the host's main action, the upgrade button. */
+  showsStatus: boolean;
+  showsUpgrade(state: GameState, b: BuildingInstance): boolean;
+}
+
 export class BuildingPanel {
-  private sheet = new Sheet('building-sheet', 'building');
+  /** The bottom sheet (null when a PanelHost holds the panel). */
+  private sheet: Sheet | null = null;
+  private readonly host: PanelHost | null;
   private buildingId: string | null = null;
   private pickerOpen = false;
   /** NICE2: the demolish button was pressed once and waits for a confirmation. */
@@ -65,14 +84,26 @@ export class BuildingPanel {
 
   private engine: GameEngine;
 
-  constructor(engine: GameEngine) {
+  constructor(engine: GameEngine, host: PanelHost | null = null) {
     this.engine = engine;
-    this.sheet.onClose = () => {
-      this.buildingId = null;
-      this.pickerOpen = false;
-      this.visited.clear();
-      this.onClose?.();
-    };
+    this.host = host;
+    if (!host) {
+      this.sheet = new Sheet('building-sheet', 'building');
+      this.sheet.onClose = () => this.closed();
+    }
+  }
+
+  /** [clean:1] The sheet (or the host) closed: forget the room. A host calls this from its own hide. */
+  closed(): void {
+    this.buildingId = null;
+    this.pickerOpen = false;
+    this.visited.clear();
+    this.onClose?.();
+  }
+
+  /** [clean:1] The room shown now (null when closed). */
+  get roomId(): string | null {
+    return this.buildingId;
   }
 
   show(buildingId: string): void {
@@ -83,18 +114,35 @@ export class BuildingPanel {
     this.effOpen = false;
     this.roleOpen = false; // [phase4]
     this.signature = '';
+    if (this.host) {
+      // [clean:1] The room screen opens (or moves to this room) and frames the room itself.
+      this.host.open(buildingId);
+      this.refresh(this.engine.stateManager.state);
+      return;
+    }
     this.refresh(this.engine.stateManager.state);
-    this.sheet.show();
+    this.sheet!.show();
     // [ux-redesign w2fix] Like a ruin's sheet: the world controller frames the room in the strip of world left above the sheet.
     window.dispatchEvent(new CustomEvent('lb:sheet-target', { detail: { buildingId } }));
   }
 
   hide(): void {
-    this.sheet.hide();
+    if (this.host) this.host.close();
+    else this.sheet!.hide();
   }
 
   get isVisible(): boolean {
-    return this.sheet.isVisible;
+    return this.host ? this.host.isOpen : this.sheet!.isVisible;
+  }
+
+  /** [clean:1] Where the panel renders. */
+  private get body(): HTMLElement {
+    return this.host ? this.host.body : this.sheet!.body;
+  }
+
+  /** [clean:1] Re-renders on the next refresh (the host's main action changed what the panel leaves out). */
+  invalidate(): void {
+    this.signature = '';
   }
 
   refresh(state: GameState): void {
@@ -124,6 +172,7 @@ export class BuildingPanel {
       this.demolishOpen, this.engine.buildingSystem.demolishBlock(state, b.id), state.maxPopulation,
       this.moreOpen, this.effOpen, this.detailsOpen, relocateBlock(state, b) ?? '', // [ux2e]
       Object.values(state.resources).map(r => Math.floor(r.cap)).join(','), state.buildings.length, state.currentFloors,
+      this.host?.showsUpgrade(state, b) ?? '', // [clean:1]
     ].join('|');
 
     if (sig !== this.signature) {
@@ -131,15 +180,18 @@ export class BuildingPanel {
       this.render(state, b, upgradeAffordable);
     }
     this.updateDynamic(state, b);
+    this.host?.refreshed(state, b); // [clean:1] the room screen's name, status, facts and main action
   }
 
   private render(state: GameState, b: BuildingInstance, upgradeAffordable: boolean): void {
     const def = getDef(b.type)!;
     const locale = i18n.currentLocale;
-    this.sheet.setTitle(`${BUILDING_ICONS[b.type] ?? ''} ${def.name[locale] ?? def.name.en} · ${i18n.t('building.level', { n: b.level })}`);
+    this.sheet?.setTitle(`${BUILDING_ICONS[b.type] ?? ''} ${def.name[locale] ?? def.name.en} · ${i18n.t('building.level', { n: b.level })}`);
     this.outputValues.clear();
 
     const root = el('div', 'bp');
+    // [clean:1] In the room screen the name, level and construction status are on its own panel.
+    const hosted = this.host;
 
     const status = el('div', 'bp-status');
     this.statusText = el('div', 'bp-status-text');
@@ -157,11 +209,12 @@ export class BuildingPanel {
     status.style.display = b.isConstructing ? '' : 'none';
     // [ux-wp4] B3: the upgrade and "Next" sit in a bar pinned to the top of the sheet: upgrading several rooms is one tap each.
     root.appendChild(this.renderUpgradeBar(state, b, upgradeAffordable));
-    root.appendChild(status);
+    if (hosted?.showsStatus) this.statusText = null;
+    else root.appendChild(status);
 
     if (this.pickerOpen) {
       root.appendChild(this.renderPicker(state, b));
-      this.sheet.body.replaceChildren(root);
+      this.body.replaceChildren(root);
       return;
     }
 
@@ -289,7 +342,7 @@ export class BuildingPanel {
     const roles = this.renderRoles(state, b); // [phase4] one role per room type, plus this room's Act role
     if (roles) root.appendChild(roles);
     root.appendChild(this.renderDemolish(state, b));
-    this.sheet.body.replaceChildren(root);
+    this.body.replaceChildren(root);
   }
 
   /** The crisis in this room (or the blackout on its floor). */
@@ -656,7 +709,9 @@ export class BuildingPanel {
     const bar = el('div', 'bp-upbar');
     const bs = this.engine.buildingSystem;
     const block = bs.upgradeBlock(b, state);
-    if (block === null) {
+    if (block === null && this.host?.showsUpgrade(state, b)) {
+      // [clean:1] The room screen's main button is this upgrade: the bar keeps only "Next".
+    } else if (block === null) {
       // Short of the price the button stays tappable: the app's handler then says what is missing and when it will be there (ui/missing.ts).
       const up = button(`[[up]] ${i18n.t('building.upgradeTo', { n: b.level + 1 })}`, `btn-primary bp-upbtn${affordable ? '' : ' unaffordable'}`, () => this.onUpgrade?.(b.id));
       if (!affordable) up.setAttribute('aria-disabled', 'true');

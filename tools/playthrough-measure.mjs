@@ -24,6 +24,7 @@ const probe = arg('probe', ''); // extra JS expression recorded with every sampl
 const STATE = `(() => { const s = __app.state; const h = s.survivors.map(p => p.happiness); return { act: s.longGame?.act, paused: __engine.paused, morale: Math.round(h.reduce((a, b) => a + b, 0) / Math.max(1, h.length)), people: s.survivors.length, power: Math.round(s.resources.power.amount), food: Math.round(s.resources.food.amount), playSeconds: Math.round(s.stats.totalPlayTime), strip: (document.querySelector('.objective-text')?.textContent ?? '').slice(0, 60), sheet: ([...document.querySelectorAll('.sheet-overlay.open .sheet-title, .sheet-overlay.open h2')][0]?.textContent ?? '').slice(0, 40), rooms: s.buildings.length, probe: (() => { try { return ${probe ? probe : 'null'}; } catch (e) { return String(e); } })() }; })()`;
 const samples = [];
 const tour = process.argv.includes('--tour'); // open every tab, the bell and the status chip: one PNG each (needs --out)
+const roomsOnly = process.argv.includes('--rooms-only'); // [clean:1] with --tour: only the main view and the room screen stops
 const width = Number(arg('width', 375));
 const shots = (arg('shots', '') || '').split(',').filter(Boolean).map(Number); // wall seconds after the start to save a PNG (needs --out)
 const CHROMES = ['C:/Program Files/Google/Chrome/Application/chrome.exe', 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe'];
@@ -79,8 +80,18 @@ try {
     await sleep(1500); await snap('main');
     const stops = [['bell', '.hx-alerts'], ['status', '.hx-act'], ['build', '.hx-tab[data-key=build]'], ['people', '.hx-tab[data-key=people]'],
       ['research', '.hx-tab[data-key=research]'], ['menu', '.hx-tab[data-key=menu]'], ['surface', '.hx-tab[data-key=surface]']];
-    for (const [name, sel] of stops) {
+    for (const [name, sel] of roomsOnly ? [] : stops) {
       await evaluate('document.querySelector(' + JSON.stringify(sel) + ')?.click()'); await sleep(1600); await snap(name);
+      for (let i = 0; i < 3; i++) { await evaluate(close); await sleep(350); }
+    }
+    // [clean:1] The room screen: the busiest room opened through the app's own tap handler (renderer.onBuildingClick, what a tap on the room
+    // calls), then the same with "More" expanded (before the room screen existed: the old sheet scrolled to its end).
+    const busiest = "(() => { const b = [...__app.state.buildings].filter(x => !x.isConstructing).sort((a, c) => c.assignedSurvivorIds.length - a.assignedSurvivorIds.length)[0]; return b ? b.id : null; })()";
+    const roomId = await evaluate(busiest);
+    if (roomId) {
+      await evaluate(`__app.renderer.onBuildingClick(${JSON.stringify(roomId)})`); await sleep(2200); await snap('room');
+      await evaluate("(() => { const t = document.querySelector('.rs-more-toggle'); if (t) { t.click(); return; } const s = document.querySelector('.sheet-overlay.open .sheet'); if (s) s.scrollTop = s.scrollHeight; })()");
+      await sleep(1200); await snap('room-more');
       for (let i = 0; i < 3; i++) { await evaluate(close); await sleep(350); }
     }
     console.log('tour done');

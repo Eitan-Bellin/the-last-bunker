@@ -59,7 +59,7 @@ import { buildAtmosphere, type Atmosphere } from './atmosphere'; // [gfx2 wear]
 import { WingSigns } from './wingSigns'; // [plan4:ST-4]
 import { wingOptions } from './wingsApi'; // [plan4:ST-4] (one-line swap to ../data/wings once it merges)
 import { buildSignage, signZone, sprayOutline, steelTag } from './signage';
-import { FrontChunks } from './frontChunks'; // [plan4:ST-7]
+import { FrontChunks, setStairTowersHidden } from './frontChunks'; // [plan4:ST-7]
 import { KIT_KEYS, buildBays,buildCasing, depthGains, structureAmbient, gfx2Enabled, kitReady, kitState, occupancy, type WorldLamp } from './structure';
 
 
@@ -936,6 +936,13 @@ export class BunkerRenderer {
     this.onPlacementEmptyTap?.();
   }
 
+  /** [clean:1] The room screen is open: the stairwells and vent stacks (infra), drawn in front of the rooms, step aside until it closes. */
+  private roomFocus = false;
+  setRoomFocus(on: boolean): void {
+    this.roomFocus = on;
+    if (this.infra) this.infra.container.visible = !on;
+    setStairTowersHidden(on);
+  }
   setSelected(buildingId: string | null): void {
     this.selectedId = buildingId;
     this.cityHost?.select(buildingId); // [world:C1] the selected room's readability floor lifts
@@ -1244,6 +1251,7 @@ export class BunkerRenderer {
       this.infra = new InfraLayer(); // plan4:ST-14
       this.infra.set(state, { floors: this.floors, exts, st: kitState(this.surfaceEra), ambient: structureAmbient(this.surfaceEra) }); // plan4:ST-14
       this.utilitiesHolder.addChild(this.group(this.infra.container, 'infra')); // plan4:ST-14
+      this.infra.container.visible = !this.roomFocus; // [clean:1]
       // A room's light colour: its lamps' colours, weighted by strength.
       this.roomLight.clear();
       for (const l of lamps) {

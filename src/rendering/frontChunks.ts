@@ -3,6 +3,14 @@ import type { BuildingInstance } from '../core/GameState';
 import { glowTexture } from '../art/ArtLibrary';
 import { roomFlicker } from './paintedRoom';
 import { GFX, gfxLevel } from './gfxFeatures';
+
+/** [clean:1] Stair-tower layers of the mounted chunks: the room screen puts them away (a tower can stand in front of a bridging room). */
+const towerLayers = new Set<Container>();
+let towersHidden = false;
+export function setStairTowersHidden(hidden: boolean): void {
+  towersHidden = hidden;
+  for (const t of towerLayers) { if (t.destroyed) towerLayers.delete(t); else t.visible = !hidden; }
+}
 import { DOOR_H, DOOR_W, openingsOfFloor, type Opening } from './openings';
 import {
   ceilingPanelTexture, floorNumberTexture, floorStyles, heavySlabTexture, kindLight, latticeTexture, mulTint, perforatedSlabTexture, pipeColumnTexture, type FloorStyle,
@@ -569,6 +577,8 @@ export class FrontChunks implements Animated {
     root.addChild(ledgeLayer); // [airy:A3]
     root.addChild(railLayer); // [airy2:D1]
     root.addChild(towerLayer);
+    towerLayer.visible = !towersHidden; // [clean:1]
+    towerLayers.add(towerLayer);
     root.addChild(railLayer); // [airy2:D1]
     // Warm night guide lights at the column feet (fixture always there, lit only at night).
     const guide = (x: number, floorY: number, kl?: FloorStyle) => {

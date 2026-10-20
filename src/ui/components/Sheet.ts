@@ -51,6 +51,8 @@ export class Sheet {
   private opener: HTMLElement | null = null;
 
   onClose: (() => void) | null = null;
+  /** [clean:1] Called when a sheet opens: the room screen (not a sheet) closes then, so one panel is open at a time. */
+  static onOpen: (() => void) | null = null;
   /** [Q6] Opens the Bunker Book at a topic; set once by the app. */
   static onHelp: ((topic: string) => void) | null = null;
 
@@ -207,6 +209,16 @@ export class Sheet {
     return true;
   }
 
+  /** [clean:1] Closes every open sheet at once (the room screen opening). */
+  static closeAll(): void {
+    for (const s of [...openSheets].reverse()) s.hideNow();
+  }
+
+  /** [clean:1] Is any sheet open? */
+  static get anyOpen(): boolean {
+    return openSheets.length > 0;
+  }
+
   setTitle(text: string): void {
     setRich(this.titleEl, text);
   }
@@ -238,6 +250,7 @@ export class Sheet {
     if (i >= 0) openSheets.splice(i, 1);
     openSheets.push(this);
     if (!wasOpen) {
+      Sheet.onOpen?.();
       this.staggerRows();
       if (openCount++ === 0) for (const n of behind()) holdInert(n, 'sheet');
       // The title takes the focus so a screen reader starts at the top of the panel (a repeated show() leaves it where the player is).
