@@ -14,7 +14,7 @@ const CHAPTER_GAP = 240;
 /** [ux-wp5 C3] The first team to come home from this far out finds the Genesis expedition's map. */
 const MAP_FRAGMENT_RING = 5;
 /** [Q1] From the late chapters on, at least an hour of play separates two chapters, so a run never ends in a flood of dialogs. */
-const LATE_CHAPTER = 9;
+const LATE_CHAPTER = 10; // [phase5] "Platform 4" (was 9 before the Act II frost chapter came before the winter)
 const LATE_CHAPTER_GAP = 3600;
 /** Story characters never walk out in a "someone leaves" outcome; they have their own arcs. */
 const STORY_PEOPLE = new Set(['Maya', 'Gideon']);
@@ -106,9 +106,13 @@ export class StorySystem {
   /** Whether a choice is on offer and can be afforded. */
   canChoose(chapterId: string, key: string): boolean {
     const ch = getChapter(chapterId);
-    const choice = ch ? shownChoices(ch).find(c => c.key === key) : undefined;
+    const shown = ch ? shownChoices(ch) : [];
+    const choice = shown.find(c => c.key === key);
     if (!choice) return false;
-    return !choice.effect.cost || this.resources.canAfford(this.sm.state, choice.effect.cost as Record<string, number>);
+    const afford = (c: (typeof shown)[number]) => !c.effect.cost || this.resources.canAfford(this.sm.state, c.effect.cost as Record<string, number>);
+    if (afford(choice)) return true;
+    // [phase5] Never a stuck chapter: when nothing on offer can be paid, the last choice is open anyway (it takes what there is).
+    return choice === shown[shown.length - 1] && !shown.some(afford);
   }
 
   /** Finishes a chapter with the given choice (or none); returns the reply lines and what changed. */

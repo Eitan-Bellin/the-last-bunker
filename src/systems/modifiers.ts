@@ -38,9 +38,10 @@ export function prepareModifiers(state: GameState): void {
 
 /** The product of every modifier for this room and resource, held under the central ceiling. */
 export function modifierProduct(ctx: ModifierContext): number {
-  let p = 1;
-  for (const m of modifiers) p *= m.mult(ctx);
-  return Math.min(p, TUNING.multiplierCeiling);
+  // [phase5] A modifier marked `uncapped` (the Genesis bonuses) sits above the ceiling: a new run starts ahead, not at the same cap.
+  let p = 1, free = 1;
+  for (const m of modifiers) { const v = m.mult(ctx); if ((m as { uncapped?: boolean }).uncapped) free *= v; else p *= v; }
+  return Math.min(p, TUNING.multiplierCeiling) * free;
 }
 
 /** Each modifier's share, for the "why" panel (call prepareModifiers first). Ones at exactly 1 are left out. */

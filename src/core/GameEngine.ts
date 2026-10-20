@@ -247,6 +247,8 @@ export class GameEngine {
     this.explorationSystem = new ExplorationSystem(this.stateManager, this.rng, this.resourceSystem, this.populationSystem);
     this.eventSystem.setExploration(this.explorationSystem);
     this.metaSystem = new MetaSystem(this.stateManager, this.resourceSystem);
+    // [phase5] Genesis perks that add people (Founders class, Veterans) go through the normal arrival path.
+    this.metaSystem.addPeople = n => { for (let i = 0; i < n; i++) this.populationSystem.addSurvivor(this.stateManager, this.populationSystem.createSurvivor(this.rng)); };
     this.objectiveSystem = new ObjectiveSystem(this.stateManager, this.resourceSystem);
     this.objectiveSystem.guide = s => guideObjective(this, s); // [Q2]
     this.chronicleSystem = new ChronicleSystem(this.stateManager); // [Q14]

@@ -3,7 +3,10 @@ import type { GameEngine } from '../../core/GameEngine';
 import { i18n } from '../../i18n/I18nManager';
 import { fmtNum, plural } from '../format';
 import { ACHIEVEMENTS } from '../../data/achievements';
-import { PRESTIGE_UPGRADES, upgradeCost } from '../../data/prestige';
+import { CLASS_GROUP, CLASS_LINES, PRESTIGE_UPGRADES, classOf, upgradeCost } from '../../data/prestige';
+import { endingOf } from '../../data/endings'; // [phase5]
+import { MUTATORS, RETIRED_MUTATORS, hasMutator } from '../../data/mutators'; // [phase5]
+import { className, perkLine, showClassPick } from './GenesisClassPick'; // [phase5]
 import { ERAS } from '../../data/eras';
 import type { MetaSystem } from '../../systems/MetaSystem';
 import { Sheet } from './Sheet';
@@ -751,9 +754,16 @@ export class MenuPanel {
     }
     box.appendChild(rebirth);
 
+    // [phase5] The class (the first Genesis purchase) and what the endings carry into the next run.
+    box.appendChild(this.renderClassCard(state));
+    box.appendChild(this.renderPerkCard(state));
+    const classFirst = meta.classPickDue(state);
+
     const shop = el('div', 'bp-card');
     shop.appendChild(el('div', 'bp-section-title', i18n.t('genesis.upgrades')));
+    if (classFirst) shop.appendChild(el('div', 'bp-hint', `[[lock]] ${i18n.t('p5g.tab.classFirst')}`));
     for (const u of PRESTIGE_UPGRADES) {
+      if (u.keystone === CLASS_GROUP) continue; // [phase5] the classes have their own card above
       const level = meta.upgradeLevel(state, u.id);
       const row = el('div', 'genesis-row');
       const info = el('div', 'genesis-info');
@@ -774,11 +784,55 @@ export class MenuPanel {
             this.signature = '';
             this.refresh(this.engine.stateManager.state);
           }
-        }, meta.isotope(state) < cost));
+        }, meta.isotope(state) < cost || classFirst));
       }
       shop.appendChild(row);
     }
     box.appendChild(shop);
     return box;
+  }
+
+  /** [phase5] The bunker's class: what it changes, or the button that opens the full-screen pick. */
+  private renderClassCard(state: GameState): HTMLElement {
+    const meta = this.engine.metaSystem;
+    const locale = i18n.currentLocale;
+    const card = el('div', 'bp-card p5g-card');
+    card.appendChild(el('div', 'bp-section-title', `[[crown]] ${i18n.t('p5g.tab.class')}`));
+    const cls = classOf(state);
+    if (cls) {
+      card.appendChild(el('div', 'research-name', `${cls.icon} ${className(cls)}`));
+      const ul = el('ul');
+      for (const line of CLASS_LINES[cls.id] ?? [cls.desc]) ul.appendChild(el('li', '', line[locale] ?? line.en));
+      card.appendChild(ul);
+      return card;
+    }
+    card.appendChild(el('div', 'bp-hint', i18n.t('p5g.tab.classNone', { n: meta.classCost() })));
+    if (meta.classPickDue(state)) {
+      card.appendChild(button(`[[crown]] ${i18n.t('p5g.tab.pick')}`, 'btn-primary', () => {
+        showClassPick(this.engine, () => { this.signature = ''; this.refresh(this.engine.stateManager.state); });
+      }));
+    }
+    return card;
+  }
+
+  /** [phase5] The perk this run has from the last ending, the one the next run would get, and this run's hardships. */
+  private renderPerkCard(state: GameState): HTMLElement {
+    const locale = i18n.currentLocale;
+    const card = el('div', 'bp-card p5g-card');
+    card.appendChild(el('div', 'bp-section-title', `[[trophy]] ${i18n.t('p5g.tab.perkTitle')}`));
+    const now = perkLine(this.engine, state);
+    card.appendChild(el('div', 'bp-hint', now || i18n.t('p5g.tab.perkNone')));
+    if (state.longGame && !state.longGame.meta.legacy) {
+      const next = endingOf(state);
+      card.appendChild(el('div', 'bp-hint', i18n.t('p5g.tab.next', { ending: `${next.icon} ${next.name[locale]}`, perk: next.perk.name[locale], desc: next.perk.desc[locale] })));
+    }
+    const hard = [...MUTATORS, ...RETIRED_MUTATORS].filter(m => hasMutator(state, m.id));
+    if (hard.length) {
+      card.appendChild(el('div', 'bp-section-title', `[[skull]] ${i18n.t('p5g.tab.hardships')}`));
+      const ul = el('ul');
+      for (const m of hard) ul.appendChild(el('li', '', `${m.icon} ${m.name[locale]}: ${m.desc[locale]}`));
+      card.appendChild(ul);
+    }
+    return card;
   }
 }

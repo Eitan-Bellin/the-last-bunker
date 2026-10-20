@@ -1,0 +1,15 @@
+{
+  "en": {
+    "p5a.siege.held": "The Wall held: all {n} waves broke on it.",
+    "p5a.siege.bent": "The Wall held {n} of 3 waves; the rest broke into the yard.",
+    "p5a.siege.broke": "The Wall fell: the Grey Column broke into the yard.",
+    "p5a.siege.soon": "The Grey Column reaches the Wall in {t}: defense {d}, the waves {w}."
+  },
+  "he": {
+    "p5a.siege.held": "החומה החזיקה: כל {n} הגלים נשברו עליה.",
+    "p5a.siege.bent": "החומה החזיקה {n} מתוך 3 גלים, והשאר פרצו לחצר.",
+    "p5a.siege.broke": "החומה נפלה: הטור האפור פרץ לחצר.",
+    "p5a.siege.soon": "הטור האפור יגיע לחומה בעוד {t}: הגנה {d}, הגלים {w}."
+  },
+  "replace": {}
+}

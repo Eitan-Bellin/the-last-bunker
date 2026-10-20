@@ -1,7 +1,7 @@
 import { LAWS, lawCooldown, lawCost, lawSlots, lawUpkeep } from '../../data/laws';
 import { ENDINGS, endingScore, pushActive, type EndingDef, type EndingPush } from '../../data/endings';
 import { showCrossroads } from './Crossroads'; // [phase4]
-import { noteRepeal } from '../../systems/ActSystem'; // [phase4]
+import { noteRepeal, signatureRequirement } from '../../systems/ActSystem'; // [phase4] [phase5] the Act's signature row
 import '../../styles/p4-c.css'; // [phase4]
 import type { GameEngine } from '../../core/GameEngine';
 import type { GameState, ResourceType } from '../../core/GameState';
@@ -43,6 +43,18 @@ function topGoals(reqs: Requirement[]): Requirement[] {
   const open = reqs.filter(r => !r.done && !r.locked);
   const later = reqs.filter(r => !r.done && r.locked);
   return [...open, ...later].slice(0, NOW_GOALS);
+}
+
+/**
+ * [phase5] The Act's signature problem as one more requirement row (after its counter goals, before the charter projects), unless the
+ * guide already lists it (Guide.actRequirements, once it is wired there).
+ */
+function withSignature(reqs: Requirement[], state: GameState, act: ActDef): Requirement[] {
+  if (reqs.some(r => r.id === 'signature')) return reqs;
+  const sig = signatureRequirement(state, act);
+  if (!sig) return reqs;
+  const at = reqs.findIndex(r => !!r.project);
+  return at < 0 ? [...reqs, sig] : [...reqs.slice(0, at), sig, ...reqs.slice(at)];
 }
 
 /** Sets a line of text that may hold icon tokens ([[food]]), only when it changed (the panel refreshes four times a second). */
@@ -168,7 +180,7 @@ export class EraPanel {
     this.lastState = state;
     const orders = FOREMAN_ORDERS.map(o => (state.longGame?.foreman.orders[o] ? 1 : 0)).join('') + (state.longGame?.policy.laws ?? []).join(',');
     // [ux2e] The requirements are read once per refresh; the Now tab rebuilds when its three goals change.
-    const reqs = act && this.engine ? actRequirements(this.engine, state, act) : [];
+    const reqs = act && this.engine ? withSignature(actRequirements(this.engine, state, act), state, act) : []; // [phase5]
     const goals = this.tab === 'now' && !this.actOpen ? topGoals(reqs).map(r => r.id).join(',') : '';
     const tabs = this.tabs(state).map(t => t.id).join(','); // [phase2] a tab appears when its system opens
     const doctrines = this.tab === 'policies' && this.engine ? RESEARCH.filter(r => r.fork).map(r => this.engine!.researchSystem.status(state, r.id)).join(',') : '';
@@ -730,6 +742,8 @@ export function showActBanner(act: ActDef, onDone: () => void): void {
     el('div', 'era-banner-tagline', act.tagline[locale]),
     el('p', 'era-banner-story', i18n.t('act.opens', { level: act.levelCap, people: act.popCap, floors: act.floorCap })),
   );
+  // [phase5] The problem this Act brings, and the goal that answers it.
+  if (act.signature) inner.appendChild(el('p', 'era-banner-story act-banner-problem', `${act.signature.problem[locale]} ${act.signature.icon} ${act.signature.text[locale]}.`));
   if (act.opens) inner.appendChild(el('p', 'era-banner-story', act.opens[locale]));
   const btn = el('button', 'btn btn-primary', i18n.t('era.continue'));
   inner.appendChild(btn);
