@@ -474,6 +474,9 @@ function districtEntry(type: string, tier: RoomTier): ArtEntry {
 export const PAINTED_TYPES: BuildingType[] = [
   'quarters', 'farm', 'generator', 'waterPump', 'workshop', 'medbay', 'canteen', 'laboratory',
   'radioTower', 'waterPurifier', 'trainingRoom', 'armory', 'reactor', 'hydroponics', 'storage',
+  // [clean:3] painted 2026-10-20 (Canva, one look per type for now: the same painting serves all three tiers)
+  'mushroomFarm', 'batteryBank', 'library', 'condenser', 'commons', 'bathhouse', 'memorialHall', 'quarantineWard', 'nursery',
+  'componentsPlant', 'barracks', 'market', 'recycler', 'alloyFoundry', 'school', 'dataCenter', 'forum', 'seedLab',
 ];
 
 /** Room paintings that exist on disk: every room type in all three tiers. */
