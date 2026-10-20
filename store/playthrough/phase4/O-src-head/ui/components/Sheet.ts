@@ -1,0 +1,319 @@
+import { el, setRich } from '../dom';
+import { haptic } from '../../utils/haptics';
+import { uiSound } from '../../audio/uiSound';
+import { i18n } from '../../i18n/I18nManager';
+import { trapTab } from '../a11yDom';
+import { dropInert, holdInert } from '../inertOwners';
+import { MS } from '../kit/tokens';
+
+/** [ux-redesign W4] Rows of a sheet that come in one by one (fx.css styles the same eight). */
+const STAGGER_ROWS = 8;
+/** [w4fix C3] How deep under the body the row list may sit (Build: .bm > .bm-list; Research: .bp > .research-list; Menu: a settings card six levels down). */
+const STAGGER_DEPTH = 6;
+
+/** Open sheets, newest last: Escape closes the top one. */
+const openSheets: Sheet[] = [];
+let escBound = false;
+/** [plan4:AC-8] How many sheets are open: while any is, the HUD and the canvas behind are inert (out of the tab order and the screen reader). */
+let openCount = 0;
+let titleSeq = 0;
+const behind = (): Element[] => [document.getElementById('hud'), document.getElementById('game-canvas')].filter((n): n is HTMLElement => !!n);
+
+/*
+ * [ux-w2f #38] Sheet motion (250 ms in, 180 ms out, `.sheet-instant` when one sheet replaces another) lives in style.css
+ * ([ux-redesign w2fix]: it used to be injected from here as <style id="sheet-motion">).
+ */
+
+/**
+ * [ux-redesign w2fix] Sheets that open OVER the sheet that asked for them instead of replacing it: the Bunker Book (help) and the
+ * Chronicle (opened from the Menu, which is still there when it closes). Every other sheet replaces the open one (coupon and projects
+ * close the others themselves before they open).
+ */
+const STACKING = ['help-sheet', 'chronicle-sheet'];
+const stacks = (s: Sheet): boolean => STACKING.some(c => s.panelHas(c));
+
+/** How far (px) or how fast (px/ms) a pull-down must go to dismiss the sheet. */
+const DISMISS_PX = 90;
+const DISMISS_SPEED = 0.6;
+
+/**
+ * Bottom sheet that slides up over the game. It closes from the ✕ plate, a tap on the backdrop,
+ * Escape, or a pull-down: drag the handle/title, or pull the body down while it is scrolled to the top.
+ */
+export class Sheet {
+  readonly body: HTMLDivElement;
+  private overlay: HTMLDivElement;
+  private panel: HTMLDivElement;
+  private titleEl: HTMLHeadingElement;
+  private open = false;
+  private helpBtn: HTMLButtonElement;
+  /** [plan4:AC-8] What had the focus when the sheet opened: it gets it back on close. */
+  private opener: HTMLElement | null = null;
+
+  onClose: (() => void) | null = null;
+  /** [Q6] Opens the Bunker Book at a topic; set once by the app. */
+  static onHelp: ((topic: string) => void) | null = null;
+
+  constructor(extraClass = '', helpTopic: string | null = null) {
+    this.overlay = el('div', 'sheet-overlay');
+    this.overlay.addEventListener('click', (e) => {
+      if (e.target === this.overlay) this.hide();
+    });
+
+    this.panel = el('div', `sheet ${extraClass}`);
+    this.panel.setAttribute('role', 'dialog');
+    this.panel.setAttribute('aria-modal', 'true');
+    const close = el('button', 'sheet-close', '[[close]]');
+    close.setAttribute('aria-label', i18n.t('journal.close'));
+    close.addEventListener('click', (e) => {
+      e.stopPropagation();
+      haptic('tap');
+      this.hide();
+    });
+    // [Q6] The "?" plate: opens the Bunker Book at this sheet's topic (shown only when a topic was set).
+    this.helpBtn = el('button', 'sheet-help', '[[question]]');
+    this.helpBtn.style.display = 'none';
+    this.helpBtn.setAttribute('aria-label', i18n.t('book.title'));
+    this.helpBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      haptic('tap');
+      const topic = this.helpBtn.dataset.topic;
+      if (topic) Sheet.onHelp?.(topic);
+    });
+    const handle = el('div', 'sheet-handle');
+    this.titleEl = el('h2', 'sheet-title');
+    // [plan4:AC-8] The dialog is named by its title; the title takes the focus on open (tabindex -1: reachable by script, not by Tab).
+    this.titleEl.id = `sheet-title-${++titleSeq}`;
+    this.titleEl.tabIndex = -1;
+    this.panel.setAttribute('aria-labelledby', this.titleEl.id);
+    // Tab stays in the sheet and the navigation console that is always visible below it.
+    this.overlay.addEventListener('keydown', (e) => trapTab(e, [this.panel, ...[document.querySelector('.hud-bottom')].filter((n): n is Element => !!n)]));
+    this.body = el('div', 'sheet-body');
+    this.panel.append(close, this.helpBtn, handle, this.titleEl, this.body);
+    this.overlay.appendChild(this.panel);
+    document.body.appendChild(this.overlay);
+    this.bindPullDown(handle);
+    this.setHelp(helpTopic);
+
+    if (!escBound) {
+      escBound = true;
+      document.addEventListener('keydown', (e) => {
+        // [ux-wp4] Escape closes the top sheet only, and not while a dialog is up (the dialog asks for an answer first).
+        if (e.key === 'Escape' && !document.querySelector('.modal-overlay.open')) Sheet.closeTop();
+      });
+    }
+  }
+
+  /** Pull-to-dismiss. Touch works anywhere while the body sits at the top; the mouse drags the handle or title. */
+  private bindPullDown(handle: HTMLElement): void {
+    let startX = 0;
+    let startY = 0;
+    let startT = 0;
+    let dy = 0;
+    let armed = false;
+    let dragging = false;
+
+    const begin = (y: number) => {
+      startY = y;
+      startT = performance.now();
+      dy = 0;
+      dragging = false;
+    };
+    const move = (y: number): boolean => {
+      dy = y - startY;
+      if (!dragging) {
+        if (dy < 8) return false;
+        dragging = true;
+        this.panel.classList.add('dragging');
+        startY = y;
+        startT = performance.now();
+        dy = 0;
+      }
+      // Follow the finger downward, resist a little upward.
+      const shown = dy > 0 ? dy : dy * 0.25;
+      this.panel.style.transform = `translateY(${shown.toFixed(1)}px)`;
+      return true;
+    };
+    const end = () => {
+      if (!dragging) return;
+      dragging = false;
+      const speed = dy / Math.max(1, performance.now() - startT);
+      this.panel.classList.remove('dragging');
+      this.panel.style.transform = '';
+      if (dy > DISMISS_PX || (dy > 24 && speed > DISMISS_SPEED)) this.hide();
+    };
+
+    this.panel.addEventListener('touchstart', (e) => {
+      if (e.touches.length !== 1) { armed = false; return; }
+      // [plan4:UX-4] A touch that starts on a text field or a slider belongs to that control (typing, selecting, dragging a thumb),
+      // never to the pull-down: the old code cancelled every downward touchmove, which froze the volume sliders.
+      const t = e.target as Element | null;
+      if (t?.closest?.('input,textarea,select,[data-no-pulldown]')) { armed = false; return; }
+      // Only a pull that starts with the content at its top may close the sheet.
+      armed = this.panel.scrollTop <= 0;
+      startX = e.touches[0].clientX;
+      begin(e.touches[0].clientY);
+    }, { passive: true });
+    this.panel.addEventListener('touchmove', (e) => {
+      if (!armed || e.touches.length !== 1) return;
+      const y = e.touches[0].clientY;
+      if (!dragging) {
+        const dy = y - startY;
+        const dx = e.touches[0].clientX - startX;
+        if (dy < -8) {
+          // Pushing the content up is a normal scroll: hand the gesture back to the browser.
+          armed = false;
+          return;
+        }
+        // [plan4:UX-4] Claim the gesture only once it is clearly a downward pull (more than 8 px, and more vertical than
+        // horizontal): a sideways swipe or a small wobble of a tap must stay with the content under the finger.
+        if (dy <= 8) return;
+        if (Math.abs(dy) <= Math.abs(dx)) { armed = false; return; }
+      }
+      // At the top a downward pull has nothing to scroll, so once claimed the sheet follows the finger
+      // (later touchmoves stop being cancelable once the browser starts its own pan).
+      if (e.cancelable) e.preventDefault();
+      move(y);
+    }, { passive: false });
+    const touchEnd = () => {
+      armed = false;
+      end();
+    };
+    this.panel.addEventListener('touchend', touchEnd);
+    this.panel.addEventListener('touchcancel', touchEnd);
+
+    // Mouse: drag the grip or the title bar.
+    const grabMouse = (e: PointerEvent) => {
+      if (e.pointerType !== 'mouse' || e.button !== 0) return;
+      begin(e.clientY);
+      const onMove = (ev: PointerEvent) => { move(ev.clientY); };
+      const onUp = () => {
+        window.removeEventListener('pointermove', onMove);
+        window.removeEventListener('pointerup', onUp);
+        end();
+      };
+      window.addEventListener('pointermove', onMove);
+      window.addEventListener('pointerup', onUp);
+    };
+    handle.addEventListener('pointerdown', grabMouse);
+    this.titleEl.addEventListener('pointerdown', grabMouse);
+  }
+
+  /** [ux-wp4] Closes the newest open sheet (the phone's back button and Escape): false when no sheet is open. */
+  static closeTop(): boolean {
+    const top = openSheets[openSheets.length - 1];
+    if (!top) return false;
+    top.hide();
+    return true;
+  }
+
+  setTitle(text: string): void {
+    setRich(this.titleEl, text);
+  }
+
+  /** [Q6] Puts a "?" plate on the sheet that opens the Bunker Book at the given topic (null removes it). */
+  setHelp(topic: string | null): void {
+    this.helpBtn.style.display = topic ? '' : 'none';
+    if (topic) this.helpBtn.dataset.topic = topic;
+  }
+
+  show(): void {
+    if (!this.open) {
+      this.opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      uiSound('open', 0.7, 150);
+      // [Q6] The newest sheet is the top sheet (the Bunker Book opens over the sheet it was asked from), but always below dialogs.
+      const modal = document.querySelector('.modal-overlay');
+      if (modal && modal.parentElement === document.body) document.body.insertBefore(this.overlay, modal);
+      else document.body.appendChild(this.overlay);
+    }
+    // [ux-w2f #38] Switching sheets: the old one goes at once (the stacking readers are the exception: see STACKING).
+    if (!stacks(this)) {
+      for (const other of [...openSheets]) if (other !== this && !stacks(other)) other.hideNow();
+    }
+    this.open = true;
+    this.panel.style.transform = '';
+    const wasOpen = openSheets.includes(this);
+    this.overlay.classList.add('open');
+    const i = openSheets.indexOf(this);
+    if (i >= 0) openSheets.splice(i, 1);
+    openSheets.push(this);
+    if (!wasOpen) {
+      this.staggerRows();
+      if (openCount++ === 0) for (const n of behind()) holdInert(n, 'sheet');
+      // The title takes the focus so a screen reader starts at the top of the panel (a repeated show() leaves it where the player is).
+      this.titleEl.focus({ preventScroll: true });
+    }
+  }
+
+  /**
+   * [ux-redesign W4] The first eight rows come in one after the other (fx.css, --stagger apart, skipped under reduced motion). The class
+   * stays only for the entrance, so rows a panel re-renders later simply appear. Taps are never held up: rows are tappable at once.
+   */
+  private staggerTimer = 0;
+  private staggerEl: HTMLElement | null = null;
+  private staggerRows(): void {
+    window.clearTimeout(this.staggerTimer);
+    this.staggerEl?.classList.remove('fx-stagger');
+    const list = this.staggerList();
+    this.staggerEl = list;
+    void list.offsetWidth;
+    list.classList.add('fx-stagger');
+    this.staggerTimer = window.setTimeout(() => list.classList.remove('fx-stagger'), MS['dur-popup-in'] + MS.stagger * STAGGER_ROWS);
+  }
+
+  /**
+   * [w4fix C3] Which rows come in one after the other: most panels put one wrapper in the body (Build, Research, Menu), so the rows are
+   * the children of the panel's longest list a few levels down (tab rows aside), else the body's own children.
+   */
+  private staggerList(): HTMLElement {
+    let best: HTMLElement = this.body;
+    let most = this.body.children.length;
+    let level: Element[] = [this.body];
+    for (let depth = 0; depth < STAGGER_DEPTH && level.length; depth++) {
+      const next: Element[] = [];
+      for (const n of level) {
+        for (const c of n.children) {
+          if (!(c instanceof HTMLElement) || c.matches('.tab-row, [role="tablist"]')) continue;
+          if (c.children.length > most) { best = c; most = c.children.length; }
+          next.push(c);
+        }
+      }
+      level = next;
+    }
+    return best;
+  }
+
+  /** [ux-w2f #38] Closes without the slide (another sheet is taking over). */
+  private hideNow(): void {
+    this.overlay.classList.add('sheet-instant');
+    this.hide();
+    void this.overlay.offsetWidth; // apply the instant state before the class goes
+    requestAnimationFrame(() => this.overlay.classList.remove('sheet-instant'));
+  }
+
+  hide(): void {
+    if (!this.open) return;
+    this.open = false;
+    this.overlay.classList.remove('open');
+    const i = openSheets.indexOf(this);
+    if (i >= 0) openSheets.splice(i, 1);
+    if (--openCount <= 0) {
+      openCount = 0;
+      for (const n of behind()) dropInert(n, 'sheet');
+    }
+    const back = this.opener;
+    this.opener = null;
+    // Focus returns to what opened the sheet (when that is still on the page and the player is not inside another sheet now).
+    if (back && back.isConnected && !openSheets.length) back.focus({ preventScroll: true });
+    this.onClose?.();
+  }
+
+  get isVisible(): boolean {
+    return this.open;
+  }
+
+  /** The panel carries this class (which kind of sheet it is). */
+  panelHas(cls: string): boolean {
+    return this.panel.classList.contains(cls);
+  }
+}

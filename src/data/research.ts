@@ -28,6 +28,11 @@ export interface ResearchDef {
   fork?: string;
   /** [Long game P3] Eureka: a node that matches how the bunker is played costs 30% less and takes 40% less time. */
   eureka?: { kind: EurekaKind; n: number };
+  /**
+   * [phase4] A filler node (a plain % or storage step nobody needs to think about): never shown or bought, it completes by itself, for
+   * free, once its Act has come and its prerequisites are done (ResearchSystem.autoComplete). Keeps the visible tree near 60 nodes.
+   */
+  auto?: boolean;
 }
 
 /** What a Eureka looks at. */

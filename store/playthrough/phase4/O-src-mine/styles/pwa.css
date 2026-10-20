@@ -1,0 +1,90 @@
+/* [plan4:UX-13, UX-14] Installed-app chrome: the "new version" chip, the home-screen card, save/backup helpers. Own file (UX-iPhone). */
+
+/* The "new version ready" chip: same family as the sound chip, one slot higher so both can be up together. */
+.notice-chip {
+  position: fixed;
+  inset-inline: 0;
+  margin-inline: auto;
+  width: max-content;
+  max-width: calc(100% - 32px);
+  bottom: calc(var(--nav-h, 72px) + var(--obj-h, 0px) + 68px);
+  z-index: 35;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 8px 16px;
+  border-radius: 22px;
+  border: 1px solid #6fd3a0;
+  background: #1c1d20;
+  color: #d8f5e4;
+  font: inherit;
+  font-size: calc(14px * var(--fs, 1));
+  font-weight: 600;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.6);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(6px);
+  transition: opacity 0.18s, transform 0.18s;
+}
+.notice-chip.show { opacity: 1; pointer-events: auto; transform: none; }
+.notice-chip:disabled { opacity: 0.8; }
+/* A note, not a button: never takes a tap. */
+.notice-chip.gfx-note { pointer-events: none; border-color: var(--border, #555); color: #e8e2d8; bottom: auto; top: calc(env(safe-area-inset-top, 0px) + 96px); }
+@media (orientation: landscape) and (max-height: 500px) {
+  .notice-chip { bottom: calc(max(8px, env(safe-area-inset-bottom)) + 56px); }
+}
+
+/* The numbered steps of the "Add to Home Screen" card. */
+.pwa-list {
+  margin: 8px 0 0;
+  padding-inline-start: 1.4em;
+  display: grid;
+  gap: 10px;
+  text-align: start;
+  font-size: calc(15px * var(--fs, 1));
+  line-height: 1.45;
+}
+.pwa-list li .ic { width: 1.2em; height: 1.2em; vertical-align: -0.2em; }
+
+/* The "copy the code" box that replaced window.prompt (UX-16). */
+.copy-code {
+  width: 100%;
+  min-height: 120px;
+  max-height: 40vh;
+  margin-top: 8px;
+  padding: 10px;
+  box-sizing: border-box;
+  resize: none;
+  font: 12px/1.35 ui-monospace, Menlo, monospace;
+  direction: ltr;
+  text-align: left;
+  color: var(--text, #e8e2d8);
+  background: rgba(0, 0, 0, 0.45);
+  border: 1px solid var(--border, #3a3a3a);
+  border-radius: 8px;
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+/* [plan4:UX-18] Splash progress: a hairline under the title, moved by setSplashProgress(). */
+.splash-progress {
+  position: absolute;
+  inset-inline: 0;
+  margin-inline: auto;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 18vh);
+  width: min(60vw, 240px);
+  height: 3px;
+  border-radius: 2px;
+  background: rgba(241, 213, 138, 0.18);
+  overflow: hidden;
+}
+.splash-progress > i { display: block; height: 100%; width: 0; background: #f1d58a; transition: width 0.35s ease-out; }
+
+/* [plan4:UX-5 follow-up] Review on iPhone sizes: the full-size buttons (Upgrade, Start research, people tabs) measured 37-40px. A real
+   44px box for all of them; the .btn-small family keeps its 34px look with the 44px ::after hit area from touch.css. */
+.btn:not(.btn-small) { min-height: var(--tap, 44px); }
+/* The volume sliders were 28px tall: the thumb is the touch target, so the control is a 44px band (the track stays centred). */
+.vol-slider { height: var(--tap, 44px); }
+/* A very narrow small button (the "?" help, 29px wide) got only 5px of hit area each side: widen the ::after to 44 whatever the width. */
+.btn-small::after { inset-inline: min(-5px, calc((var(--tap, 44px) - 100%) / -2 - 1px)); }

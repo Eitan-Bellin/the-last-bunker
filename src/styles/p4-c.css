@@ -1,0 +1,73 @@
+/* [phase4] Agent C: the Crossroads (doctrine choice), the Endings tally and the Policies tab additions. Tokens only. */
+
+/* The Crossroads: full screen, above the sheets and dialogs, scrolls on a phone. `.ceremony` makes the dialog queue wait. */
+.ceremony.p4c-xr {
+  z-index: var(--z-story);
+  pointer-events: auto;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  background: var(--surface-0);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+.ceremony.p4c-xr.in { opacity: 1; }
+:root[data-motion="reduced"] .ceremony.p4c-xr { transition: none; }
+
+.p4c-xr__inner {
+  max-width: 1040px;
+  margin: 0 auto;
+  padding: var(--sp-5) var(--sp-4) var(--sp-7);
+  padding-top: max(var(--sp-5), env(safe-area-inset-top));
+  padding-bottom: max(var(--sp-7), env(safe-area-inset-bottom));
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+.p4c-xr__kicker { color: var(--primary); font-size: 0.85rem; letter-spacing: 0.06em; text-transform: uppercase; }
+.p4c-xr__title { margin: 0; color: var(--text-primary); font-size: 1.5rem; line-height: 1.2; }
+.p4c-xr__hint { margin: 0; color: var(--text-secondary); font-size: 0.9rem; }
+
+/* Three ways: stacked on a phone, side by side from a tablet. */
+.p4c-xr__grid { display: grid; grid-template-columns: 1fr; gap: var(--sp-3); }
+@media (min-width: 720px) { .p4c-xr__grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+
+.p4c-xr__col {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  min-width: 0;
+  padding: var(--sp-4);
+  background: var(--surface-1);
+  border: var(--border-w) solid var(--border);
+  border-radius: var(--r-card);
+  box-shadow: var(--elev-1);
+}
+.p4c-xr__name { margin: 0; color: var(--text-primary); font-size: 1.1rem; overflow-wrap: anywhere; }
+.p4c-xr__label { color: var(--text-tertiary); font-size: 0.75rem; letter-spacing: 0.05em; text-transform: uppercase; margin-top: var(--sp-1); }
+.p4c-xr__rule, .p4c-xr__ending { margin: 0; color: var(--text-primary); font-size: 0.95rem; line-height: 1.4; overflow-wrap: anywhere; }
+.p4c-xr__nums { margin: 0; padding-inline-start: var(--sp-4); color: var(--text-secondary); font-size: 0.9rem; line-height: 1.45; }
+.p4c-xr__nums li { overflow-wrap: anywhere; }
+.p4c-xr__choose { min-height: 48px; margin-top: auto; width: 100%; }
+.p4c-xr__later { min-height: 48px; align-self: center; }
+
+/* Research: the card that says a Crossroads is waiting. */
+.p4c-xr-card { display: flex; flex-direction: column; gap: var(--sp-2); border-inline-start: var(--ring-w) solid var(--primary); }
+.p4c-xr-card .k-btn { min-height: 48px; }
+
+/* Command > Endings: what pushes each ending, with its state. */
+.p4c-push-list { list-style: none; margin: var(--sp-1) 0 var(--sp-3); padding: 0; display: flex; flex-wrap: wrap; gap: var(--sp-1); }
+.p4c-push {
+  font-size: 0.8rem;
+  padding: 2px var(--sp-2);
+  border-radius: var(--r-full);
+  border: var(--border-w) solid var(--border);
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+}
+.p4c-push.is-on { color: var(--text-on-primary); background: var(--success); border-color: var(--success); }
+.p4c-push.is-closed { color: var(--text-disabled); text-decoration: line-through; }
+
+/* Command > Policies: a fork's row and a law's upkeep / cooldown lines. */
+.p4c-fork-row { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2); flex-wrap: wrap; }
+.p4c-fork-row .k-btn { min-height: 44px; }
+.p4c-upkeep { color: var(--warning); }

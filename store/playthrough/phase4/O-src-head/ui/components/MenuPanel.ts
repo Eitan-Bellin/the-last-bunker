@@ -1,0 +1,784 @@
+import type { GameState } from '../../core/GameState';
+import type { GameEngine } from '../../core/GameEngine';
+import { i18n } from '../../i18n/I18nManager';
+import { fmtNum, plural } from '../format';
+import { ACHIEVEMENTS } from '../../data/achievements';
+import { PRESTIGE_UPGRADES, upgradeCost } from '../../data/prestige';
+import { ERAS } from '../../data/eras';
+import type { MetaSystem } from '../../systems/MetaSystem';
+import { Sheet } from './Sheet';
+import { button, el } from '../dom';
+import { uiSound } from '../../audio/uiSound';
+import type { BackupInfo, BackupKind } from '../../core/SaveManager';
+import { getA11y, setA11y } from '../../utils/a11y';
+import { haptic } from '../../utils/haptics';
+import { enhanceTabs } from '../a11yDom';
+import { isIosBrowserTab } from '../../utils/platform'; // [plan4:UX-15]
+import { lastExportAt, markExported } from '../pwa';
+import { markPopupsChosen, popupMode } from './NumberPopup';
+import { kBadge, kButton, kRow, kTabs, MS } from '../kit'; // [ux2e]
+
+/** [ux2e #25] The groups of the Settings tab. */
+type SettingsGroup = 'game' | 'display' | 'saves' | 'more' | 'about';
+/** [ux2e #25] How long New Game must be held: two long presses (~0.9 s). */
+const HOLD_MS = 2 * MS['long-press'];
+/** [ux-redesign w2fix] A click this soon after Enter/Space came from the keyboard (its hold already ran), not from a screen reader. */
+const KEY_CLICK_MS = MS['long-press'];
+
+/** [ux2e #25] The build id of the running service worker (production only), or '' when there is none or it does not answer. */
+function appBuild(): Promise<string> {
+  const w = typeof navigator !== 'undefined' ? navigator.serviceWorker?.controller : null;
+  if (!w) return Promise.resolve('');
+  return new Promise<string>(resolve => {
+    const channel = new MessageChannel();
+    const timer = window.setTimeout(() => resolve(''), MS['toast-hold']);
+    channel.port1.onmessage = ev => { window.clearTimeout(timer); resolve(typeof ev.data === 'string' ? ev.data : ''); };
+    try { w.postMessage({ type: 'build' }, [channel.port2]); } catch { window.clearTimeout(timer); resolve(''); }
+  });
+}
+
+export type MenuTab = 'settings' | 'a11y' | 'stats' | 'achievements' | 'genesis';
+
+/** Genesis checklist (research, survivors, era): shown wherever the rebirth button or its lock appears. */
+export function genesisRequirements(state: GameState, meta: MetaSystem): HTMLElement {
+  const box = el('div', 'genesis-reqs');
+  const reqs = meta.rebirthRequirements(state);
+  const ready = reqs.every(r => r.met);
+  box.appendChild(el('div', 'bp-section-title', ready ? `[[check]] ${i18n.t('genesis.ready')}` : `[[lock]] ${i18n.t('genesis.locked')}`));
+  for (const r of reqs) {
+    const vars: Record<string, string | number> = { current: r.current, target: r.target };
+    if (r.key === 'genesis.reqEra') vars.name = ERAS[r.target]?.name[i18n.currentLocale] ?? String(r.target);
+    box.appendChild(el('div', `genesis-req ${r.met ? 'met' : ''}`, `${r.met ? '[[check]]' : '[[lock]]'} ${i18n.t(r.key, vars)}`));
+  }
+  return box;
+}
+
+export interface MenuActions {
+  toggleLanguage: () => void;
+  toggleSound: () => void;
+  isSoundOn: () => boolean;
+  newGame: () => void;
+  rebirth: () => void;
+  importSave: (raw: string) => void;
+  /** Graphics quality: current label and cycling to the next setting. */
+  graphics: () => string;
+  cycleGraphics: () => void;
+  /** Screen brightness: current label and cycling to the next level. */
+  brightness: () => string;
+  cycleBrightness: () => void;
+  /** Puts the crash/diagnostics report on the clipboard. */
+  copyDiagnostics: () => void;
+  /** Notifications (S6): current label, and turning them on (asks the system) or off. */
+  notifications: () => string;
+  toggleNotifications: () => Promise<void>;
+  /** Saves to a file / imports from a file (the player's own copy, outside the browser's storage). */
+  exportFile: () => void;
+  importFile: () => void;
+  /** The automatic backups that exist, and putting one back (the app asks for confirmation first). */
+  listBackups: () => Promise<BackupInfo[]>;
+  restoreBackup: (kind: BackupKind) => void;
+  /** Music and effects volume, 0..1. */
+  getLevels: () => { music: number; fx: number };
+  setLevels: (music: number, fx: number) => void;
+  /** [plan4:AC-11] Opens the list view of the bunker. */
+  openStructure: () => void;
+  /** Text size: current label and cycling to the next. */
+  textSize: () => string;
+  cycleTextSize: () => void;
+  /** Whether the browser promised to keep the save. */
+  persistLabel: () => string;
+  /** Checks a coupon code and opens the coupon sheet when it is right. */
+  redeemCoupon: (code: string) => boolean;
+  /** [Q6] Opens the Bunker Book. */
+  openBook: () => void;
+  /** [Q14] Opens the Chronicle (the run's milestones). */
+  openChronicle: () => void;
+  /** [phase2] The Archive row (Menu top): the journal (lore finds, story). Optional until the app wires it (button hidden). */
+  openJournal?: () => void;
+  /** [phase2] The trade shop (it left the Inbox list): a row under the Archive. Optional until the app wires it (row hidden). */
+  openShop?: () => void;
+  /** [phase2] Door knocks: newcomers come in by themselves while there is a bed (app.events.autoDoor / setAutoDoor). Row hidden until wired. */
+  autoDoor?: () => boolean;
+  setAutoDoor?: (on: boolean) => void;
+  /** [plan4:UX-11] Forget which gesture tips were seen / play the opening story again (no change to the game). */
+  showTipsAgain?: () => void;
+  replayIntro?: () => void;
+  /** [ux-redesign W3a] "Tutorial again": the first-session spotlight (or a short walk round the screen) for this player again. */
+  replayTutorial?: () => void;
+  /** [plan4:GP-5/GP-6] Make the share picture / start the tour mode (the app closes the menu first). */
+  shareBunker?: () => void;
+  startTour?: () => void;
+}
+
+export class MenuPanel {
+  private sheet = new Sheet('menu-sheet', 'menu');
+  private engine: GameEngine;
+  private actions: MenuActions;
+  private tab: MenuTab = 'settings';
+  private signature = '';
+  private backups: BackupInfo[] | null = null;
+  /** [ux2e #25] The settings group on screen (Game first: the language is its first row), and the app build once asked. */
+  private group: SettingsGroup = 'game';
+  private build: string | null = null;
+
+  constructor(engine: GameEngine, actions: MenuActions) {
+    this.engine = engine;
+    this.actions = actions;
+  }
+
+  show(tab?: MenuTab): void {
+    if (tab) this.tab = tab;
+    this.signature = '';
+    this.refresh(this.engine.stateManager.state);
+    this.sheet.show();
+    this.loadBackups();
+  }
+
+  /** Reads the list of backups (they live in storage, so it is asynchronous) and redraws when it arrives. */
+  loadBackups(): void {
+    void this.actions.listBackups().then(list => {
+      this.backups = list;
+      this.signature = '';
+      if (this.sheet.isVisible) this.refresh(this.engine.stateManager.state);
+    }).catch(() => undefined);
+  }
+
+  hide(): void {
+    this.sheet.hide();
+  }
+
+  get isVisible(): boolean {
+    return this.sheet.isVisible;
+  }
+
+  refresh(state: GameState): void {
+    const meta = this.engine.metaSystem;
+    const sig = [
+      this.tab, state.achievements.length, meta.isotope(state), JSON.stringify(state.prestige.upgrades),
+      meta.canRebirth(state), this.tab === 'stats' ? Math.floor(state.stats.totalPlayTime / 5) : 0,
+      this.tab === 'genesis' ? meta.rebirthGain(state) : 0, this.actions.isSoundOn(), this.actions.graphics(), this.actions.brightness(), this.actions.textSize(), this.actions.persistLabel(),
+      this.backups?.map(b => `${b.kind}${b.timestamp}`).join(',') ?? 'loading',
+      this.tab === 'a11y' ? JSON.stringify(getA11y()) : '',
+      this.tab === 'genesis' ? meta.rebirthRequirements(state).map(r => r.current).join(',') : '',
+      // [phase2] The Archive row's unread count, the shop's credits, and whether Genesis is on the tab row.
+      state.loreUnread?.length ?? 0, Math.floor(state.resources.credits?.amount ?? 0), this.genesisShown(state), this.actions.autoDoor?.() ?? '',
+    ].join('|');
+    if (sig === this.signature) return;
+    this.signature = sig;
+    this.render(state);
+  }
+
+  /**
+   * [phase2] Genesis (prestige) is on the tab row from Act VI, or at any time when this save already has prestige (a rebirth done, or
+   * Isotope-7 earned). A legacy run (no long game) keeps it. An explicit show('genesis') (the Command panel's route) still opens it.
+   */
+  private genesisShown(state: GameState): boolean {
+    const lg = state.longGame;
+    if (!lg || lg.meta.legacy || (lg.meta.act ?? 1) >= 6) return true;
+    return state.prestige.rebirthCount > 0 || state.prestige.totalIsotope7Earned > 0 || this.engine.metaSystem.isotope(state) > 0;
+  }
+
+  /**
+   * [phase2] The Menu's top row (ui-architecture fix 9): the Archive, one tap each (Journal, Chronicle, Bunker Book; they left the
+   * Inbox and the Settings > More group), and the trade shop with the credits. Buttons the app has not wired are left out.
+   */
+  private renderTop(state: GameState): HTMLElement {
+    const card = el('div', 'bp-card menu-archive');
+    card.appendChild(el('div', 'bp-section-title', `[[books]] ${i18n.t('p2h.archive')}`));
+    const grid = el('div', 'menu-archive__grid');
+    const open = (fn: () => void) => () => { uiSound('click'); fn(); };
+    const unread = state.loreUnread?.length ?? 0;
+    if (this.actions.openJournal) {
+      const journal = kButton({ variant: 'secondary', className: 'btn-secondary menu-archive__btn', icon: 'journal', label: i18n.t('journal.title'), onPress: open(() => this.actions.openJournal?.()) });
+      if (unread > 0) journal.appendChild(kBadge(unread));
+      grid.appendChild(journal);
+    }
+    grid.append(
+      kButton({ variant: 'secondary', className: 'btn-secondary menu-archive__btn', icon: 'flag', label: i18n.t('chronicle.title'), onPress: open(() => this.actions.openChronicle()) }),
+      kButton({ variant: 'secondary', className: 'btn-secondary menu-archive__btn', icon: 'question', label: i18n.t('p2h.book'), ariaLabel: i18n.t('book.title'), onPress: open(() => this.actions.openBook()) }),
+    );
+    card.appendChild(grid);
+    if (this.actions.openShop) {
+      const shop = kRow({ icon: 'credits', label: i18n.t('ux2b.shop'), value: fmtNum(Math.floor(state.resources.credits?.amount ?? 0)), onPress: open(() => this.actions.openShop?.()) });
+      shop.classList.add('menu-archive__shop');
+      shop.querySelector<HTMLElement>('.k-row__value')?.setAttribute('dir', 'ltr');
+      card.appendChild(shop);
+    }
+    return card;
+  }
+
+  private render(state: GameState): void {
+    this.sheet.setTitle(`[[menu]] ${i18n.t('menu.title')}`);
+    const root = el('div', 'bp');
+    root.appendChild(this.renderTop(state)); // [phase2]
+    const tabs = el('div', 'tab-row');
+    const tabDefs: { id: MenuTab; icon: string }[] = [
+      { id: 'settings', icon: '[[settings]]' },
+      { id: 'a11y', icon: '[[eye]]' },
+      { id: 'stats', icon: '[[chart]]' },
+      { id: 'achievements', icon: '[[trophy]]' },
+    ];
+    // [phase2] Genesis only when it matters (see genesisShown), or when it was opened on purpose.
+    if (this.genesisShown(state) || this.tab === 'genesis') tabDefs.push({ id: 'genesis', icon: '[[isotope7]]' });
+    for (const t of tabDefs) {
+      tabs.appendChild(button(`${t.icon} ${i18n.t(`menu.${t.id}`)}`, `tab ${t.id === this.tab ? 'active' : ''}`, () => {
+        this.tab = t.id;
+        this.signature = '';
+        this.refresh(this.engine.stateManager.state);
+      }));
+    }
+    // [plan4:AC-8] ARIA tabs: tablist / tab / tabpanel, arrow keys.
+    const panel = el('div');
+    panel.id = 'menu-tabpanel';
+    enhanceTabs(tabs, i18n.t('menu.title'), panel);
+    root.appendChild(tabs);
+
+    if (this.tab === 'settings') panel.appendChild(this.renderSettings());
+    if (this.tab === 'a11y') panel.appendChild(this.renderA11y());
+    if (this.tab === 'stats') panel.appendChild(this.renderStats(state));
+    if (this.tab === 'achievements') panel.appendChild(this.renderAchievements(state));
+    if (this.tab === 'genesis') panel.appendChild(this.renderGenesis(state));
+    root.appendChild(panel);
+    this.sheet.body.replaceChildren(root);
+  }
+
+  /**
+   * [plan4:UX-21, UX-24] Two phone-comfort settings, as a block of their own: how many floating numbers, and the battery saver.
+   * Both live in the a11y block (one source), but are shown here with the graphics settings they belong with.
+   */
+  private comfortRows(): HTMLElement[] {
+    const a = getA11y();
+    const redraw = () => { this.signature = ''; this.refresh(this.engine.stateManager.state); };
+    const order = ['all', 'important', 'off'] as const;
+    const mode = popupMode();
+    const popups = el('div', 'bp-row');
+    popups.append(el('span', '', `[[sparkle]] ${i18n.t('settings.popups')}`),
+      button(i18n.t(`settings.popups.${mode}`), 'btn-small', () => {
+        uiSound('switch');
+        markPopupsChosen(); // a phone's default ("important") no longer overrules the player
+        setA11y({ popups: order[(order.indexOf(mode) + 1) % order.length] });
+        redraw();
+      }));
+    const saver = el('div', 'bp-row');
+    saver.append(el('span', '', `[[battery]] ${i18n.t('settings.powerSaver')}`),
+      button(i18n.t(a.powerSaver ? 'settings.on' : 'settings.off'), 'btn-small', () => {
+        uiSound('switch');
+        setA11y({ powerSaver: !a.powerSaver });
+        redraw();
+      }));
+    return [popups, el('div', 'bp-hint', i18n.t('settings.popupsHint')), saver, el('div', 'bp-hint', i18n.t('settings.powerSaverHint'))];
+  }
+
+  /** [plan4:UX-11] Learning aids, as a block of their own: the gesture tips again, and the opening story again. */
+  private renderTipsBlock(): HTMLElement {
+    const card = el('div', 'bp-card settings-learn');
+    const tips = button(`[[hand]] ${i18n.t('settings.tipsAgain')}`, 'btn-secondary learn-btn', () => { uiSound('click'); this.actions.showTipsAgain?.(); });
+    const intro = button(`[[flashlight]] ${i18n.t('settings.introAgain')}`, 'btn-secondary learn-btn', () => { uiSound('click'); this.actions.replayIntro?.(); });
+    // [ux-redesign W3a] The tutorial row.
+    const tutorial = button(`[[target]] ${i18n.t('ux3a.tutorialAgain')}`, 'btn-secondary learn-btn', () => { uiSound('click'); this.actions.replayTutorial?.(); });
+    if (!this.actions.showTipsAgain) tips.hidden = true;
+    if (!this.actions.replayIntro) intro.hidden = true;
+    if (!this.actions.replayTutorial) tutorial.hidden = true;
+    card.append(tutorial, tips, intro);
+    return card;
+  }
+
+  /** [plan4:GP-5] The "share your bunker" row (also shown on the Genesis tab, where the player looks back at the run). */
+  private shareRow(): HTMLElement | null {
+    if (!this.actions.shareBunker) return null;
+    const row = el('div', 'bp-row');
+    row.append(el('span', '', `[[upload]] ${i18n.t('share.menu')}`), button(i18n.t('share.make'), 'btn-small', () => { uiSound('click'); this.actions.shareBunker?.(); }));
+    return row;
+  }
+
+  /** [plan4:GP-5/GP-6] Share the bunker as a picture, and the tour mode (the camera wanders on a clean screen). */
+  private renderShareTourBlock(): HTMLElement {
+    const card = el('div', 'bp-card settings-share');
+    const share = this.shareRow();
+    if (share) card.append(share, el('div', 'bp-hint', i18n.t('share.hint')));
+    if (this.actions.startTour) {
+      const tour = el('div', 'bp-row');
+      tour.append(el('span', '', `[[walker]] ${i18n.t('tour.menu')}`), button(i18n.t('tour.start'), 'btn-small', () => { uiSound('click'); this.actions.startTour?.(); }));
+      card.append(tour, el('div', 'bp-hint', i18n.t('tour.hint')));
+    }
+    card.hidden = !share && !this.actions.startTour;
+    return card;
+  }
+
+  /** [ux2e #25] A plain "label ... button" settings row (the old rows, on a 48 px kit button). */
+  private setRow(label: string, value: string, onPress: () => void): HTMLElement {
+    const row = el('div', 'bp-row ux2e-set-row');
+    row.append(el('span', '', label), kButton({ variant: 'secondary', className: 'btn-secondary ux2e-48 ux2e-set-btn', label: value, onPress }));
+    return row;
+  }
+
+  private redraw(): void {
+    this.signature = '';
+    this.refresh(this.engine.stateManager.state);
+  }
+
+  /**
+   * [ux2e #25] Settings in five groups, one on screen at a time (it was one ~25-row scroll): Game (language first), Display, Saves,
+   * More (book, chronicle, share, tour...) and About. The Accessibility tab is unchanged.
+   */
+  private renderSettings(): HTMLElement {
+    const box = el('div', 'bp ux2e-settings');
+    const groups: SettingsGroup[] = ['game', 'display', 'saves', 'more', 'about'];
+    const body = el('div', 'ux2e-group');
+    body.id = 'menu-settings-group';
+    box.appendChild(kTabs(groups.map(g => ({ id: g, label: i18n.t(`ux2e.set.${g}`) })), this.group, (id) => {
+      this.group = id as SettingsGroup;
+      uiSound('click');
+      this.redraw();
+    }, i18n.t('menu.settings'), body));
+    if (this.group === 'game') body.append(...this.renderGame());
+    if (this.group === 'display') body.append(...this.renderDisplay());
+    if (this.group === 'saves') body.append(...this.renderSaves());
+    if (this.group === 'more') body.append(...this.renderMore());
+    if (this.group === 'about') body.append(...this.renderAbout());
+    box.appendChild(body);
+    return box;
+  }
+
+  private renderGame(): HTMLElement[] {
+    const card = el('div', 'bp-card');
+    // Language first: a player who cannot read the rest finds it at once (the button names the other language in its own script).
+    const lang = this.setRow(`[[surface]] ${i18n.t('settings.language')}`, i18n.currentLocale === 'he' ? 'English' : 'עברית', () => { uiSound('switch'); this.actions.toggleLanguage(); });
+    lang.classList.add('ux2e-lang');
+    const sound = this.setRow(`[[sound]] ${i18n.t('settings.sfx')}`, this.actions.isSoundOn() ? i18n.t('settings.on') : i18n.t('settings.off'), () => {
+      uiSound('switch');
+      this.actions.toggleSound();
+      this.redraw();
+    });
+    const levels = this.actions.getLevels();
+    const slider = (labelKey: string, icon: string, value: number, onInput: (v: number) => void): HTMLElement => {
+      const row = el('div', 'bp-row vol-row');
+      const input = document.createElement('input');
+      input.type = 'range';
+      input.min = '0';
+      input.max = '100';
+      input.step = '5';
+      input.value = String(Math.round(value * 100));
+      input.className = 'vol-slider';
+      input.setAttribute('aria-label', i18n.t(labelKey));
+      // [plan4:UX-4] Dragging the thumb must not be taken over by the sheet's pull-down-to-close.
+      input.setAttribute('data-no-pulldown', '');
+      // No redraw while dragging: replacing the slider under the finger would end the drag.
+      input.addEventListener('input', () => onInput(Number(input.value) / 100));
+      input.addEventListener('change', () => uiSound('switch'));
+      row.append(el('span', '', `${icon} ${i18n.t(labelKey)}`), input);
+      return row;
+    };
+    const music = slider('settings.volumeMusic', '[[sound]]', levels.music, v => this.actions.setLevels(v, this.actions.getLevels().fx));
+    const fx = slider('settings.volumeFx', '[[sound]]', levels.fx, v => this.actions.setLevels(this.actions.getLevels().music, v));
+    const order = ['off', 'light', 'strong'] as const;
+    const h = getA11y().haptics;
+    const haptics = this.setRow(`[[hand]] ${i18n.t('a11y.haptics')}`, i18n.t(`a11y.haptics.${h}`), () => {
+      uiSound('switch');
+      setA11y({ haptics: order[(order.indexOf(h) + 1) % order.length] });
+      haptic('success'); // a sample of the new strength (nothing when it was just turned off)
+      this.redraw();
+    });
+    // [offline agent] Notifications: turning them on asks the system for permission.
+    const notify = this.setRow(`[[bell]] ${i18n.t('settings.notifications')}`, this.actions.notifications(), () => {
+      uiSound('switch');
+      void this.actions.toggleNotifications().then(() => this.redraw());
+    });
+    const notifyHint = el('div', 'bp-hint', i18n.t('settings.notifyWebHint'));
+    // [plan4:UX-15] Safari in a tab on an iPhone cannot keep this promise: no switch, an honest line instead.
+    if (isIosBrowserTab()) {
+      notify.replaceChildren(el('span', '', `[[bell]] ${i18n.t('settings.notifications')}`), el('span', 'bp-value', i18n.t('settings.notifyUnsupported')));
+      notifyHint.textContent = i18n.t('settings.notifyIosHint');
+    }
+    card.append(lang, sound, music, fx, haptics, notify, notifyHint);
+    // [phase2] The door: let newcomers in by themselves while there is a free bed (on by default after the first knock).
+    if (this.actions.autoDoor && this.actions.setAutoDoor) {
+      const on = this.actions.autoDoor();
+      card.appendChild(this.setRow(`[[door]] ${i18n.t('p2p.door.setting')}`, i18n.t(on ? 'settings.on' : 'settings.off'), () => {
+        uiSound('switch');
+        this.actions.setAutoDoor?.(!on);
+        this.redraw();
+      }));
+    }
+    return [card];
+  }
+
+  private renderDisplay(): HTMLElement[] {
+    const card = el('div', 'bp-card');
+    const cycle = (fn: () => void) => () => { uiSound('switch'); fn(); this.redraw(); };
+    card.append(
+      this.setRow(`[[sparkle]] ${i18n.t('settings.graphics')}`, this.actions.graphics(), cycle(() => this.actions.cycleGraphics())),
+      el('div', 'bp-hint', i18n.t('settings.gfxHint')),
+      this.setRow(`[[sun]] ${i18n.t('settings.brightness')}`, this.actions.brightness(), cycle(() => this.actions.cycleBrightness())),
+      this.setRow(`[[note]] ${i18n.t('settings.textSize')}`, this.actions.textSize(), cycle(() => this.actions.cycleTextSize())),
+      ...this.comfortRows(),
+    );
+    // Reduced motion and the other accessibility switches stay on their own tab: one tap away.
+    const a11y = kRow({
+      icon: 'eye', label: i18n.t('ux2e.set.motionLink'), value: i18n.t(`a11y.motion.${getA11y().motion}`),
+      onPress: () => { uiSound('click'); this.tab = 'a11y'; this.redraw(); },
+    });
+    a11y.classList.add('ux2e-link');
+    card.appendChild(a11y);
+    return [card];
+  }
+
+  private renderSaves(): HTMLElement[] {
+    const saves = el('div', 'bp-card');
+    saves.appendChild(el('div', 'bp-section-title', `[[save]] ${i18n.t('settings.save')}`));
+    const area = el('textarea', 'save-area');
+    area.placeholder = i18n.t('settings.pasteHere');
+    area.setAttribute('aria-label', i18n.t('settings.save')); // [plan4:AC-8]
+    const row = el('div', 'btn-row ux2e-btn-grid');
+    const b = (label: string, onPress: () => void) => kButton({ variant: 'secondary', className: 'btn-secondary ux2e-48', label, onPress });
+    row.append(
+      b(i18n.t('settings.export'), () => {
+        const data = this.engine.exportState();
+        area.value = data;
+        area.select();
+        void navigator.clipboard?.writeText(data).then(() => {
+          markExported(); // [plan4:UX-13]
+          area.placeholder = i18n.t('settings.copied');
+        }, () => undefined); // clipboard blocked: the text stays selected in the box for manual copy
+      }),
+      b(i18n.t('settings.exportFile'), () => this.actions.exportFile()),
+      b(i18n.t('settings.import'), () => { if (area.value.trim()) this.actions.importSave(area.value); }),
+      b(i18n.t('settings.importFile'), () => this.actions.importFile()),
+    );
+    saves.append(area, row);
+    const persist = el('div', 'bp-row');
+    persist.append(el('span', '', `[[lock]] ${i18n.t('settings.persist')}`), el('span', 'bp-value', this.actions.persistLabel()));
+    // [plan4:UX-13] When the last backup was made on this phone (Safari may clear a site's data after a while unused).
+    const lastExport = lastExportAt();
+    const when = lastExport ? new Date(lastExport).toLocaleDateString(i18n.currentLocale === 'he' ? 'he-IL' : 'en-GB', { dateStyle: 'medium' }) : '';
+    saves.append(persist, el('div', 'bp-hint', i18n.t('settings.persistHint')),
+      el('div', 'bp-hint', lastExport ? i18n.t('settings.lastBackup', { when }) : i18n.t('settings.lastBackupNever')));
+
+    const backupCard = el('div', 'bp-card');
+    backupCard.appendChild(el('div', 'bp-section-title', `[[refresh]] ${i18n.t('settings.backups')}`));
+    if (this.backups && this.backups.length > 0) {
+      const locale = i18n.currentLocale === 'he' ? 'he-IL' : 'en-GB';
+      for (const bk of this.backups) {
+        const r = el('div', 'bp-row backup-row');
+        const t = new Date(bk.timestamp).toLocaleString(locale, { dateStyle: 'short', timeStyle: 'short' });
+        r.append(
+          el('span', 'backup-text', plural('settings.backups.row', bk.people, { kind: i18n.t(`save.kind.${bk.kind}`), time: t })),
+          kButton({ variant: 'secondary', className: 'btn-secondary ux2e-48', label: i18n.t('settings.backups.restore'), onPress: () => this.actions.restoreBackup(bk.kind) }),
+        );
+        backupCard.appendChild(r);
+      }
+    } else if (this.backups) {
+      backupCard.appendChild(el('div', 'bp-hint', i18n.t('settings.backups.none')));
+    }
+    backupCard.appendChild(el('div', 'bp-hint', i18n.t('settings.backups.hint')));
+
+    const danger = el('div', 'bp-card ux2e-danger-card');
+    const hint = el('div', 'bp-hint', i18n.t('ux2e.set.holdHint'));
+    hint.id = 'ux2e-hold-hint';
+    danger.append(this.holdButton(`[[warning]] ${i18n.t('settings.newGame')}`, () => this.actions.newGame()), hint);
+    return [saves, backupCard, danger];
+  }
+
+  /**
+   * [ux2e #25] Hold to confirm (New Game): the action fires only after the button is held for HOLD_MS (two long presses, ~0.9 s) while a
+   * bar fills; letting go or sliding off earlier cancels. Keyboard: hold Enter or Space. The app's own confirmation still follows.
+   */
+  private holdButton(label: string, onDone: () => void): HTMLButtonElement {
+    const btn = el('button', 'btn btn-ghost danger-btn ux2e-hold ux2e-48');
+    btn.type = 'button';
+    btn.setAttribute('aria-describedby', 'ux2e-hold-hint');
+    const fill = el('span', 'ux2e-hold-fill');
+    fill.setAttribute('aria-hidden', 'true');
+    btn.append(fill, el('span', 'ux2e-hold-label', label));
+    let timer = 0;
+    const cancel = (): void => {
+      window.clearTimeout(timer);
+      timer = 0;
+      btn.classList.remove('is-holding');
+    };
+    const start = (): void => {
+      if (timer) return;
+      btn.classList.add('is-holding');
+      haptic('tap');
+      timer = window.setTimeout(() => {
+        cancel();
+        haptic('success');
+        uiSound('confirm');
+        onDone();
+      }, HOLD_MS);
+    };
+    btn.addEventListener('pointerdown', (e) => {
+      if (e.button !== 0) return;
+      try { if (btn.hasPointerCapture(e.pointerId)) btn.releasePointerCapture(e.pointerId); } catch { /* synthetic pointer */ }
+      start();
+    });
+    for (const ev of ['pointerup', 'pointerleave', 'pointercancel', 'blur'] as const) btn.addEventListener(ev, cancel);
+    let keyAt = 0;
+    btn.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { keyAt = performance.now(); if (!e.repeat) { e.preventDefault(); start(); } } });
+    btn.addEventListener('keyup', (e) => { if (e.key === 'Enter' || e.key === ' ') { keyAt = performance.now(); cancel(); } });
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      // [ux-redesign w2fix] A click with no pointer (detail 0) and no held key is a screen reader or switch "activate": it cannot hold,
+      // so it goes straight on (the app's own confirmation dialog still follows). A keyboard hold already handled its own keys.
+      if (e.detail === 0 && performance.now() - keyAt > KEY_CLICK_MS && !timer) { haptic('success'); uiSound('confirm'); onDone(); }
+    });
+    btn.addEventListener('contextmenu', (e) => e.preventDefault()); // a long touch must not open the phone's menu
+    return btn;
+  }
+
+  private renderMore(): HTMLElement[] {
+    const card = el('div', 'bp-card');
+    const open = (fn: () => void) => () => { uiSound('click'); fn(); };
+    card.append(
+      // [phase2] The book and the chronicle moved to the Menu's top row (the Archive).
+      // [ux-wp4] M5/D5: the rooms list (with filters).
+      this.setRow(`[[build]] ${i18n.t('wp4.roomsList')}`, i18n.t('book.open'), open(() => this.actions.openStructure())),
+    );
+    const out: HTMLElement[] = [card, this.renderShareTourBlock(), this.renderTipsBlock()];
+    const coupon = this.renderCouponBlock(); // [plan4:GP-12] only with ?debug
+    if (coupon) out.push(coupon);
+    return out;
+  }
+
+  private renderAbout(): HTMLElement[] {
+    const card = el('div', 'bp-card');
+    const state = this.engine.stateManager.state;
+    const kv = (label: string, value: string) => {
+      const r = el('div', 'bp-row');
+      const v = el('span', 'bp-value ux2e-mono', value);
+      v.dir = 'ltr';
+      r.append(el('span', '', label), v);
+      return r;
+    };
+    if (this.build === null) {
+      this.build = '';
+      void appBuild().then(b => { this.build = b; if (this.sheet.isVisible && this.tab === 'settings' && this.group === 'about') this.redraw(); });
+    }
+    // The bunker's id: when this run's save was first made (the same on every copy and backup of it), readable to support.
+    const id = (state.createdAt || state.timestamp || 0).toString(36).toUpperCase();
+    card.append(
+      kv(`[[note]] ${i18n.t('ux2e.set.version')}`, this.build || (import.meta.env.DEV ? 'dev' : '…')),
+      kv(`[[save]] ${i18n.t('ux2e.set.saveFormat')}`, `v${state.version}`),
+      kv(`[[people]] ${i18n.t('ux2e.set.playerId')}`, id),
+      el('div', 'bp-hint', i18n.t('ux2e.set.playerIdHint')),
+      this.setRow(`[[chart]] ${i18n.t('settings.diagnostics')}`, i18n.t('settings.diagnosticsCopy'), () => { uiSound('switch'); this.actions.copyDiagnostics(); }),
+      // [plan4:qa] The privacy page, next to the diagnostics.
+      this.setRow(`[[eye]] ${i18n.t('settings.privacy')}`, i18n.t('settings.privacyOpen'), () => { uiSound('click'); window.open(new URL('privacy.html', document.baseURI).href, '_blank', 'noopener'); }),
+    );
+    return [card];
+  }
+
+  /**
+   * [plan4:GP-12] The coupon code entry is a developer/tester tool: it is shown only on a page opened with ?debug (the code is BUNKER17;
+   * the sheet it opens is unchanged). Players never see it; app.ts also refuses the code without ?debug.
+   */
+  private renderCouponBlock(): HTMLElement | null {
+    if (!new URLSearchParams(location.search).has('debug')) return null;
+    const coupon = el('div', 'bp-card');
+    coupon.appendChild(el('div', 'bp-section-title', `[[gift]] ${i18n.t('coupon.code')}`));
+    const codeRow = el('div', 'btn-row');
+    const code = el('input', 'coupon-code');
+    code.type = 'text';
+    code.autocomplete = 'off';
+    code.spellcheck = false;
+    code.placeholder = i18n.t('coupon.placeholder');
+    code.setAttribute('aria-label', i18n.t('coupon.code'));
+    const redeem = () => {
+      if (!code.value.trim()) return;
+      if (this.actions.redeemCoupon(code.value)) code.value = '';
+      else {
+        uiSound('cancel');
+        code.classList.add('bad');
+        setTimeout(() => code.classList.remove('bad'), 900);
+      }
+    };
+    code.addEventListener('keydown', e => { if (e.key === 'Enter') redeem(); });
+    codeRow.append(code, button(i18n.t('coupon.redeem'), 'btn-small', redeem));
+    coupon.appendChild(codeRow);
+    return coupon;
+  }
+
+  /**
+   * [plan4:AC-1] The accessibility tab. Every control writes through utils/a11y.ts (the single source), which applies it to the page.
+   * Not shown on purpose: powerSaver (the field is kept for a later wave; a switch before it does something would be a lie).
+   * Everything else in the A11ySettings block has a row here. [plan4:AC-12] One-hand mode and large touch targets are live
+   * (styles/touch.css keys off data-onehand / data-large on <html>).
+   */
+  private renderA11y(): HTMLElement {
+    const box = el('div', 'bp');
+    const a = getA11y();
+    const redraw = () => { this.signature = ''; this.refresh(this.engine.stateManager.state); };
+    const card = el('div', 'bp-card a11y-card');
+    card.appendChild(el('div', 'bp-section-title', `[[eye]] ${i18n.t('a11y.title')}`));
+
+    const cycleRow = <T extends string>(icon: string, labelKey: string, order: readonly T[], value: T, optKey: string, onPick: (v: T) => void): HTMLElement => {
+      const row = el('div', 'bp-row');
+      row.append(el('span', '', `${icon} ${i18n.t(labelKey)}`),
+        button(i18n.t(`${optKey}.${value}`), 'btn-small', () => {
+          uiSound('switch');
+          onPick(order[(order.indexOf(value) + 1) % order.length]);
+          redraw();
+        }));
+      return row;
+    };
+
+    const hapticsRow = cycleRow('[[hand]]', 'a11y.haptics', ['off', 'light', 'strong'] as const, a.haptics, 'a11y.haptics', v => {
+      setA11y({ haptics: v });
+      haptic('success'); // a sample of the new strength (nothing when it was just turned off)
+    });
+    const silentRow = el('div', 'bp-row');
+    silentRow.append(el('span', '', `[[sound]] ${i18n.t('a11y.playInSilent')}`),
+      button(i18n.t(a.playInSilent ? 'settings.on' : 'settings.off'), 'btn-small', () => {
+        uiSound('switch');
+        setA11y({ playInSilent: !a.playInSilent });
+        redraw();
+      }));
+    const textRow = el('div', 'bp-row');
+    textRow.append(el('span', '', `[[note]] ${i18n.t('settings.textSize')}`),
+      button(this.actions.textSize(), 'btn-small', () => {
+        uiSound('switch');
+        this.actions.cycleTextSize();
+        redraw();
+      }));
+    const motionRow = cycleRow('[[sparkle]]', 'a11y.motion', ['auto', 'reduced', 'full'] as const, a.motion, 'a11y.motion', v => setA11y({ motion: v }));
+
+    // [plan4:AC-12] One-hand mode: which thumb; large targets: every touch target at least 52 px.
+    const oneHandRow = cycleRow('[[hand]]', 'a11y.oneHand', ['off', 'right', 'left'] as const, a.oneHand, 'a11y.oneHand', v => setA11y({ oneHand: v }));
+    const largeRow = el('div', 'bp-row');
+    largeRow.append(el('span', '', `[[hand]] ${i18n.t('a11y.largeTargets')}`),
+      button(i18n.t(a.largeTargets ? 'settings.on' : 'settings.off'), 'btn-small', () => {
+        uiSound('switch');
+        setA11y({ largeTargets: !a.largeTargets });
+        redraw();
+      }));
+
+    // [plan4:AC-5/AC-6] Flash budget switch and the three colour-vision modes.
+    const flashRow = cycleRow('[[sparkle]]', 'a11y.flash', ['normal', 'safe'] as const, a.flash, 'a11y.flash', v => setA11y({ flash: v }));
+    const colorRow = cycleRow('[[eye]]', 'a11y.color', ['none', 'deuter', 'protan', 'tritan'] as const, a.colorMode, 'a11y.color', v => setA11y({ colorMode: v }));
+
+    // [plan4:AC-9/AC-11] Captions for sounds, and announcements for a screen reader.
+    const toggleRow = (icon: string, key: string, on: boolean, set: (v: boolean) => void): HTMLElement => {
+      const row = el('div', 'bp-row');
+      row.append(el('span', '', `${icon} ${i18n.t(key)}`), button(i18n.t(on ? 'settings.on' : 'settings.off'), 'btn-small', () => {
+        uiSound('switch');
+        set(!on);
+        redraw();
+      }));
+      return row;
+    };
+    const captionsRow = toggleRow('[[note]]', 'a11y.captions', a.captions, v => setA11y({ captions: v }));
+    const announceRow = toggleRow('[[eye]]', 'a11y.announce', a.announce, v => setA11y({ announce: v }));
+    // [plan4:AC-3/AC-1/AC-13] High contrast, popup density, relaxed timing, floating zoom buttons.
+    const contrastRow = cycleRow('[[eye]]', 'a11y.contrast', ['normal', 'high'] as const, a.contrast, 'a11y.contrast', v => setA11y({ contrast: v }));
+    const popupsRow = cycleRow('[[note]]', 'a11y.popups', ['all', 'important', 'off'] as const, a.popups, 'a11y.popups', v => setA11y({ popups: v }));
+    const timingRow = cycleRow('[[clock]]', 'a11y.timing', ['normal', 'relaxed'] as const, a.timing, 'a11y.timing', v => setA11y({ timing: v }));
+    const zoomRow = toggleRow('[[hand]]', 'a11y.zoomButtons', a.zoomButtons, v => setA11y({ zoomButtons: v }));
+    // [plan4:AC-16] The accessibility statement (a static page next to the game: public/accessibility.html).
+    const statementRow = el('div', 'bp-row');
+    statementRow.append(el('span', '', `[[eye]] ${i18n.t('a11y.statement')}`),
+      button(i18n.t('a11y.statementOpen'), 'btn-small', () => { uiSound('click'); window.open(new URL('accessibility.html', document.baseURI).href, '_blank', 'noopener'); }));
+    // [plan4:AC-11] The list view: the bunker as floors and rooms.
+    const listRow = el('div', 'bp-row');
+    listRow.append(el('span', '', `[[build]] ${i18n.t('structure.openList')}`),
+      button(i18n.t('structure.open'), 'btn-small', () => { uiSound('click'); this.actions.openStructure(); }));
+
+    card.append(listRow, el('div', 'bp-hint', i18n.t('structure.openListHint')), hapticsRow, el('div', 'bp-hint', i18n.t('a11y.hapticsHint')), silentRow, el('div', 'bp-hint', i18n.t('a11y.playInSilentHint')),
+      textRow, motionRow, el('div', 'bp-hint', i18n.t('a11y.motionHint')),
+      flashRow, el('div', 'bp-hint', i18n.t('a11y.flashHint')), colorRow, el('div', 'bp-hint', i18n.t('a11y.colorHint')),
+      captionsRow, el('div', 'bp-hint', i18n.t('a11y.captionsHint')), announceRow, el('div', 'bp-hint', i18n.t('a11y.announceHint')),
+      contrastRow, el('div', 'bp-hint', i18n.t('a11y.contrastHint')), popupsRow, el('div', 'bp-hint', i18n.t('a11y.popupsHint')),
+      oneHandRow, el('div', 'bp-hint', i18n.t('a11y.oneHandHint')), largeRow, el('div', 'bp-hint', i18n.t('a11y.largeTargetsHint')),
+      zoomRow, el('div', 'bp-hint', i18n.t('a11y.zoomButtonsHint')), timingRow, el('div', 'bp-hint', i18n.t('a11y.timingHint')),
+      statementRow, el('div', 'bp-hint', i18n.t('a11y.statementHint')));
+    box.appendChild(card);
+    return box;
+  }
+
+  private renderStats(state: GameState): HTMLElement {
+    const card = el('div', 'bp-card');
+    const rows: [string, string][] = [
+      ['[[clock]] ' + i18n.t('stats2.playTime'), i18n.formatDuration(state.stats.totalPlayTime)],
+      ['[[food]] ' + i18n.t('stats2.food'), fmtNum(state.stats.totalFoodProduced)],
+      ['[[build]] ' + i18n.t('stats2.buildings'), String(state.stats.totalBuildingsBuilt)],
+      ['[[people]] ' + i18n.t('stats2.recruited'), String(state.stats.totalSurvivorsRecruited)],
+      ['[[walker]] ' + i18n.t('stats2.missions'), String(state.stats.totalMissionsCompleted)],
+      ['[[map]] ' + i18n.t('stats2.explored'), String(state.explorationMap.filter(h => h.explored).length)],
+      ['[[research]] ' + i18n.t('stats2.research'), String(Object.values(state.research).filter(r => r.completed).length)],
+      ['[[refresh]] ' + i18n.t('stats2.rebirths'), String(state.prestige.rebirthCount)],
+      ['[[isotope7]] ' + i18n.t('stats2.isotope'), String(state.prestige.totalIsotope7Earned)],
+    ];
+    for (const [k, v] of rows) {
+      const r = el('div', 'bp-row');
+      r.append(el('span', '', k), el('span', 'bp-value', v));
+      card.appendChild(r);
+    }
+    return card;
+  }
+
+  private renderAchievements(state: GameState): HTMLElement {
+    const locale = i18n.currentLocale;
+    const box = el('div', 'bp');
+    box.appendChild(el('div', 'bp-hint center', `${state.achievements.length}/${ACHIEVEMENTS.length}`));
+    const grid = el('div', 'ach-grid');
+    for (const a of ACHIEVEMENTS) {
+      const done = state.achievements.includes(a.id);
+      const card = el('div', `ach-card ${done ? 'done' : ''}`);
+      card.append(el('div', 'ach-icon', done ? a.icon : '[[lock]]'), el('div', 'ach-name', a.name[locale] ?? a.name.en), el('div', 'bp-hint', a.desc[locale] ?? a.desc.en));
+      grid.appendChild(card);
+    }
+    box.appendChild(grid);
+    return box;
+  }
+
+  private renderGenesis(state: GameState): HTMLElement {
+    const meta = this.engine.metaSystem;
+    const locale = i18n.currentLocale;
+    const box = el('div', 'bp');
+    const head = el('div', 'bp-card genesis-head');
+    head.append(
+      el('div', 'genesis-iso', `[[isotope7]] ${meta.isotope(state)}`),
+      el('div', 'bp-hint', i18n.t('genesis.isotope')),
+    );
+    box.appendChild(head);
+    const share = this.shareRow(); // [plan4:GP-5]
+    if (share) { const sc = el('div', 'bp-card'); sc.append(share, el('div', 'bp-hint', i18n.t('share.hint'))); box.appendChild(sc); }
+
+    const rebirth = el('div', 'bp-card');
+    rebirth.appendChild(el('p', 'modal-body', i18n.t('genesis.explain')));
+    rebirth.appendChild(genesisRequirements(state, meta));
+    if (meta.canRebirth(state)) {
+      rebirth.appendChild(button(`[[isotope7]] ${i18n.t('genesis.rebirth', { n: meta.rebirthGain(state) })}`, 'btn-primary', () => this.actions.rebirth()));
+    }
+    box.appendChild(rebirth);
+
+    const shop = el('div', 'bp-card');
+    shop.appendChild(el('div', 'bp-section-title', i18n.t('genesis.upgrades')));
+    for (const u of PRESTIGE_UPGRADES) {
+      const level = meta.upgradeLevel(state, u.id);
+      const row = el('div', 'genesis-row');
+      const info = el('div', 'genesis-info');
+      info.append(el('div', 'research-name', `${u.icon} ${u.name[locale] ?? u.name.en} · ${level}/${u.maxLevel}`), el('div', 'bp-hint', u.desc[locale] ?? u.desc.en));
+      row.appendChild(info);
+      // [P5] Keystones: one per group.
+      const closed = !!u.keystone && level === 0 && PRESTIGE_UPGRADES.some(x => x.keystone === u.keystone && x.id !== u.id && meta.upgradeLevel(state, x.id) > 0);
+      if (u.keystone) info.appendChild(el('div', 'bp-hint doctrine-tag', i18n.t(closed ? 'genesis.keystoneClosed' : 'genesis.keystone')));
+      if (closed) {
+        row.appendChild(el('span', 'research-done', '[[lock]]'));
+      } else if (level >= u.maxLevel) {
+        row.appendChild(el('span', 'research-done', '[[star]]'));
+      } else {
+        const cost = upgradeCost(u, level);
+        row.appendChild(button(`[[isotope7]] ${cost}`, 'btn-small', () => {
+          if (meta.buy(u.id)) {
+            this.engine.requestSave();
+            this.signature = '';
+            this.refresh(this.engine.stateManager.state);
+          }
+        }, meta.isotope(state) < cost));
+      }
+      shop.appendChild(row);
+    }
+    box.appendChild(shop);
+    return box;
+  }
+}

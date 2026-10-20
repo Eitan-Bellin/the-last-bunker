@@ -1,5 +1,8 @@
-import { LAWS, lawCost, lawSlots } from '../../data/laws';
-import { ENDINGS, endingScore, type EndingDef } from '../../data/endings';
+import { LAWS, lawCooldown, lawCost, lawSlots, lawUpkeep } from '../../data/laws';
+import { ENDINGS, endingScore, pushActive, type EndingDef, type EndingPush } from '../../data/endings';
+import { showCrossroads } from './Crossroads'; // [phase4]
+import { noteRepeal } from '../../systems/ActSystem'; // [phase4]
+import '../../styles/p4-c.css'; // [phase4]
 import type { GameEngine } from '../../core/GameEngine';
 import type { GameState, ResourceType } from '../../core/GameState';
 import { i18n } from '../../i18n/I18nManager';
@@ -7,7 +10,7 @@ import { fmtNum, plural } from '../format';
 import { ERAS, eraOf, type EraDef } from '../../data/eras';
 import { Sheet } from './Sheet';
 import { RESOURCE_ICONS, bar, button, costRow, el, setBar, setRich } from '../dom';
-import { ACTS, actOf, systemOpen, type ActDef } from '../../data/acts';
+import { ACTS, FORK_SYSTEM, actOf, systemOpen, systemOpensIn, type ActDef } from '../../data/acts';
 import { FOREMAN_ACT, FOREMAN_ORDERS, type ForemanSystem } from '../../systems/ForemanSystem';
 import { actEta, actFraction, actRequirements, type Requirement } from '../../systems/Guide';
 import type { ObjectiveAction } from '../../systems/ObjectiveSystem';
@@ -169,7 +172,10 @@ export class EraPanel {
     const goals = this.tab === 'now' && !this.actOpen ? topGoals(reqs).map(r => r.id).join(',') : '';
     const tabs = this.tabs(state).map(t => t.id).join(','); // [phase2] a tab appears when its system opens
     const doctrines = this.tab === 'policies' && this.engine ? RESEARCH.filter(r => r.fork).map(r => this.engine!.researchSystem.status(state, r.id)).join(',') : '';
-    const sig = `${era.id}|${act?.id ?? 0}|${orders}|${state.tutorialStep}|${i18n.currentLocale}|${this.tab}|${this.actOpen}|${goals}|${tabs}|${doctrines}|${this.tab === 'policies' ? `${lawSlots(state)}${lawsShown(state)}` : ''}`;
+    // [phase4] The Endings tab redraws when a doctrine or law that pushes an ending changes; Policies when a cooldown ends or a price can be paid.
+    const pushes = this.tab === 'endings' ? ENDINGS.map(e => e.pushes.map(p => (pushActive(state, p) ? 1 : 0)).join('')).join(',') : '';
+    const policy = this.tab === 'policies' ? `${lawSlots(state)}${lawsShown(state)}|${LAWS.map(l => (lawCooldown(state, l.id) > 0 ? 1 : 0)).join('')}|${this.engine?.resourceSystem.canAfford(state, lawCost(state)) ? 1 : 0}|${Math.floor((state.longGame?.meta.worldT ?? 0) / 600)}` : '';
+    const sig = `${era.id}|${act?.id ?? 0}|${orders}|${state.tutorialStep}|${i18n.currentLocale}|${this.tab}|${this.actOpen}|${goals}|${tabs}|${doctrines}|${policy}|${pushes}`;
     if (sig !== this.signature) {
       this.signature = sig;
       this.projectsSig = '';
@@ -379,11 +385,39 @@ export class EraPanel {
       const label = el('span', 'era-goal-count');
       top.append(el('span', 'era-goal-text', `${e.icon} ${e.name[locale]}`), label);
       const b = bar(0, 'accent');
-      row.append(top, b, el('div', 'bp-hint', e.drivers[locale]));
+      row.append(top, b, this.pushList(e));
+      if (e.other) row.appendChild(el('div', 'bp-hint', e.other.text[locale]));
       card.appendChild(row);
       this.endingBars.push({ id: e.id, bar: b, label });
     }
     return card;
+  }
+
+  /**
+   * [phase4] What pushes an ending, each with its state in this run: chosen / in force (lit), still open, or closed (another way of its
+   * Crossroads was taken).
+   */
+  private pushList(e: EndingDef): HTMLElement {
+    const state = this.lastState;
+    const rs = this.engine?.researchSystem;
+    const locale = i18n.currentLocale;
+    const ul = el('ul', 'p4c-push-list');
+    for (const p of e.pushes) {
+      const name = this.pushName(p, locale);
+      const on = !!state && pushActive(state, p);
+      const def = p.kind === 'doctrine' ? RESEARCH.find(r => r.id === p.id) : undefined;
+      const closed = !on && !!state && !!rs && !!def?.fork && !!rs.forkChoice(state, def.fork);
+      const li = el('li', `p4c-push${on ? ' is-on' : ''}${closed ? ' is-closed' : ''}`, `${on ? '✓ ' : ''}${name} +${p.w}`);
+      li.setAttribute('aria-label', `${name} +${p.w}: ${i18n.t(on ? 'p4c.end.on' : closed ? 'p4c.end.closed' : 'p4c.end.open')}`);
+      ul.appendChild(li);
+    }
+    return ul;
+  }
+
+  private pushName(p: EndingPush, locale: 'he' | 'en'): string {
+    if (p.kind === 'law') return LAWS.find(l => l.id === p.id)?.name[locale] ?? p.id;
+    const d = RESEARCH.find(r => r.id === p.id);
+    return (d?.name[locale] ?? p.id).replace(/^[^:]*:\s*/, '');
   }
 
   private refreshEndings(state: GameState): void {
@@ -407,6 +441,15 @@ export class EraPanel {
     const slots = lawSlots(state);
     box.appendChild(el('div', 'bp-section-title', `[[books]] ${i18n.t('laws.title', { n: active.length, slots })}`));
     box.appendChild(costRow(state, lawCost(state)));
+    // [phase4] Policies cost upkeep every hour; a repealed law waits its cooldown.
+    const upkeep = Object.entries(lawUpkeep(state));
+    const upkeepText = upkeep.map(([r, v]) => `${fmtNum(v)} ${RESOURCE_ICONS[r] ?? ''}`).join(' + ');
+    const share = upkeep.map(([r, v]) => {
+      const res = state.resources[r as ResourceType];
+      const income = res ? res.productionRate * 3600 : 0;
+      return income > 0 ? Math.round((v / income) * 100) : null;
+    })[0];
+    box.appendChild(el('div', 'bp-hint p4c-upkeep', i18n.t(share !== null && share !== undefined ? 'p4c.law.upkeepShare' : 'p4c.law.upkeep', { cost: upkeepText, pct: share ?? 0, total: fmtNum(upkeep.reduce((s, [, v]) => s + v, 0) * active.length) })));
     for (const l of LAWS) {
       const on = active.includes(l.id);
       const row = el('div', 'foreman-row');
@@ -418,9 +461,11 @@ export class EraPanel {
         const pct = Math.round(imp.outputChange * 100);
         text.appendChild(el('div', 'bp-hint law-impact', i18n.t('wp2.lawImpact', { out: `${pct > 0 ? '+' : pct < 0 ? '−' : ''}${Math.abs(pct)}%`, from: Math.round(imp.moraleWithout), to: Math.round(imp.moraleWith) })));
       }
-      const can = on || (active.length < slots && this.engine!.resourceSystem.canAfford(state, lawCost(state)));
+      const wait = on ? 0 : lawCooldown(state, l.id); // [phase4]
+      if (wait > 0) text.appendChild(el('div', 'bp-hint', `[[clock]] ${i18n.t('p4c.law.cooldown', { t: i18n.formatDuration(wait) })}`));
+      const can = on || (wait <= 0 && active.length < slots && this.engine!.resourceSystem.canAfford(state, lawCost(state)));
       row.append(text, button(i18n.t(on ? 'laws.repeal' : 'laws.enact'), on ? 'btn-secondary btn-small' : 'btn-primary btn-small', () => {
-        if (on) this.engine!.repealLaw(l.id); else this.engine!.enactLaw(l.id);
+        if (on) { this.engine!.repealLaw(l.id); noteRepeal(this.engine!.stateManager, l.id); } else if (lawCooldown(this.engine!.stateManager.state, l.id) <= 0) this.engine!.enactLaw(l.id); // [phase4] cooldown
         this.signature = '';
         this.refresh(this.engine!.stateManager.state);
       }, !can));
@@ -523,23 +568,43 @@ export class EraPanel {
   }
 
   /** [phase2] The doctrines this run has chosen (research forks), read-only: they are picked in Research. */
+  /**
+   * [phase4] The doctrines, one row per Crossroads: the way chosen (permanent, read-only), a waiting one (opens its Crossroads), or when
+   * the next one opens. Forks of later Acts stay out of sight but one.
+   */
   private renderDoctrines(state: GameState): HTMLElement | null {
     const rs = this.engine!.researchSystem;
-    const forks = RESEARCH.filter(r => r.fork);
-    if (!forks.some(r => rs.blockReason(state, r.id) !== 'act' || rs.status(state, r.id) !== 'locked')) return null;
+    const act = state.longGame?.meta.act ?? 1;
+    const forks = rs.forks();
+    const reached = forks.filter(f => (rs.forkOptions(f)[0]?.act ?? 1) <= act);
+    if (reached.length === 0) return null;
+    const next = forks.find(f => (rs.forkOptions(f)[0]?.act ?? 1) > act);
     const locale = i18n.currentLocale;
     const box = el('div', 'foreman p2s-doctrines');
     box.appendChild(el('div', 'bp-section-title', `[[flag]] ${i18n.t('p2s.cmd.doctrines')}`));
-    const chosen = forks.filter(r => ['done', 'active', 'queued'].includes(rs.status(state, r.id)));
-    for (const r of chosen) {
-      const row = el('div', 'foreman-row');
+    for (const f of [...reached, ...(next ? [next] : [])]) {
+      const row = el('div', 'foreman-row p4c-fork-row');
       const text = el('span', 'foreman-text');
-      text.append(el('div', '', `${r.icon} ${r.name[locale] ?? r.name.en}`), el('div', 'bp-hint', r.desc[locale] ?? r.desc.en));
-      row.appendChild(text);
+      const forkName = i18n.t(`p4c.fork.${f}`);
+      const chosen = rs.forkChoice(state, f);
+      if (chosen) {
+        text.append(el('div', '', `${chosen.icon} ${forkName}: ${(chosen.name[locale] ?? chosen.name.en).replace(/^[^:]*:\s*/, '')}`), el('div', 'bp-hint', chosen.desc[locale] ?? chosen.desc.en));
+        row.appendChild(text);
+      } else if (rs.forkWaiting(state, f)) {
+        text.append(el('div', '', `[[flag]] ${forkName}`), el('div', 'bp-hint', i18n.t('p4c.xr.waitingHint')));
+        row.append(text, kButton({ variant: 'primary', label: i18n.t('p4c.xr.open'), onPress: () => showCrossroads(this.engine!, f, () => { this.signature = ''; if (this.lastState) this.refresh(this.engine!.stateManager.state); }) }));
+      } else {
+        const opts = rs.forkOptions(f);
+        const fAct = opts[0]?.act ?? 1;
+        const sys = FORK_SYSTEM[f];
+        const inT = fAct === act && sys ? systemOpensIn(state, sys) : Infinity;
+        const when = isFinite(inT) && inT > 0 ? i18n.t('p4c.fork.opensIn', { t: i18n.formatDuration(inT) }) : i18n.t('research.actLock', { n: fAct });
+        text.append(el('div', '', `[[lock]] ${forkName}`), el('div', 'bp-hint', when));
+        row.appendChild(text);
+      }
       box.appendChild(row);
     }
-    box.appendChild(el('div', 'bp-hint', i18n.t(chosen.length ? 'p2s.cmd.doctrinesHint' : 'p2s.cmd.doctrinesNone')));
-    box.appendChild(kButton({ variant: 'tertiary', className: 'btn-ghost ux2e-48 ux2e-link-btn', label: `[[research]] ${i18n.t('p2s.cmd.toResearch')} ${flowArrow()}`, onPress: () => this.onGo?.({ kind: 'research' }) }));
+    box.appendChild(el('div', 'bp-hint', i18n.t('p4c.cmd.doctrinesHint')));
     return box;
   }
 

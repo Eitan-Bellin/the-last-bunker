@@ -58,7 +58,8 @@ export const ACTS: ActDef[] = [
       // [phase3] Said as what it takes, not as an era number: the guide lists the steps under it (Guide.ts 'era').
       { kind: 'era', text: { he: 'הפעילו את הבונקר והגיעו ל־10 ניצולים', en: 'Get the bunker running and reach 10 survivors' }, progress: s => atLeast(s.era ?? 0, 2) },
       { kind: 'ruins', text: { he: 'פנו את כל ההריסות', en: 'Clear every ruin' }, progress: allCleared },
-      { kind: 'research', text: { he: 'השלימו 10 מחקרים', en: 'Complete 10 researches' }, progress: s => atLeast(researched(s), 10) },
+      // [phase4] A specific unlock instead of a research count (the filler nodes complete themselves now).
+      { kind: 'research', text: { he: 'חקרו את תורת הכור (פותח את הכור)', en: 'Research Reactor Theory (unlocks the Reactor)' }, progress: s => [s.research.reactorTheory?.completed ? 1 : 0, 1] },
     ],
     charter: ['vaultSeal'],
   },
@@ -69,12 +70,12 @@ export const ACTS: ActDef[] = [
     levelCap: 5, popCap: 40, floorCap: 8, // [phase3] 40 (was 30): casual players sat ~10 days at a full house
     goals: [
       { kind: 'dig', text: { he: 'חפרו 8 קומות', en: 'Dig 8 levels' }, progress: s => atLeast(s.currentFloors, 8) },
-      { kind: 'research', text: { he: 'השלימו 22 מחקרים', en: 'Complete 22 researches' }, progress: s => atLeast(researched(s), 22) },
+      { kind: 'research', text: { he: 'חקרו קידוח עמוק (חפירה מהירה ב־25%)', en: 'Research Deep Drilling (digs 25% faster)' }, progress: s => [s.research.deepDrilling?.completed ? 1 : 0, 1] }, // [phase4]
       { kind: 'levels', level: 5, text: { he: '10 חדרים ברמה 5', en: '10 rooms at level 5' }, progress: s => atLeast(roomsAt(s, 5), 10) },
     ],
     charter: ['radioMast', 'purifier'],
     // [phase3] Caravans wait for Act III (with the outposts), the seasons for Act IV.
-    opens: { he: 'נפתחים: מנהל העבודה, ודוקטרינות חשמל ומזון במחקר, ובהמשך המערכה חוזים עם העולם בחוץ. החלטות שאינן דחופות מחכות בתיבת ההחלטות.', en: 'Opens: the Foreman, power and food doctrines in research, and later in the Act contracts with the world outside. Decisions that can wait now wait in the Decisions inbox.' },
+    opens: { he: 'נפתחים: מנהל העבודה, ופרשות הדרכים של החשמל והמזון, ובהמשך המערכה חוזים עם העולם בחוץ. החלטות שאינן דחופות מחכות בהודעות.', en: 'Opens: the Foreman, the power and food crossroads, and later in the Act contracts with the world outside. Decisions that can wait now wait in Messages.' },
   },
   {
     id: 3,

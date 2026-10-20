@@ -183,17 +183,7 @@ export class ForemanSystem {
   /** Idle adults to the dig crew first, then to the rooms with the most open places. */
   private staff(): ForemanReport {
     let placed = this.dig.autoStaff();
-    for (const s of this.sm.state.survivors) {
-      if (s.assignedBuildingId || s.child || s.isOnMission) continue;
-      const st = this.sm.state;
-      // [plan4:qa] Try every room with a free post, emptiest first: one the survivor cannot be put in (behind a sealed door, say) must not end the round.
-      const rooms = st.buildings
-        .filter(b => !b.isConstructing && crewCount(st, b) < (getDef(b.type)?.maxWorkers ?? 0))
-        .sort((a, b) => ((getDef(b.type)?.maxWorkers ?? 0) - crewCount(st, b)) - ((getDef(a.type)?.maxWorkers ?? 0) - crewCount(st, a)));
-      if (rooms.length === 0) break;
-      if (!rooms.some(room => this.population.assignSurvivorToBuilding(this.sm, s.id, room.id))) continue;
-      placed++;
-    }
+    placed += this.population.assignIdleBestFit(this.sm); // [phase4] best-fit staffing (PopulationSystem), the same as the room's "fill" button
     if (placed) return { key: 'staffed', n: placed };
     return this.sm.state.survivors.some(s => !s.assignedBuildingId && !s.child && !s.isOnMission) ? { key: 'staffFull' } : { key: 'staffIdle' };
   }

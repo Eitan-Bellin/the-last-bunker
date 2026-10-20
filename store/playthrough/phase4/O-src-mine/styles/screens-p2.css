@@ -1,0 +1,106 @@
+/* [phase2] Agent S screens: the build menu's short cards and its one "where the space is" card, the survivor card's best skill and job-fit bar,
+   the Surface panel's tabs (three picks / all areas with the map / trade), the Command panel's four tabs, Research before it opens.
+   Tokens only (styles/tokens.css); every tap target reaches --hit-min; nothing is told by colour alone. Phones first (375 and 320 px, RTL). */
+
+/* ---- Build menu: a card = name, one-line purpose, one effect, price; the rest behind (i). ---------------------------------------------- */
+
+.bm-card.p2s-card {
+  position: relative;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--sp-2);
+}
+.bm-card.p2s-card:active { transform: none; }
+.p2s-card__main {
+  display: flex;
+  gap: var(--sp-3);
+  align-items: flex-start;
+  min-width: 0;
+  /* Room for the (i) button at the inline end. */
+  padding-inline-end: calc(var(--hit-min) - var(--sp-2));
+  border-radius: var(--r-card);
+  outline: none;
+  transition: transform var(--dur-press) var(--ease-out);
+}
+.p2s-card__main[role="button"]:active,
+.p2s-card__main[role="button"]:focus-visible { transform: scale(var(--press-scale)); }
+.p2s-card__main[role="button"]:focus-visible { box-shadow: 0 0 0 var(--ring-w) var(--primary-glow); }
+.p2s-card__main .bm-info { flex: 1 1 auto; }
+.btn.k-btn.p2s-card__more {
+  position: absolute;
+  inset-block-start: var(--sp-1);
+  inset-inline-end: var(--sp-1);
+  min-width: var(--hit-min);
+  min-height: var(--hit-min);
+  padding: 0;
+  justify-content: center;
+  color: var(--text-secondary);
+}
+.p2s-card__more .ic { width: var(--icon-m); height: var(--icon-m); }
+.bm-card.p2s-card.is-open .p2s-card__more { color: var(--primary); }
+.p2s-oneline { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; unicode-bidi: plaintext; }
+.p2s-card__face { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-1) var(--sp-2); }
+.bm-card.disabled .p2s-card__face .bm-out { filter: grayscale(1); }
+.p2s-card__detail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  padding-block-start: var(--sp-2);
+  border-block-start: var(--border-w) solid var(--border);
+}
+.p2s-card__width { display: flex; align-items: center; gap: var(--sp-2); }
+
+/* The one card for every room that waits for space. */
+.bm-card.p2s-space {
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--sp-2);
+  cursor: default;
+  border-style: dashed;
+  border-color: var(--warning);
+}
+.bm-card.p2s-space:active { transform: none; }
+.bm-card.p2s-space.is-alone { padding: var(--sp-4) var(--sp-3); border-style: solid; }
+.p2s-space__title {
+  font-family: var(--font-title);
+  font-size: calc(var(--type-body-l) * var(--fs, 1));
+  color: var(--text-primary);
+}
+.p2s-space__title .ic { width: var(--icon-m); height: var(--icon-m); vertical-align: middle; }
+.btn.k-btn.p2s-space__all { align-self: flex-start; min-height: var(--hit-min); }
+
+/* ---- People: the best skill by name and one "fit for the job" bar (all five skills on the full card). ---------------------------------- */
+
+.p2s-topstat .ux2e-skill { font-size: calc(var(--type-caption) * var(--fs, 1)); color: var(--text-primary); }
+.p2s-fit {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: var(--sp-1) var(--sp-2);
+  font-size: calc(var(--type-caption) * var(--fs, 1));
+  color: var(--text-secondary);
+}
+.p2s-fit__label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-inline-size: calc(var(--sp-8) * 2.5); unicode-bidi: plaintext; }
+.p2s-fit__label .ic { width: var(--icon-s); height: var(--icon-s); vertical-align: middle; }
+.p2s-fit__word { font-weight: var(--weight-medium); color: var(--text-primary); white-space: nowrap; }
+@media (max-width: 340px) {
+  .p2s-fit { grid-template-columns: 1fr auto; }
+  .p2s-fit__label { grid-column: 1 / -1; max-inline-size: none; }
+}
+
+/* ---- Surface: the tabs; the map only on "All areas". ------------------------------------------------------------------------------- */
+
+.surface-overlay.p2s-nomap:not(.is-locked) .surface-map { display: none; }
+.surface-overlay.p2s-nomap:not(.is-locked) .surface-card { flex: 1 1 auto; max-height: none; }
+.p2s-surface-tabs { margin-block-end: var(--sp-2); }
+.p2s-surface-tabs .tab, .p2s-cmd-tabs .tab { flex: 1 0 auto; min-height: var(--hit-min); }
+.p2s-surface-panel { display: flex; flex-direction: column; gap: var(--sp-2); }
+.p2s-recs { gap: var(--sp-2); }
+.surface-region.p2s-rec .k-row__label { white-space: normal; line-height: var(--lh-tight); }
+.btn.k-btn.p2s-link { align-self: flex-start; min-height: var(--hit-min); }
+
+/* ---- Research before it opens: one line (and a way there). ---------------------------------------------------------------------------- */
+
+.p2s-research-wait { display: flex; flex-direction: column; gap: var(--sp-2); }
+.p2s-research-wait__line { color: var(--text-primary); font-size: calc(var(--type-body) * var(--fs, 1)); line-height: var(--lh-body); }
+.p2s-research-wait__line .ic { width: var(--icon-s); height: var(--icon-s); vertical-align: middle; }

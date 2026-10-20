@@ -107,7 +107,7 @@ export function getPartner(id: string | null | undefined): PartnerDef | undefine
 }
 
 export function partnerOpen(state: GameState, p: PartnerDef): boolean {
-  return p.flags.some(f => state.storyFlags.includes(f)) && systemOpen(state, 'caravans'); // [phase3] the unlock schedule
+  return p.flags.some(f => state.storyFlags.includes(f)) && systemOpen(state, 'caravans') && !state.research.isolationism?.completed; // [phase3] schedule; [phase4] Isolationism
 }
 
 export function openPartners(state: GameState): PartnerDef[] {

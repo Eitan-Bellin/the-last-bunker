@@ -24,6 +24,8 @@ import { setUiSound, soundRate } from './audio/uiSound';
 import { timeOfDay } from './ui/HUD';
 import { i18n } from './i18n/I18nManager';
 import { bus } from './core/EventBus';
+import { crossroadsDue, crossroadsLabel, showCrossroads } from './ui/components/Crossroads'; // [phase4]
+import { LAWS } from './data/laws'; // [phase4]
 import { getDef } from './data/buildingDefs';
 import { RESEARCH } from './data/research';
 import { el } from './ui/dom';
@@ -704,6 +706,13 @@ export class GameApp {
         label: () => i18n.t('act.new'),
       },
       {
+        // [phase4] A doctrine fork that just opened: the full-screen Crossroads (a story-tier moment; "decide later" snoozes it).
+        id: 'crossroads', priority: 35, tier: 'story', snoozeMs: 300_000, icon: '[[flag]]',
+        ready: () => crossroadsDue(this.engine, st()) !== null,
+        open: () => { const f = crossroadsDue(this.engine, st()); if (f) { this.closeSheets(); showCrossroads(this.engine, f, () => this.engine.requestSave()); } },
+        label: () => crossroadsLabel(crossroadsDue(this.engine, st()) ?? 'power'),
+      },
+      {
         id: 'memorial', priority: 90, tier: 'crisis', snoozeMs: 60_000, critical: true, icon: '[[heart]]',
         ready: () => memorialN() > 0,
         open: () => this.danger.showMemorial(), // [Danger C5]
@@ -1212,6 +1221,8 @@ export class GameApp {
     this.daily.install(); // [plan4:GP-1]
     this.watchGestures(); // [plan4:UX-10]
     this.tips.install(); // [plan4:UX-11]
+    // [phase4] A law whose upkeep could not be paid lapses: say so.
+    bus.on('law:lapsed', (id: unknown) => this.toasts.show(`[[books]] ${i18n.t('p4c.law.lapsed', { name: LAWS.find(l => l.id === id)?.name[i18n.currentLocale] ?? '' })}`, 'bad'));
 
     bus.on('state:loaded', () => {
       this.closeSheets();

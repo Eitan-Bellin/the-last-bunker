@@ -1,0 +1,124 @@
+/* [plan4:ST-19] Placing a room: the confirm bar above the bottom nav and the chips that follow the ghost room.
+   Imported once from app.ts. Targets are at least --hit-min (48px) tall; every font goes through --fs (Text size XL); the bar keeps clear of the
+   safe areas (the nav's --nav-h already contains the home-bar inset) and of the depth ruler; the thumb side follows data-onehand.
+   [ux-redesign w2c] Tokens only. The three buttons are kit buttons (ui/kit/Button.ts): pressed / disabled / shake come from kit.css; a disabled
+   Build is the kit's dashed grey plate and says why when pressed. Status colours stay on --ok / --warn / --bad (colour-vision aware, a11y.css). */
+
+.placement-bar {
+  position: fixed;
+  inset-inline: max(var(--sp-2), env(safe-area-inset-left)) max(var(--sp-2), env(safe-area-inset-right));
+  bottom: calc(var(--nav-h, 72px) + var(--obj-h, 0px) + var(--sp-3));
+  margin-inline: auto;
+  width: max-content;
+  max-width: calc(100% - 2 * var(--sp-2) - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px));
+  z-index: 24; /* above the nav console (--z-nav 22), under toasts */
+  display: flex;
+  align-items: stretch;
+  gap: var(--sp-2);
+  /* Room under the buttons for the kit's key edge. */
+  padding: var(--sp-2) var(--sp-2) calc(var(--sp-2) + var(--elev-btn-lift));
+  background: var(--surface-0);
+  border: var(--border-w) solid var(--border);
+  border-radius: var(--r-card);
+  box-shadow: var(--elev-2);
+  animation: pl-rise var(--dur-popup-in) var(--ease-out);
+}
+.placement-bar[style*="none"] { animation: none; }
+@keyframes pl-rise { from { opacity: 0; translate: 0 var(--sp-2); } to { opacity: 1; translate: 0 0; } }
+:root[data-motion="reduced"] .placement-bar { animation: none; }
+
+.btn.k-btn.pl-btn {
+  min-width: calc(var(--hit-min) + var(--sp-2));
+  min-height: max(var(--hit-min), var(--tap, 0px));
+  padding: var(--sp-1) var(--sp-3);
+  border-radius: var(--r-panel);
+  font-size: calc(var(--type-body) * var(--fs, 1));
+  gap: var(--sp-2);
+}
+.pl-btn .ic { width: var(--icon-m); height: var(--icon-m); flex: none; }
+.btn.k-btn.pl-cancel { color: var(--danger-text); border: var(--border-w) solid var(--danger); background: var(--surface-2); }
+.btn.k-btn.pl-rec { color: var(--primary); border: var(--border-w) solid var(--primary); background: var(--surface-2); }
+.btn.k-btn.pl-build {
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  row-gap: var(--sp-1);
+}
+.pl-build .cost-row { gap: var(--sp-1); flex-wrap: nowrap; }
+.pl-build .cost-chip { font-size: calc(var(--type-caption) * var(--fs, 1)); padding: 0 var(--sp-1); background: var(--surface-0); color: var(--text-primary); }
+.pl-build .ux2c-short { color: var(--danger-text); }
+.pl-cost-slot { display: inline-flex; }
+
+/* Keep the bar's thumb side: Build is the button under the thumb (one-hand mode), the others sit beside it. */
+:root[data-onehand="right"] .placement-bar { direction: ltr; margin-inline: auto 0; }
+:root[data-onehand="left"] .placement-bar { direction: ltr; flex-direction: row-reverse; margin-inline: 0 auto; }
+/* The depth ruler hugs the screen edge on the thumb's opposite side: leave it clear on a phone. */
+.placement-bar-on .depth-ruler { opacity: 0.6; }
+
+/* Narrow phones: the Best spot button shows a short two-line label, the price chips may wrap under "Build". */
+@media (max-width: 380px) {
+  .btn.k-btn.pl-btn { padding-inline: var(--sp-2); }
+  .pl-rec .k-btn__label { max-width: 5.6em; line-height: var(--lh-tight); text-align: center; }
+  .pl-build .cost-row { flex-wrap: wrap; justify-content: center; }
+}
+
+/* ---- chips that follow the ghost ---- */
+.placement-chips {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 14;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--sp-1);
+  width: max-content;
+  max-width: calc(100vw - 2 * var(--sp-2));
+  pointer-events: none;
+  will-change: transform;
+}
+.pl-chip, .placement-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  padding: var(--sp-1) var(--sp-2);
+  border-radius: var(--r-card);
+  background: var(--surface-0);
+  border: var(--border-w) solid var(--info);
+  color: var(--text-primary);
+  font-size: calc(var(--type-caption) * var(--fs, 1));
+  font-weight: var(--weight-bold);
+  line-height: var(--lh-tight);
+  box-shadow: var(--elev-1);
+  white-space: nowrap;
+  --chip-i: var(--ic-dot);
+  --chip-c: var(--info);
+}
+.pl-chip::before, .placement-hint::before {
+  content: '';
+  width: 0.95em;
+  height: 0.95em;
+  flex: none;
+  background: var(--chip-c);
+  -webkit-mask: var(--chip-i) center / contain no-repeat;
+  mask: var(--chip-i) center / contain no-repeat;
+}
+/* Status is told by the icon and the line style as well as the colour (AC-7): solid good, dashed warning, double bad. */
+.pl-chip.good { border-color: var(--ok); border-style: solid; --chip-i: var(--ic-check); --chip-c: var(--ok); }
+.pl-chip.warn, .placement-hint.warn { border-color: var(--warn); border-style: dashed; --chip-i: var(--ic-warn); --chip-c: var(--warn); }
+.pl-chip.bad, .placement-hint.bad { border-color: var(--bad); border-style: double; border-width: var(--ring-w); --chip-i: var(--ic-cross); --chip-c: var(--bad); white-space: normal; max-width: min(86vw, var(--tooltip-max)); }
+.pl-chip.info { --chip-i: var(--ic-dot); --chip-c: var(--info); }
+
+.placement-hint {
+  position: fixed;
+  inset-inline: 0;
+  margin-inline: auto;
+  width: max-content;
+  max-width: calc(100% - 2 * var(--sp-3));
+  bottom: calc(var(--nav-h, 72px) + var(--obj-h, 0px) + var(--pl-h, 64px) + var(--sp-4));
+  z-index: 25;
+  white-space: normal;
+  pointer-events: none;
+}
+
+/* Placement mode: the crosshair cursor of the older stylesheet is wrong for the grab-and-drag ghost. */
+body.placement-mode #game-canvas { cursor: default; }

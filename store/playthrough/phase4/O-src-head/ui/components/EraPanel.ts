@@ -1,0 +1,725 @@
+import { LAWS, lawCost, lawSlots } from '../../data/laws';
+import { ENDINGS, endingScore, type EndingDef } from '../../data/endings';
+import type { GameEngine } from '../../core/GameEngine';
+import type { GameState, ResourceType } from '../../core/GameState';
+import { i18n } from '../../i18n/I18nManager';
+import { fmtNum, plural } from '../format';
+import { ERAS, eraOf, type EraDef } from '../../data/eras';
+import { Sheet } from './Sheet';
+import { RESOURCE_ICONS, bar, button, costRow, el, setBar, setRich } from '../dom';
+import { ACTS, actOf, systemOpen, type ActDef } from '../../data/acts';
+import { FOREMAN_ACT, FOREMAN_ORDERS, type ForemanSystem } from '../../systems/ForemanSystem';
+import { actEta, actFraction, actRequirements, type Requirement } from '../../systems/Guide';
+import type { ObjectiveAction } from '../../systems/ObjectiveSystem';
+import { resourceDef } from '../../data/resources';
+import { getScenario, homeShare, type HomeSite } from '../../data/scenarios';
+import { wingSummary } from '../../data/wings';
+import { fillSafetyCard } from './SafetyCard'; // plan4:ST-14/15
+import { lawImpact } from '../../systems/morale';
+import { labourBonus } from '../../systems/economy';
+import { kButton, kTabs } from '../kit'; // [ux2e]
+import { flowArrow } from '../rtl';
+import { PROJECTS } from '../../data/projects'; // [phase2]
+import { RESEARCH } from '../../data/research'; // [phase2]
+import { ProjectsView } from './ProjectsPanel'; // [phase2]
+import '../../styles/screens-p2.css'; // [phase2]
+
+/** [phase3] Laws show once their slot exists AND the Act's schedule has opened them (Act III + 2 days). */
+const lawsShown = (state: GameState) => lawSlots(state) > 0 && systemOpen(state, 'laws');
+
+/**
+ * [ux2e #32] The Command panel's tabs. [phase2] Now (the next step, three goals, and the whole Act behind one button) · Projects (the big
+ * projects, drawn here) · Policies (laws, the Foreman's orders, the doctrines chosen) · Endings: Projects and Laws are one tap from the Act chip.
+ */
+export type CommandTab = 'now' | 'projects' | 'policies' | 'endings';
+/** [ux2e #32] How many of the Act's goals the Now tab shows. */
+const NOW_GOALS = 3;
+
+/** [ux2e #32] The goals the Now tab shows: open ones first (not done, not waiting for their era), in the Act's order. */
+function topGoals(reqs: Requirement[]): Requirement[] {
+  const open = reqs.filter(r => !r.done && !r.locked);
+  const later = reqs.filter(r => !r.done && r.locked);
+  return [...open, ...later].slice(0, NOW_GOALS);
+}
+
+/** Sets a line of text that may hold icon tokens ([[food]]), only when it changed (the panel refreshes four times a second). */
+function setLine(node: HTMLElement | null, text: string): void {
+  if (!node || node.dataset.t === text) return;
+  node.dataset.t = text;
+  setRich(node, text);
+}
+
+/** How far ahead the forecast looks, in seconds. */
+const FORECAST_SECONDS = 6 * 3600;
+
+/** One requirement row of the Act card: a bar and the next step toward it. */
+interface ReqRow {
+  id: string;
+  row: HTMLElement;
+  bar: HTMLElement;
+  label: HTMLElement;
+  hint: HTMLElement;
+  /** [ux-wp1 C1] The era goal's own steps, one line each. */
+  subs: HTMLElement;
+  /** What a tap does now (changes as the requirement's next step changes). */
+  action: ObjectiveAction;
+}
+
+/**
+ * The Command panel (it used to be the "Eras" panel): where the run stands and what blocks it.
+ * [Q2/Q3] The first card says what to do next and why, every requirement of the Act has its own next step and a tap
+ * that takes you there, a six-hour forecast shows what will run out or overflow, and the ending's lean is visible.
+ * The era's own goals only show for bunkers from before the long game (there they still drive the story).
+ */
+export class EraPanel {
+  private sheet = new Sheet('era-sheet', 'command');
+  private signature = '';
+  private bars: HTMLElement[] = [];
+  private labels: HTMLElement[] = [];
+  /** [LateGame B1] Opens the big projects panel. */
+  onOpenProjects: (() => void) | null = null;
+  /** [Q2] Where a tap on a step goes (the app opens the right panel). */
+  onGo: ((action: ObjectiveAction) => void) | null = null;
+  /** [Long game] The Act's requirement rows (its own goals, then its charter projects). */
+  private reqRows: ReqRow[] = [];
+  /** [Long game] Set by the app: the Foreman whose standing orders are toggled here. */
+  foreman: ForemanSystem | null = null;
+  /** Set by the app: the engine, for the guide and the forecast. */
+  engine: GameEngine | null = null;
+  private lastState: GameState | null = null;
+  /** [Long game UX] The Foreman's live lines: next-round countdown, then one report per order. */
+  private foremanNext: HTMLElement | null = null;
+  private foremanReports: HTMLElement[] = [];
+  private nowText: HTMLElement | null = null;
+  private nowMeta: HTMLElement | null = null;
+  private nowGo: HTMLButtonElement | null = null;
+  private nowAction: ObjectiveAction = null;
+  /** [ux-wp1 M2] "This Act ends in ~X at today's rates". */
+  private nowEta: HTMLElement | null = null;
+  private forecastBox: HTMLElement | null = null;
+  private endingBars: { id: string; bar: HTMLElement; label: HTMLElement }[] = [];
+  private pctLabel: HTMLElement | null = null;
+  /** [plan4:ST-5] The wing width line (west/east reach and the running wing dig's time left). */
+  private wingLine: HTMLElement | null = null;
+  /** [plan4:ST-14/15] The Safety card's box (fire code, shut doors, emergency door button). */
+  private safetyBox: HTMLElement | null = null;
+  /** [ux2e #32] The tab on screen (Now whenever the panel opens). */
+  private tab: CommandTab = 'now';
+  /** [phase2] The Now tab shows the whole Act (every goal, the timeline, the forecast) instead of three goals. Folded on open. */
+  private actOpen = false;
+  /** [phase2] The Projects tab's view and box (redrawn when the projects' signature changes). */
+  private projectsView: ProjectsView | null = null;
+  private projectsBox: HTMLElement | null = null;
+  private projectsSig = '';
+
+  show(state: GameState): void {
+    this.tab = 'now';
+    this.actOpen = false; // [phase2]
+    this.signature = '';
+    this.refresh(state);
+    this.sheet.show();
+  }
+
+  hide(): void {
+    this.sheet.hide();
+  }
+
+  /**
+   * [phase2] Opens the panel on a tab (the app can send the Act chip's "Projects" or a surface lot here). A tab this bunker does not have
+   * yet falls back to Now.
+   */
+  showTab(state: GameState, tab: CommandTab): void {
+    this.show(state);
+    if (tab !== 'now') this.switchTab(tab);
+  }
+
+  /** [plan4:ST-9] Scrolls the wing line into view and lets it glow for a moment (the "what's new" card's "Show me"). */
+  revealWings(): void {
+    // [ux2e #32] The wing line lives on the Act card. [phase2] It is the Now tab's "whole Act" view now.
+    if ((this.tab !== 'now' || !this.actOpen) && this.lastState) {
+      this.tab = 'now';
+      this.actOpen = true;
+      this.signature = '';
+      this.refresh(this.lastState);
+    }
+    const line = this.wingLine;
+    if (!line) return;
+    requestAnimationFrame(() => {
+      line.scrollIntoView({ block: 'center', behavior: 'auto' });
+      line.classList.add('wing-hl');
+      setTimeout(() => line.classList.remove('wing-hl'), 3200);
+    });
+  }
+
+  get isVisible(): boolean {
+    return this.sheet.isVisible;
+  }
+
+  private longGame(state: GameState): boolean {
+    return !!state.longGame && !state.longGame.meta.legacy;
+  }
+
+  refresh(state: GameState): void {
+    const era = eraOf(state);
+    const act = state.longGame ? actOf(state) : null;
+    this.lastState = state;
+    const orders = FOREMAN_ORDERS.map(o => (state.longGame?.foreman.orders[o] ? 1 : 0)).join('') + (state.longGame?.policy.laws ?? []).join(',');
+    // [ux2e] The requirements are read once per refresh; the Now tab rebuilds when its three goals change.
+    const reqs = act && this.engine ? actRequirements(this.engine, state, act) : [];
+    const goals = this.tab === 'now' && !this.actOpen ? topGoals(reqs).map(r => r.id).join(',') : '';
+    const tabs = this.tabs(state).map(t => t.id).join(','); // [phase2] a tab appears when its system opens
+    const doctrines = this.tab === 'policies' && this.engine ? RESEARCH.filter(r => r.fork).map(r => this.engine!.researchSystem.status(state, r.id)).join(',') : '';
+    const sig = `${era.id}|${act?.id ?? 0}|${orders}|${state.tutorialStep}|${i18n.currentLocale}|${this.tab}|${this.actOpen}|${goals}|${tabs}|${doctrines}|${this.tab === 'policies' ? `${lawSlots(state)}${lawsShown(state)}` : ''}`;
+    if (sig !== this.signature) {
+      this.signature = sig;
+      this.projectsSig = '';
+      this.render(era, act, reqs);
+    }
+    // [phase2] The Projects tab redraws on its own signature (the stage numbers move every few seconds).
+    if (this.tab === 'projects' && this.projectsView && this.projectsBox?.isConnected) {
+      const ps = this.projectsView.signature(state);
+      if (ps !== this.projectsSig) {
+        this.projectsSig = ps;
+        this.projectsBox.replaceChildren(this.projectsView.render(state));
+      }
+    }
+    if (act && this.engine) this.refreshAct(state, act, reqs);
+    this.refreshForeman(state);
+    era.next.forEach((g, i) => {
+      const [c, t] = g.progress(state);
+      setBar(this.bars[i], (Math.min(c, t) / t) * 100);
+      if (this.labels[i]) this.labels[i].textContent = t > 1 ? `${Math.min(c, t)}/${t}` : c >= t ? '✓' : '';
+    });
+  }
+
+  /** The live parts of the Act cards: the "next step" line, every requirement's bar and hint, the forecast, the ending's lean. */
+  private refreshAct(state: GameState, act: ActDef, reqs: Requirement[]): void {
+    const engine = this.engine!;
+    // [ux2e] Rows are matched by id: the Now tab shows only some of the goals.
+    for (const row of this.reqRows) {
+      const r = reqs.find(x => x.id === row.id);
+      if (!r) continue;
+      setBar(row.bar, r.fraction * 100);
+      // [ux-wp1 P15] "0/6 · 2 in progress": work already running counts where the player can see it.
+      const count = r.progress[1] > 1 ? `${r.progress[0]}/${r.progress[1]}` : '';
+      row.label.textContent = r.done ? '✓' : (r.pending ?? 0) > 0 ? `${count}${count ? ' · ' : ''}${i18n.t('wp1.inProgress', { n: r.pending ?? 0 })}` : count;
+      setLine(row.hint, r.done ? '' : r.text);
+      this.refreshSubs(row.subs, r.done ? undefined : r.subs);
+      row.row.classList.toggle('done', r.done);
+      row.action = r.action;
+    }
+    // [ux2e #33] One source of truth: the very objective the bottom strip shows (ObjectiveSystem.current: the tutorial step, then the
+    // guide's pick from the Act's requirements, then the endless tasks), with its counter, so the two can never disagree.
+    if (this.nowText) {
+      const os = engine.objectiveSystem;
+      const obj = os.current(state);
+      const [c, t] = obj.progress(state);
+      const count = t > 1 ? ` (${Math.min(c, t)}/${t})` : '';
+      setLine(this.nowText, `${obj.icon} ${obj.text[i18n.currentLocale] ?? obj.text.en}${count}`);
+      this.nowAction = obj.action;
+      const req = obj.id.startsWith('guide:') ? reqs.find(r => `guide:${r.id}` === obj.id) : undefined;
+      setLine(this.nowMeta, os.inTutorial(state) ? i18n.t('wp1.tutorialThen', { act: act.name[i18n.currentLocale] }) : req ? req.title : '');
+      if (this.nowGo) this.nowGo.style.display = this.nowAction ? '' : 'none';
+    }
+    if (this.nowEta) {
+      // [ux-wp1 M2] When the Act should end at today's rates (a lower bound when some step can't be timed).
+      const e = actEta(reqs);
+      const what = e.slowest ? e.slowest.title : '';
+      const text = e.seconds >= 60 && e.slowest
+        ? i18n.t(e.known ? 'wp1.actEta' : 'wp1.actEtaMin', { t: i18n.formatDuration(e.seconds), what })
+        : '';
+      setLine(this.nowEta, text ? `[[clock]] ${text}` : '');
+      this.nowEta.style.display = text ? '' : 'none';
+    }
+    if (this.pctLabel) this.pctLabel.textContent = `${Math.floor(Math.min(0.99, actFraction(engine, state, act)) * 100)}%`;
+    this.refreshWings(state);
+    fillSafetyCard(this.safetyBox, engine, state); // plan4:ST-14/15
+    this.refreshForecast(state);
+    this.refreshEndings(state);
+  }
+
+  /** [plan4:ST-5] "Wing width: west X/Y, east X/Y" (X = widest floor now, Y = what the Act and depth allow) and the next wing's ETA. */
+  private refreshWings(state: GameState): void {
+    if (!this.wingLine || !this.engine) return;
+    const w = wingSummary(state, 'w'), e = wingSummary(state, 'e');
+    if (w.max <= 0 && e.max <= 12 && w.have <= 0 && e.have <= 12) { setLine(this.wingLine, `[[build]] ${i18n.t('wing.line.closed')}`); return; }
+    const ds = this.engine.digSystem;
+    const etas = ds.slots(state).filter(i => ds.dig(state, i)?.kind === 'wing').map(i => ds.eta(state, i)).filter(t => isFinite(t));
+    const next = etas.length ? ` · ${i18n.t('wing.line.eta', { t: i18n.formatDuration(Math.min(...etas)) })}` : '';
+    setLine(this.wingLine, `[[build]] ${i18n.t('wing.line', { wh: w.have, wm: w.max, eh: e.have, em: e.max })}${next}`);
+  }
+
+  /** [N1] The first card: the one thing to do now, what it is for, and a button that takes you there. */
+  private renderNow(): HTMLElement {
+    const card = el('div', 'bp-card now-card');
+    card.appendChild(el('div', 'bp-section-title', `[[target]] ${i18n.t('command.now')}`));
+    this.nowText = el('div', 'now-text');
+    this.nowMeta = el('div', 'bp-hint now-meta');
+    this.nowGo = kButton({ variant: 'primary', className: 'btn-primary now-go ux2e-48', label: `${i18n.t('command.go')} ${flowArrow()}`, onPress: () => this.onGo?.(this.nowAction) });
+    this.nowEta = el('div', 'bp-hint now-eta');
+    card.append(this.nowText, this.nowMeta, this.nowEta, this.nowGo);
+    return card;
+  }
+
+  /** [ux-wp1 C1] The era's steps under its Act goal: "✓ Restore the generator", "• Clear 6 areas 4/6". */
+  private refreshSubs(box: HTMLElement, subs: Requirement['subs']): void {
+    const lines = (subs ?? []).map(s => `${s.done ? '✓' : '•'} ${s.text}${!s.done && s.count ? ` ${s.count}` : ''}`);
+    const sig = lines.join('|');
+    if (box.dataset.sig === sig) return;
+    box.dataset.sig = sig;
+    box.replaceChildren(...lines.map((l, i) => el('div', `req-sub${subs![i].done ? ' done' : ''}`, l)));
+    box.style.display = lines.length ? '' : 'none';
+  }
+
+  /** [Long game] The Act card: its name, what it allows, and every requirement with its own next step. */
+  private renderAct(act: ActDef, reqs: Requirement[]): HTMLElement {
+    const locale = i18n.currentLocale;
+    const card = el('div', 'bp-card act-card');
+    this.pctLabel = el('span', 'act-pct');
+    const head = el('div', 'act-head');
+    head.append(el('div', 'act-name', act.name[locale]), this.pctLabel);
+    card.append(
+      head,
+      el('div', 'era-tagline', act.tagline[locale]),
+      el('div', 'act-limits', i18n.t('act.limits', { level: act.levelCap, people: act.popCap, floors: act.floorCap })),
+    );
+    if (act.opens) card.appendChild(el('div', 'bp-hint', act.opens[locale]));
+    // [plan4:ST-5] How wide the bunker may grow, and how wide it is.
+    this.wingLine = el('div', 'act-limits');
+    card.appendChild(this.wingLine);
+    // [P2] How tempting the bunker looks out there.
+    if (this.lastState?.longGame) {
+      const t = this.lastState.longGame.threat;
+      const calm = t.breatherUntil > this.lastState.longGame.meta.worldT;
+      card.appendChild(el('div', 'act-limits', `[[skull]] ${i18n.t('threat.meter', { n: Math.round(t.meter) })}${calm ? ` · ${i18n.t('threat.breather', { t: i18n.formatDuration(t.breatherUntil - this.lastState.longGame.meta.worldT) })}` : ''}`));
+    }
+    const last = act.id >= ACTS.length;
+    card.appendChild(el('div', 'bp-section-title', last ? i18n.t('act.goalsGenesis') : i18n.t('act.goalsNext', { name: ACTS[act.id].name[locale] })));
+    for (const r of reqs) card.appendChild(this.reqRow(r));
+    const steps = el('div', 'era-timeline');
+    for (const a of ACTS) {
+      const step = el('div', `era-step ${a.id < act.id ? 'past' : a.id === act.id ? 'current' : 'future'}`);
+      step.append(el('span', 'era-dot'), el('span', 'era-step-name', a.name[locale]));
+      steps.appendChild(step);
+    }
+    card.appendChild(steps);
+    return card;
+  }
+
+  /** [N1] Six hours ahead at today's rates: what runs dry, what overflows (and is wasted), what grows. */
+  private renderForecast(): HTMLElement {
+    const card = el('div', 'bp-card forecast-card');
+    card.appendChild(el('div', 'bp-section-title', `[[clock]] ${i18n.t('command.forecast')}`));
+    this.forecastBox = el('div', 'forecast');
+    card.append(this.forecastBox, el('div', 'bp-hint', i18n.t('command.forecastHint')));
+    return card;
+  }
+
+  private refreshForecast(state: GameState): void {
+    const box = this.forecastBox;
+    if (!box || !box.isConnected) return;
+    const act = state.longGame?.meta.act ?? 1;
+    const rows: HTMLElement[] = [];
+    const resources = (Object.keys(state.resources) as ResourceType[]).filter(r => {
+      const def = resourceDef(r);
+      if (!def || r === 'power' || r === 'isotope7' || r === 'credits' || r === 'blueprints' || r === 'vaultCoins') return false;
+      const opens = def.act ?? 0;
+      return opens === 0 || (act >= opens && opens >= act - 1);
+    });
+    for (const r of resources) {
+      const res = state.resources[r];
+      const net = res.productionRate - res.consumptionRate;
+      const cap = res.cap;
+      const finite = isFinite(cap) && cap > 0;
+      let text = i18n.t('command.steady');
+      let kind = '';
+      if (net < -0.0005 && res.amount > 0) {
+        const t = res.amount / -net;
+        if (t < FORECAST_SECONDS) { text = i18n.t('command.empty', { t: i18n.formatDuration(t) }); kind = 'bad'; }
+        else text = `${fmtNum(Math.max(0, res.amount + net * FORECAST_SECONDS))}`;
+      } else if (net > 0.0005 && finite) {
+        const t = (cap - res.amount) / net;
+        if (t <= 0) { text = i18n.t('command.full'); kind = 'warn'; }
+        else if (t < FORECAST_SECONDS) { text = i18n.t('command.fullIn', { t: i18n.formatDuration(t) }); kind = 'warn'; }
+        else text = `${fmtNum(Math.min(cap, res.amount + net * FORECAST_SECONDS))}`;
+      } else if (res.amount <= 0 && net < 0) { text = i18n.t('command.empty', { t: '0' }); kind = 'bad'; }
+      const row = el('div', `forecast-row ${kind}`);
+      row.append(el('span', 'forecast-res', `${RESOURCE_ICONS[r] ?? ''} ${i18n.t(`resources.${r}`)}`), el('span', 'forecast-now', fmtNum(res.amount)), el('span', 'forecast-then', text));
+      rows.push(row);
+    }
+    const sig = rows.map(r => r.textContent).join('|');
+    if (box.dataset.sig === sig) return;
+    box.dataset.sig = sig;
+    box.replaceChildren(...rows);
+  }
+
+  /** [P3-5] The bunkers of earlier timelines and what they send home. */
+  private renderHomes(homes: HomeSite[]): HTMLElement {
+    const locale = i18n.currentLocale;
+    const card = el('div', 'bp-card homes-card');
+    card.appendChild(el('div', 'bp-section-title', `[[vault]] ${i18n.t('home.title')}`));
+    card.appendChild(el('div', 'bp-hint', i18n.t('home.hint')));
+    for (const h of homes) {
+      const name = getScenario(h.scenario).name[locale];
+      card.appendChild(el('div', 'home-row', i18n.t('home.line', { name, act: ACTS[Math.min(ACTS.length, h.act) - 1]?.name[locale] ?? String(h.act), pct: Math.round(homeShare(h) * 100) })));
+    }
+    return card;
+  }
+
+  /** [Q8] Where the ending leans: each ending's score and what raises it. */
+  private renderEndings(): HTMLElement {
+    const locale = i18n.currentLocale;
+    const card = el('div', 'bp-card endings-card');
+    card.appendChild(el('div', 'bp-section-title', `[[flag]] ${i18n.t('command.endings')}`));
+    card.appendChild(el('div', 'bp-hint', i18n.t('command.endingsHint')));
+    this.endingBars = [];
+    for (const e of ENDINGS) {
+      const row = el('div', 'ending-row');
+      const top = el('div', 'era-goal');
+      const label = el('span', 'era-goal-count');
+      top.append(el('span', 'era-goal-text', `${e.icon} ${e.name[locale]}`), label);
+      const b = bar(0, 'accent');
+      row.append(top, b, el('div', 'bp-hint', e.drivers[locale]));
+      card.appendChild(row);
+      this.endingBars.push({ id: e.id, bar: b, label });
+    }
+    return card;
+  }
+
+  private refreshEndings(state: GameState): void {
+    if (this.endingBars.length === 0) return;
+    const scores = ENDINGS.map(e => ({ e, s: endingScore(state, e) }));
+    const max = Math.max(1, ...scores.map(x => x.s));
+    const lead = scores.reduce((a, b) => (b.s > a.s ? b : a)).e.id;
+    for (const { e, s } of scores) {
+      const row = this.endingBars.find(x => x.id === e.id);
+      if (!row) continue;
+      setBar(row.bar, (s / max) * 100);
+      row.label.textContent = e.id === lead ? `★ ${s.toFixed(1)}` : s.toFixed(1);
+    }
+  }
+
+  /** [P3] Laws: a few slots, each law a clear trade. */
+  private renderLaws(state: GameState): HTMLElement {
+    const locale = i18n.currentLocale;
+    const box = el('div', 'foreman laws');
+    const active = state.longGame?.policy.laws ?? [];
+    const slots = lawSlots(state);
+    box.appendChild(el('div', 'bp-section-title', `[[books]] ${i18n.t('laws.title', { n: active.length, slots })}`));
+    box.appendChild(costRow(state, lawCost(state)));
+    for (const l of LAWS) {
+      const on = active.includes(l.id);
+      const row = el('div', 'foreman-row');
+      const text = el('span', 'foreman-text');
+      text.append(el('div', '', `${l.icon} ${l.name[locale]}`), el('div', 'bp-hint', l.desc[locale]));
+      // [ux-wp2 S4] What the law really does in this bunker (morale above 100 is worth less, below 60 it costs output).
+      const imp = lawImpact(state, l.id);
+      if (imp) {
+        const pct = Math.round(imp.outputChange * 100);
+        text.appendChild(el('div', 'bp-hint law-impact', i18n.t('wp2.lawImpact', { out: `${pct > 0 ? '+' : pct < 0 ? '−' : ''}${Math.abs(pct)}%`, from: Math.round(imp.moraleWithout), to: Math.round(imp.moraleWith) })));
+      }
+      const can = on || (active.length < slots && this.engine!.resourceSystem.canAfford(state, lawCost(state)));
+      row.append(text, button(i18n.t(on ? 'laws.repeal' : 'laws.enact'), on ? 'btn-secondary btn-small' : 'btn-primary btn-small', () => {
+        if (on) this.engine!.repealLaw(l.id); else this.engine!.enactLaw(l.id);
+        this.signature = '';
+        this.refresh(this.engine!.stateManager.state);
+      }, !can));
+      box.appendChild(row);
+    }
+    return box;
+  }
+
+  /** [Long game] The Foreman's standing orders: routine handed over, each a clear on/off switch with what it last did. */
+  private renderForeman(state: GameState): HTMLElement {
+    const box = el('div', 'foreman');
+    box.appendChild(el('div', 'bp-section-title', `[[worker]] ${i18n.t('foreman.title')}`));
+    box.appendChild(el('div', 'bp-hint', i18n.t('foreman.hint')));
+    // [ux-wp2 S7] Idle adults lend a hand: say how much it speeds digs and charter work.
+    const labour = Math.round(labourBonus(state) * 100);
+    if (labour >= 1) box.appendChild(el('div', 'bp-hint', `[[worker]] ${i18n.t('wp2.labour', { n: labour })}`));
+    this.foremanReports = [];
+    for (const o of FOREMAN_ORDERS) {
+      const on = !!state.longGame?.foreman.orders[o];
+      const row = el('div', `foreman-row ${on ? 'on' : 'off'}`);
+      const text = el('span', 'foreman-text');
+      const report = el('div', 'bp-hint foreman-report');
+      text.append(el('div', '', i18n.t(`foreman.${o}`)), report);
+      this.foremanReports.push(report);
+      const sw = button(on ? `✓ ${i18n.t('settings.on')}` : i18n.t('settings.off'), `btn-small foreman-switch ${on ? 'btn-primary' : 'btn-secondary'}`, () => {
+        this.foreman?.set(o, !on);
+        this.signature = '';
+        if (this.lastState) this.refresh(this.lastState);
+      });
+      sw.setAttribute('role', 'switch');
+      sw.setAttribute('aria-checked', String(on));
+      row.append(text, sw);
+      box.appendChild(row);
+    }
+    this.foremanNext = el('div', 'bp-hint');
+    box.appendChild(this.foremanNext);
+    return box;
+  }
+
+  /** The live part of the Foreman box: what each order did on its last round and when the next one comes. */
+  private refreshForeman(state: GameState): void {
+    const f = this.foreman;
+    if (!f || !this.foremanNext?.isConnected) return;
+    const anyOn = FOREMAN_ORDERS.some(o => f.isOn(state, o));
+    this.foremanNext.textContent = anyOn ? i18n.t('foreman.next', { t: i18n.formatDuration(Math.ceil(f.nextRoundIn())) }) : i18n.t('foreman.allOff');
+    FOREMAN_ORDERS.forEach((o, i) => {
+      const r = f.last[o];
+      const line = this.foremanReports[i];
+      if (!line) return;
+      line.textContent = !f.isOn(state, o) ? '' : r ? (i18n.has(`foreman.report.${r.key}.other`) ? plural(`foreman.report.${r.key}`, r.n ?? 0) : i18n.t(`foreman.report.${r.key}`, { n: r.n ?? 0 })) : i18n.t('foreman.report.waiting');
+    });
+  }
+
+  /** [ux2e #32] One goal of the Act as a tappable row (bar, count, what to do next). Registered so refreshAct keeps it live. */
+  private reqRow(r: Requirement): HTMLElement {
+    const row = el('button', 'req-row');
+    row.type = 'button';
+    const top = el('div', 'era-goal');
+    const label = el('span', 'era-goal-count');
+    top.append(el('span', 'era-goal-text', `${r.icon} ${r.title}`), label);
+    const b = bar(0, 'accent');
+    const hint = el('div', 'bp-hint req-hint');
+    const subs = el('div', 'bp-hint req-subs');
+    subs.style.display = 'none';
+    row.append(top, b, hint, subs);
+    const entry: ReqRow = { id: r.id, row, bar: b, label, hint, subs, action: r.action };
+    row.addEventListener('click', () => { if (entry.action) this.onGo?.(entry.action); });
+    this.reqRows.push(entry);
+    return row;
+  }
+
+  /** [ux2e #32] The Now tab's second card: three of the Act's goals, and the way to the rest. */
+  private renderGoals(act: ActDef, reqs: Requirement[]): HTMLElement {
+    const locale = i18n.currentLocale;
+    const card = el('div', 'bp-card ux2e-goals');
+    const last = act.id >= ACTS.length;
+    card.appendChild(el('div', 'bp-section-title', last ? i18n.t('act.goalsGenesis') : i18n.t('act.goalsNext', { name: ACTS[act.id].name[locale] })));
+    const goals = topGoals(reqs);
+    for (const r of goals) card.appendChild(this.reqRow(r));
+    if (goals.length === 0) card.appendChild(el('div', 'bp-hint', i18n.t('command.actDone')));
+    const open = reqs.filter(r => !r.done).length;
+    card.appendChild(kButton({
+      variant: 'tertiary', className: 'btn-ghost ux2e-48 ux2e-link-btn',
+      label: `${i18n.t('ux2e.cmd.allGoals', { n: reqs.length, open })} ${flowArrow()}`,
+      onPress: () => { this.actOpen = true; this.switchTab('now'); }, // [phase2] the whole Act opens in place
+    }));
+    return card;
+  }
+
+  /** [phase2] The tabs this bunker has now: Projects once one can be worked on, Policies once laws or the Foreman open. */
+  private tabs(state: GameState): { id: CommandTab; label: string }[] {
+    if (!state.longGame || !this.engine) return [];
+    const act = actOf(state);
+    const ps = this.engine.projectSystem;
+    const out: { id: CommandTab; label: string }[] = [{ id: 'now', label: `[[target]] ${i18n.t('ux2e.cmd.now')}` }];
+    if (PROJECTS.some(d => ps.isAvailable(state, d))) out.push({ id: 'projects', label: `[[build]] ${i18n.t('p2s.cmd.projects')}` });
+    if ((act.id >= FOREMAN_ACT && !!this.foreman) || lawsShown(state)) out.push({ id: 'policies', label: `[[books]] ${i18n.t('p2s.cmd.policies')}` });
+    out.push({ id: 'endings', label: `[[star]] ${i18n.t('ux2e.cmd.endings')}` });
+    return out;
+  }
+
+  /** [phase2] The doctrines this run has chosen (research forks), read-only: they are picked in Research. */
+  private renderDoctrines(state: GameState): HTMLElement | null {
+    const rs = this.engine!.researchSystem;
+    const forks = RESEARCH.filter(r => r.fork);
+    if (!forks.some(r => rs.blockReason(state, r.id) !== 'act' || rs.status(state, r.id) !== 'locked')) return null;
+    const locale = i18n.currentLocale;
+    const box = el('div', 'foreman p2s-doctrines');
+    box.appendChild(el('div', 'bp-section-title', `[[flag]] ${i18n.t('p2s.cmd.doctrines')}`));
+    const chosen = forks.filter(r => ['done', 'active', 'queued'].includes(rs.status(state, r.id)));
+    for (const r of chosen) {
+      const row = el('div', 'foreman-row');
+      const text = el('span', 'foreman-text');
+      text.append(el('div', '', `${r.icon} ${r.name[locale] ?? r.name.en}`), el('div', 'bp-hint', r.desc[locale] ?? r.desc.en));
+      row.appendChild(text);
+      box.appendChild(row);
+    }
+    box.appendChild(el('div', 'bp-hint', i18n.t(chosen.length ? 'p2s.cmd.doctrinesHint' : 'p2s.cmd.doctrinesNone')));
+    box.appendChild(kButton({ variant: 'tertiary', className: 'btn-ghost ux2e-48 ux2e-link-btn', label: `[[research]] ${i18n.t('p2s.cmd.toResearch')} ${flowArrow()}`, onPress: () => this.onGo?.({ kind: 'research' }) }));
+    return box;
+  }
+
+  private switchTab(tab: CommandTab): void {
+    if (this.lastState && !this.tabs(this.lastState).some(t => t.id === tab)) tab = 'now'; // [phase2]
+    this.tab = tab;
+    this.signature = '';
+    if (this.lastState) this.refresh(this.lastState);
+    this.sheet.body.scrollTop = 0;
+  }
+
+  private render(era: EraDef, act: ActDef | null, reqs: Requirement[]): void {
+    const locale = i18n.currentLocale;
+    this.sheet.setTitle(`[[flag]] ${i18n.t('era.title')}`);
+    const root = el('div', 'era command');
+    const state = this.lastState;
+    const longGame = !!state && this.longGame(state);
+    this.nowText = this.nowMeta = this.nowGo = null;
+    this.nowEta = null;
+    this.forecastBox = null;
+    this.pctLabel = null;
+    this.wingLine = null;
+    this.safetyBox = null;
+    this.foremanNext = null;
+    this.endingBars = [];
+    this.reqRows = [];
+    this.bars = [];
+    this.labels = [];
+    this.projectsBox = null;
+    if (act && this.engine && state) {
+      const tabs = this.tabs(state);
+      if (!tabs.some(t => t.id === this.tab)) this.tab = 'now'; // [phase2]
+      // [ux2e #32] Three tabs instead of one 3.5K-character wall: Now (the next step and three goals), Act, Endings.
+      const panel = el('div', 'ux2e-cmd-panel');
+      panel.id = 'command-tabpanel';
+      // [phase2] Now · Projects · Policies · Endings (a tab shows once its system is open); the whole Act folds into Now.
+      const tabRow = kTabs(tabs, this.tab, (id) => this.switchTab(id as CommandTab), i18n.t('era.title'), panel);
+      tabRow.classList.add('p2s-cmd-tabs');
+      root.appendChild(tabRow);
+      if (this.tab === 'now') {
+        panel.appendChild(this.renderNow());
+        if (this.actOpen) {
+          panel.appendChild(this.renderAct(act, reqs));
+          panel.appendChild(this.renderForecast());
+          const homes = (state.longGame?.meta.homes ?? []) as HomeSite[];
+          if (homes.length > 0) panel.appendChild(this.renderHomes(homes));
+          panel.appendChild(kButton({ variant: 'tertiary', className: 'btn-ghost ux2e-48 ux2e-link-btn', label: i18n.t('p2s.cmd.fewerGoals'), onPress: () => { this.actOpen = false; this.switchTab('now'); } }));
+        } else {
+          panel.appendChild(this.renderGoals(act, reqs));
+        }
+        this.safetyBox = el('div', 'safety-box'); panel.appendChild(this.safetyBox); // plan4:ST-14/15
+      } else if (this.tab === 'projects') {
+        this.projectsView ??= new ProjectsView(this.engine, () => { this.projectsSig = ''; if (this.lastState) this.refresh(this.engine!.stateManager.state); });
+        this.projectsBox = el('div', 'p2s-cmd-projects');
+        panel.appendChild(this.projectsBox);
+      } else if (this.tab === 'policies') {
+        const extras = el('div', 'bp-card');
+        if (lawsShown(state)) extras.appendChild(this.renderLaws(state)); // [phase3]
+        if (act.id >= FOREMAN_ACT && this.foreman) extras.appendChild(this.renderForeman(state));
+        const doctrines = this.renderDoctrines(state);
+        if (doctrines) extras.appendChild(doctrines);
+        panel.appendChild(extras);
+      } else {
+        if (act.id >= 2) panel.appendChild(this.renderEndings());
+        else panel.appendChild(el('div', 'bp-card bp-hint', i18n.t('ux2e.cmd.endingsLater')));
+      }
+      root.appendChild(panel);
+      if (this.tab !== 'now' || !this.actOpen) {
+        this.sheet.body.replaceChildren(root);
+        return;
+      }
+    }
+    // The era is the bunker's look and mood; only a bunker from before the long game still plays toward its goals.
+    // [phase3] One progress bar: a long-game run sees the Act only (no era number, name or bar; eras stay the art's backdrop).
+    if (!longGame) {
+      const head = el('div', `era-head era-${era.key}`);
+      head.append(
+        el('div', 'era-num', i18n.t('era.number', { n: era.id + 1 })),
+        el('div', 'era-name', era.name[locale]),
+        el('div', 'era-tagline', era.tagline[locale]),
+      );
+      root.appendChild(head);
+    }
+    this.bars = [];
+    this.labels = [];
+    if (!longGame) {
+      if (era.next.length) {
+        const goals = el('div', 'bp-card');
+        goals.appendChild(el('div', 'bp-section-title', i18n.t('era.nextGoals', { name: ERAS[era.id + 1].name[locale] })));
+        for (const g of era.next) {
+          const row = el('div', 'era-goal');
+          const label = el('span', 'era-goal-count');
+          row.append(el('span', 'era-goal-text', g.text[locale]), label);
+          const b = bar(0, 'accent');
+          goals.append(row, b);
+          this.bars.push(b);
+          this.labels.push(label);
+        }
+        root.appendChild(goals);
+      } else {
+        root.appendChild(el('div', 'bp-card bp-hint', i18n.t('era.final')));
+      }
+      const timeline = el('div', 'era-timeline');
+      for (const e of ERAS) {
+        const step = el('div', `era-step ${e.id < era.id ? 'past' : e.id === era.id ? 'current' : 'future'}`);
+        step.append(el('span', 'era-dot'), el('span', 'era-step-name', e.name[locale]));
+        timeline.appendChild(step);
+      }
+      root.appendChild(timeline);
+    }
+    this.sheet.body.replaceChildren(root);
+  }
+}
+
+/** [Long game] Full-screen title card when a new Act begins: what it opens. */
+export function showActBanner(act: ActDef, onDone: () => void): void {
+  const locale = i18n.currentLocale;
+  const overlay = el('div', 'era-banner act-banner');
+  const inner = el('div', 'era-banner-inner');
+  inner.append(
+    el('div', 'era-banner-kicker', i18n.t('act.new')),
+    el('div', 'era-banner-name', act.name[locale]),
+    el('div', 'era-banner-tagline', act.tagline[locale]),
+    el('p', 'era-banner-story', i18n.t('act.opens', { level: act.levelCap, people: act.popCap, floors: act.floorCap })),
+  );
+  if (act.opens) inner.appendChild(el('p', 'era-banner-story', act.opens[locale]));
+  const btn = el('button', 'btn btn-primary', i18n.t('era.continue'));
+  inner.appendChild(btn);
+  overlay.appendChild(inner);
+  document.body.appendChild(overlay);
+  requestAnimationFrame(() => overlay.classList.add('in'));
+  btn.addEventListener('click', () => {
+    overlay.classList.remove('in');
+    setTimeout(() => overlay.remove(), 600);
+    onDone();
+  });
+}
+
+/** [P5] The run's ending: its name and story, before Genesis. */
+export function showEndingBanner(ending: EndingDef, onDone: () => void): void {
+  const locale = i18n.currentLocale;
+  const overlay = el('div', 'era-banner ending-banner');
+  const inner = el('div', 'era-banner-inner');
+  inner.append(
+    el('div', 'era-banner-kicker', i18n.t('ending.kicker')),
+    el('div', 'era-banner-name', `${ending.icon} ${ending.name[locale]}`),
+    el('p', 'era-banner-story', ending.text[locale]),
+    el('div', 'era-banner-tagline', i18n.t('ending.next')),
+  );
+  const btn = el('button', 'btn btn-primary', i18n.t('era.continue'));
+  inner.appendChild(btn);
+  overlay.appendChild(inner);
+  document.body.appendChild(overlay);
+  requestAnimationFrame(() => overlay.classList.add('in'));
+  btn.addEventListener('click', () => {
+    overlay.classList.remove('in');
+    setTimeout(() => overlay.remove(), 600);
+    onDone();
+  });
+}
+
+/** Full-screen title card when a new era begins. */
+export function showEraBanner(era: EraDef, onDone: () => void): void {
+  const locale = i18n.currentLocale;
+  const overlay = el('div', `era-banner era-${era.key}`);
+  const inner = el('div', 'era-banner-inner');
+  inner.append(
+    el('div', 'era-banner-kicker', i18n.t('era.newEra')),
+    el('div', 'era-banner-name', era.name[locale]),
+    el('div', 'era-banner-tagline', era.tagline[locale]),
+    el('p', 'era-banner-story', era.story[locale]),
+  );
+  const btn = el('button', 'btn btn-primary', i18n.t('era.continue'));
+  inner.appendChild(btn);
+  overlay.appendChild(inner);
+  document.body.appendChild(overlay);
+  requestAnimationFrame(() => overlay.classList.add('in'));
+  btn.addEventListener('click', () => {
+    overlay.classList.remove('in');
+    setTimeout(() => overlay.remove(), 600);
+    onDone();
+  });
+}

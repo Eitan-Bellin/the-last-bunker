@@ -1,0 +1,632 @@
+/* Fonts (Karantina, Rubik, Secular One) are self-hosted: public/fonts/fonts.css, linked from index.html. */
+@import './styles/tokens.css';
+@import './styles/kit.css';
+
+/* [ux-redesign W1] The palette, spacing, type, layers and motion live in one place now: styles/tokens.css. */
+
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  font-family: var(--font-body);
+  background: var(--bg-dark);
+  color: var(--text-primary);
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+}
+
+/* [plan4:UX-4] Text fields: the html/body user-select:none is inherited by inputs in WebKit and blocks typing. 16px+ stops iOS zooming
+   the page when a field is focused (which is why maximum-scale used to be needed; it is gone from the viewport so players can zoom). */
+input, textarea, select {
+  -webkit-user-select: text;
+  user-select: text;
+  font-size: max(16px, 1em);
+}
+/* Never let iOS inflate text on rotation; and no long-press "save image" sheet over the portraits and icons. */
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+img { -webkit-touch-callout: none; }
+
+button {
+  font-family: inherit;
+  color: inherit;
+}
+
+#game-canvas {
+  position: absolute;
+  inset: 0;
+  /* [ux-redesign w2fix] Pixi writes the backing size as inline px on resize; the box must still follow the viewport (#26), so these win. */
+  width: 100% !important;
+  height: 100% !important;
+  z-index: var(--z-world);
+}
+
+/* gfx-p0 light: vignette and film grain are drawn in-engine (postfx.ts composite, per era); the old DOM overlay and its scanlines are gone. */
+.vignette { display: none; }
+
+/* ---------- HUD ---------- */
+
+#hud {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: var(--z-hud);
+}
+
+.hud-top {
+  pointer-events: auto;
+  background: linear-gradient(to bottom, rgba(10, 10, 26, 0.95) 60%, transparent);
+  padding: 8px 10px 14px;
+  padding-top: max(8px, env(safe-area-inset-top));
+}
+
+/* [ux-redesign W2b] The resource tiles, the info row and the nav keys are styled in styles/hud.css (imported by HUD.ts). */
+
+@keyframes pulse-red {
+  from { box-shadow: 0 0 0 rgba(255, 85, 85, 0); }
+  to { box-shadow: 0 0 10px rgba(255, 85, 85, 0.6); }
+}
+
+
+.hud-banner {
+  pointer-events: auto;
+  margin: 0 auto;
+  width: fit-content;
+  max-width: 92%;
+  padding: 7px 14px;
+  border-radius: 4px;
+  font-size: calc(12px * var(--fs, 1));
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.hud-banner.power {
+  background: rgba(255, 85, 85, 0.18);
+  border: 1px solid rgba(255, 85, 85, 0.6);
+  color: #ffb0b0;
+  animation: pulse-red 1.2s infinite alternate;
+}
+.hud-banner.placement {
+  margin-top: 6px;
+  background: rgba(77, 255, 143, 0.14);
+  border: 1px solid rgba(77, 255, 143, 0.6);
+  color: #c8ffdc;
+}
+
+.hud-bottom {
+  pointer-events: auto;
+  position: fixed;
+  bottom: 0;
+  inset-inline: 0;
+  display: flex;
+  justify-content: space-around;
+  background: var(--bg-panel);
+  padding: 6px 0;
+  padding-bottom: max(6px, env(safe-area-inset-bottom));
+  border-top: 1px solid var(--border);
+  /* [perf] no backdrop-filter: a blur over the live canvas is a GPU pass every picture (96% opaque anyway) */
+  /* [plan4:UX-8] 22: above the bottom sheets (20), so the nav stays visible and tappable with a sheet open; below the surface map (25),
+     toasts (30) and dialogs (40). HUD.ts puts the console on <body> so this z-index competes with the sheets at all. */
+  z-index: var(--z-nav);
+}
+
+
+body.placement-mode #game-canvas { cursor: crosshair; }
+
+
+
+/* ---------- Generic controls ---------- */
+
+.btn {
+  border: 1px solid var(--border);
+  background: var(--bg-card-hi);
+  border-radius: var(--radius);
+  padding: 10px 14px;
+  font-size: calc(13px * var(--fs, 1));
+  font-weight: 600;
+  cursor: pointer;
+  /* [ux-redesign W4] The kit's press on every legacy button: in --dur-press, back in --dur-release springing (out-back). */
+  transition: transform var(--dur-release) var(--ease-out-back), filter var(--dur-release) var(--ease-out);
+}
+/* .btn.btn: beats bunker-os.css's later `.btn:active` (translateY only); the key still sinks its 1 px there. */
+.btn.btn:active:not(:disabled):not([aria-disabled="true"]):not(.k-btn) {
+  transform: translateY(var(--border-w)) scale(var(--press-scale));
+  filter: brightness(var(--press-darken));
+  transition-duration: var(--dur-press);
+}
+.btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.btn-primary { background: linear-gradient(135deg, #ff8a4d, #e8592a); border-color: transparent; color: #fff; }
+.btn-secondary { background: var(--bg-card-hi); }
+.btn-ghost { background: transparent; }
+.btn-small { padding: 4px 10px; font-size: calc(11px * var(--fs, 1)); }
+.btn-slot {
+  width: 100%;
+  border: 1px dashed var(--text-dim);
+  background: transparent;
+  color: var(--text-secondary);
+  margin-top: 6px;
+}
+.btn-job { width: 100%; text-align: start; margin-top: 5px; font-weight: 500; }
+.btn-job.current { border-color: var(--positive); }
+
+.bar-track {
+  height: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.bar-fill { height: 100%; background: var(--accent); transition: width 0.3s ease; border-radius: 3px; }
+.bar-track.health .bar-fill { background: #ff5f7a; }
+.bar-track.happiness .bar-fill { background: #ffd447; }
+.bar-track.xp .bar-fill { background: #8fd8ff; }
+.bar-track.accent .bar-fill { background: var(--warning); }
+
+.cost-row { display: flex; gap: 6px; flex-wrap: wrap; }
+.cost-chip {
+  font-size: calc(11px * var(--fs, 1));
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.3);
+  unicode-bidi: isolate;
+}
+.cost-chip.affordable { color: var(--positive); }
+.cost-chip.expensive { color: var(--negative); }
+
+/* ---------- Bottom sheet ---------- */
+
+.sheet-overlay {
+  position: fixed;
+  inset: 0;
+  background: transparent;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  z-index: var(--z-panels);
+  pointer-events: none;
+  transition: background var(--dur-popup-out) var(--ease-in);
+}
+.sheet-overlay.open { background: var(--overlay-soft); pointer-events: auto; transition: background var(--dur-popup-in) var(--ease-out); }
+
+.sheet {
+  background: var(--bg-panel);
+  border-radius: var(--r-card) var(--r-card) 0 0;
+  /* [plan4:UX-6] side padding clears the notch / rounded corners in landscape */
+  padding: 8px max(16px, env(safe-area-inset-right)) 16px max(16px, env(safe-area-inset-left));
+  width: 100%;
+  max-width: 520px;
+  max-height: 72vh;
+  /* [plan4:UX-8] The nav console stays visible above the sheet's bottom edge, so the content must end above it (--nav-h is measured by
+     HUD.ts and already includes the home-bar safe area). With the keyboard up (--kb-inset, viewportUi.ts) the sheet is lifted by the
+     overlay's padding and the nav no longer needs room. */
+  padding-bottom: calc(max(0px, var(--nav-h, 72px) - var(--kb-inset, 0px)) + 12px);
+  /* [ux-redesign final F2/F3] Something scrolled into view (the Assign room list, a tutorial target) stops above the nav, not under it. */
+  scroll-padding-block-end: calc(max(0px, var(--nav-h, 72px) - var(--kb-inset, 0px)) + var(--sp-3));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+  border: 1px solid var(--border);
+  border-bottom: none;
+  transform: translateY(100%);
+}
+.sheet-overlay.open .sheet { transform: translateY(0); }
+/*
+ * [ux-w2f #38] Sheet motion: in --dur-popup-in (250 ms) easing out, out --dur-popup-out (180 ms) easing in; a parked sheet hides once it
+ * is down. [ux-redesign w2fix] Moved here from the <style id="sheet-motion"> Sheet.ts used to inject; the old 300 ms (--dur-screen)
+ * rules here and in bunker-os.css are gone, and the CRT flash there now runs for --dur-popup-in. A sheet replaced by another one closes
+ * with `.sheet-instant`, so two panels never slide over each other; a dragged sheet follows the finger with no transition.
+ */
+.sheet-overlay .sheet { transition: transform var(--dur-popup-out) var(--ease-in), visibility 0s linear var(--dur-popup-out); }
+.sheet-overlay.open .sheet { transition: transform var(--dur-popup-in) var(--ease-out); }
+.sheet-overlay .sheet.dragging, .sheet-overlay.open .sheet.dragging { transition: none; animation: none; }
+.sheet-overlay.sheet-instant, .sheet-overlay.sheet-instant .sheet { transition: none; animation: none; }
+/* [plan4:UX-7] dvh follows the browser bars (100vh on iOS Safari is the tallest state, so a 72vh sheet could reach under the toolbar). */
+@supports (height: 100dvh) {
+  .sheet { max-height: min(78dvh, calc(100dvh - var(--kb-inset, 0px) - 16px)); }
+}
+/* [plan4:UX-7] The keyboard lifts the sheet (iOS keeps the layout viewport full height). */
+.sheet-overlay { padding-bottom: var(--kb-inset, 0px); }
+
+.sheet-handle {
+  width: 40px;
+  height: 4px;
+  background: var(--text-dim);
+  border-radius: var(--r-full);
+  margin: 2px auto 10px;
+}
+
+.sheet-title {
+  font-size: calc(17px * var(--fs, 1));
+  font-weight: 700;
+  margin-bottom: 12px;
+  text-align: center;
+  color: var(--accent);
+}
+
+/* ---------- Build menu ---------- */
+
+.build-list { display: flex; flex-direction: column; gap: 8px; }
+
+.build-item {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  background: var(--bg-card);
+  padding: 10px;
+  border-radius: var(--radius);
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: transform 0.1s, border-color 0.2s;
+}
+.build-item:active { border-color: var(--accent); transform: scale(0.98); }
+.build-item.disabled { filter: grayscale(0.7) brightness(0.8); } /* [plan4:AC-3] a filter, not opacity: text keeps its contrast */
+
+.build-icon {
+  flex-shrink: 0;
+  width: 42px;
+  height: 42px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  font-size: calc(22px * var(--fs, 1));
+  box-shadow: inset 0 -4px 0 rgba(0, 0, 0, 0.3);
+}
+
+.build-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.build-item-name { font-weight: 700; font-size: calc(14px * var(--fs, 1)); }
+.build-item-desc { font-size: calc(11px * var(--fs, 1)); color: var(--text-secondary); }
+.build-meta { display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: calc(11px * var(--fs, 1)); color: var(--text-secondary); unicode-bidi: plaintext; }
+.zone-chip { background: rgba(255, 255, 255, 0.07); border-radius: 6px; padding: 0 6px; color: var(--text-primary); }
+
+/* ---------- Building panel ---------- */
+
+.bp { display: flex; flex-direction: column; gap: 10px; }
+.bp-card { background: var(--bg-card); border-radius: var(--radius); padding: 10px 12px; }
+.bp-status { display: flex; flex-direction: column; gap: 6px; background: rgba(255, 181, 71, 0.1); border: 1px solid rgba(255, 181, 71, 0.4); border-radius: var(--radius); padding: 8px 12px; font-size: calc(12px * var(--fs, 1)); }
+.bp-row { display: flex; justify-content: space-between; align-items: center; padding: 4px 0; font-size: calc(13px * var(--fs, 1)); gap: 10px; }
+.bp-row.total { border-top: 1px solid var(--border); margin-top: 4px; padding-top: 6px; font-weight: 700; }
+.bp-value { font-weight: 700; unicode-bidi: isolate; font-variant-numeric: tabular-nums; }
+.bp-value.positive { color: var(--positive); }
+.bp-value.negative { color: var(--negative); }
+.bp-warning { font-size: calc(11px * var(--fs, 1)); color: var(--warning); margin-top: 4px; }
+.bp-section-title { font-size: calc(13px * var(--fs, 1)); font-weight: 700; margin-bottom: 6px; }
+.bp-hint { font-size: calc(11px * var(--fs, 1)); color: var(--text-secondary); font-weight: 400; }
+.center { text-align: center; }
+.bp-upgrade { display: flex; flex-direction: column; gap: 8px; }
+.bp-upgrade-info { display: flex; justify-content: space-between; align-items: center; }
+
+.worker-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  width: 100%;
+  background: none;
+  border-inline: none;
+  border-top: none;
+  text-align: start;
+  font-size: calc(13px * var(--fs, 1));
+}
+.worker-pick { cursor: pointer; border-radius: 6px; padding: 8px 6px; }
+.worker-pick:active { background: var(--bg-card-hi); }
+.worker-name { flex: 1; font-weight: 600; }
+.worker-level { font-weight: 400; font-size: calc(11px * var(--fs, 1)); color: var(--text-secondary); }
+.worker-stat { font-weight: 700; unicode-bidi: isolate; font-variant-numeric: tabular-nums; }
+.worker-trait { color: #ffd447; font-weight: 700; }
+
+/* ---------- People panel ---------- */
+
+.people-list { display: flex; flex-direction: column; gap: 8px; }
+.person-card {
+  background: var(--bg-card);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  border: 1px solid transparent;
+}
+.person-card.idle { border-color: rgba(255, 181, 71, 0.5); }
+.person-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+.person-name { font-weight: 700; font-size: calc(14px * var(--fs, 1)); }
+.trait-list { display: flex; gap: 4px; flex-wrap: wrap; }
+.trait-chip { font-size: calc(10px * var(--fs, 1)); padding: 2px 7px; border-radius: 4px; background: rgba(255, 181, 71, 0.12); border: 1px solid rgba(255, 181, 71, 0.28); color: #f0d39a; }
+.stat-row { display: flex; gap: 4px; flex-wrap: wrap; }
+.stat-chip { font-size: calc(11px * var(--fs, 1)); padding: 2px 6px; border-radius: 6px; background: rgba(0, 0, 0, 0.25); color: var(--text-secondary); unicode-bidi: isolate; }
+.stat-chip.high { color: var(--text-primary); }
+.stat-chip.active { outline: 1px solid var(--accent); color: var(--accent); }
+.bar-grid { display: grid; grid-template-columns: auto 1fr; gap: 4px 8px; align-items: center; }
+.bar-label { font-size: calc(10px * var(--fs, 1)); color: var(--text-secondary); }
+.person-job { display: flex; justify-content: space-between; align-items: center; font-size: calc(12px * var(--fs, 1)); }
+.person-job .warn { color: var(--warning); font-weight: 600; }
+.person-actions { display: flex; gap: 6px; }
+.morale-box, .job-chooser { background: rgba(0, 0, 0, 0.22); border-radius: 8px; padding: 8px 10px; }
+
+/* ---------- Modal ---------- */
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: var(--overlay);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: var(--z-popups);
+  /* [plan4:UX-3] Keep clear of the notch, the home bar and rounded corners. */
+  padding: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--dur-popup-out) var(--ease-in);
+}
+.modal-overlay.open { opacity: 1; pointer-events: auto; transition: opacity var(--dur-popup-in) var(--ease-out); }
+/* [ux-redesign w2fix B2] A dialog that opened during a story scene waits, hidden and untappable, until the scene closes (Modal.waitBehind). */
+.modal-overlay.open.is-held { opacity: 0; visibility: hidden; pointer-events: none; }
+
+.modal {
+  background: linear-gradient(180deg, #23233f, #16162b);
+  border: 1px solid var(--border);
+  border-radius: var(--r-card);
+  padding: 20px 18px 16px;
+  width: 100%;
+  max-width: 380px;
+  text-align: center;
+  box-shadow: var(--elev-3);
+  transform: scale(var(--popup-from-scale));
+  transition: transform var(--dur-popup-in) var(--ease-out-back);
+  /* [plan4:UX-3] A dialog never grows past the screen (small phone, landscape, big text): the text scrolls, the buttons stay in reach.
+     html/body are overflow:hidden, so a dialog taller than the screen used to push its buttons out of reach (Genesis choices could lock). */
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 80px);
+  overflow: hidden;
+}
+@supports (height: 100dvh) {
+  .modal { max-height: calc(100dvh - max(12px, env(safe-area-inset-top)) - max(12px, env(safe-area-inset-bottom)) - 24px); }
+}
+/* Icon, title, text (and the choices beyond the last button) scroll together; touch-action is needed because the page itself is touch-action:none. */
+.modal-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; touch-action: pan-y; }
+.modal-body { min-height: 0; }
+.modal-overlay.open .modal { transform: scale(1); }
+.modal-icon { font-size: calc(44px * var(--fs, 1)); margin-bottom: 6px; }
+.modal-title { font-size: calc(19px * var(--fs, 1)); font-weight: var(--weight-bold); color: var(--accent); margin-bottom: var(--sp-2); }
+.modal-body { font-size: calc(var(--type-body) * var(--fs, 1)); line-height: 1.5; color: var(--text-primary); margin-bottom: 14px; }
+.modal-sub { font-size: calc(var(--type-caption) * var(--fs, 1)); color: var(--text-secondary); margin-bottom: var(--sp-2); }
+.modal-actions { display: flex; flex-direction: column; gap: var(--sp-2); }
+/* The last (main) button stays pinned under the scrolling part; a very tall pinned group may scroll on its own, never push the text away. */
+.modal > .modal-actions { flex: 0 0 auto; max-height: 45vh; overflow-y: auto; overscroll-behavior: contain; touch-action: pan-y; padding: 8px 4px max(2px, env(safe-area-inset-bottom)); margin-inline: -4px; }
+.modal-scroll > .modal-actions { margin-bottom: 8px; }
+@supports (height: 100dvh) { .modal > .modal-actions { max-height: 45dvh; } }
+.modal-actions .btn { display: flex; justify-content: space-between; align-items: center; gap: 10px; text-align: start; }
+.modal-actions .btn:only-child { justify-content: center; }
+.gains-list { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; margin-bottom: 14px; }
+.gain-chip { font-size: calc(14px * var(--fs, 1)); font-weight: 700; padding: 4px 10px; border-radius: 8px; background: rgba(0, 0, 0, 0.3); unicode-bidi: isolate; }
+.gain-chip.positive { color: var(--positive); }
+.gain-chip.negative { color: var(--negative); }
+
+/* ---------- Toasts ---------- */
+
+.toast-stack {
+  position: fixed;
+  /* [plan4:UX-5] just under the measured status row (HUD.ts publishes --hud-top-h); 150px until the first measurement */
+  top: calc(var(--hud-top-h, 150px) + 6px);
+  inset-inline: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  z-index: var(--z-toasts);
+  pointer-events: none;
+}
+.toast {
+  max-width: 90%;
+  background: rgba(20, 20, 40, 0.95);
+  border: 1px solid var(--border);
+  border-radius: var(--r-full);
+  padding: var(--sp-2) var(--sp-4);
+  font-size: calc(13px * var(--fs, 1));
+  font-weight: var(--weight-medium);
+  box-shadow: var(--elev-2);
+  opacity: 0;
+  transform: translateY(-8px);
+  transition: opacity var(--dur-toast) var(--ease-out), transform var(--dur-toast) var(--ease-out);
+}
+.toast.good { border-color: var(--success); }
+.toast.bad, .toast.critical { border-color: var(--danger); }
+.toast.critical { border-width: 2px; }
+/* [plan4:UX-9] The player can swipe a toast away (Toast.ts moves it with --dx); the counter shows merged repeats ("x3"). */
+.toast { pointer-events: auto; touch-action: none; transform: translate(var(--dx, 0px), -8px); }
+.toast.in { opacity: 1; transform: translate(var(--dx, 0px), 0); }
+.toast.dragging { transition: none; }
+.toast-count { margin-inline-start: var(--sp-2); font-weight: var(--weight-bold); font-variant-numeric: var(--num-tabular); opacity: 0.85; unicode-bidi: isolate; }
+
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+/* ---------- Tabs ---------- */
+
+.tab-row { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 2px; scrollbar-width: none; }
+.tab-row::-webkit-scrollbar { display: none; }
+.tab { flex-shrink: 0; padding: 6px 10px; font-size: calc(12px * var(--fs, 1)); background: var(--bg-card); }
+.tab.active { border-color: var(--accent); color: var(--accent); background: rgba(255, 181, 71, 0.14); }
+.btn-row { display: flex; gap: 8px; margin-top: 8px; }
+.btn-danger { background: linear-gradient(135deg, #e85555, #b53030); border-color: transparent; color: #fff; }
+.danger-btn { width: 100%; color: var(--negative); border-color: rgba(255, 85, 85, 0.5); }
+.positive-text { color: var(--positive); }
+.negative-text { color: var(--negative); }
+.build-item.locked .build-icon { filter: grayscale(1) brightness(0.6); }
+
+/* ---------- Research ---------- */
+
+.research-head { display: flex; flex-direction: column; gap: 6px; }
+.research-active-name { font-weight: 700; font-size: calc(13px * var(--fs, 1)); }
+.research-list { display: flex; flex-direction: column; gap: 8px; }
+.research-card { background: var(--bg-card); border-radius: var(--radius); padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; border: 1px solid transparent; }
+.research-card.available { border-color: rgba(77, 255, 143, 0.35); }
+.research-card.active { border-color: rgba(255, 181, 71, 0.7); box-shadow: 0 0 12px rgba(255, 181, 71, 0.22); }
+.research-card.done { opacity: 0.6; }
+.research-card.locked { filter: grayscale(0.7) brightness(0.8); }
+.research-name { font-weight: 700; font-size: calc(13px * var(--fs, 1)); }
+.tier-chip { font-size: calc(10px * var(--fs, 1)); font-weight: 700; color: var(--text-secondary); background: rgba(0, 0, 0, 0.3); border-radius: 6px; padding: 1px 6px; }
+.research-done { font-size: calc(12px * var(--fs, 1)); font-weight: 600; color: var(--positive); }
+.research-done.active { color: var(--warning); }
+/* Research queue and Genesis checklist (balance pass). */
+.research-card.queued { border-color: rgba(156, 123, 255, 0.35); }
+.research-queue { display: flex; flex-direction: column; gap: 4px; padding-top: 4px; border-top: 1px solid rgba(255, 255, 255, 0.06); }
+.research-queue-row { display: flex; align-items: center; gap: 8px; font-size: calc(12px * var(--fs, 1)); }
+.research-queue-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.genesis-reqs { display: flex; flex-direction: column; gap: 4px; margin: 6px 0; }
+.genesis-req { font-size: calc(12px * var(--fs, 1)); color: var(--text-secondary); }
+.genesis-req.met { color: var(--positive); }
+
+/* ---------- Surface ---------- */
+
+.surface-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 25;
+  background: radial-gradient(ellipse at 50% 40%, #2a2418 0%, #14110c 60%, #0a0907 100%);
+  display: flex;
+  flex-direction: column;
+  /* [plan4:UX-6] all four sides: in landscape the notch is on the left or right */
+  padding: max(10px, env(safe-area-inset-top)) max(10px, env(safe-area-inset-right)) max(10px, env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left));
+  gap: 8px;
+  opacity: 0;
+  pointer-events: none;
+  transform: scale(1.03);
+  transition: opacity 0.25s, transform 0.25s;
+}
+.surface-overlay.open { opacity: 1; pointer-events: auto; transform: scale(1); }
+.surface-header { display: flex; align-items: center; justify-content: center; position: relative; }
+.surface-header .sheet-title { margin: 0; }
+.surface-close { position: absolute; inset-inline-end: 0; font-size: calc(16px * var(--fs, 1)); }
+.surface-missions { display: flex; flex-direction: column; gap: 6px; max-height: 22vh; overflow-y: auto; }
+@supports (height: 100dvh) { .surface-missions { max-height: 22dvh; } .surface-card { max-height: 42dvh; } }
+.mission-row { background: rgba(0, 0, 0, 0.35); border: 1px solid var(--border); border-radius: var(--radius); padding: 6px 10px; display: flex; flex-direction: column; gap: 4px; }
+.mission-name { font-size: calc(12px * var(--fs, 1)); font-weight: 600; }
+.surface-map { flex: 1; min-height: 0; overflow: auto; display: flex; align-items: safe center; justify-content: safe center; touch-action: pan-x pan-y; }
+.surface-map .map-wrap { position: relative; width: 100%; max-width: 620px; min-width: min(460px, 100%); max-height: 100%; border-radius: 10px; overflow: hidden; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06), 0 6px 18px rgba(0, 0, 0, 0.5); }
+.surface-map .map-paint { position: absolute; inset: 0; width: 100%; height: 100%; }
+.surface-map svg { position: relative; display: block; width: 100%; height: 100%; }
+.surface-map .hex { cursor: pointer; }
+.surface-map .hex polygon { transition: filter 0.15s; }
+/* [plan4:UX-7] hover only where there is a real hover: on a phone a tap left the last hex highlighted (sticky :hover). */
+@media (hover: hover) { .surface-map .hex:hover polygon { stroke: rgba(255, 255, 255, 0.55); stroke-width: 1.5; } }
+.surface-map .hex.fog { cursor: default; }
+.hex-icon { font-size: calc(13px * var(--fs, 1)); pointer-events: none; }
+.hex-q { font-size: calc(11px * var(--fs, 1)); font-weight: 700; fill: rgba(255, 255, 255, 0.55); pointer-events: none; }
+.mission-ring { fill: none; stroke: #ffd447; stroke-width: 2; animation: ring 1.2s ease-in-out infinite; pointer-events: none; }
+.mission-line { stroke: rgba(255, 212, 71, 0.5); stroke-width: 1.5; stroke-dasharray: 4 4; pointer-events: none; }
+@keyframes ring { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+.surface-card { background: var(--bg-panel); border: 1px solid var(--border); border-radius: 14px; padding: 10px 12px; max-height: 42vh; overflow-y: auto; }
+.surface-locked { text-align: center; max-width: 320px; }
+.surface-info { display: flex; gap: 12px; font-size: calc(12px * var(--fs, 1)); color: var(--text-secondary); flex-wrap: wrap; }
+.danger { color: #ff7a7a; letter-spacing: 1px; }
+.team-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.team-chip { padding: 6px 10px; font-size: calc(12px * var(--fs, 1)); font-weight: 500; }
+.team-chip.on { border-color: var(--positive); background: rgba(77, 255, 143, 0.14); color: #c8ffdc; }
+
+/* ---------- Menu ---------- */
+
+.save-area {
+  width: 100%;
+  height: 70px;
+  background: rgba(0, 0, 0, 0.35);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px;
+  font-size: calc(10px * var(--fs, 1));
+  font-family: monospace;
+  resize: none;
+  user-select: text;
+  -webkit-user-select: text;
+  direction: ltr;
+}
+.ach-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+.ach-card { background: var(--bg-card); border-radius: var(--radius); padding: 10px; text-align: center; opacity: 0.5; border: 1px solid transparent; }
+.ach-card.done { opacity: 1; border-color: rgba(255, 212, 71, 0.5); }
+.ach-icon { font-size: calc(26px * var(--fs, 1)); }
+.ach-name { font-weight: 700; font-size: calc(12px * var(--fs, 1)); margin: 2px 0; }
+.genesis-head { text-align: center; background: linear-gradient(135deg, rgba(122, 255, 90, 0.12), rgba(0, 0, 0, 0.2)); border: 1px solid rgba(122, 255, 90, 0.35); }
+.genesis-iso { font-size: calc(28px * var(--fs, 1)); font-weight: 700; color: #9dff7a; text-shadow: 0 0 12px rgba(122, 255, 90, 0.5); }
+.genesis-row { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid rgba(255, 255, 255, 0.05); }
+.genesis-info { flex: 1; }
+
+/* ---------- Objective tracker ---------- */
+
+.objective {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 2px auto 4px;
+  max-width: min(94%, 460px);
+  padding: 6px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 212, 71, 0.45);
+  background: rgba(16, 16, 34, 0.92); /* [ux-redesign w3fix] the old --obj-progress fill is gone: the advisor strip has its own bar */
+  font-size: calc(12px * var(--fs, 1));
+  cursor: pointer;
+  text-align: start;
+  /* [perf] no backdrop-filter (see the nav bar) */
+}
+.objective:active { transform: scale(0.98); }
+.objective-tag { font-size: calc(14px * var(--fs, 1)); }
+.objective-text { flex: 1; font-weight: 600; }
+.objective-meta { font-size: calc(11px * var(--fs, 1)); color: #ffd447; white-space: nowrap; unicode-bidi: isolate; }
+
+.night-overlay {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 2;
+  opacity: 0;
+  background: radial-gradient(ellipse at 50% 55%, rgba(8, 14, 40, 0.28) 0%, rgba(4, 8, 26, 0.6) 100%);
+  transition: opacity 1.5s linear;
+}
+
+/* ---------- Icon set ---------- */
+
+.ic { display: inline-flex; width: 1.15em; height: 1.15em; vertical-align: -0.2em; flex-shrink: 0; color: inherit; }
+.ic svg { width: 100%; height: 100%; display: block; filter: drop-shadow(0 1px 0 rgba(0, 0, 0, 0.45)); }
+.ic-food { color: #e8a24a; } .ic-water { color: #4fb6ff; } .ic-power { color: #ffd23f; }
+.ic-materials { color: #c98a5a; } .ic-medicine { color: #ff6b6b; } .ic-knowledge { color: #b48cff; }
+.ic-scrap { color: #a7b0ba; } .ic-blueprints { color: #6fa8ff; } .ic-isotope7, .ic-rad { color: #8dff5a; }
+.ic-star { color: #ffd23f; } .ic-heart { color: #ff5f6d; } .ic-happy { color: #ffd23f; } .ic-sad { color: #8aa0b8; }
+.ic-check { color: #5ee38a; } .ic-warning { color: #ffb547; } .ic-skull { color: #e6e1d6; } .ic-lock { color: #9a9488; }
+.ic-strength { color: #ff8a5a; } .ic-intelligence { color: #ffe27a; } .ic-agility { color: #7ae0ff; }
+.ic-charisma { color: #ff9ad5; } .ic-endurance { color: #9ad08a; } .ic-gift { color: #ff9ad5; } .ic-target { color: #ff7a5a; }
+.ic-clock, .ic-hourglass { color: #d8cfbf; } .ic-pick { color: #d9a441; } .ic-trophy, .ic-crown, .ic-medal { color: #ffc547; }
+.modal-icon .ic { width: 52px; height: 52px; }
+.ach-icon .ic { width: 30px; height: 30px; }
+.build-icon .ic { width: 28px; height: 28px; }
+.hex-icon { fill: rgba(255, 255, 255, 0.88); font-size: calc(13px * var(--fs, 1)); pointer-events: none; }
+
+.welcome-door { margin-top: 10px; padding: 8px; border-radius: 10px; background: rgba(255, 210, 122, 0.08); border: 1px solid rgba(255, 210, 122, 0.3); }
+
+/* Coupon: the code box in Settings and the amount boxes in the coupon sheet. */
+.coupon-code, .coupon-amount {
+  background: rgba(0, 0, 0, 0.35);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 8px;
+  font-size: calc(13px * var(--fs, 1));
+  min-height: 34px;
+}
+.coupon-code { flex: 1; min-width: 0; letter-spacing: 0.08em; text-transform: uppercase; }
+.coupon-amount { width: 76px; text-align: center; }
+.coupon-code.bad { border-color: var(--bad, #ff6b6b); animation: coupon-shake 0.3s; }
+@keyframes coupon-shake { 25% { transform: translateX(-4px); } 75% { transform: translateX(4px); } }
+.coupon-sheet .btn-row { align-items: center; }

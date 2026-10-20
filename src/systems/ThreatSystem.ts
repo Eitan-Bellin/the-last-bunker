@@ -1,6 +1,6 @@
 import { hasMutator } from '../data/mutators';
 import { lawThreat } from '../data/laws';
-import { hasFeature } from './ResearchSystem';
+import { doctrineRaidPace, hasFeature } from './ResearchSystem';
 import { scenarioOf } from '../data/scenarios';
 import type { StateManager } from '../core/StateManager';
 import type { GameState } from '../core/GameState';
@@ -40,7 +40,7 @@ export function threatTarget(state: GameState): number {
 /** Raids come this many times more often than the base pace (1 at a meter of 50). */
 export function threatPace(state: GameState): number {
   // [P3] The Diplomacy doctrine keeps a fifth of the gangs away.
-  return (0.5 + (state.longGame?.threat.meter ?? 50) / 100) * (hasFeature(state, 'diplomacy') ? 0.8 : 1);
+  return (0.5 + (state.longGame?.threat.meter ?? 50) / 100) * (hasFeature(state, 'diplomacy') ? 0.8 : 1) * doctrineRaidPace(state); // [phase4] Fortress: rarer
 }
 
 /** Raiders' strength factor from the meter and the season. */

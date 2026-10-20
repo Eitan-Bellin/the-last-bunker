@@ -14,6 +14,7 @@ import { describeMissing, missingList } from '../missing';
 import { kButton, kRow, kTabs, kEmpty, setKButtonHighlighted } from '../kit';
 import { uiSound } from '../../audio/uiSound';
 import { genesisRequirements } from './MenuPanel';
+import { showCrossroads } from './Crossroads'; // [phase4]
 import '../../styles/research.css';
 import '../../styles/screens-p2.css'; // [phase2]
 
@@ -172,6 +173,8 @@ export class ResearchPanel {
       }));
     } else head.appendChild(el('div', 'bp-hint', `[[intelligence]] ${i18n.t('research.needLab')}`));
     root.appendChild(head);
+    // [phase4] A doctrine is chosen on its Crossroads, not researched: a waiting one shows here, above the tree.
+    for (const fork of rs.waitingForks(state)) root.appendChild(this.crossroadsCard(fork));
 
     // [ux-redesign W2d #14] Only branches with something to do now get a tab, so the row fits a phone; the row scrolls with a fade
     // at its end when it still does not. Genesis waits for the late game (ux-wp6), refinement until its first node can start.
@@ -234,7 +237,7 @@ export class ResearchPanel {
       for (const [n, defs] of [...byAct].sort((a, b) => a[0] - b[0])) {
         list.appendChild(this.fold(`act${n}`, `[[lock]] ${i18n.t('ux2d.research.opensAct', { n, count: defs.length })}`, defs.map(d => this.foldRow(state, d))));
       }
-      const hidden = inBranch.filter(r => !places.has(r.id)).length;
+      const hidden = inBranch.filter(r => !places.has(r.id) && !this.offTree(state, r)).length; // [phase4] auto and doctrine nodes are not "later"
       if (hidden > 0) list.appendChild(el('div', 'bp-hint research-later', `[[lock]] ${plural('wp6.research.later', hidden)}`));
       const done = of('done');
       if (done.length) {
@@ -330,7 +333,7 @@ export class ResearchPanel {
     const pending = new Set([rs.activeId(state), ...rs.queue(state)]);
     const ready = (id: string) => !!state.research[id]?.completed || pending.has(id);
     for (const r of RESEARCH) {
-      if (hidden.has(r.id)) continue;
+      if (hidden.has(r.id) || this.offTree(state, r)) continue; // [phase4]
       const st = rs.status(state, r.id);
       if (st === 'done') out.set(r.id, 'done');
       else if (st === 'active' || st === 'queued' || st === 'available') out.set(r.id, 'now');
@@ -340,6 +343,28 @@ export class ResearchPanel {
       else out.set(r.id, r.requires.every(q => ready(q) || rs.status(state, q) === 'available') ? 'now' : 'later');
     }
     return out;
+  }
+
+  /**
+   * [phase4] Nodes that are not part of the tree the player works through: filler that completes by itself (`auto`), and doctrines,
+   * which are chosen on their Crossroads (a chosen one still shows as done; one an older save had running or queued shows as such).
+   */
+  private offTree(state: GameState, r: ResearchDef): boolean {
+    if (r.auto) return true;
+    if (!r.fork) return false;
+    const st = this.engine.researchSystem.status(state, r.id);
+    return st !== 'done' && st !== 'active' && st !== 'queued';
+  }
+
+  /** [phase4] "A crossroads is waiting: Power" and the way to it. */
+  private crossroadsCard(fork: string): HTMLElement {
+    const card = el('div', 'bp-card p4c-xr-card');
+    card.append(
+      el('div', 'bp-section-title', `[[flag]] ${i18n.t('p4c.xr.waiting', { fork: i18n.t(`p4c.fork.${fork}`) })}`),
+      el('div', 'bp-hint', i18n.t('p4c.xr.waitingHint')),
+      kButton({ variant: 'primary', label: `${i18n.t('p4c.xr.open')} ${flowArrow()}`, onPress: () => showCrossroads(this.engine, fork, () => this.redraw()) }),
+    );
+    return card;
   }
 
   /** [ux-wp6] A second run (or later): the whole tree was seen once, nothing is held back. */

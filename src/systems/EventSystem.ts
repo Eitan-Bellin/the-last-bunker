@@ -16,7 +16,7 @@ import { bus } from '../core/EventBus';
 import type { ExplorationSystem } from './ExplorationSystem';
 import type { IncidentSystem } from './IncidentSystem';
 import { effectiveLevel, getDef, workforceMultiplier } from '../data/buildingDefs';
-import { hasFeature } from './ResearchSystem';
+import { doctrineRaidStrength, doctrineWarningBonus, hasFeature } from './ResearchSystem';
 import { scenarioOf } from '../data/scenarios';
 import { incidentBlocks } from '../data/incidents';
 import { specMax, specTotal } from '../data/specializations';
@@ -572,7 +572,7 @@ export function raidStrength(state: GameState, roll = 0.5): number {
   const level = lg && !lg.meta.legacy ? (act <= 3 ? 8 * act : 24 + 6 * (act - 3)) : 8 * Math.max(0, state.era ?? 0);
   const base = 10 + level + 0.15 * state.survivors.length;
   return Math.max(10, Math.round(base * RAID_SCALE * (1 + state.survivors.length / RAID_CROWD) * (0.75 + roll * 0.5)
-    * difficultyOf(state).raidStrength * threatStrength(state)));
+    * difficultyOf(state).raidStrength * threatStrength(state) * doctrineRaidStrength(state))); // [phase4] Fortress: stronger
 }
 
 /** [P2] Chance the raid is won against the stated strength (the scout's estimate shown to the player): 0 or 1, it is decided by the numbers. */
@@ -667,7 +667,7 @@ export class EventSystem {
     const state = this.ctx.sm.state;
     // [P2] The scout report: who is coming is known at once (the forecast is exact).
     const kind: RaidKind = this.ctx.rng.chance(0.5) ? 'scavengers' : 'marauders';
-    const warning = RAID_WARNING + (hasFeature(state, 'watchtower') ? 180 : 0) + (hasFeature(state, 'rapidResponse') ? 120 : 0) + earlyWarningLead(state); // [P3] the watchtower sees them sooner; [plan4:BL-8] lookouts add their seconds
+    const warning = RAID_WARNING + (hasFeature(state, 'watchtower') ? 180 : 0) + (hasFeature(state, 'rapidResponse') ? 120 : 0) + earlyWarningLead(state) + doctrineWarningBonus(state); // [phase4] Rangers: sooner; [P3] the watchtower sees them sooner; [plan4:BL-8] lookouts add their seconds
     const raid = { hitAt: state.stats.totalPlayTime + warning, strength: raidStrength(state, this.ctx.rng.next()), kind, stance: 'hold' as RaidStance };
     this.setDanger({ raid });
     bus.emit('raid:warning', raid);

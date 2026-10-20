@@ -5,7 +5,7 @@ import { BIOMES, type BiomeId } from '../data/surface';
 import { ACT_CURRENCY, actPrice, refIncome } from '../data/pricing';
 import { TUNING } from '../data/tuning';
 import { systemOpen } from '../data/acts';
-import { hasFeature } from './ResearchSystem';
+import { doctrineClosedGates, hasFeature, ISOLATION_OUTPOSTS } from './ResearchSystem';
 import type { ResourceSystem } from './ResourceSystem';
 import type { ExplorationSystem } from './ExplorationSystem';
 
@@ -56,7 +56,8 @@ export class OutpostSystem {
 
   max(state: GameState): number {
     if (!systemOpen(state, 'outposts')) return 0; // [phase3] the unlock schedule
-    return MAX_OUTPOSTS[Math.min(MAX_OUTPOSTS.length - 1, state.longGame?.meta.act ?? 0)] + (hasFeature(state, 'expansionism') ? 2 : 0); // [P2-1]
+    const max = MAX_OUTPOSTS[Math.min(MAX_OUTPOSTS.length - 1, state.longGame?.meta.act ?? 0)] + (hasFeature(state, 'expansionism') ? 2 : 0); // [P2-1]
+    return doctrineClosedGates(state) ? Math.min(max, ISOLATION_OUTPOSTS) : max; // [phase4] Isolationism
   }
 
   cost(state: GameState): Record<string, number> {

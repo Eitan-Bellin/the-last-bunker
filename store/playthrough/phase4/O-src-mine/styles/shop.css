@@ -1,0 +1,33 @@
+/* [ux-redesign W2d] The credits shop sheet (#23, #24): one row per item, what it gives, a price button that says why when blocked.
+   Tokens only. */
+
+.shop { display: flex; flex-direction: column; gap: var(--sp-2); }
+.shop-balance {
+  margin: 0;
+  font-family: var(--font-title);
+  font-size: calc(var(--type-subtitle) * var(--fs, 1));
+  color: var(--res-credits);
+  font-variant-numeric: var(--num-tabular);
+}
+.shop-item {
+  display: flex;
+  gap: var(--sp-3);
+  align-items: center;
+  justify-content: space-between;
+  padding-block: var(--sp-2);
+  border-block-end: var(--border-w) solid var(--border);
+}
+.shop-text { display: flex; flex-direction: column; gap: var(--sp-1); min-width: 0; flex: 1 1 auto; }
+.shop-name { font-weight: var(--weight-bold); font-size: calc(var(--type-body) * var(--fs, 1)); }
+.shop-gets {
+  color: var(--success);
+  font-size: calc(var(--type-caption) * var(--fs, 1));
+  unicode-bidi: isolate;
+}
+.shop-item .shop-buy {
+  flex: 0 0 auto;
+  min-inline-size: calc(var(--hit-min) * 2);
+  justify-content: center;
+  font-variant-numeric: var(--num-tabular);
+}
+.journal-tabs .tab { flex: 1 1 0; min-height: var(--hit-min); }

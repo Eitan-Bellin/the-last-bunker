@@ -5,6 +5,7 @@ import type { StateManager } from '../core/StateManager';
 import type { SeededRandom } from '../core/Random';
 import { DAY_MS, isQuiet } from './DeathSystem';
 import { raidProfile, raidStrength, type EventSystem } from './EventSystem';
+import { doctrineAwayTruce } from './ResearchSystem'; // [phase4] Diplomacy
 import type { IncidentSystem } from './IncidentSystem';
 import type { DeathSystem } from './DeathSystem';
 
@@ -104,13 +105,15 @@ export class AwayDanger {
           const raid = { hitAt: play, strength: raidStrength(this.sm.state, this.rng.next()) };
           this.sm.applyDelta({ path: 'danger', value: { ...this.sm.state.danger, raid } });
         }
-        const res = this.events.resolveRaid('fight', { soft: true, allowDeath });
+        // [phase4] Diplomacy: the raid is met with the toll while the player is away, and nobody dies of it.
+        const truce = doctrineAwayTruce(this.sm.state);
+        const res = this.events.resolveRaid(truce && this.events.canPayTribute() ? 'tribute' : 'fight', { soft: true, allowDeath: allowDeath && !truce });
         if (!res) continue;
         report.raids++;
         if (res.key === 'loseSmall' || res.key === 'loseBig') report.raidsLost++;
         report.hurt += res.injured.length;
         if (res.died) { report.died.push(res.died); deathBudget--; }
-        else if (allowDeath && deathBudget > 0 && res.injured.length > 0 && this.ignoredToll()) { deathBudget--; this.lose(report); }
+        else if (!truce && allowDeath && deathBudget > 0 && res.injured.length > 0 && this.ignoredToll()) { deathBudget--; this.lose(report); }
       } else {
         const dz = ev.disasterId ? this.sm.state.danger.disasters.find(x => x.id === ev.disasterId) : this.rollDisaster(this.sm.state);
         if (!dz) continue;

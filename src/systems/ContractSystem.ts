@@ -1,6 +1,6 @@
 import { hasKeystone } from '../data/prestige';
 import { lateActTwoSystems } from '../data/acts';
-import { hasFeature } from './ResearchSystem';
+import { doctrineClosedGates, hasFeature } from './ResearchSystem';
 import type { StateManager } from '../core/StateManager';
 import type { GameState, ResourceType } from '../core/GameState';
 import type { InboxItem } from '../core/state/longGame';
@@ -116,7 +116,7 @@ export class ContractSystem {
 
   /** Contracts start with the second Act (the first is learned without them). */
   active(state: GameState): boolean {
-    return lateActTwoSystems(state); // [Q7] from day ~4, not the moment Act II begins
+    return lateActTwoSystems(state) && !doctrineClosedGates(state); // [Q7] from day ~4; [phase4] Isolationism closes the gates
   }
 
   open(state: GameState): InboxItem[] {

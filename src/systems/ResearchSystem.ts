@@ -9,6 +9,7 @@ import {
   REFINEMENTS, REFINEMENT_STEP, RESEARCH, getRefinement, getResearch, refinementResearch, type ResearchDef,
 } from '../data/research';
 import { effectiveLevel, getDef } from '../data/buildingDefs';
+import { registerModifier } from './modifiers'; // [phase4] the power doctrines' rules
 
 export type ResearchStatus = 'done' | 'active' | 'queued' | 'available' | 'locked';
 
@@ -73,6 +74,53 @@ export function researchMorale(state: GameState): number {
 export function hasFeature(state: GameState, feature: string): boolean {
   return completedDefs(state).some(r => r.effects.some(e => e.type === 'feature' && e.feature === feature));
 }
+
+// ---- [phase4] Doctrine rules (C1): what a doctrine changes in how a loop plays ----
+
+/**
+ * [phase4] The power doctrines change where the bunker works best: Fission runs the workshops on spare power (materials +15% while the
+ * grid is fully fed), Geothermal lifts the three deepest floors (+20%), the Solar Array the top two (+20%).
+ */
+const DOCTRINE_ROOM_BONUS = 0.2;
+const FISSION_MATERIALS = 0.15;
+let doctrineNow = { fission: false, geothermal: false, solar: false, floors: 0 };
+registerModifier({
+  id: 'doctrine',
+  prepare: state => {
+    doctrineNow = { fission: isResearched(state, 'fission'), geothermal: isResearched(state, 'geothermal'), solar: isResearched(state, 'solarArray'), floors: state.currentFloors ?? 0 };
+  },
+  mult: ({ building, resource, powerRatio }) => {
+    const d = doctrineNow;
+    let m = 1;
+    if (d.fission && resource === 'materials' && powerRatio >= 1) m *= 1 + FISSION_MATERIALS;
+    const floor = building.position?.floor ?? 0;
+    if (d.geothermal && floor >= d.floors - 3) m *= 1 + DOCTRINE_ROOM_BONUS;
+    if (d.solar && floor <= 1) m *= 1 + DOCTRINE_ROOM_BONUS;
+    return m;
+  },
+});
+
+/** [phase4] Fortress: raids come this many times as often (read by the raid pace, e.g. ThreatSystem.threatPace). */
+export function doctrineRaidPace(state: GameState): number {
+  return isResearched(state, 'fortress') ? 0.7 : 1;
+}
+/** [phase4] Fortress: raiders this many times as strong (read by EventSystem.raidStrength). */
+export function doctrineRaidStrength(state: GameState): number {
+  return isResearched(state, 'fortress') ? 1.3 : 1;
+}
+/** [phase4] Rangers: seconds added to the lookout's raid warning. */
+export function doctrineWarningBonus(state: GameState): number {
+  return isResearched(state, 'rangers') ? 300 : 0;
+}
+/** [phase4] Diplomacy: while the player is away, the toll is paid by itself and no one dies in a raid (read by AwayDanger). */
+export function doctrineAwayTruce(state: GameState): boolean {
+  return isResearched(state, 'diplomacy');
+}
+/** [phase4] Isolationism: no contracts or caravans, and at most ISOLATION_OUTPOSTS outposts. */
+export function doctrineClosedGates(state: GameState): boolean {
+  return isResearched(state, 'isolationism');
+}
+export const ISOLATION_OUTPOSTS = 3;
 
 /**
  * A building is available when it has no research requirement or its unlocking research is done, and (plan4 BL-2) its
@@ -191,7 +239,7 @@ export class ResearchSystem {
     if (node?.isResearching) return 'active';
     if (this.queue(state).includes(id)) return 'queued';
     const def = this.defOf(state, id);
-    if (!def || this.blockReason(state, id) || this.surplusHidden(state, id)) return 'locked';
+    if (!def || def.auto || this.blockReason(state, id) || this.surplusHidden(state, id)) return 'locked'; // [phase4] auto: never bought
     return def.requires.every(req => isResearched(state, req)) ? 'available' : 'locked';
   }
 
@@ -245,6 +293,7 @@ export class ResearchSystem {
   canStart(state: GameState, id: string): boolean {
     const def = this.defOf(state, id);
     if (!def || state.research[id]?.completed || state.research[id]?.isResearching || this.queue(state).includes(id)) return false;
+    if (def.auto) return false; // [phase4] filler completes by itself
     if (!this.requirementsMet(state, def) || this.blockReason(state, id) || this.surplusHidden(state, id)) return false;
     if (!baseStands(state)) return false; // [phase3] the first minutes: one thing at a time
     if (this.activeId(state) && this.queue(state).length >= this.queueSlots(state)) return false;
@@ -300,6 +349,7 @@ export class ResearchSystem {
 
   /** Advances research by dt seconds; time left over after a finish flows into the next queued node. */
   update(sm: StateManager, dt: number): void {
+    this.autoComplete(sm); // [phase4]
     let remaining = dt;
     for (let guard = 0; remaining > 0 && guard < 20; guard++) {
       const state = sm.state;
@@ -366,6 +416,80 @@ export class ResearchSystem {
     return false;
   }
 
+  /**
+   * [phase4] Filler nodes (`auto`) complete by themselves, free, once their Act has come and their prerequisites are done (a chain of
+   * them settles in one call). One a save had already queued is refunded; one it was running completes and the queue moves on.
+   * Quiet: 'research:auto' (no card, no toast), not 'research:complete'.
+   */
+  autoComplete(sm: StateManager): void {
+    for (let changed = true, guard = 0; changed && guard < 50; guard++) {
+      changed = false;
+      const state = sm.state;
+      const act = state.longGame?.meta.act ?? 99;
+      for (const def of AUTO_NODES) {
+        const node = sm.state.research[def.id];
+        if (node?.completed || (def.act ?? 1) > act || !def.requires.every(r => isResearched(sm.state, r))) continue;
+        const wasActive = !!node?.isResearching;
+        if (this.queue(sm.state).includes(def.id)) {
+          sm.applyDelta({ path: 'researchQueue', value: this.queue(sm.state).filter(q => q !== def.id) });
+          this.refund(sm, def.id);
+        }
+        sm.applyDelta({ path: 'research', value: { ...sm.state.research, [def.id]: { id: def.id, completed: true, progress: def.time, total: def.time, isResearching: false } } });
+        if (wasActive) this.startNextQueued(sm);
+        bus.emit('research:auto', def.id);
+        changed = true;
+      }
+    }
+  }
+
+  /** [phase4] The doctrine forks in their order (power, food, society, defense, industry, surface, regime, crossing). */
+  forks(): string[] {
+    return [...new Set(RESEARCH.filter(r => r.fork).map(r => r.fork!))];
+  }
+
+  /** [phase4] A fork's three options. */
+  forkOptions(fork: string): ResearchDef[] {
+    return RESEARCH.filter(r => r.fork === fork);
+  }
+
+  /** [phase4] The option this run took (done, running or queued), if any. */
+  forkChoice(state: GameState, fork: string): ResearchDef | undefined {
+    const pending = new Set([this.activeId(state), ...this.queue(state)]);
+    return this.forkOptions(fork).find(r => isResearched(state, r.id) || pending.has(r.id));
+  }
+
+  /** [phase4] A Crossroads waits: the fork's Act (and schedule) has come and nothing was chosen yet. */
+  forkWaiting(state: GameState, fork: string): boolean {
+    const opts = this.forkOptions(fork);
+    return opts.length > 0 && !this.forkChoice(state, fork) && this.blockReason(state, opts[0].id) === null;
+  }
+
+  /** [phase4] The forks waiting for a choice now, in order. */
+  waitingForks(state: GameState): string[] {
+    return this.forks().filter(f => this.forkWaiting(state, f));
+  }
+
+  /** [phase4] Why a doctrine can't be chosen now: null (it can), 'closed' (not open, or taken) or 'cost' (its price is not there). */
+  chooseBlock(state: GameState, id: string): 'closed' | 'cost' | null {
+    const def = this.defOf(state, id);
+    if (!def?.fork || !this.forkWaiting(state, def.fork)) return 'closed';
+    return this.resources.canAfford(state, def.cost as Record<string, number>) ? null : 'cost';
+  }
+
+  /**
+   * [phase4] The Crossroads choice: pays the doctrine's price (with its Eureka) and makes it law at once (no lab time, no prerequisite
+   * nodes: the fork's Act opening it is enough). The other options close for this run. Emits 'research:complete' like a finished node.
+   */
+  chooseDoctrine(sm: StateManager, id: string): boolean {
+    const def = this.defOf(sm.state, id);
+    if (!def || this.chooseBlock(sm.state, id) !== null) return false;
+    if (!this.resources.spend(sm, def.cost as Record<string, number>)) return false;
+    sm.applyDelta({ path: 'research', value: { ...sm.state.research, [id]: { id, completed: true, progress: def.time, total: def.time, isResearching: false } } });
+    bus.emit('research:complete', id);
+    bus.emit('doctrine:chosen', id);
+    return true;
+  }
+
   /** Buildings that exist and are unlocked; used to hide a type's def lookups for the UI. */
   buildingName(type: BuildingType, locale: string): string {
     const def = getDef(type);
@@ -377,6 +501,9 @@ export class ResearchSystem {
  * [phase3] "The base stands" (same rule as ObjectiveSystem.baseStands, kept here to avoid an import cycle): research waits until the
  * generator, the pump and the farm work and are staffed. A bunker that already researched or sent a team never locks again.
  */
+/** [phase4] The filler nodes, once. */
+const AUTO_NODES = RESEARCH.filter(r => r.auto);
+
 function baseStands(s: GameState): boolean {
   if (s.stats.totalMissionsCompleted > 0 || Object.values(s.research).some(r => r.completed || r.isResearching)) return true;
   const works = (t: BuildingType) => s.buildings.some(b => b.type === t && !(b.isConstructing && b.level === 1) && b.assignedSurvivorIds.length > 0);

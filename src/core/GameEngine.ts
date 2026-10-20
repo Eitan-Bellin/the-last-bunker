@@ -1,5 +1,5 @@
 import { MUTATORS } from '../data/mutators';
-import { LAWS, lawCost, lawSlots } from '../data/laws';
+import { LAWS, lawCooldown, lawCost, lawSlots } from '../data/laws';
 import { StateManager } from './StateManager';
 import { SaveManager, type BackupKind } from './SaveManager';
 import { stillOwner } from './singleInstance';
@@ -37,7 +37,7 @@ import { AwayDanger, type AwayDangerReport } from '../systems/AwayDanger';
 import { DIG_LORE, seedRuins } from '../data/ruins';
 import { InboxSystem } from '../systems/InboxSystem';
 import { DigSystem } from '../systems/DigSystem';
-import { ActSystem } from '../systems/ActSystem';
+import { ActSystem, noteRepeal } from '../systems/ActSystem';
 import { ForemanSystem } from '../systems/ForemanSystem';
 import { ThreatSystem } from '../systems/ThreatSystem';
 import { ContractSystem } from '../systems/ContractSystem';
@@ -833,6 +833,7 @@ export class GameEngine {
     const sm = this.stateManager;
     const lg = sm.state.longGame;
     if (!lg || lg.policy.laws.includes(id) || lg.policy.laws.length >= lawSlots(sm.state) || !LAWS.some(l => l.id === id)) return false;
+    if (lawCooldown(sm.state, id) > 0) return false; // [phase4] a repealed law waits 12 h
     if (!this.resourceSystem.spend(sm, lawCost(sm.state))) return false;
     sm.applyDelta({ path: 'longGame.policy.laws', value: [...lg.policy.laws, id] });
     this.chronicleSystem.note('law', id);
@@ -846,6 +847,7 @@ export class GameEngine {
     const lg = sm.state.longGame;
     if (!lg) return;
     sm.applyDelta({ path: 'longGame.policy.laws', value: lg.policy.laws.filter(x => x !== id) });
+    noteRepeal(sm, id); // [phase4] starts the cooldown
     this.requestSave();
   }
 

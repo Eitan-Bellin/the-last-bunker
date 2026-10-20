@@ -1,0 +1,134 @@
+import { difficultyOf } from '../data/difficulty';
+import type { Fallen, GameState, Grief, SurvivorState } from '../core/GameState';
+import type { StateManager } from '../core/StateManager';
+import { bus } from '../core/EventBus';
+import { mourningMult } from '../data/roomEffects'; // [plan4:BL-8]
+
+/**
+ * [Danger C5] Meaningful death: every loss is remembered (memorial modal, plaque at the entrance), mourned
+ * (morale), and followed by a breather (no bad events for 6 hours; no disasters for a day after more than
+ * 3 deaths in a day) so one death can never snowball into a spiral.
+ * Times here are wall-clock ms (a "day" is a real day, so it counts the hours the player is away too).
+ */
+export const DAY_MS = 86_400_000;
+export const QUIET_MS = 6 * 3_600_000;
+/** More deaths than this within a day pauses every disaster for a day. */
+const DEATHS_PER_DAY_LIMIT = 3;
+/** Mood: the whole bunker, and the family of the one who died. */
+const MOURN_ALL = -15;
+const MOURN_FAMILY = -30;
+const CEREMONY_BONUS = 5;
+/** The shared meal of a ceremony. */
+export const CEREMONY_COST = { food: 25 };
+
+/** After a death (or while the day's deaths are too many) nothing new goes wrong. */
+export function isQuiet(state: GameState, now = Date.now()): boolean {
+  return (state.danger?.quietUntil ?? 0) > now;
+}
+
+export function disastersPaused(state: GameState, now = Date.now()): boolean {
+  return (state.danger?.disastersPausedUntil ?? 0) > now;
+}
+
+/** The mourning (or ceremony glow) a survivor feels right now. */
+export function griefFor(state: GameState, id: string, now = Date.now()): number {
+  let sum = 0;
+  const soften = (state.danger?.grief?.length ?? 0) > 0 ? mourningMult(state) : 1; // [plan4:BL-8] a memorial hall shortens the sorrow, not the ceremony's lift
+  for (const g of state.danger?.grief ?? []) {
+    if (now < g.from || now >= g.until) continue;
+    if (g.ids && !g.ids.includes(id)) continue;
+    sum += g.value < 0 ? g.value * soften : g.value;
+  }
+  return sum;
+}
+
+/**
+ * [ux-wp3 W1] The cause of a death as the player should hear it: `kind` names the sentence (wp3.cause.<kind>), `disaster` the
+ * disaster's kind when there was one. A death from failing health is told as hunger or thirst when the stores were empty.
+ */
+export function deathCause(state: GameState, cause: string | undefined): { kind: 'raid' | 'disaster' | 'away' | 'hunger' | 'thirst' | 'wounds' | 'other'; disaster?: string } {
+  if (!cause) return { kind: 'other' };
+  if (cause === 'raid' || cause === 'away' || cause === 'hunger' || cause === 'thirst' || cause === 'wounds') return { kind: cause };
+  if (cause.startsWith('disaster:')) return { kind: 'disaster', disaster: cause.slice('disaster:'.length) };
+  if (cause === 'health') {
+    if ((state.resources.water?.amount ?? 1) <= 0) return { kind: 'thirst' };
+    if ((state.resources.food?.amount ?? 1) <= 0) return { kind: 'hunger' };
+    return { kind: 'wounds' };
+  }
+  return { kind: 'other' };
+}
+
+export class DeathSystem {
+  private sm: StateManager;
+
+  constructor(sm: StateManager) {
+    this.sm = sm;
+  }
+
+  /** Takes a living person out of the bunker (the same bookkeeping as starving to death) and announces it. */
+  /** `cause` is told with the death (raid, disaster:<kind>, away, health). On Settler nobody dies: returns false. */
+  kill(id: string, cause = 'other'): boolean {
+    const state = this.sm.state;
+    const s = state.survivors.find(x => x.id === id);
+    if (!s || !difficultyOf(state).canDie) return false;
+    this.sm.applyDelta({ path: 'survivors', value: state.survivors.filter(x => x.id !== id) });
+    this.sm.applyDelta({
+      path: 'buildings',
+      value: this.sm.state.buildings.map(b => (b.assignedSurvivorIds.includes(id)
+        ? { ...b, assignedSurvivorIds: b.assignedSurvivorIds.filter(x => x !== id) } : b)),
+    });
+    bus.emit('survivor:died', s, cause);
+    return true;
+  }
+
+  /** Called for every death (raid, disaster, hunger): the memorial, the mourning and the breather. */
+  onDeath(s: SurvivorState, now = Date.now(), cause?: string): void {
+    const state = this.sm.state;
+    const d = state.danger;
+    const job = s.assignedBuildingId ? state.buildings.find(b => b.id === s.assignedBuildingId)?.type ?? null : null;
+    const fallen: Fallen = {
+      id: s.id, name: s.name, portraitIndex: s.portraitIndex, portrait: s.portrait, child: s.child, job, level: s.level, at: now,
+    };
+    // [ux-wp3 W1] Kept with the memorial ("health" is resolved now, while the empty store that caused it is still empty).
+    const told = deathCause(state, cause);
+    if (told.kind !== 'other') fallen.cause = told.kind === 'disaster' ? `disaster:${told.disaster}` : told.kind;
+    const times = [...d.deathTimes.filter(t => now - t < DAY_MS), now];
+    // A first answer before the player chooses: the long mourning of simply carrying on.
+    const grief: Grief[] = [...d.grief.filter(g => g.until > now), { value: MOURN_ALL, from: now, until: now + 2 * DAY_MS, ids: null, tag: s.id }];
+    const family = state.survivors
+      .filter(o => o.id === s.partnerId || (s.parentIds ?? []).includes(o.id) || (o.parentIds ?? []).includes(s.id))
+      .map(o => o.id);
+    if (family.length) grief.push({ value: MOURN_FAMILY, from: now, until: now + 3 * DAY_MS, ids: family });
+    this.sm.applyDelta({
+      path: 'danger',
+      value: {
+        ...d,
+        fallen: [...d.fallen, fallen].slice(-24),
+        memorialQueue: [...d.memorialQueue, fallen],
+        deathTimes: times,
+        grief,
+        quietUntil: Math.max(d.quietUntil, now + QUIET_MS),
+        disastersPausedUntil: times.length > DEATHS_PER_DAY_LIMIT ? Math.max(d.disastersPausedUntil, now + DAY_MS) : d.disastersPausedUntil,
+      },
+    });
+    bus.emit('danger:death', fallen);
+  }
+
+  /** The player's answer to a memorial: a ceremony (shorter mourning, then a lift) or carrying on. */
+  answerMemorial(choice: 'ceremony' | 'carryOn', resources: { spend: (sm: StateManager, c: Record<string, number>) => boolean }): boolean {
+    const d = this.sm.state.danger;
+    const f = d.memorialQueue[0];
+    if (!f) return false;
+    if (!this.sm.state.storyFlags.includes('memorial:first')) this.sm.applyDelta({ path: 'storyFlags', value: [...this.sm.state.storyFlags, 'memorial:first'] }); // plan4:BL-32 the first remembered death opens the memorial hall
+    let grief = d.grief;
+    if (choice === 'ceremony') {
+      if (!resources.spend(this.sm, CEREMONY_COST)) return false;
+      grief = d.grief.map(g => (g.tag === f.id ? { ...g, until: g.from + DAY_MS } : g));
+      const base = d.grief.find(g => g.tag === f.id);
+      const from = base ? base.from + DAY_MS : f.at + DAY_MS;
+      grief = [...grief, { value: CEREMONY_BONUS, from, until: from + DAY_MS, ids: null }];
+    }
+    this.sm.applyDelta({ path: 'danger', value: { ...this.sm.state.danger, grief, memorialQueue: d.memorialQueue.slice(1) } });
+    return true;
+  }
+}
