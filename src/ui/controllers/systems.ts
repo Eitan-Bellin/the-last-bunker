@@ -44,7 +44,8 @@ const CARDS: SystemCard[] = [
       const a = actOf(s);
       const locale = i18n.currentLocale;
       const charter = a.charter.map(id => getProject(id)?.name[locale]).filter((n): n is string => !!n);
-      return { act: a.name[locale], goals: [...a.goals.map(g => g.text[locale]), ...charter].join(' · ') };
+      const sig = a.signature ? [a.signature.text[locale]] : []; // [phase5]
+      return { act: a.name[locale], goals: [...a.goals.map(g => g.text[locale]), ...sig, ...charter].join(' · ') };
     },
   },
   { id: 'inbox', icon: '[[inbox]]', ready: s => act(s) >= 2, spot: 'inbox', book: 'inbox' },

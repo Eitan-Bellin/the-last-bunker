@@ -1,6 +1,6 @@
-import type { GameState } from '../core/GameState';
+import type { GameState, ResourceType } from '../core/GameState';
 import { relationLevel } from './trade';
-import { scenarioOf } from './scenarios';
+import { previousEnding, scenarioOf } from './scenarios';
 import { RESEARCH } from './research'; // [phase4] names for the drivers line
 import { LAWS } from './laws';
 
@@ -37,6 +37,20 @@ export interface EndingDef {
   pushes: EndingPush[];
   /** [phase4] What else raises it, in plain words (the Endings tab), and how much it is worth now. */
   other?: { text: Record<'he' | 'en', string>; score: (s: GameState) => number };
+  /** [phase5] The small perk this ending grants the NEXT run (shown on the Genesis tab; applied by MetaSystem). */
+  perk: EndingPerk;
+}
+
+/**
+ * [phase5] What the ending you reached gives the next run: a start (stock, a dug floor) applied once by MetaSystem.applyStartBonuses,
+ * and a lean in output for the whole run (MetaSystem's 'genesis' modifier). The Commonwealth's tribute is read by scenarios.homeTribute.
+ */
+export interface EndingPerk {
+  name: Record<'he' | 'en', string>;
+  desc: Record<'he' | 'en', string>;
+  stock?: Partial<Record<ResourceType, number>>;
+  floors?: number;
+  output?: Partial<Record<ResourceType, number>>;
 }
 
 /** [phase4] What one doctrine is worth to its ending. */
@@ -55,6 +69,12 @@ export const ENDINGS: EndingDef[] = ([
       he: 'בונקר 17 לא נשאר מתחת לאדמה. הדרכים שסללתם, החוזים ששמרתם והאנשים שהאכלתם הפכו שכנים לברית. כשתתחיל הבראשית, היא תתחיל עם חברים.',
       en: 'Bunker 17 did not stay underground. The roads you paved, the contracts you kept and the people you fed turned neighbours into an alliance. When Genesis begins, it begins among friends.',
     },
+    // [phase5]
+    perk: {
+      name: { he: 'בעלי ברית ותיקים', en: 'Old Allies' },
+      desc: { he: 'הבונקרים הקודמים שולחים פי שניים בכל שעה, ומתחילים עם 80 זיכויי סחר', en: 'Your old bunkers send twice as much every hour, and you start with 80 trade credits' },
+      stock: { credits: 80 },
+    },
     pushes: [...doctrines('surfaceFarms', 'commune', 'diplomacy', 'precisionCraft', 'merchantRepublic', 'republic'), { kind: 'law', id: 'openDoors', w: 1 }],
     other: {
       text: { he: 'ידידות עם כל שלושת השותפים (+1) וחוזים (עד +0.5)', en: 'Friendship with all three partners (+1) and contracts (up to +0.5)' },
@@ -68,6 +88,12 @@ export const ENDINGS: EndingDef[] = ([
       he: 'העולם ניסה לקחת ממכם שוב ושוב, ושוב ושוב הדלת החזיקה. מה שתעבירו לעולם הבא הוא לא רק זרעים וספרים, אלא הידיעה שאפשר לעמוד.',
       en: 'The world tried to take from you again and again, and again and again the door held. What you carry into the next world is not only seeds and books, but the knowledge that one can stand.',
     },
+    // [phase5]
+    perk: {
+      name: { he: 'החומות הישנות', en: 'The Old Walls' },
+      desc: { he: 'מתחילים עם עוד קומה חפורה ו־400 חומרים, וחומרים +10% כל הסיבוב', en: 'Start with one more dug floor and 400 materials, and materials +10% all run' },
+      stock: { materials: 400 }, floors: 1, output: { materials: 0.1 },
+    },
     pushes: [...doctrines('fission', 'militia', 'fortress', 'foundryDoctrine', 'isolationism', 'vanguardCrossing'), { kind: 'law', id: 'martialLaw', w: 1 }, { kind: 'law', id: 'doubleShifts', w: 0.5 }],
   },
   {
@@ -77,6 +103,12 @@ export const ENDINGS: EndingDef[] = ([
       he: 'מתחת לכיפת השמיים גדלים עכשיו עצים שאף אחד כאן לא ראה מעולם. אתם מוכנים לבראשית כמו שגננים מוכנים לאביב: עם זרעים בכיס וידיים בעפר.',
       en: 'Under the Sky Dome now grow trees nobody here had ever seen. You are ready for Genesis the way gardeners are ready for spring: seeds in the pocket and hands in the soil.',
     },
+    // [phase5]
+    perk: {
+      name: { he: 'זרעים בכיס', en: 'Seeds in the Pocket' },
+      desc: { he: 'אוכל ומים +20% כל הסיבוב, ומתחילים עם 200 אוכל ו־100 מים', en: 'Food and water +20% all run, and you start with 200 food and 100 water' },
+      stock: { food: 200, water: 100 }, output: { food: 0.2, water: 0.2 },
+    },
     pushes: [...doctrines('solarArray', 'mycelium', 'rangers', 'expansionism', 'confederation', 'seedCrossing'), { kind: 'law', id: 'dayOfRest', w: 1 }, { kind: 'law', id: 'rationing', w: 0.5 }],
   },
   {
@@ -85,6 +117,12 @@ export const ENDINGS: EndingDef[] = ([
     text: {
       he: 'לא כל מה שבניתם ישרוד את המעבר. אבל השמות, השירים והזרעים בתיבה כן. מישהו בעולם הבא יפתח אותה, ויידע שהייתם כאן.',
       en: 'Not everything you built will survive the crossing. But the names, the songs and the seeds in the Ark will. Someone in the next world will open it, and know that you were here.',
+    },
+    // [phase5]
+    perk: {
+      name: { he: 'ספרי התיבה', en: 'The Ark\'s Books' },
+      desc: { he: 'ידע +20% כל הסיבוב, ומתחילים עם 300 ידע', en: 'Knowledge +20% all run, and you start with 300 knowledge' },
+      stock: { knowledge: 300 }, output: { knowledge: 0.2 },
     },
     pushes: [...doctrines('geothermal', 'hydroDoctrine', 'meritocracy', 'deepMining', 'technocracy', 'archiveCrossing'), { kind: 'law', id: 'freeSchools', w: 1 }],
   },
@@ -124,6 +162,13 @@ export function endingChoiceScore(s: GameState, e: EndingDef): number {
 /** The run's score for an ending: what the choices made, plus the lean of the place (scenario) it was lived in. */
 export function endingScore(state: GameState, e: EndingDef): number {
   return endingChoiceScore(state, e) + (scenarioOf(state).endingBonus?.[e.id] ?? 0);
+}
+
+/** [phase5] The perk this run has from the ending the previous run reached (none on a first run). */
+export function endingPerkOf(state: GameState): { ending: EndingDef; perk: EndingPerk } | undefined {
+  const id = previousEnding(state);
+  const ending = ENDINGS.find(e => e.id === id);
+  return ending ? { ending, perk: ending.perk } : undefined;
 }
 
 export function endingOf(state: GameState): EndingDef {

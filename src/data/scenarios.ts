@@ -1,5 +1,6 @@
 import type { GameState, ResourceType } from '../core/GameState';
 import { actBundle } from './pricing';
+import { hasMutator } from './mutators'; // [phase5]
 
 /**
  * [Balance plan P3-5, lean] Exodus: after the first Genesis the next timeline may begin somewhere else. A scenario is a place with
@@ -95,11 +96,25 @@ export function homeShare(home: HomeSite): number {
   return 0.01 * Math.max(1, home.act);
 }
 
+/**
+ * [phase5] The ending the previous run closed with (the last home, if it is the run just before this one): it grants this run a perk
+ * (endings.ts ENDING_PERKS).
+ */
+export function previousEnding(state: GameState): string | undefined {
+  const lg = state.longGame;
+  const homes = (lg?.meta.homes ?? []) as HomeSite[];
+  const last = homes[homes.length - 1];
+  return lg && last && last.run === lg.meta.runIndex - 1 ? last.ending : undefined;
+}
+
 /** What the homes send each hour in the run's current Act (the Act's own mix of goods, see pricing.actBundle). */
 export function homeTribute(state: GameState): Partial<Record<ResourceType, number>> {
   const lg = state.longGame;
   const homes = (lg?.meta.homes ?? []) as HomeSite[];
   if (!lg || homes.length === 0 || lg.meta.legacy) return {};
-  const share = Math.min(0.12, homes.reduce((s, h) => s + homeShare(h), 0));
+  if (hasMutator(state, 'cutOff')) return {}; // [phase5] the Cut Off hardship
+  // [phase5] The Commonwealth's perk: the old allies send twice as much (the cap doubles with it).
+  const ally = previousEnding(state) === 'commonwealth' ? 2 : 1;
+  const share = Math.min(0.12 * ally, ally * homes.reduce((s, h) => s + homeShare(h), 0));
   return actBundle(Math.max(1, lg.meta.act), share);
 }

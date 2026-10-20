@@ -1,0 +1,67 @@
+/* [phase5] Agent G: the class pick after a Genesis (GenesisClassPick.ts) and the Genesis tab's class / ending-perk cards. Tokens only. */
+
+/* The class pick: full screen, above the sheets and dialogs, scrolls on a phone. `.ceremony` makes the dialog queue wait. */
+.ceremony.p5g-cls {
+  z-index: var(--z-story);
+  pointer-events: auto;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  background: var(--surface-0);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+.ceremony.p5g-cls.in { opacity: 1; }
+:root[data-motion="reduced"] .ceremony.p5g-cls { transition: none; }
+
+.p5g-cls__inner {
+  max-width: 1040px;
+  margin: 0 auto;
+  padding: var(--sp-5) var(--sp-4) var(--sp-7);
+  padding-top: max(var(--sp-5), env(safe-area-inset-top));
+  padding-bottom: max(var(--sp-7), env(safe-area-inset-bottom));
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+.p5g-cls__kicker { color: var(--primary); font-size: 0.85rem; letter-spacing: 0.06em; text-transform: uppercase; }
+.p5g-cls__title { margin: 0; color: var(--text-primary); font-size: 1.5rem; line-height: 1.2; }
+.p5g-cls__hint { margin: 0; color: var(--text-secondary); font-size: 0.9rem; line-height: 1.4; }
+.p5g-cls__perk {
+  margin: 0;
+  padding: var(--sp-2) var(--sp-3);
+  color: var(--text-primary);
+  font-size: 0.9rem;
+  line-height: 1.4;
+  background: var(--surface-1);
+  border-inline-start: var(--ring-w) solid var(--primary);
+  border-radius: var(--r-card);
+}
+
+/* Three classes: stacked on a phone, side by side from a tablet. */
+.p5g-cls__grid { display: grid; grid-template-columns: 1fr; gap: var(--sp-3); }
+@media (min-width: 720px) { .p5g-cls__grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+
+.p5g-cls__col {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  min-width: 0;
+  padding: var(--sp-4);
+  background: var(--surface-1);
+  border: var(--border-w) solid var(--border);
+  border-radius: var(--r-card);
+  box-shadow: var(--elev-1);
+}
+.p5g-cls__icon { font-size: 1.6rem; line-height: 1; }
+.p5g-cls__name { margin: 0; color: var(--text-primary); font-size: 1.15rem; overflow-wrap: anywhere; }
+.p5g-cls__label { color: var(--text-tertiary); font-size: 0.75rem; letter-spacing: 0.05em; text-transform: uppercase; margin-top: var(--sp-1); }
+.p5g-cls__lines { margin: 0; padding-inline-start: var(--sp-4); color: var(--text-primary); font-size: 0.95rem; line-height: 1.45; }
+.p5g-cls__lines li { overflow-wrap: anywhere; }
+.p5g-cls__lines li:last-child { color: var(--text-secondary); font-size: 0.9rem; }
+.p5g-cls__choose { min-height: 48px; margin-top: auto; width: 100%; }
+.p5g-cls__later { min-height: 48px; align-self: center; }
+
+/* The Genesis tab: the class card and the ending-perk card. */
+.p5g-card { display: flex; flex-direction: column; gap: var(--sp-2); border-inline-start: var(--ring-w) solid var(--primary); }
+.p5g-card .k-btn, .p5g-card .btn-primary { min-height: 48px; }
+.p5g-card ul { margin: 0; padding-inline-start: var(--sp-4); color: var(--text-secondary); font-size: 0.9rem; line-height: 1.45; }

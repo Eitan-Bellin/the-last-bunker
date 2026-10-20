@@ -5,6 +5,7 @@ import { genesisGateMet } from '../systems/MetaSystem';
 import { localizeName } from './names';
 import { genderOf } from './portraits';
 import { resolveGender } from '../i18n/I18nManager';
+import { beatDue, firstLaw, inAct, signatureDue } from './acts'; // [phase5] the Acts' signature problems and mid-Act beats
 
 /**
  * The storyline (Sprint 6): chapters told by recurring characters, each unlocked by a milestone.
@@ -113,6 +114,12 @@ const mayaHome = (s: GameState) => s.survivors.some(x => x.name === 'Maya' && !x
 const outerRing = (s: GameState) => s.explorationMap.some(h => h.explored && hexDistance(h.x, h.y) >= 6);
 /** Genesis is ready: the same gate as the rebirth button (MetaSystem.rebirthRequirements). */
 const genesisReady = (s: GameState) => genesisGateMet(s);
+/** [phase5] Act V's expedition: each outpost held (up to 4), the scouts and the decoded signal make the northern road safer. */
+const northOdds = (s: GameState) => Math.min(0.95, 0.35 + 0.1 * Math.min(4, ((s.longGame?.world.outposts ?? []) as unknown[]).length)
+  + (has(s, 'north:scouted') ? 0.15 : 0) + (has(s, 'north:decoded') ? 0.1 : 0) + (built(s, 'medbay') ? 0.05 : 0));
+/** [phase5] Act VI's vote: the side the bunker backs wins more often with influence in hand and the tables canvassed. */
+const voteOdds = (s: GameState, base: number) => Math.min(0.95, base + (s.resources.influence?.amount ?? 0) / 3000
+  + (has(s, 'vote:canvassed') ? 0.15 : 0) + (has(s, 'vote:promised') ? 0.1 : 0));
 /** [Q1] The run is in this Act or later (a bunker from before the long game counts as Act VII: it keeps the classic story timing). */
 const actAtLeast = (s: GameState, n: number) => !s.longGame || s.longGame.meta.legacy || s.longGame.meta.act >= n;
 
@@ -237,40 +244,82 @@ export const CHAPTERS: Chapter[] = [
   // ── S9: the mid and late game, up to the first rebirth ──────────────────────────────────────────
   // The tension cycle of the plan: hard choices between people and supplies, the three factions
   // (the Rust Clan, Terminus, Noa's Genesis lab) coming back with what the player chose before.
+  // [phase5] Act II's mid-Act beat: the first frost warns of the winter (the Act's signature) half a day ahead.
   {
-    id: 'winter', number: 8,
+    id: 'frost', number: 8,
+    title: { he: 'הכפור הראשון', en: 'The First Frost' },
+    trigger: s => beatDue(s, 2) && has(s, 'story:toll'),
+    lines: [
+      { who: 'narrator', text: { he: 'הבוקר מצא הצוות קרח על האנטנה. האוויר בחוץ מריח כמו ברזל.', en: 'This morning the crew found ice on the antenna. The air outside smells of iron.' } },
+      { who: 'ezra', when: s => has(s, 'story:terminus'), text: { he: 'בונקר 17, כאן עזרא. המדחום שלנו ירד בלילה מתחת לאפס, וזו רק ההתחלה. החורף הזה יהיה ארוך.', en: 'Bunker 17, Ezra here. Our thermometer dropped below zero last night, and that is only the start. This winter will be a long one.' } },
+      { who: 'narrator', when: s => !has(s, 'story:terminus'), text: { he: 'המדחום ליד הדלת ירד בלילה מתחת לאפס. כולם יודעים מה זה אומר: החורף הזה יהיה ארוך.', en: 'The thermometer by the door dropped below zero last night. Everyone knows what that means: this winter will be a long one.' } },
+      { who: 'gideon', when: gideonInside, text: { he: 'המחנה של השבט נמצא ליד הנהר. אוהלים מבד ופח. הם לא יעברו חורף כזה.', en: 'The Clan\'s camp is by the river. Tents of canvas and tin. They won\'t last a winter like this.' } },
+      { who: 'crew', when: s => !gideonInside(s), text: { he: 'ראינו עשן מהמחנה של שבט החלודה ליד הנהר. אוהלים מבד ופח. הם לא יעברו חורף כזה, ובסוף הם יגיעו לדלת שלנו.', en: 'We saw smoke from the Rust Clan\'s camp by the river. Tents of canvas and tin. They won\'t last a winter like this, and sooner or later they will come to our door.' } },
+      { who: 'crew', text: { he: 'יש לנו בערך חצי יום לפני שהשלג סוגר את הדרכים. על מה עובדים קודם?', en: 'We have about half a day before the snow closes the roads. What do we work on first?' } },
+    ],
+    choices: [
+      {
+        key: 'stock', label: { he: 'לאגור אוכל לחורף', en: 'Store food for the winter' },
+        effect: { cost: { scrap: 300 }, flags: ['winter:stocked'] },
+        reply: [{ who: 'crew', text: { he: 'מילאנו את המחסן עד התקרה: שימורים, פטריות מיובשות, שקי קמח. אם יבואו אורחים, יהיה מה לשים על השולחן.', en: 'We filled the storeroom to the ceiling: tins, dried mushrooms, sacks of flour. If guests come, there will be something to put on the table.' } }],
+      },
+      {
+        key: 'beds', label: { he: 'לפנות מסדרון חם לאורחים', en: 'Clear a warm corridor for guests' },
+        effect: { cost: { materials: 40000 }, flags: ['winter:beds'] },
+        reply: [{ who: 'crew', text: { he: 'פינינו את המסדרון בקומה העליונה ותלינו שמיכות על הצינורות החמים. זה לא מלון, אבל זה חם.', en: 'We cleared the corridor on the top level and hung blankets over the warm pipes. It is no hotel, but it is warm.' } }],
+      },
+      {
+        key: 'word', label: { he: 'לשלוח לשבט הודעה שהדלת פתוחה', en: 'Send word to the Clan that the door is open' },
+        effect: { morale: 3, flags: ['winter:invited'] },
+        reply: [{ who: 'narrator', text: { he: 'מישהו מהשבט ענה ברדיו הישן שלהם. רק מילה אחת: "שמענו."', en: 'Someone from the Clan answered on their old radio. Just one word: "Heard."' } }],
+      },
+    ],
+  },
+  {
+    id: 'winter', number: 9,
     title: { he: 'החורף הארוך', en: 'The Long Winter' },
-    trigger: s => s.survivors.length >= 30 && has(s, 'story:toll'),
+    // [phase5] Act II's signature: half a day after the frost (the old trigger, 30 people, for a bunker past Act II or from before the long game).
+    trigger: s => (inAct(s, 2) ? signatureDue(s, 2) : s.survivors.length >= 30) && has(s, 'story:toll'),
     lines: [
       { who: 'narrator', text: { he: 'שלג אפור יורד כבר שבוע. במצלמת הכניסה נראית שיירה קטנה: אנשים עטופים בשמיכות, ילדים על הכתפיים, עגלה בלי סוס.', en: 'Grey snow has been falling for a week. The entrance camera shows a small column: people wrapped in blankets, children on shoulders, a cart with no horse.' } },
+      { who: 'narrator', when: s => has(s, 'winter:invited'), text: { he: 'הם באו כי שמעו שהדלת פתוחה. אף אחד לא צריך לדפוק.', en: 'They came because they heard the door was open. Nobody has to knock.' } },
       { who: 'gideon', when: gideonInside, text: { he: 'אלה האנשים שלי. מה שנשאר משבט החלודה. המחנה ליד הנהר קפא, והם הלכו שלושה ימים כדי להגיע לדלת שלנו.', en: 'Those are my people. What\'s left of the Rust Clan. The camp by the river froze, and they walked three days to reach our door.' } },
       { who: 'gideon', when: s => !gideonInside(s) && has(s, 'gideon:paid'), text: { he: 'שכנים. פעם ביקשתי מכם מכס, ושילמתם בלי לירות. אז אני מקווה שתקשיבו גם עכשיו. המחנה שלנו קפא.', en: 'Neighbors. Once I asked you for a toll, and you paid without a shot fired. So I hope you\'ll listen now too. Our camp froze.' } },
       { who: 'gideon', when: s => !gideonInside(s) && !has(s, 'gideon:paid'), text: { he: 'אני יודע. בפעם הקודמת באתי עם רובים. היום אני בא עם ילדים. המחנה שלנו קפא, ואין לנו לאן ללכת.', en: 'I know. Last time I came with rifles. Today I come with children. Our camp froze, and we have nowhere else to go.' } },
       { who: 'gideon', text: { he: 'שמונה אנשים. הם יאכלו, הם יישנו במסדרונות, הם יריבו על השמיכות. אבל הם יודעים לעבוד קשה. מה אתם אומרים?', en: 'Eight people. They\'ll eat, they\'ll sleep in the corridors, they\'ll fight over blankets. But they know how to work hard. What do you say?' } },
+      { who: 'crew', when: s => has(s, 'winter:stocked'), text: { he: 'המחסן מלא. הפעם יש מספיק כדי לחלוק.', en: 'The storeroom is full. This time there is enough to share.' } },
+      { who: 'crew', when: s => has(s, 'winter:beds'), text: { he: 'המסדרון העליון מוכן, עם שמיכות על הצינורות החמים.', en: 'The top corridor is ready, with blankets on the warm pipes.' } },
     ],
     choices: [
       {
+        // [phase5] Food is cheap by Act II, so the price is real now; a bunker that got ready for the cold keeps everyone well.
         key: 'all', label: { he: 'לפתוח את הדלת לכל השמונה', en: 'Open the door to all eight' },
-        effect: { cost: { food: 120 }, group: 8, flags: ['clan:sheltered'] },
+        effect: { cost: { food: 1200 }, group: 8, flags: ['clan:sheltered'] },
+        check: s => Math.min(1, 0.55 + (has(s, 'winter:beds') ? 0.3 : 0) + (has(s, 'winter:stocked') ? 0.3 : 0)),
         reply: [
           { who: 'gideon', text: { he: 'תודה. אני לא טוב עם המילה הזאת, אז אגיד אותה פעם אחת: תודה.', en: 'Thank you. I\'m no good with that word, so I\'ll say it once: thank you.' } },
           { who: 'narrator', text: { he: 'הלילה ישנים גם במסדרונות. צריך עוד מגורים, ומהר.', en: 'Tonight people sleep in the corridors too. We need more quarters, and fast.' } },
         ],
+        failEffect: { cost: { food: 1200 }, group: 8, hurt: { count: 3, damage: 30 }, morale: -4, flags: ['clan:sheltered', 'winter:cold'] },
+        failReply: [
+          { who: 'gideon', text: { he: 'תודה. אני לא טוב עם המילה הזאת, אז אגיד אותה פעם אחת: תודה.', en: 'Thank you. I\'m no good with that word, so I\'ll say it once: thank you.' } },
+          { who: 'narrator', text: { he: 'המסדרונות היו קרים מדי. בשבוע הראשון שלושה חלו, אבל כולם נשארו בחיים. בחורף הבא, מתכוננים מראש.', en: 'The corridors were too cold. Three fell sick in the first week, but everyone lived. Next winter, we get ready in time.' } },
+        ],
       },
       {
         key: 'young', label: { he: 'לקבל רק את הצעירים והחולים', en: 'Take in only the young and the sick' },
-        effect: { cost: { food: 40 }, group: 3, morale: -4, flags: ['clan:children'] },
+        effect: { cost: { food: 400 }, group: 3, morale: -4, flags: ['clan:children'] },
         reply: [{ who: 'gideon', text: { he: 'שלושה מתוך שמונה. זה יותר ממה שהעולם נתן לנו בזמן האחרון. השאר יסתדרו. איכשהו.', en: 'Three out of eight. That\'s more than the world has given us lately. The rest will manage. Somehow.' } }],
       },
       {
         key: 'supplies', label: { he: 'לתת להם ציוד ולשלוח אותם הלאה', en: 'Give them supplies and send them on' },
-        effect: { cost: { food: 100, water: 80 }, morale: -6, flags: ['clan:turned'] },
+        effect: { cost: { food: 1000, water: 800 }, morale: -6, flags: ['clan:turned'] },
         reply: [{ who: 'gideon', text: { he: 'אוכל לדרך. זה לא בית, אבל זה גם לא כלום. רק אל תצפו שהם ישכחו את הדלת הזאת.', en: 'Food for the road. It\'s not a home, but it\'s not nothing. Just don\'t expect them to forget this door.' } }],
       },
     ],
   },
   {
-    id: 'platform', number: 9,
+    id: 'platform', number: 10,
     title: { he: 'רציף 4', en: 'Platform 4' },
     trigger: s => (s.era ?? 0) >= 3 && actAtLeast(s, 3) && has(s, 'story:static'),
     lines: [
@@ -300,8 +349,72 @@ export const CHAPTERS: Chapter[] = [
       },
     ],
   },
+  // [phase5] Act III: a quarrel halfway through the Act sets up its signature, the colony's first law (told once a law is passed).
   {
-    id: 'fever', number: 10,
+    id: 'quarrel', number: 11,
+    title: { he: 'הריב בחדר האוכל', en: 'The Canteen Quarrel' },
+    trigger: s => beatDue(s, 3),
+    lines: [
+      { who: 'narrator', text: { he: 'זה התחיל בשאלה מי שוטף את הסירים, ונגמר בשולחן הפוך בחדר האוכל.', en: 'It started with who washes the pots, and it ended with a table turned over in the canteen.' } },
+      { who: 'crew', text: { he: 'הוותיקים אומרים שהחדשים לא עובדים. החדשים אומרים שהוותיקים שומרים לעצמם את המשמרות הטובות. שני הצדדים קצת צודקים.', en: 'The old hands say the newcomers don\'t work. The newcomers say the old hands keep the good shifts for themselves. Both sides are a little right.' } },
+      { who: 'ezra', when: s => has(s, 'terminus:merged'), text: { he: 'האנשים שלי רגילים לכללים של התחנה. פה אין כללים, רק הרגלים. ובהרגלים, מי שהיה כאן ראשון תמיד מנצח.', en: 'My people are used to the station\'s rules. Here there are no rules, only habits. And with habits, whoever was here first always wins.' } },
+      { who: 'gideon', when: clanFriend, text: { he: 'אצל השבט היה כלל אחד: מי שצועק הכי חזק. אל תחזרו על הטעות שלנו.', en: 'The Clan had one rule: whoever shouts loudest. Don\'t repeat our mistake.' } },
+      { who: 'crew', text: { he: 'עיר צריכה חוק, לא רק מנהל עבודה. אבל עד שנכתוב אותו, צריך להחליט מה עושים עם הערב הזה.', en: 'A city needs a law, not just a foreman. But until we write one, we have to decide what to do about tonight.' } },
+      { who: 'narrator', when: s => !firstLaw(s), text: { he: 'החוקים נמצאים במרכז הפיקוד, בלשונית "מדיניות".', en: 'The laws are in the Command panel, under the Policies tab.' } },
+    ],
+    choices: [
+      {
+        key: 'assembly', label: { he: 'לכנס את כולם לאספה פתוחה', en: 'Call everyone to an open assembly' },
+        effect: { morale: 4, moraleFor: 1800, flags: ['quarrel:assembly'] },
+        reply: [{ who: 'narrator', text: { he: 'האספה נמשכה עד אחרי חצות. אף אחד לא שכנע אף אחד, אבל כולם הסכימו על דבר אחד: צריך חוק כתוב.', en: 'The assembly ran past midnight. Nobody convinced anybody, but everyone agreed on one thing: we need a written law.' } }],
+      },
+      {
+        key: 'lottery', label: { he: 'לחלק את המשמרות מחדש בהגרלה', en: 'Redraw the shifts by lottery' },
+        effect: { morale: 2, flags: ['quarrel:lottery'] },
+        reply: [{ who: 'crew', text: { he: 'הגרלה הוגנת. כולם רטנו באותה מידה, וזה כנראה סימן טוב. אבל הגרלה היא לא חוק.', en: 'A fair lottery. Everyone grumbled the same amount, which is probably a good sign. But a lottery is not a law.' } }],
+      },
+      {
+        key: 'firm', label: { he: 'להעניש את שני הצדדים', en: 'Punish both sides' },
+        effect: { morale: -4, gain: { materials: 20000 }, flags: ['quarrel:firm'] },
+        reply: [{ who: 'narrator', text: { he: 'שני הצדדים קיבלו שבוע של משמרות לילה. השקט חזר. השאלה נשארה.', en: 'Both sides got a week of night shifts. The quiet came back. The question stayed.' } }],
+      },
+    ],
+  },
+  {
+    id: 'firstLaw', number: 12,
+    title: { he: 'כתוב על הקיר', en: 'Written on the Wall' },
+    // [phase5] Act III's signature: after the quarrel, once the colony has passed a law (ActSystem keeps the first one as a flag).
+    trigger: s => signatureDue(s, 3) && !!firstLaw(s),
+    lines: [
+      { who: 'narrator', text: { he: 'מישהו הביא דלי צבע לבן. עד הערב, החוק הראשון של העיר כתוב על הקיר של חדר האוכל, באותיות בגובה של ילד.', en: 'Someone brought a bucket of white paint. By evening the city\'s first law is written on the canteen wall, in letters as tall as a child.' } },
+      { who: 'crew', when: s => firstLaw(s) === 'rationing', text: { he: '"כל אחד מקבל אותה מנה." קל לכתוב. קשה יותר לאכול.', en: '"Everyone gets the same portion." Easy to write. Harder to eat.' } },
+      { who: 'crew', when: s => firstLaw(s) === 'doubleShifts', text: { he: '"בינתיים, כולם עובדים כפול." אף אחד לא מחא כפיים, אבל אף אחד גם לא יצא מהחדר.', en: '"For now, everyone works double." Nobody clapped, but nobody walked out either.' } },
+      { who: 'crew', when: s => firstLaw(s) === 'openDoors', text: { he: '"הדלת פתוחה לכל מי שמגיע." מישהו הוסיף מתחת בעיפרון: "גם בלילה?"', en: '"The door is open to whoever comes." Someone added underneath in pencil: "At night too?"' } },
+      { who: 'crew', when: s => firstLaw(s) === 'martialLaw', text: { he: '"השומרים מחליטים עד שהסכנה עוברת." השומרים עמדו ליד הקיר כל הערב. אף אחד לא שאל מתי היא עוברת.', en: '"The guards decide until the danger passes." The guards stood by the wall all evening. Nobody asked when it passes.' } },
+      { who: 'crew', when: s => firstLaw(s) === 'freeSchools', text: { he: '"כל ילד לומד לקרוא." הילדים כתבו את זה בעצמם, עם שתי שגיאות כתיב שאף אחד לא תיקן.', en: '"Every child learns to read." The children painted it themselves, with two spelling mistakes nobody fixed.' } },
+      { who: 'crew', when: s => firstLaw(s) === 'dayOfRest', text: { he: '"יום אחד בשבוע, אף אחד לא עובד." מישהו כבר שאל איזה יום. הוויכוח נמשך עד עכשיו.', en: '"One day a week, nobody works." Someone already asked which day. The argument is still going.' } },
+      { who: 'crew', text: { he: 'עכשיו זה כתוב. השאלה היא איך שומרים עליו.', en: 'Now it is written. The question is how we keep it.' } },
+    ],
+    choices: [
+      {
+        key: 'sign', label: { he: 'כולם חותמים מתחת', en: 'Everyone signs under it' },
+        effect: { morale: 6, moraleFor: 3600, flags: ['law:signed'] },
+        reply: [{ who: 'narrator', text: { he: 'חתימות ממלאות את הקיר, חלקן רק איקס. הקיר כבר לא נראה כמו קיר של בונקר.', en: 'Signatures fill the wall, some of them just an X. It no longer looks like a bunker wall.' } }],
+      },
+      {
+        key: 'keepers', label: { he: 'למנות שלושה שומרי חוק, אחד מכל קבוצה', en: 'Name three keepers of the law, one from each group' },
+        effect: { morale: 3, moraleFor: 3600, gain: { knowledge: 2000 }, flags: ['law:keepers'] },
+        reply: [{ who: 'crew', text: { he: 'שלושה אנשים, אחד מכל קבוצה. הם כבר מתווכחים ביניהם, וזה בדיוק הרעיון.', en: 'Three people, one from each group. They already argue among themselves, which is exactly the point.' } }],
+      },
+      {
+        key: 'quiet', label: { he: 'לאכוף בשקט, בלי טקסים', en: 'Enforce it quietly, no ceremony' },
+        effect: { morale: -1, gain: { materials: 30000 }, flags: ['law:quiet'] },
+        reply: [{ who: 'narrator', text: { he: 'בלי טקס ובלי נאומים. מחר בבוקר, החוק פשוט נמצא שם.', en: 'No ceremony and no speeches. Tomorrow morning the law is simply there.' } }],
+      },
+    ],
+  },
+  {
+    id: 'fever', number: 13,
     title: { he: 'קדחת האפר', en: 'Ash Fever' },
     // [Q1] A bunker of 40 reaches Act III within days; the fever belongs to the expansion (Act IV).
     trigger: s => s.survivors.length >= 40 && actAtLeast(s, 4) && has(s, 'story:genesis'),
@@ -330,7 +443,7 @@ export const CHAPTERS: Chapter[] = [
     ],
   },
   {
-    id: 'trail', number: 11,
+    id: 'trail', number: 14,
     title: { he: 'השביל של יוסי', en: 'Yossi\'s Trail' },
     // After Maya told her story (or once the bunker is well settled), so Yossi's name means something.
     trigger: s => outerRing(s) && (has(s, 'story:maya') || (s.era ?? 0) >= 2),
@@ -361,7 +474,7 @@ export const CHAPTERS: Chapter[] = [
     ],
   },
   {
-    id: 'gate', number: 12,
+    id: 'gate', number: 15,
     title: { he: 'השער', en: 'The Gate' },
     trigger: s => s.survivors.length >= 50 && actAtLeast(s, 5) && has(s, 'story:toll'),
     lines: [
@@ -404,7 +517,7 @@ export const CHAPTERS: Chapter[] = [
   },
   // ---- [P2-7] The late chapters (Acts IV-VII): the story keeps going until Genesis ----
   {
-    id: 'ashStorm', number: 13,
+    id: 'ashStorm', number: 16,
     title: { he: 'סופת האפר הגדולה', en: 'The Great Ash Storm' },
     trigger: s => actAtLeast(s, 4) && has(s, 'story:static'),
     lines: [
@@ -434,7 +547,7 @@ export const CHAPTERS: Chapter[] = [
     ],
   },
   {
-    id: 'railLine', number: 14,
+    id: 'railLine', number: 17,
     title: { he: 'הקו מהתחנה', en: 'The Line from the Station' },
     trigger: s => actAtLeast(s, 4) && has(s, 'story:platform'),
     lines: [
@@ -455,8 +568,92 @@ export const CHAPTERS: Chapter[] = [
       },
     ],
   },
+  // [phase5] Act IV: the lookouts see an army on the ridge (the beat), and a day later it reaches the Wall (the signature, resolved by
+  // ActSystem.resolveSiege by the numbers: three waves against the bunker's defense and this chapter's preparation).
   {
-    id: 'noaDemand', number: 15,
+    id: 'ridge', number: 18,
+    title: { he: 'עשן על הרכס', en: 'Smoke on the Ridge' },
+    trigger: s => beatDue(s, 4),
+    lines: [
+      { who: 'narrator', text: { he: 'בלילה ספרו השומרים מדורות על הרכס. עשרים. שלושים. בבוקר הם הפסיקו לספור.', en: 'At night the lookouts counted fires on the ridge. Twenty. Thirty. By morning they stopped counting.' } },
+      { who: 'gideon', when: clanFriend, text: { he: 'אני מכיר את הדגלים האלה. הטור האפור: מה שנשאר מכל הכנופיות שהשבט גירש מהנהר. הם שמעו שיש פה עיר, והם רעבים.', en: 'I know those flags. The Grey Column: what is left of every gang the Clan drove from the river. They heard there is a city here, and they are hungry.' } },
+      { who: 'crew', when: clanFoe, text: { he: 'הם קוראים לעצמם הטור האפור: כל הכנופיות מהנהר, ביחד, בפעם הראשונה. הם שמעו שיש פה עיר, והם רעבים.', en: 'They call themselves the Grey Column: every gang from the river, together for the first time. They heard there is a city here, and they are hungry.' } },
+      { who: 'crew', text: { he: 'הם יגיעו לחומה מחר בערב, בשלושה גלים, אחד אחרי השני. יש לנו יום להתכונן.', en: 'They will reach the Wall tomorrow evening, in three waves, one after another. We have a day to get ready.' } },
+      { who: 'narrator', when: s => !has(s, 'project:wall'), text: { he: 'החומה עוד לא גמורה. כל שלב שייבנה עד מחר יעמוד בדרכם, וכך גם כל שומר בנשקייה.', en: 'The Wall is not finished yet. Every stage built by tomorrow will stand in their way, and so will every guard in the Armory.' } },
+    ],
+    choices: [
+      {
+        key: 'fortify', label: { he: 'לחזק את הדלת ואת החומה', en: 'Reinforce the door and the Wall' },
+        effect: { cost: { materials: 300000, scrap: 1500 }, flags: ['siege:fortified'] },
+        reply: [{ who: 'crew', text: { he: 'לוחות פלדה על הדלת, שקי חול לאורך החומה. זה מכוער. זה יחזיק.', en: 'Steel plates on the door, sandbags along the Wall. It is ugly. It will hold.' } }],
+      },
+      {
+        key: 'allies', when: s => clanFriend(s) || terminusAlly(s) || terminusSaved(s), label: { he: 'לקרוא לשבט ולמסוף לעזרה', en: 'Call the Clan and Terminus for help' },
+        effect: { flags: ['siege:allies'] },
+        reply: [{ who: 'narrator', text: { he: 'השבט יתקוף אותם מהאגף המערבי. המסוף שולח כל מי שיודע לירות. לא תעמדו לבד.', en: 'The Clan will hit their west flank. Terminus is sending everyone who can shoot. You won\'t stand alone.' } }],
+      },
+      {
+        key: 'drill', label: { he: 'לאמן את כולם לקרב', en: 'Drill everyone for the fight' },
+        effect: { cost: { food: 3000 }, morale: -2, flags: ['siege:drilled'] },
+        reply: [{ who: 'crew', text: { he: 'כל מי שיכול להחזיק צינור מתאמן במסדרון. הילדים סוחבים מים. אף אחד לא ישן הרבה.', en: 'Everyone who can hold a pipe trains in the corridor. The children carry water. Nobody sleeps much.' } }],
+      },
+      {
+        key: 'trust', label: { he: 'לסמוך על מה שיש', en: 'Trust what we have' },
+        effect: { flags: ['siege:trust'] },
+        reply: [{ who: 'crew', text: { he: 'הגנה היא הגנה. מחר נראה כמה היא שווה.', en: 'Defense is defense. Tomorrow we will see what it is worth.' } }],
+      },
+    ],
+  },
+  {
+    id: 'siege', number: 19,
+    title: { he: 'המצור על החומה', en: 'The Siege of the Wall' },
+    trigger: s => inAct(s, 4) && has(s, 'siege:done'),
+    lines: [
+      { who: 'narrator', text: { he: 'הם הגיעו עם החושך, בשלושה גלים, בדיוק כמו שאמרו השומרים.', en: 'They came with the dark, in three waves, just as the lookouts said.' } },
+      { who: 'narrator', when: s => has(s, 'siege:held'), text: { he: 'הגל הראשון נשבר על החומה. השני על הדלת. השלישי כבר לא הגיע עד הסוף. עם שחר, הרכס ריק.', en: 'The first wave broke on the Wall. The second on the door. The third never made it all the way. At dawn the ridge is empty.' } },
+      { who: 'narrator', when: s => has(s, 'siege:bent'), text: { he: 'החומה החזיקה, אבל לא בכל מקום. מה שעבר אותה פרץ לחצר והגיע עד הדלת לפני שנהדף.', en: 'The Wall held, but not everywhere. What got past it broke into the yard and reached the door before it was pushed back.' } },
+      { who: 'narrator', when: s => has(s, 'siege:broke'), text: { he: 'החומה לא החזיקה. הטור האפור פרץ לחצר, לקח כל מה שיכול היה, ונעלם מעבר לרכס לפני הבוקר.', en: 'The Wall did not hold. The Grey Column broke into the yard, took everything it could, and vanished over the ridge before morning.' } },
+      { who: 'gideon', when: s => has(s, 'siege:allies') && clanFriend(s), text: { he: 'אמרתי לכם שלא תעמדו לבד.', en: 'I told you you wouldn\'t stand alone.' } },
+      { who: 'crew', text: { he: 'עכשיו צריך להחליט מה עושים עם הבוקר.', en: 'Now we have to decide what to do with the morning.' } },
+    ],
+    choices: [
+      {
+        key: 'feast', when: s => has(s, 'siege:held'), label: { he: 'משתה על החומה', en: 'A feast on the Wall' },
+        effect: { cost: { food: 1500 }, gain: { scrap: 800 }, morale: 10, moraleFor: 3600, flags: ['siege:feast'] },
+        reply: [{ who: 'narrator', text: { he: 'שולחנות ארוכים לאורך החומה, מרק חם, ומישהו מנגן במפוחית שמצא בשלל. העיר ישנה בשקט בפעם הראשונה מזה יומיים.', en: 'Long tables along the Wall, hot soup, and someone playing a harmonica found in the loot. The city sleeps quietly for the first time in two days.' } }],
+      },
+      {
+        key: 'pursue', when: s => has(s, 'siege:held'), label: { he: 'לרדוף אחריהם עד הרכס', en: 'Chase them over the ridge' },
+        check: () => 0.7,
+        effect: { gain: { scrap: 1500, materials: 150000 }, morale: 4, flags: ['siege:pursued'] },
+        reply: [{ who: 'crew', text: { he: 'מצאנו את המחנה שלהם ריק: עגלות, כלים, ומחסן שלם של גרוטאות. הטור האפור לא יחזור.', en: 'We found their camp empty: carts, tools, and a whole store of scrap. The Grey Column won\'t be back.' } }],
+        failEffect: { gain: { scrap: 400 }, hurt: { count: 2, damage: 30 }, flags: ['siege:pursued'] },
+        failReply: [{ who: 'crew', text: { he: 'הם חיכו לנו מעבר לרכס. חזרנו עם שני פצועים ומעט שלל. בפעם הבאה, נישאר מאחורי החומה.', en: 'They were waiting for us past the ridge. We came back with two hurt and a little loot. Next time we stay behind the Wall.' } }],
+      },
+      {
+        key: 'repair', when: s => has(s, 'siege:bent'), label: { he: 'לתקן את הפרצה מיד', en: 'Repair the breach at once' },
+        effect: { cost: { materials: 200000 }, hurt: { count: 2, damage: 25 }, morale: 2, flags: ['siege:repaired'] },
+        reply: [{ who: 'crew', text: { he: 'עד הצהריים הפרצה סגורה, והפעם בבטון. שניים מהשומרים במרפאה, אבל הם יחזרו.', en: 'By noon the breach is closed, with concrete this time. Two of the guards are in the medbay, but they will be back.' } }],
+      },
+      {
+        key: 'rest', when: s => has(s, 'siege:bent'), label: { he: 'לטפל בפצועים ולנוח', en: 'Tend the hurt and rest' },
+        effect: { hurt: { count: 2, damage: 25 }, morale: 4, moraleFor: 1800, flags: ['siege:rested'] },
+        reply: [{ who: 'narrator', text: { he: 'יום שלם בלי עבודה. אנשים ישנים, אוכלים, ומספרים שוב ושוב מה ראו בלילה.', en: 'A whole day without work. People sleep, eat, and tell each other again and again what they saw in the night.' } }],
+      },
+      {
+        key: 'rebuild', when: s => has(s, 'siege:broke'), label: { he: 'לרדת למטה ולבנות מחדש', en: 'Pull back below and rebuild' },
+        effect: { cost: { materials: 400000, food: 3000 }, hurt: { count: 4, damage: 35 }, morale: -6, moraleFor: 1800, flags: ['siege:rebuilt'] },
+        reply: [{ who: 'crew', text: { he: 'ספרנו מה נשאר, וזה יותר ממה שחשבנו. מחר מתחילים לבנות, והחומה הבאה תהיה גבוהה יותר.', en: 'We counted what is left, and it is more than we thought. Tomorrow we start building, and the next wall will be higher.' } }],
+      },
+      {
+        key: 'pay', when: s => has(s, 'siege:broke'), label: { he: 'לשלם להם כדי שיעזבו את הרכס', en: 'Pay them to leave the ridge' },
+        effect: { cost: { food: 5000, scrap: 3000 }, hurt: { count: 2, damage: 25 }, morale: -8, moraleFor: 1800, flags: ['siege:paid'] },
+        reply: [{ who: 'narrator', text: { he: 'עגלה אחרי עגלה יוצאת מהשער. הטור האפור לוקח, מסתובב, ונעלם. אף אחד לא מסתכל לאף אחד בעיניים.', en: 'Cart after cart leaves the gate. The Grey Column takes it, turns, and is gone. Nobody looks anyone in the eye.' } }],
+      },
+    ],
+  },
+  {
+    id: 'noaDemand', number: 20,
     title: { he: 'מה נועה צריכה', en: 'What Noa Needs' },
     trigger: s => actAtLeast(s, 5) && has(s, 'story:fever'),
     lines: [
@@ -483,7 +680,7 @@ export const CHAPTERS: Chapter[] = [
     ],
   },
   {
-    id: 'sunriseGate', number: 16,
+    id: 'sunriseGate', number: 21,
     title: { he: 'בוקר בחוץ', en: 'Morning Outside' },
     trigger: s => has(s, 'project:surfaceGate'),
     lines: [
@@ -509,35 +706,136 @@ export const CHAPTERS: Chapter[] = [
       },
     ],
   },
+  // [phase5] Act V: a signal from beyond the map (the beat) and the expedition that answers it half a day later (the signature). The
+  // outposts the bunker holds, the scouts and the decoded signal make the road safer; a failed expedition comes back hurt, never stuck.
   {
-    id: 'firstVote', number: 17,
-    title: { he: 'ההצבעה הראשונה', en: 'The First Vote' },
-    trigger: s => actAtLeast(s, 6) && s.survivors.length >= 100 && has(s, 'story:gate'),
+    id: 'signal', number: 22,
+    title: { he: 'אות מהצפון', en: 'A Signal from the North' },
+    trigger: s => beatDue(s, 5),
     lines: [
-      { who: 'narrator', text: { he: 'מאה ועשרים איש מתחת לאדמה, ועוד מאות בחוץ. מי שמחליט עליהם? עד היום זה הייתם אתם. אבל הם התחילו לשאול.', en: 'A hundred and twenty people underground, and hundreds more outside. Who decides for them? Until now it was you. But they have started to ask.' } },
-      { who: 'crew', text: { he: 'בחדר האוכל מדברים על הצבעה. לא נגדכם. עם. אבל אם נאמר לא, זה ייראה כמו נשק.', en: 'In the canteen they talk about a vote. Not against you. With you. But if we say no, it will look like a weapon.' } },
-      { who: 'gideon', when: clanFriend, text: { he: 'שבט החלודה הצביע פעם בעשר שנים: מי שצעק חזק. אתם יכולים יותר טוב מזה.', en: 'The Rust Clan voted once in ten years: whoever shouted loudest. You can do better than that.' } },
+      { who: 'ezra', when: s => has(s, 'story:terminus'), text: { he: 'בונקר 17, תקשיבו לזה. אנחנו קולטים את זה כבר שלושה לילות.', en: 'Bunker 17, listen to this. We have been picking it up for three nights.' } },
+      { who: 'narrator', text: { he: 'שלושה צפצופים קצרים, אחד ארוך, ומספר. שוב ושוב, מאז שמישהו פתח את התדר.', en: 'Three short beeps, one long, and a number. Over and over, ever since someone opened the channel.' } },
+      { who: 'noa', text: { he: 'אני מכירה את הקוד הזה. זו תחנת הזרעים הצפונית, מלפני האפר. אם מישהו שם עדיין משדר, יש שם זרעים, ואולי גם אנשים.', en: 'I know that code. It is the Northern Seed Station, from before the ashes. If someone there is still sending, there are seeds there, and maybe people.' } },
+      { who: 'crew', text: { he: 'זה מעבר לקצה המפה. משלחת תצטרך יום שלם רק כדי להגיע. כל מאחז בדרך הוא עוד מקום לנוח, לשתות, לברוח אליו.', en: 'It is past the edge of the map. An expedition would need a whole day just to get there. Every outpost on the way is one more place to rest, to drink, to run to.' } },
     ],
     choices: [
       {
-        key: 'republic', label: { he: 'בחירות פתוחות לכולם', en: 'Open elections for everyone' },
-        effect: { morale: 8, moraleFor: 7200, cost: { knowledge: 600 }, flags: ['vote:republic'] },
-        reply: [{ who: 'narrator', text: { he: 'ארבע קלפיות בחדר האוכל. יוצאים אחרי שעה, מופתעים כמה קל. מי שהפסיד לוחץ יד למי שניצח.', en: 'Four ballot boxes in the canteen. People leave an hour later, surprised how easy it was. The loser shakes the winner\'s hand.' } }],
+        key: 'scouts', label: { he: 'לשלוח סיירים לסמן את הדרך', en: 'Send scouts to mark the road' },
+        effect: { cost: { food: 3000, water: 3000 }, flags: ['north:scouted'] },
+        reply: [{ who: 'crew', text: { he: 'הסיירים יצאו עם סמרטוטים אדומים, לקשור על כל עמוד בדרך. מי שילך אחריהם לא יאבד.', en: 'The scouts left with red rags to tie to every post on the road. Whoever follows them won\'t get lost.' } }],
       },
       {
-        key: 'council', label: { he: 'מועצה של מומחים', en: 'A council of experts' },
-        effect: { gain: { knowledge: 800 }, morale: -2, moraleFor: 3600, flags: ['vote:council'] },
-        reply: [{ who: 'narrator', text: { he: 'תשעה אנשים ישבו שבוע בחדר סגור. כשיצאו, יש להם חוקה בת ארבעה עמודים, ושתי מחלוקות שאף אחד לא פתר.', en: 'Nine people sat in a closed room for a week. When they came out, they had a four-page constitution, and two disputes nobody had settled.' } }],
-      },
-      {
-        key: 'warden', label: { he: 'להישאר כמו שאנחנו', en: 'Stay as we are' },
-        effect: { morale: -5, moraleFor: 3600, flags: ['vote:warden'] },
-        reply: [{ who: 'crew', text: { he: 'הם לא יפגינו. לא עכשיו. אבל אני שמעתי איך שקט נשמע כשהוא מחכה.', en: 'They will not protest. Not now. But I have heard what silence sounds like when it is waiting.' } }],
+        key: 'decode', label: { he: 'להקשיב עוד וללמוד את הקוד', en: 'Listen longer and learn the code' },
+        effect: { gain: { knowledge: 2000 }, flags: ['north:decoded'] },
+        reply: [{ who: 'noa', text: { he: 'תנו לי לילה אחד עם הקלטות. אם יש שם מישהו, אני רוצה לדעת מה הוא אומר לפני שאנחנו דופקים בדלת שלו.', en: 'Give me one night with the recordings. If someone is there, I want to know what they are saying before we knock on their door.' } }],
       },
     ],
   },
   {
-    id: 'gideonSeat', number: 18,
+    id: 'northStation', number: 23,
+    title: { he: 'התחנה הצפונית', en: 'The Northern Station' },
+    trigger: s => signatureDue(s, 5),
+    lines: [
+      { who: 'narrator', text: { he: 'המשלחת מחכה בשער: תרמילים, מסננים, רדיו אחד ושני חבלים ארוכים.', en: 'The expedition waits at the gate: packs, filters, one radio and two long ropes.' } },
+      { who: 'crew', when: s => has(s, 'north:scouted'), text: { he: 'הסיירים סימנו את הדרך בסמרטוטים אדומים. מי שילך, לא יאבד.', en: 'The scouts marked the road with red rags. Whoever goes won\'t get lost.' } },
+      { who: 'noa', when: s => has(s, 'north:decoded'), text: { he: 'הקוד השתנה מאתמול. מישהו שם עונה לנו.', en: 'The code changed since yesterday. Someone there is answering us.' } },
+      { who: 'crew', text: { he: 'כמה אנשים שולחים?', en: 'How many do we send?' } },
+    ],
+    choices: [
+      {
+        key: 'full', label: { he: 'לשלוח משלחת מלאה', en: 'Send a full expedition' },
+        effect: { cost: { food: 4000, water: 4000 }, gain: { isotope7: 6, knowledge: 4000, data: 800 }, group: 4, morale: 8, moraleFor: 3600, flags: ['north:found'] },
+        check: s => northOdds(s),
+        reply: [{ who: 'narrator', text: { he: 'בתחנה עוד שמרו ארבעה אנשים במעילים אפורים על בנק הזרעים, שיישאר קר. הם חזרו הביתה עם המשלחת, ואיתם ארגזים של זרעים.', en: 'At the station, four people in grey coats were still keeping the seed bank cold. They came home with the expedition, and with crates of seeds.' } }],
+        failEffect: { cost: { food: 4000, water: 4000 }, gain: { knowledge: 1000 }, hurt: { count: 4, damage: 40 }, morale: -6, moraleFor: 1800, flags: ['north:lost'] },
+        failReply: [{ who: 'narrator', text: { he: 'סופת אבק תפסה אותם באמצע הדרך. הם חזרו עם כוויות ובידיים ריקות. האות עדיין מצפצף.', en: 'A dust storm caught them halfway. They came back burned and empty-handed. The signal still beeps.' } }],
+      },
+      {
+        key: 'small', label: { he: 'לשלוח צוות קטן', en: 'Send a small team' },
+        effect: { cost: { food: 1000, water: 1000 }, gain: { knowledge: 2000, data: 300 }, flags: ['north:mapped'] },
+        check: s => Math.min(0.95, northOdds(s) + 0.3),
+        reply: [{ who: 'crew', text: { he: 'הגענו, צילמנו, וחזרנו. התחנה עומדת, ומישהו גר בה. הם לא פתחו לנו, אבל השאירו לנו מפה.', en: 'We got there, took pictures, and came back. The station stands, and someone lives in it. They did not open for us, but they left us a map.' } }],
+        failEffect: { cost: { food: 1000, water: 1000 }, hurt: { count: 2, damage: 30 }, flags: ['north:mapped'] },
+        failReply: [{ who: 'crew', text: { he: 'לא הגענו. הדרך קרסה לתוך ערוץ, ושניים מאיתנו נפצעו בטיפוס חזרה.', en: 'We did not make it. The road had fallen into a gully, and two of us got hurt climbing back.' } }],
+      },
+      {
+        key: 'stay', label: { he: 'להשאיר את האות לבדו', en: 'Leave the signal alone' },
+        effect: { morale: -3, flags: ['north:ignored'] },
+        reply: [{ who: 'noa', text: { he: 'אז מישהו אחר ימצא אותו. אני מקווה שהוא יהיה אדיב.', en: 'Then someone else will find it. I hope they will be kind.' } }],
+      },
+    ],
+  },
+  // [phase5] Act VI: three tables in the canteen (the beat) and, a day later, the vote itself (the signature, "The First Vote"):
+  // influence is spent to back a side, and the influence held (and the canvassing) decides whether that side wins.
+  {
+    id: 'factions', number: 24,
+    title: { he: 'שלושה שולחנות', en: 'Three Tables' },
+    trigger: s => beatDue(s, 6),
+    lines: [
+      { who: 'narrator', text: { he: 'בחדר האוכל יש עכשיו שלושה שולחנות שלא מתערבבים: הוותיקים, אנשי השבט ואנשי המסוף.', en: 'The canteen now has three tables that do not mix: the old hands, the Clan\'s people and Terminus\'s.' } },
+      { who: 'crew', text: { he: 'כולם מדברים על הצבעה: מי ינהל את העיר, ואיך. בעוד חצי יום פותחים את הקלפיות, ומי שירצה לנצח יצטרך השפעה, כלומר אנשים שסומכים עליו.', en: 'Everyone is talking about a vote: who governs the city, and how. In half a day the ballot boxes open, and whoever wants to win will need influence: people who trust them.' } },
+      { who: 'gideon', when: clanFriend, text: { he: 'השולחן שלי יצביע בשביל מי שהקשיב לנו כשאף אחד אחר לא הקשיב.', en: 'My table will vote for whoever listened to us when nobody else did.' } },
+      { who: 'ezra', when: terminusSaved, text: { he: 'המסוף יצביע בשביל מי שישאיר את העגלות נוסעות. אני צוחק. בערך.', en: 'Terminus will vote for whoever keeps the carts running. I am joking. Mostly.' } },
+    ],
+    choices: [
+      {
+        key: 'canvass', label: { he: 'לעבור בין השולחנות ולהקשיב', en: 'Go from table to table and listen' },
+        effect: { cost: { influence: 300 }, flags: ['vote:canvassed'] },
+        reply: [{ who: 'narrator', text: { he: 'שלושה ערבים, שלושה שולחנות, הרבה תה דליל. אף אחד לא הבטיח כלום, אבל כולם זוכרים מי ישב איתם.', en: 'Three evenings, three tables, a lot of weak tea. Nobody promised anything, but everyone remembers who sat with them.' } }],
+      },
+      {
+        key: 'promise', label: { he: 'להבטיח לכל שולחן כיסא במועצה', en: 'Promise every table a seat on the council' },
+        effect: { morale: 3, moraleFor: 1800, flags: ['vote:promised'] },
+        reply: [{ who: 'crew', text: { he: 'הבטחה יפה. עכשיו צריך לעמוד בה.', en: 'A fine promise. Now we have to keep it.' } }],
+      },
+      {
+        key: 'aloof', label: { he: 'להישאר מחוץ לזה', en: 'Stay out of it' },
+        effect: { morale: -2, flags: ['vote:aloof'] },
+        reply: [{ who: 'crew', text: { he: 'אפשר להישאר בחוץ. אבל ההצבעה תקרה גם בלעדינו.', en: 'We can stay out of it. But the vote will happen with or without us.' } }],
+      },
+    ],
+  },
+  {
+    id: 'firstVote', number: 25,
+    title: { he: 'ההצבעה הראשונה', en: 'The First Vote' },
+    // [phase5] Act VI's signature: half a day after the three tables (the old trigger for a bunker past Act VI or from before the long game).
+    trigger: s => (inAct(s, 6) ? signatureDue(s, 6) : actAtLeast(s, 6) && s.survivors.length >= 100 && has(s, 'story:gate')),
+    lines: [
+      { who: 'narrator', text: { he: 'מאה ועשרים איש מתחת לאדמה, ועוד מאות בחוץ. מי שמחליט עליהם? עד היום זה הייתם אתם. אבל הם התחילו לשאול.', en: 'A hundred and twenty people underground, and hundreds more outside. Who decides for them? Until now it was you. But they have started to ask.' } },
+      { who: 'crew', text: { he: 'בחדר האוכל מדברים על הצבעה. לא נגדכם. עם. אבל אם נאמר לא, זה ייראה כמו נשק.', en: 'In the canteen they talk about a vote. Not against you. With you. But if we say no, it will look like a weapon.' } },
+      { who: 'gideon', when: clanFriend, text: { he: 'שבט החלודה הצביע פעם בעשר שנים: מי שצעק חזק. אתם יכולים יותר טוב מזה.', en: 'The Rust Clan voted once in ten years: whoever shouted loudest. You can do better than that.' } },
+      { who: 'crew', when: s => inAct(s, 6), text: { he: 'כל צד שתתמכו בו יעלה לנו השפעה. וככל שיש לנו יותר השפעה, יותר אנשים יקשיבו.', en: 'Whichever side we back will cost us influence. And the more influence we hold, the more people will listen.' } },
+    ],
+    choices: [
+      {
+        key: 'republic', label: { he: 'בחירות פתוחות לכולם', en: 'Open elections for everyone' },
+        effect: { morale: 8, moraleFor: 7200, cost: { influence: 900 }, flags: ['vote:republic'] },
+        check: s => (inAct(s, 6) ? voteOdds(s, 0.35) : 1),
+        reply: [{ who: 'narrator', text: { he: 'ארבע קלפיות בחדר האוכל. יוצאים אחרי שעה, מופתעים כמה קל. מי שהפסיד לוחץ יד למי שניצח.', en: 'Four ballot boxes in the canteen. People leave an hour later, surprised how easy it was. The loser shakes the winner\'s hand.' } }],
+        failEffect: { cost: { influence: 900 }, morale: -3, moraleFor: 3600, flags: ['vote:council', 'vote:lost'] },
+        failReply: [{ who: 'narrator', text: { he: 'הבחירות הפתוחות הפסידו באחד עשר קולות. המועצה של המומחים לוקחת את הכיסאות. האנשים שלכם רוטנים, אבל נשארים.', en: 'Open elections lost by eleven votes. The council of experts takes the chairs. Your people grumble, but they stay.' } }],
+      },
+      {
+        key: 'council', label: { he: 'מועצה של מומחים', en: 'A council of experts' },
+        effect: { cost: { influence: 400 }, gain: { knowledge: 800 }, morale: -2, moraleFor: 3600, flags: ['vote:council'] },
+        check: s => (inAct(s, 6) ? voteOdds(s, 0.45) : 1),
+        reply: [{ who: 'narrator', text: { he: 'תשעה אנשים ישבו שבוע בחדר סגור. כשיצאו, יש להם חוקה בת ארבעה עמודים, ושתי מחלוקות שאף אחד לא פתר.', en: 'Nine people sat in a closed room for a week. When they came out, they had a four-page constitution, and two disputes nobody had settled.' } }],
+        failEffect: { cost: { influence: 400 }, morale: 4, moraleFor: 3600, flags: ['vote:republic', 'vote:lost'] },
+        failReply: [{ who: 'narrator', text: { he: 'העיר בחרה אחרת: בחירות פתוחות לכולם. הצד שלכם הפסיד, אבל בחדר האוכל שרים עד הבוקר.', en: 'The city chose otherwise: open elections for everyone. Your plan lost, but in the canteen they sing until morning.' } }],
+      },
+      {
+        key: 'warden', label: { he: 'להישאר כמו שאנחנו', en: 'Stay as we are' },
+        effect: { morale: -5, moraleFor: 3600, flags: ['vote:warden'] },
+        // [phase5] Without influence, "stay as we are" can lose too: the city votes for open elections over your head.
+        check: s => (inAct(s, 6) ? voteOdds(s, 0.15) : 1),
+        reply: [{ who: 'crew', text: { he: 'הם לא יפגינו. לא עכשיו. אבל אני שמעתי איך שקט נשמע כשהוא מחכה.', en: 'They will not protest. Not now. But I have heard what silence sounds like when it is waiting.' } }],
+        failEffect: { morale: -6, moraleFor: 3600, flags: ['vote:republic', 'vote:lost'] },
+        failReply: [{ who: 'narrator', text: { he: 'העיר הצביעה בלי לשאול אתכם: בחירות פתוחות לכולם. אתם עדיין כאן, אבל כבר לא לבד בראש השולחן.', en: 'The city voted without asking you: open elections for everyone. You are still here, but no longer alone at the head of the table.' } }],
+      },
+    ],
+  },
+  {
+    id: 'gideonSeat', number: 26,
     title: { he: 'מקום סביב השולחן', en: 'A Seat at the Table' },
     trigger: s => actAtLeast(s, 6) && has(s, 'story:gate') && has(s, 'story:firstVote'),
     lines: [
@@ -563,11 +861,41 @@ export const CHAPTERS: Chapter[] = [
       },
     ],
   },
+  // [phase5] Act VII: the last census (the beat) counts what the city has, so the Ark's choice (the signature) weighs something.
   {
-    id: 'arkChapter', number: 19,
-    title: { he: 'מה בתיבה', en: 'What Goes in the Ark' },
-    trigger: s => has(s, 'project:ark'),
+    id: 'lastCensus', number: 27,
+    title: { he: 'המפקד האחרון', en: 'The Last Census' },
+    trigger: s => beatDue(s, 7),
     lines: [
+      { who: 'noa', text: { he: 'מדדתי את התיבה שלכם על הנייר. יש בה מקום לדבר אחד גדול ולשניים קטנים. לא יותר.', en: 'I measured your Ark on paper. It has room for one big thing and two small ones. No more.' } },
+      { who: 'crew', text: { he: 'אז סופרים. כל חדר, כל ארגז, כל שם. בפעם הראשונה מאז שהגענו, מישהו כותב את כל מה שיש לנו.', en: 'So we count. Every room, every crate, every name. For the first time since we came here, someone writes down everything we have.' } },
+      { who: 'maya', when: mayaHome, text: { he: 'אמא הייתה סופרת את הקופסאות בלילה, כשחשבה שאני ישנה. עכשיו אני מבינה למה.', en: 'Mom used to count the tins at night, when she thought I was asleep. Now I understand why.' } },
+    ],
+    choices: [
+      {
+        key: 'names', label: { he: 'לרשום כל שם, גם של מי שכבר איננו', en: 'Write down every name, even of those who are gone' },
+        effect: { morale: 4, moraleFor: 3600, flags: ['census:names'] },
+        reply: [{ who: 'narrator', text: { he: 'הרשימה ארוכה יותר ממה שמישהו ציפה. אנשים עומדים בתור כדי להוסיף שם אחד ששכחו.', en: 'The list is longer than anyone expected. People queue to add one name that was forgotten.' } }],
+      },
+      {
+        key: 'seeds', label: { he: 'לספור את הזרעים, צנצנת אחרי צנצנת', en: 'Count the seeds, jar by jar' },
+        effect: { gain: { knowledge: 3000 }, flags: ['census:seeds'] },
+        reply: [{ who: 'crew', text: { he: 'שמונה סוגים שגדלו כאן, ועוד שלושה שאף אחד לא זכר שיש לנו. החווה תתגעגע אליהם.', en: 'Eight kinds that grew here, and three more nobody remembered we had. The farm will miss them.' } }],
+      },
+      {
+        key: 'songs', label: { he: 'להקליט את מה שהילדים שרים', en: 'Record what the children sing' },
+        effect: { morale: 6, moraleFor: 3600, flags: ['census:songs'] },
+        reply: [{ who: 'narrator', text: { he: 'הילדים שרים לתוך מיקרופון ישן. באמצע אחד השירים מישהו מתחיל לבכות, וכולם מעמידים פנים שלא שמעו.', en: 'The children sing into an old microphone. Halfway through one song someone starts to cry, and everyone pretends not to hear.' } }],
+      },
+    ],
+  },
+  {
+    id: 'arkChapter', number: 28,
+    title: { he: 'מה בתיבה', en: 'What Goes in the Ark' },
+    // [phase5] Act VII's signature: once the Ark is built, after the last census (any other Act, or a bunker from before: as before).
+    trigger: s => has(s, 'project:ark') && (!inAct(s, 7) || has(s, 'story:lastCensus')),
+    lines: [
+      { who: 'crew', when: s => has(s, 'census:names') || has(s, 'census:seeds') || has(s, 'census:songs'), text: { he: 'המפקד גמור. עכשיו יודעים בדיוק מה משאירים מאחור.', en: 'The census is done. Now we know exactly what we leave behind.' } },
       { who: 'maya', when: mayaHome, text: { he: 'אמא הייתה אומרת שמה שמחזיקים בידיים אחרי שהכול נשרף, זה מה שחשוב. מה נשים בתיבה?', en: 'Mom used to say that what you hold in your hands after everything has burned is what matters. What do we put in the Ark?' } },
       { who: 'narrator', when: s => !mayaHome(s), text: { he: 'התיבה עומדת פתוחה בחדר הכספת: מגירות ריקות, ושלוש מדפים להחליט עליהם.', en: 'The Ark stands open in the vault room: empty drawers, and three shelves to decide about.' } },
       { who: 'crew', text: { he: 'מקום לדבר אחד גדול, ולשני קטנים. מה אנחנו שולחים לעולם הבא?', en: 'Room for one big thing, and two small ones. What are we sending to the next world?' } },
@@ -591,7 +919,7 @@ export const CHAPTERS: Chapter[] = [
     ],
   },
   {
-    id: 'decision', number: 20,
+    id: 'decision', number: 29,
     title: { he: 'ההחלטה הגדולה', en: 'The Big Decision' },
     // [Q1] Fires only when the Genesis button itself is open (the last Act done), not at the old research + 40 people gate.
     trigger: genesisReady,

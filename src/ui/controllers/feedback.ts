@@ -34,6 +34,7 @@ import type { Incident } from '../../core/GameState';
 import { type RaidResult } from '../../systems/EventSystem';
 import { deathCause } from '../../systems/DeathSystem'; // [ux-wp3 W1]
 import type { GameApp } from '../../app';
+import { classPickDue, showClassPick } from '../components/GenesisClassPick'; // [phase5]
 import { GOAL_FOLD_MS, goalLine } from '../popupRules';
 
 /** [ux-wp3 W1] The cause of a death in words (null when unknown: the old sentence is used). Also used by the memorial. */
@@ -494,7 +495,16 @@ export class FeedbackController {
     });
     // [P5] A new timeline: choose its hardships (if any) for more Legacy.
     // [P3-5] First where the next world begins, then the hardships.
-    bus.on('rebirth', () => setTimeout(() => this.app.story.chooseScenario(() => this.app.story.chooseMutators()), 1500));
+    // [phase5] The siege of Act IV ends: say how the Wall held.
+    bus.on('siege:resolved', (r: unknown) => {
+      const res = r as { outcome?: string; held?: number };
+      if (res?.outcome) this.app.toasts.show(`[[shield]] ${i18n.t(`p5a.siege.${res.outcome}`, { n: res.held ?? 0 })}`, res.outcome === 'broke' ? 'bad' : res.outcome === 'held' ? 'good' : 'info');
+    });
+    // [phase5] After a Genesis: first the class (keystone) of the new run, then the scenario and the hardships.
+    bus.on('rebirth', () => setTimeout(() => {
+      const next = () => this.app.story.chooseScenario(() => this.app.story.chooseMutators());
+      if (classPickDue(this.app.engine, this.app.state)) showClassPick(this.app.engine, next); else next();
+    }, 1500));
     bus.on('dig:start', (_floor: unknown, total: unknown) => {
       this.app.toasts.show(`[[pick]] ${i18n.t('dig.started', { n: this.app.state.currentFloors + 1, t: i18n.formatDuration((total as number | undefined) ?? this.app.state.longGame?.dig.total ?? 0) })}`, 'info');
     });

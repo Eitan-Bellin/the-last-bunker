@@ -1,3 +1,4 @@
+import { signatureRequirement } from './ActSystem'; // [phase5]
 import type { GameEngine } from '../core/GameEngine';
 import type { BuildingInstance, BuildingType, GameState, ResourceType } from '../core/GameState';
 import { ACTS, actOf, type ActDef, type ActGoal } from '../data/acts';
@@ -411,6 +412,8 @@ function projectRequirement(engine: GameEngine, state: GameState, id: string): R
 /** Every requirement of the Act (goals, then charter projects) with its own next step. */
 export function actRequirements(engine: GameEngine, state: GameState, act: ActDef = actOf(state)): Requirement[] {
   const out: Requirement[] = act.goals.map((g, i) => goalRequirement(engine, state, act, g, i));
+  const sig = signatureRequirement(state, act); // [phase5] the Act's signature problem
+  if (sig) out.push(sig);
   for (const id of act.charter) if (getProject(id)) out.push(projectRequirement(engine, state, id));
   return out;
 }

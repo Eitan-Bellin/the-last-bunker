@@ -1,3 +1,4 @@
+import { hasMutator } from '../data/mutators'; // [phase5]
 import type { StateManager } from '../core/StateManager';
 import type { GameState } from '../core/GameState';
 import { crewCount, getDef } from '../data/buildingDefs';
@@ -62,7 +63,7 @@ export class ForemanSystem {
   }
 
   available(state: GameState): boolean {
-    return (state.longGame?.meta.act ?? 0) >= FOREMAN_ACT;
+    return (state.longGame?.meta.act ?? 0) >= FOREMAN_ACT && !hasMutator(state, 'noForeman'); // [phase5] the No Foreman hardship
   }
 
   isOn(state: GameState, order: ForemanOrder): boolean {

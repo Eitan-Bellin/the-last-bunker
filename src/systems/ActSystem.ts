@@ -1,6 +1,9 @@
 import type { StateManager } from '../core/StateManager';
 import { bus } from '../core/EventBus';
-import { ACTS, MAX_ACT, actComplete, actOf } from '../data/acts';
+import { ACTS, BEAT_AT, MAX_ACT, actComplete, actOf, actProgress, beatAt, firstLaw, inAct, signatureDue, signatureEta, signatureProgress, systemOpen, systemOpensIn, type ActDef } from '../data/acts';
+import type { GameState } from '../core/GameState';
+import type { Requirement } from './Guide';
+import { bunkerDefense, raidStrength } from './EventSystem'; // [phase5] the siege
 import { ENDINGS, endingOf, endingScore } from '../data/endings';
 import type { BuildingSystem } from './BuildingSystem';
 import { registerInboxKind, type InboxSystem } from './InboxSystem';
@@ -18,6 +21,93 @@ export function noteRepeal(sm: StateManager, id: string): void {
   const lg = sm.state.longGame;
   if (!lg) return;
   sm.applyDelta({ path: 'longGame.policy.repealedAt', value: { ...(policyExtras(sm.state).repealedAt ?? {}), [id]: lg.meta.worldT } });
+}
+
+// ---- [phase5] The Acts' signature problems (data/acts.ts SignatureDef) ----
+
+/** [phase5] The siege's three waves, as shares of a usual raid's strength at this point of the run. */
+export const SIEGE_WAVES = [0.8, 1.05, 1.35];
+
+/** [phase5] What the ridge chapter's preparation adds to the defense in the siege (fortified door, drilled crews, allies on the flanks). */
+export function siegePrep(s: GameState): number {
+  const f = s.storyFlags;
+  return 1 + (f.includes('siege:fortified') ? 0.25 : 0) + (f.includes('siege:drilled') ? 0.15 : 0) + (f.includes('siege:allies') ? 0.2 : 0);
+}
+
+/** [phase5] The siege as the lookouts see it now: the bunker's defense (with its preparation) against each wave. */
+export function siegeForecast(s: GameState): { defense: number; waves: number[] } {
+  const base = raidStrength(s, 0.5);
+  return { defense: Math.round(bunkerDefense(s) * siegePrep(s)), waves: SIEGE_WAVES.map(k => Math.round(base * k)) };
+}
+
+type Loc = 'he' | 'en';
+const L = (he: string, en: string): Record<Loc, string> => ({ he, en });
+
+/** [phase5] What to do about the Act's signature now, in plain words (the goal line's second line). */
+export function signatureHint(s: GameState, act: ActDef): Record<Loc, string> {
+  const sig = act.signature;
+  if (!sig) return L('', '');
+  const f = s.storyFlags;
+  if (f.includes(`story:${sig.chapter}`)) return L('', '');
+  const fmt = (t: number) => i18n.formatDuration(Math.max(60, t));
+  const beatTold = !sig.beat || f.includes(`story:${sig.beat}`);
+  if (!beatTold) {
+    const p = actProgress(s, act);
+    if (p >= BEAT_AT) return L('בקרוב: ברגע השקט הבא', 'Soon: at the next quiet moment');
+    const pct = Math.floor(Math.min(0.99, p) * 100);
+    return L(`יתחיל כשהמערכה תגיע בערך לחצי הדרך (עכשיו ${pct}%)`, `Begins when the Act is about half done (now ${pct}%)`);
+  }
+  const eta = signatureEta(s, act.id) ?? 0;
+  switch (sig.id) {
+    case 'toll':
+      return s.survivors.length < 6 ? L('זרים יגיעו כשיגורו כאן 6 אנשים', 'Strangers will come once 6 people live here') : L('חכו לדפיקה בדלת', 'Wait for the knock on the door');
+    case 'winter':
+      return eta > 0 ? L(`השלג יגיע בעוד ${fmt(eta)}. אגרו אוכל ופנו מיטות.`, `The snow comes in ${fmt(eta)}. Store food and free some beds.`) : L('השלג כבר כאן. השבט מחכה בדלת.', 'The snow is here. The Clan is waiting at the door.');
+    case 'firstLaw': {
+      if (firstLaw(s)) return L('המושבה מתאספת לכתוב את החוק על הקיר', 'The colony gathers to write the law on the wall');
+      if (!systemOpen(s, 'laws')) {
+        const t = systemOpensIn(s, 'laws');
+        return isFinite(t) ? L(`החוקים ייפתחו בעוד ${fmt(t)}`, `Laws open in ${fmt(t)}`) : L('החוקים עוד סגורים', 'Laws are not open yet');
+      }
+      return L('העבירו חוק: מרכז הפיקוד, לשונית מדיניות', 'Pass a law: Command, Policies tab');
+    }
+    case 'siege': {
+      if (f.includes('siege:done')) return L('המצור נגמר. ספרו מה נשאר.', 'The siege is over. Count what is left.');
+      const fc = siegeForecast(s);
+      const w = fc.waves.join(' / ');
+      return L(`הצבא יגיע לחומה בעוד ${fmt(eta)} · ההגנה שלכם ${fc.defense}, הגלים ${w}. שומרים בנשקייה ושלבי החומה מעלים אותה.`,
+        `The army reaches the Wall in ${fmt(eta)} · your defense ${fc.defense}, the waves ${w}. Guards in the Armory and the Wall's stages raise it.`);
+    }
+    case 'north':
+      return eta > 0 ? L(`המשלחת יוצאת בעוד ${fmt(eta)}. כל מאחז שאתם מחזיקים הופך את הדרך לבטוחה יותר.`, `The expedition leaves in ${fmt(eta)}. Every outpost you hold makes the road safer.`) : L('המשלחת מוכנה לצאת', 'The expedition is ready to leave');
+    case 'vote':
+      return eta > 0 ? L(`ההצבעה בעוד ${fmt(eta)}. ההשפעה שבידיכם קונה קולות.`, `The vote is in ${fmt(eta)}. The influence you hold buys voices.`) : L('הקלפיות פתוחות', 'The ballot boxes are open');
+    case 'ark':
+      return f.includes('project:ark') ? L('התיבה מוכנה. בחרו מה נכנס בה.', 'The Ark is ready. Choose what goes in.') : L('השלימו את התיבה (פרויקט המערכה), ואז בחרו מה נכנס בה', 'Finish the Ark (Act project), then choose what goes in');
+  }
+  return L('', '');
+}
+
+/**
+ * [phase5] The signature as a requirement row (the same shape Guide.actRequirements gives the Act's goals), for the Command panel and the
+ * guide. Null when the Act has no signature.
+ */
+export function signatureRequirement(s: GameState, act: ActDef = actOf(s)): Requirement | null {
+  const sig = act.signature;
+  if (!sig) return null;
+  const locale = i18n.currentLocale as Loc;
+  const progress = signatureProgress(s, sig);
+  const done = progress[0] >= progress[1];
+  const hint = signatureHint(s, act)[locale];
+  const beat = !sig.beat || s.storyFlags.includes(`story:${sig.beat}`);
+  const eta = done ? 0 : beat ? signatureEta(s, act.id) ?? Infinity : Infinity;
+  const action = sig.id === 'siege' ? { kind: 'rooms' as const, type: 'armory' as const } : sig.id === 'north' ? { kind: 'surface' as const } : sig.id === 'ark' ? { kind: 'projects' as const } : { kind: 'command' as const };
+  // Waiting for its moment, it is never "the step" (Guide.pickRequirement skips locked rows): only passing Act III's law is a thing to do.
+  const actionable = sig.id === 'firstLaw' && beat && !firstLaw(s) && systemOpen(s, 'laws');
+  return {
+    id: 'signature', icon: sig.icon, title: sig.text[locale], text: done ? sig.text[locale] : hint || sig.text[locale], progress,
+    fraction: done ? 1 : beat ? 0.5 : 0, done, immediate: false, eta, action: done ? null : action, locked: !done && !actionable,
+  };
 }
 
 /** An ending a run may choose must score at least this much, and at least this share of the best one. */
@@ -85,6 +175,7 @@ export class ActSystem {
     if (!lg) return;
     this.chargeUpkeep(); // [phase4]
     const act = actOf(state);
+    this.signatureTick(act); // [phase5]
     // [P5] The last Act done: the run's ending is told once (and kept for the Legacy).
     if (act.id >= MAX_ACT) {
       if (actComplete(state, act) && !state.storyFlags.some(f => f.startsWith('ending:')) && !this.inbox.items().some(i => i.kind === 'ending')) {
@@ -102,6 +193,42 @@ export class ActSystem {
     ]);
     this.buildings.recalculateMaxPopulation(this.sm);
     bus.emit('act:advance', next.id);
+  }
+
+  /** [phase5] Adds run flags (story flags reset with Genesis, so these belong to this run). */
+  private flag(...add: string[]): void {
+    const flags = this.sm.state.storyFlags;
+    const fresh = add.filter(f => !flags.includes(f));
+    if (fresh.length) this.sm.applyDelta({ path: 'storyFlags', value: [...flags, ...fresh] });
+  }
+
+  /**
+   * [phase5] The signature's clockwork, online and away: when the mid-Act beat was told (the warning's clock starts), the first law the
+   * colony passed (Act III), and the siege itself (Act IV), resolved by the numbers when its day comes.
+   */
+  private signatureTick(act: ActDef): void {
+    const state = this.sm.state;
+    const lg = state.longGame;
+    const sig = act.signature;
+    if (!lg || lg.meta.legacy || !sig) return;
+    if (sig.beat && state.storyFlags.includes(`story:${sig.beat}`) && beatAt(state, act.id) === null) this.flag(`sig:beat${act.id}:${Math.round(lg.meta.worldT)}`);
+    if (!firstLaw(state) && lg.policy.laws.length > 0) this.flag(`law:first:${lg.policy.laws[0]}`);
+    if (sig.id === 'siege' && inAct(state, 4) && !state.storyFlags.includes('siege:done') && signatureDue(state, 4)) this.resolveSiege();
+  }
+
+  /**
+   * [phase5] Act IV's siege: three waves against the bunker's defense (its walls, guards and people, the Wall's stages, the ridge chapter's
+   * preparation). Every wave held counts; the chapter "The Siege" then tells it and settles the cost. Never a dead end: a broken siege is
+   * a worse chapter, not a stuck Act.
+   */
+  resolveSiege(): { held: number; outcome: 'held' | 'bent' | 'broke'; defense: number; waves: number[] } {
+    const fc = siegeForecast(this.sm.state);
+    const held = fc.waves.filter(w => fc.defense >= w).length;
+    const outcome = held >= fc.waves.length ? 'held' : held > 0 ? 'bent' : 'broke';
+    this.flag('siege:done', `siege:${outcome}`, `siege:waves:${held}`);
+    const res = { held, outcome, defense: fc.defense, waves: fc.waves } as const;
+    bus.emit('siege:resolved', res);
+    return { ...res, waves: [...res.waves] };
   }
 
   /**

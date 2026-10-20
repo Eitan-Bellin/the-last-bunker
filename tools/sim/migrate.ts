@@ -88,6 +88,9 @@ export async function checkMigration(json: string): Promise<MigrateCheck> {
     for (const f of old.storyFlags ?? []) if (!m.storyFlags.includes(f)) problems.push(`flag ${f} lost`);
     if ((m.currentFloors ?? 0) < (old.currentFloors ?? 0)) problems.push(`floors ${old.currentFloors} -> ${m.currentFloors}`);
     if ((m.prestige?.rebirthCount ?? 0) !== (old.prestige?.rebirthCount ?? 0)) problems.push('rebirth count changed');
+    // [phase5] Genesis upgrades, keystones and the run's hardships (even retired ones) are kept as they were.
+    for (const [id, lvl] of Object.entries(old.prestige?.upgrades ?? {})) if ((m.prestige.upgrades[id] ?? 0) !== lvl) problems.push(`genesis upgrade ${id} ${lvl} -> ${m.prestige.upgrades[id] ?? 0}`);
+    for (const id of old.longGame?.meta.mutators ?? []) if (!m.longGame?.meta.mutators.includes(id)) problems.push(`hardship ${id} lost`);
     problems.push(...cityMigrationProblems(old, m, from));
     // Only for saves from before the Acts existed (no longGame slice): those were placed in Act 4. A v5+ save keeps the Act it was in. [plan4:QA-1]
     if (m.longGame && !old.longGame && (old.era ?? 0) >= 3 && m.longGame.meta.act !== 4) problems.push(`era 3 save placed in Act ${m.longGame.meta.act}`);
