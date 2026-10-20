@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>View prototype</title>
+<style>
+  :root {
+    --bg: #0d0f0e; --rock: #1b1a17; --slab: #2d2a25; --panel: #171a18; --line: #343a36; --fg: #ece6d6; --muted: #9da59f;
+    --amber: #f0a637; --ok: #6cc28f; --warn: #e8ae4c; --bad: #ec8070;
+    --living: #c9845b; --food: #7fae5a; --power: #e2b33c; --industry: #8c8f98; --health: #d46a6a; --defense: #8a6d55;
+    --surface: #6d8fa8; --infra: #7a7f86; --trade: #b08a4f; --act: #a57fd0;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: #050605; color: var(--fg); font-family: "Assistant", system-ui, "Segoe UI", sans-serif; }
+  body { display: flex; justify-content: center; }
+  .phone { position: relative; width: min(100vw, 400px); height: 100%; background: var(--bg); overflow: hidden; display: flex; flex-direction: column; }
+  /* top bar: the four numbers that matter, nothing else */
+  .top { display: flex; gap: 6px; padding: 10px 10px 6px; align-items: center; }
+  .chip { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 6px 2px; border-radius: 10px; background: var(--panel); border: 1px solid var(--line); font-weight: 700; font-size: 15px; }
+  .chip small { font-weight: 500; font-size: 11px; color: var(--muted); }
+  .chip.low { border-color: var(--bad); color: var(--bad); }
+  .modes { display: flex; gap: 6px; padding: 0 10px 8px; }
+  .modes button, .saves button { flex: 1; padding: 8px; border-radius: 9px; border: 1px solid var(--line); background: var(--panel); color: var(--fg); font: inherit; font-size: 14px; cursor: pointer; }
+  .modes button.on, .saves button.on { border-color: var(--amber); color: var(--amber); }
+  .saves { display: flex; gap: 6px; padding: 0 10px 8px; }
+  .stage { position: relative; flex: 1; overflow: auto; overscroll-behavior: contain; }
+
+  /* A: clean front view */
+  .tower { position: relative; padding: 12px 0 40px; }
+  .floor { position: relative; height: 168px; margin-bottom: 14px; background: linear-gradient(var(--rock), #141310); border-top: 6px solid var(--slab); }
+  .floor-tag { position: sticky; inset-inline-start: 0; z-index: 2; display: inline-block; margin: 6px; padding: 2px 8px; border-radius: 6px; background: #000a; font-weight: 700; font-size: 13px; }
+  .room { position: absolute; top: 10px; height: 150px; border-radius: 10px; overflow: hidden; background: #222 center / cover no-repeat; border: 2px solid #0008; box-shadow: 0 6px 18px #0007; cursor: pointer; }
+  .room::after { content: ""; position: absolute; inset: 55% 0 0; background: linear-gradient(transparent, #000c); }
+  .room .name { position: absolute; z-index: 1; inset-inline-start: 10px; bottom: 8px; font-weight: 700; font-size: 16px; text-shadow: 0 1px 3px #000; }
+  .room .who { position: absolute; z-index: 1; inset-inline-end: 8px; bottom: 9px; font-size: 13px; color: var(--muted); }
+  .room .dot { position: absolute; z-index: 1; top: 8px; inset-inline-end: 8px; width: 14px; height: 14px; border-radius: 50%; border: 2px solid #000a; }
+  .room.flat { display: flex; align-items: center; justify-content: center; font-size: 34px; }
+
+  /* B: one floor from above */
+  .plan-wrap { display: flex; height: 100%; }
+  .lift { width: 54px; flex: none; display: flex; flex-direction: column; gap: 4px; padding: 8px 6px; border-inline-end: 1px solid var(--line); overflow-y: auto; }
+  .lift button { padding: 9px 0; border-radius: 8px; border: 1px solid var(--line); background: var(--panel); color: var(--fg); font: inherit; font-weight: 700; cursor: pointer; }
+  .lift button.on { background: var(--amber); color: #1a1408; border-color: var(--amber); }
+  .plan { flex: 1; overflow: auto; }
+  canvas { display: block; }
+
+  /* room focus */
+  .focus { position: absolute; inset: 0; z-index: 10; background: #000d; display: none; flex-direction: column; }
+  .focus.on { display: flex; }
+  .focus .art { height: 46%; background: #222 center / cover no-repeat; }
+  .focus .body { flex: 1; padding: 16px; display: flex; flex-direction: column; gap: 10px; background: var(--panel); }
+  .focus h2 { margin: 0; font-size: 24px; }
+  .focus .facts { display: flex; gap: 8px; }
+  .focus .fact { flex: 1; padding: 10px; border-radius: 10px; background: var(--bg); border: 1px solid var(--line); text-align: center; }
+  .focus .fact b { display: block; font-size: 20px; }
+  .focus .main { margin-top: auto; padding: 14px; border: 0; border-radius: 12px; background: var(--amber); color: #1a1408; font: inherit; font-weight: 800; font-size: 17px; }
+  .focus .close { position: absolute; top: 10px; inset-inline-start: 10px; width: 44px; height: 44px; border-radius: 12px; border: 0; background: #000a; color: var(--fg); font-size: 22px; }
+  .note { padding: 6px 12px 10px; color: var(--muted); font-size: 13px; }
+</style>
+</head>
+<body>
+<div class="phone" id="phone">
+  <div class="top" id="top"></div>
+  <div class="saves" id="saves"></div>
+  <div class="modes" id="modes"></div>
+  <div class="note" id="note"></div>
+  <div class="stage" id="stage"></div>
+  <div class="focus" id="focus"></div>
+</div>
+<script type="module" src="./viewproto.ts"></script>
+</body>
+</html>
