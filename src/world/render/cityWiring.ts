@@ -14,12 +14,46 @@ import { Graphics, type Container } from 'pixi.js';
 import type { Rect } from './layoutTypes';
 import { SHELL_RENDER } from '../tokensRender';
 import { setCityLayoutProvider, setShellMounter, type ShellMounter } from './citySeams';
+import { GFX } from '../../rendering/gfxFeatures';
+import { labelState } from '../../rendering/LabelScale';
+import { CALM_COLOR } from '../../rendering/roomPlate';
+import { polyBounds } from '../model/outline';
+import type { CityLayout } from './layoutTypes';
+
+/** [clean:0] The calm sheet's opacity, and the shell dressing it replaces at normal zoom (CALM_COLOR: the clean front's own token, roomPlate.ts). */
+const CALM_ALPHA = 1;
+const CALM_PAD = 2400;
+const CLEAN_HIDE = new Set(['caverns:front']);
+
+/**
+ * [clean:0] One flat dark sheet over the whole shell back (cavity backs, rock cut face, strata), under the rooms: at normal zoom the eye rests
+ * on the paintings, not on tile, rock and timber. The lightmap still lights it round the lamps. Shown only while the room names show
+ * (LabelScale 'full'); farther out the strata and the shell come back.
+ */
+function buildCalm(layout: CityLayout): Graphics {
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (const c of layout.cavities) {
+    const b = polyBounds(c.poly);
+    x0 = Math.min(x0, b.x0); y0 = Math.min(y0, b.y0); x1 = Math.max(x1, b.x1); y1 = Math.max(y1, b.y1);
+  }
+  const g = new Graphics();
+  g.label = 'shell:calm';
+  g.eventMode = 'none';
+  if (isFinite(x0)) g.rect(x0 - CALM_PAD, y0 - 8, x1 - x0 + 2 * CALM_PAD, y1 - y0 + 8 + CALM_PAD).fill({ color: CALM_COLOR, alpha: CALM_ALPHA });
+  return g;
+}
 
 const mountCityShell: ShellMounter = ctx => {
   const parts = buildShell(ctx.layout, ctx.state, ctx.tier, { era: Math.max(0, ctx.era) });
   ctx.back.addChild(parts.back);
   ctx.front.addChild(parts.front);
-  const ids = parts.lights.map(l => ctx.addLight(l));
+  // [clean:0] The calm sheet (not built with `?gx=-clean`) and the dressing it hides at normal zoom (cave timber, ledges and stalactites).
+  const calm = GFX.clean ? buildCalm(ctx.layout) : null;
+  if (calm) ctx.back.addChild(calm);
+  const dressing = GFX.clean ? parts.front.children.filter(c => CLEAN_HIDE.has(c.label)) : [];
+  let calmOn: boolean | null = null;
+  // [clean:0] Under the calm sheet the shell's fixtures are not drawn, so their lamps keep only the light they throw (no floating halos or cones).
+  const ids = parts.lights.map(l => ctx.addLight(GFX.clean ? { ...l, halo: 0, cone: 0 } : l));
   batchOrder(parts.back, parts.front);
   if (ctx.state.currentFloors <= SHELL_RENDER.forceBatchMaxFloors) forceBatch(parts.back, parts.front); // [world:M1] small shells only (see SHELL_RENDER)
   const cull = cullList(parts.back, parts.front);
@@ -34,6 +68,15 @@ const mountCityShell: ShellMounter = ctx => {
   });
   return {
     update(_t, _dt, view) {
+      if (calm) {
+        const on = labelState.mode === 'full';
+        if (on !== calmOn) {
+          calmOn = on;
+          calm.visible = on;
+          parts.back.visible = !on; // [perf] the sheet is opaque: what lies under it is not drawn at all (fewer draw calls than before)
+          for (const d of dressing) d.visible = !on;
+        }
+      }
       parts.update(view, performance.now());
       cullTo(cull, view);
     },

@@ -1,0 +1,155 @@
+<title>החזית הנקייה</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Secular+One&family=Assistant:wght@400;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a field manual. Prototype shots up top, then the rule, then the steps in order with effort stamps. */
+:root{
+  --bg:#ECEEEB; --panel:#F7F8F6; --fg:#1D211F; --muted:#59605B; --rule:#C9CEC9;
+  --accent:#A85F00; --accent-soft:#F3E3CB; --ok:#2E7D4F; --warn:#A86A00; --bad:#A23A2A;
+  --f-display:"Secular One","Assistant",system-ui,sans-serif;
+  --f-body:"Assistant",system-ui,"Segoe UI",sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,Consolas,monospace;
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#141715; --panel:#1C201D; --fg:#E3E6E2; --muted:#9AA39C; --rule:#323833;
+  --accent:#F0A637; --accent-soft:#3A2D17; --ok:#6CC28F; --warn:#E8AE4C; --bad:#EC8070; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#141715; --panel:#1C201D; --fg:#E3E6E2; --muted:#9AA39C; --rule:#323833;
+  --accent:#F0A637; --accent-soft:#3A2D17; --ok:#6CC28F; --warn:#E8AE4C; --bad:#EC8070; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font-family:var(--f-body);font-size:17px;line-height:1.6;margin:0}
+.wrap{max-width:960px;margin:0 auto;padding-left:max(16px, env(safe-area-inset-left, 0px));padding-right:max(16px, env(safe-area-inset-right, 0px));padding-block:28px 64px}
+h1,h2,h3{font-family:var(--f-display);font-weight:400;line-height:1.2;text-wrap:balance;margin:0}
+h1{font-size:clamp(30px,6vw,44px)}
+h2{font-size:clamp(22px,4vw,28px)}
+h3{font-size:19px;font-family:var(--f-body);font-weight:700}
+p{margin:0}
+.eyebrow{font-size:13px;letter-spacing:.06em;color:var(--accent);font-weight:700}
+.lede{color:var(--muted);max-width:62ch;margin-top:10px;font-size:18px}
+header{display:grid;gap:6px;padding-bottom:22px;border-bottom:3px solid var(--fg)}
+section{margin-top:40px;display:grid;gap:14px}
+code{font-family:var(--f-mono);font-size:13.5px;direction:ltr;unicode-bidi:isolate}
+.shots{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px}
+.shot{display:grid;gap:6px;margin:0}
+.shot img{width:100%;border-radius:14px;border:1px solid var(--rule);display:block}
+.shot figcaption{font-size:14.5px;color:var(--muted)}
+.rule{background:var(--panel);border:1px solid var(--rule);border-inline-start:5px solid var(--accent);padding:16px 18px;display:grid;gap:8px}
+.rule ul{margin:0;padding-inline-start:20px;display:grid;gap:4px}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:1px;background:var(--rule);border:1px solid var(--rule)}
+.stat{background:var(--panel);padding:14px 16px;display:grid;gap:2px;align-content:start}
+.stat b{font-family:var(--f-display);font-weight:400;font-size:28px;color:var(--accent);line-height:1.1;font-variant-numeric:tabular-nums}
+.stat span{font-size:14px;color:var(--muted);line-height:1.4}
+.step{border:1px solid var(--rule);background:var(--panel);display:grid}
+.step>header{border:0;padding:14px 18px 10px;display:grid;grid-template-columns:auto 1fr auto;gap:4px 14px;align-items:baseline}
+.step>header .n{font-family:var(--f-display);font-size:26px;color:var(--accent);grid-row:1/3}
+.step>header p{grid-column:2;color:var(--muted);font-size:15.5px}
+.stamps{grid-row:1/3;grid-column:3;display:flex;flex-direction:column;gap:6px;align-items:flex-end}
+.tag{font-family:var(--f-mono);font-size:12.5px;font-weight:500;padding:2px 7px;border:1.5px solid currentColor;border-radius:2px;white-space:nowrap}
+.tag.S{color:var(--ok)}.tag.M{color:var(--warn)}.tag.L{color:var(--bad)}.tag.when{color:var(--muted)}
+.item{padding:10px 18px;border-top:1px solid var(--rule);display:grid;gap:2px}
+.item .t{font-weight:700}
+.item .d{font-size:15.5px;min-width:0}
+.item .f{font-size:13px;color:var(--muted);overflow-wrap:anywhere}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chips span{font-size:14px;padding:3px 9px;border:1px solid var(--rule);border-radius:3px;background:var(--bg)}
+.chips span.hot{border-color:var(--accent);color:var(--accent);font-weight:700}
+.ask{background:var(--accent-soft);padding:16px 18px;display:grid;gap:8px}
+.ask ol{margin:0;padding-inline-start:22px;display:grid;gap:6px}
+footer{margin-top:44px;padding-top:14px;border-top:1px solid var(--rule);color:var(--muted);font-size:14px}
+@media (max-width:560px){
+  .step>header{grid-template-columns:auto 1fr}
+  .stamps{grid-row:auto;grid-column:1/3;flex-direction:row;justify-content:flex-start}
+}
+</style>
+
+<div class="wrap" dir="rtl" lang="he">
+<header>
+  <div class="eyebrow">הבונקר האחרון · מבט חדש · 20.10.2026</div>
+  <h1>החזית הנקייה ומסך החדר</h1>
+  <p class="lede">נשארים במבט חזית, שמתאים לציורים שכבר יש. מנקים את מה שמסביב: כל חדר הוא ציור, שם ונקודת מצב אחת, ולחיצה על חדר פותחת אותו על כל המסך. כל השאר עובר למסך החדר.</p>
+</header>
+
+<section>
+  <h2>האב־טיפוס, על שמירה אמיתית של יום 10</h2>
+  <div class="shots">
+    <figure class="shot"><img src="front.png" alt="החזית הנקייה: חדרים גדולים, ציור, שם ונקודת מצב"><figcaption>החזית הנקייה: מה שרואים בבונקר</figcaption></figure>
+    <figure class="shot"><img src="focus.png" alt="מסך החדר: הציור גדול, שלושה נתונים וכפתור אחד"><figcaption>מסך החדר: מה שנפתח בלחיצה</figcaption></figure>
+  </div>
+</section>
+
+<section>
+  <div class="rule">
+    <h3>הכלל שכל השלבים שומרים עליו</h3>
+    <ul>
+      <li><b>על החדר בעולם:</b> הציור, השם, נקודת מצב אחת (ירוק עובד · כתום חסרים עובדים או בבנייה · אדום אין עובדים או תקלה), והאנשים שבתוכו.</li>
+      <li><b>במסך החדר:</b> רמה, עובדים, מה הוא מייצר, וכפתור ראשי אחד שמשתנה לפי המצב (שבצו · שדרגו · אספו · תקנו). כל השאר מתחת ל"עוד".</li>
+      <li><b>לא על החדר:</b> מספרי ‎+N, אייקונים עגולים גדולים, שטיפת צבע, צינורות, סדקים ושלטים בזום הרגיל.</li>
+    </ul>
+  </div>
+  <div class="stats">
+    <div class="stat"><b>15</b><span>סוגי חדרים עם ציור, שנראים מצוין בחזית הנקייה</span></div>
+    <div class="stat"><b>27</b><span>סוגי חדרים שמצוירים אוטומטית, בערך 40% מהחדרים באמצע המשחק ובסופו</span></div>
+    <div class="stat"><b>5</b><span>שלבים, מהזול והבטוח לגדול</span></div>
+  </div>
+</section>
+
+<section>
+  <h2>השלבים</h2>
+
+  <div class="step">
+    <header><span class="n">0</span><h3>ניקוי העולם</h3><p>רק שכבות ציור. לא נוגע במסכים או בלוגיקה, ולכן אפשר להתחיל מיד במקביל לשלב 4.</p>
+      <div class="stamps"><span class="tag M">M</span><span class="tag when">אפשר עכשיו</span></div></header>
+    <div class="item"><div class="t">פרופיל "נקי" לשכבות הציור</div><div class="d">מתג חדש במערכת המתגים הקיימת. הוא מכבה בזום הרגיל את שטיפת הצבע ואת האייקון העגול הגדול (הם נשארים רק בזום רחוק), את מספרי ‎+N, את המדבקות (סדקים, חלודה), את השלטים המצוירים ואת צרור הצינורות. הכל נשאר זמין כ־<code>?gx=-clean</code> להשוואה.</div><div class="f">gfxFeatures.ts · roomClarity.ts · decals.ts · signage.ts · structure.ts</div></div>
+    <div class="item"><div class="t">שם בתחתית ונקודת מצב אחת</div><div class="d">שם החדר בתחתית הציור על רקע כהה, כמו באב־טיפוס, ונקודת מצב אחת בפינה. מצב החדר מחושב ממקום אחד, וגם מסך החדר משתמש בו.</div><div class="f">RoomViews.ts · LabelScale.ts</div></div>
+    <div class="item"><div class="t">כל חדר הוא כרטיס</div><div class="d">מסגרת כהה ורווח ברור בין חדרים, ורקע סלע אחיד ושקט בין הקומות, כדי שהעין תנוח על הציורים.</div><div class="f">structure.ts · BunkerRenderer.ts</div></div>
+    <div class="item"><div class="t">בדיקה עם הצ'יט</div><div class="d">סיור צילומים בימים 1 עד 70, ב־320 וב־375 פיקסלים, לפני ואחרי, ובדיקת ביצועים בטלפון.</div><div class="f">tools/playthrough-measure.mjs --tour</div></div>
+  </div>
+
+  <div class="step">
+    <header><span class="n">1</span><h3>מסך החדר</h3><p>מחליף את הגיליון של החדר. נוגע ב־BuildingPanel, שגם שלב 4 משנה, ולכן מתחיל אחרי ששלב 4 ממוזג.</p>
+      <div class="stamps"><span class="tag M">M–L</span><span class="tag when">אחרי שלב 4</span></div></header>
+    <div class="item"><div class="t">החדר על כל המסך</div><div class="d">למעלה הציור החי של החדר עם האנשים שבו. מתחת שלושה נתונים (רמה, עובדים, מצב) ושורת ייצור אחת. בתחתית כפתור ראשי אחד לפי המצב.</div><div class="f">BuildingPanel.ts ← RoomScreen.ts חדש</div></div>
+    <div class="item"><div class="t">"עוד" במקום עשרה כרטיסים</div><div class="d">התמחות, תחזוקה, קלטים, העברת חדר והריסה עוברים לאזור "עוד" מקופל. שום פונקציה לא נעלמת.</div></div>
+    <div class="item"><div class="t">החלקה בין חדרים</div><div class="d">החלקה ימינה ושמאלה עוברת לחדר השכן באותה קומה, וחזרה סוגרת. המצלמה ברקע מתמקדת בחדר הפתוח.</div></div>
+  </div>
+
+  <div class="step">
+    <header><span class="n">2</span><h3>מצלמה וניווט</h3><p>שבונקר של 24 קומות ירגיש מסודר: קומה־קומה, בלי לגלול לאיבוד.</p>
+      <div class="stamps"><span class="tag M">M</span><span class="tag when">אחרי שלב 1</span></div></header>
+    <div class="item"><div class="t">זום ברירת מחדל קבוע</div><div class="d">בערך שתי קומות וחצי על מסך של טלפון, עם חדרים גדולים. בגלילה אנכית המצלמה נעצרת על קומה ולא באמצע.</div><div class="f">CameraController.ts</div></div>
+    <div class="item"><div class="t">תווית קומה דביקה ומפת עיר בזום רחוק</div><div class="d">שם הקומה נשאר בצד בזמן הגלילה. שכבות הסלע של "העיר שמתחת" מופיעות רק בזום רחוק, ושם יש מפה במקום ציורים.</div><div class="f">CameraController.ts · src/world/render</div></div>
+  </div>
+
+  <div class="step">
+    <header><span class="n">3</span><h3>ציורים לחדרים שחסרים</h3><p>בחזית נקייה חדר שמצויר אוטומטית בולט מיד לרעה ליד ציור אמיתי. זה הצעד שהופך את החזית ל"איכותית" עד סוף המשחק.</p>
+      <div class="stamps"><span class="tag L">L</span><span class="tag when">במקביל, לפי קרדיטים</span></div></header>
+    <div class="item"><div class="t">סדר לפי כמה פעמים החדר מופיע</div><div class="d chips">
+      <span class="hot">חוות פטריות</span><span class="hot">פאנלים סולאריים</span><span class="hot">מצבר</span><span class="hot">ספרייה</span><span class="hot">מעבה</span><span class="hot">צריפים</span>
+      <span>מועדון</span><span>עמדת שער</span><span>מגדל תצפית</span><span>מפעל רכיבים</span><span>יציקת סגסוגות</span><span>מרכז נתונים</span><span>פורום</span><span>מעבדת זרעים</span><span>ועוד 13</span></div></div>
+    <div class="item"><div class="t">אותו צינור עבודה שכבר קיים</div><div class="d">בשלב ראשון ציור אחד לכל סוג (27 ציורים), ואחר כך שלוש דרגות כמו לחדרים הקיימים. יצירת תמונות דורשת את אישורך, ו־Canva איטי (תמונה כל כמה דקות).</div><div class="f">tools/art.html · tools/kit.html · src/art/registry.ts</div></div>
+  </div>
+
+  <div class="step">
+    <header><span class="n">4</span><h3>בדיקה וליטוש</h3><p>לפני כל מיזוג ל־main.</p>
+      <div class="stamps"><span class="tag S">S–M</span><span class="tag when">בסוף כל שלב</span></div></header>
+    <div class="item"><div class="t">הצ'יט מקצה לקצה</div><div class="d">סיור צילומים בכל השלבים, ספירת הפרעות, ביצועים בטלפון אמיתי, שמירות ישנות נטענות, והשמירה שלך לא נוגעת.</div></div>
+  </div>
+</section>
+
+<section>
+  <h2>הסדר מול שלב 4</h2>
+  <p>שלב 4 (החלטות אמיתיות) עדיין לא ממוזג. יש בו באג פתוח של מוות מרעב בסימולציה, וסוכני D ו־O לא סיימו. הסדר המוצע: שלב 0 מתחיל עכשיו, כי הוא לא נוגע באותם קבצים. אחריו סוגרים את שלב 4, ממשיכים לשלבים 1 ו־2, ושלב 3 רץ ברקע לפי הקרדיטים.</p>
+  <div class="ask">
+    <h3>שלוש החלטות שלך</h3>
+    <ol>
+      <li>להתחיל את שלב 0 עכשיו, או קודם לסגור את שלב 4?</li>
+      <li>לאשר יצירת 27 ציורים חדשים (Canva או Moda)?</li>
+      <li>להשאיר בהגדרות כפתור "מראה קלאסי", או להעביר כולם לחזית הנקייה?</li>
+    </ol>
+  </div>
+</section>
+
+<footer>האב־טיפוס: <code>tools/viewproto.html</code> בשרת המקומי · תכנית השדרוג המקורית: <code>store/playthrough/upgrade-plan.html</code></footer>
+</div>

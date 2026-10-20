@@ -88,6 +88,20 @@ export class WingSigns {
       root.on('pointertap', () => { if (!this.isDragging()) this.onDig?.(s.floor, s.side); });
       return root;
     }
+    if (GFX.clean) {
+      // [clean:0] No "+N" plate with prices at normal zoom: a small quiet dig button (the price shows in the confirmation it opens).
+      const b = new Graphics();
+      b.circle(0, 0, 9).fill({ color: 0x0d0f0e, alpha: 0.82 }).stroke({ color: 0xf0a637, alpha: 0.75, width: 1.4 });
+      b.rect(-4.5, -0.9, 9, 1.8).fill({ color: 0xf0a637, alpha: 0.9 });
+      b.rect(-0.9, -4.5, 1.8, 9).fill({ color: 0xf0a637, alpha: 0.9 });
+      root.addChild(b);
+      root.alpha = o.block ? 0.5 : 0.9;
+      root.eventMode = 'static';
+      root.cursor = 'pointer';
+      root.hitArea = new Rectangle(-22, -22, 44, 44);
+      root.on('pointertap', () => { if (!this.isDragging()) this.onDig?.(s.floor, s.side); });
+      return root;
+    }
     const g = new Graphics();
     // A steel plate under a strip of hazard tape (the tape is on top, slightly crooked, as it was hung by hand).
     steelTag(g, -SIGN_W / 2, -SIGN_H / 2, SIGN_W, SIGN_H, { rivets: 4 });

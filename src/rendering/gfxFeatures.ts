@@ -47,14 +47,20 @@ export interface GfxFeatures {
   branches: boolean;
   /** [airy:A1] spacious-bunker pass: room gaps, taller floors, clusters, airier camera. `?gx=-airy` gives the old dense look. */
   airy: boolean;
+  /**
+   * [clean:0] Clean front view (store/playthrough/clean0/BRIEF.md): at normal zoom a room shows only its painting, its people, its name at the
+   * bottom and one status dot; the wash / ceiling band / icon plate come back only at far zoom, and the dressing between the rooms (pipe
+   * bundles, decals, wall props, paint bands, the city shell's cave dressing) gives way to a calm dark tone. `?gx=-clean` restores the old look.
+   */
+  clean: boolean;
 }
 
 /** The plan 4 structure switches (also the names `?gx=` understands). */
 export const PLAN4_FLAGS = ['wings', 'galleries', 'strata', 'walkers', 'surfaceRow', 'floorId', 'openings', 'bulkheads', 'branches'] as const;
-type Plan4Flag = typeof PLAN4_FLAGS[number] | 'airy';
-/** Names `?gx=` understands: the plan 4 switches plus `airy` (not part of `-all`, it is a visual pass of its own). */
-const GX_NAMES: readonly string[] = [...PLAN4_FLAGS, 'airy'];
-const P4_ON = { wings: true, galleries: true, strata: true, walkers: true, surfaceRow: true, floorId: true, openings: true, bulkheads: true, branches: true, airy: true };
+type Plan4Flag = typeof PLAN4_FLAGS[number] | 'airy' | 'clean';
+/** Names `?gx=` understands: the plan 4 switches plus `airy` and `clean` (not part of `-all`, each is a visual pass of its own). */
+const GX_NAMES: readonly string[] = [...PLAN4_FLAGS, 'airy', 'clean'];
+const P4_ON = { wings: true, galleries: true, strata: true, walkers: true, surfaceRow: true, floorId: true, openings: true, bulkheads: true, branches: true, airy: true, clean: true };
 
 export const GFX_FEATURES: Record<QualityLevel, GfxFeatures> = {
   high: { fade: true, place: true, wallShadow: true, beams: true, sitSleep: true, skyLayers: true, ...P4_ON },
