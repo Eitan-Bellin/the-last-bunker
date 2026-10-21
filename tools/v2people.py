@@ -34,4 +34,6 @@ for vdir in sorted(glob.glob(os.path.join(src, 'v*'))):
     json.dump(info, open(os.path.join(dst, f'{v}.json'), 'w'))
     index[v] = True
     print(v, f'cell {cw}x{ch}', f'atlas {atlas.width}x{atlas.height}', f'{os.path.getsize(os.path.join(dst, v + ".webp")) // 1024} KB')
-json.dump(sorted(index), open(os.path.join(dst, 'index.json'), 'w'))
+names = sorted(index)
+json.dump([n for n in names if int(n[1:]) < 4], open(os.path.join(dst, 'index.json'), 'w'))
+json.dump([n for n in names if int(n[1:]) >= 4], open(os.path.join(dst, 'battle.json'), 'w'))

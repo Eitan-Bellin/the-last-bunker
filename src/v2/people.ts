@@ -2,7 +2,7 @@
 // animation. Walk cycles advance with the distance walked so the feet never slide.
 import { Assets, Container, Graphics, Rectangle, Sprite, Texture } from 'pixi.js';
 
-export type WorkerAnim = 'idle' | 'walk' | 'walkCarry' | 'hammer' | 'lift' | 'tend' | 'type' | 'wrench' | 'inspect';
+export type WorkerAnim = 'idle' | 'walk' | 'walkCarry' | 'hammer' | 'lift' | 'tend' | 'type' | 'wrench' | 'inspect' | 'run' | 'aim' | 'die';
 
 interface Look { cell: [number, number]; foot: [number, number]; pxPerMetre: number; fps: number; anims: Record<string, { row: number; n: number }>; frames: Record<string, Texture[]> }
 
@@ -12,15 +12,17 @@ export const UNITS_PER_M = 54;
 /** Metres a walk cycle covers (two steps). */
 const STRIDE_M = 1.45;
 
-let looks: Look[] = [];
-let loading: Promise<void> | null = null;
+type LookSet = 'index' | 'battle';
+const sets: Record<LookSet, Look[]> = { index: [], battle: [] };
+const loadingSet: Partial<Record<LookSet, Promise<void>>> = {};
+let looks: Look[] = sets.index;
 
-export function loadPeople(): Promise<void> {
-  loading ??= (async () => {
-    const r = await fetch(`${ART}index.json`);
+export function loadPeople(set: LookSet = 'index'): Promise<void> {
+  return (loadingSet[set] ??= (async () => {
+    const r = await fetch(`${ART}${set}.json`);
     if (!r.ok) return;
     const names = (await r.json()) as string[];
-    looks = (await Promise.all(names.map(async n => {
+    sets[set] = (await Promise.all(names.map(async n => {
       const info = (await (await fetch(`${ART}${n}.json`)).json()) as Look;
       const tex = await Assets.load<Texture>({ src: `${ART}${n}.webp`, data: { autoGenerateMipmaps: true } });
       info.frames = {};
@@ -30,11 +32,11 @@ export function loadPeople(): Promise<void> {
       }
       return info;
     }))).filter(Boolean);
-  })().catch(() => { looks = []; });
-  return loading;
+    if (set === 'index') looks = sets.index;
+  })().catch(() => { sets[set] = []; }));
 }
 
-export function peopleReady(): boolean { return looks.length > 0; }
+export function peopleReady(set: LookSet = 'index'): boolean { return sets[set].length > 0; }
 
 export class Worker3D {
   readonly root = new Container();
@@ -44,8 +46,11 @@ export class Worker3D {
   private walked = 0;
   private lastX = NaN;
 
-  constructor(lookIndex: number) {
-    this.look = looks[((lookIndex % looks.length) + looks.length) % looks.length];
+  private once = 0;
+
+  constructor(lookIndex: number, set: LookSet = 'index') {
+    const list = sets[set].length ? sets[set] : looks;
+    this.look = list[((lookIndex % list.length) + list.length) % list.length];
     const shadow = new Graphics().ellipse(0, 0, 20, 5).fill({ color: 0x000000, alpha: 0.4 });
     const s = UNITS_PER_M / this.look.pxPerMetre;
     this.sprite.anchor.set(this.look.foot[0] / this.look.cell[0], this.look.foot[1] / this.look.cell[1]);
@@ -61,8 +66,10 @@ export class Worker3D {
     this.t += dt;
     this.root.position.set(x, y);
     const fr = this.look.frames[anim] ?? this.look.frames.idle;
-    const walking = anim === 'walk' || anim === 'walkCarry';
-    const k = walking
+    const walking = anim === 'walk' || anim === 'walkCarry' || anim === 'run';
+    if (anim === 'die') this.once += dt; else this.once = 0;
+    const k = anim === 'die' ? Math.min(fr.length - 1, Math.floor(this.once * this.look.fps))
+      : walking
       ? Math.floor((this.walked / (STRIDE_M * UNITS_PER_M)) * fr.length) % fr.length
       : Math.floor(this.t * this.look.fps) % fr.length;
     this.sprite.texture = fr[k];

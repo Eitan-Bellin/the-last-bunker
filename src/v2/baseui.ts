@@ -24,6 +24,7 @@ export class BaseUI {
   private panel = $('#panel');
   private lastKey = '';
   onToast: (t: string) => void = () => {};
+  onBattle: (campId: number) => void = () => {};
 
   constructor(mine: Mine, base: Base) {
     this.mine = mine;
@@ -56,7 +57,7 @@ export class BaseUI {
     const next = [...b.jobs].sort((x, y) => x.endAt - y.endAt)[0];
     $('#builders').textContent = `👷 ${this.base.freeBuilders()}/${b.builders}${next ? ` · ${clock((next.endAt - now) / 1000)}` : ''}`;
     $('#nav [data-tab="command"]').classList.toggle('dot', this.base.freeBuilders() > 0 && (this.base.ccCost() ?? Infinity) <= this.mine.s.cash);
-    $('#nav [data-tab="raids"]').classList.toggle('dot', !b.squad && b.camps.some(c => c.respawnAt === null && this.base.chance(c) > 0.6));
+    $('#nav [data-tab="raids"]').classList.toggle('dot', (!b.squad || b.squad.returnAt <= now) && b.camps.some(c => c.respawnAt === null && this.base.chance(c) > 0.6));
     if (this.tab !== 'mine') this.render();
     if (!$('#report').classList.contains('on') && this.base.unseen().length) this.nextReport();
   }
@@ -141,15 +142,14 @@ export class BaseUI {
     const q = b.squad;
     const camps = b.camps.map(c => {
       const ch = this.base.chance(c);
-      const away = q?.campId === c.id;
+      const resting = !!q && q.returnAt > now;
       const beaten = c.respawnAt !== null;
       return `<div class="camp ${beaten ? 'beaten' : ''}" style="background-image:url(${ART}biomes/${c.biome}.webp)">
         <div class="cshade"></div>
         <div class="ctop"><b>${c.name}</b><span class="pow">⚔️ ${big(c.power)}</span></div>
         ${beaten ? `<div class="cmid">נכבש · מחנה חדש בעוד ${clock(((c.respawnAt ?? now) - now) / 1000)}</div>`
           : `<div class="cmid"><span>🪙 ${big(c.loot)}</span><span>💎 ${c.gems}</span><span class="odds ${ch > 0.66 ? 'g' : ch > 0.4 ? 'y' : 'r'}">סיכוי ${Math.round(ch * 100)}%</span></div>`}
-        ${away ? `<div class="bar"><i style="width:${(100 * (1 - (q!.returnAt - now) / (this.base.travelS(c) * 1000))).toFixed(1)}%"></i></div><div class="cmid">החוליה בדרך · ${clock((q!.returnAt - now) / 1000)}</div>`
-          : beaten ? '' : `<button class="buy" data-attack="${c.id}" ${q ? 'disabled' : ''}>תקוף</button>`}
+        ${beaten ? '' : resting ? `<div class="cmid muted">החוליה נחה · ${clock((q!.returnAt - now) / 1000)}</div>` : `<button class="buy" data-attack="${c.id}">⚔️ תקוף</button>`}
       </div>`;
     }).join('');
     const nextRaid = b.cc >= 2 ? `פשיטה הבאה על הבונקר בעוד ${clock((b.nextRaidAt - now) / 1000)}` : 'פושטים יתחילו להגיע אחרי מפקדה רמה 2';
@@ -172,7 +172,10 @@ export class BaseUI {
     else if (btn.dataset.rush) {
       const j = this.base.busy(btn.dataset.rush as Job['kind']);
       ok = !!j && this.base.rush(j, now);
-    } else if (btn.dataset.attack) { ok = this.base.attack(Number(btn.dataset.attack), now); msg = 'החוליה יצאה לדרך'; }
+    } else if (btn.dataset.attack) {
+      const id = Number(btn.dataset.attack);
+      if (this.base.canAttack(id, now)) { this.onBattle(id); return; }
+    }
     play(ok ? (btn.dataset.attack ? 'depart' : btn.dataset.rush ? 'complete' : 'build') : 'error', { volume: ok ? 0.8 : 0.4 });
     if (ok && msg) this.onToast(msg);
     this.lastKey = '';

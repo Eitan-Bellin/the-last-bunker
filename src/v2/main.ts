@@ -7,6 +7,7 @@ import { play, unlockAudio } from './sound.ts';
 import { FLOORS } from './econ.ts';
 import { Base, newBase, CC_FLOORS } from './base.ts';
 import { BaseUI } from './baseui.ts';
+import { BattleView } from './battleview.ts';
 import { big, clock } from './format.ts';
 
 const params = new URLSearchParams(location.search);
@@ -50,6 +51,17 @@ async function start(): Promise<void> {
   await document.fonts.load('700 20px Rubik').catch(() => null);
   view.topInset = 64;
   await view.init(document.getElementById('stage')!);
+  const battle = new BattleView(view.app);
+  view.app.stage.addChild(battle.root);
+  bui.onBattle = campId => {
+    const c = base.s.camps.find(x => x.id === campId);
+    if (!c) return;
+    const now = Date.now();
+    void battle.start(base.battleSetup(c), c, win => {
+      base.endBattle(campId, win, Date.now());
+      persist();
+    }).catch(err => ui.toast(`הקרב לא נטען: ${String(err)}`));
+  };
   view.onOpen = id => ui.openStage(id);
   view.onTap = (id: StageId) => {
     if (mine.tap(id)) play(id === 'elev' ? 'elevator' : 'click', { volume: id === 'elev' ? 0.35 : 0.6, minGapMs: 120 });
@@ -115,7 +127,9 @@ async function start(): Promise<void> {
     let dt = Math.min(t.deltaMS / 1000, 0.25);
     const real = dt;
     while (dt > 0) { const step = Math.min(dt, 0.05); mine.step(step); dt -= step; }
-    view.update(real);
+    view.world.visible = !battle.active;
+    if (battle.active) battle.update(real);
+    else view.update(real);
     uiAcc += real;
     if (uiAcc > 0.1) { base.step(Date.now()); ui.update(uiAcc); bui.update(); uiAcc = 0; }
   });
@@ -139,6 +153,7 @@ async function start(): Promise<void> {
   }
   if (params.has('cam')) view.setCam(Number(params.get('cam')));
   if (params.has('tab')) bui.show(params.get('tab') as 'command' | 'raids');
+  if (params.has('battle')) { base.step(Date.now()); setTimeout(() => bui.onBattle(base.s.camps[Number(params.get('battle')) || 0].id), 300); }
   if (params.has('open')) { const o = params.get('open')!; ui.openStage(o === 'elev' || o === 'market' ? o : Number(o)); }
 
   if (params.has('debug')) {

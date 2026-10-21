@@ -3,6 +3,7 @@
 // jobs, squads and attacks all progress while the player is away. Pure logic: the UI only reads and calls.
 import { FLOORS } from './econ.ts';
 import type { Mine } from './mine.ts';
+import { estimateWin, raidersFor, squadSizeFor, type BattleSetup } from './battle.ts';
 
 export type JobKind = 'dig' | 'cc' | 'armory' | 'walls';
 export interface Job { kind: JobKind; target: number; startAt: number; endAt: number }
@@ -162,30 +163,50 @@ export class Base {
     };
   }
 
-  chance(c: Camp): number { return winChance(this.power(), c.power); }
-  travelS(c: Camp): number { return 40 + (c.id % 4) * 15; }
+  private odds = new Map<string, number>();
 
-  attack(campId: number, now: number): boolean {
-    const c = this.s.camps.find(x => x.id === campId);
-    if (!c || this.s.squad || c.respawnAt !== null) return false;
-    this.s.squad = { campId, returnAt: now + this.travelS(c) * 1000, winChance: this.chance(c) };
-    return true;
+  battleSetup(c: Camp, seed = Math.floor(Math.random() * 1e9)): BattleSetup {
+    return { squadPower: this.power(), squadSize: squadSizeFor(this.s.armory), campPower: c.power, raiders: raidersFor(c.id), seed };
   }
 
-  private resolveSquad(now: number): void {
-    const q = this.s.squad;
-    if (!q || q.returnAt > now) return;
-    this.s.squad = null;
-    const c = this.s.camps.find(x => x.id === q.campId);
-    if (!c) return;
-    const win = Math.random() < q.winChance;
-    const r: Report = { at: now, kind: 'attack', win, camp: c.name, loot: win ? c.loot : 0, gems: win ? c.gems : 0, lost: 0, seen: false };
+  /** Win odds for a typical player (from simulating the battle), cached per camp and armory level. */
+  chance(c: Camp): number {
+    const key = `${c.id}|${c.power}|${this.s.armory}`;
+    let v = this.odds.get(key);
+    if (v === undefined) {
+      const { seed: _s, ...setup } = this.battleSetup(c, 0);
+      v = estimateWin(setup, 24);
+      this.odds.set(key, v);
+    }
+    return v;
+  }
+
+  /** Seconds the squad rests after a battle (longer after a defeat). */
+  restS(win: boolean): number { return win ? 45 : 120; }
+
+  /** The squad can fight (not resting) and the camp stands. */
+  canAttack(campId: number, now: number): boolean {
+    const c = this.s.camps.find(x => x.id === campId);
+    return !!c && c.respawnAt === null && (!this.s.squad || this.s.squad.returnAt <= now);
+  }
+
+  /** Books the outcome of a battle the player fought. */
+  endBattle(campId: number, win: boolean, now: number): Report | null {
+    const c = this.s.camps.find(x => x.id === campId);
+    if (!c) return null;
+    this.s.squad = { campId, returnAt: now + this.restS(win) * 1000, winChance: 0 };
+    const r: Report = { at: now, kind: 'attack', win, camp: c.name, loot: win ? c.loot : 0, gems: win ? c.gems : 0, lost: 0, seen: true };
     if (win) {
       this.mine.s.cash += c.loot;
       this.mine.s.gems += c.gems;
       c.respawnAt = now + 10 * 60 * 1000;
     }
     this.pushReport(r);
+    return r;
+  }
+
+  private resolveSquad(now: number): void {
+    if (this.s.squad && this.s.squad.returnAt <= now) this.s.squad = null;
   }
 
   private resolveRaid(now: number): void {

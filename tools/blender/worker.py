@@ -21,6 +21,11 @@ VARIANTS = [
     dict(name='v1', shirt=(0.16, 0.26, 0.40), pants=(0.16, 0.25, 0.38), skin=(0.55, 0.36, 0.25), hat='cap', hat_c=(0.50, 0.10, 0.08), hair=(0.05, 0.035, 0.03), w=0.88, beard=False, vest=False, bun=True),
     dict(name='v2', shirt=(0.22, 0.28, 0.17), pants=(0.24, 0.20, 0.15), skin=(0.80, 0.60, 0.47), hat='hard', hat_c=(0.82, 0.82, 0.78), hair=(0.32, 0.20, 0.10), w=1.07, beard=True, vest=False),
     dict(name='v3', shirt=(0.40, 0.36, 0.32), pants=(0.15, 0.14, 0.13), skin=(0.36, 0.24, 0.17), hat=None, hat_c=(0, 0, 0), hair=(0.55, 0.53, 0.50), w=0.97, beard=True, vest=True),
+    # battle: the squad (v4, v5) and the raiders (v6, v7)
+    dict(name='v4', shirt=(0.22, 0.25, 0.15), pants=(0.19, 0.21, 0.14), skin=(0.70, 0.50, 0.38), hat='helmet', hat_c=(0.20, 0.23, 0.14), hair=(0.1, 0.07, 0.05), w=1.05, beard=False, vest=True, vest_c=(0.16, 0.17, 0.12), battle=True),
+    dict(name='v5', shirt=(0.36, 0.31, 0.21), pants=(0.27, 0.24, 0.17), skin=(0.48, 0.32, 0.22), hat='helmet', hat_c=(0.30, 0.27, 0.18), hair=(0.05, 0.04, 0.03), w=1.0, beard=False, vest=True, vest_c=(0.22, 0.2, 0.14), mask='gas', battle=True),
+    dict(name='v6', shirt=(0.42, 0.10, 0.07), pants=(0.20, 0.14, 0.10), skin=(0.78, 0.58, 0.45), hat='band', hat_c=(0.6, 0.08, 0.05), hair=(0.12, 0.08, 0.05), w=1.02, beard=True, vest=False, spikes=True, battle=True),
+    dict(name='v7', shirt=(0.16, 0.15, 0.15), pants=(0.12, 0.11, 0.10), skin=(0.60, 0.42, 0.30), hat='hood', hat_c=(0.16, 0.15, 0.15), hair=(0.05, 0.05, 0.05), w=0.98, beard=False, vest=False, mask='skull', spikes=True, battle=True),
 ]
 V = VARIANTS[VAR]
 W = V['w']
@@ -50,7 +55,7 @@ GLOVE = mat('glove', (0.30, 0.22, 0.13), rough=0.85, grime=0.3, scale=40)
 HAIR = mat('hair', V['hair'], rough=0.65, grime=0.4, scale=200, bump=0.4)
 HAT = mat('hat', V['hat_c'], metal=0.05, rough=0.3, grime=0.25, scale=8)
 EYE = mat('eye', (0.02, 0.02, 0.02), rough=0.2)
-VEST = mat('vest', (0.90, 0.42, 0.04), rough=0.7, grime=0.25, scale=40)
+VEST = mat('vest', V.get('vest_c', (0.90, 0.42, 0.04)), rough=0.7, grime=0.25, scale=40)
 STRIPE = mat('reflect', (0.85, 0.85, 0.82), metal=0.7, rough=0.25)
 BELT = mat('belt', (0.07, 0.06, 0.05), rough=0.45)
 TOOL = mat('tool', (0.45, 0.46, 0.48), metal=0.9, rough=0.3)
@@ -116,7 +121,7 @@ for f in me.polygons:
     elif c.z > 1.47:
         f.material_index = MI['skin']
     elif V['vest'] and side < 0.17 * W and 0.99 < c.z < 1.44:
-        f.material_index = MI['reflect'] if (1.15 < c.z < 1.19 or 1.32 < c.z < 1.36) else MI['vest']
+        f.material_index = MI['reflect'] if (not V.get('battle') and (1.15 < c.z < 1.19 or 1.32 < c.z < 1.36)) else MI['vest']
     else:
         f.material_index = MI['shirt']
 
@@ -190,6 +195,24 @@ if V['hat'] == 'hard':
     parts.append(sphere('hardhat', (0.01, 0, HZ + 0.075), 0.118, HAT, scale=(1.08, 1.0, 0.78)))
     parts.append(cyl('brim', (0.03, 0, HZ + 0.045), 0.14, 0.012, HAT))
     parts.append(box('ridge', (0.01, 0, HZ + 0.16), (0.2, 0.02, 0.02), HAT, 0.008))
+elif V['hat'] == 'helmet':
+    parts.append(sphere('helmet', (0.0, 0, HZ + 0.06), 0.125, HAT, scale=(1.1, 1.05, 0.82)))
+    parts.append(cyl('helm_rim', (0.0, 0, HZ + 0.02), 0.135, 0.02, HAT))
+elif V['hat'] == 'band':
+    parts.append(cyl('bandana', (0.0, 0, HZ + 0.07), 0.108, 0.04, HAT))
+    parts.append(box('band_tail', (-0.12, 0, HZ + 0.04), (0.04, 0.03, 0.12), HAT, 0.005, rot=(0, 0.4, 0)))
+elif V['hat'] == 'hood':
+    parts.append(sphere('hood', (-0.015, 0, HZ + 0.02), 0.13, HAT, scale=(1.1, 1.0, 1.15)))
+if V.get('mask') == 'gas':
+    gm = mat('gasmask', (0.08, 0.08, 0.08), rough=0.5)
+    parts.append(sphere('gasmask', (0.08, 0, HZ - 0.02), 0.07, gm, scale=(0.9, 1.0, 1.0)))
+    parts.append(cyl('filter', (0.14, 0, HZ - 0.05), 0.03, 0.06, mat('filter', (0.3, 0.3, 0.28), metal=0.6, rough=0.4), rot=(0, math.pi / 2, 0)))
+    parts.append(sphere('goggle', (0.1, 0.035, HZ + 0.025), 0.022, mat('lens', (0.1, 0.15, 0.12), metal=0.5, rough=0.1)))
+    parts.append(sphere('goggle2', (0.1, -0.035, HZ + 0.025), 0.022, mat('lens', (0.1, 0.15, 0.12), metal=0.5, rough=0.1)))
+elif V.get('mask') == 'skull':
+    parts.append(sphere('skullmask', (0.075, 0, HZ + 0.0), 0.08, mat('skullm', (0.85, 0.82, 0.74), rough=0.5), scale=(0.8, 1.0, 1.15)))
+    for s_ in (-1, 1):
+        parts.append(sphere('socket', (0.13, s_ * 0.032, HZ + 0.02), 0.018, EYE))
 elif V['hat'] == 'cap':
     parts.append(sphere('cap', (0.0, 0, HZ + 0.07), 0.108, HAT, scale=(1.05, 0.96, 0.7)))
     parts.append(box('peak', (0.12, 0, HZ + 0.06), (0.1, 0.15, 0.012), HAT, 0.005))
@@ -214,6 +237,17 @@ prop('can', [cyl('can_b', (wrR[0] + 0.05, wrR[1], wrR[2] - 0.14), 0.065, 0.15, m
              cyl('spout', (wrR[0] + 0.16, wrR[1], wrR[2] - 0.12), 0.012, 0.16, mat('can_m2', (0.25, 0.4, 0.28), metal=0.6, rough=0.4), rot=(0, 1.0, 0))], 'handR')
 wrL = P['wrL'][0]
 prop('clip', [box('cb', (wrL[0] + 0.06, wrL[1], wrL[2] - 0.06), (0.02, 0.17, 0.24), mat('cb_m', (0.85, 0.82, 0.72), rough=0.6), 0.004)], 'handL')
+GUNM = mat('gun', (0.07, 0.07, 0.07), metal=0.7, rough=0.4)
+prop('rifle', [box('r_body', (wrR[0] + 0.0, wrR[1], wrR[2] - 0.12), (0.06, 0.04, 0.42), GUNM, 0.006),
+               box('r_stock', (wrR[0] - 0.02, wrR[1], wrR[2] + 0.12), (0.07, 0.04, 0.2), mat('stock', (0.3, 0.2, 0.1), rough=0.6), 0.006),
+               cyl('r_barrel', (wrR[0] + 0.01, wrR[1], wrR[2] - 0.46), 0.012, 0.3, GUNM),
+               box('r_mag', (wrR[0] + 0.05, wrR[1], wrR[2] - 0.1), (0.07, 0.03, 0.05), GUNM, 0.004)], 'handR')
+if V.get('spikes'):
+    for s_ in (-1, 1):
+        for k in range(3):
+            o = bpy.ops.mesh.primitive_cone_add(vertices=8, radius1=0.025, depth=0.09, location=(-0.02 + k * 0.03, s_ * 0.2 * W, 1.47))
+            attach(bpy.context.object, f'sh{"L" if s_ > 0 else "R"}')
+            bpy.context.object.data.materials.append(mat('spike', (0.5, 0.48, 0.45), metal=0.9, rough=0.3))
 crate_o = box('c_box', (0.33, 0, 1.08), (0.34, 0.36, 0.27), CRATE, 0.015)
 props['crate'] = [crate_o]
 
@@ -366,11 +400,59 @@ def anim_inspect(t):
     rot('head', y=D(18) + D(4) * math.sin(2 * math.pi * t), z=D(10) * math.sin(2 * math.pi * t))
 
 
+def anim_run(t):
+    ph = 2 * math.pi * t
+    for side in 'LR':
+        p = ph if side == 'L' else ph + math.pi
+        sw = math.sin(p)
+        knee = max(0.0, math.sin(p + math.pi / 2)) ** 2
+        rot(f'thigh{side}', y=-D(38) * sw - D(8))
+        rot(f'shin{side}', y=D(15) + D(85) * knee)
+        rot(f'foot{side}', y=-D(15) * sw)
+    # rifle carried at port arms
+    rot('uarmR', y=-D(30), x=D(6))
+    rot('farmR', y=-D(80))
+    rot('uarmL', y=-D(45), x=-D(18))
+    rot('farmL', y=-D(70))
+    drop(-0.05 + 0.05 * abs(math.cos(ph)))
+    rot('spine', y=D(10))
+    rot('chest', z=-D(5) * math.sin(ph))
+
+
+def anim_aim(t):
+    stand(t, 6)
+    k = max(0.0, 1 - t * 3)  # recoil at the start of the loop
+    for side in 'LR':
+        rot(f'thigh{side}', y=D(-12 if side == 'L' else 10))
+        rot(f'shin{side}', y=D(16))
+    rot('uarmR', y=-D(78) + D(6) * k, x=D(12))
+    rot('farmR', y=-D(20) - D(4) * k)
+    rot('handR', y=D(10))
+    rot('uarmL', y=-D(85) + D(4) * k, x=-D(22))
+    rot('farmL', y=-D(25))
+    rot('chest', y=-D(4) * k)
+    rot('head', y=D(6))
+
+
+def anim_die(t):
+    k = min(1.0, t * 1.5)
+    rig.rotation_euler = (0, -D(85) * k * k, math.radians(-28))
+    rig.location = (0.85 * k * k, 0, 0)
+    rot('uarmR', y=-D(60) * k, x=D(30) * k)
+    rot('uarmL', y=-D(90) * k, x=-D(30) * k)
+    rot('thighL', y=-D(30) * k)
+    rot('shinL', y=D(50) * k)
+    rot('head', y=-D(20) * k)
+
+
 ANIMS = {
     'idle': (anim_idle, []), 'walk': (lambda t: walk(t), []), 'walkCarry': (lambda t: walk(t, True), ['crate']),
     'hammer': (anim_hammer, ['hammer']), 'lift': (anim_lift, []), 'tend': (anim_tend, ['can']),
     'type': (anim_type, []), 'wrench': (anim_wrench, ['wrench']), 'inspect': (anim_inspect, ['clip']),
 }
+if V.get('battle'):
+    ANIMS = {'idle': (lambda t: (anim_aim(0.9)), ['rifle']), 'run': (anim_run, ['rifle']), 'aim': (anim_aim, ['rifle']), 'die': (anim_die, ['rifle'])}
+FRAMES = {'aim': 6, 'die': 8, **({'idle': 1} if V.get('battle') else {})}
 
 # ---- camera and lights (match the rooms: 7 degrees down, warm key from above, cool fill, rim) ----
 bpy.ops.object.camera_add()
@@ -395,10 +477,12 @@ for name, (fn, shown) in ANIMS.items():
     for pn, objs in props.items():
         for o in objs:
             o.hide_render = pn not in shown
-    n = 1 if STILL else FR
+    n = 1 if STILL else FRAMES.get(name, FR)
     for i in range(n):
         pose_reset()
-        fn((i + (3 if STILL else 0)) / FR)
+        rig.rotation_euler = (0, 0, math.radians(-28))
+        rig.location = (0, 0, 0)
+        fn((i + (3 if STILL else 0)) / n if not STILL else 3 / FR)
         bpy.context.view_layer.update()
         sc.render.filepath = os.path.join(OUT, V['name'], f'{name}_{i:02d}.png')
         bpy.ops.render.render(write_still=True)
