@@ -6,6 +6,7 @@ import { FLOORS, tierOf } from './econ.ts';
 import { Particles, RoomFx, softDot, type Light } from './roomfx.ts';
 import { Room3D, loadRoom3D, releaseRoom3D } from './room3d.ts';
 import { Worker3D, loadPeople, peopleReady, type WorkerAnim } from './people.ts';
+import { Celebrate, Drop, type DropPrize } from './juice.ts';
 
 /** Anything drawn as a person: the pre-rendered 3D worker when its atlases loaded, else the older body. */
 interface Fig { root: Container; update(dt: number, x: number, y: number, anim: Anim3, faceRight: boolean): void }
@@ -45,7 +46,7 @@ const HAIRS = [0x2a1d14, 0x5a3a22, 0x8a6a3a, 0x1a1a1a, 0x9a9590];
 const HAIR_STYLES = ['short', 'curly', 'bun', 'cropped', 'long', 'braids'];
 const HATS = [null, null, 'hard', 'cap', 'helmet', null];
 
-export interface HitZone { x: number; y: number; w: number; h: number; action: () => void }
+export interface HitZone { x: number; y: number; w: number; h: number; action: (wx: number, wy: number) => void }
 
 let seed = 7;
 const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
@@ -113,6 +114,9 @@ interface FloorView {
   mgr: Container;
   mgrKey: string;
   hint: Text;
+  rushT: Text;
+  /** Dark room shell shown until the floor's picture has loaded (never bare rock). */
+  shell: Graphics;
   people: Fig[];
 }
 
@@ -162,6 +166,16 @@ export class MineView {
   private floats: { t: Text; life: number; vy: number }[] = [];
   private pulses: { g: Graphics; life: number }[] = [];
   private zones: HitZone[] = [];
+  readonly celebrate = new Celebrate();
+  private drops: Drop[] = [];
+  /** A supply crate was tapped (screen point of the tap). */
+  onDropOpen: (prize: DropPrize, sx: number, sy: number) => void = () => {};
+  /** The upgrade a player should buy next (an arrow bobs over its badge). */
+  recommend: StageId | null = null;
+  private arrow = new Graphics();
+  private badgeRects = new Map<Text, { x: number; y: number; w: number }>();
+  /** Where the camera is gliding to (null = free). */
+  private camTarget: number | null = null;
   camY = 0;
   private velY = 0;
   scale = 1;
@@ -171,6 +185,7 @@ export class MineView {
   /** What the dig slot shows (price, digging progress, or the Command Center level it needs). */
   digInfo: () => { text: string; color: number; progress: number | null } = () => ({ text: '', color: 0xffd36b, progress: null });
   private digBar = new Graphics();
+  /** A stage was tapped and started or sped up (for sound). */
   onTap: (id: StageId) => void = () => {};
 
   private mine: Mine;
@@ -193,12 +208,15 @@ export class MineView {
     this.app.stage.addChild(this.world);
     this.rock = new TilingSprite({ texture: Assets.get('backdrops/rock') ?? Texture.WHITE, width: WORLD_W, height: 100 });
     this.rock.tint = 0x8a8178;
-    this.world.addChild(this.rock, this.shaftBg, this.floorsLayer, this.surfaceLayer, this.shaftLayer, this.peopleLayer, this.uiLayer, this.fxLayer);
+    this.arrow.poly([-16, -30, 16, -30, 16, -8, 28, -8, 0, 18, -28, -8, -16, -8]).fill(0xffd36b).stroke({ width: 4, color: 0x3a2400 });
+    this.arrow.visible = false;
+    this.world.addChild(this.rock, this.shaftBg, this.floorsLayer, this.surfaceLayer, this.shaftLayer, this.peopleLayer, this.uiLayer, this.fxLayer, this.celebrate.layer, this.arrow);
     this.buildSurface();
     this.buildShaft();
     this.dig.eventMode = 'none';
     this.uiLayer.addChild(this.dig);
     this.rebuildFloors();
+    this.prefetchRooms();
     this.mine.on(e => this.onEvent(e));
     this.bindInput();
     window.addEventListener('resize', () => this.layout());
@@ -206,6 +224,19 @@ export class MineView {
   }
 
   private tex(key: string): Texture { return Assets.get(key) ?? Texture.WHITE; }
+
+  /** Warms the HTTP cache with every open floor's files (and the next one), so scrolling never waits on the network. */
+  private prefetchRooms(): void {
+    const arts = FLOORS.slice(0, this.mine.s.floors.length + 1).map(f => f.art);
+    let k = 0;
+    const next = () => {
+      const art = arts[k++];
+      if (!art) return;
+      const base = `${ART}v2/${art}/`;
+      void Promise.all(['anim.json', 'bg.webp', 'anim.webp'].map(f => fetch(base + f).then(r => r.blob()).catch(() => null))).then(() => setTimeout(next, 150));
+    };
+    setTimeout(next, 1500);
+  }
 
   private meta: Record<string, { lights?: Light[] }> = {};
   private lights(key: string): Light[] { return this.meta[key]?.lights ?? []; }
@@ -354,7 +385,15 @@ export class MineView {
     const hint = label('👆 לחץ', 34, 0xffe9a8, '800');
     hint.anchor.set(0.5);
     hint.position.set(ROOM_W / 2 - 40, y + ROOM_H * 0.45);
-    root.addChild(inner, mask, frame, crateBox, crate);
+    const rushT = label('⚡ מהר!', 24, 0xffe27a, '800');
+    rushT.anchor.set(1, 0);
+    rushT.position.set(ROOM_W - 14, y + 16);
+    rushT.visible = false;
+    const shell = new Graphics().rect(0, y, ROOM_W, ROOM_H).fill(0x1a1714)
+      .rect(0, y + ROOM_H - FEET_PAD - 6, ROOM_W, FEET_PAD + 6).fill(0x2a2520)
+      .rect(0, y, ROOM_W, 10).fill(0x0e0c0a);
+    for (let k = 0; k < 3; k++) shell.circle(90 + k * 180, y + 26, 5).fill(0xffd9a0).circle(90 + k * 180, y + 60, 46).fill({ color: 0xffc070, alpha: 0.06 });
+    root.addChild(shell, inner, mask, frame, crateBox, crate);
     // the 3D floor frame (slab, door gap, shaft) once loaded replaces the drawn slab
     void Assets.load<Texture>({ src: `${ART}v2/frame.webp`, data: { autoGenerateMipmaps: true } }).then(t => {
       const fs = new Sprite(t);
@@ -366,9 +405,9 @@ export class MineView {
     }).catch(() => null);
     this.floorsLayer.addChild(root);
     const ui = new Container();
-    ui.addChild(badgeBg, badge, mgr, hint);
+    ui.addChild(badgeBg, badge, mgr, hint, rushT);
     this.uiLayer.addChild(ui);
-    const fv: FloorView = { root, inner, painting, fx, room3d: null, pic: 'none', crateBox, activity: 0, tier, crate, badge, badgeBg, mgr, mgrKey: '', hint, people: [] };
+    const fv: FloorView = { root, inner, painting, fx, room3d: null, pic: 'none', crateBox, activity: 0, tier, crate, badge, badgeBg, mgr, mgrKey: '', hint, rushT, shell, people: [] };
     inner.visible = false;
     return fv;
   }
@@ -393,6 +432,7 @@ export class MineView {
           fv.root.addChildAt(r3.root, 0);
           fv.room3d = r3;
           fv.pic = 'room3d';
+          fv.shell.visible = false;
         } else {
           const key = `rooms/${art}-${fv.tier}`;
           const t = await Assets.load<Texture>({ alias: key, src: `${ART}${key}.webp`, data: { autoGenerateMipmaps: true } }).catch(() => Texture.WHITE);
@@ -400,6 +440,7 @@ export class MineView {
           fv.painting.scale.set(ROOM_W / t.width);
           fv.inner.visible = true;
           fv.pic = 'painting';
+          fv.shell.visible = false;
         }
       });
     } else if (far && fv.pic === 'room3d' && fv.room3d) {
@@ -407,6 +448,7 @@ export class MineView {
       fv.room3d = null;
       releaseRoom3D(art);
       fv.crateBox.visible = true;
+      fv.shell.visible = true;
       fv.pic = 'none';
     }
   }
@@ -493,21 +535,86 @@ export class MineView {
 
   private viewH(): number { return this.app.screen.height / this.scale; }
 
+  /** Extra room below the mine (screen px) while a sheet covers the bottom, so the lowest floors can scroll up. */
+  bottomPad = 0;
+
   private clampCam(): void {
     const min = 120 - this.topInset / this.scale;
-    const max = Math.max(min, this.worldBottom() - this.viewH());
+    const max = Math.max(min, this.worldBottom() - this.viewH() + this.bottomPad / this.scale);
     this.camY = Math.min(max, Math.max(min, this.camY));
     this.world.position.y = -this.camY * this.scale;
   }
 
-  setCam(y: number): void { this.camY = y; this.velY = 0; this.clampCam(); }
+  setCam(y: number): void { this.camY = y; this.velY = 0; this.camTarget = null; this.clampCam(); }
+
+  /** Glides the camera to y (world units at the top of the screen). */
+  scrollTo(y: number): void { this.camTarget = y; this.velY = 0; }
 
   /** Scrolls so floor i is in view (used after digging). */
-  focusFloor(i: number): void {
-    this.camY = floorTop(i) - this.viewH() * 0.35;
-    this.velY = 0;
-    this.clampCam();
+  focusFloor(i: number): void { this.scrollTo(floorTop(i) - this.viewH() * 0.35); }
+
+  /** Puts a stage just under the top bar (the upgrade sheet covers the lower half of the screen). */
+  focusStage(id: StageId | 'dig'): void {
+    const top = id === 'dig' ? floorTop(this.mine.s.floors.length) : typeof id === 'number' ? floorTop(id) : SURF_H - 340;
+    this.scrollTo(top - this.topInset / this.scale - 6);
   }
+
+  /** The top of the mine (the surface). */
+  scrollTop(): void { this.scrollTo(-1e6); }
+
+  /** Is the camera far enough down that the surface is out of sight? */
+  deep(): boolean { return this.camY > SURF_H + 60; }
+
+  /** World point -> screen (CSS) point. */
+  toScreen(wx: number, wy: number): { x: number; y: number } {
+    const r = this.app.canvas.getBoundingClientRect();
+    return { x: r.left + wx * this.scale, y: r.top + (wy - this.camY) * this.scale };
+  }
+
+  /** Centre of a stage in world units (for celebrations). */
+  stageCentre(id: StageId): { x: number; y: number } {
+    if (typeof id === 'number') return { x: ROOM_W / 2, y: floorTop(id) + ROOM_H * 0.45 };
+    return id === 'elev' ? { x: SHAFT_X + SHAFT_W / 2 - 40, y: SURF_H - 200 } : { x: MARKET_X + 40, y: SURF_H - 190 };
+  }
+
+  /** A word and a burst over a stage. */
+  cheer(id: StageId, text: string, color = 0xffd36b): void {
+    const c = this.stageCentre(id);
+    this.celebrate.burst(c.x, c.y, color, 34);
+    this.celebrate.text(text, c.x, c.y, color, 62);
+  }
+
+  /** Drops a supply crate into whatever part of the mine is on screen. */
+  spawnDrop(prize: DropPrize): void {
+    const vh = this.viewH();
+    const topW = this.camY + this.topInset / this.scale;
+    const mid = topW + (vh - this.topInset / this.scale) * 0.45;
+    // the floor (or the surface) nearest the middle of the screen
+    let landY = SURF_H - 6;
+    let floor = -1;
+    let best = Math.abs(SURF_H - 150 - mid);
+    for (let i = 0; i < this.mine.s.floors.length; i++) {
+      const d = Math.abs(floorTop(i) + ROOM_H / 2 - mid);
+      if (d < best) { best = d; landY = floorTop(i) + FEET_Y; floor = i; }
+    }
+    const x = 90 + Math.random() * (ROOM_W - 200);
+    // the sky: under a parachute from the top of the screen; a floor: through a hatch in its ceiling
+    const d = floor < 0
+      ? new Drop(x, Math.max(landY - 520, topW - 60), landY, prize, true)
+      : new Drop(x, floorTop(floor) + 30, landY, prize, false);
+    d.onLand = (lx, ly) => {
+      for (let k = 0; k < 14; k++) {
+        this.surfFx.spawn({ x: lx + (Math.random() - 0.5) * 70, y: ly - 6, vx: (Math.random() - 0.5) * 160, vy: -20 - Math.random() * 40, life: 0.9, size: 22, color: 0xb8a080, alpha: 0.35, grow: 30, drag: 2 });
+      }
+    };
+    if (floor >= 0) {
+      for (let k = 0; k < 10; k++) this.surfFx.spawn({ x: x + (Math.random() - 0.5) * 60, y: floorTop(floor) + 26, vx: (Math.random() - 0.5) * 60, vy: 40 + Math.random() * 60, life: 1, size: 14, color: 0x9a8a70, alpha: 0.35, grow: 12 });
+    }
+    this.drops.push(d);
+    this.celebrate.layer.addChild(d.root);
+  }
+
+  hasDrop(): boolean { return this.drops.length > 0; }
 
   // --- input: drag to scroll, tap = the first zone under the finger ---
   private bindInput(): void {
@@ -527,6 +634,7 @@ export class MineView {
       if (!down) return;
       if (!dragging && Math.hypot(e.clientX - down.x, e.clientY - down.y) > 10) dragging = true;
       if (dragging) {
+        this.camTarget = null;
         this.camY = down.cam - (e.clientY - down.y) / this.scale;
         const now = performance.now();
         const dtm = Math.max(1, now - lastT);
@@ -541,15 +649,22 @@ export class MineView {
       if (performance.now() - lastT > 80) this.velY = 0;
       down = null;
     });
-    c.addEventListener('wheel', e => { this.camY += e.deltaY / this.scale; this.clampCam(); }, { passive: true });
+    c.addEventListener('wheel', e => { this.camTarget = null; this.camY += e.deltaY / this.scale; this.clampCam(); }, { passive: true });
   }
 
   private tapAt(sx: number, sy: number): void {
     const r = this.app.canvas.getBoundingClientRect();
     const wx = (sx - r.left) / this.scale;
     const wy = (sy - r.top) / this.scale + this.camY;
+    const d = this.drops.find(d => d.hit(wx, wy));
+    if (d) {
+      d.gone = true;
+      this.celebrate.burst(d.x, d.y - 24, d.prize.kind === 'gems' ? 0x7fd8ff : 0xffd36b, 40, 320);
+      this.onDropOpen(d.prize, sx, sy);
+      return;
+    }
     const z = this.zones.find(z => wx >= z.x && wx <= z.x + z.w && wy >= z.y && wy <= z.y + z.h);
-    if (z) z.action();
+    if (z) z.action(wx, wy);
   }
 
   private zonesFor(): HitZone[] {
@@ -563,10 +678,17 @@ export class MineView {
     zs.push({ x: SHAFT_X - 150, y: SURF_H - 334, w: 310, h: 76, action: () => this.onOpen('elev') });
     zs.push({ x: MARKET_X - 150, y: SURF_H - 334, w: 340, h: 76, action: () => this.onOpen('market') });
     if (this.mine.digCost() !== null) zs.push({ x: 0, y: floorTop(n), w: ROOM_W, h: ROOM_H, action: () => this.onDig() });
-    for (let i = 0; i < n; i++) zs.push({ x: 0, y: floorTop(i), w: ROOM_W, h: ROOM_H, action: () => this.onTap(i) });
-    zs.push({ x: SHAFT_X - 20, y: SURF_H - 260, w: SHAFT_W + 20, h: this.worldBottom() - SURF_H + 260, action: () => this.onTap('elev') });
-    zs.push({ x: 0, y: SURF_H - 250, w: SHAFT_X - 20, h: 250, action: () => this.onTap('market') });
+    for (let i = 0; i < n; i++) zs.push({ x: 0, y: floorTop(i), w: ROOM_W, h: ROOM_H, action: (x, y) => this.tapStage(i, x, y) });
+    zs.push({ x: SHAFT_X - 20, y: SURF_H - 260, w: SHAFT_W + 20, h: this.worldBottom() - SURF_H + 260, action: (x, y) => this.tapStage('elev', x, y) });
+    zs.push({ x: 0, y: SURF_H - 250, w: SHAFT_X - 20, h: 250, action: (x, y) => this.tapStage('market', x, y) });
     return zs;
+  }
+
+  private tapStage(id: StageId, wx: number, wy: number): void {
+    const r = this.mine.tap(id);
+    if (r === 'rush') this.celebrate.burst(wx, wy, 0xffe9a8, 7, 160);
+    else if (r === 'start') this.celebrate.burst(wx, wy, 0x9cf09c, 10, 180);
+    if (r) this.onTap(id);
   }
 
   // --- juice ---
@@ -598,6 +720,12 @@ export class MineView {
 
   // --- per frame ---
   update(dt: number): void {
+    if (this.camTarget !== null) {
+      const before = this.camY;
+      this.camY += (this.camTarget - this.camY) * Math.min(1, dt * 7);
+      this.clampCam();
+      if (Math.abs(this.camY - before) < 0.3) this.camTarget = null;
+    }
     if (Math.abs(this.velY) > 5) {
       this.camY += this.velY * dt;
       this.velY *= Math.pow(0.04, dt);
@@ -627,6 +755,8 @@ export class MineView {
       this.drawManager(fv, i);
       fv.hint.visible = m.idle(i);
       fv.hint.alpha = blink;
+      fv.rushT.visible = m.rushing(i);
+      fv.rushT.alpha = blink;
       const ws = m.workers[i];
       while (fv.people.length < ws.length) {
         const fig = makeFig(pick(['man', 'woman', 'man', 'woman', 'elder'] as BodyKind[]));
@@ -712,6 +842,23 @@ export class MineView {
           .roundRect(ROOM_W / 2 - 150, y, 300 * Math.min(1, info.progress), 14, 7).fill(0xffb43a);
       }
     }
+    // supply drops, celebrations, the recommended-upgrade arrow
+    for (let k = this.drops.length - 1; k >= 0; k--) {
+      const d = this.drops[k];
+      d.update(dt);
+      if (d.gone) { d.root.destroy({ children: true }); this.drops.splice(k, 1); }
+    }
+    this.celebrate.update(dt);
+    const rb = this.recommend === null ? undefined
+      : this.badgeRects.get(this.recommend === 'elev' ? this.elevBadge : this.recommend === 'market' ? this.marketBadge : this.floors[this.recommend]?.badge);
+    this.arrow.visible = !!rb;
+    if (rb) {
+      // bobs above the middle of the badge pointing down at it; under it (pointing up) when the top bar would hide it
+      const bob = Math.abs(Math.sin(now * 4)) * 12;
+      const under = (rb.y - 50 - this.camY) * this.scale < this.topInset;
+      this.arrow.scale.y = under ? -1 : 1;
+      this.arrow.position.set(rb.x + Math.min(rb.w / 2, 120), under ? rb.y + 64 + bob : rb.y - 14 - bob);
+    }
     // fx
     for (let k = this.floats.length - 1; k >= 0; k--) {
       const f = this.floats[k];
@@ -740,6 +887,7 @@ export class MineView {
     const w = t.width + 28;
     const bx = center ? x + 140 - w / 2 : x;
     t.position.set(bx + 14, y + 12);
+    this.badgeRects.set(t, { x: bx, y, w });
     // a riveted metal plate: drop shadow, dark body, lit top edge; affordable = a green glow edge
     bg.clear()
       .roundRect(bx + 2, y + 5, w, 50, 14).fill({ color: 0x000000, alpha: 0.45 })

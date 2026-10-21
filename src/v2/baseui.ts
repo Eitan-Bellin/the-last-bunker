@@ -52,6 +52,7 @@ export class BaseUI {
     play('tab', { volume: 0.5 });
     document.querySelectorAll<HTMLButtonElement>('#nav button').forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
     this.panel.classList.toggle('on', tab !== 'mine');
+    document.body.classList.toggle('panel-open', tab !== 'mine');
     this.lastKey = '';
     this.render();
   }

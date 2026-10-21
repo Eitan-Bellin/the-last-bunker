@@ -59,6 +59,16 @@ export const BOOST_MUL = 2;
 export const BOOST_S = 120;
 export const BOOST_CD_S = 600;
 
+// --- tapping a busy stage speeds it up for a moment ---
+export const RUSH_MUL = 1.6;
+export const RUSH_PER_TAP_S = 0.6;
+export const RUSH_MAX_S = 4;
+
+// --- gems: turbo (every sale doubled for a while) and doubling the time-away earnings ---
+export const TURBO_S = 30 * 60;
+export const TURBO_GEMS = 10;
+export const OFFLINE_DOUBLE_GEMS = 5;
+
 /** Offline earnings are credited for at most this long. */
 export const OFFLINE_CAP_S = 2 * 3600;
 
@@ -70,6 +80,12 @@ export function bulkCost(price: (lvl: number) => number, lvl: number, n: number)
 }
 
 /** How many levels `cash` buys from `lvl` (at least 1 when the next level is affordable, capped at MAX_LVL). */
+/** Levels to the next milestone (at least 1). */
+export function toMilestone(lvl: number): number {
+  const m = MILESTONES.find(x => x > lvl);
+  return m ? m - lvl : 1;
+}
+
 export function maxAffordable(price: (lvl: number) => number, lvl: number, cash: number): number {
   let n = 0;
   let s = 0;

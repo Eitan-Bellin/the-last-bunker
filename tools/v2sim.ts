@@ -52,7 +52,7 @@ let nextTap = 0;
 let nextAct = 0;
 let nextReport = 300;
 for (let t = 0; t < minutes * 60; t += DT) {
-  if (mine.s.time >= nextTap) { for (const id of stages()) mine.tap(id); nextTap += tapEvery; }
+  if (mine.s.time >= nextTap) { for (const id of stages()) if (mine.idle(id)) mine.tap(id); nextTap += tapEvery; }
   if (mine.s.time >= nextAct) { act(); nextAct += 2; }
   for (const id of stages()) mine.boost(id);
   mine.step(DT);

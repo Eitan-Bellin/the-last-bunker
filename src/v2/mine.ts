@@ -2,7 +2,7 @@
 // Pure logic (no Pixi, no DOM) so tools/v2sim.ts can run it in Node; the view only reads positions and events.
 import type { BaseSave } from './base.ts';
 import {
-  BOOST_CD_S, BOOST_MUL, BOOST_S, DIG_COST, ELEV_MGR_COST, FLOORS, MARKET_MGR_COST, MAX_LVL, OFFLINE_CAP_S,
+  BOOST_CD_S, BOOST_MUL, BOOST_S, RUSH_MAX_S, RUSH_MUL, RUSH_PER_TAP_S, DIG_COST, ELEV_MGR_COST, FLOORS, MARKET_MGR_COST, MAX_LVL, OFFLINE_CAP_S,
   bulkCost, elevCap, elevSpeed, elevUpCost, floorLoad, floorMgrCost, floorUpCost, floorWorkers, marketUpCost,
   porterCap, porterSpeed, porters,
 } from './econ.ts';
@@ -54,6 +54,10 @@ export interface MineSave {
   /** New-bunker runs: how many, bonus points, coins earned in earlier runs. */
   prestige?: { count: number; points: number; lifetime: number };
   daily?: import('./daily.ts').DailySave;
+  /** The goal chain (index of the current goal). */
+  goals?: import('./goals.ts').GoalsSave;
+  /** Wall-clock ms until which every sale is doubled (bought with gems). */
+  turboUntil?: number;
 }
 
 export function newSave(): MineSave {
@@ -93,10 +97,14 @@ export class Mine {
   elev: Elevator = { phase: 'idle', y: stopY(-1), t: 0, carry: 0, at: -1 };
   porters: Porter[] = [];
   private pending = new Set<StageId>();
+  /** Seconds of tap-speed left per stage (each tap on a busy stage adds a little). */
+  private rushLeft = new Map<StageId, number>();
   /** Highest level a stage may reach (the Command Center raises it). */
   levelCap = () => MAX_LVL;
   /** Sale price multiplier (the top Command Center levels add a bonus). */
   saleMul = () => 1;
+  /** Extra sale multiplier that applies only while playing (the gem turbo), never to time away. */
+  liveMul = () => 1;
   private listeners: ((e: MineEvent) => void)[] = [];
 
   constructor(save: MineSave) {
@@ -109,7 +117,12 @@ export class Mine {
   private emit(e: MineEvent): void { for (const fn of this.listeners) fn(e); }
 
   stage(id: StageId): StageSave { return id === 'elev' ? this.s.elev : id === 'market' ? this.s.market : this.s.floors[id]; }
-  private mul(id: StageId): number { return this.stage(id).boostUntil > this.s.time ? BOOST_MUL : 1; }
+  private mul(id: StageId): number {
+    return (this.stage(id).boostUntil > this.s.time ? BOOST_MUL : 1) * ((this.rushLeft.get(id) ?? 0) > 0 ? RUSH_MUL : 1);
+  }
+
+  /** Is this stage sped up by taps right now? */
+  rushing(id: StageId): boolean { return (this.rushLeft.get(id) ?? 0) > 0; }
 
   private syncWorkers(i: number): void {
     const want = floorWorkers(this.s.floors[i].lvl);
@@ -130,11 +143,32 @@ export class Mine {
     return this.workers[id].every(w => w.phase === 'idle');
   }
 
-  tap(id: StageId): boolean {
-    if (!this.idle(id)) return false;
-    this.pending.add(id);
+  /** A tap starts an idle stage, or speeds up a busy one for a moment. */
+  tap(id: StageId): 'start' | 'rush' | false {
+    if (this.idle(id)) { this.s.stats.taps++; this.pending.add(id); return 'start'; }
+    const left = this.rushLeft.get(id) ?? 0;
+    if (left >= RUSH_MAX_S - 1e-6) return false;
     this.s.stats.taps++;
-    return true;
+    this.rushLeft.set(id, Math.min(RUSH_MAX_S, left + RUSH_PER_TAP_S));
+    return 'rush';
+  }
+
+  /** The affordable upgrade that adds the most income per coin (what a player should buy next), or null. */
+  bestUpgrade(): StageId | null {
+    const before = this.rates().income;
+    let best: { id: StageId; score: number } | null = null;
+    for (const id of ['elev', 'market', ...this.s.floors.map((_, i) => i)] as StageId[]) {
+      const st = this.stage(id);
+      if (st.lvl >= this.levelCap()) continue;
+      const cost = this.upgradeCost(id, 1);
+      if (cost > this.s.cash) continue;
+      st.lvl++;
+      const gain = this.rates().income - before;
+      st.lvl--;
+      const score = (gain + before * 1e-4) / cost;
+      if (!best || score > best.score) best = { id, score };
+    }
+    return best?.id ?? null;
   }
 
   // --- buying ---
@@ -229,7 +263,7 @@ export class Mine {
     const floorSum = floors.reduce((a, b) => a + b, 0);
     const elev = this.elevRate();
     const market = this.marketRate();
-    const income = Math.min(floorSum, elev, market) * this.saleMul();
+    const income = Math.min(floorSum, elev, market) * this.saleMul() * this.liveMul();
     const low = Math.min(floorSum, elev, market);
     const bottleneck = low === floorSum ? 'floors' : low === elev ? 'elev' : 'market';
     return { floors, floorSum, elev, market, income, bottleneck };
@@ -265,6 +299,7 @@ export class Mine {
   step(dt: number): void {
     this.s.time += dt;
     this.s.stats.playS += dt;
+    for (const [id, left] of this.rushLeft) { if (left <= dt) this.rushLeft.delete(id); else this.rushLeft.set(id, left - dt); }
     this.s.floors.forEach((_, i) => this.stepFloor(i, dt));
     this.stepElev(dt);
     this.stepMarket(dt);
@@ -376,7 +411,7 @@ export class Mine {
         case 'sell':
           p.t += dt * m;
           if (p.t >= SELL_T) {
-            const got = p.carry * this.saleMul();
+            const got = p.carry * this.saleMul() * this.liveMul();
             this.s.cash += got;
             this.s.stats.earned += got;
             this.emit({ kind: 'sell', amount: got, x: p.x });

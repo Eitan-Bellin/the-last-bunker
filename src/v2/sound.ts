@@ -1,6 +1,7 @@
 // v2 sound: the game's synthesized SFX (src/audio/sfx.ts), rendered once per name and played through one AudioContext.
 import { SFX, type Sfx } from '../audio/sfx.ts';
-import { envelope, filter, gain, noiseHit, osc, renderOneShot, type Builder } from '../audio/dsp.ts';
+import { envelope, filter, gain, noiseHit, osc, renderLoop, renderOneShot, type Builder } from '../audio/dsp.ts';
+import { BEDS, BED_SECONDS } from '../audio/beds.ts';
 
 /** Battle sounds made here (the shared library has none): a rifle shot, an artillery whistle, an explosion. */
 const CUSTOM: Record<string, { seconds: number; reverb: number; build: Builder }> = {
@@ -64,7 +65,8 @@ export function unlockAudio(): void {
     master = ctx.createGain();
     master.gain.value = muted ? 0 : 0.7;
     master.connect(ctx.destination);
-    for (const n of ['click', 'coin', 'collect', 'levelup', 'elevator', 'unlock', 'cheer', 'dig', 'powerUp', 'error', 'tab', 'open', 'shot', 'boom', 'whistle'] as Name[]) prepare(n);
+    for (const n of ['click', 'coin', 'collect', 'levelup', 'elevator', 'unlock', 'cheer', 'dig', 'powerUp', 'error', 'tab', 'open', 'shot', 'boom', 'whistle', 'reveal', 'achievement', 'rankUp', 'whoosh'] as Name[]) prepare(n);
+    startAmbience();
   }
   if (ctx.state === 'suspended') void ctx.resume();
 }
@@ -93,6 +95,25 @@ export function play(name: Name, opts: { volume?: number; rate?: number; minGapM
   g.gain.value = opts.volume ?? 1;
   src.connect(g).connect(master);
   src.start();
+}
+
+/** A quiet working-bunker bed under everything (machines, ventilation, distant voices), looped. */
+function startAmbience(): void {
+  const c = ctx;
+  if (!c || !master) return;
+  const out = master;
+  setTimeout(() => {
+    void renderLoop(BED_SECONDS, 2, BEDS.undercity, 41, 0.8, 32000).then(buf => {
+      const src = c.createBufferSource();
+      src.buffer = buf;
+      src.loop = true;
+      const g = c.createGain();
+      g.gain.value = 0;
+      g.gain.linearRampToValueAtTime(0.22, c.currentTime + 4);
+      src.connect(g).connect(out);
+      src.start();
+    }).catch(() => { /* silence is fine */ });
+  }, 1200);
 }
 
 export function isMuted(): boolean { return muted; }
