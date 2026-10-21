@@ -20,7 +20,7 @@ for r, x in enumerate((2.2, 5.6)):
         cyl(f'chan{r}{lv}', (x, 2.3, z + 0.06), 0.08, 2.9, pvc, rot=(0, math.pi / 2, 0))
         for i in range(10):
             rosette(f'g{r}{lv}{i}', (x - 1.35 + i * 0.3, 2.3, z + 0.1), 1.25 + random.random() * 0.3,
-                  random.choice((leaf, leaf2, leaf, red)), FR, sway=0.04, phase=random.random())
+                  random.choice((leaf, leaf2, leaf, red)), FR, sway=0.0, phase=random.random())
         m, s = emissive(f'led{r}{lv}', (0.92, 0.95, 1.0), 7)
         box(f'ledbar{r}{lv}', (x, 2.25, z + 0.72), (2.8, 0.06, 0.03), m, 0.005)
     area((x, 2.0, 3.0), 120, 2.5, (0.9, 0.95, 1.0))

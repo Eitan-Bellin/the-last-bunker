@@ -20,7 +20,7 @@ for row, (y, z) in enumerate(((2.45, 0.85), (1.45, 0.35))):
     box(f'soil{row}', (4.4, y, z + 0.01), (8.0, 0.68, 0.06), soil, 0)
     for i in range(26):
         plant(f'p{row}_{i}', (0.5 + i * 0.31 + random.random() * 0.06, y + (random.random() - 0.5) * 0.3, z), 1.0 + random.random() * 0.5,
-              random.choice((leaf, leaf2)), FR, sway=0.05, phase=random.random())
+              random.choice((leaf, leaf2)), FR, sway=0.0, phase=random.random())
 # grow lights: emissive bars with a faint magenta glow
 for row, y in enumerate((2.4, 1.45)):
     for i in range(4):

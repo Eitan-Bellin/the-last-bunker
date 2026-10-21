@@ -23,9 +23,7 @@ cyl('core_ring', (4.8, 1.1, 1.55), 0.45, 0.05, steel, rot=(math.pi / 2, 0, 0))
 bpy.ops.object.light_add(type='POINT', location=(4.8, 0.7, 1.55))
 cl = bpy.context.object
 cl.data.color = (0.5, 1.0, 0.3)
-for f in range(1, FR + 2):
-    cl.data.energy = 110 + 50 * math.sin(2 * math.pi * (f - 1) / FR)
-    cl.data.keyframe_insert('energy', frame=f)
+cl.data.energy = 120  # constant: a pulsing light would make the whole room an animated region
 # coolant pipes left and right with steam vents
 for sx in (-1, 1):
     pipe(f'cool{sx}', [(4.8 + sx * 0.9, 2.0, 1.0), (4.8 + sx * 1.6, 2.0, 1.0), (4.8 + sx * 1.6, 2.0, 3.8), (4.8 + sx * 3.5, 2.0, 3.8)], 0.14, steel)

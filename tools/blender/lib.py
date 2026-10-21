@@ -525,7 +525,8 @@ def plant(name, loc, s, m_leaf, frames, sway=0.06, phase=0.0):
             z = h * (0.3 + 0.7 * i / 6)
             fast_leaf(f'{name}_l{st}{i}', (sx + math.cos(a) * 0.08 * s, sy + math.sin(a) * 0.08 * s, z), 0.075 * s,
                       random.choice(_leaf_shades[key]), piv, (1.7, 0.75, 0.18), (random.uniform(-0.6, 0.6), random.uniform(-0.7, 0.2), a))
-    wobble(piv, 'rotation_euler[0]', 0, sway, frames, cycles=1, phase=phase)
+    if sway:
+        wobble(piv, 'rotation_euler[0]', 0, sway, frames, cycles=1, phase=phase)
     return piv
 
 
@@ -588,20 +589,39 @@ def rosette(name, loc, s, m_leaf, frames, sway=0.04, phase=0.0):
             a = i * 2 * math.pi / n + ring * 0.3 + random.random() * 0.2
             fast_leaf(f'{name}_r{ring}{i}', (math.cos(a) * rad * s, math.sin(a) * rad * s, (0.05 + ring * 0.04) * s), sz * s,
                       random.choice(_leaf_shades[key]), piv, (1.5, 1.0, 0.35), (0, -tilt, a))
-    wobble(piv, 'rotation_euler[0]', 0, sway, frames, cycles=1, phase=phase)
+    if sway:
+        wobble(piv, 'rotation_euler[0]', 0, sway, frames, cycles=1, phase=phase)
     return piv
 
 
 def smoke_mat(name='smoke', color=(0.85, 0.85, 0.85), alpha=0.18, glow=0.15):
-    """Soft see-through vapour for steam/smoke puffs."""
+    """Soft see-through vapour: a transparent/emissive mix that fades toward the puff's silhouette."""
     m = bpy.data.materials.new(name)
     m.use_nodes = True
-    p = m.node_tree.nodes['Principled BSDF']
-    p.inputs['Base Color'].default_value = (*color, 1)
-    p.inputs['Roughness'].default_value = 1.0
-    p.inputs['Alpha'].default_value = alpha
-    p.inputs['Emission Color'].default_value = (*color, 1)
-    p.inputs['Emission Strength'].default_value = glow
+    nt = m.node_tree
+    for n in list(nt.nodes):
+        if n.type != 'OUTPUT_MATERIAL':
+            nt.nodes.remove(n)
+    out = nt.nodes['Material Output']
+    tr = nt.nodes.new('ShaderNodeBsdfTransparent')
+    em = nt.nodes.new('ShaderNodeEmission')
+    em.inputs['Color'].default_value = (*color, 1)
+    em.inputs['Strength'].default_value = max(0.35, glow * 3)
+    lw = nt.nodes.new('ShaderNodeLayerWeight')
+    lw.inputs['Blend'].default_value = 0.6
+    inv = nt.nodes.new('ShaderNodeMath')
+    inv.operation = 'SUBTRACT'
+    inv.inputs[0].default_value = 1.0
+    nt.links.new(lw.outputs['Facing'], inv.inputs[1])
+    mul = nt.nodes.new('ShaderNodeMath')
+    mul.operation = 'MULTIPLY'
+    mul.inputs[1].default_value = alpha * 1.6
+    nt.links.new(inv.outputs['Value'], mul.inputs[0])
+    mix = nt.nodes.new('ShaderNodeMixShader')
+    nt.links.new(mul.outputs['Value'], mix.inputs['Fac'])
+    nt.links.new(tr.outputs['BSDF'], mix.inputs[1])
+    nt.links.new(em.outputs['Emission'], mix.inputs[2])
+    nt.links.new(mix.outputs['Shader'], out.inputs['Surface'])
     for attr, val in (('surface_render_method', 'BLENDED'), ('blend_method', 'BLEND')):
         try:
             setattr(m, attr, val)

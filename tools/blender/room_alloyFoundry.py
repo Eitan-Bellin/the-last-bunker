@@ -36,10 +36,7 @@ for k, fx in enumerate((1.4, 7.3)):
     L = bpy.context.object
     L.data.color = (1.0, 0.45, 0.12)
     L.data.shadow_soft_size = 0.4
-    for f in range(1, FR + 2):
-        t = (f - 1) / FR
-        L.data.energy = 260 + 80 * math.sin(2 * math.pi * (3 * t + k * 0.37)) + 40 * math.sin(2 * math.pi * (5 * t))
-        L.data.keyframe_insert('energy', frame=f)
+    L.data.energy = 90
     pipe(f'hood{k}', [(fx, 2.2, 2.0), (fx, 2.2, 4.6)], 0.35, soot)
     ember = mat('ember', (1, 0.6, 0.2), emit=(1, 0.5, 0.1), emit_strength=20)
     for e in range(8):
@@ -75,9 +72,7 @@ for fc in fcurves(stream.animation_data.action):
 bpy.ops.object.light_add(type='POINT', location=(4.7, 1.5, 1.4))
 pour = bpy.context.object
 pour.data.color = (1, 0.5, 0.1)
-for f, v in tilt:
-    pour.data.energy = 250 * min(1, -v / 0.6)
-    pour.data.keyframe_insert('energy', frame=f)
+pour.data.energy = 0
 
 # moulds and an ingot conveyor (ingots cool from bright to dark as they ride right)
 box('mould_table', (4.8, 1.9, 0.5), (1.4, 0.9, 1.0), steel, 0.02)

@@ -49,9 +49,7 @@ bpy.ops.object.light_add(type='POINT', location=(6.9, 1.6, 1.05))
 arcL = bpy.context.object
 arcL.data.color = (0.7, 0.85, 1.0)
 arcL.data.shadow_soft_size = 0.05
-for f in range(1, FR + 2):
-    arcL.data.energy = 180 if (f - 1) % 3 != 1 else 10
-    arcL.data.keyframe_insert('energy', frame=f)
+arcL.data.energy = 25
 spark_m = mat('spark', (1, 0.8, 0.3), emit=(1, 0.7, 0.2), emit_strength=25)
 for s_ in range(10):
     o = sphere(f'spark{s_}', (6.9, 1.9, 1.05), 0.012, spark_m)

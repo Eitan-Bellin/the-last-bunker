@@ -7,7 +7,7 @@ from PIL import Image, ImageFilter
 
 src, dst = sys.argv[1], sys.argv[2]
 opt = dict(zip(sys.argv[3::2], sys.argv[4::2]))
-THRESH = int(opt.get('--thresh', 9))
+THRESH = int(opt.get('--thresh', 18))
 SCALE = float(opt.get('--scale', 1))
 FPS = int(opt.get('--fps', 12))
 os.makedirs(dst, exist_ok=True)
@@ -31,7 +31,7 @@ mask = Image.fromarray((diff * 255).astype(np.uint8)).filter(ImageFilter.MaxFilt
 m = np.asarray(mask) > 0
 
 # connected components on a coarse grid (cells of 8 px), then bounding rects, merged when close
-CELL = 8
+CELL = 6
 gh, gw = (H + CELL - 1) // CELL, (W + CELL - 1) // CELL
 grid = np.zeros((gh, gw), bool)
 for gy in range(gh):
@@ -56,8 +56,16 @@ for gy in range(gh):
         rects.append([x0 * CELL, y0 * CELL, min(W, (x1 + 1) * CELL), min(H, (y1 + 1) * CELL)])
 
 
-def close(a, b, pad=16):
-    return not (a[2] + pad < b[0] or b[2] + pad < a[0] or a[3] + pad < b[1] or b[3] + pad < a[1])
+def area_of(r):
+    return (r[2] - r[0]) * (r[3] - r[1])
+
+
+def close(a, b, pad=8):
+    # merge only touching rects whose union does not waste much space
+    if a[2] + pad < b[0] or b[2] + pad < a[0] or a[3] + pad < b[1] or b[3] + pad < a[1]:
+        return False
+    u = [min(a[0], b[0]), min(a[1], b[1]), max(a[2], b[2]), max(a[3], b[3])]
+    return area_of(u) <= 1.25 * (area_of(a) + area_of(b))
 
 
 merged = True
@@ -73,6 +81,44 @@ while merged:
                 break
         if merged:
             break
+
+# split sparse rects (connected parts whose bounding box is mostly empty) into tighter pieces
+def tight(r):
+    gx0, gy0, gx1, gy1 = r[0] // CELL, r[1] // CELL, (r[2] + CELL - 1) // CELL, (r[3] + CELL - 1) // CELL
+    sub = grid[gy0:gy1, gx0:gx1]
+    if not sub.any():
+        return None
+    ys, xs = np.nonzero(sub)
+    return [(gx0 + xs.min()) * CELL, (gy0 + ys.min()) * CELL, min(W, (gx0 + xs.max() + 1) * CELL), min(H, (gy0 + ys.max() + 1) * CELL)]
+
+
+def split(r, depth=0):
+    r = tight(r)
+    if r is None:
+        return []
+    gx0, gy0, gx1, gy1 = r[0] // CELL, r[1] // CELL, (r[2] + CELL - 1) // CELL, (r[3] + CELL - 1) // CELL
+    sub = grid[gy0:gy1, gx0:gx1]
+    fill = sub.mean()
+    if fill > 0.55 or depth > 6 or sub.size < 64:
+        return [r]
+    # cut along the longer side at the emptiest line near the middle
+    if (gx1 - gx0) >= (gy1 - gy0):
+        cols = sub.sum(axis=0)
+        n = len(cols)
+        c = min(range(n // 4, max(n // 4 + 1, 3 * n // 4)), key=lambda k: (cols[k], abs(k - n / 2)))
+        a, b = [r[0], r[1], (gx0 + c) * CELL, r[3]], [(gx0 + c) * CELL, r[1], r[2], r[3]]
+    else:
+        rows = sub.sum(axis=1)
+        n = len(rows)
+        c = min(range(n // 4, max(n // 4 + 1, 3 * n // 4)), key=lambda k: (rows[k], abs(k - n / 2)))
+        a, b = [r[0], r[1], r[2], (gy0 + c) * CELL], [r[0], (gy0 + c) * CELL, r[2], r[3]]
+    parts = split(a, depth + 1) + split(b, depth + 1)
+    if sum(area_of(p) for p in parts) < 0.8 * area_of(r):
+        return parts
+    return [r]
+
+
+rects = [[int(v) for v in p] for r in rects for p in split(r)]
 
 # shelf-pack every rect x every frame into one atlas (max 4096 wide)
 cells = [(r, k) for r in range(len(rects)) for k in range(len(frames))]
@@ -105,6 +151,8 @@ meta = {
 }
 json.dump(meta, open(os.path.join(dst, 'anim.json'), 'w'))
 area = sum((r[2] - r[0]) * (r[3] - r[1]) for r in rects)
+if AH > 4096:
+    print('WARNING: atlas taller than 4096 px - too big for phones; reduce the moving area')
 print(f'{len(paths)} frames {W}x{H}: {len(rects)} moving rects, {100 * area / (W * H):.1f}% of the room, atlas {AW}x{AH} '
       f'({AW * AH * 4 / 1e6:.1f} MB GPU), files bg {os.path.getsize(os.path.join(dst, "bg.webp")) // 1024} KB'
       + (f' anim {os.path.getsize(os.path.join(dst, "anim.webp")) // 1024} KB' if rects else ''))

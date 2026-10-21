@@ -31,20 +31,20 @@ em = nt.nodes.new('ShaderNodeEmission')
 em.inputs['Strength'].default_value = 0.85
 nt.links.new(tex.outputs['Color'], em.inputs['Color'])
 nt.links.new(em.outputs['Emission'], nt.nodes['Material Output'].inputs['Surface'])
-bpy.ops.mesh.primitive_plane_add(size=1, location=(SW / 2 - 1.5, 30, 6.5), rotation=(math.pi / 2, 0, 0))
+bpy.ops.mesh.primitive_plane_add(size=1, location=(SW / 2 - 1.0, 6.4, 5.2), rotation=(math.pi / 2, 0, 0))
 bp = bpy.context.object
-bp.scale = (34, 17.2, 1)
+bp.scale = (21.8, 11.0, 1)
 bp.data.materials.append(bm)
 
-ground = mat('dirt', (0.30, 0.24, 0.17), rough=0.95, grime=0.5, scale=4, bump=0.5)
-box('ground', (SW / 2, 10, -0.1), (60, 24, 0.2), ground, 0)
+ground = mat('dirt', (0.22, 0.18, 0.09), rough=0.95, grime=0.55, scale=4, bump=0.6)
+box('ground', (SW / 2, 2.0, -0.1), (60, 8.6, 0.2), ground, 0)
 rock = mat('rubble', (0.35, 0.32, 0.28), rough=0.9, grime=0.5, scale=8, bump=0.4)
 for i in range(40):
     scrap_piece(f'rub{i}', (random.uniform(-1, SW + 1), random.uniform(1.5, 8), 0.05), random.uniform(0.08, 0.3), rock, kind='lump')
 
 steel = mat('steel', (0.32, 0.31, 0.29), metal=0.85, rough=0.45, grime=0.5)
 rustm = mat('rust', (0.40, 0.22, 0.12), metal=0.6, rough=0.7, grime=0.5, scale=8, bump=0.3)
-concrete = mat('concrete', (0.42, 0.40, 0.36), rough=0.9, grime=0.5, scale=3, bump=0.3)
+concrete = mat('concrete', (0.30, 0.29, 0.26), rough=0.9, grime=0.55, scale=3, bump=0.35)
 dark = mat('dark', (0.05, 0.05, 0.05), metal=0.4, rough=0.6)
 
 # ---- headframe: four legs, braces, top deck, sheave wheel ----
@@ -64,10 +64,10 @@ for k in (-1, 1):
     box(f'rail{k}', (TX, TD + k * 0.95, H + 0.5), (2.6, 0.05, 0.05), steel, 0)
 wheel = empty('sheave', (TX, TD - 0.4, H + 1.1))
 R = 1.0
-cyl('rim', (0, 0, 0), R, 0.12, dark, rot=(math.pi / 2, 0, 0), verts=48)
-bpy.context.object.parent = wheel
-bpy.context.object.location = (0, 0, 0)
-cyl('rim_in', (0, 0, 0), R * 0.86, 0.14, mat('hole', (0.02, 0.02, 0.02)), rot=(math.pi / 2, 0, 0), verts=48, parent=wheel)
+bpy.ops.mesh.primitive_torus_add(major_radius=R * 0.95, minor_radius=0.06, location=(0, 0, 0), rotation=(math.pi / 2, 0, 0))
+rim = bpy.context.object
+rim.data.materials.append(dark)
+rim.parent = wheel
 for k in range(8):
     a = k * math.pi / 4
     box(f'spoke{k}', (math.cos(a) * R * 0.45, -0.08, math.sin(a) * R * 0.45), (R * 0.9, 0.05, 0.07), rustm, 0.005, rot=(0, -a, 0), parent=wheel)
@@ -108,10 +108,10 @@ for k, sx in enumerate((1.4, 3.5, 5.6)):
             box('pole', (px, py, 1.1), (0.08, 0.08, 2.2), wood, 0.005)
     box(f'table{k}', (sx, 1.8, 0.75), (1.8, 0.7, 0.08), wood, 0.01)
     box(f'tbase{k}', (sx, 1.8, 0.37), (1.7, 0.6, 0.72), wood, 0.01)
-    bpy.ops.mesh.primitive_plane_add(size=1, location=(sx, 2.1, 2.3))
+    bpy.ops.mesh.primitive_plane_add(size=2, location=(sx, 2.0, 2.25))
     aw = bpy.context.object
-    aw.scale = (1.0, 0.65, 1)
-    aw.rotation_euler = (0.25, 0, 0)
+    aw.scale = (1.05, 0.62, 1)
+    aw.rotation_euler = (-0.35, 0, 0)
     sub_ = aw.modifiers.new('sub', 'SUBSURF'); sub_.levels = 3; sub_.subdivision_type = 'SIMPLE'
     wav = aw.modifiers.new('wave', 'WAVE')
     wav.height = 0.06
@@ -137,8 +137,8 @@ for k, sx in enumerate((1.4, 3.5, 5.6)):
 for i in range(4):
     cyl(f'barrel{i}', (0.4 + i * 0.25 * (i % 2) + 6.6 + (i // 2) * 0.6, 2.3 + (i % 2) * 0.5, 0.45), 0.28, 0.9, rustm)
 cyl('firebarrel', (7.1, 1.3, 0.45), 0.3, 0.9, rustm)
-fm, fs = emissive('fire', (1, 0.45, 0.08), 20)
-anim_value(fs, FR, lambda t: 18 + 8 * math.sin(2 * math.pi * 3 * t) + 4 * math.sin(2 * math.pi * 5 * t + 1))
+fm, fs = emissive('fire', (1, 0.4, 0.05), 6)
+anim_value(fs, FR, lambda t: 5 + 2 * math.sin(2 * math.pi * 3 * t) + 1 * math.sin(2 * math.pi * 5 * t + 1))
 for k in range(5):
     o = sphere(f'flame{k}', (7.1, 1.3, 0.95), 0.12, fm, scale=(1, 1, 1.6))
     for f in range(1, FR + 2):
@@ -150,18 +150,15 @@ for k in range(5):
 bpy.ops.object.light_add(type='POINT', location=(7.1, 1.0, 1.3))
 fl = bpy.context.object
 fl.data.color = (1, 0.5, 0.15)
-for f in range(1, FR + 2):
-    t = (f - 1) / FR
-    fl.data.energy = 220 + 70 * math.sin(2 * math.pi * 3 * t) + 40 * math.sin(2 * math.pi * 5 * t + 1)
-    fl.data.keyframe_insert('energy', frame=f)
+fl.data.energy = 220
 
 # evening sun from the left, sky fill
 bpy.ops.object.light_add(type='SUN', rotation=(math.radians(55), math.radians(-35), math.radians(-20)))
 sun = bpy.context.object
-sun.data.energy = 3.2
+sun.data.energy = 1.8
 sun.data.color = (1, 0.78, 0.55)
 sun.data.angle = math.radians(4)
-area((SW / 2, -4, 6), 300, 10, (0.6, 0.7, 0.9), rot=(math.radians(60), 0, 0))
+area((SW / 2, -4, 6), 180, 10, (0.6, 0.7, 0.9), rot=(math.radians(60), 0, 0))
 post()
 camera()
 render(out, FR, still)
