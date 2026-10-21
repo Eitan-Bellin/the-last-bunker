@@ -5,6 +5,9 @@ import { MineUI } from './ui.ts';
 import { MineView } from './view.ts';
 import { play, unlockAudio } from './sound.ts';
 import { FLOORS } from './econ.ts';
+import { Base, newBase, CC_FLOORS } from './base.ts';
+import { BaseUI } from './baseui.ts';
+import { big, clock } from './format.ts';
 
 const params = new URLSearchParams(location.search);
 const KEY = `lastbunker_v2${params.get('slot') ? `_${params.get('slot')}` : ''}`;
@@ -23,8 +26,14 @@ function load(): MineSave {
 }
 
 const save = load();
+save.base ??= newBase(Date.now());
+if (save.gems === undefined || Number.isNaN(save.gems)) save.gems = 15;
 const mine = new Mine(save);
+const base = new Base(mine, save.base);
+mine.levelCap = () => base.levelCap();
+mine.saleMul = () => 1 + base.incomeBonus();
 const awayS = (Date.now() - save.savedAt) / 1000;
+base.step(Date.now());
 const earnedAway = awayS > 30 ? mine.offline(awayS) : 0;
 
 function persist(): void {
@@ -34,6 +43,8 @@ function persist(): void {
 
 const view = new MineView(mine);
 const ui = new MineUI(mine);
+const bui = new BaseUI(mine, base);
+bui.onToast = t => ui.toast(t);
 
 async function start(): Promise<void> {
   await document.fonts.load('700 20px Rubik').catch(() => null);
@@ -46,16 +57,41 @@ async function start(): Promise<void> {
   view.onDig = () => {
     const c = mine.digCost();
     if (c === null) return;
-    if (mine.dig()) {
+    const job = base.busy('dig');
+    if (job) { bui.show('command'); return; }
+    if (!base.canDigMore()) {
+      play('error', { volume: 0.4 });
+      ui.toast(`כדי לחפור עוד צריך מפקדה רמה ${CC_FLOORS.findIndex(n => n > mine.s.floors.length)}`);
+      bui.show('command');
+      return;
+    }
+    if (base.freeBuilders() <= 0) { play('error', { volume: 0.4 }); ui.toast('כל הבנאים עסוקים'); return; }
+    if (base.startDig(Date.now())) {
       play('dig');
-      setTimeout(() => play('unlock'), 350);
-      ui.toast(`נפתחה קומה ${mine.s.floors.length}: ${FLOORS[mine.s.floors.length - 1].name}`);
+      ui.toast(`הבנאים התחילו לחפור: ${FLOORS[mine.s.floors.length].name}`);
       persist();
     } else {
       play('error', { volume: 0.4 });
       ui.toast('אין מספיק מטבעות עדיין');
     }
   };
+  view.digInfo = () => {
+    const now = Date.now();
+    const job = base.busy('dig');
+    const c = mine.digCost() ?? 0;
+    if (job) return { text: `⛏ חופרים… ${clock((job.endAt - now) / 1000)}`, color: 0xffd9a0, progress: (now - job.startAt) / Math.max(1, job.endAt - job.startAt) };
+    if (!base.canDigMore()) return { text: `🔒 מפקדה רמה ${CC_FLOORS.findIndex(n => n > mine.s.floors.length)}`, color: 0xff9b7b, progress: null };
+    return { text: `⛏ ${big(c)} · ⏱ ${clock(base.digTime())}`, color: c <= mine.s.cash ? 0x9cf09c : 0xffd36b, progress: null };
+  };
+  base.on(e => {
+    if (e.kind === 'jobDone') {
+      play('complete', { volume: 0.8 });
+      if (e.job.kind === 'dig') { setTimeout(() => play('unlock'), 300); ui.toast(`נפתחה קומה ${e.job.target + 1}: ${FLOORS[e.job.target].name}`); }
+      else if (e.job.kind === 'cc') ui.toast(`המפקדה עלתה לרמה ${e.job.target}!`);
+      else ui.toast(`${e.job.kind === 'armory' ? 'הנשקייה' : 'החומות'} עלו לרמה ${e.job.target}`);
+      persist();
+    }
+  });
   mine.on(e => {
     if (e.kind === 'sell') play('coin', { volume: 0.35, rate: 1 + Math.random() * 0.15, minGapMs: 90 });
     else if (e.kind === 'unload') play('collect', { volume: 0.3, minGapMs: 200 });
@@ -81,7 +117,7 @@ async function start(): Promise<void> {
     while (dt > 0) { const step = Math.min(dt, 0.05); mine.step(step); dt -= step; }
     view.update(real);
     uiAcc += real;
-    if (uiAcc > 0.1) { ui.update(uiAcc); uiAcc = 0; }
+    if (uiAcc > 0.1) { base.step(Date.now()); ui.update(uiAcc); bui.update(); uiAcc = 0; }
   });
   document.getElementById('splash')?.remove();
   if (earnedAway > 0) ui.welcome(earnedAway, awayS, () => {});
@@ -89,17 +125,20 @@ async function start(): Promise<void> {
 
   // dev scenes for headless screenshots: ?slot=x&scene=mid&cam=900&open=0
   if (params.get('scene') === 'mid' && mine.s.floors.length === 1) {
+    base.s.cc = 4;
     mine.s.cash += 5e5;
     for (let k = 0; k < 3; k++) mine.dig();
     for (const id of ['elev', 'market', 0, 1, 2] as StageId[]) mine.hire(id);
     mine.upgrade(0, 30); mine.upgrade(1, 12); mine.upgrade('elev', 20); mine.upgrade('market', 15);
   }
   if (params.get('scene') === 'late' && mine.s.floors.length === 1) {
+    base.s.cc = 7;
     mine.s.cash += 1e12;
     while (mine.dig()) { /* open every floor */ }
     for (const id of ['elev', 'market', ...mine.s.floors.map((_, i) => i)] as StageId[]) { mine.hire(id); mine.upgrade(id, 30); }
   }
   if (params.has('cam')) view.setCam(Number(params.get('cam')));
+  if (params.has('tab')) bui.show(params.get('tab') as 'command' | 'raids');
   if (params.has('open')) { const o = params.get('open')!; ui.openStage(o === 'elev' || o === 'market' ? o : Number(o)); }
 
   if (params.has('debug')) {
@@ -107,6 +146,8 @@ async function start(): Promise<void> {
       __v2: {
         mine, view, ui,
         cash: (n: number) => { mine.s.cash += n; },
+        base,
+        gems: (n: number) => { mine.s.gems += n; },
         reset: () => { localStorage.removeItem(KEY); location.reload(); },
         skip: (s: number) => { mine.offline(s); },
       },

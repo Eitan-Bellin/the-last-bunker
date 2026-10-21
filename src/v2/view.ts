@@ -162,6 +162,9 @@ export class MineView {
   topInset = 0;
   onOpen: (id: StageId) => void = () => {};
   onDig: () => void = () => {};
+  /** What the dig slot shows (price, digging progress, or the Command Center level it needs). */
+  digInfo: () => { text: string; color: number; progress: number | null } = () => ({ text: '', color: 0xffd36b, progress: null });
+  private digBar = new Graphics();
   onTap: (id: StageId) => void = () => {};
 
   private mine: Mine;
@@ -308,7 +311,7 @@ export class MineView {
       this.digText = label('', 30, 0xffd36b, '800');
       this.digText.anchor.set(0.5, 0);
       this.digText.position.set(ROOM_W / 2, y + ROOM_H / 2 + 0);
-      this.dig.addChild(prev, box, title, this.digText);
+      this.dig.addChild(prev, box, title, this.digText, this.digBar);
     }
     this.layout();
   }
@@ -677,8 +680,15 @@ export class MineView {
     // dig slot
     const dc = m.digCost();
     if (dc !== null && this.digText) {
-      this.digText.text = `⛏ ${big(dc)}`;
-      this.digText.style.fill = dc <= s.cash ? 0x9cf09c : 0xffd36b;
+      const info = this.digInfo();
+      if (this.digText.text !== info.text) this.digText.text = info.text;
+      this.digText.style.fill = info.color;
+      const y = floorTop(s.floors.length) + ROOM_H / 2 + 40;
+      this.digBar.clear();
+      if (info.progress !== null) {
+        this.digBar.roundRect(ROOM_W / 2 - 150, y, 300, 14, 7).fill({ color: 0x000000, alpha: 0.6 })
+          .roundRect(ROOM_W / 2 - 150, y, 300 * Math.min(1, info.progress), 14, 7).fill(0xffb43a);
+      }
     }
     // fx
     for (let k = this.floats.length - 1; k >= 0; k--) {

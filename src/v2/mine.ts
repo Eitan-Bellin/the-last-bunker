@@ -1,5 +1,6 @@
 // v2 mine simulation: workers, elevator and porters as small state machines in world units and game seconds.
 // Pure logic (no Pixi, no DOM) so tools/v2sim.ts can run it in Node; the view only reads positions and events.
+import type { BaseSave } from './base.ts';
 import {
   BOOST_CD_S, BOOST_MUL, BOOST_S, DIG_COST, ELEV_MGR_COST, FLOORS, MARKET_MGR_COST, MAX_LVL, OFFLINE_CAP_S,
   bulkCost, elevCap, elevSpeed, elevUpCost, floorLoad, floorMgrCost, floorUpCost, floorWorkers, marketUpCost,
@@ -48,12 +49,14 @@ export interface MineSave {
   elev: StageSave;
   market: StageSave;
   stats: { earned: number; taps: number; playS: number };
+  /** Command Center, builders, raids (added with the base layer; created on load when missing). */
+  base?: BaseSave;
 }
 
 export function newSave(): MineSave {
   const stage = (): StageSave => ({ lvl: 1, mgr: false, boostUntil: 0, boostReadyAt: 0 });
   return {
-    v: 1, cash: 0, gems: 0, depot: 0, time: 0, savedAt: Date.now(),
+    v: 1, cash: 0, gems: 15, depot: 0, time: 0, savedAt: Date.now(),
     floors: [{ ...stage(), crate: 0 }],
     elev: stage(), market: stage(),
     stats: { earned: 0, taps: 0, playS: 0 },
@@ -87,6 +90,10 @@ export class Mine {
   elev: Elevator = { phase: 'idle', y: stopY(-1), t: 0, carry: 0, at: -1 };
   porters: Porter[] = [];
   private pending = new Set<StageId>();
+  /** Highest level a stage may reach (the Command Center raises it). */
+  levelCap = () => MAX_LVL;
+  /** Sale price multiplier (the top Command Center levels add a bonus). */
+  saleMul = () => 1;
   private listeners: ((e: MineEvent) => void)[] = [];
 
   constructor(save: MineSave) {
@@ -138,7 +145,7 @@ export class Mine {
 
   upgrade(id: StageId, n: number): boolean {
     const st = this.stage(id);
-    n = Math.min(n, MAX_LVL - st.lvl);
+    n = Math.min(n, this.levelCap() - st.lvl);
     if (n <= 0) return false;
     const cost = this.upgradeCost(id, n);
     if (cost > this.s.cash) return false;
@@ -180,11 +187,17 @@ export class Mine {
     const c = this.digCost();
     if (c === null || c > this.s.cash) return false;
     this.s.cash -= c;
+    this.openFloor();
+    return true;
+  }
+
+  /** Adds the next floor (paid for already: a builder finished digging it). */
+  openFloor(): void {
+    if (this.digCost() === null) return;
     this.s.floors.push({ lvl: 1, mgr: false, boostUntil: 0, boostReadyAt: 0, crate: 0 });
     const i = this.s.floors.length - 1;
     this.syncWorkers(i);
     this.emit({ kind: 'dig', floor: i });
-    return true;
   }
 
   // --- rates (per game second, steady state) ---
@@ -213,8 +226,9 @@ export class Mine {
     const floorSum = floors.reduce((a, b) => a + b, 0);
     const elev = this.elevRate();
     const market = this.marketRate();
-    const income = Math.min(floorSum, elev, market);
-    const bottleneck = income === floorSum ? 'floors' : income === elev ? 'elev' : 'market';
+    const income = Math.min(floorSum, elev, market) * this.saleMul();
+    const low = Math.min(floorSum, elev, market);
+    const bottleneck = low === floorSum ? 'floors' : low === elev ? 'elev' : 'market';
     return { floors, floorSum, elev, market, income, bottleneck };
   }
 
@@ -235,8 +249,9 @@ export class Mine {
     }
     let earned = 0;
     if (this.s.market.mgr) {
-      earned = Math.min(this.s.depot, r.market * dt);
-      this.s.depot -= earned;
+      const sold = Math.min(this.s.depot, r.market * dt);
+      this.s.depot -= sold;
+      earned = sold * this.saleMul();
       this.s.cash += earned;
       this.s.stats.earned += earned;
     }
@@ -358,9 +373,10 @@ export class Mine {
         case 'sell':
           p.t += dt * m;
           if (p.t >= SELL_T) {
-            this.s.cash += p.carry;
-            this.s.stats.earned += p.carry;
-            this.emit({ kind: 'sell', amount: p.carry, x: p.x });
+            const got = p.carry * this.saleMul();
+            this.s.cash += got;
+            this.s.stats.earned += got;
+            this.emit({ kind: 'sell', amount: got, x: p.x });
             p.carry = 0;
             p.phase = 'back';
           }

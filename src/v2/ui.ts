@@ -91,7 +91,8 @@ export class MineUI {
 
   private levels(id: StageId): number {
     const st = this.mine.stage(id);
-    const left = MAX_LVL - st.lvl;
+    const left = this.mine.levelCap() - st.lvl;
+    if (left <= 0) return 0;
     if (this.buy === 'max') return Math.max(1, Math.min(left, maxAffordable(this.mine.upgradePrice(id), st.lvl, this.mine.s.cash)));
     return Math.min(this.buy, left);
   }
@@ -109,7 +110,8 @@ export class MineUI {
     const st = m.stage(id);
     const n = this.levels(id);
     const cost = m.upgradeCost(id, n);
-    const can = cost <= m.s.cash && st.lvl < MAX_LVL;
+    const cap = m.levelCap();
+    const can = n > 0 && cost <= m.s.cash && st.lvl < cap;
     const r = m.rates();
     const boostLeft = st.boostUntil - m.s.time;
     const cdLeft = st.boostReadyAt - m.s.time;
@@ -119,7 +121,7 @@ export class MineUI {
     const title = id === 'elev' ? 'מעלית' : id === 'market' ? 'שוק' : `קומה ${id + 1}: ${FLOORS[id].name}`;
     const sub = id === 'elev' ? 'מעלה את הסחורה מהארגזים למחסן' : id === 'market' ? 'סבלים לוקחים מהמחסן ומוכרים בשוק' : `מייצרת ${FLOORS[id].product}`;
     const now = this.stats(id, st.lvl);
-    const next = this.stats(id, Math.min(MAX_LVL, st.lvl + n));
+    const next = this.stats(id, Math.min(cap, st.lvl + n));
     const rate = id === 'elev' ? r.elev : id === 'market' ? r.market : r.floors[id];
     const isNeck = (id === 'elev' && r.bottleneck === 'elev') || (id === 'market' && r.bottleneck === 'market') || (typeof id === 'number' && r.bottleneck === 'floors');
     const ms = nextMilestone(st.lvl);
@@ -130,14 +132,14 @@ export class MineUI {
            <button class="hire" ${m.mgrCost(id) <= m.s.cash ? '' : 'disabled'}>שכור · 🪙 ${big(m.mgrCost(id))}</button></div>`;
     this.sheet.innerHTML = `
       <div class="head"><div><h2>${title}</h2><small>${sub}</small></div><button class="x">✕</button></div>
-      <div class="lvl">רמה <b>${st.lvl}</b>${n > 0 && st.lvl < MAX_LVL ? ` → <b class="up">${st.lvl + n}</b>` : ''}
+      <div class="lvl">רמה <b>${st.lvl}</b>${n > 0 && st.lvl < cap ? ` → <b class="up">${st.lvl + n}</b>` : ''}
         ${ms ? `<span class="ms">ברמה ${ms}: ${typeof id === 'number' || id === 'market' ? '+1 עובד, ' : ''}×1.5</span>` : ''}</div>
       <table>${now.map((row, k) => `<tr><td>${row[0]}</td><td>${row[1]}</td><td class="up">${next[k][1] !== row[1] ? `→ ${next[k][1]}` : ''}</td></tr>`).join('')}
         <tr><td>תפוקה</td><td>${big(rate)}/ש'</td><td>${isNeck ? '<span class="neck">צוואר בקבוק</span>' : ''}</td></tr></table>
       <div class="buyrow">
         ${([1, 10, 'max'] as Buy[]).map(b => `<button class="amt ${this.buy === b ? 'on' : ''}" data-amt="${b}">${b === 'max' ? 'מקס' : `×${b}`}</button>`).join('')}
       </div>
-      <button class="upgrade" ${can ? '' : 'disabled'}>${st.lvl >= MAX_LVL ? 'רמה מקסימלית' : `שדרג · 🪙 ${big(cost)}`}</button>
+      <button class="upgrade" ${can ? '' : 'disabled'}>${st.lvl >= MAX_LVL ? 'רמה מקסימלית' : st.lvl >= cap ? `תקרה ${cap} · שדרגו את המפקדה` : `שדרג · 🪙 ${big(cost)}`}</button>
       ${mgrHtml}`;
   }
 
