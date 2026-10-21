@@ -144,7 +144,8 @@ export class BaseUI {
       <h3>הגנה ותקיפה</h3>
       ${def('armory', 'נשקייה', '⚔️', squadPower)}
       ${def('walls', 'חומות', '🧱', wallPower)}
-      ${this.rebirthHtml()}`;
+      ${this.rebirthHtml()}
+      <p class="muted classic"><a href="./classic.html">למשחק הקלאסי (השמירה הישנה) ←</a></p>`;
   }
 
   private dailyHtml(now: number): string {

@@ -117,7 +117,8 @@ function stampServiceWorker(): Plugin {
     writeBundle(options) {
       const dist = options.dir ? resolve(options.dir) : resolve(import.meta.dirname, 'dist');
       const swPath = join(dist, 'sw.js');
-      const htmlPath = join(dist, 'index.html');
+      // the classic game (classic.html since v2 became the home page) is the page that checks for updates
+      const htmlPath = existsSync(join(dist, 'classic.html')) ? join(dist, 'classic.html') : join(dist, 'index.html');
       if (!existsSync(swPath) || !existsSync(htmlPath)) return;
       const assets = readdirSync(join(dist, 'assets')).sort();
       const html = readFileSync(htmlPath, 'utf8');
@@ -162,7 +163,7 @@ export default defineConfig(({ command }) => ({
     chunkSizeWarningLimit: 1200,
     rollupOptions: {
       // v2 prototype (store/v2/DESIGN.md) ships as its own page next to the classic game
-      input: { main: resolve(import.meta.dirname, 'index.html'), v2: resolve(import.meta.dirname, 'v2.html') },
+      input: { main: resolve(import.meta.dirname, 'index.html'), classic: resolve(import.meta.dirname, 'classic.html') },
       output: {
         manualChunks: (id: string) => (id.includes('node_modules/pixi.js') ? 'pixi' : undefined),
       },

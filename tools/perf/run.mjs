@@ -43,7 +43,7 @@ function bundleStats() {
   // Initial set: <script type=module src>, <link rel=modulepreload>, then static `import ... from "./x.js"` / `import "./x.js"` (dynamic import() has parentheses and is skipped).
   const initial = new Set();
   const queue = [];
-  const html = fs.existsSync(path.join(dist, 'index.html')) ? fs.readFileSync(path.join(dist, 'index.html'), 'utf8') : '';
+  const html = fs.existsSync(path.join(dist, 'classic.html')) ? fs.readFileSync(path.join(dist, 'classic.html'), 'utf8') : '';
   for (const m of html.matchAll(/(?:src|href)="[^"]*?assets\/([^"]+\.js)"/g)) queue.push(m[1]);
   while (queue.length) {
     const f = queue.pop();
@@ -71,7 +71,7 @@ async function runScenario(port, name, sc) {
   try {
     await phoneSetup(c, { quality: sc.quality, throttle: 1, dpr });
     await c.send('HeapProfiler.enable');
-    await c.send('Page.navigate', { url: `http://127.0.0.1:${port}/?debug${sc.fixture ? `&perfFixture=${sc.fixture}` : ''}${arg("query", "")}` });
+    await c.send('Page.navigate', { url: `http://127.0.0.1:${port}/classic.html?debug${sc.fixture ? `&perfFixture=${sc.fixture}` : ''}${arg("query", "")}` });
     if (!await waitFor(c, '!!(window.__engine && window.__renderer && window.__renderer.postfx && window.__perf2)')) throw new Error('game did not start');
     await sleep(1500);
     await c.evalJs(`window.__perfFixture(${sc.floors}, ${sc.people})`);
@@ -159,7 +159,7 @@ async function runAudio(port, sc) {
   const c = await launch();
   try {
     await phoneSetup(c, { quality: 'medium', throttle: 1, dpr });
-    await c.send('Page.navigate', { url: `http://127.0.0.1:${port}/?debug` });
+    await c.send('Page.navigate', { url: `http://127.0.0.1:${port}/classic.html?debug` });
     if (!await waitFor(c, '!!(window.__engine && window.__audio)')) throw new Error('game did not start');
     await sleep(2500);
     const th = sc.throttle || throttle;
@@ -196,7 +196,7 @@ async function runOffline(port, sc) {
   const c = await launch();
   try {
     await phoneSetup(c, { quality: 'medium', throttle: 1, dpr });
-    await c.send('Page.navigate', { url: `http://127.0.0.1:${port}/?debug` });
+    await c.send('Page.navigate', { url: `http://127.0.0.1:${port}/classic.html?debug` });
     if (!await waitFor(c, '!!(window.__engine && window.__renderer && window.__perf2)')) throw new Error('game did not start');
     await sleep(1500);
     await c.evalJs(`window.__perfFixture(${sc.floors || 24}, ${sc.people || 60})`);

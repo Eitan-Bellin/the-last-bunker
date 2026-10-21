@@ -175,3 +175,4 @@ body.in-battle #hud, body.in-battle #nav, body.in-battle #panel, body.in-battle 
 #panel .chest .ic { font-size: 34px; }
 #panel .chest .rt { flex: 1; display: flex; flex-direction: column; }
 #panel .chest small { color: var(--muted); }
+#panel .classic a { color: #9fc8e0; }

@@ -187,7 +187,7 @@ const hudTs = read('src/ui/HUD.ts');
 if (/'hx-info'/.test(hudTs)) fail('HUD.ts: builds a second info row (.hx-info); the HUD is one row');
 
 // ---- 8. fonts are self-hosted -----------------------------------------------------------------------------------------------------------
-const html = read('index.html');
+const html = read('classic.html');
 if (/fonts\.googleapis\.com/.test(html)) fail('index.html still loads Google Fonts over the network');
 if (!/href="\.\/fonts\/fonts\.css"/.test(html)) fail('index.html does not link ./fonts/fonts.css');
 const fontsCss = existsSync(join(ROOT, 'public/fonts/fonts.css')) ? read('public/fonts/fonts.css') : '';
