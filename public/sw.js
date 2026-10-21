@@ -94,6 +94,16 @@ self.addEventListener('fetch', (event) => {
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
 
+  // Other pages (v2.html, privacy...) are fetched and cached under their own address: only the game's own page is
+  // stored as index.html, so opening another page can never replace the classic game offline.
+  if (req.mode === 'navigate' && !(url.pathname.endsWith('/') || url.pathname.endsWith('/index.html'))) {
+    event.respondWith(fetch(req).then((res) => {
+      if (res.ok) { const copy = res.clone(); caches.open(CACHE).then((c) => c.put(req, copy)); }
+      return res;
+    }).catch(async () => (await caches.match(req)) || Response.error()));
+    return;
+  }
+
   if (req.mode === 'navigate') {
     event.respondWith((async () => {
       const network = fetch(req).then((res) => {
