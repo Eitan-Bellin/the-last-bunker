@@ -46,6 +46,8 @@ export class BattleView {
   private onEnd: (win: boolean) => void = () => {};
   private loot = { coins: 0, gems: 0 };
   active = false;
+  /** Dev: barrages fire by themselves (?battle=N&auto) for screenshots. */
+  auto = new URLSearchParams(location.search).has('auto');
 
   constructor(app: Application) {
     this.app = app;
@@ -255,6 +257,7 @@ export class BattleView {
     if (!this.active || !this.sim) return;
     const sim = this.sim;
     if (!this.ended) {
+      if (this.auto) sim.autoBarrage();
       let left = Math.min(dt, 0.1);
       while (left > 0) { const s = Math.min(left, 0.033); sim.step(s); left -= s; }
       if (sim.result && !this.resultSeen) { this.resultSeen = true; setTimeout(() => this.finish(sim.result === 'win'), 900); }
