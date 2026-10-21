@@ -161,6 +161,8 @@ export default defineConfig(({ command }) => ({
     target: 'es2020',
     chunkSizeWarningLimit: 1200,
     rollupOptions: {
+      // v2 prototype (store/v2/DESIGN.md) ships as its own page next to the classic game
+      input: { main: resolve(import.meta.dirname, 'index.html'), v2: resolve(import.meta.dirname, 'v2.html') },
       output: {
         manualChunks: (id: string) => (id.includes('node_modules/pixi.js') ? 'pixi' : undefined),
       },
