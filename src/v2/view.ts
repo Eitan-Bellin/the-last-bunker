@@ -143,6 +143,12 @@ export class MineView {
   private surfFx = new Particles(false);
   private vendors: Fig[] = [];
   private surface3d: Room3D | null = null;
+  /** The Command Center on the surface (three looks by level). */
+  private ccSprite = new Sprite(Texture.EMPTY);
+  private ccShown = 0;
+  private ccLayers: Record<string, { x: number; y: number; w: number; h: number }> | null = null;
+  ccTier: () => number = () => 1;
+  onCommand: () => void = () => {};
   private shaftBg = new Graphics();
   private depotText!: Text;
   private elevBadge!: Text;
@@ -226,6 +232,7 @@ export class MineView {
       const r3 = new Room3D(d, WORLD_W, SURF_H);
       for (const o of [sky, back, ground, market, head]) o.visible = false;
       this.surfaceLayer.addChildAt(r3.root, 0);
+      this.surfaceLayer.addChildAt(this.ccSprite, 1);
       this.surface3d = r3;
       this.wheel.visible = false;
     });
@@ -552,6 +559,7 @@ export class MineView {
       const y = floorTop(i);
       zs.push({ x: 0, y: y, w: 250, h: 140, action: () => this.onOpen(i) });
     }
+    if (this.ccShown) zs.push({ x: this.ccSprite.x, y: this.ccSprite.y, w: this.ccSprite.width, h: Math.max(40, SURF_H - 120 - this.ccSprite.y), action: () => this.onCommand() });
     zs.push({ x: SHAFT_X - 150, y: SURF_H - 334, w: 310, h: 76, action: () => this.onOpen('elev') });
     zs.push({ x: MARKET_X - 150, y: SURF_H - 334, w: 340, h: 76, action: () => this.onOpen('market') });
     if (this.mine.digCost() !== null) zs.push({ x: 0, y: floorTop(n), w: ROOM_W, h: ROOM_H, action: () => this.onDig() });
@@ -642,6 +650,20 @@ export class MineView {
     this.cabText.text = e.carry > 0 ? big(e.carry) : '';
     this.cabText.position.set(SHAFT_X + SHAFT_W / 2, e.y - this.cab.height - 4);
     this.wheel.rotation = -e.y / 24;
+    const tier = this.ccTier();
+    if (tier !== this.ccShown && this.surface3d) {
+      this.ccShown = tier;
+      void (async () => {
+        this.ccLayers ??= await fetch(`${ART}v2/cc/layers.json`).then(r => r.json()).catch(() => null);
+        const L = this.ccLayers?.[String(tier)];
+        if (!L) return;
+        const t = await Assets.load<Texture>({ src: `${ART}v2/cc/cc${tier}.webp`, data: { autoGenerateMipmaps: true } });
+        this.ccSprite.texture = t;
+        this.ccSprite.position.set(L.x, L.y);
+        this.ccSprite.width = L.w;
+        this.ccSprite.height = L.h;
+      })();
+    }
     const moving = e.phase === 'down' || e.phase === 'up';
     this.surface3d?.update(dt, moving ? 1 : 0.25);
     this.cable.clear().moveTo(SHAFT_X + SHAFT_W / 2, this.surface3d ? SURF_H - 8 - 6.6 * 54 : SURF_H - 236).lineTo(SHAFT_X + SHAFT_W / 2, e.y - this.cab.height).stroke({ width: 3, color: 0x15120e });

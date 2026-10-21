@@ -159,6 +159,81 @@ sun.data.energy = 1.8
 sun.data.color = (1, 0.78, 0.55)
 sun.data.angle = math.radians(4)
 area((SW / 2, -4, 6), 180, 10, (0.6, 0.7, 0.9), rot=(math.radians(60), 0, 0))
+CC_TIER = int(sys.argv[sys.argv.index('--cc') + 1]) if '--cc' in sys.argv else 0
+if CC_TIER:
+    # render only the Command Center; everything already in the scene becomes a holdout (it still hides what is behind)
+    hold = bpy.data.collections.new('hold')
+    sc.collection.children.link(hold)
+    for o in list(sc.collection.objects):
+        if o.type in ('MESH', 'CURVE'):
+            sc.collection.objects.unlink(o)
+            hold.objects.link(o)
+    bpy.context.view_layer.layer_collection.children['hold'].holdout = True
+    bp.hide_render = True
+    sc.render.film_transparent = True
+    cx, cy = 3.5, 4.3
+    conc = mat('cc_conc', (0.30, 0.29, 0.27), rough=0.9, grime=0.55, scale=3, bump=0.35)
+    olive = mat('cc_olive', (0.22, 0.24, 0.16), metal=0.3, rough=0.6, grime=0.5, scale=5)
+    sandm = mat('cc_sand', (0.38, 0.33, 0.22), rough=0.95, grime=0.4, scale=20, bump=0.4)
+    flag = mat('cc_flag', (0.55, 0.42, 0.10), rough=0.8)
+    def mast(x, h):
+        pipe('mast', [(x, cy, 0), (x, cy, h)], 0.05, steel)
+        for k in range(3):
+            pipe('guy', [(x, cy, h * 0.8), (x + math.cos(k * 2.1) * 1.4, cy + math.sin(k * 2.1) * 1.0, 0)], 0.01, dark)
+        lm, _ = emissive('mast_lamp', (1, 0.15, 0.1), 10)
+        sphere('mast_top', (x, cy, h + 0.08), 0.08, lm)
+    if CC_TIER == 1:
+        for r in range(3):
+            for i in range(9 - r * 2):
+                sphere('cc_sb', (cx - 1.5 + r * 0.35 + i * 0.36, cy - 0.6, 0.16 + r * 0.27), 0.21, sandm, scale=(1.0, 0.75, 0.6))
+        box('cc_bunker', (cx, cy, 0.7), (3.0, 1.6, 1.4), conc, 0.05)
+        box('cc_door', (cx + 0.6, cy - 0.81, 0.55), (0.7, 0.04, 1.0), mat('cc_door', (0.25, 0.22, 0.18), metal=0.6, rough=0.5, grime=0.5), 0.01)
+        mast(cx - 1.0, 3.6)
+        pipe('pole', [(cx + 1.3, cy, 0), (cx + 1.3, cy, 2.8)], 0.03, steel)
+        bpy.ops.mesh.primitive_plane_add(size=1, location=(cx + 1.65, cy, 2.55), rotation=(math.pi / 2, 0, 0))
+        bpy.context.object.scale = (0.7, 0.45, 1)
+        bpy.context.object.data.materials.append(flag)
+    elif CC_TIER == 2:
+        box('cc_base', (cx, cy, 1.0), (3.4, 2.0, 2.0), conc, 0.05)
+        box('cc_tower', (cx - 0.6, cy, 2.6), (1.6, 1.6, 1.2), conc, 0.04)
+        box('cc_cab', (cx - 0.6, cy, 3.55), (2.0, 1.9, 0.7), olive, 0.03)
+        glass_m, _ = emissive('cc_win', (1, 0.8, 0.5), 2.5)
+        box('cc_wins', (cx - 0.6, cy - 0.96, 3.55), (1.7, 0.02, 0.35), glass_m, 0)
+        box('cc_roof', (cx - 0.6, cy, 3.98), (2.2, 2.1, 0.12), steel, 0.01)
+        bpy.ops.object.light_add(type='SPOT', location=(cx + 0.3, cy - 0.9, 4.1), rotation=(math.radians(60), 0, math.radians(-30)))
+        bpy.context.object.data.energy = 300
+        cyl('cc_search', (cx + 0.3, cy - 0.9, 4.15), 0.15, 0.25, steel, rot=(math.radians(60), 0, 0))
+        mast(cx + 1.2, 5.2)
+        for k in range(2):
+            sphere('cc_sb2', (cx + 1.0 + k * 0.4, cy - 1.2, 0.2), 0.22, sandm, scale=(1.0, 0.75, 0.6))
+    else:
+        box('cc_hq', (cx, cy, 1.5), (4.4, 2.4, 3.0), conc, 0.06)
+        box('cc_hq2', (cx - 0.5, cy, 3.6), (2.6, 2.0, 1.2), conc, 0.05)
+        glass_m, _ = emissive('cc_win', (1, 0.82, 0.55), 2.8)
+        for k in range(4):
+            box('cc_w', (cx - 1.6 + k * 1.05, cy - 1.21, 1.8), (0.6, 0.02, 0.5), glass_m, 0)
+        box('cc_w2', (cx - 0.5, cy - 1.01, 3.6), (2.0, 0.02, 0.35), glass_m, 0)
+        box('cc_banner', (cx + 1.2, cy - 1.22, 1.3), (0.6, 0.02, 1.6), mat('cc_ban', (0.5, 0.36, 0.08), rough=0.8), 0)
+        dish = empty('dish', (cx - 0.5, cy, 4.6))
+        bpy.ops.mesh.primitive_uv_sphere_add(radius=0.8, location=(0, 0, 0))
+        d = bpy.context.object
+        d.scale = (1, 1, 0.35)
+        d.rotation_euler = (math.radians(65), 0, math.radians(20))
+        d.data.materials.append(steel)
+        d.parent = dish
+        pipe('dish_post', [(cx - 0.5, cy, 4.2), (cx - 0.5, cy, 4.7)], 0.08, steel)
+        mast(cx + 1.6, 6.2)
+        for k in range(3):
+            bpy.ops.object.light_add(type='POINT', location=(cx - 1.5 + k * 1.5, cy - 1.6, 2.6))
+            bpy.context.object.data.energy = 40
+            bpy.context.object.data.color = (1, 0.8, 0.5)
+    post()
+    camera()
+    os.makedirs(out, exist_ok=True)
+    sc.render.filepath = os.path.join(out, f'cc{CC_TIER}.png')
+    bpy.ops.render.render(write_still=True)
+    print('DONE cc', CC_TIER)
+    sys.exit(0)
 post()
 camera()
 render(out, FR, still)

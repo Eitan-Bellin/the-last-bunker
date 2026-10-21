@@ -110,9 +110,9 @@ export class BattleView {
     this.gy = Math.round(H * 0.62);
     this.back.removeChildren();
     this.props.removeChildren();
-    const paintW = W * 1.55;
+    const paintW = W * 1.9;
     const paintH = (paintW / bg.width) * bg.height;
-    const py = this.gy - paintH * 0.8;
+    const py = this.gy - paintH * 0.78;
     const sky = new Graphics().rect(-40, -40, W + 80, py + 40).fill(0x4a3d2e);
     const ground = new Graphics().rect(-40, py + paintH - 2, W + 80, H - py - paintH + 80).fill(0x2a2117);
     const paint = new Sprite(bg);

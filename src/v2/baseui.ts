@@ -4,6 +4,7 @@ import { BUILDER_GEMS, CC_FLOORS, CC_LVL_CAP, CC_MAX, CC_BONUS, MAX_BUILDERS, de
 import { FLOORS } from './econ.ts';
 import { big, clock } from './format.ts';
 import type { Mine } from './mine.ts';
+import { POINT_BONUS, PRESTIGE_MIN_CC, canRebirth, pointsFor } from './prestige.ts';
 import { play } from './sound.ts';
 
 type Tab = 'mine' | 'command' | 'raids';
@@ -25,6 +26,8 @@ export class BaseUI {
   private lastKey = '';
   onToast: (t: string) => void = () => {};
   onBattle: (campId: number) => void = () => {};
+  onRebirth: () => void = () => {};
+  private confirmRebirth = false;
 
   constructor(mine: Mine, base: Base) {
     this.mine = mine;
@@ -134,7 +137,25 @@ export class BaseUI {
       ${bg !== null ? `<button class="buy" data-builder="1" ${bg <= this.mine.s.gems ? '' : 'disabled'}>👷 בנאי נוסף · 💎 ${bg}</button>` : ''}
       <h3>הגנה ותקיפה</h3>
       ${def('armory', 'נשקייה', '⚔️', squadPower)}
-      ${def('walls', 'חומות', '🧱', wallPower)}`;
+      ${def('walls', 'חומות', '🧱', wallPower)}
+      ${this.rebirthHtml()}`;
+  }
+
+  private rebirthHtml(): string {
+    const s = this.mine.s;
+    const p = s.prestige ?? { count: 0, points: 0, lifetime: 0 };
+    const gain = pointsFor(s.stats.earned);
+    const ok = canRebirth(s);
+    const pct = (n: number) => `${Math.round(n * POINT_BONUS * 100)}%`;
+    return `<h3>בונקר חדש ${p.count ? `· הבונקר ה-${p.count + 1}` : ''}</h3>
+      <div class="rebirth">
+        <p>מתחילים מכרה חדש מאפס, עם בונוס קבוע לכל המכירות. נשמרים: יהלומים, בנאים והבונוס.</p>
+        <div class="rb"><span>הבונוס היום</span><b>+${pct(p.points)}</b></div>
+        <div class="rb"><span>בונקר חדש עכשיו ייתן</span><b class="up">+${pct(gain)}</b></div>
+        ${this.confirmRebirth && ok
+          ? `<div class="confirm"><b>בטוח? המכרה, המפקדה והמטבעות יתאפסו.</b><div class="cb"><button class="buy" data-rebirth="yes">כן, בונקר חדש</button><button class="rush" data-rebirth="no">ביטול</button></div></div>`
+          : `<button class="buy big" data-rebirth="ask" ${ok ? '' : 'disabled'}>${ok ? `🏗️ הקם בונקר חדש · +${pct(gain)}` : s.base && s.base.cc < PRESTIGE_MIN_CC ? `נפתח במפקדה רמה ${PRESTIGE_MIN_CC}` : 'הרוויחו עוד כדי לקבל בונוס'}</button>`}
+      </div>`;
   }
 
   private raidsHtml(now: number): string {
@@ -166,6 +187,14 @@ export class BaseUI {
     const now = Date.now();
     let ok = false;
     let msg = '';
+    if (btn.dataset.rebirth) {
+      if (btn.dataset.rebirth === 'yes') { play('levelup'); this.onRebirth(); return; }
+      this.confirmRebirth = btn.dataset.rebirth === 'ask';
+      play('click', { volume: 0.5 });
+      this.lastKey = '';
+      this.render();
+      return;
+    }
     if (btn.dataset.cc) { ok = this.base.startCC(now); msg = 'הבנאים התחילו לשדרג את המפקדה'; }
     else if (btn.dataset.def) { ok = this.base.startDef(btn.dataset.def as 'armory' | 'walls', now); msg = 'הבנייה התחילה'; }
     else if (btn.dataset.builder) { ok = this.base.hireBuilder(); msg = 'בנאי חדש הצטרף'; }

@@ -37,3 +37,12 @@ if (!s.base.reports.length) fail('report');
 now += 3 * 3600_000; base.step(now);
 if (!s.base.reports.some(r => r.kind === 'defense')) fail('raid on the bunker');
 console.log('base ok', { cc: s.base.cc, floors: mine.s.floors.length, reports: s.base.reports.map(r => `${r.kind}:${r.win}`), gems: s.gems });
+
+// new bunker
+import { canRebirth, pointsFor, prestigeMul, rebirth } from '../src/v2/prestige.ts';
+s.stats.earned = 8e9;
+s.base.cc = 4;
+if (!canRebirth(s)) fail('can rebirth at cc 4 with 8e9 earned');
+const next = rebirth(s, now);
+if (next.prestige?.points !== pointsFor(8e9) || next.floors.length !== 1 || next.gems !== s.gems || next.base?.cc !== 1) fail('rebirth keeps gems/points, resets mine');
+console.log('rebirth ok', { points: next.prestige.points, mul: prestigeMul(next.prestige) });

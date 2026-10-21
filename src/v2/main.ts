@@ -8,6 +8,7 @@ import { FLOORS } from './econ.ts';
 import { Base, newBase, CC_FLOORS } from './base.ts';
 import { BaseUI } from './baseui.ts';
 import { BattleView } from './battleview.ts';
+import { prestigeMul, rebirth } from './prestige.ts';
 import { big, clock } from './format.ts';
 
 const params = new URLSearchParams(location.search);
@@ -32,12 +33,13 @@ if (save.gems === undefined || Number.isNaN(save.gems)) save.gems = 15;
 const mine = new Mine(save);
 const base = new Base(mine, save.base);
 mine.levelCap = () => base.levelCap();
-mine.saleMul = () => 1 + base.incomeBonus();
+mine.saleMul = () => (1 + base.incomeBonus()) * prestigeMul(save.prestige);
 const awayS = (Date.now() - save.savedAt) / 1000;
 base.step(Date.now());
 const earnedAway = awayS > 30 ? mine.offline(awayS) : 0;
 
 function persist(): void {
+  if (rebirthing) return;
   mine.s.savedAt = Date.now();
   try { localStorage.setItem(KEY, JSON.stringify(mine.s)); } catch { /* storage full: keep playing */ }
 }
@@ -46,6 +48,17 @@ const view = new MineView(mine);
 const ui = new MineUI(mine);
 const bui = new BaseUI(mine, base);
 bui.onToast = t => ui.toast(t);
+bui.onRebirth = () => {
+  const next = rebirth(mine.s, Date.now());
+  next.savedAt = Date.now();
+  try {
+    localStorage.setItem(`${KEY}_before_rebirth`, JSON.stringify(mine.s));
+    localStorage.setItem(KEY, JSON.stringify(next));
+  } catch { return; }
+  rebirthing = true;
+  location.reload();
+};
+let rebirthing = false;
 
 async function start(): Promise<void> {
   await document.fonts.load('700 20px Rubik').catch(() => null);
@@ -62,6 +75,8 @@ async function start(): Promise<void> {
       persist();
     }).catch(err => ui.toast(`הקרב לא נטען: ${String(err)}`));
   };
+  view.ccTier = () => (base.s.cc >= 7 ? 3 : base.s.cc >= 4 ? 2 : 1);
+  view.onCommand = () => bui.show('command');
   view.onOpen = id => ui.openStage(id);
   view.onTap = (id: StageId) => {
     if (mine.tap(id)) play(id === 'elev' ? 'elevator' : 'click', { volume: id === 'elev' ? 0.35 : 0.6, minGapMs: 120 });

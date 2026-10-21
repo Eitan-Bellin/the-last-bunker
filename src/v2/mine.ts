@@ -51,6 +51,8 @@ export interface MineSave {
   stats: { earned: number; taps: number; playS: number };
   /** Command Center, builders, raids (added with the base layer; created on load when missing). */
   base?: BaseSave;
+  /** New-bunker runs: how many, bonus points, coins earned in earlier runs. */
+  prestige?: { count: number; points: number; lifetime: number };
 }
 
 export function newSave(): MineSave {
