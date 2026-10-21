@@ -53,6 +53,7 @@ export interface MineSave {
   base?: BaseSave;
   /** New-bunker runs: how many, bonus points, coins earned in earlier runs. */
   prestige?: { count: number; points: number; lifetime: number };
+  daily?: import('./daily.ts').DailySave;
 }
 
 export function newSave(): MineSave {

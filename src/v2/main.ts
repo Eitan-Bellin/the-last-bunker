@@ -9,6 +9,7 @@ import { Base, newBase, CC_FLOORS } from './base.ts';
 import { BaseUI } from './baseui.ts';
 import { BattleView } from './battleview.ts';
 import { prestigeMul, rebirth } from './prestige.ts';
+import { Daily } from './daily.ts';
 import { big, clock } from './format.ts';
 
 const params = new URLSearchParams(location.search);
@@ -46,7 +47,9 @@ function persist(): void {
 
 const view = new MineView(mine);
 const ui = new MineUI(mine);
-const bui = new BaseUI(mine, base);
+const daily = new Daily(mine, base, save.daily, Date.now());
+save.daily = daily.s;
+const bui = new BaseUI(mine, base, daily);
 bui.onToast = t => ui.toast(t);
 bui.onRebirth = () => {
   const next = rebirth(mine.s, Date.now());
@@ -167,7 +170,7 @@ async function start(): Promise<void> {
     for (const id of ['elev', 'market', ...mine.s.floors.map((_, i) => i)] as StageId[]) { mine.hire(id); mine.upgrade(id, 30); }
   }
   if (params.has('cam')) view.setCam(Number(params.get('cam')));
-  if (params.has('tab')) bui.show(params.get('tab') as 'command' | 'raids');
+  if (params.has('tab')) bui.show(params.get('tab') as 'command' | 'raids' | 'daily');
   if (params.has('battle')) { base.step(Date.now()); setTimeout(() => bui.onBattle(base.s.camps[Number(params.get('battle')) || 0].id), 300); }
   if (params.has('open')) { const o = params.get('open')!; ui.openStage(o === 'elev' || o === 'market' ? o : Number(o)); }
 

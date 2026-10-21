@@ -4,10 +4,11 @@ import { BUILDER_GEMS, CC_FLOORS, CC_LVL_CAP, CC_MAX, CC_BONUS, MAX_BUILDERS, de
 import { FLOORS } from './econ.ts';
 import { big, clock } from './format.ts';
 import type { Mine } from './mine.ts';
+import { TASK_TEXT, type Daily } from './daily.ts';
 import { POINT_BONUS, PRESTIGE_MIN_CC, canRebirth, pointsFor } from './prestige.ts';
 import { play } from './sound.ts';
 
-type Tab = 'mine' | 'command' | 'raids';
+type Tab = 'mine' | 'command' | 'raids' | 'daily';
 const $ = <T extends HTMLElement>(sel: string) => document.querySelector(sel) as T;
 const ART = `${import.meta.env.BASE_URL}art/`;
 
@@ -29,9 +30,12 @@ export class BaseUI {
   onRebirth: () => void = () => {};
   private confirmRebirth = false;
 
-  constructor(mine: Mine, base: Base) {
+  private daily: Daily;
+
+  constructor(mine: Mine, base: Base, daily: Daily) {
     this.mine = mine;
     this.base = base;
+    this.daily = daily;
     $('#nav').addEventListener('click', e => {
       const b = (e.target as HTMLElement).closest('button');
       if (b?.dataset.tab) this.show(b.dataset.tab as Tab);
@@ -60,6 +64,8 @@ export class BaseUI {
     const next = [...b.jobs].sort((x, y) => x.endAt - y.endAt)[0];
     $('#builders').textContent = `👷 ${this.base.freeBuilders()}/${b.builders}${next ? ` · ${clock((next.endAt - now) / 1000)}` : ''}`;
     $('#nav [data-tab="command"]').classList.toggle('dot', this.base.freeBuilders() > 0 && (this.base.ccCost() ?? Infinity) <= this.mine.s.cash);
+    this.daily.update(now);
+    $('#nav [data-tab="daily"]').classList.toggle('dot', this.daily.claimable() > 0);
     $('#nav [data-tab="raids"]').classList.toggle('dot', (!b.squad || b.squad.returnAt <= now) && b.camps.some(c => c.respawnAt === null && this.base.chance(c) > 0.6));
     if (this.tab !== 'mine') this.render();
     if (!$('#report').classList.contains('on') && this.base.unseen().length) this.nextReport();
@@ -87,7 +93,7 @@ export class BaseUI {
 
   private render(): void {
     const now = Date.now();
-    const html = this.tab === 'command' ? this.commandHtml(now) : this.tab === 'raids' ? this.raidsHtml(now) : '';
+    const html = this.tab === 'command' ? this.commandHtml(now) : this.tab === 'raids' ? this.raidsHtml(now) : this.tab === 'daily' ? this.dailyHtml(now) : '';
     const key = html;
     if (key === this.lastKey) return;
     this.lastKey = key;
@@ -141,6 +147,23 @@ export class BaseUI {
       ${this.rebirthHtml()}`;
   }
 
+  private dailyHtml(now: number): string {
+    const d = this.daily;
+    const end = new Date(now);
+    end.setUTCHours(24, 0, 0, 0);
+    const rows = d.s.tasks.map((t, i) => {
+      const done = t.progress >= t.target;
+      return `<div class="job"><div class="jt"><b>${TASK_TEXT[t.kind](big(t.target))}</b><small>${big(t.progress)}/${big(t.target)}</small></div>
+        <div class="bar"><i style="width:${(100 * t.progress / t.target).toFixed(1)}%"></i></div>
+        ${t.claimed ? '<span class="busy">✓ נאסף</span>' : `<button class="buy" data-claim="${i}" ${done ? '' : 'disabled'}>אסוף · 💎 ${t.gems}</button>`}</div>`;
+    }).join('');
+    const ready = d.chestReady();
+    return `<div class="phead"><h2>משימות היום</h2><small>משימות חדשות בעוד ${clock((end.getTime() - now) / 1000)}</small></div>
+      ${rows}
+      <div class="chest ${ready ? 'ready' : ''}"><div class="ic">🎁</div><div class="rt"><b>תיבת היום</b><small>סיימו את שלוש המשימות: 💎 15 + 🪙 ${big(d.chestCoins())}</small></div>
+        ${d.s.chest ? '<span class="busy">✓ נפתחה</span>' : `<button class="buy" data-chest="1" ${ready ? '' : 'disabled'}>פתח</button>`}</div>`;
+  }
+
   private rebirthHtml(): string {
     const s = this.mine.s;
     const p = s.prestige ?? { count: 0, points: 0, lifetime: 0 };
@@ -187,6 +210,21 @@ export class BaseUI {
     const now = Date.now();
     let ok = false;
     let msg = '';
+    if (btn.dataset.claim) {
+      const ok2 = this.daily.claim(Number(btn.dataset.claim));
+      play(ok2 ? 'coin' : 'error', { volume: 0.8 });
+      this.lastKey = '';
+      this.render();
+      return;
+    }
+    if (btn.dataset.chest) {
+      const ok2 = this.daily.openChest();
+      play(ok2 ? 'achievement' : 'error', { volume: 0.9 });
+      if (ok2) this.onToast('תיבת היום נפתחה! 💎 15');
+      this.lastKey = '';
+      this.render();
+      return;
+    }
     if (btn.dataset.rebirth) {
       if (btn.dataset.rebirth === 'yes') { play('levelup'); this.onRebirth(); return; }
       this.confirmRebirth = btn.dataset.rebirth === 'ask';
