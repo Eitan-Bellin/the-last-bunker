@@ -87,7 +87,7 @@ export class MineUI {
     el.innerHTML = `
       <div class="card">
         <h2>ברוך שובך!</h2>
-        <p>בזמן שלא היית (${clock(seconds)}) המנהלים הרוויחו</p>
+        <p>בזמן שלא היית (${clock(seconds)}) המנהלים הרוויחו${seconds > this.mine.offlineCap() ? `<br><small>(נספרות עד ${this.mine.offlineCap() / 3600} שעות · המפקדה מאריכה)</small>` : ''}</p>
         <div class="amount">🪙 ${big(amount)}</div>
         <div class="two">
           <button class="go">אסוף</button>

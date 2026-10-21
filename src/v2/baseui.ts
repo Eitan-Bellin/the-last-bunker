@@ -1,7 +1,7 @@
 // v2 base screens: the bottom bar (mine / command / raids), the Command Center panel (level, builders, armory, walls),
 // the raid map (camp cards, the squad on its way, the bunker's defense) and battle reports.
 import { BUILDER_GEMS, CC_FLOORS, CC_LVL_CAP, CC_MAX, CC_BONUS, MAX_BUILDERS, defCap, squadPower, wallPower, type Base, type Job, type Report } from './base.ts';
-import { FLOORS } from './econ.ts';
+import { FLOORS, offlineCapFor } from './econ.ts';
 import { big, clock } from './format.ts';
 import type { Mine } from './mine.ts';
 import { TASK_TEXT, type Daily } from './daily.ts';
@@ -119,6 +119,7 @@ export class BaseUI {
       CC_LVL_CAP[cc + 1] > CC_LVL_CAP[cc] ? `תקרת שדרוג ${CC_LVL_CAP[cc + 1]}` : '',
       CC_BONUS[cc + 1] > CC_BONUS[cc] ? `בונוס מכירה +${Math.round(CC_BONUS[cc + 1] * 100)}%` : '',
       `נשקייה וחומות עד רמה ${defCap(cc + 1)}`,
+      offlineCapFor(cc + 1) > offlineCapFor(cc) ? `רווח בהיעדרות עד ${offlineCapFor(cc + 1) / 3600} שעות` : '',
     ].filter(Boolean) : [];
     const free = this.base.freeBuilders() > 0;
     const def = (kind: 'armory' | 'walls', title: string, icon: string, pow: (l: number) => number) => {

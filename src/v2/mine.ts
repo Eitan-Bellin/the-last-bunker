@@ -105,6 +105,8 @@ export class Mine {
   saleMul = () => 1;
   /** Extra sale multiplier that applies only while playing (the gem turbo), never to time away. */
   liveMul = () => 1;
+  /** Longest time away that still earns (seconds). */
+  offlineCap = () => OFFLINE_CAP_S;
   private listeners: ((e: MineEvent) => void)[] = [];
 
   constructor(save: MineSave) {
@@ -271,7 +273,7 @@ export class Mine {
 
   /** Credits `seconds` away from the game for the managed stages; returns the cash earned. */
   offline(seconds: number): number {
-    const dt = Math.min(seconds, OFFLINE_CAP_S);
+    const dt = Math.min(seconds, this.offlineCap());
     if (dt <= 0) return 0;
     const r = this.rates();
     this.s.floors.forEach((f, i) => { if (f.mgr) f.crate += r.floors[i] * dt; });

@@ -69,8 +69,9 @@ export const TURBO_S = 30 * 60;
 export const TURBO_GEMS = 10;
 export const OFFLINE_DOUBLE_GEMS = 5;
 
-/** Offline earnings are credited for at most this long. */
+/** Offline earnings are credited for at most this long (the Command Center adds an hour per level, up to 8 h). */
 export const OFFLINE_CAP_S = 2 * 3600;
+export const offlineCapFor = (cc: number) => Math.min(8, 2 + Math.max(0, cc - 1)) * 3600;
 
 /** Total price of buying `n` levels from `lvl` with a per-level price function. */
 export function bulkCost(price: (lvl: number) => number, lvl: number, n: number): number {
