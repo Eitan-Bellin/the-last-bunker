@@ -34,3 +34,6 @@ store/gfx-audit/shots/
 
 # Personal save exports never go to the public repo
 save-export*.txt
+art-src/v2/*/f_*.png
+art-src/v2/people/
+tools/blender/__pycache__/

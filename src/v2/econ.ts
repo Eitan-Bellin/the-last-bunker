@@ -36,7 +36,7 @@ export const tierOf = (lvl: number) => (lvl >= TIER_AT[2] ? 2 : lvl >= TIER_AT[1
 // --- floors ---
 export const floorWorkers = (lvl: number) => 1 + count(CREW_STEPS, lvl);
 /** Goods one worker carries per trip. */
-export const floorLoad = (i: number, lvl: number) => 6 * 7 ** i * (1 + 0.35 * (lvl - 1)) * MILESTONE_MUL ** milestonesPassed(lvl);
+export const floorLoad = (i: number, lvl: number) => 11 * 7 ** i * (1 + 0.35 * (lvl - 1)) * MILESTONE_MUL ** milestonesPassed(lvl);
 export const floorUpCost = (i: number, lvl: number) => 8 * 9 ** i * 1.13 ** (lvl - 1);
 export const DIG_COST = [0, 100, 2e3, 3e4, 4e5, 5e6, 7e7, 1e9];
 export const floorMgrCost = (i: number) => 120 * 12 ** i;
@@ -50,7 +50,7 @@ export const ELEV_MGR_COST = 200;
 // --- market (porters carry from the headframe to the stalls) ---
 export const porters = (lvl: number) => 1 + count(CREW_STEPS, lvl);
 export const porterCap = (lvl: number) => 40 * 1.15 ** (lvl - 1) * MILESTONE_MUL ** milestonesPassed(lvl);
-export const porterSpeed = (lvl: number) => Math.min(260, 130 * (1 + 0.01 * (lvl - 1)));
+export const porterSpeed = (lvl: number) => Math.min(170, 90 * (1 + 0.01 * (lvl - 1)));
 export const marketUpCost = (lvl: number) => 15 * 1.16 ** (lvl - 1);
 export const MARKET_MGR_COST = 300;
 

@@ -1,0 +1,1 @@
+{"cell": [89, 160], "foot": [39.0, 154.6], "pxPerMetre": 78.04878230324681, "fps": 12, "anims": {"idle": {"row": 0, "n": 12}, "walk": {"row": 1, "n": 12}, "walkCarry": {"row": 2, "n": 12}, "hammer": {"row": 3, "n": 12}, "lift": {"row": 4, "n": 12}, "tend": {"row": 5, "n": 12}, "type": {"row": 6, "n": 12}, "wrench": {"row": 7, "n": 12}, "inspect": {"row": 8, "n": 12}}}

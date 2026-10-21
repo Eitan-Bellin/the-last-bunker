@@ -20,7 +20,8 @@ export const CRATE_X = 482;
 /** Porter x at the headframe (pick-up) and at the stalls (sale). */
 export const DEPOT_X = 560;
 export const MARKET_X = 190;
-export const WALK = 170;
+/** Worker walking speed: 1.6 m/s at 54 units per metre. */
+export const WALK = 86;
 export const WORK_T = 2;
 export const LOAD_T = 0.5;
 export const UNLOAD_T = 0.6;

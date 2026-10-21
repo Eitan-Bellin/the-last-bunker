@@ -4,6 +4,18 @@ import { Application, Assets, Container, Graphics, Sprite, Text, Texture, Tiling
 import { Body3D, bodyData, type Anim3, type BodyKind } from '../rendering/people3d.ts';
 import { FLOORS, tierOf } from './econ.ts';
 import { Particles, RoomFx, softDot, type Light } from './roomfx.ts';
+import { Room3D, loadRoom3D } from './room3d.ts';
+import { Worker3D, loadPeople, peopleReady, type WorkerAnim } from './people.ts';
+
+/** Anything drawn as a person: the pre-rendered 3D worker when its atlases loaded, else the older body. */
+interface Fig { root: Container; update(dt: number, x: number, y: number, anim: Anim3, faceRight: boolean): void }
+const TO_WORKER: Partial<Record<Anim3, WorkerAnim>> = { water: 'tend', talk: 'idle', look: 'idle', stir: 'wrench', dig: 'lift', carry: 'walkCarry' };
+let lookSeq = 0;
+function makeFig(kind: BodyKind): Fig {
+  if (!peopleReady()) return new Figure(kind);
+  const w = new Worker3D(lookSeq++);
+  return { root: w.root, update: (dt, x, y, anim, right) => w.update(dt, x, y, (TO_WORKER[anim] ?? anim) as WorkerAnim, right) };
+}
 import { big } from './format.ts';
 import {
   CRATE_X, DEPOT_X, FLOOR_H, MARKET_X, Mine, ROOM_H, ROOM_W, SHAFT_W, SHAFT_X, SURF_H, WORLD_W, floorTop, stopY,
@@ -89,6 +101,8 @@ interface FloorView {
   inner: Container;
   painting: Sprite;
   fx: RoomFx;
+  room3d: Room3D | null;
+  crateBox: Graphics;
   activity: number;
   tier: number;
   crate: Text;
@@ -97,7 +111,7 @@ interface FloorView {
   mgr: Container;
   mgrKey: string;
   hint: Text;
-  people: Figure[];
+  people: Fig[];
 }
 
 function roundBox(w: number, h: number, color: number, alpha = 0.92, r = 14): Graphics {
@@ -125,7 +139,8 @@ export class MineView {
   private landingLamps = new Container();
   private wheel = new Graphics();
   private surfFx = new Particles(false);
-  private vendors: Figure[] = [];
+  private vendors: Fig[] = [];
+  private surface3d: Room3D | null = null;
   private shaftBg = new Graphics();
   private depotText!: Text;
   private elevBadge!: Text;
@@ -135,7 +150,7 @@ export class MineView {
   private dig = new Container();
   private digText!: Text;
   private digPreview: Sprite | null = null;
-  private porterFigs: Figure[] = [];
+  private porterFigs: Fig[] = [];
   private floats: { t: Text; life: number; vy: number }[] = [];
   private pulses: { g: Graphics; life: number }[] = [];
   private zones: HitZone[] = [];
@@ -164,6 +179,7 @@ export class MineView {
     ];
     await Promise.all(keys.map(k => Assets.load({ alias: k, src: `${ART}${k}.webp`, data: { autoGenerateMipmaps: true } }).catch(() => null)));
     this.meta = await fetch(`${ART}meta.json`).then(r => r.json()).catch(() => ({}));
+    await loadPeople();
     this.app.stage.addChild(this.world);
     this.rock = new TilingSprite({ texture: Assets.get('backdrops/rock') ?? Texture.WHITE, width: WORLD_W, height: 100 });
     this.rock.tint = 0x8a8178;
@@ -200,6 +216,15 @@ export class MineView {
     head.scale.set(-0.62, 0.62); // mirrored (extends left of its position) so the tower stands over the shaft on the right
     head.position.set(WORLD_W, SURF_H + 10);
     this.surfaceLayer.addChild(sky, back, ground, market, head);
+    void loadRoom3D('surface').then(d => {
+      if (!d) return;
+      // the pre-rendered surface replaces the painted pieces; its sheave wheel replaces the drawn one
+      const r3 = new Room3D(d, WORLD_W, SURF_H);
+      for (const o of [sky, back, ground, market, head]) o.visible = false;
+      this.surfaceLayer.addChildAt(r3.root, 0);
+      this.surface3d = r3;
+      this.wheel.visible = false;
+    });
     this.depotText = label('', 22);
     this.depotText.anchor.set(0.5, 1);
     this.depotText.position.set(DEPOT_X - 40, SURF_H - 150);
@@ -308,7 +333,18 @@ export class MineView {
     const ui = new Container();
     ui.addChild(badgeBg, badge, mgr, hint);
     this.uiLayer.addChild(ui);
-    return { root, inner, painting, fx, activity: 0, tier, crate, badge, badgeBg, mgr, mgrKey: '', hint, people: [] };
+    const fv: FloorView = { root, inner, painting, fx, room3d: null, crateBox, activity: 0, tier, crate, badge, badgeBg, mgr, mgrKey: '', hint, people: [] };
+    void loadRoom3D(art).then(d => {
+      if (!d) return;
+      // a pre-rendered 3D room replaces the painting, its effects and the drawn crate (the render has its own)
+      const r3 = new Room3D(d, ROOM_W, ROOM_H);
+      r3.root.position.set(0, y);
+      inner.visible = false;
+      crateBox.visible = false;
+      root.addChildAt(r3.root, 0);
+      fv.room3d = r3;
+    });
+    return fv;
   }
 
   private drawManager(fv: { mgr: Container; mgrKey: string }, id: StageId, x = 0, y = 0): void {
@@ -524,13 +560,14 @@ export class MineView {
       fv.hint.alpha = blink;
       const ws = m.workers[i];
       while (fv.people.length < ws.length) {
-        const fig = new Figure(pick(['man', 'woman', 'man', 'woman', 'elder'] as BodyKind[]));
+        const fig = makeFig(pick(['man', 'woman', 'man', 'woman', 'elder'] as BodyKind[]));
         fv.people.push(fig);
         this.peopleLayer.addChild(fig.root);
       }
       const working = ws.filter(w => w.phase !== 'idle').length / ws.length;
       fv.activity += (working - fv.activity) * Math.min(1, dt * 3);
-      fv.fx.update(dt, fv.activity);
+      if (fv.room3d) fv.room3d.update(dt, fv.activity);
+      else fv.fx.update(dt, fv.activity);
       const feet = floorTop(i) + FEET_Y;
       ws.forEach((w, k) => {
         const anim: Anim3 = w.phase === 'out' ? 'walk' : w.phase === 'back' ? 'walkCarry' : w.phase === 'work' ? WORK_ANIM[FLOORS[i].art] ?? 'hammer' : 'idle';
@@ -544,7 +581,9 @@ export class MineView {
     this.cabText.text = e.carry > 0 ? big(e.carry) : '';
     this.cabText.position.set(SHAFT_X + SHAFT_W / 2, e.y - this.cab.height - 4);
     this.wheel.rotation = -e.y / 24;
-    this.cable.clear().moveTo(SHAFT_X + SHAFT_W / 2, SURF_H - 236).lineTo(SHAFT_X + SHAFT_W / 2, e.y - this.cab.height).stroke({ width: 3, color: 0x15120e });
+    const moving = e.phase === 'down' || e.phase === 'up';
+    this.surface3d?.update(dt, moving ? 1 : 0.25);
+    this.cable.clear().moveTo(SHAFT_X + SHAFT_W / 2, this.surface3d ? SURF_H - 8 - 6.6 * 54 : SURF_H - 236).lineTo(SHAFT_X + SHAFT_W / 2, e.y - this.cab.height).stroke({ width: 3, color: 0x15120e });
     // surface
     this.depotText.text = s.depot >= 1 ? `📦 ${big(s.depot)}` : '';
     const eAfford = m.upgradeCost('elev', 1) <= s.cash;
@@ -557,21 +596,21 @@ export class MineView {
     this.marketHint.visible = m.idle('market') && s.depot >= 1;
     this.elevHint.alpha = this.marketHint.alpha = blink;
     while (this.porterFigs.length < m.porters.length) {
-      const fig = new Figure(pick(['man', 'woman'] as BodyKind[]));
+      const fig = makeFig(pick(['man', 'woman'] as BodyKind[]));
       this.porterFigs.push(fig);
       this.peopleLayer.addChild(fig.root);
     }
     m.porters.forEach((p, k) => {
       const anim: Anim3 = p.phase === 'go' ? 'walkCarry' : p.phase === 'back' ? 'walk' : 'idle';
-      this.porterFigs[k].update(dt, p.x + (p.phase === 'idle' ? -k * 18 : 0), SURF_H + 2 + (k % 2) * 5, anim, p.phase === 'back' || p.phase === 'idle');
+      this.porterFigs[k].update(dt, p.x + (p.phase === 'idle' ? -k * 18 : 0), SURF_H - 6 + (k % 2) * 4, anim, p.phase === 'back' || p.phase === 'idle');
     });
     while (this.vendors.length < 2) {
-      const fig = new Figure(this.vendors.length ? 'elder' : 'woman');
+      const fig = makeFig(this.vendors.length ? 'elder' : 'woman');
       this.vendors.push(fig);
       this.peopleLayer.addChildAt(fig.root, 0);
     }
-    this.vendors[0].update(dt, MARKET_X - 70, SURF_H - 30, 'idle', true);
-    this.vendors[1].update(dt, MARKET_X + 80, SURF_H - 30, this.mine.porters.some(p => p.phase === 'sell') ? 'talk' : 'look', false);
+    this.vendors[0].update(dt, MARKET_X - 70, SURF_H - 10, 'idle', true);
+    this.vendors[1].update(dt, MARKET_X + 80, SURF_H - 10, this.mine.porters.some(p => p.phase === 'sell') ? 'talk' : 'look', false);
     if (Math.random() < dt * 2.5) this.surfFx.spawn({ x: Math.random() * WORLD_W, y: SURF_H - 10 - Math.random() * 60, vx: 14 + Math.random() * 10, vy: -3, life: 4, size: 10, color: 0xc8b090, alpha: 0.18, grow: 6 });
     if (e.phase === 'down' || e.phase === 'up') {
       if (Math.random() < dt * 6) this.surfFx.spawn({ x: SHAFT_X + SHAFT_W / 2 + (Math.random() - 0.5) * 100, y: e.y - this.cab.height * Math.random(), vy: e.phase === 'down' ? -30 : 30, life: 0.8, size: 6, color: 0x9a8a70, alpha: 0.3 });
