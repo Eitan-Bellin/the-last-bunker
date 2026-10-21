@@ -94,6 +94,11 @@ async function start(): Promise<void> {
     for (const id of ['elev', 'market', 0, 1, 2] as StageId[]) mine.hire(id);
     mine.upgrade(0, 30); mine.upgrade(1, 12); mine.upgrade('elev', 20); mine.upgrade('market', 15);
   }
+  if (params.get('scene') === 'late' && mine.s.floors.length === 1) {
+    mine.s.cash += 1e12;
+    while (mine.dig()) { /* open every floor */ }
+    for (const id of ['elev', 'market', ...mine.s.floors.map((_, i) => i)] as StageId[]) { mine.hire(id); mine.upgrade(id, 30); }
+  }
   if (params.has('cam')) view.setCam(Number(params.get('cam')));
   if (params.has('open')) { const o = params.get('open')!; ui.openStage(o === 'elev' || o === 'market' ? o : Number(o)); }
 

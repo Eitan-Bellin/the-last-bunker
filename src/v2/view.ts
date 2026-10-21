@@ -3,6 +3,7 @@
 import { Application, Assets, Container, Graphics, Sprite, Text, Texture, TilingSprite } from 'pixi.js';
 import { Body3D, bodyData, type Anim3, type BodyKind } from '../rendering/people3d.ts';
 import { FLOORS, tierOf } from './econ.ts';
+import { Particles, RoomFx, softDot, type Light } from './roomfx.ts';
 import { big } from './format.ts';
 import {
   CRATE_X, DEPOT_X, FLOOR_H, MARKET_X, Mine, ROOM_H, ROOM_W, SHAFT_W, SHAFT_X, SURF_H, WORLD_W, floorTop, stopY,
@@ -11,9 +12,16 @@ import {
 
 const ART = `${import.meta.env.BASE_URL}art/`;
 const FONT = 'Rubik, system-ui, sans-serif';
-/** Feet line inside a room painting (fraction of the painting height). */
-const FEET = 0.9;
-const PERSON_SCALE = 1.25;
+/** Floor line of each room painting (fraction of its height); the window is cropped so it sits FEET_PAD above the slab. */
+const FLOOR_LINE: Record<string, number> = {
+  recycler: 0.88, farm: 0.87, hydroponics: 0.88, seedLab: 0.9, componentsPlant: 0.8, alloyFoundry: 0.82, dataCenter: 0.86, reactor: 0.87,
+};
+const FEET_PAD = 16;
+/** Feet line in world units from the top of a floor. */
+const FEET_Y = ROOM_H - FEET_PAD;
+const PAINT_H = (ROOM_W / 720) * 522;
+const cropTop = (art: string) => Math.max(0, Math.min(PAINT_H - ROOM_H, (FLOOR_LINE[art] ?? 0.88) * PAINT_H + FEET_PAD - ROOM_H));
+const PERSON_SCALE = 1.05;
 const WORK_ANIM: Record<string, Anim3> = {
   recycler: 'hammer', farm: 'tend', hydroponics: 'water', seedLab: 'inspect', componentsPlant: 'wrench',
   alloyFoundry: 'lift', dataCenter: 'type', reactor: 'wrench',
@@ -78,7 +86,10 @@ class Figure {
 
 interface FloorView {
   root: Container;
+  inner: Container;
   painting: Sprite;
+  fx: RoomFx;
+  activity: number;
   tier: number;
   crate: Text;
   badge: Text;
@@ -111,6 +122,10 @@ export class MineView {
   private cab!: Sprite;
   private cabText!: Text;
   private cable = new Graphics();
+  private landingLamps = new Container();
+  private wheel = new Graphics();
+  private surfFx = new Particles(false);
+  private vendors: Figure[] = [];
   private shaftBg = new Graphics();
   private depotText!: Text;
   private elevBadge!: Text;
@@ -148,6 +163,7 @@ export class MineView {
       ...Array.from({ length: 14 }, (_, i) => `portraits/p${String(i + 1).padStart(2, '0')}`),
     ];
     await Promise.all(keys.map(k => Assets.load({ alias: k, src: `${ART}${k}.webp`, data: { autoGenerateMipmaps: true } }).catch(() => null)));
+    this.meta = await fetch(`${ART}meta.json`).then(r => r.json()).catch(() => ({}));
     this.app.stage.addChild(this.world);
     this.rock = new TilingSprite({ texture: Assets.get('backdrops/rock') ?? Texture.WHITE, width: WORLD_W, height: 100 });
     this.rock.tint = 0x8a8178;
@@ -164,6 +180,9 @@ export class MineView {
   }
 
   private tex(key: string): Texture { return Assets.get(key) ?? Texture.WHITE; }
+
+  private meta: Record<string, { lights?: Light[] }> = {};
+  private lights(key: string): Light[] { return this.meta[key]?.lights ?? []; }
 
   private buildSurface(): void {
     const sky = new Graphics().rect(0, -400, WORLD_W, SURF_H + 400).fill(0x6a7f8c);
@@ -212,7 +231,13 @@ export class MineView {
     this.cab.scale.set(w / this.cab.texture.width);
     this.cabText = label('', 22);
     this.cabText.anchor.set(0.5, 1);
-    this.shaftLayer.addChild(this.cable, this.cab, this.cabText);
+    this.landingLamps.blendMode = 'add';
+    const r = 24;
+    this.wheel.circle(0, 0, r).stroke({ width: 5, color: 0x2b2722 });
+    for (let k = 0; k < 6; k++) { const a = (k * Math.PI) / 3; this.wheel.moveTo(0, 0).lineTo(Math.cos(a) * r, Math.sin(a) * r); }
+    this.wheel.stroke({ width: 3, color: 0x2b2722 }).circle(0, 0, 5).fill(0x55504a);
+    this.wheel.position.set(SHAFT_X + SHAFT_W / 2 - r, SURF_H - 236);
+    this.shaftLayer.addChild(this.landingLamps, this.cable, this.wheel, this.cab, this.cabText, this.surfFx.layer);
   }
 
   /** Builds views for floors that exist and the dig slot below them. */
@@ -226,7 +251,10 @@ export class MineView {
       const y = floorTop(n);
       const prev = new Sprite(this.tex(`rooms/${FLOORS[n].art}-0`));
       prev.scale.set(ROOM_W / prev.texture.width);
-      prev.position.set(0, y);
+      prev.position.set(0, y - cropTop(FLOORS[n].art));
+      const pm = new Graphics().rect(0, y, ROOM_W, ROOM_H).fill(0xffffff);
+      prev.mask = pm;
+      this.dig.addChild(pm);
       prev.alpha = 0.22;
       prev.tint = 0x705a48;
       this.digPreview = prev;
@@ -248,19 +276,25 @@ export class MineView {
     const y = floorTop(i);
     const f = this.mine.s.floors[i];
     const tier = tierOf(f.lvl);
-    const painting = new Sprite(this.tex(`rooms/${FLOORS[i].art}-${tier}`));
+    const art = FLOORS[i].art;
+    const inner = new Container();
+    inner.position.set(0, y - cropTop(art));
+    const painting = new Sprite(this.tex(`rooms/${art}-${tier}`));
     painting.scale.set(ROOM_W / painting.texture.width);
-    painting.position.set(0, y);
+    const fx = new RoomFx(art, tier, this.lights(`rooms/${art}-${tier}`), ROOM_W, PAINT_H);
+    inner.addChild(painting, fx.root);
+    const mask = new Graphics().rect(0, y, ROOM_W, ROOM_H).fill(0xffffff);
+    inner.mask = mask;
     const frame = new Graphics()
       .rect(0, y + ROOM_H, WORLD_W, FLOOR_H - ROOM_H).fill(0x2a2520)
       .rect(0, y + ROOM_H, WORLD_W, 3).fill(0x4a4036)
       .rect(ROOM_W - 2, y, 4, ROOM_H).fill({ color: 0x000000, alpha: 0.5 });
     const crateBox = new Graphics()
-      .rect(CRATE_X + 4, y + ROOM_H * FEET - 44, 50, 44).fill(0x7a5634).stroke({ width: 3, color: 0x3e2a18 })
-      .moveTo(CRATE_X + 4, y + ROOM_H * FEET - 22).lineTo(CRATE_X + 54, y + ROOM_H * FEET - 22).stroke({ width: 3, color: 0x3e2a18 });
+      .rect(CRATE_X + 4, y + FEET_Y - 44, 50, 44).fill(0x7a5634).stroke({ width: 3, color: 0x3e2a18 })
+      .moveTo(CRATE_X + 4, y + FEET_Y - 22).lineTo(CRATE_X + 54, y + FEET_Y - 22).stroke({ width: 3, color: 0x3e2a18 });
     const crate = label('0', 22);
     crate.anchor.set(0.5, 1);
-    crate.position.set(CRATE_X + 29, y + ROOM_H * FEET - 50);
+    crate.position.set(CRATE_X + 29, y + FEET_Y - 50);
     const badgeBg = new Graphics();
     const badge = label('', 22, 0xffffff, '800');
     badge.position.set(16, y + 14);
@@ -269,12 +303,12 @@ export class MineView {
     const hint = label('👆 לחץ', 34, 0xffe9a8, '800');
     hint.anchor.set(0.5);
     hint.position.set(ROOM_W / 2 - 40, y + ROOM_H * 0.45);
-    root.addChild(painting, frame, crateBox, crate);
+    root.addChild(inner, mask, frame, crateBox, crate);
     this.floorsLayer.addChild(root);
     const ui = new Container();
     ui.addChild(badgeBg, badge, mgr, hint);
     this.uiLayer.addChild(ui);
-    return { root, painting, tier, crate, badge, badgeBg, mgr, mgrKey: '', hint, people: [] };
+    return { root, inner, painting, fx, activity: 0, tier, crate, badge, badgeBg, mgr, mgrKey: '', hint, people: [] };
   }
 
   private drawManager(fv: { mgr: Container; mgrKey: string }, id: StageId, x = 0, y = 0): void {
@@ -329,9 +363,22 @@ export class MineView {
       .rect(SHAFT_X, SURF_H - 4, SHAFT_W, bottom - SURF_H).fill(0x141210)
       .rect(SHAFT_X + 8, SURF_H, 6, bottom - SURF_H).fill(0x3a342c)
       .rect(SHAFT_X + SHAFT_W - 14, SURF_H, 6, bottom - SURF_H).fill(0x3a342c);
+    for (let y = SURF_H + 30; y < bottom; y += 72) {
+      this.shaftBg.moveTo(SHAFT_X + 14, y).lineTo(SHAFT_X + SHAFT_W - 14, y + 36).stroke({ width: 3, color: 0x2a251f })
+        .moveTo(SHAFT_X + SHAFT_W - 14, y).lineTo(SHAFT_X + 14, y + 36).stroke({ width: 3, color: 0x2a251f });
+    }
+    this.landingLamps.removeChildren();
     for (let i = 0; i < this.mine.s.floors.length; i++) {
       const y = floorTop(i);
-      this.shaftBg.rect(ROOM_W, y + ROOM_H * 0.55, SHAFT_X - ROOM_W + 4, ROOM_H * 0.45).fill(0x221d18);
+      this.shaftBg.rect(ROOM_W, y + ROOM_H * 0.5, SHAFT_X - ROOM_W + 4, ROOM_H * 0.5).fill(0x221d18)
+        .rect(SHAFT_X, y + ROOM_H, SHAFT_W, 8).fill(0x4a4036);
+      const lamp = new Sprite(softDot());
+      lamp.anchor.set(0.5);
+      lamp.tint = 0xffc070;
+      lamp.width = lamp.height = 90;
+      lamp.alpha = 0.35;
+      lamp.position.set(SHAFT_X + 10, y + 40);
+      this.landingLamps.addChild(lamp);
     }
     if (!this.uiLayer.children.includes(this.elevMgr.mgr)) {
       this.uiLayer.addChild(this.elevBadgeBg, this.elevBadge, this.elevMgr.mgr, this.marketBadgeBg, this.marketBadge, this.marketMgr.mgr);
@@ -424,7 +471,7 @@ export class MineView {
   // --- juice ---
   private onEvent(e: MineEvent): void {
     if (e.kind === 'sell') this.float(`+${big(e.amount)}`, e.x, SURF_H - 120, 0xffd36b, 34);
-    else if (e.kind === 'deposit') this.float(`+${big(e.amount)}`, CRATE_X + 29, floorTop(e.floor) + ROOM_H * FEET - 80, 0xffffff, 22);
+    else if (e.kind === 'deposit') this.float(`+${big(e.amount)}`, CRATE_X + 29, floorTop(e.floor) + FEET_Y - 80, 0xffffff, 22);
     else if (e.kind === 'upgrade') this.pulseStage(e.stage);
     else if (e.kind === 'dig') { this.rebuildFloors(); this.focusFloor(e.floor); this.pulseStage(e.floor); }
     else if (e.kind === 'hire' || e.kind === 'boost') this.pulseStage(e.stage);
@@ -465,6 +512,9 @@ export class MineView {
       if (tier !== fv.tier) {
         fv.tier = tier;
         fv.painting.texture = this.tex(`rooms/${FLOORS[i].art}-${tier}`);
+        fv.fx.root.destroy({ children: true });
+        fv.fx = new RoomFx(FLOORS[i].art, tier, this.lights(`rooms/${FLOORS[i].art}-${tier}`), ROOM_W, PAINT_H);
+        fv.inner.addChild(fv.fx.root);
       }
       fv.crate.text = big(f.crate);
       const afford = m.upgradeCost(i, 1) <= s.cash;
@@ -478,7 +528,10 @@ export class MineView {
         fv.people.push(fig);
         this.peopleLayer.addChild(fig.root);
       }
-      const feet = floorTop(i) + ROOM_H * FEET;
+      const working = ws.filter(w => w.phase !== 'idle').length / ws.length;
+      fv.activity += (working - fv.activity) * Math.min(1, dt * 3);
+      fv.fx.update(dt, fv.activity);
+      const feet = floorTop(i) + FEET_Y;
       ws.forEach((w, k) => {
         const anim: Anim3 = w.phase === 'out' ? 'walk' : w.phase === 'back' ? 'walkCarry' : w.phase === 'work' ? WORK_ANIM[FLOORS[i].art] ?? 'hammer' : 'idle';
         const right = w.phase === 'back' || w.phase === 'idle';
@@ -490,7 +543,8 @@ export class MineView {
     this.cab.position.set(SHAFT_X + SHAFT_W / 2, e.y);
     this.cabText.text = e.carry > 0 ? big(e.carry) : '';
     this.cabText.position.set(SHAFT_X + SHAFT_W / 2, e.y - this.cab.height - 4);
-    this.cable.clear().moveTo(SHAFT_X + SHAFT_W / 2, SURF_H - 230).lineTo(SHAFT_X + SHAFT_W / 2, e.y - this.cab.height).stroke({ width: 3, color: 0x15120e });
+    this.wheel.rotation = -e.y / 24;
+    this.cable.clear().moveTo(SHAFT_X + SHAFT_W / 2, SURF_H - 236).lineTo(SHAFT_X + SHAFT_W / 2, e.y - this.cab.height).stroke({ width: 3, color: 0x15120e });
     // surface
     this.depotText.text = s.depot >= 1 ? `📦 ${big(s.depot)}` : '';
     const eAfford = m.upgradeCost('elev', 1) <= s.cash;
@@ -511,6 +565,18 @@ export class MineView {
       const anim: Anim3 = p.phase === 'go' ? 'walkCarry' : p.phase === 'back' ? 'walk' : 'idle';
       this.porterFigs[k].update(dt, p.x + (p.phase === 'idle' ? -k * 18 : 0), SURF_H + 2 + (k % 2) * 5, anim, p.phase === 'back' || p.phase === 'idle');
     });
+    while (this.vendors.length < 2) {
+      const fig = new Figure(this.vendors.length ? 'elder' : 'woman');
+      this.vendors.push(fig);
+      this.peopleLayer.addChildAt(fig.root, 0);
+    }
+    this.vendors[0].update(dt, MARKET_X - 70, SURF_H - 30, 'idle', true);
+    this.vendors[1].update(dt, MARKET_X + 80, SURF_H - 30, this.mine.porters.some(p => p.phase === 'sell') ? 'talk' : 'look', false);
+    if (Math.random() < dt * 2.5) this.surfFx.spawn({ x: Math.random() * WORLD_W, y: SURF_H - 10 - Math.random() * 60, vx: 14 + Math.random() * 10, vy: -3, life: 4, size: 10, color: 0xc8b090, alpha: 0.18, grow: 6 });
+    if (e.phase === 'down' || e.phase === 'up') {
+      if (Math.random() < dt * 6) this.surfFx.spawn({ x: SHAFT_X + SHAFT_W / 2 + (Math.random() - 0.5) * 100, y: e.y - this.cab.height * Math.random(), vy: e.phase === 'down' ? -30 : 30, life: 0.8, size: 6, color: 0x9a8a70, alpha: 0.3 });
+    }
+    this.surfFx.update(dt);
     // dig slot
     const dc = m.digCost();
     if (dc !== null && this.digText) {

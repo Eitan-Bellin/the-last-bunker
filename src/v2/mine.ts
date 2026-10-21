@@ -8,10 +8,11 @@ import {
 
 // --- geometry (world units; the view uses the same numbers) ---
 export const WORLD_W = 720;
-export const SURF_H = 600;
-export const FLOOR_H = 420;
+export const SURF_H = 470;
+export const FLOOR_H = 292;
 export const ROOM_W = 540;
-export const ROOM_H = 392;
+/** Visible window of a room (the painting is cropped to its working band around the floor). */
+export const ROOM_H = 268;
 export const SHAFT_X = 560;
 export const SHAFT_W = 160;
 /** Worker x where goods are dropped (the crate by the shaft door). */
