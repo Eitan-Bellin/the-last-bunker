@@ -98,6 +98,7 @@ def mat(name, color, metal=0.0, rough=0.6, emit=None, emit_strength=0.0, grime=0
     if emit is not None:
         p.inputs['Emission Color'].default_value = (*emit, 1)
         p.inputs['Emission Strength'].default_value = emit_strength
+    m['rgb'] = list(color)
     _mats[key] = m
     return m
 
@@ -510,22 +511,20 @@ _leaf_shades = {}
 def plant(name, loc, s, m_leaf, frames, sway=0.06, phase=0.0):
     """A bushy plant: thin stems with many small leaves in a few shades of the given colour; it sways."""
     piv = empty(name, loc)
-    base = m_leaf.node_tree.nodes['Principled BSDF'].inputs['Base Color'].default_value
+    base = list(m_leaf.get('rgb', (0.2, 0.45, 0.12)))
     key = m_leaf.name
     if key not in _leaf_shades:
         _leaf_shades[key] = [mat(f'{key}_s{k}', tuple(c * f for c in base[:3]), rough=0.55, grime=0.3, scale=30) for k, f in enumerate((0.6, 0.85, 1.1))]
     stem_m = mat('stem', (0.18, 0.28, 0.1), rough=0.7)
-    for st in range(4):
+    for st in range(5):
         a0 = st * 1.6 + random.random()
         h = (0.25 + random.random() * 0.25) * s
         sx, sy = math.cos(a0) * 0.06 * s, math.sin(a0) * 0.06 * s
-        cyl(f'{name}_st{st}', (sx, sy, h / 2), 0.006, h, stem_m, parent=piv, verts=6)
-        for i in range(6):
+        for i in range(7):
             a = a0 + i * 1.05
-            z = h * (0.35 + 0.65 * i / 5)
-            lf = sphere(f'{name}_l{st}{i}', (sx + math.cos(a) * 0.07 * s, sy + math.sin(a) * 0.07 * s, z), 0.055 * s,
-                        random.choice(_leaf_shades[key]), parent=piv, scale=(1.7, 0.75, 0.18))
-            lf.rotation_euler = (random.uniform(-0.6, 0.6), random.uniform(-0.7, 0.2), a)
+            z = h * (0.3 + 0.7 * i / 6)
+            fast_leaf(f'{name}_l{st}{i}', (sx + math.cos(a) * 0.08 * s, sy + math.sin(a) * 0.08 * s, z), 0.075 * s,
+                      random.choice(_leaf_shades[key]), piv, (1.7, 0.75, 0.18), (random.uniform(-0.6, 0.6), random.uniform(-0.7, 0.2), a))
     wobble(piv, 'rotation_euler[0]', 0, sway, frames, cycles=1, phase=phase)
     return piv
 
@@ -580,16 +579,15 @@ def glass_mat(name='glass', tint=(0.8, 0.92, 1.0), alpha=0.22):
 def rosette(name, loc, s, m_leaf, frames, sway=0.04, phase=0.0):
     """A lettuce-like head: cupped leaves radiating from the centre in two rings; it sways a little."""
     piv = empty(name, loc)
-    base = m_leaf.node_tree.nodes['Principled BSDF'].inputs['Base Color'].default_value
+    base = list(m_leaf.get('rgb', (0.2, 0.45, 0.12)))
     key = m_leaf.name
     if key not in _leaf_shades:
         _leaf_shades[key] = [mat(f'{key}_s{k}', tuple(c * f for c in base[:3]), rough=0.5, grime=0.3, scale=30) for k, f in enumerate((0.65, 0.9, 1.15))]
     for ring, (n, rad, tilt, sz) in enumerate(((9, 0.09, 1.0, 0.085), (6, 0.04, 0.45, 0.07))):
         for i in range(n):
             a = i * 2 * math.pi / n + ring * 0.3 + random.random() * 0.2
-            lf = sphere(f'{name}_r{ring}{i}', (math.cos(a) * rad * s, math.sin(a) * rad * s, (0.05 + ring * 0.04) * s), sz * s,
-                        random.choice(_leaf_shades[key]), parent=piv, scale=(1.5, 1.0, 0.35))
-            lf.rotation_euler = (0, -tilt, a)
+            fast_leaf(f'{name}_r{ring}{i}', (math.cos(a) * rad * s, math.sin(a) * rad * s, (0.05 + ring * 0.04) * s), sz * s,
+                      random.choice(_leaf_shades[key]), piv, (1.5, 1.0, 0.35), (0, -tilt, a))
     wobble(piv, 'rotation_euler[0]', 0, sway, frames, cycles=1, phase=phase)
     return piv
 
@@ -659,3 +657,28 @@ def brick_mat(name='brick', c1=(0.36, 0.16, 0.09), c2=(0.26, 0.11, 0.06), mortar
     nt.links.new(bump.outputs['Normal'], p.inputs['Normal'])
     p.inputs['Roughness'].default_value = 0.9
     return m
+
+
+_leaf_mesh = None
+
+
+def fast_leaf(name, loc, r, m, parent, scale, rot):
+    """A leaf as a linked copy of one shared smooth ellipsoid mesh (far faster than an operator per leaf)."""
+    global _leaf_mesh
+    if _leaf_mesh is None:
+        bpy.ops.mesh.primitive_uv_sphere_add(radius=1, segments=12, ring_count=6)
+        tmp = bpy.context.object
+        for f in tmp.data.polygons:
+            f.use_smooth = True
+        _leaf_mesh = tmp.data
+        _leaf_mesh.materials.append(bpy.data.materials.new('leaf_slot'))
+        bpy.data.objects.remove(tmp)
+    o = bpy.data.objects.new(name, _leaf_mesh)
+    bpy.context.collection.objects.link(o)
+    o.parent = parent
+    o.location = loc
+    o.scale = (scale[0] * r, scale[1] * r, scale[2] * r)
+    o.rotation_euler = rot
+    o.material_slots[0].link = 'OBJECT'
+    o.material_slots[0].material = m
+    return o

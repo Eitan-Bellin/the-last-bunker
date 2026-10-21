@@ -4,7 +4,7 @@ import { Application, Assets, Container, Graphics, Sprite, Text, Texture, Tiling
 import { Body3D, bodyData, type Anim3, type BodyKind } from '../rendering/people3d.ts';
 import { FLOORS, tierOf } from './econ.ts';
 import { Particles, RoomFx, softDot, type Light } from './roomfx.ts';
-import { Room3D, loadRoom3D } from './room3d.ts';
+import { Room3D, loadRoom3D, releaseRoom3D } from './room3d.ts';
 import { Worker3D, loadPeople, peopleReady, type WorkerAnim } from './people.ts';
 
 /** Anything drawn as a person: the pre-rendered 3D worker when its atlases loaded, else the older body. */
@@ -102,6 +102,8 @@ interface FloorView {
   painting: Sprite;
   fx: RoomFx;
   room3d: Room3D | null;
+  /** Streaming state of the floor's picture: 3D render, painting fallback, or nothing loaded. */
+  pic: 'none' | 'loading' | 'room3d' | 'painting';
   crateBox: Graphics;
   activity: number;
   tier: number;
@@ -174,7 +176,6 @@ export class MineView {
     host.appendChild(this.app.canvas);
     const keys = [
       'backdrops/rock', 'backdrops/surface-1', 'kit/car', 'kit/proj-surfaceGate', 'kit/proj-tradeLeague',
-      ...FLOORS.flatMap(f => [0, 1, 2].map(t => `rooms/${f.art}-${t}`)),
       ...Array.from({ length: 14 }, (_, i) => `portraits/p${String(i + 1).padStart(2, '0')}`),
     ];
     await Promise.all(keys.map(k => Assets.load({ alias: k, src: `${ART}${k}.webp`, data: { autoGenerateMipmaps: true } }).catch(() => null)));
@@ -254,6 +255,10 @@ export class MineView {
     this.cab.anchor.set(0.5, 1);
     const w = SHAFT_W - 30;
     this.cab.scale.set(w / this.cab.texture.width);
+    void Assets.load<Texture>({ src: `${ART}v2/cab.webp`, data: { autoGenerateMipmaps: true } }).then(t => {
+      this.cab.texture = t;
+      this.cab.scale.set(w / t.width);
+    }).catch(() => null);
     this.cabText = label('', 22);
     this.cabText.anchor.set(0.5, 1);
     this.landingLamps.blendMode = 'add';
@@ -274,9 +279,21 @@ export class MineView {
     this.digPreview = null;
     if (next !== null) {
       const y = floorTop(n);
-      const prev = new Sprite(this.tex(`rooms/${FLOORS[n].art}-0`));
-      prev.scale.set(ROOM_W / prev.texture.width);
-      prev.position.set(0, y - cropTop(FLOORS[n].art));
+      const prev = new Sprite(Texture.EMPTY);
+      const nextArt = FLOORS[n].art;
+      void loadRoom3D(nextArt).then(async d => {
+        if (d) {
+          prev.texture = d.bg;
+          prev.scale.set(ROOM_W / d.bg.width, ROOM_H / d.bg.height);
+          prev.position.set(0, y);
+        } else {
+          const key = `rooms/${nextArt}-0`;
+          const t = await Assets.load<Texture>({ alias: key, src: `${ART}${key}.webp` }).catch(() => Texture.EMPTY);
+          prev.texture = t;
+          prev.scale.set(ROOM_W / Math.max(1, t.width));
+          prev.position.set(0, y - cropTop(nextArt));
+        }
+      });
       const pm = new Graphics().rect(0, y, ROOM_W, ROOM_H).fill(0xffffff);
       prev.mask = pm;
       this.dig.addChild(pm);
@@ -304,8 +321,7 @@ export class MineView {
     const art = FLOORS[i].art;
     const inner = new Container();
     inner.position.set(0, y - cropTop(art));
-    const painting = new Sprite(this.tex(`rooms/${art}-${tier}`));
-    painting.scale.set(ROOM_W / painting.texture.width);
+    const painting = new Sprite(Texture.EMPTY);
     const fx = new RoomFx(art, tier, this.lights(`rooms/${art}-${tier}`), ROOM_W, PAINT_H);
     inner.addChild(painting, fx.root);
     const mask = new Graphics().rect(0, y, ROOM_W, ROOM_H).fill(0xffffff);
@@ -329,22 +345,60 @@ export class MineView {
     hint.anchor.set(0.5);
     hint.position.set(ROOM_W / 2 - 40, y + ROOM_H * 0.45);
     root.addChild(inner, mask, frame, crateBox, crate);
+    // the 3D floor frame (slab, door gap, shaft) once loaded replaces the drawn slab
+    void Assets.load<Texture>({ src: `${ART}v2/frame.webp`, data: { autoGenerateMipmaps: true } }).then(t => {
+      const fs = new Sprite(t);
+      fs.width = WORLD_W;
+      fs.height = FLOOR_H;
+      fs.position.set(0, y);
+      frame.visible = false;
+      root.addChildAt(fs, root.getChildIndex(frame));
+    }).catch(() => null);
     this.floorsLayer.addChild(root);
     const ui = new Container();
     ui.addChild(badgeBg, badge, mgr, hint);
     this.uiLayer.addChild(ui);
-    const fv: FloorView = { root, inner, painting, fx, room3d: null, crateBox, activity: 0, tier, crate, badge, badgeBg, mgr, mgrKey: '', hint, people: [] };
-    void loadRoom3D(art).then(d => {
-      if (!d) return;
-      // a pre-rendered 3D room replaces the painting, its effects and the drawn crate (the render has its own)
-      const r3 = new Room3D(d, ROOM_W, ROOM_H);
-      r3.root.position.set(0, y);
-      inner.visible = false;
-      crateBox.visible = false;
-      root.addChildAt(r3.root, 0);
-      fv.room3d = r3;
-    });
+    const fv: FloorView = { root, inner, painting, fx, room3d: null, pic: 'none', crateBox, activity: 0, tier, crate, badge, badgeBg, mgr, mgrKey: '', hint, people: [] };
+    inner.visible = false;
     return fv;
+  }
+
+  /** Loads a floor's picture when it comes near the screen (the 3D render, else the painting) and frees it far away. */
+  private streamFloor(i: number, fv: FloorView): void {
+    const top = floorTop(i);
+    const vh = this.viewH();
+    const near = top + FLOOR_H > this.camY - vh * 1.2 && top < this.camY + vh * 2.2;
+    const far = top + FLOOR_H < this.camY - vh * 3 || top > this.camY + vh * 4;
+    const art = FLOORS[i].art;
+    if (near && fv.pic === 'none') {
+      fv.pic = 'loading';
+      void loadRoom3D(art).then(async d => {
+        if (fv.pic !== 'loading') return;
+        if (d) {
+          // a pre-rendered 3D room replaces the painting, its effects and the drawn crate (the render has its own)
+          const r3 = new Room3D(d, ROOM_W, ROOM_H);
+          r3.root.position.set(0, top);
+          fv.inner.visible = false;
+          fv.crateBox.visible = false;
+          fv.root.addChildAt(r3.root, 0);
+          fv.room3d = r3;
+          fv.pic = 'room3d';
+        } else {
+          const key = `rooms/${art}-${fv.tier}`;
+          const t = await Assets.load<Texture>({ alias: key, src: `${ART}${key}.webp`, data: { autoGenerateMipmaps: true } }).catch(() => Texture.WHITE);
+          fv.painting.texture = t;
+          fv.painting.scale.set(ROOM_W / t.width);
+          fv.inner.visible = true;
+          fv.pic = 'painting';
+        }
+      });
+    } else if (far && fv.pic === 'room3d' && fv.room3d) {
+      fv.room3d.root.destroy({ children: true });
+      fv.room3d = null;
+      releaseRoom3D(art);
+      fv.crateBox.visible = true;
+      fv.pic = 'none';
+    }
   }
 
   private drawManager(fv: { mgr: Container; mgrKey: string }, id: StageId, x = 0, y = 0): void {
@@ -412,7 +466,7 @@ export class MineView {
       lamp.anchor.set(0.5);
       lamp.tint = 0xffc070;
       lamp.width = lamp.height = 90;
-      lamp.alpha = 0.35;
+      lamp.alpha = 0;
       lamp.position.set(SHAFT_X + 10, y + 40);
       this.landingLamps.addChild(lamp);
     }
@@ -545,9 +599,13 @@ export class MineView {
     s.floors.forEach((f, i) => {
       const fv = this.floors[i];
       const tier = tierOf(f.lvl);
+      this.streamFloor(i, fv);
       if (tier !== fv.tier) {
         fv.tier = tier;
-        fv.painting.texture = this.tex(`rooms/${FLOORS[i].art}-${tier}`);
+        if (fv.pic === 'painting') {
+          const key = `rooms/${FLOORS[i].art}-${tier}`;
+          void Assets.load<Texture>({ alias: key, src: `${ART}${key}.webp` }).then(t => { fv.painting.texture = t; }).catch(() => null);
+        }
         fv.fx.root.destroy({ children: true });
         fv.fx = new RoomFx(FLOORS[i].art, tier, this.lights(`rooms/${FLOORS[i].art}-${tier}`), ROOM_W, PAINT_H);
         fv.inner.addChild(fv.fx.root);
@@ -650,6 +708,13 @@ export class MineView {
     const w = t.width + 28;
     const bx = center ? x + 140 - w / 2 : x;
     t.position.set(bx + 14, y + 12);
-    bg.clear().roundRect(bx, y, w, 50, 16).fill({ color: hot ? 0x2f6b2f : 0x1f1a15, alpha: 0.92 }).stroke({ width: 2, color: hot ? 0x9cf09c : 0x000000, alpha: 0.7 });
+    // a riveted metal plate: drop shadow, dark body, lit top edge; affordable = a green glow edge
+    bg.clear()
+      .roundRect(bx + 2, y + 5, w, 50, 14).fill({ color: 0x000000, alpha: 0.45 })
+      .roundRect(bx, y, w, 50, 14).fill({ color: hot ? 0x22401f : 0x1b1611, alpha: 0.95 })
+      .stroke({ width: 2.5, color: hot ? 0x8fe38a : 0x6d5a42, alpha: 0.95 })
+      .roundRect(bx + 4, y + 3, w - 8, 3, 2).fill({ color: 0xffffff, alpha: hot ? 0.22 : 0.12 })
+      .circle(bx + 7, y + 25, 2.2).fill({ color: 0xb59a72, alpha: 0.8 })
+      .circle(bx + w - 7, y + 25, 2.2).fill({ color: 0xb59a72, alpha: 0.8 });
   }
 }

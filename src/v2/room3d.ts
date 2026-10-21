@@ -13,6 +13,19 @@ export interface Room3DData { bg: Texture; meta: AnimMeta; cells: Texture[][] }
 const ART = `${import.meta.env.BASE_URL}art/v2/`;
 const cache = new Map<string, Promise<Room3DData | null>>();
 
+/** Frees a room's textures (GPU memory) when it is far from the camera; it loads again on demand. */
+export function releaseRoom3D(art: string): void {
+  const p = cache.get(art);
+  if (!p) return;
+  cache.delete(art);
+  void p.then(d => {
+    if (!d) return;
+    for (const row of d.cells) for (const t of row) t.destroy(false);
+    void Assets.unload(`${ART}${art}/bg.webp`).catch(() => null);
+    if (d.meta.atlas) void Assets.unload(`${ART}${art}/anim.webp`).catch(() => null);
+  });
+}
+
 /** Loads a room's background, atlas and frame table once; null when the room has no 3D render yet. */
 export function loadRoom3D(art: string): Promise<Room3DData | null> {
   let p = cache.get(art);
