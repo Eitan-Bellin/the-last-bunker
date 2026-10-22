@@ -702,3 +702,39 @@ def fast_leaf(name, loc, r, m, parent, scale, rot):
     o.material_slots[0].link = 'OBJECT'
     o.material_slots[0].material = m
     return o
+
+
+def fire_mat(name='fire_soft', color=(1.0, 0.42, 0.06), strength=6.0):
+    """Soft flame: emissive at the core, fading to transparent toward the silhouette (no solid blobs)."""
+    m = bpy.data.materials.new(name)
+    m.use_nodes = True
+    nt = m.node_tree
+    for n in list(nt.nodes):
+        if n.type != 'OUTPUT_MATERIAL':
+            nt.nodes.remove(n)
+    out = nt.nodes['Material Output']
+    tr = nt.nodes.new('ShaderNodeBsdfTransparent')
+    em = nt.nodes.new('ShaderNodeEmission')
+    em.inputs['Color'].default_value = (*color, 1)
+    em.inputs['Strength'].default_value = strength
+    lw = nt.nodes.new('ShaderNodeLayerWeight')
+    lw.inputs['Blend'].default_value = 0.45
+    inv = nt.nodes.new('ShaderNodeMath')
+    inv.operation = 'SUBTRACT'
+    inv.inputs[0].default_value = 1.0
+    nt.links.new(lw.outputs['Facing'], inv.inputs[1])
+    pw = nt.nodes.new('ShaderNodeMath')
+    pw.operation = 'POWER'
+    pw.inputs[1].default_value = 1.6
+    nt.links.new(inv.outputs['Value'], pw.inputs[0])
+    mix = nt.nodes.new('ShaderNodeMixShader')
+    nt.links.new(pw.outputs['Value'], mix.inputs['Fac'])
+    nt.links.new(tr.outputs['BSDF'], mix.inputs[1])
+    nt.links.new(em.outputs['Emission'], mix.inputs[2])
+    nt.links.new(mix.outputs['Shader'], out.inputs['Surface'])
+    for attr, val in (('surface_render_method', 'BLENDED'), ('blend_method', 'BLEND')):
+        try:
+            setattr(m, attr, val)
+        except Exception:
+            pass
+    return m

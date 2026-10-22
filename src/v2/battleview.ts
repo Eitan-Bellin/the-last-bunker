@@ -4,7 +4,7 @@ import { Application, Assets, Container, Graphics, Sprite, Text, Texture } from 
 import { BARRAGES, BattleSim, TIME_LIMIT, type BattleSetup, type BEvent, type BUnit } from './battle.ts';
 import { Worker3D, loadPeople } from './people.ts';
 import { Particles, softDot } from './roomfx.ts';
-import { play } from './sound.ts';
+import { play, startBattleMusic, stopBattleMusic } from './sound.ts';
 import { big, clock } from './format.ts';
 
 const ART = `${import.meta.env.BASE_URL}art/`;
@@ -96,6 +96,7 @@ export class BattleView {
     $('#bname').textContent = camp.name;
     $('#battle').classList.add('on');
     play('depart', { volume: 0.7 });
+    startBattleMusic();
     play('siren', { volume: 0.25 });
   }
 
@@ -238,6 +239,7 @@ export class BattleView {
       ${win ? `<div class="amount">🪙 ${big(this.loot.coins)} &nbsp; 💎 ${this.loot.gems}</div>` : ''}
       <button class="go">${win ? 'אסוף' : 'חזרה'}</button></div>`;
     el.classList.add('on');
+    stopBattleMusic();
     play(win ? 'cheer' : 'powerDown', { volume: 0.8 });
     if (win) play('coin', { volume: 0.7 });
     this.onEnd(win);

@@ -80,8 +80,25 @@ box('collar', (TX, TD - 0.6, 0.1), (2.8, 1.6, 0.2), concrete, 0.02)
 
 # ---- winding house (the depot) with its gate ----
 HX = 9.0
-box('house', (HX, 2.6, 1.6), (3.2, 2.4, 3.2), concrete, 0.04)
-box('roof', (HX, 2.6, 3.3), (3.5, 2.7, 0.2), rustm, 0.02)
+house_m = mat('house_conc', (0.15, 0.145, 0.13), rough=0.92, grime=0.7, scale=2.2, bump=0.5)
+box('house', (HX, 2.6, 1.6), (3.2, 2.4, 3.2), house_m, 0.04)
+box('plinth', (HX, 2.6, 0.25), (3.3, 2.5, 0.5), mat('plinth', (0.2, 0.19, 0.17), rough=0.95, grime=0.6, scale=4, bump=0.5), 0.02)
+# corrugated sheet roof: alternating ridges, slightly sagging
+for k in range(18):
+    box(f'ridge{k}', (HX - 1.7 + k * 0.2, 2.6, 3.27 + (0.04 if k % 2 else 0) - 0.03 * math.sin(k / 17 * math.pi)), (0.2, 2.8, 0.05), rustm, 0.004, rot=(0.04, 0, 0))
+# stains running down from the roof line
+for k in range(5):
+    box(f'stain{k}', (HX - 1.3 + k * 0.6, 1.39, 2.6 - k % 2 * 0.3), (0.12 + k % 3 * 0.05, 0.01, 1.1 + k % 2 * 0.5), mat('stain', (0.10, 0.09, 0.07), rough=0.9), 0)
+# clutter at the house: sandbags, crates, a rusty tank, a tyre stack
+sandm = mat('sandbag2', (0.32, 0.28, 0.19), rough=0.95, grime=0.5, scale=20, bump=0.45)
+for i in range(6):
+    sphere(f'hsb{i}', (HX - 1.6 + i * 0.32, 1.2, 0.15), 0.19, sandm, scale=(1.0, 0.75, 0.6))
+for i in range(3):
+    box(f'hcr{i}', (HX + 1.35 + (i % 2) * 0.1, 1.25, 0.22 + i * 0.42), (0.42, 0.42, 0.42), mat('crate_s', (0.30, 0.21, 0.12), rough=0.85, grime=0.6, scale=10, bump=0.3), 0.02)
+cyl('tank', (HX - 2.0, 3.2, 0.6), 0.45, 1.2, rustm)
+for i in range(3):
+    bpy.ops.mesh.primitive_torus_add(major_radius=0.3, minor_radius=0.1, location=(6.2, 1.1, 0.1 + i * 0.19))
+    bpy.context.object.data.materials.append(dark)
 box('gate', (HX + 0.3, 1.39, 1.15), (1.8, 0.05, 2.2), mat('gate', (0.38, 0.30, 0.22), metal=0.4, rough=0.6, grime=0.6, scale=6, bump=0.2), 0.01)
 for k in (-1, 1):
     box(f'gate_x{k}', (HX + 0.3, 1.36, 1.15), (0.08, 0.03, 2.6), steel, 0, rot=(0, 0.7 * k, 0))
@@ -97,11 +114,11 @@ for k in range(5):
         o.keyframe_insert('scale', frame=f)
 lamp_m, _ = emissive('gate_lamp', (1, 0.75, 0.4), 12)
 sphere('gate_lamp', (HX + 0.3, 1.3, 2.55), 0.08, lamp_m)
-point((HX + 0.3, 1.0, 2.4), 120, (1, 0.7, 0.4), 0.2)
+point((HX + 0.3, 1.0, 2.4), 45, (1, 0.7, 0.4), 0.2)
 
 # ---- market: three stalls with flapping awnings, goods, a fire barrel ----
 cloths = [mat('cloth_r', (0.55, 0.16, 0.10), rough=0.9, grime=0.4, scale=20, bump=0.2), mat('cloth_y', (0.70, 0.52, 0.18), rough=0.9, grime=0.4, scale=20, bump=0.2), mat('cloth_b', (0.18, 0.30, 0.45), rough=0.9, grime=0.4, scale=20, bump=0.2)]
-wood = mat('wood', (0.40, 0.27, 0.15), rough=0.8, grime=0.5, scale=10, bump=0.2)
+wood = mat('wood', (0.19, 0.13, 0.08), rough=0.85, grime=0.65, scale=10, bump=0.4)
 for k, sx in enumerate((1.4, 3.5, 5.6)):
     for px in (sx - 0.85, sx + 0.85):
         for py in (1.6, 2.6):
@@ -137,14 +154,16 @@ for k, sx in enumerate((1.4, 3.5, 5.6)):
 for i in range(4):
     cyl(f'barrel{i}', (0.4 + i * 0.25 * (i % 2) + 6.6 + (i // 2) * 0.6, 2.3 + (i % 2) * 0.5, 0.45), 0.28, 0.9, rustm)
 cyl('firebarrel', (7.1, 1.3, 0.45), 0.3, 0.9, rustm)
-fm, fs = emissive('fire', (1, 0.4, 0.05), 6)
-anim_value(fs, FR, lambda t: 5 + 2 * math.sin(2 * math.pi * 3 * t) + 1 * math.sin(2 * math.pi * 5 * t + 1))
-for k in range(5):
-    o = sphere(f'flame{k}', (7.1, 1.3, 0.95), 0.12, fm, scale=(1, 1, 1.6))
+fm = fire_mat('barrel_fire', (1, 0.45, 0.08), 7)
+fm2 = fire_mat('barrel_fire2', (1, 0.75, 0.25), 9)
+sphere('coals', (7.1, 1.3, 0.9), 0.24, emissive('coals', (1, 0.3, 0.05), 2.5)[0], scale=(1, 1, 0.25))
+for k in range(8):
+    o = sphere(f'flame{k}', (7.1, 1.3, 0.95), 0.1, fm if k % 3 else fm2, scale=(1, 1, 1.8))
+    dx = (k % 4 - 1.5) * 0.07
     for f in range(1, FR + 2):
-        t = ((f - 1) / FR + k / 5) % 1
-        o.location = (7.1 + 0.06 * math.sin(2 * math.pi * (t + k / 5)), 1.3, 0.92 + 0.45 * t)
-        o.scale = ((1 - t) * 1.0 + 0.1,) * 2 + ((1 - t) * 1.6 + 0.1,)
+        t = ((f - 1) / FR + k / 8) % 1
+        o.location = (7.1 + dx + 0.05 * math.sin(2 * math.pi * (t * 2 + k / 8)), 1.3, 0.93 + 0.5 * t)
+        o.scale = ((1 - t) * 0.9 + 0.05,) * 2 + ((1 - t) * 1.8 + 0.1,)
         o.keyframe_insert('location', frame=f)
         o.keyframe_insert('scale', frame=f)
 bpy.ops.object.light_add(type='POINT', location=(7.1, 1.0, 1.3))
@@ -155,10 +174,10 @@ fl.data.energy = 220
 # evening sun from the left, sky fill
 bpy.ops.object.light_add(type='SUN', rotation=(math.radians(55), math.radians(-35), math.radians(-20)))
 sun = bpy.context.object
-sun.data.energy = 1.8
+sun.data.energy = 1.35
 sun.data.color = (1, 0.78, 0.55)
 sun.data.angle = math.radians(4)
-area((SW / 2, -4, 6), 180, 10, (0.6, 0.7, 0.9), rot=(math.radians(60), 0, 0))
+area((SW / 2, -4, 6), 90, 10, (0.6, 0.7, 0.9), rot=(math.radians(60), 0, 0))
 CC_TIER = int(sys.argv[sys.argv.index('--cc') + 1]) if '--cc' in sys.argv else 0
 if CC_TIER:
     # render only the Command Center; everything already in the scene becomes a holdout (it still hides what is behind)
@@ -172,7 +191,7 @@ if CC_TIER:
     bp.hide_render = True
     sc.render.film_transparent = True
     cx, cy = 3.5, 4.3
-    conc = mat('cc_conc', (0.30, 0.29, 0.27), rough=0.9, grime=0.55, scale=3, bump=0.35)
+    conc = mat('cc_conc', (0.17, 0.165, 0.15), rough=0.92, grime=0.7, scale=2.2, bump=0.5)
     olive = mat('cc_olive', (0.22, 0.24, 0.16), metal=0.3, rough=0.6, grime=0.5, scale=5)
     sandm = mat('cc_sand', (0.38, 0.33, 0.22), rough=0.95, grime=0.4, scale=20, bump=0.4)
     flag = mat('cc_flag', (0.55, 0.42, 0.10), rough=0.8)
